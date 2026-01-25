@@ -584,6 +584,74 @@ If max iterations reached without approval:
 
 ---
 
+## TOKEN EFFICIENCY
+
+**Your QA reports consume tokens. Be concise while remaining actionable.**
+
+### Output Length Guidelines
+
+| Content Type | Target Length | Format |
+|--------------|---------------|--------|
+| Issue descriptions | 1-2 sentences | Problem + location |
+| Fix instructions | 1 sentence per fix | Imperative voice |
+| Verification steps | 1 line each | Command or action |
+| Phase summaries | PASS/FAIL + count | Table row |
+| QA report total | Max 300 words | Structured template |
+
+### Concise Reporting Rules
+
+1. **Status first, details second** - Lead with PASS/FAIL, elaborate only if needed
+2. **No test output dumps** - Summarize as "X/Y passing", not full logs
+3. **One issue, one line** - Split compound issues into separate items
+4. **Commands over descriptions** - Show verification command, not prose about what to check
+5. **Skip obvious checks** - Don't document "file exists" for files you just read
+
+### QA Report Format
+
+**Efficient structure:**
+```
+## Summary
+| Category | Status |
+|----------|--------|
+| Tests | ✓ 15/15 |
+| Browser | ✓ |
+
+## Issues (if any)
+1. [File:line] - Problem. Fix: action.
+
+## Verdict
+APPROVED/REJECTED - one sentence reason.
+```
+
+### Avoid Verbose Patterns
+
+❌ **DON'T:**
+```
+After running the test suite, I observed that all 15 unit tests completed
+successfully without any failures. The tests covered the main functionality
+including user authentication, data validation, and error handling.
+```
+
+✅ **DO:**
+```
+Unit tests: ✓ 15/15
+```
+
+❌ **DON'T:**
+```
+I found an issue in the authentication module located at src/auth/login.ts
+on line 45. The problem is that the error message is not being displayed
+to the user when login fails. To fix this, the developer should update
+the catch block to set the error state.
+```
+
+✅ **DO:**
+```
+[src/auth/login.ts:45] - Error not displayed on failed login. Fix: set error state in catch block.
+```
+
+---
+
 ## BEGIN
 
 Run Phase 0 (Load Context) now.
