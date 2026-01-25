@@ -10,6 +10,25 @@ use `create_simple_client()` from `core.simple_client`.
 
 The client factory now uses AGENT_CONFIGS from agents/tools_pkg/models.py as the
 single source of truth for phase-aware tool and MCP server configuration.
+
+Multi-Provider Support
+----------------------
+This module integrates with the provider abstraction layer (core.providers) to enable
+alternative AI backends. Claude Agent SDK remains the default and recommended provider.
+
+Available providers:
+- claude: Claude Agent SDK (default) - Full agentic capabilities with MCP, tools, security
+- litellm: LiteLLM unified API - 100+ LLMs via single interface (simplified features)
+- openrouter: OpenRouter cloud routing - 400+ models with pay-per-use (simplified features)
+
+Usage:
+    # Direct Claude SDK client (recommended for full functionality)
+    from core.client import create_client
+    client = create_client(project_dir, spec_dir, model, agent_type)
+
+    # Provider-based client (supports alternative backends)
+    from core.client import create_client_for_provider
+    provider, session = create_client_for_provider(project_dir, spec_dir, agent_type)
 """
 
 import copy
@@ -143,6 +162,24 @@ from core.auth import (
     require_auth_token,
     validate_token_not_encrypted,
 )
+
+# Provider abstraction layer imports
+# These enable multi-provider support while preserving Claude as default
+from core.providers import (
+    ProviderError,
+    ProviderNotInstalled,
+    create_engine_provider,
+    get_available_provider_names,
+)
+from core.providers.base import AIEngineProvider, AgentSession, SessionConfig
+from core.providers.config import (
+    DEFAULT_PROVIDER,
+    ProviderConfig,
+    get_available_providers,
+    get_provider_config,
+    validate_provider_config,
+)
+
 from linear_updater import is_linear_enabled
 from prompts_pkg.project_context import detect_project_capabilities, load_project_index
 from security import bash_security_hook
@@ -837,3 +874,192 @@ def create_client(
         options_kwargs["agents"] = agents
 
     return ClaudeSDKClient(options=ClaudeAgentOptions(**options_kwargs))
+
+
+# =============================================================================
+# Multi-Provider Support Functions
+# =============================================================================
+# These functions enable alternative AI backends while preserving Claude as default.
+# Claude remains the recommended provider for full functionality (MCP, tools, security).
+
+
+def get_current_provider_config() -> ProviderConfig:
+    """
+    Get the current provider configuration from environment.
+
+    Returns:
+        ProviderConfig with current provider settings
+
+    Example:
+        config = get_current_provider_config()
+        print(f"Using provider: {config.provider}")
+        print(f"Model: {config.get_model_for_provider()}")
+    """
+    return get_provider_config()
+
+
+def get_current_provider() -> AIEngineProvider:
+    """
+    Create an AI engine provider instance based on current environment configuration.
+
+    Uses the AI_ENGINE_PROVIDER environment variable to determine which provider
+    to create. Defaults to Claude if not specified.
+
+    Returns:
+        AIEngineProvider instance (ClaudeAgentProvider, LiteLLMProvider, or OpenRouterProvider)
+
+    Raises:
+        ProviderNotInstalled: If required packages for the provider are missing
+        ProviderError: If provider creation fails
+
+    Example:
+        provider = get_current_provider()
+        print(f"Provider: {provider.name}")
+        print(f"Supported models: {provider.get_supported_models()}")
+    """
+    config = get_provider_config()
+    return create_engine_provider(config)
+
+
+def is_using_claude_provider() -> bool:
+    """
+    Check if the Claude Agent SDK is the configured provider.
+
+    This is useful for determining whether full functionality (MCP servers,
+    security hooks, extended thinking) is available, as these features are
+    only supported by the Claude provider.
+
+    Returns:
+        True if Claude is the configured provider (default), False otherwise
+    """
+    config = get_provider_config()
+    return config.provider == DEFAULT_PROVIDER
+
+
+def create_client_for_provider(
+    project_dir: Path,
+    spec_dir: Path,
+    agent_type: str = "coder",
+    max_thinking_tokens: int | None = None,
+    output_format: dict | None = None,
+    agents: dict | None = None,
+) -> tuple[AIEngineProvider, AgentSession]:
+    """
+    Create an AI engine provider and session using the provider factory.
+
+    This function provides an alternative to create_client() that uses the
+    provider abstraction layer. It supports multiple AI backends based on
+    the AI_ENGINE_PROVIDER environment variable.
+
+    For Claude provider (default), this is functionally equivalent to using
+    create_client() directly, as the ClaudeAgentProvider delegates to it.
+
+    For non-Claude providers (LiteLLM, OpenRouter), this creates a simplified
+    session without MCP servers, security hooks, or tool permissions.
+
+    Args:
+        project_dir: Root directory for the project (working directory)
+        spec_dir: Directory containing the spec
+        agent_type: Agent type identifier from AGENT_CONFIGS
+                   (e.g., 'coder', 'planner', 'qa_reviewer')
+        max_thinking_tokens: Token budget for extended thinking (Claude only)
+        output_format: Optional structured output format (Claude only)
+        agents: Optional dict of subagent definitions (Claude only)
+
+    Returns:
+        Tuple of (provider, session):
+        - provider: AIEngineProvider instance
+        - session: AgentSession instance for interacting with the AI
+
+    Raises:
+        ProviderNotInstalled: If required packages for the provider are missing
+        ProviderError: If provider or session creation fails
+        ProviderConfigError: If configuration is invalid
+
+    Example:
+        from core.client import create_client_for_provider
+
+        provider, session = create_client_for_provider(
+            project_dir=Path("/path/to/project"),
+            spec_dir=Path("/path/to/spec"),
+            agent_type="coder"
+        )
+
+        # For Claude provider, get the underlying SDK client
+        if provider.name == "claude":
+            client = session.client  # ClaudeSDKClient instance
+    """
+    # Get provider configuration
+    config = get_provider_config()
+
+    logger.info(
+        f"Creating provider-based client: provider={config.provider}, "
+        f"agent_type={agent_type}, project_dir={project_dir}"
+    )
+
+    # Create the provider
+    provider = create_engine_provider(config)
+
+    # Build session configuration
+    session_config = SessionConfig(
+        name=f"{agent_type}-session",
+        model=config.get_model_for_provider(),
+        working_directory=str(project_dir),
+        extra={
+            "project_dir": str(project_dir),
+            "spec_dir": str(spec_dir),
+            "agent_type": agent_type,
+            "max_thinking_tokens": max_thinking_tokens,
+        },
+    )
+
+    # Create session using provider-specific logic
+    # For Claude, this delegates to create_client() internally
+    session = provider.create_session(
+        config=session_config,
+        project_dir=project_dir,
+        spec_dir=spec_dir,
+        agent_type=agent_type,
+        max_thinking_tokens=max_thinking_tokens,
+        output_format=output_format,
+        agents=agents,
+    )
+
+    return provider, session
+
+
+def validate_current_provider() -> tuple[bool, list[str]]:
+    """
+    Validate the current provider configuration.
+
+    Checks that all required credentials and settings are present for
+    the configured provider.
+
+    Returns:
+        Tuple of (is_valid, error_messages):
+        - is_valid: True if configuration is valid
+        - error_messages: List of validation errors (empty if valid)
+
+    Example:
+        is_valid, errors = validate_current_provider()
+        if not is_valid:
+            print("Provider configuration errors:")
+            for error in errors:
+                print(f"  - {error}")
+    """
+    return validate_provider_config()
+
+
+def get_provider_summary() -> str:
+    """
+    Get a human-readable summary of the current provider configuration.
+
+    Returns:
+        Summary string describing the configured provider and model
+
+    Example:
+        print(f"AI Backend: {get_provider_summary()}")
+        # Output: "AI Backend: Claude Agent SDK (claude-sonnet-4-5-20250929)"
+    """
+    config = get_provider_config()
+    return config.get_provider_summary()
