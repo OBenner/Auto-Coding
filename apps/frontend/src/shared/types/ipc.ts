@@ -761,6 +761,7 @@ export interface ElectronAPI {
   // File explorer operations
   listDirectory: (dirPath: string) => Promise<IPCResult<FileNode[]>>;
   readFile: (filePath: string) => Promise<IPCResult<string>>;
+  writeFile: (filePath: string, content: string) => Promise<IPCResult<void>>;
 
   // Git operations
   getGitBranches: (projectPath: string) => Promise<IPCResult<string[]>>;

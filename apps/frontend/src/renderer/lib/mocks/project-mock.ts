@@ -82,6 +82,11 @@ export const projectMock = {
     data: ''
   }),
 
+  writeFile: async () => ({
+    success: true,
+    data: undefined
+  }),
+
   // Git operations
   getGitBranches: async () => ({
     success: true,
