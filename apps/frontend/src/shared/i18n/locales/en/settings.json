@@ -619,6 +619,62 @@
       "description": "Select a project from the sidebar to configure its settings."
     }
   },
+  "aiProvider": {
+    "title": "AI Engine Provider",
+    "description": "Select which AI backend to use for agent sessions",
+    "label": "AI Provider",
+    "selectProvider": "Select AI provider",
+    "currentProvider": "Current provider",
+    "providers": {
+      "claude": {
+        "name": "Claude Agent SDK",
+        "description": "Anthropic's Claude Agent SDK (default, recommended)"
+      },
+      "litellm": {
+        "name": "LiteLLM",
+        "description": "Unified interface supporting 100+ LLM providers"
+      },
+      "openrouter": {
+        "name": "OpenRouter",
+        "description": "Cloud-based multi-model routing with 400+ models"
+      }
+    },
+    "configuration": {
+      "title": "Provider Configuration",
+      "apiKey": "API Key",
+      "apiKeyPlaceholder": "Enter your API key",
+      "apiKeyDescription": "Required for LiteLLM and OpenRouter providers",
+      "model": "Model",
+      "modelPlaceholder": "e.g., gpt-4, claude-3-opus, anthropic/claude-3-sonnet",
+      "modelDescription": "Model identifier for the selected provider",
+      "baseUrl": "Base URL (Optional)",
+      "baseUrlPlaceholder": "https://api.example.com/v1",
+      "baseUrlDescription": "Custom API endpoint (leave empty for default)"
+    },
+    "validation": {
+      "apiKeyRequired": "API key is required for this provider",
+      "modelRequired": "Model selection is required"
+    },
+    "toast": {
+      "providerChanged": "AI Provider Changed",
+      "providerChangedDescription": "Now using {{provider}}",
+      "configSaved": "Configuration Saved",
+      "configSavedDescription": "Provider settings have been updated",
+      "configError": "Configuration Error",
+      "configErrorDescription": "Failed to save provider settings: {{error}}"
+    },
+    "hints": {
+      "envOverride": "This setting can be overridden by the AI_ENGINE_PROVIDER environment variable",
+      "requiresRestart": "Changes will take effect for new agent sessions",
+      "claudeDefault": "Claude Agent SDK is the default and most thoroughly tested provider"
+    },
+    "status": {
+      "active": "Active",
+      "configured": "Configured",
+      "notConfigured": "Not configured",
+      "requiresApiKey": "Requires API key"
+    }
+  },
   "mcp": {
     "title": "MCP Server Overview",
     "titleWithProject": "MCP Server Overview for {{projectName}}",
