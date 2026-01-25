@@ -408,3 +408,47 @@ def suggest_thinking_budget(
         return "high"
     else:
         return "ultrathink"
+
+
+# Output constraint format types and their templates
+OUTPUT_CONSTRAINT_TEMPLATES: dict[str, str] = {
+    "summary": "Respond in {limit} words or less",
+    "brief": "Keep your response under {limit} words",
+    "concise": "Provide a concise response in {limit} words or fewer",
+    "strict": "Your response MUST NOT exceed {limit} words",
+}
+
+
+def get_output_constraint(
+    format_type: str,
+    word_limit: int,
+) -> str:
+    """
+    Generate a response format instruction for constraining output length.
+
+    This helper generates prompt instructions that tell the model to limit
+    its response to a specific word count. Useful for token optimization
+    by requesting shorter responses when full-length output isn't needed.
+
+    Args:
+        format_type: The type of constraint format to use. Supported types:
+            - "summary": Standard format (e.g., "Respond in 200 words or less")
+            - "brief": Alternative format (e.g., "Keep your response under 200 words")
+            - "concise": Formal format (e.g., "Provide a concise response in 200 words or fewer")
+            - "strict": Emphatic format (e.g., "Your response MUST NOT exceed 200 words")
+        word_limit: Maximum number of words for the response
+
+    Returns:
+        Formatted instruction string to include in prompts
+
+    Example:
+        >>> get_output_constraint('summary', 200)
+        'Respond in 200 words or less'
+        >>> get_output_constraint('strict', 100)
+        'Your response MUST NOT exceed 100 words'
+    """
+    # Default to 'summary' format if unknown type
+    template = OUTPUT_CONSTRAINT_TEMPLATES.get(
+        format_type, OUTPUT_CONSTRAINT_TEMPLATES["summary"]
+    )
+    return template.format(limit=word_limit)
