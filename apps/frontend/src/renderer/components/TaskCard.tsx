@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Play, Square, Clock, Zap, Target, Shield, Gauge, Palette, FileCode, Bug, Wrench, Loader2, AlertTriangle, RotateCcw, Archive, GitPullRequest, MoreVertical } from 'lucide-react';
+import { Play, Square, Clock, Zap, Target, Shield, Gauge, Palette, FileCode, Bug, Wrench, Loader2, AlertTriangle, RotateCcw, Archive, GitPullRequest, MoreVertical, ChevronDown, ChevronUp } from 'lucide-react';
 import { Card, CardContent } from './ui/card';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
@@ -136,6 +136,7 @@ export const TaskCard = memo(function TaskCard({
   const { t } = useTranslation(['tasks', 'errors']);
   const [isStuck, setIsStuck] = useState(false);
   const [isRecovering, setIsRecovering] = useState(false);
+  const [isMetadataExpanded, setIsMetadataExpanded] = useState(false);
   const stuckCheckRef = useRef<{ timeout: NodeJS.Timeout | null; interval: NodeJS.Timeout | null }>({
     timeout: null,
     interval: null
@@ -399,55 +400,56 @@ export const TaskCard = memo(function TaskCard({
           </p>
         )}
 
-        {/* Metadata badges */}
+        {/* Priority and Status badges - always visible */}
         {(task.metadata || isStuck || isIncomplete || hasActiveExecution || reviewReasonInfo) && (
-          <div className="mt-2.5 flex flex-wrap gap-1.5">
-            {/* Stuck indicator - highest priority */}
-            {isStuck && (
-              <Badge
-                variant="outline"
-                className="text-[10px] px-1.5 py-0.5 flex items-center gap-1 bg-warning/10 text-warning border-warning/30 badge-priority-urgent"
-              >
-                <AlertTriangle className="h-2.5 w-2.5" />
-                {t('labels.stuck')}
-              </Badge>
-            )}
-            {/* Incomplete indicator - task in human_review but no subtasks completed */}
-            {isIncomplete && !isStuck && (
-              <Badge
-                variant="outline"
-                className="text-[10px] px-1.5 py-0.5 flex items-center gap-1 bg-orange-500/10 text-orange-400 border-orange-500/30"
-              >
-                <AlertTriangle className="h-2.5 w-2.5" />
-                {t('labels.incomplete')}
-              </Badge>
-            )}
-            {/* Archived indicator - task has been released */}
-            {task.metadata?.archivedAt && (
-              <Badge
-                variant="outline"
-                className="text-[10px] px-1.5 py-0.5 flex items-center gap-1 bg-muted text-muted-foreground border-border"
-              >
-                <Archive className="h-2.5 w-2.5" />
-                {t('status.archived')}
-              </Badge>
-            )}
-            {/* Execution phase badge - shown when actively running */}
-            {hasActiveExecution && executionPhase && !isStuck && !isIncomplete && (
-              <Badge
-                variant="outline"
-                className={cn(
-                  'text-[10px] px-1.5 py-0.5 flex items-center gap-1',
-                  EXECUTION_PHASE_BADGE_COLORS[executionPhase]
-                )}
-              >
-                <Loader2 className="h-2.5 w-2.5 animate-spin" />
-                {EXECUTION_PHASE_LABELS[executionPhase]}
-              </Badge>
-            )}
-             {/* Status badge - hide when execution phase badge is showing */}
-             {!hasActiveExecution && (
-               <>
+          <div className="mt-2.5 space-y-2">
+            <div className="flex flex-wrap gap-1.5">
+              {/* Stuck indicator - highest priority */}
+              {isStuck && (
+                <Badge
+                  variant="outline"
+                  className="text-[10px] px-1.5 py-0.5 flex items-center gap-1 bg-warning/10 text-warning border-warning/30 badge-priority-urgent"
+                >
+                  <AlertTriangle className="h-2.5 w-2.5" />
+                  {t('labels.stuck')}
+                </Badge>
+              )}
+              {/* Incomplete indicator - task in human_review but no subtasks completed */}
+              {isIncomplete && !isStuck && (
+                <Badge
+                  variant="outline"
+                  className="text-[10px] px-1.5 py-0.5 flex items-center gap-1 bg-orange-500/10 text-orange-400 border-orange-500/30"
+                >
+                  <AlertTriangle className="h-2.5 w-2.5" />
+                  {t('labels.incomplete')}
+                </Badge>
+              )}
+              {/* Archived indicator - task has been released */}
+              {task.metadata?.archivedAt && (
+                <Badge
+                  variant="outline"
+                  className="text-[10px] px-1.5 py-0.5 flex items-center gap-1 bg-muted text-muted-foreground border-border"
+                >
+                  <Archive className="h-2.5 w-2.5" />
+                  {t('status.archived')}
+                </Badge>
+              )}
+              {/* Execution phase badge - shown when actively running */}
+              {hasActiveExecution && executionPhase && !isStuck && !isIncomplete && (
+                <Badge
+                  variant="outline"
+                  className={cn(
+                    'text-[10px] px-1.5 py-0.5 flex items-center gap-1',
+                    EXECUTION_PHASE_BADGE_COLORS[executionPhase]
+                  )}
+                >
+                  <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                  {EXECUTION_PHASE_LABELS[executionPhase]}
+                </Badge>
+              )}
+              {/* Status badge - hide when execution phase badge is showing */}
+              {!hasActiveExecution && (
+                <>
                   {task.status === 'done' ? (
                     <Badge
                       variant={getStatusBadgeVariant(task.status)}
@@ -456,74 +458,108 @@ export const TaskCard = memo(function TaskCard({
                       {getStatusLabel(task.status)}
                     </Badge>
                   ) : (
-                   <Badge
-                     variant={isStuck ? 'warning' : isIncomplete ? 'warning' : getStatusBadgeVariant(task.status)}
-                     className="text-[10px] px-1.5 py-0.5"
-                   >
-                     {isStuck ? t('labels.needsRecovery') : isIncomplete ? t('labels.needsResume') : getStatusLabel(task.status)}
-                   </Badge>
-                 )}
-               </>
-             )}
-            {/* Review reason badge - explains why task needs human review */}
-            {reviewReasonInfo && !isStuck && !isIncomplete && (
-              <Badge
-                variant={reviewReasonInfo.variant}
-                className="text-[10px] px-1.5 py-0.5"
-              >
-                {reviewReasonInfo.label}
-              </Badge>
-            )}
-            {/* Category badge with icon */}
-            {task.metadata?.category && (
-              <Badge
-                variant="outline"
-                className={cn('text-[10px] px-1.5 py-0', TASK_CATEGORY_COLORS[task.metadata.category])}
-              >
-                {CategoryIcon[task.metadata.category] && (
-                  (() => {
-                    const Icon = CategoryIcon[task.metadata.category!];
-                    return <Icon className="h-2.5 w-2.5 mr-0.5" />;
-                  })()
+                    <Badge
+                      variant={isStuck ? 'warning' : isIncomplete ? 'warning' : getStatusBadgeVariant(task.status)}
+                      className="text-[10px] px-1.5 py-0.5"
+                    >
+                      {isStuck ? t('labels.needsRecovery') : isIncomplete ? t('labels.needsResume') : getStatusLabel(task.status)}
+                    </Badge>
+                  )}
+                </>
+              )}
+              {/* Review reason badge - explains why task needs human review */}
+              {reviewReasonInfo && !isStuck && !isIncomplete && (
+                <Badge
+                  variant={reviewReasonInfo.variant}
+                  className="text-[10px] px-1.5 py-0.5"
+                >
+                  {reviewReasonInfo.label}
+                </Badge>
+              )}
+              {/* Priority badge - only show urgent/high */}
+              {task.metadata?.priority && (task.metadata.priority === 'urgent' || task.metadata.priority === 'high') && (
+                <Badge
+                  variant="outline"
+                  className={cn('text-[10px] px-1.5 py-0', TASK_PRIORITY_COLORS[task.metadata.priority])}
+                >
+                  {TASK_PRIORITY_LABELS[task.metadata.priority]}
+                </Badge>
+              )}
+            </div>
+
+            {/* Metadata toggle button and expandable badges */}
+            {(task.metadata?.category || task.metadata?.complexity || task.metadata?.impact || task.metadata?.securitySeverity) && (
+              <div className="space-y-1.5">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsMetadataExpanded(!isMetadataExpanded);
+                  }}
+                  className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
+                  aria-expanded={isMetadataExpanded}
+                >
+                  {isMetadataExpanded ? (
+                    <>
+                      <ChevronUp className="h-3 w-3" aria-hidden="true" />
+                      {t('actions.hideMetadata')}
+                    </>
+                  ) : (
+                    <>
+                      <ChevronDown className="h-3 w-3" aria-hidden="true" />
+                      {t('actions.showMetadata')}
+                    </>
+                  )}
+                </button>
+
+                {/* Expandable metadata badges */}
+                {isMetadataExpanded && (
+                  <div className="flex flex-wrap gap-1.5 pl-4">
+                    {/* Category badge with icon */}
+                    {task.metadata?.category && (
+                      <Badge
+                        variant="outline"
+                        className={cn('text-[10px] px-1.5 py-0', TASK_CATEGORY_COLORS[task.metadata.category])}
+                      >
+                        {CategoryIcon[task.metadata.category] && (
+                          (() => {
+                            const Icon = CategoryIcon[task.metadata.category!];
+                            return <Icon className="h-2.5 w-2.5 mr-0.5" />;
+                          })()
+                        )}
+                        {TASK_CATEGORY_LABELS[task.metadata.category]}
+                      </Badge>
+                    )}
+                    {/* Complexity badge */}
+                    {task.metadata?.complexity && (
+                      <Badge
+                        variant="outline"
+                        className={cn('text-[10px] px-1.5 py-0', TASK_COMPLEXITY_COLORS[task.metadata.complexity])}
+                      >
+                        {TASK_COMPLEXITY_LABELS[task.metadata.complexity]}
+                      </Badge>
+                    )}
+                    {/* Impact badge - high visibility for important tasks */}
+                    {task.metadata?.impact && (task.metadata.impact === 'high' || task.metadata.impact === 'critical') && (
+                      <Badge
+                        variant="outline"
+                        className={cn('text-[10px] px-1.5 py-0', TASK_IMPACT_COLORS[task.metadata.impact])}
+                      >
+                        {TASK_IMPACT_LABELS[task.metadata.impact]}
+                      </Badge>
+                    )}
+                    {/* Security severity - always show when present */}
+                    {task.metadata?.securitySeverity && (
+                      <Badge
+                        variant="outline"
+                        className={cn('text-[10px] px-1.5 py-0', TASK_IMPACT_COLORS[task.metadata.securitySeverity])}
+                      >
+                        {task.metadata.securitySeverity} {t('metadata.severity')}
+                      </Badge>
+                    )}
+                  </div>
                 )}
-                {TASK_CATEGORY_LABELS[task.metadata.category]}
-              </Badge>
-            )}
-            {/* Impact badge - high visibility for important tasks */}
-            {task.metadata?.impact && (task.metadata.impact === 'high' || task.metadata.impact === 'critical') && (
-              <Badge
-                variant="outline"
-                className={cn('text-[10px] px-1.5 py-0', TASK_IMPACT_COLORS[task.metadata.impact])}
-              >
-                {TASK_IMPACT_LABELS[task.metadata.impact]}
-              </Badge>
-            )}
-            {/* Complexity badge */}
-            {task.metadata?.complexity && (
-              <Badge
-                variant="outline"
-                className={cn('text-[10px] px-1.5 py-0', TASK_COMPLEXITY_COLORS[task.metadata.complexity])}
-              >
-                {TASK_COMPLEXITY_LABELS[task.metadata.complexity]}
-              </Badge>
-            )}
-            {/* Priority badge - only show urgent/high */}
-            {task.metadata?.priority && (task.metadata.priority === 'urgent' || task.metadata.priority === 'high') && (
-              <Badge
-                variant="outline"
-                className={cn('text-[10px] px-1.5 py-0', TASK_PRIORITY_COLORS[task.metadata.priority])}
-              >
-                {TASK_PRIORITY_LABELS[task.metadata.priority]}
-              </Badge>
-            )}
-            {/* Security severity - always show */}
-            {task.metadata?.securitySeverity && (
-              <Badge
-                variant="outline"
-                className={cn('text-[10px] px-1.5 py-0', TASK_IMPACT_COLORS[task.metadata.securitySeverity])}
-              >
-                {task.metadata.securitySeverity} {t('metadata.severity')}
-              </Badge>
+              </div>
             )}
           </div>
         )}
