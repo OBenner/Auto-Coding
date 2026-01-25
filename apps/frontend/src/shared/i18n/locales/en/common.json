@@ -610,6 +610,10 @@
       "goToSettings": "Go to Settings"
     }
   },
+  "codeEditor": {
+    "title": "Code Editor",
+    "files": "Files"
+  },
   "roadmapProgress": {
     "elapsedTime": "Elapsed",
     "lastActivity": "Last activity",

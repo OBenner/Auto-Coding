@@ -164,6 +164,12 @@
     "claudeCodeChangelog": "Voir le journal des modifications Claude Code",
     "claudeCodeChangelogAriaLabel": "Voir le journal des modifications Claude Code (s'ouvre dans une nouvelle fenêtre)"
   },
+  "codeEditor": {
+    "unsavedChangesTitle": "Modifications non enregistrées",
+    "unsavedChangesDescription": "Vous avez des modifications non enregistrées. Que souhaitez-vous faire ?",
+    "discardChanges": "Abandonner les modifications",
+    "saveAndSwitch": "Enregistrer et changer"
+  },
   "versionWarning": {
     "title": "Action requise",
     "subtitle": "Mise à jour version 2.7.5",
