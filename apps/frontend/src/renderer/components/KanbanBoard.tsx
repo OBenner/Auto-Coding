@@ -415,7 +415,7 @@ const DroppableColumn = memo(function DroppableColumn({ status, tasks, onTaskCli
                     checked={selectAllCheckedState}
                     onCheckedChange={handleSelectAllChange}
                     disabled={taskCount === 0}
-                    aria-label={isAllSelected ? t('kanban.deselectAll') : t('kanban.selectAll')}
+                    aria-label={isAllSelected ? t('ariaLabels.deselectAll') : t('ariaLabels.selectAll')}
                     className="h-4 w-4"
                   />
                 </div>
@@ -1485,6 +1485,7 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
               size="sm"
               className="gap-2"
               onClick={handleOpenBulkPRDialog}
+              aria-label={t('ariaLabels.createPRs')}
             >
               <GitPullRequest className="h-4 w-4" />
               {t('kanban.createPRs')}
@@ -1494,6 +1495,7 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
               size="sm"
               className="gap-2 text-muted-foreground hover:text-foreground"
               onClick={deselectAllTasks}
+              aria-label={t('ariaLabels.clearSelection')}
             >
               <X className="h-4 w-4" />
               {t('kanban.clearSelection')}
