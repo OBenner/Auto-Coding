@@ -48,10 +48,14 @@
     "lucide-react": "^0.562.0"
   },
   "overrides": {
-    "@electron/rebuild": "4.0.2",
-    "tar": "7.5.6",
-    "*": {
+    "@electron/rebuild": {
       "tar": "7.5.6"
-    }
+    },
+    "app-builder-lib": {
+      "@electron/rebuild": {
+        "tar": "7.5.6"
+      }
+    },
+    "tar": "7.5.6"
   }
 }
