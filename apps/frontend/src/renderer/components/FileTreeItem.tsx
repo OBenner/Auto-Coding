@@ -174,7 +174,11 @@ export function FileTreeItem({
       style={{ paddingLeft: `${depth * 12 + 8}px` }}
       onClick={handleClick}
       onDoubleClick={handleDoubleClick}
-      aria-label={node.isDirectory ? t('accessibility.toggleFolder', { name: node.name }) : undefined}
+      aria-label={
+        node.isDirectory
+          ? t('accessibility.toggleFolder', { name: node.name })
+          : t('accessibility.dragFile', { name: node.name })
+      }
       aria-expanded={node.isDirectory ? isExpanded : undefined}
     >
       {/* Expand/collapse chevron for directories */}

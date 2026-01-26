@@ -22,6 +22,8 @@
     "toggleFolder": "Basculer le dossier {{name}}",
     "expandFolder": "Déplier le dossier {{name}}",
     "collapseFolder": "Replier le dossier {{name}}",
+    "dragFile": "Glisser le fichier {{name}} pour référencer dans le chat",
+    "dragFolder": "Glisser le dossier {{name}} pour référencer dans le chat",
     "newConversationAriaLabel": "Nouvelle conversation",
     "saveEditAriaLabel": "Enregistrer",
     "cancelEditAriaLabel": "Annuler",

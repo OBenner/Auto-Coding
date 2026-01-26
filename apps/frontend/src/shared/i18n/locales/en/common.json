@@ -22,6 +22,8 @@
     "toggleFolder": "Toggle {{name}} folder",
     "expandFolder": "Expand {{name}} folder",
     "collapseFolder": "Collapse {{name}} folder",
+    "dragFile": "Drag {{name}} file to reference in chat",
+    "dragFolder": "Drag {{name}} folder to reference in chat",
     "newConversationAriaLabel": "New conversation",
     "saveEditAriaLabel": "Save",
     "cancelEditAriaLabel": "Cancel",
