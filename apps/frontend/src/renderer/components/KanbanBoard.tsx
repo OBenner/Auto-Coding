@@ -476,6 +476,7 @@ const DroppableColumn = memo(function DroppableColumn({ status, tasks, onTaskCli
                   className="h-7 w-7 hover:bg-cyan-500/10 hover:text-cyan-400 transition-colors"
                   onClick={onQueueAll}
                   title={t('queue.queueAll')}
+                  aria-label={t('ariaLabels.queueAllTasks')}
                 >
                   <ListPlus className="h-4 w-4" />
                 </Button>
@@ -500,6 +501,7 @@ const DroppableColumn = memo(function DroppableColumn({ status, tasks, onTaskCli
               className="h-7 w-7 hover:bg-cyan-500/10 hover:text-cyan-400 transition-colors"
               onClick={onQueueSettings}
               title={t('kanban.queueSettings')}
+              aria-label={t('ariaLabels.queueSettings')}
             >
               <Settings className="h-4 w-4" />
             </Button>
