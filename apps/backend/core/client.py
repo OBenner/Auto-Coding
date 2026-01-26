@@ -48,6 +48,88 @@ from core.platform import (
 logger = logging.getLogger(__name__)
 
 # =============================================================================
+# Token Tracking Integration
+# =============================================================================
+# Provides hooks for phase-level token usage monitoring when DEBUG=true.
+# Uses the centralized TokenTracker from core.token_tracker module.
+
+
+def _is_token_tracking_enabled() -> bool:
+    """
+    Check if token tracking is enabled for debug logging.
+
+    Token tracking is enabled when DEBUG=true is set in the environment.
+    This is a non-intrusive hook that does not modify core client flow.
+
+    Returns:
+        True if DEBUG=true, False otherwise
+    """
+    return os.environ.get("DEBUG", "").lower() in ("true", "1")
+
+
+def _get_token_tracker():
+    """
+    Get the global token tracker instance for cross-module tracking.
+
+    Lazily imports to avoid circular dependencies and only loads
+    when token tracking is actually needed.
+
+    Returns:
+        TokenTracker instance from core.token_tracker module,
+        or None if import fails.
+    """
+    if not _is_token_tracking_enabled():
+        return None
+
+    try:
+        from core.token_tracker import get_global_tracker
+
+        return get_global_tracker()
+    except ImportError:
+        logger.debug("Token tracker module not available")
+        return None
+
+
+def _log_client_creation(
+    agent_type: str,
+    model: str,
+    thinking_tokens: int | None,
+    mcp_servers: list[str],
+) -> None:
+    """
+    Log client creation event for token tracking diagnostics.
+
+    Only logs when DEBUG=true is set. Provides visibility into
+    which agents are created with what configuration.
+
+    Args:
+        agent_type: Type of agent being created
+        model: Model being used
+        thinking_tokens: Extended thinking budget (None if disabled)
+        mcp_servers: List of MCP server names being loaded
+    """
+    if not _is_token_tracking_enabled():
+        return
+
+    tracker = _get_token_tracker()
+    if tracker is None:
+        return
+
+    # Log as a pseudo-phase for diagnostics
+    # Input tokens estimate based on MCP server context bloat (~10-30K per server)
+    estimated_context_tokens = len(mcp_servers) * 15000  # Mid-estimate
+
+    tracker.log_phase(
+        phase_name=f"client_init_{agent_type}",
+        input_tokens=estimated_context_tokens,
+        output_tokens=0,
+        model=model,
+        thinking_budget=thinking_tokens or "disabled",
+        mcp_servers=", ".join(mcp_servers) if mcp_servers else "none",
+    )
+
+
+# =============================================================================
 # Project Index Cache
 # =============================================================================
 # Caches project index and capabilities to avoid reloading on every create_client() call.
@@ -872,6 +954,14 @@ def create_client(
     # See: https://platform.claude.com/docs/en/agent-sdk/subagents
     if agents:
         options_kwargs["agents"] = agents
+
+    # Log client creation for token tracking diagnostics (only when DEBUG=true)
+    _log_client_creation(
+        agent_type=agent_type,
+        model=model,
+        thinking_tokens=max_thinking_tokens,
+        mcp_servers=list(mcp_servers.keys()),
+    )
 
     return ClaudeSDKClient(options=ClaudeAgentOptions(**options_kwargs))
 

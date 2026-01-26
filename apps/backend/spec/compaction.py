@@ -7,10 +7,47 @@ reducing token usage. After each phase completes, key findings are
 summarized and passed as context to subsequent phases.
 """
 
+from enum import Enum
 from pathlib import Path
 
 from core.auth import require_auth_token
 from core.simple_client import create_simple_client
+
+
+class CompactionLevel(Enum):
+    """
+    Configurable aggressiveness levels for conversation compaction.
+
+    Each level defines a target word count for phase summaries:
+    - LIGHT: Preserves more detail (500 words) - good for complex phases
+    - MEDIUM: Balanced summarization (250 words) - default for most phases
+    - AGGRESSIVE: Maximum compression (100 words) - for token-constrained contexts
+    """
+
+    LIGHT = "light"
+    MEDIUM = "medium"
+    AGGRESSIVE = "aggressive"
+
+    @property
+    def target_words(self) -> int:
+        """Return the target word count for this compaction level."""
+        word_counts = {
+            CompactionLevel.LIGHT: 500,
+            CompactionLevel.MEDIUM: 250,
+            CompactionLevel.AGGRESSIVE: 100,
+        }
+        return word_counts[self]
+
+    @property
+    def max_input_chars(self) -> int:
+        """Return the maximum input characters for this compaction level."""
+        # More aggressive compaction can work with less input
+        char_limits = {
+            CompactionLevel.LIGHT: 15000,
+            CompactionLevel.MEDIUM: 12000,
+            CompactionLevel.AGGRESSIVE: 8000,
+        }
+        return char_limits[self]
 
 
 async def summarize_phase_output(

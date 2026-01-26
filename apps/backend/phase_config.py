@@ -317,3 +317,138 @@ def get_spec_phase_thinking_budget(phase_name: str) -> int | None:
     """
     thinking_level = SPEC_PHASE_THINKING_LEVELS.get(phase_name, "medium")
     return get_thinking_budget(thinking_level)
+
+
+# Thresholds for dynamic thinking budget selection
+# Based on task complexity signals
+COMPLEXITY_THRESHOLDS = {
+    "description_short": 100,  # Characters - very simple task description
+    "description_medium": 500,  # Characters - moderate complexity
+    "description_long": 1500,  # Characters - complex task requiring deep analysis
+    "files_simple": 3,  # File count threshold for simple tasks
+    "files_medium": 8,  # File count threshold for medium tasks
+    "services_simple": 1,  # Single service = simpler scope
+    "services_medium": 2,  # Multiple services = more complexity
+}
+
+
+def suggest_thinking_budget(
+    description: str,
+    file_count: int,
+    service_count: int,
+) -> str:
+    """
+    Suggest an appropriate thinking budget level based on task complexity signals.
+
+    Analyzes task description length, number of files to modify, and number of
+    services involved to recommend an appropriate thinking level. This helps
+    optimize token usage by using lower thinking budgets for simple tasks.
+
+    Complexity scoring:
+    - Description length: short (<100 chars) = 0, medium (100-500) = 1,
+      long (500-1500) = 2, very long (>1500) = 3
+    - File count: 1-3 = 0, 4-8 = 1, >8 = 2
+    - Service count: 1 = 0, 2 = 1, >2 = 2
+
+    Budget mapping:
+    - Score 0-1: "low" (simple tasks, minimal reasoning needed)
+    - Score 2-3: "medium" (moderate tasks, standard analysis)
+    - Score 4-5: "high" (complex tasks, deep reasoning)
+    - Score 6+: "ultrathink" (very complex, maximum reasoning depth)
+
+    Args:
+        description: Task description text
+        file_count: Number of files to modify
+        service_count: Number of services involved
+
+    Returns:
+        Thinking level string: "none", "low", "medium", "high", or "ultrathink"
+
+    Example:
+        >>> suggest_thinking_budget("simple task", 1, 1)
+        'low'
+        >>> suggest_thinking_budget("A very long and detailed task description...", 10, 3)
+        'high'
+    """
+    complexity_score = 0
+
+    # Score based on description length
+    desc_len = len(description) if description else 0
+    if desc_len < COMPLEXITY_THRESHOLDS["description_short"]:
+        complexity_score += 0
+    elif desc_len < COMPLEXITY_THRESHOLDS["description_medium"]:
+        complexity_score += 1
+    elif desc_len < COMPLEXITY_THRESHOLDS["description_long"]:
+        complexity_score += 2
+    else:
+        complexity_score += 3
+
+    # Score based on file count
+    if file_count <= COMPLEXITY_THRESHOLDS["files_simple"]:
+        complexity_score += 0
+    elif file_count <= COMPLEXITY_THRESHOLDS["files_medium"]:
+        complexity_score += 1
+    else:
+        complexity_score += 2
+
+    # Score based on service count
+    if service_count <= COMPLEXITY_THRESHOLDS["services_simple"]:
+        complexity_score += 0
+    elif service_count <= COMPLEXITY_THRESHOLDS["services_medium"]:
+        complexity_score += 1
+    else:
+        complexity_score += 2
+
+    # Map complexity score to thinking level
+    if complexity_score <= 1:
+        return "low"
+    elif complexity_score <= 3:
+        return "medium"
+    elif complexity_score <= 5:
+        return "high"
+    else:
+        return "ultrathink"
+
+
+# Output constraint format types and their templates
+OUTPUT_CONSTRAINT_TEMPLATES: dict[str, str] = {
+    "summary": "Respond in {limit} words or less",
+    "brief": "Keep your response under {limit} words",
+    "concise": "Provide a concise response in {limit} words or fewer",
+    "strict": "Your response MUST NOT exceed {limit} words",
+}
+
+
+def get_output_constraint(
+    format_type: str,
+    word_limit: int,
+) -> str:
+    """
+    Generate a response format instruction for constraining output length.
+
+    This helper generates prompt instructions that tell the model to limit
+    its response to a specific word count. Useful for token optimization
+    by requesting shorter responses when full-length output isn't needed.
+
+    Args:
+        format_type: The type of constraint format to use. Supported types:
+            - "summary": Standard format (e.g., "Respond in 200 words or less")
+            - "brief": Alternative format (e.g., "Keep your response under 200 words")
+            - "concise": Formal format (e.g., "Provide a concise response in 200 words or fewer")
+            - "strict": Emphatic format (e.g., "Your response MUST NOT exceed 200 words")
+        word_limit: Maximum number of words for the response
+
+    Returns:
+        Formatted instruction string to include in prompts
+
+    Example:
+        >>> get_output_constraint('summary', 200)
+        'Respond in 200 words or less'
+        >>> get_output_constraint('strict', 100)
+        'Your response MUST NOT exceed 100 words'
+    """
+    # Default to 'summary' format if unknown type
+    template = OUTPUT_CONSTRAINT_TEMPLATES.get(
+        format_type, OUTPUT_CONSTRAINT_TEMPLATES["summary"]
+    )
+    return template.format(limit=word_limit)
