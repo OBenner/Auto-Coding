@@ -133,8 +133,8 @@
     "vitest": "^4.0.16"
   },
   "overrides": {
-    "electron-builder-squirrel-windows": "^26.0.12",
-    "dmg-builder": "^26.0.12",
+    "electron-builder-squirrel-windows": "26.5.0",
+    "dmg-builder": "26.5.0",
     "@electron/rebuild": "4.0.2"
   },
   "build": {
