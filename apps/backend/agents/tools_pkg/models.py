@@ -38,6 +38,7 @@ TOOL_RECORD_DISCOVERY = "mcp__auto-claude__record_discovery"
 TOOL_RECORD_GOTCHA = "mcp__auto-claude__record_gotcha"
 TOOL_GET_SESSION_CONTEXT = "mcp__auto-claude__get_session_context"
 TOOL_UPDATE_QA_STATUS = "mcp__auto-claude__update_qa_status"
+TOOL_GET_SPEC_STATISTICS = "mcp__auto-claude__get_spec_statistics"
 
 # =============================================================================
 # External MCP Tools
