@@ -8,6 +8,7 @@ It exposes Auto Claude functionality via REST API and WebSocket connections.
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from core.config import settings
+from api.routes import auth
 
 # Create FastAPI application
 app = FastAPI(
@@ -26,6 +27,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include API routers
+app.include_router(auth.router)
 
 
 @app.get("/")
