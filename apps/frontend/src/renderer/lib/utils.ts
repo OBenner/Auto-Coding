@@ -86,3 +86,45 @@ export function sanitizeMarkdownForDisplay(text: string, maxLength: number = 200
 
   return sanitized;
 }
+
+/**
+ * Performs shallow equality comparison between two objects.
+ * Compares all enumerable properties using strict equality (===).
+ * @param objA First object to compare
+ * @param objB Second object to compare
+ * @returns true if objects are shallow equal, false otherwise
+ */
+export function shallowEqual(objA: any, objB: any): boolean {
+  // Handle reference equality
+  if (objA === objB) {
+    return true;
+  }
+
+  // Handle null/undefined cases
+  if (objA == null || objB == null) {
+    return false;
+  }
+
+  // Handle non-object types (should have been caught by === check above)
+  if (typeof objA !== 'object' || typeof objB !== 'object') {
+    return false;
+  }
+
+  // Get keys from both objects
+  const keysA = Object.keys(objA);
+  const keysB = Object.keys(objB);
+
+  // Different number of keys means not equal
+  if (keysA.length !== keysB.length) {
+    return false;
+  }
+
+  // Compare each property value using strict equality
+  for (const key of keysA) {
+    if (!Object.prototype.hasOwnProperty.call(objB, key) || objA[key] !== objB[key]) {
+      return false;
+    }
+  }
+
+  return true;
+}
