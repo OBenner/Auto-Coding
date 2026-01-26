@@ -280,6 +280,7 @@ export function Sidebar({
         key={item.id}
         onClick={() => handleNavClick(item.id)}
         disabled={!selectedProjectId}
+        aria-label={item.shortcut ? `${t(item.labelKey)} (${item.shortcut})` : t(item.labelKey)}
         aria-keyshortcuts={item.shortcut}
         className={cn(
           'flex w-full items-center rounded-lg text-sm transition-all duration-200',
