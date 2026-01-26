@@ -28,7 +28,7 @@ import { TaskCard } from './TaskCard';
 import { SortableTaskCard } from './SortableTaskCard';
 import { QueueSettingsModal } from './QueueSettingsModal';
 import { TASK_STATUS_COLUMNS, TASK_STATUS_LABELS } from '../../shared/constants';
-import { cn } from '../lib/utils';
+import { cn, shallowEqual } from '../lib/utils';
 import { persistTaskStatus, forceCompleteTask, archiveTasks, useTaskStore } from '../stores/task-store';
 import { updateProjectSettings, useProjectStore } from '../stores/project-store';
 import { useKanbanSettingsStore, COLLAPSED_COLUMN_WIDTH, DEFAULT_COLUMN_WIDTH, MIN_COLUMN_WIDTH, MAX_COLUMN_WIDTH } from '../stores/kanban-settings-store';
@@ -126,32 +126,50 @@ function droppableColumnPropsAreEqual(
   prevProps: DroppableColumnProps,
   nextProps: DroppableColumnProps
 ): boolean {
-  // Quick checks first
-  if (prevProps.status !== nextProps.status) return false;
-  if (prevProps.isOver !== nextProps.isOver) return false;
+  // Use shallowEqual for non-reference props (simple values)
+  const simpleProps = {
+    status: prevProps.status,
+    isOver: prevProps.isOver,
+    maxParallelTasks: prevProps.maxParallelTasks,
+    archivedCount: prevProps.archivedCount,
+    showArchived: prevProps.showArchived,
+    isCollapsed: prevProps.isCollapsed,
+    columnWidth: prevProps.columnWidth,
+    isResizing: prevProps.isResizing,
+    isLocked: prevProps.isLocked
+  };
+
+  const nextSimpleProps = {
+    status: nextProps.status,
+    isOver: nextProps.isOver,
+    maxParallelTasks: nextProps.maxParallelTasks,
+    archivedCount: nextProps.archivedCount,
+    showArchived: nextProps.showArchived,
+    isCollapsed: nextProps.isCollapsed,
+    columnWidth: nextProps.columnWidth,
+    isResizing: nextProps.isResizing,
+    isLocked: nextProps.isLocked
+  };
+
+  if (!shallowEqual(simpleProps, nextSimpleProps)) return false;
+
+  // Check function props (reference equality)
   if (prevProps.onTaskClick !== nextProps.onTaskClick) return false;
   if (prevProps.onStatusChange !== nextProps.onStatusChange) return false;
   if (prevProps.onAddClick !== nextProps.onAddClick) return false;
   if (prevProps.onArchiveAll !== nextProps.onArchiveAll) return false;
   if (prevProps.onQueueSettings !== nextProps.onQueueSettings) return false;
   if (prevProps.onQueueAll !== nextProps.onQueueAll) return false;
-  if (prevProps.maxParallelTasks !== nextProps.maxParallelTasks) return false;
-  if (prevProps.archivedCount !== nextProps.archivedCount) return false;
-  if (prevProps.showArchived !== nextProps.showArchived) return false;
   if (prevProps.onToggleArchived !== nextProps.onToggleArchived) return false;
   if (prevProps.onSelectAll !== nextProps.onSelectAll) return false;
   if (prevProps.onDeselectAll !== nextProps.onDeselectAll) return false;
   if (prevProps.onToggleSelect !== nextProps.onToggleSelect) return false;
-  if (prevProps.isCollapsed !== nextProps.isCollapsed) return false;
   if (prevProps.onToggleCollapsed !== nextProps.onToggleCollapsed) return false;
-  if (prevProps.columnWidth !== nextProps.columnWidth) return false;
-  if (prevProps.isResizing !== nextProps.isResizing) return false;
   if (prevProps.onResizeStart !== nextProps.onResizeStart) return false;
   if (prevProps.onResizeEnd !== nextProps.onResizeEnd) return false;
-  if (prevProps.isLocked !== nextProps.isLocked) return false;
   if (prevProps.onToggleLocked !== nextProps.onToggleLocked) return false;
 
-  // Compare selection props
+  // Compare selection props (Set requires special handling)
   const prevSelected = prevProps.selectedTaskIds;
   const nextSelected = nextProps.selectedTaskIds;
   if (prevSelected !== nextSelected) {
@@ -162,7 +180,7 @@ function droppableColumnPropsAreEqual(
     }
   }
 
-  // Deep compare tasks
+  // Deep compare tasks (using custom comparator)
   const tasksEqual = tasksAreEquivalent(prevProps.tasks, nextProps.tasks);
 
   // Only log when re-rendering (reduces noise)
@@ -252,50 +270,57 @@ const DroppableColumn = memo(function DroppableColumn({ status, tasks, onTaskCli
   // Memoize taskIds to prevent SortableContext from re-rendering unnecessarily
   const taskIds = useMemo(() => tasks.map((t) => t.id), [tasks]);
 
-  // Create stable onClick handlers for each task to prevent unnecessary re-renders
-  const onClickHandlers = useMemo(() => {
-    const handlers = new Map<string, () => void>();
+  // Cache handler Maps using useRef to maintain stable references across renders
+  const onClickHandlers = useRef<Map<string, () => void>>(new Map());
+  const onStatusChangeHandlers = useRef<Map<string, (newStatus: TaskStatus) => unknown>>(new Map());
+  const onToggleSelectHandlers = useRef<Map<string, () => void> | null>(null);
+
+  // Update handler Maps in useEffect when dependencies change
+  useEffect(() => {
+    const clickHandlers = new Map<string, () => void>();
     tasks.forEach((task) => {
-      handlers.set(task.id, () => onTaskClick(task));
+      clickHandlers.set(task.id, () => onTaskClick(task));
     });
-    return handlers;
+    onClickHandlers.current = clickHandlers;
   }, [tasks, onTaskClick]);
 
-  // Create stable onStatusChange handlers for each task
-  const onStatusChangeHandlers = useMemo(() => {
-    const handlers = new Map<string, (newStatus: TaskStatus) => unknown>();
+  useEffect(() => {
+    const statusHandlers = new Map<string, (newStatus: TaskStatus) => unknown>();
     tasks.forEach((task) => {
-      handlers.set(task.id, (newStatus: TaskStatus) => onStatusChange(task.id, newStatus));
+      statusHandlers.set(task.id, (newStatus: TaskStatus) => onStatusChange(task.id, newStatus));
     });
-    return handlers;
+    onStatusChangeHandlers.current = statusHandlers;
   }, [tasks, onStatusChange]);
 
-  // Create stable onToggleSelect handlers for each task (only for human_review column)
-  const onToggleSelectHandlers = useMemo(() => {
-    if (!onToggleSelect) return null;
-    const handlers = new Map<string, () => void>();
+  useEffect(() => {
+    if (!onToggleSelect) {
+      onToggleSelectHandlers.current = null;
+      return;
+    }
+    const toggleHandlers = new Map<string, () => void>();
     tasks.forEach((task) => {
-      handlers.set(task.id, () => onToggleSelect(task.id));
+      toggleHandlers.set(task.id, () => onToggleSelect(task.id));
     });
-    return handlers;
+    onToggleSelectHandlers.current = toggleHandlers;
   }, [tasks, onToggleSelect]);
 
   // Memoize task card elements to prevent recreation on every render
+  // Note: refs are not included in deps since they maintain stable identity
   const taskCards = useMemo(() => {
     if (tasks.length === 0) return null;
-    const isSelectable = !!onToggleSelectHandlers;
+    const isSelectable = !!onToggleSelectHandlers.current;
     return tasks.map((task) => (
       <SortableTaskCard
         key={task.id}
         task={task}
-        onClick={onClickHandlers.get(task.id)!}
-        onStatusChange={onStatusChangeHandlers.get(task.id)}
+        onClick={onClickHandlers.current.get(task.id)!}
+        onStatusChange={onStatusChangeHandlers.current.get(task.id)}
         isSelectable={isSelectable}
         isSelected={isSelectable ? selectedTaskIds?.has(task.id) : undefined}
-        onToggleSelect={onToggleSelectHandlers?.get(task.id)}
+        onToggleSelect={onToggleSelectHandlers.current?.get(task.id)}
       />
     ));
-  }, [tasks, onClickHandlers, onStatusChangeHandlers, onToggleSelectHandlers, selectedTaskIds]);
+  }, [tasks, selectedTaskIds]);
 
   const getColumnBorderColor = (): string => {
     switch (status) {
