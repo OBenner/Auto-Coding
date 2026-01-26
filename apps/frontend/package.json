@@ -134,11 +134,7 @@
   },
   "overrides": {
     "electron-builder-squirrel-windows": "26.5.0",
-    "dmg-builder": "26.5.0",
-    "@electron/rebuild": {
-      "tar": "7.5.6"
-    },
-    "tar": "7.5.6"
+    "dmg-builder": "26.5.0"
   },
   "build": {
     "appId": "com.autoclaude.ui",
