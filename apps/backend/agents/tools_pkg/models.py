@@ -197,6 +197,7 @@ AGENT_CONFIGS = {
             TOOL_GET_BUILD_PROGRESS,
             TOOL_GET_SESSION_CONTEXT,
             TOOL_RECORD_DISCOVERY,
+            TOOL_GET_SPEC_STATISTICS,
         ],
         "thinking_default": "high",
     },
@@ -210,6 +211,7 @@ AGENT_CONFIGS = {
             TOOL_RECORD_DISCOVERY,
             TOOL_RECORD_GOTCHA,
             TOOL_GET_SESSION_CONTEXT,
+            TOOL_GET_SPEC_STATISTICS,
         ],
         "thinking_default": "none",  # Coding doesn't use extended thinking
     },
