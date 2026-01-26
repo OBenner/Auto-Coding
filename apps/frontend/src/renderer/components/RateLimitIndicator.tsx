@@ -34,7 +34,7 @@ export function RateLimitIndicator() {
   return (
     <div className="mx-3 mb-3">
       <div
-        className="relative flex items-start gap-2 rounded-lg border border-warning/50 bg-warning/10 p-3 cursor-pointer hover:bg-warning/20 transition-colors"
+        className="relative flex items-start gap-2 rounded-lg border border-warning/50 bg-warning/10 p-3 cursor-pointer hover:bg-warning/20 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         onClick={reopenRateLimitModal}
         role="button"
         tabIndex={0}

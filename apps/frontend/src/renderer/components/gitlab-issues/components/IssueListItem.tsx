@@ -19,7 +19,7 @@ export function IssueListItem({ issue, isSelected, onClick, onInvestigate }: Iss
     <div
       role="button"
       tabIndex={0}
-      className={`group p-3 rounded-lg cursor-pointer transition-colors ${
+      className={`group p-3 rounded-lg cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
         isSelected
           ? 'bg-accent/50 border border-accent'
           : 'hover:bg-muted/50 border border-transparent'
