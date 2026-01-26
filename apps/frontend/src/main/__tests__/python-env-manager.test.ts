@@ -132,8 +132,9 @@ describe('PythonEnvManager', () => {
       // PYTHONPATH should just be the site-packages (no win32 additions)
       expect(env.PYTHONPATH).toBe(sitePackagesPath);
 
-      // PATH should not contain pywin32_system32
-      expect(env.PATH || '').not.toContain('pywin32_system32');
+      // PATH should not contain the test's pywin32_system32 path (not the system one)
+      const expectedPywin32Path = path.join(sitePackagesPath, 'pywin32_system32');
+      expect(env.PATH || '').not.toContain(expectedPywin32Path);
     });
 
     it('should normalize PATH case sensitivity on Windows', () => {
