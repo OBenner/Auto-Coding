@@ -652,7 +652,7 @@ export const TaskCard = memo(function TaskCard({
                     size="sm"
                     className="h-7 w-7 p-0"
                     onClick={(e) => e.stopPropagation()}
-                    aria-label={t('actions.taskActions')}
+                    aria-label={t('tasks:ariaLabels.taskActions', { title: displayTitle })}
                   >
                     <MoreVertical className="h-4 w-4" />
                   </Button>
