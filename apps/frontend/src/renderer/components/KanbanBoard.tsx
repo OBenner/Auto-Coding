@@ -28,7 +28,7 @@ import { TaskCard } from './TaskCard';
 import { SortableTaskCard } from './SortableTaskCard';
 import { QueueSettingsModal } from './QueueSettingsModal';
 import { TASK_STATUS_COLUMNS, TASK_STATUS_LABELS } from '../../shared/constants';
-import { cn } from '../lib/utils';
+import { cn, shallowEqual } from '../lib/utils';
 import { persistTaskStatus, forceCompleteTask, archiveTasks, useTaskStore } from '../stores/task-store';
 import { updateProjectSettings, useProjectStore } from '../stores/project-store';
 import { useKanbanSettingsStore, COLLAPSED_COLUMN_WIDTH, DEFAULT_COLUMN_WIDTH, MIN_COLUMN_WIDTH, MAX_COLUMN_WIDTH } from '../stores/kanban-settings-store';
@@ -126,32 +126,50 @@ function droppableColumnPropsAreEqual(
   prevProps: DroppableColumnProps,
   nextProps: DroppableColumnProps
 ): boolean {
-  // Quick checks first
-  if (prevProps.status !== nextProps.status) return false;
-  if (prevProps.isOver !== nextProps.isOver) return false;
+  // Use shallowEqual for non-reference props (simple values)
+  const simpleProps = {
+    status: prevProps.status,
+    isOver: prevProps.isOver,
+    maxParallelTasks: prevProps.maxParallelTasks,
+    archivedCount: prevProps.archivedCount,
+    showArchived: prevProps.showArchived,
+    isCollapsed: prevProps.isCollapsed,
+    columnWidth: prevProps.columnWidth,
+    isResizing: prevProps.isResizing,
+    isLocked: prevProps.isLocked
+  };
+
+  const nextSimpleProps = {
+    status: nextProps.status,
+    isOver: nextProps.isOver,
+    maxParallelTasks: nextProps.maxParallelTasks,
+    archivedCount: nextProps.archivedCount,
+    showArchived: nextProps.showArchived,
+    isCollapsed: nextProps.isCollapsed,
+    columnWidth: nextProps.columnWidth,
+    isResizing: nextProps.isResizing,
+    isLocked: nextProps.isLocked
+  };
+
+  if (!shallowEqual(simpleProps, nextSimpleProps)) return false;
+
+  // Check function props (reference equality)
   if (prevProps.onTaskClick !== nextProps.onTaskClick) return false;
   if (prevProps.onStatusChange !== nextProps.onStatusChange) return false;
   if (prevProps.onAddClick !== nextProps.onAddClick) return false;
   if (prevProps.onArchiveAll !== nextProps.onArchiveAll) return false;
   if (prevProps.onQueueSettings !== nextProps.onQueueSettings) return false;
   if (prevProps.onQueueAll !== nextProps.onQueueAll) return false;
-  if (prevProps.maxParallelTasks !== nextProps.maxParallelTasks) return false;
-  if (prevProps.archivedCount !== nextProps.archivedCount) return false;
-  if (prevProps.showArchived !== nextProps.showArchived) return false;
   if (prevProps.onToggleArchived !== nextProps.onToggleArchived) return false;
   if (prevProps.onSelectAll !== nextProps.onSelectAll) return false;
   if (prevProps.onDeselectAll !== nextProps.onDeselectAll) return false;
   if (prevProps.onToggleSelect !== nextProps.onToggleSelect) return false;
-  if (prevProps.isCollapsed !== nextProps.isCollapsed) return false;
   if (prevProps.onToggleCollapsed !== nextProps.onToggleCollapsed) return false;
-  if (prevProps.columnWidth !== nextProps.columnWidth) return false;
-  if (prevProps.isResizing !== nextProps.isResizing) return false;
   if (prevProps.onResizeStart !== nextProps.onResizeStart) return false;
   if (prevProps.onResizeEnd !== nextProps.onResizeEnd) return false;
-  if (prevProps.isLocked !== nextProps.isLocked) return false;
   if (prevProps.onToggleLocked !== nextProps.onToggleLocked) return false;
 
-  // Compare selection props
+  // Compare selection props (Set requires special handling)
   const prevSelected = prevProps.selectedTaskIds;
   const nextSelected = nextProps.selectedTaskIds;
   if (prevSelected !== nextSelected) {
@@ -162,7 +180,7 @@ function droppableColumnPropsAreEqual(
     }
   }
 
-  // Deep compare tasks
+  // Deep compare tasks (using custom comparator)
   const tasksEqual = tasksAreEquivalent(prevProps.tasks, nextProps.tasks);
 
   // Only log when re-rendering (reduces noise)
