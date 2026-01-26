@@ -252,50 +252,57 @@ const DroppableColumn = memo(function DroppableColumn({ status, tasks, onTaskCli
   // Memoize taskIds to prevent SortableContext from re-rendering unnecessarily
   const taskIds = useMemo(() => tasks.map((t) => t.id), [tasks]);
 
-  // Create stable onClick handlers for each task to prevent unnecessary re-renders
-  const onClickHandlers = useMemo(() => {
-    const handlers = new Map<string, () => void>();
+  // Cache handler Maps using useRef to maintain stable references across renders
+  const onClickHandlers = useRef<Map<string, () => void>>(new Map());
+  const onStatusChangeHandlers = useRef<Map<string, (newStatus: TaskStatus) => unknown>>(new Map());
+  const onToggleSelectHandlers = useRef<Map<string, () => void> | null>(null);
+
+  // Update handler Maps in useEffect when dependencies change
+  useEffect(() => {
+    const clickHandlers = new Map<string, () => void>();
     tasks.forEach((task) => {
-      handlers.set(task.id, () => onTaskClick(task));
+      clickHandlers.set(task.id, () => onTaskClick(task));
     });
-    return handlers;
+    onClickHandlers.current = clickHandlers;
   }, [tasks, onTaskClick]);
 
-  // Create stable onStatusChange handlers for each task
-  const onStatusChangeHandlers = useMemo(() => {
-    const handlers = new Map<string, (newStatus: TaskStatus) => unknown>();
+  useEffect(() => {
+    const statusHandlers = new Map<string, (newStatus: TaskStatus) => unknown>();
     tasks.forEach((task) => {
-      handlers.set(task.id, (newStatus: TaskStatus) => onStatusChange(task.id, newStatus));
+      statusHandlers.set(task.id, (newStatus: TaskStatus) => onStatusChange(task.id, newStatus));
     });
-    return handlers;
+    onStatusChangeHandlers.current = statusHandlers;
   }, [tasks, onStatusChange]);
 
-  // Create stable onToggleSelect handlers for each task (only for human_review column)
-  const onToggleSelectHandlers = useMemo(() => {
-    if (!onToggleSelect) return null;
-    const handlers = new Map<string, () => void>();
+  useEffect(() => {
+    if (!onToggleSelect) {
+      onToggleSelectHandlers.current = null;
+      return;
+    }
+    const toggleHandlers = new Map<string, () => void>();
     tasks.forEach((task) => {
-      handlers.set(task.id, () => onToggleSelect(task.id));
+      toggleHandlers.set(task.id, () => onToggleSelect(task.id));
     });
-    return handlers;
+    onToggleSelectHandlers.current = toggleHandlers;
   }, [tasks, onToggleSelect]);
 
   // Memoize task card elements to prevent recreation on every render
+  // Note: refs are not included in deps since they maintain stable identity
   const taskCards = useMemo(() => {
     if (tasks.length === 0) return null;
-    const isSelectable = !!onToggleSelectHandlers;
+    const isSelectable = !!onToggleSelectHandlers.current;
     return tasks.map((task) => (
       <SortableTaskCard
         key={task.id}
         task={task}
-        onClick={onClickHandlers.get(task.id)!}
-        onStatusChange={onStatusChangeHandlers.get(task.id)}
+        onClick={onClickHandlers.current.get(task.id)!}
+        onStatusChange={onStatusChangeHandlers.current.get(task.id)}
         isSelectable={isSelectable}
         isSelected={isSelectable ? selectedTaskIds?.has(task.id) : undefined}
-        onToggleSelect={onToggleSelectHandlers?.get(task.id)}
+        onToggleSelect={onToggleSelectHandlers.current?.get(task.id)}
       />
     ));
-  }, [tasks, onClickHandlers, onStatusChangeHandlers, onToggleSelectHandlers, selectedTaskIds]);
+  }, [tasks, selectedTaskIds]);
 
   const getColumnBorderColor = (): string => {
     switch (status) {
