@@ -557,6 +557,7 @@ export const TaskCard = memo(function TaskCard({
                 className="h-7 px-2.5"
                 onClick={handleRecover}
                 disabled={isRecovering}
+                aria-label={t('tasks:ariaLabels.recoverTask', { title: displayTitle })}
               >
                 {isRecovering ? (
                   <>
@@ -576,6 +577,7 @@ export const TaskCard = memo(function TaskCard({
                 size="sm"
                 className="h-7 px-2.5"
                 onClick={handleStartStop}
+                aria-label={t('tasks:ariaLabels.resumeTask', { title: displayTitle })}
               >
                 <Play className="mr-1.5 h-3 w-3" />
                 {t('actions.resume')}
@@ -589,6 +591,7 @@ export const TaskCard = memo(function TaskCard({
                     className="h-7 px-2 cursor-pointer"
                     onClick={handleViewPR}
                     title={t('tooltips.viewPR')}
+                    aria-label={t('tasks:ariaLabels.viewTaskPR', { title: displayTitle })}
                   >
                     <GitPullRequest className="h-3 w-3" />
                   </Button>
@@ -600,6 +603,7 @@ export const TaskCard = memo(function TaskCard({
                     className="h-7 px-2 cursor-pointer"
                     onClick={handleArchive}
                     title={t('tooltips.archiveTask')}
+                    aria-label={t('tasks:ariaLabels.archiveTask', { title: displayTitle })}
                   >
                     <Archive className="h-3 w-3" />
                   </Button>
@@ -612,6 +616,7 @@ export const TaskCard = memo(function TaskCard({
                 className="h-7 px-2.5 hover:bg-muted-foreground/10"
                 onClick={handleArchive}
                 title={t('tooltips.archiveTask')}
+                aria-label={t('tasks:ariaLabels.archiveTask', { title: displayTitle })}
               >
                 <Archive className="mr-1.5 h-3 w-3" />
                 {t('actions.archive')}
@@ -622,6 +627,7 @@ export const TaskCard = memo(function TaskCard({
                 size="sm"
                 className="h-7 px-2.5"
                 onClick={handleStartStop}
+                aria-label={isRunning ? t('tasks:ariaLabels.stopTask', { title: displayTitle }) : t('tasks:ariaLabels.startTask', { title: displayTitle })}
               >
                 {isRunning ? (
                   <>
