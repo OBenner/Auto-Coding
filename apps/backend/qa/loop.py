@@ -56,6 +56,120 @@ MAX_CONSECUTIVE_ERRORS = 3  # Stop after 3 consecutive errors without progress
 
 
 # =============================================================================
+# TEST REVIEW HELPERS
+# =============================================================================
+
+
+def _move_tests_to_review_directory(
+    project_dir: Path,
+    spec_dir: Path,
+    generated_files: list[str],
+) -> Path:
+    """
+    Move generated tests to a review directory for user approval.
+
+    Creates a review directory in the spec folder, moves generated test files
+    there, and creates an instruction file for the user.
+
+    Args:
+        project_dir: Project root directory
+        spec_dir: Spec directory
+        generated_files: List of generated test file paths (relative to project_dir)
+
+    Returns:
+        Path to the review directory
+    """
+    import shutil
+
+    # Create review directory
+    review_dir = spec_dir / "generated_tests_review"
+    review_dir.mkdir(exist_ok=True)
+    debug("qa_loop", f"Created test review directory", review_dir=str(review_dir))
+
+    # Move each generated test file to review directory
+    moved_files = []
+    for file_path_str in generated_files:
+        file_path = Path(file_path_str)
+        source = project_dir / file_path
+        dest = review_dir / file_path.name
+
+        if source.exists():
+            try:
+                shutil.move(str(source), str(dest))
+                moved_files.append(file_path.name)
+                debug("qa_loop", f"Moved test to review", file=file_path.name)
+            except Exception as e:
+                debug_error("qa_loop", f"Failed to move {file_path.name}: {e}")
+        else:
+            debug_warning("qa_loop", f"Test file not found for review: {file_path}")
+
+    # Create instruction file
+    instruction_file = review_dir / "README.md"
+    instructions = f"""# Generated Tests - Awaiting Review
+
+## Overview
+The QA loop has generated {len(moved_files)} test file(s) based on the implemented code.
+These tests are waiting for your review and approval before being committed to the project.
+
+## Generated Test Files
+{chr(10).join(f'- {name}' for name in moved_files)}
+
+## Review Process
+
+1. **Review the tests** in this directory
+   - Check that tests are meaningful and correct
+   - Verify they follow project conventions
+   - Ensure edge cases are covered appropriately
+
+2. **Approve tests** (if they look good):
+   ```bash
+   # Copy approved tests to your project's tests/ directory
+   cp {review_dir}/*.py {project_dir / 'tests'}/
+
+   # Commit them with your changes
+   git add tests/
+   git commit -m "Add generated tests for [feature name]"
+   ```
+
+3. **Reject tests** (if they need work):
+   - Delete or modify the test files in this review directory
+   - Optionally provide feedback for regeneration
+   - The tests will NOT be automatically committed
+
+## Notes
+- These tests are isolated in the review directory
+- They will NOT be automatically committed to your project
+- You have full control over which tests to include
+- You can modify tests before copying them to your project
+
+---
+Generated: {time_module.strftime('%Y-%m-%d %H:%M:%S')}
+"""
+
+    try:
+        with open(instruction_file, "w", encoding="utf-8") as f:
+            f.write(instructions)
+        debug("qa_loop", "Created review instructions", file=str(instruction_file))
+    except Exception as e:
+        debug_error("qa_loop", f"Failed to create instruction file: {e}")
+
+    # Print user-facing message
+    print("\n" + "=" * 70)
+    print("  📋 GENERATED TESTS - REVIEW REQUIRED")
+    print("=" * 70)
+    print(f"\n✅ {len(moved_files)} test file(s) have been generated and saved for review.")
+    print(f"\n📁 Review directory: {review_dir}")
+    print(f"\nGenerated tests:")
+    for name in moved_files:
+        print(f"   • {name}")
+    print(f"\n📖 See {instruction_file.name} for review instructions")
+    print("\n⚠️  Tests are NOT automatically committed - review and approve manually.")
+    print("=" * 70)
+
+    return review_dir
+
+
+# =============================================================================
 # QA VALIDATION LOOP
 # =============================================================================
 
@@ -253,6 +367,12 @@ async def run_qa_validation_loop(
                     generated_files = test_result.get("generated_files", [])
                     print(f"   ✅ Generated {len(generated_files)} test file(s)")
                     debug_success("qa_loop", f"Test generation completed", file_count=len(generated_files))
+
+                    # Move generated tests to review directory for user approval
+                    if generated_files:
+                        _move_tests_to_review_directory(
+                            project_dir, spec_dir, generated_files
+                        )
                 else:
                     error = test_result.get("error", "Unknown error")
                     print(f"   ⚠️  Test generation had issues: {error}")
