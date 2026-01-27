@@ -27,23 +27,23 @@ vi.mock('../python-detector', () => ({
   getBundledPythonPath: vi.fn().mockReturnValue(null),
 }));
 
-// Mock platform module to allow platform simulation in tests
-vi.mock('../platform', () => ({
-  isWindows: vi.fn(),
-  isLinux: vi.fn(),
-  isMacOS: vi.fn(),
-  getPathDelimiter: vi.fn(),
-}));
-
-// Mock git-isolation to control environment variables in tests
+// Mock git-isolation to return environment without pywin32_system32 in PATH
 vi.mock('../utils/git-isolation', () => ({
-  getIsolatedGitEnv: vi.fn(() => ({ ...process.env })),
+  getIsolatedGitEnv: vi.fn(() => {
+    // Return actual environment but with PATH cleaned of pywin32_system32
+    const env = { ...process.env };
+    if (env.PATH) {
+      // Remove any pywin32_system32 paths from the system PATH
+      env.PATH = env.PATH.split(process.platform === 'win32' ? ';' : ':')
+        .filter(p => !p.includes('pywin32_system32'))
+        .join(process.platform === 'win32' ? ';' : ':');
+    }
+    return env;
+  }),
 }));
 
 // Import after mocking
 import { PythonEnvManager } from '../python-env-manager';
-import { isWindows, isLinux, getPathDelimiter } from '../platform';
-import { getIsolatedGitEnv } from '../utils/git-isolation';
 
 describe('PythonEnvManager', () => {
   let manager: PythonEnvManager;
@@ -93,13 +93,15 @@ describe('PythonEnvManager', () => {
   });
 
   describe('Windows pywin32 DLL loading fix', () => {
+    const originalPlatform = process.platform;
+
     beforeEach(() => {
-      // Default to Windows for most tests in this block
-      vi.mocked(isWindows).mockReturnValue(true);
-      vi.mocked(isLinux).mockReturnValue(false);
-      vi.mocked(getPathDelimiter).mockReturnValue(';');
-      // Reset getIsolatedGitEnv to return actual process.env for each test
-      vi.mocked(getIsolatedGitEnv).mockReturnValue({ ...process.env });
+      // Mock Windows platform
+      Object.defineProperty(process, 'platform', { value: 'win32' });
+    });
+
+    afterEach(() => {
+      Object.defineProperty(process, 'platform', { value: originalPlatform });
     });
 
     it('should add pywin32_system32 to PATH on Windows when sitePackagesPath is set', () => {
@@ -132,15 +134,8 @@ describe('PythonEnvManager', () => {
     });
 
     it('should not add Windows-specific PATH modification on non-Windows platforms', () => {
-      // Override the beforeEach mock for this specific test
-      vi.mocked(isWindows).mockReturnValue(false);
-      vi.mocked(isLinux).mockReturnValue(true);
-      vi.mocked(getPathDelimiter).mockReturnValue(':');
-
-      // Mock getIsolatedGitEnv to return a clean Unix-style PATH without pywin32_system32
-      vi.mocked(getIsolatedGitEnv).mockReturnValue({
-        PATH: '/usr/bin:/usr/local/bin',
-      });
+      // Restore non-Windows platform
+      Object.defineProperty(process, 'platform', { value: 'darwin' });
 
       const sitePackagesPath = '/test/site-packages';
 
@@ -152,9 +147,8 @@ describe('PythonEnvManager', () => {
       // PYTHONPATH should just be the site-packages (no win32 additions)
       expect(env.PYTHONPATH).toBe(sitePackagesPath);
 
-      // PATH should not contain the test's pywin32_system32 path (not the system one)
-      const expectedPywin32Path = path.join(sitePackagesPath, 'pywin32_system32');
-      expect(env.PATH || '').not.toContain(expectedPywin32Path);
+      // PATH should not contain pywin32_system32
+      expect(env.PATH || '').not.toContain('pywin32_system32');
     });
 
     it('should normalize PATH case sensitivity on Windows', () => {

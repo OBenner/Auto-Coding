@@ -3000,5 +3000,375 @@ export function registerPRHandlers(getMainWindow: () => BrowserWindow | null): v
     }
   );
 
+  // Get inline comments for a PR
+  ipcMain.handle(
+    IPC_CHANNELS.GITHUB_PR_GET_INLINE_COMMENTS,
+    async (_, projectId: string, prNumber: number): Promise<import('../../../preload/api/modules/github-api').InlineComment[]> => {
+      debugLog("getInlineComments handler called", { projectId, prNumber });
+      const result = await withProjectOrNull(projectId, async (project) => {
+        const config = getGitHubConfig(project);
+        if (!config) {
+          debugLog("No GitHub config found");
+          return [];
+        }
+
+        try {
+          // Fetch review comments (inline comments on code) using GitHub REST API
+          const comments = await githubFetch(
+            config.token,
+            `/repos/${config.repo}/pulls/${prNumber}/comments`
+          ) as Array<{
+            id: number;
+            user: { login: string };
+            body: string;
+            path: string;
+            position?: number;
+            line?: number;
+            commit_id: string;
+            created_at: string;
+            updated_at: string;
+            in_reply_to_id?: number;
+          }>;
+
+          debugLog("Fetched inline comments", { prNumber, count: comments.length });
+
+          // Return comments in the expected format
+          return comments.map(comment => ({
+            id: comment.id,
+            user: { login: comment.user.login },
+            body: comment.body,
+            path: comment.path,
+            position: comment.position,
+            line: comment.line,
+            commit_id: comment.commit_id,
+            created_at: comment.created_at,
+            updated_at: comment.updated_at,
+            in_reply_to_id: comment.in_reply_to_id
+          }));
+        } catch (error) {
+          debugLog("Failed to fetch inline comments", {
+            prNumber,
+            error: error instanceof Error ? error.message : error,
+          });
+          return [];
+        }
+      });
+
+      return result ?? [];
+    }
+  );
+
+  // Reply to an inline comment on a PR
+  ipcMain.handle(
+    IPC_CHANNELS.GITHUB_PR_REPLY_TO_COMMENT,
+    async (_, projectId: string, commentId: number, body: string): Promise<boolean> => {
+      debugLog("replyToComment handler called", { projectId, commentId });
+      const result = await withProjectOrNull(projectId, async (project) => {
+        const config = getGitHubConfig(project);
+        if (!config) {
+          debugLog("No GitHub config found");
+          return false;
+        }
+
+        try {
+          // Validate commentId to prevent injection
+          if (!Number.isInteger(commentId) || commentId <= 0) {
+            throw new Error("Invalid comment ID");
+          }
+
+          // Validate body is not empty
+          if (!body || body.trim().length === 0) {
+            throw new Error("Reply body cannot be empty");
+          }
+
+          debugLog("Posting reply to comment", { commentId });
+
+          // Post reply using GitHub REST API
+          await githubFetch(
+            config.token,
+            `/repos/${config.repo}/pulls/comments/${commentId}/replies`,
+            {
+              method: "POST",
+              body: JSON.stringify({ body: body.trim() }),
+            }
+          );
+
+          debugLog("Reply posted successfully", { commentId });
+          return true;
+        } catch (error) {
+          debugLog("Failed to post reply", {
+            commentId,
+            error: error instanceof Error ? error.message : error,
+          });
+          return false;
+        }
+      });
+
+      return result ?? false;
+    }
+  );
+
+  // Apply a suggested change from a PR review comment
+  ipcMain.handle(
+    IPC_CHANNELS.GITHUB_PR_APPLY_SUGGESTION,
+    async (
+      _,
+      projectId: string,
+      prNumber: number,
+      comment: {
+        id: number;
+        body: string;
+        path: string;
+        line?: number;
+      },
+      commitMessage?: string
+    ): Promise<{ success: boolean; commit_sha?: string; error?: string }> => {
+      debugLog("applySuggestion handler called", { projectId, prNumber, comment });
+      const result = await withProjectOrNull(projectId, async (project) => {
+        try {
+          // Validate PR number
+          if (!Number.isInteger(prNumber) || prNumber <= 0) {
+            throw new Error("Invalid PR number");
+          }
+
+          // Validate comment object
+          if (!comment || typeof comment !== "object") {
+            throw new Error("Invalid comment object");
+          }
+
+          if (!comment.path || typeof comment.path !== "string") {
+            throw new Error("Comment must include a valid file path");
+          }
+
+          if (!comment.body || typeof comment.body !== "string") {
+            throw new Error("Comment must include body");
+          }
+
+          debugLog("Applying suggestion from comment", { prNumber, path: comment.path });
+
+          // Validate GitHub module and get backend path
+          const validation = await validateGitHubModule(project);
+          if (!validation.valid) {
+            throw new Error(validation.error);
+          }
+
+          const backendPath = validation.backendPath!;
+          const scriptPath = path.join(backendPath, "scripts", "apply_suggestion.py");
+
+          // Check if script exists
+          if (!fs.existsSync(scriptPath)) {
+            throw new Error("apply_suggestion.py script not found");
+          }
+
+          // Build arguments for the Python script
+          // Pass comment to Python script, which will parse it and extract suggestion
+          const args = [
+            scriptPath,
+            project.path,
+            prNumber.toString(),
+            JSON.stringify(comment),
+          ];
+
+          if (commitMessage) {
+            args.push(commitMessage);
+          }
+
+          debugLog("Running apply_suggestion script", { args });
+
+          // Build environment with project settings
+          const subprocessEnv = await getRunnerEnv(getClaudeMdEnv(project));
+
+          // Run the Python script
+          const { promise } = runPythonSubprocess<{
+            success: boolean;
+            commit_sha?: string;
+            error?: string;
+          }>({
+            pythonPath: getPythonPath(backendPath),
+            args,
+            cwd: backendPath,
+            env: subprocessEnv,
+            onStdout: (line) => debugLog("apply_suggestion STDOUT:", line),
+            onStderr: (line) => debugLog("apply_suggestion STDERR:", line),
+            onComplete: () => {
+              // The result is parsed from JSON output by runPythonSubprocess
+              debugLog("apply_suggestion completed");
+              return { success: false, error: "No result returned" };
+            },
+          });
+
+          // Wait for the process to complete
+          const scriptResult = await promise;
+
+          if (!scriptResult.success) {
+            throw new Error(scriptResult.error ?? "Failed to apply suggestion");
+          }
+
+          debugLog("Suggestion applied successfully", {
+            prNumber,
+            commit_sha: scriptResult.commit_sha,
+          });
+
+          // Emit event to notify frontend that PR was updated
+          mainWindow.webContents.send(IPC_CHANNELS.GITHUB_PR_UPDATED, {
+            prNumber,
+            commitSha: scriptResult.commit_sha,
+          });
+
+          return {
+            success: true,
+            commit_sha: scriptResult.commit_sha,
+          };
+        } catch (error) {
+          debugLog("Failed to apply suggestion", {
+            prNumber,
+            error: error instanceof Error ? error.message : error,
+          });
+          return {
+            success: false,
+            error: error instanceof Error ? error.message : "Unknown error",
+          };
+        }
+      });
+
+      return (
+        result ?? {
+          success: false,
+          error: "Project not found",
+        }
+      );
+    }
+  );
+
+  // Request re-review on a PR
+  ipcMain.handle(
+    IPC_CHANNELS.GITHUB_PR_REQUEST_REREVIEW,
+    async (
+      _,
+      projectId: string,
+      prNumber: number,
+      reviewers: string[],
+      teamReviewers?: string[]
+    ): Promise<{ success: boolean; error?: string }> => {
+      debugLog("requestReReview handler called", { projectId, prNumber, reviewers, teamReviewers });
+      const result = await withProjectOrNull(projectId, async (project) => {
+        try {
+          // Validate PR number
+          if (!Number.isInteger(prNumber) || prNumber <= 0) {
+            throw new Error("Invalid PR number");
+          }
+
+          // Validate reviewers array
+          if (!Array.isArray(reviewers) || reviewers.length === 0) {
+            throw new Error("At least one reviewer is required");
+          }
+
+          // Validate reviewer usernames
+          for (const reviewer of reviewers) {
+            if (typeof reviewer !== "string" || reviewer.trim().length === 0) {
+              throw new Error("Invalid reviewer username");
+            }
+          }
+
+          // Validate team reviewers if provided
+          if (teamReviewers !== undefined) {
+            if (!Array.isArray(teamReviewers)) {
+              throw new Error("Team reviewers must be an array");
+            }
+            for (const team of teamReviewers) {
+              if (typeof team !== "string" || team.trim().length === 0) {
+                throw new Error("Invalid team reviewer slug");
+              }
+            }
+          }
+
+          debugLog("Requesting re-review", { prNumber, reviewers, teamReviewers });
+
+          // Validate GitHub module and get backend path
+          const validation = await validateGitHubModule(project);
+          if (!validation.valid) {
+            throw new Error(validation.error);
+          }
+
+          const backendPath = validation.backendPath!;
+          const scriptPath = path.join(backendPath, "scripts", "request_rereview.py");
+
+          // Check if script exists
+          if (!fs.existsSync(scriptPath)) {
+            throw new Error("request_rereview.py script not found");
+          }
+
+          // Build arguments for the Python script
+          const args = [
+            scriptPath,
+            project.path,
+            prNumber.toString(),
+            JSON.stringify(reviewers),
+          ];
+
+          if (teamReviewers && teamReviewers.length > 0) {
+            args.push(JSON.stringify(teamReviewers));
+          }
+
+          debugLog("Running request_rereview script", { args });
+
+          // Build environment with project settings
+          const subprocessEnv = await getRunnerEnv(getClaudeMdEnv(project));
+
+          // Run the Python script
+          const { promise } = runPythonSubprocess<{
+            success: boolean;
+            error?: string;
+          }>({
+            pythonPath: getPythonPath(backendPath),
+            args,
+            cwd: backendPath,
+            env: subprocessEnv,
+            onStdout: (line) => debugLog("request_rereview STDOUT:", line),
+            onStderr: (line) => debugLog("request_rereview STDERR:", line),
+            onComplete: () => {
+              // The result is parsed from JSON output by runPythonSubprocess
+              debugLog("request_rereview completed");
+              return { success: false, error: "No result returned" };
+            },
+          });
+
+          // Wait for the process to complete
+          const scriptResult = await promise;
+
+          if (!scriptResult.success) {
+            throw new Error(scriptResult.error ?? "Failed to request re-review");
+          }
+
+          debugLog("Re-review requested successfully", {
+            prNumber,
+            reviewers,
+            teamReviewers,
+          });
+
+          return {
+            success: true,
+          };
+        } catch (error) {
+          debugLog("Failed to request re-review", {
+            prNumber,
+            error: error instanceof Error ? error.message : error,
+          });
+          return {
+            success: false,
+            error: error instanceof Error ? error.message : "Unknown error",
+          };
+        }
+      });
+
+      return (
+        result ?? {
+          success: false,
+          error: "Project not found",
+        }
+      );
+    }
+  );
+
   debugLog("PR handlers registered");
 }

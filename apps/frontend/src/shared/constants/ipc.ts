@@ -397,11 +397,16 @@ export const IPC_CHANNELS = {
   GITHUB_PR_CHECK_MERGE_READINESS: 'github:pr:checkMergeReadiness',
   GITHUB_PR_MARK_REVIEW_POSTED: 'github:pr:markReviewPosted',
   GITHUB_PR_UPDATE_BRANCH: 'github:pr:updateBranch',
+  GITHUB_PR_GET_INLINE_COMMENTS: 'github:pr:getInlineComments',
+  GITHUB_PR_REPLY_TO_COMMENT: 'github:pr:replyToComment',
+  GITHUB_PR_APPLY_SUGGESTION: 'github:pr:applySuggestion',
+  GITHUB_PR_REQUEST_REREVIEW: 'github:pr:requestReReview',
 
   // GitHub PR Review events (main -> renderer)
   GITHUB_PR_REVIEW_PROGRESS: 'github:pr:reviewProgress',
   GITHUB_PR_REVIEW_COMPLETE: 'github:pr:reviewComplete',
   GITHUB_PR_REVIEW_ERROR: 'github:pr:reviewError',
+  GITHUB_PR_UPDATED: 'github:pr:updated',
 
   // GitHub PR Logs (for viewing AI review logs)
   GITHUB_PR_GET_LOGS: 'github:pr:getLogs',
@@ -490,7 +495,6 @@ export const IPC_CHANNELS = {
   // File explorer operations
   FILE_EXPLORER_LIST: 'fileExplorer:list',
   FILE_EXPLORER_READ: 'fileExplorer:read',
-  FILE_EXPLORER_WRITE: 'fileExplorer:write',
 
   // Git operations
   GIT_GET_BRANCHES: 'git:getBranches',

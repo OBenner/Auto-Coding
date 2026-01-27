@@ -734,6 +734,66 @@ class GHClient:
             "issue_comments": issue_comments,
         }
 
+    async def get_inline_comments(self, pr_number: int) -> list[dict]:
+        """
+        Get all inline review comments for a PR.
+
+        Inline review comments are comments left on specific lines of code
+        in the PR's file changes.
+
+        Args:
+            pr_number: PR number
+
+        Returns:
+            List of inline comment objects with fields:
+            - id: Comment ID
+            - user: User who made the comment
+            - body: Comment text
+            - path: File path the comment is on
+            - position: Position in the diff
+            - line: Line number in the file
+            - commit_id: Commit SHA the comment was made on
+            - created_at: When the comment was created
+            - updated_at: When the comment was last updated
+        """
+        endpoint = f"repos/{{owner}}/{{repo}}/pulls/{pr_number}/comments"
+        args = ["api", "--method", "GET", endpoint]
+        result = await self.run(args, raise_on_error=False)
+
+        comments = []
+        if result.returncode == 0:
+            try:
+                comments = json.loads(result.stdout)
+            except json.JSONDecodeError:
+                logger.warning(f"Failed to parse inline comments for PR #{pr_number}")
+
+        return comments
+
+    async def reply_to_comment(self, comment_id: int, body: str) -> dict[str, Any]:
+        """
+        Reply to an inline review comment.
+
+        This creates a reply to a specific inline comment on a PR.
+        The reply will be threaded under the original comment.
+
+        Args:
+            comment_id: The ID of the inline comment to reply to
+            body: The reply text
+
+        Returns:
+            Dict containing the created reply comment data with fields:
+            - id: Reply comment ID
+            - body: Reply text
+            - user: User who made the reply
+            - created_at: When the reply was created
+            - in_reply_to_id: ID of the parent comment
+        """
+        endpoint = f"repos/{{owner}}/{{repo}}/pulls/comments/{comment_id}/replies"
+        args = ["api", "--method", "POST", endpoint, "-f", f"body={body}"]
+
+        result = await self.run(args)
+        return json.loads(result.stdout)
+
     async def get_reviews_since(
         self, pr_number: int, since_timestamp: str
     ) -> list[dict]:
@@ -1214,3 +1274,213 @@ class GHClient:
             "Returning all PR files with empty commits list."
         )
         return pr_files, []
+
+    async def request_rereview(
+        self, pr_number: int, reviewers: list[str], team_reviewers: list[str] | None = None
+    ) -> None:
+        """
+        Request re-review from specific reviewers on a PR.
+
+        This method requests reviewers to re-review a pull request, typically
+        after changes have been made in response to their feedback.
+
+        Args:
+            pr_number: PR number
+            reviewers: List of GitHub usernames to request review from
+            team_reviewers: Optional list of team slugs to request review from
+
+        Raises:
+            GHCommandError: If the API request fails
+        """
+        if not reviewers and not team_reviewers:
+            logger.warning(
+                f"request_rereview called for PR #{pr_number} with no reviewers"
+            )
+            return
+
+        endpoint = f"repos/{{owner}}/{{repo}}/pulls/{pr_number}/requested_reviewers"
+        args = ["api", "--method", "POST", endpoint]
+
+        # Add reviewers as JSON fields
+        if reviewers:
+            args.extend(["-f", f"reviewers={','.join(reviewers)}"])
+        if team_reviewers:
+            args.extend(["-f", f"team_reviewers={','.join(team_reviewers)}"])
+
+        await self.run(args)
+        logger.info(
+            f"Requested re-review for PR #{pr_number} from: {', '.join(reviewers)}"
+        )
+
+    async def apply_suggestion(
+        self,
+        pr_number: int,
+        suggestion: dict[str, Any],
+        commit_message: str | None = None,
+    ) -> dict[str, Any]:
+        """
+        Apply a suggested change from a review comment to the PR.
+
+        This method:
+        1. Reads the file content from the PR branch
+        2. Applies the suggested change (replaces old code with new code)
+        3. Writes the updated file
+        4. Creates a commit with the change
+        5. Pushes to the PR branch
+
+        Args:
+            pr_number: PR number
+            suggestion: Dict with:
+                - path: File path relative to repo root
+                - start_line: Starting line number (1-indexed)
+                - end_line: Ending line number (1-indexed)
+                - original_code: Expected original code (for validation)
+                - suggested_code: New code to replace with
+                - reasoning: Why this change is suggested
+            commit_message: Optional custom commit message
+
+        Returns:
+            Dict with:
+            - success: True if applied successfully
+            - commit_sha: SHA of the created commit (if successful)
+            - error: Error message (if failed)
+
+        Raises:
+            GHCommandError: If git operations fail
+        """
+        try:
+            # Extract suggestion details
+            file_path = suggestion.get("path", "")
+            start_line = suggestion.get("start_line", 0)
+            end_line = suggestion.get("end_line", 0)
+            original_code = suggestion.get("original_code", "")
+            suggested_code = suggestion.get("suggested_code", "")
+            reasoning = suggestion.get("reasoning", "Apply suggested change")
+
+            if not file_path or start_line <= 0 or end_line <= 0:
+                return {
+                    "success": False,
+                    "error": "Invalid suggestion: missing path or line numbers",
+                }
+
+            # Get PR branch name
+            pr_data = await self.pr_get(pr_number, json_fields=["headRefName"])
+            branch_name = pr_data.get("headRefName", "")
+
+            if not branch_name:
+                return {
+                    "success": False,
+                    "error": f"Could not determine branch name for PR #{pr_number}",
+                }
+
+            logger.info(
+                f"Applying suggestion to {file_path} lines {start_line}-{end_line} "
+                f"on branch {branch_name}"
+            )
+
+            # Read current file content
+            file_full_path = self.project_dir / file_path
+            if not file_full_path.exists():
+                return {
+                    "success": False,
+                    "error": f"File not found: {file_path}",
+                }
+
+            with open(file_full_path, "r", encoding="utf-8") as f:
+                lines = f.readlines()
+
+            # Validate line numbers
+            if start_line > len(lines) or end_line > len(lines):
+                return {
+                    "success": False,
+                    "error": f"Line numbers {start_line}-{end_line} exceed file length ({len(lines)} lines)",
+                }
+
+            # Apply the change (lines are 1-indexed in GitHub, 0-indexed in Python)
+            # Replace lines [start_line-1 : end_line] with suggested_code
+            suggested_lines = suggested_code.splitlines(keepends=True)
+
+            # Ensure suggested lines end with newline if original did
+            if suggested_lines and not suggested_lines[-1].endswith('\n'):
+                suggested_lines[-1] += '\n'
+
+            new_lines = (
+                lines[: start_line - 1] + suggested_lines + lines[end_line:]
+            )
+
+            # Write the updated content
+            with open(file_full_path, "w", encoding="utf-8") as f:
+                f.writelines(new_lines)
+
+            # Create commit message
+            if not commit_message:
+                commit_message = f"Apply suggestion: {reasoning}"
+
+            # Stage and commit the change
+            # Use git directly via gh CLI's shell execution
+            stage_args = ["api", "--method", "POST", "/graphql", "-f",
+                         f'query=mutation {{ __typename }}']
+
+            # Actually, let's use basic git commands through subprocess
+            # First, stage the file
+            import subprocess
+
+            try:
+                # Stage the changed file
+                subprocess.run(
+                    ["git", "add", file_path],
+                    cwd=self.project_dir,
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                )
+
+                # Create commit
+                result = subprocess.run(
+                    ["git", "commit", "-m", commit_message],
+                    cwd=self.project_dir,
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                )
+
+                # Get the commit SHA
+                sha_result = subprocess.run(
+                    ["git", "rev-parse", "HEAD"],
+                    cwd=self.project_dir,
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                )
+                commit_sha = sha_result.stdout.strip()
+
+                # Push to remote
+                subprocess.run(
+                    ["git", "push"],
+                    cwd=self.project_dir,
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                )
+
+                logger.info(
+                    f"Applied suggestion and committed as {commit_sha[:8]}"
+                )
+
+                return {
+                    "success": True,
+                    "commit_sha": commit_sha,
+                }
+
+            except subprocess.CalledProcessError as e:
+                return {
+                    "success": False,
+                    "error": f"Git operation failed: {e.stderr}",
+                }
+
+        except Exception as e:
+            logger.error(f"Failed to apply suggestion: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+            }

@@ -148,7 +148,8 @@ function createWindow(): void {
     const display = screen.getPrimaryDisplay();
     // Validate the returned object has expected structure with valid dimensions
     if (
-      display?.workAreaSize &&
+      display &&
+      display.workAreaSize &&
       typeof display.workAreaSize.width === 'number' &&
       typeof display.workAreaSize.height === 'number' &&
       display.workAreaSize.width > 0 &&
@@ -192,7 +193,7 @@ function createWindow(): void {
     icon: getIconPath(),
     webPreferences: {
       preload: join(__dirname, '../preload/index.mjs'),
-      sandbox: false,
+      sandbox: true,
       contextIsolation: true,
       nodeIntegration: false,
       backgroundThrottling: false // Prevent terminal lag when window loses focus

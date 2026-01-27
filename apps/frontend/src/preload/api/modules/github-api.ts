@@ -294,6 +294,12 @@ export interface GitHubAPI {
   getWorkflowsAwaitingApproval: (projectId: string, prNumber: number) => Promise<WorkflowsAwaitingApprovalResult>;
   approveWorkflow: (projectId: string, runId: number) => Promise<boolean>;
 
+  // Inline comments operations
+  getInlineComments: (projectId: string, prNumber: number) => Promise<InlineComment[]>;
+  replyToComment: (projectId: string, prNumber: number, commentId: number, body: string) => Promise<boolean>;
+  applySuggestion: (projectId: string, prNumber: number, comment: InlineComment) => Promise<{ success: boolean; commit_sha?: string; error?: string }>;
+  requestReReview: (projectId: string, prNumber: number, reviewers: string[]) => Promise<boolean>;
+
   // PR event listeners
   onPRReviewProgress: (
     callback: (projectId: string, progress: PRReviewProgress) => void
@@ -303,6 +309,9 @@ export interface GitHubAPI {
   ) => IpcListenerCleanup;
   onPRReviewError: (
     callback: (projectId: string, error: { prNumber: number; error: string }) => void
+  ) => IpcListenerCleanup;
+  onPRUpdated: (
+    callback: (data: { prNumber: number; commitSha?: string }) => void
   ) => IpcListenerCleanup;
 }
 
@@ -476,6 +485,22 @@ export interface PRLogs {
     analysis: PRPhaseLog;
     synthesis: PRPhaseLog;
   };
+}
+
+/**
+ * Inline code review comment from GitHub PR
+ */
+export interface InlineComment {
+  id: number;
+  user: { login: string };
+  body: string;
+  path: string;
+  position?: number;
+  line?: number;
+  commit_id: string;
+  created_at: string;
+  updated_at: string;
+  in_reply_to_id?: number;
 }
 
 /**
@@ -732,6 +757,19 @@ export const createGitHubAPI = (): GitHubAPI => ({
   approveWorkflow: (projectId: string, runId: number): Promise<boolean> =>
     invokeIpc(IPC_CHANNELS.GITHUB_WORKFLOW_APPROVE, projectId, runId),
 
+  // Inline comments operations
+  getInlineComments: (projectId: string, prNumber: number): Promise<InlineComment[]> =>
+    invokeIpc(IPC_CHANNELS.GITHUB_PR_GET_INLINE_COMMENTS, projectId, prNumber),
+
+  replyToComment: (projectId: string, prNumber: number, commentId: number, body: string): Promise<boolean> =>
+    invokeIpc(IPC_CHANNELS.GITHUB_PR_REPLY_TO_COMMENT, projectId, prNumber, commentId, body),
+
+  applySuggestion: (projectId: string, prNumber: number, comment: InlineComment): Promise<{ success: boolean; commit_sha?: string; error?: string }> =>
+    invokeIpc(IPC_CHANNELS.GITHUB_PR_APPLY_SUGGESTION, projectId, prNumber, comment),
+
+  requestReReview: (projectId: string, prNumber: number, reviewers: string[]): Promise<boolean> =>
+    invokeIpc(IPC_CHANNELS.GITHUB_PR_REQUEST_REREVIEW, projectId, prNumber, reviewers),
+
   // PR event listeners
   onPRReviewProgress: (
     callback: (projectId: string, progress: PRReviewProgress) => void
@@ -746,5 +784,10 @@ export const createGitHubAPI = (): GitHubAPI => ({
   onPRReviewError: (
     callback: (projectId: string, error: { prNumber: number; error: string }) => void
   ): IpcListenerCleanup =>
-    createIpcListener(IPC_CHANNELS.GITHUB_PR_REVIEW_ERROR, callback)
+    createIpcListener(IPC_CHANNELS.GITHUB_PR_REVIEW_ERROR, callback),
+
+  onPRUpdated: (
+    callback: (data: { prNumber: number; commitSha?: string }) => void
+  ): IpcListenerCleanup =>
+    createIpcListener(IPC_CHANNELS.GITHUB_PR_UPDATED, callback)
 });
