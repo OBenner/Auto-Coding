@@ -3,6 +3,7 @@ import { Loader2, AlertCircle } from 'lucide-react';
 import { ScrollArea } from '../../ui/scroll-area';
 import { IssueListItem } from './IssueListItem';
 import { EmptyState } from './EmptyStates';
+import { IssueListSkeleton } from '../../skeletons/IssueListSkeleton';
 import type { IssueListProps } from '../types';
 import { useTranslation } from 'react-i18next';
 
@@ -61,9 +62,11 @@ export function IssueList({
 
   if (isLoading && issues.length === 0) {
     return (
-      <div className="flex-1 flex items-center justify-center">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-      </div>
+      <ScrollArea className="flex-1">
+        <div className="p-2">
+          <IssueListSkeleton count={5} />
+        </div>
+      </ScrollArea>
     );
   }
 
