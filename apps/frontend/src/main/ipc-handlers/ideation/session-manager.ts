@@ -28,7 +28,7 @@ export async function getIdeationSession(
     AUTO_BUILD_PATHS.IDEATION_FILE
   );
 
-  const rawIdeation = readIdeationFile(ideationPath);
+  const rawIdeation = await readIdeationFile(ideationPath);
   if (!rawIdeation) {
     return { success: true, data: null };
   }

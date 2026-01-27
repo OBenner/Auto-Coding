@@ -19,7 +19,7 @@ import type { IPCResult } from '../../shared/types';
 import type { ClaudeCodeVersionInfo, ClaudeInstallationList, ClaudeInstallationInfo } from '../../shared/types/cli';
 import { getToolInfo, configureTools, sortNvmVersionDirs, getClaudeDetectionPaths, type ExecFileAsyncOptionsWithVerbatim } from '../cli-tool-manager';
 import { readSettingsFile, writeSettingsFile } from '../settings-utils';
-import { isSecurePath } from '../platform/paths';
+import { isSecurePath } from '../utils/windows-paths';
 import { isWindows, isMacOS, isLinux } from '../platform';
 import { getClaudeProfileManager } from '../claude-profile-manager';
 import { isValidConfigDir } from '../utils/config-path-validator';
@@ -862,7 +862,7 @@ function checkProfileAuthentication(configDir: string): AuthCheckResult {
       const data = JSON.parse(content);
 
       // Check for oauthAccount with emailAddress
-      if (data.oauthAccount && data.oauthAccount.emailAddress) {
+      if (data.oauthAccount?.emailAddress) {
         return {
           authenticated: true,
           email: data.oauthAccount.emailAddress,
@@ -888,7 +888,7 @@ function checkProfileAuthentication(configDir: string): AuthCheckResult {
         };
       }
 
-      if (data.oauthAccount && data.oauthAccount.emailAddress) {
+      if (data.oauthAccount?.emailAddress) {
         return {
           authenticated: true,
           email: data.oauthAccount.emailAddress,

@@ -619,60 +619,56 @@
       "description": "Select a project from the sidebar to configure its settings."
     }
   },
-  "aiProvider": {
-    "title": "AI Engine Provider",
-    "description": "Select which AI backend to use for agent sessions",
-    "label": "AI Provider",
-    "selectProvider": "Select AI provider",
-    "currentProvider": "Current provider",
-    "providers": {
-      "claude": {
-        "name": "Claude Agent SDK",
-        "description": "Anthropic's Claude Agent SDK (default, recommended)"
+  "agentModels": {
+    "title": "Agent Model Configuration",
+    "description": "Configure which Claude models and thinking token budgets to use for each agent type",
+    "agents": {
+      "planner": {
+        "label": "Planner Agent",
+        "description": "Creates implementation plans with subtasks"
       },
-      "litellm": {
-        "name": "LiteLLM",
-        "description": "Unified interface supporting 100+ LLM providers"
+      "coder": {
+        "label": "Coder Agent",
+        "description": "Implements individual subtasks"
       },
-      "openrouter": {
-        "name": "OpenRouter",
-        "description": "Cloud-based multi-model routing with 400+ models"
+      "qa_reviewer": {
+        "label": "QA Reviewer Agent",
+        "description": "Validates acceptance criteria"
+      },
+      "qa_fixer": {
+        "label": "QA Fixer Agent",
+        "description": "Fixes QA-reported issues"
       }
     },
-    "configuration": {
-      "title": "Provider Configuration",
-      "apiKey": "API Key",
-      "apiKeyPlaceholder": "Enter your API key",
-      "apiKeyDescription": "Required for LiteLLM and OpenRouter providers",
+    "fields": {
       "model": "Model",
-      "modelPlaceholder": "e.g., gpt-4, claude-3-opus, anthropic/claude-3-sonnet",
-      "modelDescription": "Model identifier for the selected provider",
-      "baseUrl": "Base URL (Optional)",
-      "baseUrlPlaceholder": "https://api.example.com/v1",
-      "baseUrlDescription": "Custom API endpoint (leave empty for default)"
+      "thinkingTokens": "Extended Thinking Tokens",
+      "thinkingTokensDescription": "Max thinking tokens for extended thinking (0 = disabled, 5000-16000 = enabled)"
     },
-    "validation": {
-      "apiKeyRequired": "API key is required for this provider",
-      "modelRequired": "Model selection is required"
+    "placeholders": {
+      "model": "Select a model...",
+      "thinkingTokens": "e.g., 10000 (or 0 to disable)"
     },
-    "toast": {
-      "providerChanged": "AI Provider Changed",
-      "providerChangedDescription": "Now using {{provider}}",
-      "configSaved": "Configuration Saved",
-      "configSavedDescription": "Provider settings have been updated",
-      "configError": "Configuration Error",
-      "configErrorDescription": "Failed to save provider settings: {{error}}"
+    "labels": {
+      "modelSelection": "Model Selection",
+      "thinkingTokenBudget": "Thinking Token Budget",
+      "disabled": "Disabled",
+      "budget": "{{count}} tokens"
     },
     "hints": {
-      "envOverride": "This setting can be overridden by the AI_ENGINE_PROVIDER environment variable",
-      "requiresRestart": "Changes will take effect for new agent sessions",
-      "claudeDefault": "Claude Agent SDK is the default and most thoroughly tested provider"
+      "thinkingTokens": "Extended thinking allows the model to reason through complex problems. 0 disables it, 5000-16000 enables it with the specified budget.",
+      "modelSelection": "Choose the Claude model to use for this agent. Different models have different capabilities and costs."
     },
-    "status": {
-      "active": "Active",
-      "configured": "Configured",
-      "notConfigured": "Not configured",
-      "requiresApiKey": "Requires API key"
+    "validation": {
+      "modelRequired": "Model is required",
+      "thinkingTokensInvalid": "Thinking tokens must be 0 or between 5000 and 16000",
+      "thinkingTokensRange": "Value must be 0 or between 5000 and 16000"
+    },
+    "toast": {
+      "saveSuccess": "Agent models updated",
+      "saveSuccessDescription": "Agent model configuration has been saved successfully.",
+      "saveFailed": "Failed to save agent models",
+      "saveFailedDescription": "An error occurred while saving agent model configuration."
     }
   },
   "mcp": {

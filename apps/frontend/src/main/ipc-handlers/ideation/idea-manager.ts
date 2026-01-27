@@ -29,7 +29,7 @@ export async function updateIdeaStatus(
     AUTO_BUILD_PATHS.IDEATION_FILE
   );
 
-  const ideation = readIdeationFile(ideationPath);
+  const ideation = await readIdeationFile(ideationPath);
   if (!ideation) {
     return { success: false, error: 'Ideation not found' };
   }
@@ -43,7 +43,7 @@ export async function updateIdeaStatus(
 
     idea.status = status;
     updateIdeationTimestamp(ideation);
-    writeIdeationFile(ideationPath, ideation);
+    await writeIdeationFile(ideationPath, ideation);
 
     return { success: true };
   } catch (error) {
@@ -73,7 +73,7 @@ export async function dismissIdea(
     AUTO_BUILD_PATHS.IDEATION_FILE
   );
 
-  const ideation = readIdeationFile(ideationPath);
+  const ideation = await readIdeationFile(ideationPath);
   if (!ideation) {
     return { success: false, error: 'Ideation not found' };
   }
@@ -87,7 +87,7 @@ export async function dismissIdea(
 
     idea.status = 'dismissed';
     updateIdeationTimestamp(ideation);
-    writeIdeationFile(ideationPath, ideation);
+    await writeIdeationFile(ideationPath, ideation);
 
     return { success: true };
   } catch (error) {
@@ -116,7 +116,7 @@ export async function dismissAllIdeas(
     AUTO_BUILD_PATHS.IDEATION_FILE
   );
 
-  const ideation = readIdeationFile(ideationPath);
+  const ideation = await readIdeationFile(ideationPath);
   if (!ideation) {
     return { success: false, error: 'Ideation not found' };
   }
@@ -132,7 +132,7 @@ export async function dismissAllIdeas(
     });
 
     updateIdeationTimestamp(ideation);
-    writeIdeationFile(ideationPath, ideation);
+    await writeIdeationFile(ideationPath, ideation);
 
     return { success: true, data: { dismissedCount } };
   } catch (error) {
@@ -162,7 +162,7 @@ export async function archiveIdea(
     AUTO_BUILD_PATHS.IDEATION_FILE
   );
 
-  const ideation = readIdeationFile(ideationPath);
+  const ideation = await readIdeationFile(ideationPath);
   if (!ideation) {
     return { success: false, error: 'Ideation not found' };
   }
@@ -175,7 +175,7 @@ export async function archiveIdea(
 
     idea.status = 'archived';
     updateIdeationTimestamp(ideation);
-    writeIdeationFile(ideationPath, ideation);
+    await writeIdeationFile(ideationPath, ideation);
 
     return { success: true };
   } catch (error) {
@@ -205,7 +205,7 @@ export async function deleteIdea(
     AUTO_BUILD_PATHS.IDEATION_FILE
   );
 
-  const ideation = readIdeationFile(ideationPath);
+  const ideation = await readIdeationFile(ideationPath);
   if (!ideation) {
     return { success: false, error: 'Ideation not found' };
   }
@@ -218,7 +218,7 @@ export async function deleteIdea(
 
     ideation.ideas?.splice(ideaIndex, 1);
     updateIdeationTimestamp(ideation);
-    writeIdeationFile(ideationPath, ideation);
+    await writeIdeationFile(ideationPath, ideation);
 
     return { success: true };
   } catch (error) {
@@ -248,7 +248,7 @@ export async function deleteMultipleIdeas(
     AUTO_BUILD_PATHS.IDEATION_FILE
   );
 
-  const ideation = readIdeationFile(ideationPath);
+  const ideation = await readIdeationFile(ideationPath);
   if (!ideation) {
     return { success: false, error: 'Ideation not found' };
   }
@@ -261,7 +261,7 @@ export async function deleteMultipleIdeas(
 
     const deletedCount = originalCount - (ideation.ideas?.length || 0);
     updateIdeationTimestamp(ideation);
-    writeIdeationFile(ideationPath, ideation);
+    await writeIdeationFile(ideationPath, ideation);
 
     return { success: true, data: { deletedCount } };
   } catch (error) {

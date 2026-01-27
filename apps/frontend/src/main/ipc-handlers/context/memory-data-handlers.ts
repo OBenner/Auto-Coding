@@ -1,7 +1,7 @@
 import { ipcMain } from 'electron';
 import type { BrowserWindow } from 'electron';
 import path from 'path';
-import { existsSync, readFileSync, readdirSync, statSync } from 'fs';
+import { promises as fsPromises } from 'fs';
 import { IPC_CHANNELS, getSpecsDir } from '../../../shared/constants';
 import type {
   IPCResult,
@@ -17,35 +17,53 @@ import {
 } from './utils';
 
 /**
+ * Check if a file exists
+ */
+async function fileExists(filePath: string): Promise<boolean> {
+  try {
+    await fsPromises.access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Load file-based memories from spec directories
  */
-export function loadFileBasedMemories(
+export async function loadFileBasedMemories(
   specsDir: string,
   limit: number
-): MemoryEpisode[] {
+): Promise<MemoryEpisode[]> {
   const memories: MemoryEpisode[] = [];
 
-  if (!existsSync(specsDir)) {
+  if (!(await fileExists(specsDir))) {
     return memories;
   }
 
-  const recentSpecDirs = readdirSync(specsDir)
-    .filter((f: string) => {
-      const specPath = path.join(specsDir, f);
-      return statSync(specPath).isDirectory();
-    })
-    .sort()
-    .reverse()
-    .slice(0, 10); // Last 10 specs
+  const allFiles = await fsPromises.readdir(specsDir);
+  const recentSpecDirs: string[] = [];
 
-  for (const specDir of recentSpecDirs) {
+  for (const f of allFiles) {
+    const specPath = path.join(specsDir, f);
+    const stat = await fsPromises.stat(specPath);
+    if (stat.isDirectory()) {
+      recentSpecDirs.push(f);
+    }
+  }
+
+  recentSpecDirs.sort().reverse();
+  const topSpecDirs = recentSpecDirs.slice(0, 10); // Last 10 specs
+
+  for (const specDir of topSpecDirs) {
     const memoryDir = path.join(specsDir, specDir, 'memory');
-    if (!existsSync(memoryDir)) continue;
+    if (!(await fileExists(memoryDir))) continue;
 
     // Load session insights
     const sessionInsightsDir = path.join(memoryDir, 'session_insights');
-    if (existsSync(sessionInsightsDir)) {
-      const sessionFiles = readdirSync(sessionInsightsDir)
+    if (await fileExists(sessionInsightsDir)) {
+      const allSessionFiles = await fsPromises.readdir(sessionInsightsDir);
+      const sessionFiles = allSessionFiles
         .filter((f: string) => f.startsWith('session_') && f.endsWith('.json'))
         .sort()
         .reverse();
@@ -53,7 +71,7 @@ export function loadFileBasedMemories(
       for (const sessionFile of sessionFiles.slice(0, 3)) {
         try {
           const sessionPath = path.join(sessionInsightsDir, sessionFile);
-          const sessionContent = readFileSync(sessionPath, 'utf-8');
+          const sessionContent = await fsPromises.readFile(sessionPath, 'utf-8');
           const sessionData = JSON.parse(sessionContent);
 
           if (sessionData.session_number !== undefined) {
@@ -79,9 +97,9 @@ export function loadFileBasedMemories(
 
     // Load codebase map
     const codebaseMapPath = path.join(memoryDir, 'codebase_map.json');
-    if (existsSync(codebaseMapPath)) {
+    if (await fileExists(codebaseMapPath)) {
       try {
-        const mapContent = readFileSync(codebaseMapPath, 'utf-8');
+        const mapContent = await fsPromises.readFile(codebaseMapPath, 'utf-8');
         const mapData = JSON.parse(mapContent);
         if (mapData.discovered_files && Object.keys(mapData.discovered_files).length > 0) {
           memories.push({
@@ -104,35 +122,40 @@ export function loadFileBasedMemories(
 /**
  * Search file-based memories for a query
  */
-export function searchFileBasedMemories(
+export async function searchFileBasedMemories(
   specsDir: string,
   query: string,
   limit: number
-): ContextSearchResult[] {
+): Promise<ContextSearchResult[]> {
   const results: ContextSearchResult[] = [];
   const queryLower = query.toLowerCase();
 
-  if (!existsSync(specsDir)) {
+  if (!(await fileExists(specsDir))) {
     return results;
   }
 
-  const allSpecDirs = readdirSync(specsDir)
-    .filter((f: string) => {
-      const specPath = path.join(specsDir, f);
-      return statSync(specPath).isDirectory();
-    });
+  const allFiles = await fsPromises.readdir(specsDir);
+  const allSpecDirs: string[] = [];
+
+  for (const f of allFiles) {
+    const specPath = path.join(specsDir, f);
+    const stat = await fsPromises.stat(specPath);
+    if (stat.isDirectory()) {
+      allSpecDirs.push(f);
+    }
+  }
 
   for (const specDir of allSpecDirs) {
     const memoryDir = path.join(specsDir, specDir, 'memory');
-    if (!existsSync(memoryDir)) continue;
+    if (!(await fileExists(memoryDir))) continue;
 
-    const memoryFiles = readdirSync(memoryDir)
-      .filter((f: string) => f.endsWith('.json'));
+    const allMemFiles = await fsPromises.readdir(memoryDir);
+    const memoryFiles = allMemFiles.filter((f: string) => f.endsWith('.json'));
 
     for (const memFile of memoryFiles) {
       try {
         const memPath = path.join(memoryDir, memFile);
-        const memContent = readFileSync(memPath, 'utf-8');
+        const memContent = await fsPromises.readFile(memPath, 'utf-8');
 
         if (memContent.toLowerCase().includes(queryLower)) {
           const memData = JSON.parse(memContent);
@@ -189,7 +212,7 @@ export function registerMemoryDataHandlers(
       // Fall back to file-based memories
       const specsBaseDir = getSpecsDir(project.autoBuildPath);
       const specsDir = path.join(project.path, specsBaseDir);
-      const memories = loadFileBasedMemories(specsDir, limit);
+      const memories = await loadFileBasedMemories(specsDir, limit);
 
       return { success: true, data: memories };
     }
@@ -234,7 +257,7 @@ export function registerMemoryDataHandlers(
       // Fall back to file-based search
       const specsBaseDir = getSpecsDir(project.autoBuildPath);
       const specsDir = path.join(project.path, specsBaseDir);
-      const results = searchFileBasedMemories(specsDir, query, 20);
+      const results = await searchFileBasedMemories(specsDir, query, 20);
 
       return { success: true, data: results };
     }

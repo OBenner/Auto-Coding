@@ -58,7 +58,7 @@ export function ScreenshotCapture({ open, onOpenChange, onCapture }: ScreenshotC
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [t]);
 
   // Fetch sources when dialog opens
   useEffect(() => {

@@ -1,7 +1,7 @@
 import { ipcMain, app } from "electron";
 import type { BrowserWindow } from "electron";
 import path from "path";
-import { existsSync, readdirSync, mkdirSync, writeFileSync, readFileSync } from "fs";
+import { promises as fsPromises } from "fs";
 import { debugError } from "../../shared/utils/debug-logger";
 import {
   IPC_CHANNELS,
@@ -25,14 +25,26 @@ import { insightsService } from "../insights-service";
 import { safeSendToRenderer } from "./utils";
 
 /**
+ * Helper to check if a file exists asynchronously
+ */
+async function fileExists(filePath: string): Promise<boolean> {
+  try {
+    await fsPromises.access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Read insights feature settings from the settings file
  */
-function getInsightsFeatureSettings(): InsightsModelConfig {
+async function getInsightsFeatureSettings(): Promise<InsightsModelConfig> {
   const settingsPath = path.join(app.getPath("userData"), "settings.json");
 
   try {
-    if (existsSync(settingsPath)) {
-      const content = readFileSync(settingsPath, "utf-8");
+    if (await fileExists(settingsPath)) {
+      const content = await fsPromises.readFile(settingsPath, "utf-8");
       const settings: AppSettings = { ...DEFAULT_APP_SETTINGS, ...JSON.parse(content) };
 
       // Get insights-specific settings from Agent Settings
@@ -94,7 +106,7 @@ export function registerInsightsHandlers(getMainWindow: () => BrowserWindow | nu
       }
 
       // Get feature settings from Agent Settings and merge with provided config
-      const featureSettings = getInsightsFeatureSettings();
+      const featureSettings = await getInsightsFeatureSettings();
       const configWithSettings: InsightsModelConfig = {
         // Start with feature settings as defaults
         ...featureSettings,
@@ -168,8 +180,8 @@ export function registerInsightsHandlers(getMainWindow: () => BrowserWindow | nu
 
         // Find next available spec number
         let specNumber = 1;
-        if (existsSync(specsDir)) {
-          const existingDirs = readdirSync(specsDir, { withFileTypes: true })
+        if (await fileExists(specsDir)) {
+          const existingDirs = (await fsPromises.readdir(specsDir, { withFileTypes: true }))
             .filter((d) => d.isDirectory())
             .map((d) => d.name);
 
@@ -195,7 +207,7 @@ export function registerInsightsHandlers(getMainWindow: () => BrowserWindow | nu
 
         // Create spec directory
         const specDir = path.join(specsDir, specId);
-        mkdirSync(specDir, { recursive: true });
+        await fsPromises.mkdir(specDir, { recursive: true });
 
         // Build metadata with source type
         const taskMetadata: TaskMetadata = {
@@ -215,11 +227,11 @@ export function registerInsightsHandlers(getMainWindow: () => BrowserWindow | nu
         };
 
         const planPath = path.join(specDir, AUTO_BUILD_PATHS.IMPLEMENTATION_PLAN);
-        writeFileSync(planPath, JSON.stringify(implementationPlan, null, 2));
+        await fsPromises.writeFile(planPath, JSON.stringify(implementationPlan, null, 2));
 
         // Save task metadata
         const metadataPath = path.join(specDir, "task_metadata.json");
-        writeFileSync(metadataPath, JSON.stringify(taskMetadata, null, 2));
+        await fsPromises.writeFile(metadataPath, JSON.stringify(taskMetadata, null, 2));
 
         // Create the task object
         const task: Task = {

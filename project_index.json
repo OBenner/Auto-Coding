@@ -1,0 +1,31 @@
+{
+  "project_type": "monorepo",
+  "services": {
+    "frontend": {
+      "path": "./apps/frontend",
+      "tech_stack": ["electron", "typescript", "react", "vite"],
+      "port": null,
+      "dev_command": "npm run dev",
+      "test_command": "npm test",
+      "build_command": "npm run build"
+    },
+    "backend": {
+      "path": "./apps/backend",
+      "tech_stack": ["python", "fastapi"],
+      "port": null,
+      "dev_command": "python run.py",
+      "test_command": "pytest"
+    }
+  },
+  "infrastructure": {
+    "docker": false,
+    "database": null,
+    "electron": true
+  },
+  "conventions": {
+    "linter": "eslint",
+    "formatter": "prettier",
+    "testing": "vitest",
+    "typescript": true
+  }
+}

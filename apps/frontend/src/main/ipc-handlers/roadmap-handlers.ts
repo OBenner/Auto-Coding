@@ -11,7 +11,6 @@ import {
 import type {
   IPCResult,
   Roadmap,
-  RoadmapFeature,
   RoadmapFeatureStatus,
   RoadmapGenerationStatus,
   PersistedRoadmapProgress,
@@ -22,21 +21,33 @@ import type {
 } from "../../shared/types";
 import type { RoadmapConfig } from "../agent/types";
 import path from "path";
-import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, unlinkSync } from "fs";
+import { promises as fsPromises } from "fs";
 import { projectStore } from "../project-store";
 import { AgentManager } from "../agent";
 import { debugLog, debugError } from "../../shared/utils/debug-logger";
 import { safeSendToRenderer } from "./utils";
 
 /**
+ * Helper to check if a file exists asynchronously
+ */
+async function fileExists(filePath: string): Promise<boolean> {
+  try {
+    await fsPromises.access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Read feature settings from the settings file
  */
-function getFeatureSettings(): { model?: string; thinkingLevel?: string } {
+async function getFeatureSettings(): Promise<{ model?: string; thinkingLevel?: string }> {
   const settingsPath = path.join(app.getPath("userData"), "settings.json");
 
   try {
-    if (existsSync(settingsPath)) {
-      const content = readFileSync(settingsPath, "utf-8");
+    if (await fileExists(settingsPath)) {
+      const content = await fsPromises.readFile(settingsPath, "utf-8");
       const settings: AppSettings = { ...DEFAULT_APP_SETTINGS, ...JSON.parse(content) };
 
       // Get roadmap-specific settings
@@ -84,12 +95,12 @@ export function registerRoadmapHandlers(
         AUTO_BUILD_PATHS.ROADMAP_FILE
       );
 
-      if (!existsSync(roadmapPath)) {
+      if (!(await fileExists(roadmapPath))) {
         return { success: true, data: null };
       }
 
       try {
-        const content = readFileSync(roadmapPath, "utf-8");
+        const content = await fsPromises.readFile(roadmapPath, "utf-8");
         const rawRoadmap = JSON.parse(content);
 
         // Load competitor analysis if available (competitor_analysis.json)
@@ -99,9 +110,9 @@ export function registerRoadmapHandlers(
           AUTO_BUILD_PATHS.COMPETITOR_ANALYSIS
         );
         let competitorAnalysis: CompetitorAnalysis | undefined;
-        if (existsSync(competitorAnalysisPath)) {
+        if (await fileExists(competitorAnalysisPath)) {
           try {
-            const competitorContent = readFileSync(competitorAnalysisPath, "utf-8");
+            const competitorContent = await fsPromises.readFile(competitorAnalysisPath, "utf-8");
             const rawCompetitor = JSON.parse(competitorContent);
             // Transform snake_case to camelCase for frontend
             competitorAnalysis = {
@@ -229,14 +240,14 @@ export function registerRoadmapHandlers(
 
   ipcMain.on(
     IPC_CHANNELS.ROADMAP_GENERATE,
-    (
+    async (
       _,
       projectId: string,
       enableCompetitorAnalysis?: boolean,
       refreshCompetitorAnalysis?: boolean
     ) => {
       // Get feature settings for roadmap
-      const featureSettings = getFeatureSettings();
+      const featureSettings = await getFeatureSettings();
       const config: RoadmapConfig = {
         model: featureSettings.model,
         thinkingLevel: featureSettings.thinkingLevel,
@@ -291,14 +302,14 @@ export function registerRoadmapHandlers(
 
   ipcMain.on(
     IPC_CHANNELS.ROADMAP_REFRESH,
-    (
+    async (
       _,
       projectId: string,
       enableCompetitorAnalysis?: boolean,
       refreshCompetitorAnalysis?: boolean
     ) => {
       // Get feature settings for roadmap
-      const featureSettings = getFeatureSettings();
+      const featureSettings = await getFeatureSettings();
       const config: RoadmapConfig = {
         model: featureSettings.model,
         thinkingLevel: featureSettings.thinkingLevel,
@@ -378,12 +389,12 @@ export function registerRoadmapHandlers(
         AUTO_BUILD_PATHS.ROADMAP_FILE
       );
 
-      if (!existsSync(roadmapPath)) {
+      if (!(await fileExists(roadmapPath))) {
         return { success: false, error: "Roadmap not found" };
       }
 
       try {
-        const content = readFileSync(roadmapPath, "utf-8");
+        const content = await fsPromises.readFile(roadmapPath, "utf-8");
         const existingRoadmap = JSON.parse(content);
 
         // Transform camelCase features back to snake_case for JSON file
@@ -408,7 +419,7 @@ export function registerRoadmapHandlers(
         existingRoadmap.metadata = existingRoadmap.metadata || {};
         existingRoadmap.metadata.updated_at = new Date().toISOString();
 
-        writeFileSync(roadmapPath, JSON.stringify(existingRoadmap, null, 2));
+        await fsPromises.writeFile(roadmapPath, JSON.stringify(existingRoadmap, null, 2));
 
         return { success: true };
       } catch (error) {
@@ -439,12 +450,12 @@ export function registerRoadmapHandlers(
         AUTO_BUILD_PATHS.ROADMAP_FILE
       );
 
-      if (!existsSync(roadmapPath)) {
+      if (!(await fileExists(roadmapPath))) {
         return { success: false, error: "Roadmap not found" };
       }
 
       try {
-        const content = readFileSync(roadmapPath, "utf-8");
+        const content = await fsPromises.readFile(roadmapPath, "utf-8");
         const roadmap = JSON.parse(content);
 
         // Find and update the feature
@@ -457,7 +468,7 @@ export function registerRoadmapHandlers(
         roadmap.metadata = roadmap.metadata || {};
         roadmap.metadata.updated_at = new Date().toISOString();
 
-        writeFileSync(roadmapPath, JSON.stringify(roadmap, null, 2));
+        await fsPromises.writeFile(roadmapPath, JSON.stringify(roadmap, null, 2));
 
         return { success: true };
       } catch (error) {
@@ -483,12 +494,12 @@ export function registerRoadmapHandlers(
         AUTO_BUILD_PATHS.ROADMAP_FILE
       );
 
-      if (!existsSync(roadmapPath)) {
+      if (!(await fileExists(roadmapPath))) {
         return { success: false, error: "Roadmap not found" };
       }
 
       try {
-        const content = readFileSync(roadmapPath, "utf-8");
+        const content = await fsPromises.readFile(roadmapPath, "utf-8");
         const roadmap = JSON.parse(content);
 
         // Find the feature
@@ -517,14 +528,14 @@ ${(feature.acceptance_criteria || []).map((c: string) => `- [ ] ${c}`).join("\n"
         const specsDir = path.join(project.path, specsBaseDir);
 
         // Ensure specs directory exists
-        if (!existsSync(specsDir)) {
-          mkdirSync(specsDir, { recursive: true });
+        if (!(await fileExists(specsDir))) {
+          await fsPromises.mkdir(specsDir, { recursive: true });
         }
 
         // Find next available spec number
         let specNumber = 1;
-        const existingDirs = existsSync(specsDir)
-          ? readdirSync(specsDir, { withFileTypes: true })
+        const existingDirs = (await fileExists(specsDir))
+          ? (await fsPromises.readdir(specsDir, { withFileTypes: true }))
               .filter((d) => d.isDirectory())
               .map((d) => d.name)
           : [];
@@ -548,7 +559,7 @@ ${(feature.acceptance_criteria || []).map((c: string) => `- [ ] ${c}`).join("\n"
 
         // Create spec directory
         const specDir = path.join(specsDir, specId);
-        mkdirSync(specDir, { recursive: true });
+        await fsPromises.mkdir(specDir, { recursive: true });
 
         // Create initial implementation_plan.json
         const now = new Date().toISOString();
@@ -560,7 +571,7 @@ ${(feature.acceptance_criteria || []).map((c: string) => `- [ ] ${c}`).join("\n"
           status: "pending",
           phases: [],
         };
-        writeFileSync(
+        await fsPromises.writeFile(
           path.join(specDir, AUTO_BUILD_PATHS.IMPLEMENTATION_PLAN),
           JSON.stringify(implementationPlan, null, 2)
         );
@@ -570,13 +581,13 @@ ${(feature.acceptance_criteria || []).map((c: string) => `- [ ] ${c}`).join("\n"
           task_description: taskDescription,
           workflow_type: "feature",
         };
-        writeFileSync(
+        await fsPromises.writeFile(
           path.join(specDir, AUTO_BUILD_PATHS.REQUIREMENTS),
           JSON.stringify(requirements, null, 2)
         );
 
         // Create spec.md (required by backend spec creation process)
-        writeFileSync(path.join(specDir, AUTO_BUILD_PATHS.SPEC_FILE), taskDescription);
+        await fsPromises.writeFile(path.join(specDir, AUTO_BUILD_PATHS.SPEC_FILE), taskDescription);
 
         // Build metadata
         const metadata: TaskMetadata = {
@@ -584,7 +595,7 @@ ${(feature.acceptance_criteria || []).map((c: string) => `- [ ] ${c}`).join("\n"
           featureId: feature.id,
           category: "feature",
         };
-        writeFileSync(path.join(specDir, "task_metadata.json"), JSON.stringify(metadata, null, 2));
+        await fsPromises.writeFile(path.join(specDir, "task_metadata.json"), JSON.stringify(metadata, null, 2));
 
         // NOTE: We do NOT auto-start spec creation here - user should explicitly start the task
         // from the kanban board when they're ready
@@ -594,7 +605,7 @@ ${(feature.acceptance_criteria || []).map((c: string) => `- [ ] ${c}`).join("\n"
         feature.linked_spec_id = specId;
         roadmap.metadata = roadmap.metadata || {};
         roadmap.metadata.updated_at = new Date().toISOString();
-        writeFileSync(roadmapPath, JSON.stringify(roadmap, null, 2));
+        await fsPromises.writeFile(roadmapPath, JSON.stringify(roadmap, null, 2));
 
         // Create task object
         const task: Task = {
@@ -646,8 +657,8 @@ ${(feature.acceptance_criteria || []).map((c: string) => `- [ ] ${c}`).join("\n"
 
       try {
         // Ensure roadmap directory exists
-        if (!existsSync(roadmapDir)) {
-          mkdirSync(roadmapDir, { recursive: true });
+        if (!(await fileExists(roadmapDir))) {
+          await fsPromises.mkdir(roadmapDir, { recursive: true });
         }
 
         // Derive isRunning from phase (active phases are running)
@@ -663,7 +674,7 @@ ${(feature.acceptance_criteria || []).map((c: string) => `- [ ] ${c}`).join("\n"
           is_running: isRunning,
         };
 
-        writeFileSync(progressPath, JSON.stringify(fileData, null, 2));
+        await fsPromises.writeFile(progressPath, JSON.stringify(fileData, null, 2));
         debugLog("[Roadmap Handler] Saved progress checkpoint:", { projectId, phase: progressData.phase });
 
         return { success: true };
@@ -694,12 +705,12 @@ ${(feature.acceptance_criteria || []).map((c: string) => `- [ ] ${c}`).join("\n"
         AUTO_BUILD_PATHS.GENERATION_PROGRESS
       );
 
-      if (!existsSync(progressPath)) {
+      if (!(await fileExists(progressPath))) {
         return { success: true, data: null };
       }
 
       try {
-        const content = readFileSync(progressPath, "utf-8");
+        const content = await fsPromises.readFile(progressPath, "utf-8");
         const rawData = JSON.parse(content);
 
         // Valid phase values that the frontend expects
@@ -748,8 +759,8 @@ ${(feature.acceptance_criteria || []).map((c: string) => `- [ ] ${c}`).join("\n"
       );
 
       try {
-        if (existsSync(progressPath)) {
-          unlinkSync(progressPath);
+        if (await fileExists(progressPath)) {
+          await fsPromises.unlink(progressPath);
           debugLog("[Roadmap Handler] Cleared progress checkpoint:", { projectId });
         }
         return { success: true };

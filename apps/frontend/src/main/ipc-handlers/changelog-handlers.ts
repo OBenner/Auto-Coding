@@ -1,7 +1,7 @@
 import { ipcMain } from 'electron';
 import type { BrowserWindow } from 'electron';
 import path from 'path';
-import { existsSync, mkdirSync, writeFileSync, readFileSync } from 'fs';
+import { promises as fsPromises } from 'fs';
 import { IPC_CHANNELS, getSpecsDir } from '../../shared/constants';
 import type {
   IPCResult,
@@ -20,6 +20,18 @@ import type {
 } from '../../shared/types';
 import { projectStore } from '../project-store';
 import { changelogService } from '../changelog-service';
+
+/**
+ * Helper to check if a file exists asynchronously
+ */
+async function fileExists(filePath: string): Promise<boolean> {
+  try {
+    await fsPromises.access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Register all changelog-related IPC handlers
@@ -52,7 +64,7 @@ export function registerChangelogHandlers(
     }
   });
 
-  changelogService.on('rate-limit', (projectId: string, rateLimitInfo: import('../../shared/types').SDKRateLimitInfo) => {
+  changelogService.on('rate-limit', (_projectId: string, rateLimitInfo: import('../../shared/types').SDKRateLimitInfo) => {
     const mainWindow = getMainWindow();
     if (mainWindow) {
       mainWindow.webContents.send(IPC_CHANNELS.CLAUDE_SDK_RATE_LIMIT, rateLimitInfo);
@@ -73,7 +85,7 @@ export function registerChangelogHandlers(
 
       // Use renderer tasks if provided (they have the correct UI status),
       // otherwise fall back to reading from filesystem
-      const tasks = rendererTasks || projectStore.getTasks(projectId);
+      const tasks = rendererTasks || await projectStore.getTasks(projectId);
 
       // Get specs directory path
       const specsBaseDir = getSpecsDir(project.autoBuildPath);
@@ -91,7 +103,7 @@ export function registerChangelogHandlers(
         return { success: false, error: 'Project not found' };
       }
 
-      const tasks = projectStore.getTasks(projectId);
+      const tasks = await projectStore.getTasks(projectId);
 
       // Get specs directory path
       const specsBaseDir = getSpecsDir(project.autoBuildPath);
@@ -120,7 +132,7 @@ export function registerChangelogHandlers(
       // Load specs for selected tasks (only in tasks mode)
       let specs: TaskSpecContent[] = [];
       if (request.sourceMode === 'tasks' && request.taskIds && request.taskIds.length > 0) {
-        const tasks = projectStore.getTasks(request.projectId);
+        const tasks = await projectStore.getTasks(request.projectId);
         const specsBaseDir = getSpecsDir(project.autoBuildPath);
         specs = await changelogService.loadTaskSpecs(project.path, request.taskIds, tasks, specsBaseDir);
       }
@@ -177,8 +189,8 @@ export function registerChangelogHandlers(
         const currentVersion = existing.lastVersion;
 
         // Load specs for selected tasks to analyze change types
-        const tasks = projectStore.getTasks(projectId);
-                const specsBaseDir = getSpecsDir(project.autoBuildPath);
+        const tasks = await projectStore.getTasks(projectId);
+        const specsBaseDir = getSpecsDir(project.autoBuildPath);
         const specs = await changelogService.loadTaskSpecs(project.path, taskIds, tasks, specsBaseDir);
 
         // Analyze specs and suggest version
@@ -348,8 +360,8 @@ export function registerChangelogHandlers(
       try {
         // Create .github/assets directory if it doesn't exist
         const assetsDir = path.join(project.path, '.github', 'assets');
-        if (!existsSync(assetsDir)) {
-          mkdirSync(assetsDir, { recursive: true });
+        if (!(await fileExists(assetsDir))) {
+          await fsPromises.mkdir(assetsDir, { recursive: true });
         }
 
         // Decode base64 image data
@@ -358,7 +370,7 @@ export function registerChangelogHandlers(
 
         // Save image file
         const imagePath = path.join(assetsDir, filename);
-        writeFileSync(imagePath, buffer);
+        await fsPromises.writeFile(imagePath, buffer);
 
         // Return relative path for use in markdown
         const relativePath = `.github/assets/${filename}`;
@@ -383,12 +395,12 @@ export function registerChangelogHandlers(
         const fullPath = path.join(projectPath, relativePath);
 
         // Verify the file exists
-        if (!existsSync(fullPath)) {
+        if (!(await fileExists(fullPath))) {
           return { success: false, error: `Image not found: ${relativePath}` };
         }
 
         // Read the file and convert to base64
-        const buffer = readFileSync(fullPath);
+        const buffer = await fsPromises.readFile(fullPath);
         const base64 = buffer.toString('base64');
 
         // Determine MIME type from extension

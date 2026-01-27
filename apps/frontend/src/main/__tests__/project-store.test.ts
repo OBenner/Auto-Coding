@@ -268,7 +268,7 @@ describe('ProjectStore', () => {
       const { ProjectStore } = await import('../project-store');
       const store = new ProjectStore();
 
-      const tasks = store.getTasks('nonexistent-id');
+      const tasks = await store.getTasks('nonexistent-id');
 
       expect(tasks).toEqual([]);
     });
@@ -278,7 +278,7 @@ describe('ProjectStore', () => {
       const store = new ProjectStore();
 
       const project = store.addProject(TEST_PROJECT_PATH);
-      const tasks = store.getTasks(project.id);
+      const tasks = await store.getTasks(project.id);
 
       expect(tasks).toEqual([]);
     });
@@ -321,7 +321,7 @@ describe('ProjectStore', () => {
       const store = new ProjectStore();
 
       const project = store.addProject(TEST_PROJECT_PATH);
-      const tasks = store.getTasks(project.id);
+      const tasks = await store.getTasks(project.id);
 
       expect(tasks).toHaveLength(1);
       expect(tasks[0].title).toBe('Test Feature');
@@ -364,7 +364,7 @@ describe('ProjectStore', () => {
       const store = new ProjectStore();
 
       const project = store.addProject(TEST_PROJECT_PATH);
-      const tasks = store.getTasks(project.id);
+      const tasks = await store.getTasks(project.id);
 
       expect(tasks[0].status).toBe('backlog');
     });
@@ -403,7 +403,7 @@ describe('ProjectStore', () => {
       const store = new ProjectStore();
 
       const project = store.addProject(TEST_PROJECT_PATH);
-      const tasks = store.getTasks(project.id);
+      const tasks = await store.getTasks(project.id);
 
       expect(tasks[0].status).toBe('ai_review');
     });
@@ -446,7 +446,7 @@ describe('ProjectStore', () => {
       const store = new ProjectStore();
 
       const project = store.addProject(TEST_PROJECT_PATH);
-      const tasks = store.getTasks(project.id);
+      const tasks = await store.getTasks(project.id);
 
       expect(tasks[0].status).toBe('human_review');
     });
@@ -490,7 +490,7 @@ describe('ProjectStore', () => {
       const store = new ProjectStore();
 
       const project = store.addProject(TEST_PROJECT_PATH);
-      const tasks = store.getTasks(project.id);
+      const tasks = await store.getTasks(project.id);
 
       expect(tasks[0].status).toBe('human_review');
       expect(tasks[0].reviewReason).toBe('completed');
@@ -531,7 +531,7 @@ describe('ProjectStore', () => {
       const store = new ProjectStore();
 
       const project = store.addProject(TEST_PROJECT_PATH);
-      const tasks = store.getTasks(project.id);
+      const tasks = await store.getTasks(project.id);
 
       expect(tasks[0].status).toBe('done');
     });
@@ -864,15 +864,15 @@ describe('ProjectStore', () => {
       const project = store.addProject(TEST_PROJECT_PATH);
 
       // First call should populate cache
-      const tasksBefore = store.getTasks(project.id);
+      const tasksBefore = await store.getTasks(project.id);
       expect(tasksBefore).toHaveLength(1);
       expect(tasksBefore[0].metadata?.archivedAt).toBeUndefined();
 
       // Archive the task
-      store.archiveTasks(project.id, ['005-cache-test']);
+      await store.archiveTasks(project.id, ['005-cache-test']);
 
       // After archiving, cache should be invalidated and getTasks should return updated data
-      const tasksAfter = store.getTasks(project.id);
+      const tasksAfter = await store.getTasks(project.id);
       expect(tasksAfter[0].metadata?.archivedAt).toBeDefined();
     });
 
@@ -898,7 +898,7 @@ describe('ProjectStore', () => {
       const project = store.addProject(TEST_PROJECT_PATH);
 
       // First call should populate cache
-      const tasksBefore = store.getTasks(project.id);
+      const tasksBefore = await store.getTasks(project.id);
       expect(tasksBefore[0].title).toBe('Initial Feature');
 
       // Modify the file directly (simulating external change)
@@ -906,14 +906,14 @@ describe('ProjectStore', () => {
       writeFileSync(path.join(specsDir, 'implementation_plan.json'), JSON.stringify(updatedPlan));
 
       // Without invalidation, should still return cached data
-      const tasksCached = store.getTasks(project.id);
+      const tasksCached = await store.getTasks(project.id);
       expect(tasksCached[0].title).toBe('Initial Feature');
 
       // Invalidate cache
       store.invalidateTasksCache(project.id);
 
       // Now should return fresh data
-      const tasksAfterInvalidation = store.getTasks(project.id);
+      const tasksAfterInvalidation = await store.getTasks(project.id);
       expect(tasksAfterInvalidation[0].title).toBe('Updated Feature');
     });
   });
@@ -961,7 +961,7 @@ describe('ProjectStore', () => {
       const store = new ProjectStore();
 
       const project = store.addProject(TEST_PROJECT_PATH);
-      const tasks = store.getTasks(project.id);
+      const tasks = await store.getTasks(project.id);
 
       // Should only return ONE task, not two
       const matchingTasks = tasks.filter(t => t.specId === '007-dedupe-test');

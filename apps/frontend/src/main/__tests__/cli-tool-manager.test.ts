@@ -19,7 +19,7 @@ import {
   findWindowsExecutableViaWhere,
   findWindowsExecutableViaWhereAsync,
   isSecurePath
-} from '../platform/paths';
+} from '../utils/windows-paths';
 import { findExecutable, findExecutableAsync } from '../env-utils';
 
 type SpawnOptions = Parameters<(typeof import('../env-utils'))['getSpawnOptions']>[1];
@@ -69,7 +69,7 @@ vi.mock('child_process', () => {
   // so when tests call vi.mocked(execFileSync).mockReturnValue(), it affects execSync too
   const sharedSyncMock = vi.fn();
 
-const mockExecFile = vi.fn((cmd: unknown, args: unknown, options: unknown, callback: unknown) => {
+const mockExecFile = vi.fn((_cmd: unknown, _args: unknown, _options: unknown, callback: unknown) => {
     // Return a minimal ChildProcess-like object
     const childProcess = {
       stdout: { on: vi.fn() },
@@ -86,7 +86,7 @@ const mockExecFile = vi.fn((cmd: unknown, args: unknown, options: unknown, callb
     return childProcess as unknown as import('child_process').ChildProcess;
   });
 
-  const mockExec = vi.fn((cmd: unknown, options: unknown, callback: unknown) => {
+  const mockExec = vi.fn((_cmd: unknown, _options: unknown, callback: unknown) => {
     // Return a minimal ChildProcess-like object
     const childProcess = {
       stdout: { on: vi.fn() },
@@ -160,18 +160,14 @@ vi.mock('../utils/homebrew-python', () => ({
 }));
 
 // Mock windows-paths utility
-vi.mock('../platform/paths', async () => {
-  const actual = await vi.importActual<typeof import('../platform/paths')>('../platform/paths');
-  return {
-    ...actual,
-    findWindowsExecutableViaWhere: vi.fn(() => null),
-    findWindowsExecutableViaWhereAsync: vi.fn(() => Promise.resolve(null)),
-    isSecurePath: vi.fn(() => true),
-    getWindowsExecutablePaths: vi.fn(() => []),
-    getWindowsExecutablePathsAsync: vi.fn(() => Promise.resolve([])),
-    WINDOWS_GIT_PATHS: {}
-  };
-});
+vi.mock('../utils/windows-paths', () => ({
+  findWindowsExecutableViaWhere: vi.fn(() => null),
+  findWindowsExecutableViaWhereAsync: vi.fn(() => Promise.resolve(null)),
+  isSecurePath: vi.fn(() => true),
+  getWindowsExecutablePaths: vi.fn(() => []),
+  getWindowsExecutablePathsAsync: vi.fn(() => Promise.resolve([])),
+  WINDOWS_GIT_PATHS: {}
+}));
 
 describe('cli-tool-manager - Claude CLI NVM detection', () => {
   beforeEach(() => {

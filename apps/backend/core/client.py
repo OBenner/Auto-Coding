@@ -10,25 +10,6 @@ use `create_simple_client()` from `core.simple_client`.
 
 The client factory now uses AGENT_CONFIGS from agents/tools_pkg/models.py as the
 single source of truth for phase-aware tool and MCP server configuration.
-
-Multi-Provider Support
-----------------------
-This module integrates with the provider abstraction layer (core.providers) to enable
-alternative AI backends. Claude Agent SDK remains the default and recommended provider.
-
-Available providers:
-- claude: Claude Agent SDK (default) - Full agentic capabilities with MCP, tools, security
-- litellm: LiteLLM unified API - 100+ LLMs via single interface (simplified features)
-- openrouter: OpenRouter cloud routing - 400+ models with pay-per-use (simplified features)
-
-Usage:
-    # Direct Claude SDK client (recommended for full functionality)
-    from core.client import create_client
-    client = create_client(project_dir, spec_dir, model, agent_type)
-
-    # Provider-based client (supports alternative backends)
-    from core.client import create_client_for_provider
-    provider, session = create_client_for_provider(project_dir, spec_dir, agent_type)
 """
 
 import copy
@@ -46,88 +27,6 @@ from core.platform import (
 )
 
 logger = logging.getLogger(__name__)
-
-# =============================================================================
-# Token Tracking Integration
-# =============================================================================
-# Provides hooks for phase-level token usage monitoring when DEBUG=true.
-# Uses the centralized TokenTracker from core.token_tracker module.
-
-
-def _is_token_tracking_enabled() -> bool:
-    """
-    Check if token tracking is enabled for debug logging.
-
-    Token tracking is enabled when DEBUG=true is set in the environment.
-    This is a non-intrusive hook that does not modify core client flow.
-
-    Returns:
-        True if DEBUG=true, False otherwise
-    """
-    return os.environ.get("DEBUG", "").lower() in ("true", "1")
-
-
-def _get_token_tracker():
-    """
-    Get the global token tracker instance for cross-module tracking.
-
-    Lazily imports to avoid circular dependencies and only loads
-    when token tracking is actually needed.
-
-    Returns:
-        TokenTracker instance from core.token_tracker module,
-        or None if import fails.
-    """
-    if not _is_token_tracking_enabled():
-        return None
-
-    try:
-        from core.token_tracker import get_global_tracker
-
-        return get_global_tracker()
-    except ImportError:
-        logger.debug("Token tracker module not available")
-        return None
-
-
-def _log_client_creation(
-    agent_type: str,
-    model: str,
-    thinking_tokens: int | None,
-    mcp_servers: list[str],
-) -> None:
-    """
-    Log client creation event for token tracking diagnostics.
-
-    Only logs when DEBUG=true is set. Provides visibility into
-    which agents are created with what configuration.
-
-    Args:
-        agent_type: Type of agent being created
-        model: Model being used
-        thinking_tokens: Extended thinking budget (None if disabled)
-        mcp_servers: List of MCP server names being loaded
-    """
-    if not _is_token_tracking_enabled():
-        return
-
-    tracker = _get_token_tracker()
-    if tracker is None:
-        return
-
-    # Log as a pseudo-phase for diagnostics
-    # Input tokens estimate based on MCP server context bloat (~10-30K per server)
-    estimated_context_tokens = len(mcp_servers) * 15000  # Mid-estimate
-
-    tracker.log_phase(
-        phase_name=f"client_init_{agent_type}",
-        input_tokens=estimated_context_tokens,
-        output_tokens=0,
-        model=model,
-        thinking_budget=thinking_tokens or "disabled",
-        mcp_servers=", ".join(mcp_servers) if mcp_servers else "none",
-    )
-
 
 # =============================================================================
 # Project Index Cache
@@ -244,25 +143,10 @@ from core.auth import (
     require_auth_token,
     validate_token_not_encrypted,
 )
-
-# Provider abstraction layer imports
-# These enable multi-provider support while preserving Claude as default
-from core.providers import (
-    ProviderError,
-    ProviderNotInstalled,
-    create_engine_provider,
-    get_available_provider_names,
-)
-from core.providers.base import AIEngineProvider, AgentSession, SessionConfig
-from core.providers.config import (
-    DEFAULT_PROVIDER,
-    ProviderConfig,
-    get_available_providers,
-    get_provider_config,
-    validate_provider_config,
-)
-
+from core.cost_tracking import CostTracker
+from core.model_fallback import retry_with_fallback
 from linear_updater import is_linear_enabled
+from phase_config import get_agent_model
 from prompts_pkg.project_context import detect_project_capabilities, load_project_index
 from security import bash_security_hook
 
@@ -609,6 +493,10 @@ def create_client(
        (see security.py for ALLOWED_COMMANDS)
     4. Tool filtering - Each agent type only sees relevant tools (prevents misuse)
     """
+    # Resolve model using agent-specific configuration
+    # Priority: CLI arg (model) > task_metadata.json agentModels > AGENT_DEFAULT_MODELS > fallback
+    resolved_model = get_agent_model(spec_dir, agent_type, model)
+
     # Get OAuth token - Claude CLI handles token lifecycle internally
     oauth_token = require_auth_token()
 
@@ -916,7 +804,7 @@ def create_client(
 
     # Build options dict, conditionally including output_format
     options_kwargs: dict[str, Any] = {
-        "model": model,
+        "model": resolved_model,
         "system_prompt": base_prompt,
         "allowed_tools": allowed_tools_list,
         "mcp_servers": mcp_servers,
@@ -955,201 +843,65 @@ def create_client(
     if agents:
         options_kwargs["agents"] = agents
 
-    # Log client creation for token tracking diagnostics (only when DEBUG=true)
-    _log_client_creation(
-        agent_type=agent_type,
-        model=model,
-        thinking_tokens=max_thinking_tokens,
-        mcp_servers=list(mcp_servers.keys()),
+    # Wrap client creation with fallback logic
+    # If the requested model fails (rate limit, unavailable, etc.),
+    # automatically retry with degraded models (opus -> sonnet -> haiku)
+    def _create_client_with_model(model_to_use: str) -> ClaudeSDKClient:
+        """Helper to create client with a specific model."""
+        options_with_model = {**options_kwargs, "model": model_to_use}
+        return ClaudeSDKClient(options=ClaudeAgentOptions(**options_with_model))
+
+    # Use retry_with_fallback to handle model failures gracefully
+    # This will automatically try fallback models if the primary model fails
+    return retry_with_fallback(
+        callable_fn=_create_client_with_model,
+        model=resolved_model,
+        max_retries_per_model=1,
     )
 
-    return ClaudeSDKClient(options=ClaudeAgentOptions(**options_kwargs))
 
-
-# =============================================================================
-# Multi-Provider Support Functions
-# =============================================================================
-# These functions enable alternative AI backends while preserving Claude as default.
-# Claude remains the recommended provider for full functionality (MCP, tools, security).
-
-
-def get_current_provider_config() -> ProviderConfig:
-    """
-    Get the current provider configuration from environment.
-
-    Returns:
-        ProviderConfig with current provider settings
-
-    Example:
-        config = get_current_provider_config()
-        print(f"Using provider: {config.provider}")
-        print(f"Model: {config.get_model_for_provider()}")
-    """
-    return get_provider_config()
-
-
-def get_current_provider() -> AIEngineProvider:
-    """
-    Create an AI engine provider instance based on current environment configuration.
-
-    Uses the AI_ENGINE_PROVIDER environment variable to determine which provider
-    to create. Defaults to Claude if not specified.
-
-    Returns:
-        AIEngineProvider instance (ClaudeAgentProvider, LiteLLMProvider, or OpenRouterProvider)
-
-    Raises:
-        ProviderNotInstalled: If required packages for the provider are missing
-        ProviderError: If provider creation fails
-
-    Example:
-        provider = get_current_provider()
-        print(f"Provider: {provider.name}")
-        print(f"Supported models: {provider.get_supported_models()}")
-    """
-    config = get_provider_config()
-    return create_engine_provider(config)
-
-
-def is_using_claude_provider() -> bool:
-    """
-    Check if the Claude Agent SDK is the configured provider.
-
-    This is useful for determining whether full functionality (MCP servers,
-    security hooks, extended thinking) is available, as these features are
-    only supported by the Claude provider.
-
-    Returns:
-        True if Claude is the configured provider (default), False otherwise
-    """
-    config = get_provider_config()
-    return config.provider == DEFAULT_PROVIDER
-
-
-def create_client_for_provider(
-    project_dir: Path,
+def log_agent_usage(
     spec_dir: Path,
-    agent_type: str = "coder",
-    max_thinking_tokens: int | None = None,
-    output_format: dict | None = None,
-    agents: dict | None = None,
-) -> tuple[AIEngineProvider, AgentSession]:
+    agent_type: str,
+    model: str,
+    input_tokens: int,
+    output_tokens: int,
+) -> float:
     """
-    Create an AI engine provider and session using the provider factory.
+    Log model usage for an agent session to cost tracking.
 
-    This function provides an alternative to create_client() that uses the
-    provider abstraction layer. It supports multiple AI backends based on
-    the AI_ENGINE_PROVIDER environment variable.
-
-    For Claude provider (default), this is functionally equivalent to using
-    create_client() directly, as the ClaudeAgentProvider delegates to it.
-
-    For non-Claude providers (LiteLLM, OpenRouter), this creates a simplified
-    session without MCP servers, security hooks, or tool permissions.
+    This is a cost tracking hook that should be called after each agent session
+    to record token usage and calculate costs.
 
     Args:
-        project_dir: Root directory for the project (working directory)
         spec_dir: Directory containing the spec
-        agent_type: Agent type identifier from AGENT_CONFIGS
-                   (e.g., 'coder', 'planner', 'qa_reviewer')
-        max_thinking_tokens: Token budget for extended thinking (Claude only)
-        output_format: Optional structured output format (Claude only)
-        agents: Optional dict of subagent definitions (Claude only)
+        agent_type: Type of agent (e.g., "coder", "planner", "qa_reviewer")
+        model: Claude model identifier (e.g., "claude-sonnet-4-5-20250929")
+        input_tokens: Number of input tokens consumed
+        output_tokens: Number of output tokens consumed
 
     Returns:
-        Tuple of (provider, session):
-        - provider: AIEngineProvider instance
-        - session: AgentSession instance for interacting with the AI
-
-    Raises:
-        ProviderNotInstalled: If required packages for the provider are missing
-        ProviderError: If provider or session creation fails
-        ProviderConfigError: If configuration is invalid
+        Cost of this operation in dollars
 
     Example:
-        from core.client import create_client_for_provider
-
-        provider, session = create_client_for_provider(
-            project_dir=Path("/path/to/project"),
-            spec_dir=Path("/path/to/spec"),
-            agent_type="coder"
+        # After an agent session completes
+        cost = log_agent_usage(
+            spec_dir=Path(".auto-claude/specs/001"),
+            agent_type="coder",
+            model="claude-sonnet-4-5-20250929",
+            input_tokens=5000,
+            output_tokens=2000
         )
-
-        # For Claude provider, get the underlying SDK client
-        if provider.name == "claude":
-            client = session.client  # ClaudeSDKClient instance
+        print(f"Session cost: ${cost:.4f}")
     """
-    # Get provider configuration
-    config = get_provider_config()
-
-    logger.info(
-        f"Creating provider-based client: provider={config.provider}, "
-        f"agent_type={agent_type}, project_dir={project_dir}"
-    )
-
-    # Create the provider
-    provider = create_engine_provider(config)
-
-    # Build session configuration
-    session_config = SessionConfig(
-        name=f"{agent_type}-session",
-        model=config.get_model_for_provider(),
-        working_directory=str(project_dir),
-        extra={
-            "project_dir": str(project_dir),
-            "spec_dir": str(spec_dir),
-            "agent_type": agent_type,
-            "max_thinking_tokens": max_thinking_tokens,
-        },
-    )
-
-    # Create session using provider-specific logic
-    # For Claude, this delegates to create_client() internally
-    session = provider.create_session(
-        config=session_config,
-        project_dir=project_dir,
-        spec_dir=spec_dir,
+    tracker = CostTracker(spec_dir=spec_dir)
+    cost = tracker.log_usage(
         agent_type=agent_type,
-        max_thinking_tokens=max_thinking_tokens,
-        output_format=output_format,
-        agents=agents,
+        model=model,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
     )
-
-    return provider, session
-
-
-def validate_current_provider() -> tuple[bool, list[str]]:
-    """
-    Validate the current provider configuration.
-
-    Checks that all required credentials and settings are present for
-    the configured provider.
-
-    Returns:
-        Tuple of (is_valid, error_messages):
-        - is_valid: True if configuration is valid
-        - error_messages: List of validation errors (empty if valid)
-
-    Example:
-        is_valid, errors = validate_current_provider()
-        if not is_valid:
-            print("Provider configuration errors:")
-            for error in errors:
-                print(f"  - {error}")
-    """
-    return validate_provider_config()
-
-
-def get_provider_summary() -> str:
-    """
-    Get a human-readable summary of the current provider configuration.
-
-    Returns:
-        Summary string describing the configured provider and model
-
-    Example:
-        print(f"AI Backend: {get_provider_summary()}")
-        # Output: "AI Backend: Claude Agent SDK (claude-sonnet-4-5-20250929)"
-    """
-    config = get_provider_config()
-    return config.get_provider_summary()
+    logger.debug(
+        f"Logged usage for {agent_type}: {input_tokens} input + {output_tokens} output tokens = ${cost:.4f}"
+    )
+    return cost

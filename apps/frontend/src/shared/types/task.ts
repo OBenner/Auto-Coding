@@ -154,6 +154,7 @@ export interface TaskDraft {
   images: ImageAttachment[];
   referencedFiles: ReferencedFile[];
   requireReviewBeforeCoding?: boolean;
+  agentModels?: Record<string, string>;  // Agent-specific model overrides
   savedAt: Date;
 }
 
@@ -237,6 +238,9 @@ export interface TaskMetadata {
   baseBranch?: string;  // Override base branch for this task's worktree
   prUrl?: string;  // GitHub PR URL if task has been submitted as a PR
   useWorktree?: boolean;  // If false, use direct mode (no worktree isolation) - default is true for safety
+
+  // Multi-model agent orchestration
+  agentModels?: Record<string, string>;  // Agent-specific model overrides (e.g., { coder: 'haiku', planner: 'sonnet' })
 
   // Archive status
   archivedAt?: string;  // ISO date when task was archived

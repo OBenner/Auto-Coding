@@ -119,7 +119,7 @@ export function Insights({ projectId }: InsightsProps) {
   // Auto-scroll to bottom when messages change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [session?.messages, streamingContent]);
+  }, []);
 
   // Focus textarea on mount
   useEffect(() => {
@@ -129,7 +129,7 @@ export function Insights({ projectId }: InsightsProps) {
   // Reset taskCreated when switching sessions
   useEffect(() => {
     setTaskCreated(new Set());
-  }, [session?.id]);
+  }, []);
 
   const handleSend = () => {
     const message = inputValue.trim();

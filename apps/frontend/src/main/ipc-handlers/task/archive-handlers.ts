@@ -20,7 +20,7 @@ export function registerTaskArchiveHandlers(): void {
     ): Promise<IPCResult<boolean>> => {
       console.warn('[IPC] TASK_ARCHIVE called with projectId:', projectId, 'taskIds:', taskIds);
 
-      const result = projectStore.archiveTasks(projectId, taskIds, version);
+      const result = await projectStore.archiveTasks(projectId, taskIds, version);
 
       if (result) {
         console.warn('[IPC] TASK_ARCHIVE success');
@@ -40,7 +40,7 @@ export function registerTaskArchiveHandlers(): void {
     async (_, projectId: string, taskIds: string[]): Promise<IPCResult<boolean>> => {
       console.warn('[IPC] TASK_UNARCHIVE called with projectId:', projectId, 'taskIds:', taskIds);
 
-      const result = projectStore.unarchiveTasks(projectId, taskIds);
+      const result = await projectStore.unarchiveTasks(projectId, taskIds);
 
       if (result) {
         console.warn('[IPC] TASK_UNARCHIVE success');

@@ -5,7 +5,7 @@ import { AgentState } from './agent-state';
 import { AgentEvents } from './agent-events';
 import { AgentProcessManager } from './agent-process';
 import { AgentQueueManager } from './agent-queue';
-import { getClaudeProfileManager, initializeClaudeProfileManager } from '../claude-profile-manager';
+import { getClaudeProfileManager, initializeClaudeProfileManager, type ClaudeProfileManager } from '../claude-profile-manager';
 import {
   SpecCreationMetadata,
   TaskExecutionOptions,
@@ -97,7 +97,7 @@ export class AgentManager extends EventEmitter {
   ): Promise<void> {
     // Pre-flight auth check: Verify active profile has valid authentication
     // Ensure profile manager is initialized to prevent race condition
-    let profileManager;
+    let profileManager: ClaudeProfileManager;
     try {
       profileManager = await initializeClaudeProfileManager();
     } catch (error) {
@@ -117,7 +117,7 @@ export class AgentManager extends EventEmitter {
       return;
     }
 
-    const autoBuildSource = this.processManager.getAutoBuildSourcePath();
+    const autoBuildSource = await this.processManager.getAutoBuildSourcePath();
 
     if (!autoBuildSource) {
       this.emit('error', taskId, 'Auto-build source path not found. Please configure it in App Settings.');
@@ -132,7 +132,7 @@ export class AgentManager extends EventEmitter {
     }
 
     // Get combined environment variables
-    const combinedEnv = this.processManager.getCombinedEnv(projectPath);
+    const combinedEnv = await this.processManager.getCombinedEnv(projectPath);
 
     // spec_runner.py will auto-start run.py after spec creation completes
     const args = [specRunnerPath, '--task', taskDescription, '--project-dir', projectPath];
@@ -190,7 +190,7 @@ export class AgentManager extends EventEmitter {
   ): Promise<void> {
     // Pre-flight auth check: Verify active profile has valid authentication
     // Ensure profile manager is initialized to prevent race condition
-    let profileManager;
+    let profileManager: ClaudeProfileManager;
     try {
       profileManager = await initializeClaudeProfileManager();
     } catch (error) {
@@ -210,7 +210,7 @@ export class AgentManager extends EventEmitter {
       return;
     }
 
-    const autoBuildSource = this.processManager.getAutoBuildSourcePath();
+    const autoBuildSource = await this.processManager.getAutoBuildSourcePath();
 
     if (!autoBuildSource) {
       this.emit('error', taskId, 'Auto-build source path not found. Please configure it in App Settings.');
@@ -225,7 +225,7 @@ export class AgentManager extends EventEmitter {
     }
 
     // Get combined environment variables
-    const combinedEnv = this.processManager.getCombinedEnv(projectPath);
+    const combinedEnv = await this.processManager.getCombinedEnv(projectPath);
 
     const args = [runPath, '--spec', specId, '--project-dir', projectPath];
 
@@ -271,7 +271,7 @@ export class AgentManager extends EventEmitter {
       return;
     }
 
-    const autoBuildSource = this.processManager.getAutoBuildSourcePath();
+    const autoBuildSource = await this.processManager.getAutoBuildSourcePath();
 
     if (!autoBuildSource) {
       this.emit('error', taskId, 'Auto-build source path not found. Please configure it in App Settings.');
@@ -286,7 +286,7 @@ export class AgentManager extends EventEmitter {
     }
 
     // Get combined environment variables
-    const combinedEnv = this.processManager.getCombinedEnv(projectPath);
+    const combinedEnv = await this.processManager.getCombinedEnv(projectPath);
 
     const args = [runPath, '--spec', specId, '--project-dir', projectPath, '--qa'];
 

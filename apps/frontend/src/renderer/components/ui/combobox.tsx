@@ -97,7 +97,7 @@ const Combobox = React.forwardRef<HTMLButtonElement, ComboboxProps>(
     // Reset focused index when filtered options change
     React.useEffect(() => {
       setFocusedIndex(-1);
-    }, [filteredOptions.length]);
+    }, []);
 
     // Scroll focused option into view
     React.useEffect(() => {
@@ -170,7 +170,7 @@ const Combobox = React.forwardRef<HTMLButtonElement, ComboboxProps>(
               'flex h-10 w-full items-center justify-between rounded-lg',
               'border border-border bg-card px-3 py-2 text-sm',
               'text-foreground placeholder:text-muted-foreground',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:border-primary',
+              'focus:outline-none focus:ring-2 focus:ring-ring focus:border-primary',
               'disabled:cursor-not-allowed disabled:opacity-50',
               'transition-colors duration-200',
               className
@@ -203,7 +203,7 @@ const Combobox = React.forwardRef<HTMLButtonElement, ComboboxProps>(
               className={cn(
                 'flex h-10 w-full bg-transparent py-3 px-2 text-sm',
                 'placeholder:text-muted-foreground',
-                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                'focus:outline-none',
                 'disabled:cursor-not-allowed disabled:opacity-50'
               )}
             />

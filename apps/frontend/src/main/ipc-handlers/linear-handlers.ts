@@ -3,12 +3,24 @@ import type { BrowserWindow } from 'electron';
 import { IPC_CHANNELS, getSpecsDir, AUTO_BUILD_PATHS } from '../../shared/constants';
 import type { IPCResult, LinearIssue, LinearTeam, LinearProject, LinearImportResult, LinearSyncStatus, Project, TaskMetadata } from '../../shared/types';
 import path from 'path';
-import { existsSync, readFileSync, mkdirSync, writeFileSync, readdirSync } from 'fs';
+import { promises as fsPromises } from 'fs';
 import { projectStore } from '../project-store';
 import { parseEnvFile } from './utils';
 
 
 import { AgentManager } from '../agent';
+
+/**
+ * Helper to check if a file exists asynchronously
+ */
+async function fileExists(filePath: string): Promise<boolean> {
+  try {
+    await fsPromises.access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Register all linear-related IPC handlers
@@ -24,13 +36,13 @@ export function registerLinearHandlers(
   /**
    * Helper to get Linear API key from project env
    */
-  const getLinearApiKey = (project: Project): string | null => {
+  const getLinearApiKey = async (project: Project): Promise<string | null> => {
     if (!project.autoBuildPath) return null;
     const envPath = path.join(project.path, project.autoBuildPath, '.env');
-    if (!existsSync(envPath)) return null;
+    if (!(await fileExists(envPath))) return null;
 
     try {
-      const content = readFileSync(envPath, 'utf-8');
+      const content = await fsPromises.readFile(envPath, 'utf-8');
       const vars = parseEnvFile(content);
       return vars['LINEAR_API_KEY'] || null;
     } catch {
@@ -87,7 +99,7 @@ export function registerLinearHandlers(
         return { success: false, error: 'Project not found' };
       }
 
-      const apiKey = getLinearApiKey(project);
+      const apiKey = await getLinearApiKey(project);
       if (!apiKey) {
         return {
           success: true,
@@ -191,7 +203,7 @@ export function registerLinearHandlers(
         return { success: false, error: 'Project not found' };
       }
 
-      const apiKey = getLinearApiKey(project);
+      const apiKey = await getLinearApiKey(project);
       if (!apiKey) {
         return { success: false, error: 'No Linear API key configured' };
       }
@@ -231,7 +243,7 @@ export function registerLinearHandlers(
         return { success: false, error: 'Project not found' };
       }
 
-      const apiKey = getLinearApiKey(project);
+      const apiKey = await getLinearApiKey(project);
       if (!apiKey) {
         return { success: false, error: 'No Linear API key configured' };
       }
@@ -273,7 +285,7 @@ export function registerLinearHandlers(
         return { success: false, error: 'Project not found' };
       }
 
-      const apiKey = getLinearApiKey(project);
+      const apiKey = await getLinearApiKey(project);
       if (!apiKey) {
         return { success: false, error: 'No Linear API key configured' };
       }
@@ -381,7 +393,7 @@ export function registerLinearHandlers(
         return { success: false, error: 'Project not found' };
       }
 
-      const apiKey = getLinearApiKey(project);
+      const apiKey = await getLinearApiKey(project);
       if (!apiKey) {
         return { success: false, error: 'No Linear API key configured' };
       }
@@ -437,10 +449,10 @@ export function registerLinearHandlers(
         const errors: string[] = [];
 
         // Set up specs directory
-                const specsBaseDir = getSpecsDir(project.autoBuildPath);
+        const specsBaseDir = getSpecsDir(project.autoBuildPath);
         const specsDir = path.join(project.path, specsBaseDir);
-        if (!existsSync(specsDir)) {
-          mkdirSync(specsDir, { recursive: true });
+        if (!(await fileExists(specsDir))) {
+          await fsPromises.mkdir(specsDir, { recursive: true });
         }
 
         // Create tasks for each imported issue
@@ -462,7 +474,7 @@ ${issue.description || 'No description provided.'}
 
             // Find next available spec number
             let specNumber = 1;
-            const existingDirs = readdirSync(specsDir, { withFileTypes: true })
+            const existingDirs = (await fsPromises.readdir(specsDir, { withFileTypes: true }))
               .filter(d => d.isDirectory())
               .map(d => d.name);
             const existingNumbers = existingDirs
@@ -485,7 +497,7 @@ ${issue.description || 'No description provided.'}
 
             // Create spec directory
             const specDir = path.join(specsDir, specId);
-            mkdirSync(specDir, { recursive: true });
+            await fsPromises.mkdir(specDir, { recursive: true });
 
             // Create initial implementation_plan.json
             const now = new Date().toISOString();
@@ -497,14 +509,14 @@ ${issue.description || 'No description provided.'}
               status: 'pending',
               phases: []
             };
-            writeFileSync(path.join(specDir, AUTO_BUILD_PATHS.IMPLEMENTATION_PLAN), JSON.stringify(implementationPlan, null, 2));
+            await fsPromises.writeFile(path.join(specDir, AUTO_BUILD_PATHS.IMPLEMENTATION_PLAN), JSON.stringify(implementationPlan, null, 2));
 
             // Create requirements.json
             const requirements = {
               task_description: description,
               workflow_type: 'feature'
             };
-            writeFileSync(path.join(specDir, AUTO_BUILD_PATHS.REQUIREMENTS), JSON.stringify(requirements, null, 2));
+            await fsPromises.writeFile(path.join(specDir, AUTO_BUILD_PATHS.REQUIREMENTS), JSON.stringify(requirements, null, 2));
 
             // Build metadata
             const metadata: TaskMetadata = {
@@ -514,7 +526,7 @@ ${issue.description || 'No description provided.'}
               linearUrl: issue.url,
               category: 'feature'
             };
-            writeFileSync(path.join(specDir, 'task_metadata.json'), JSON.stringify(metadata, null, 2));
+            await fsPromises.writeFile(path.join(specDir, 'task_metadata.json'), JSON.stringify(metadata, null, 2));
 
             // Start spec creation with the existing spec directory
             agentManager.startSpecCreation(specId, project.path, description, specDir, metadata);

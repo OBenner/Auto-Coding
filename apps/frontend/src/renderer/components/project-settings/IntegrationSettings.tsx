@@ -85,7 +85,7 @@ export function IntegrationSettings({
       loadBranches();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- loadBranches is intentionally excluded to avoid infinite loops
-  }, [githubExpanded, project.path]);
+  }, [githubExpanded, project.path, loadBranches]);
 
   const loadBranches = async () => {
     setIsLoadingBranches(true);

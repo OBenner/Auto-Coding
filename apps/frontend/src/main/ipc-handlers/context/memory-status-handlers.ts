@@ -1,7 +1,7 @@
 import { ipcMain } from 'electron';
 import type { BrowserWindow } from 'electron';
 import path from 'path';
-import { existsSync, readFileSync, readdirSync, statSync } from 'fs';
+import { promises as fsPromises } from 'fs';
 import { IPC_CHANNELS, getSpecsDir, AUTO_BUILD_PATHS } from '../../../shared/constants';
 import type { IPCResult, GraphitiMemoryStatus, GraphitiMemoryState } from '../../../shared/types';
 import { projectStore } from '../../project-store';
@@ -17,34 +17,51 @@ import { readSettingsFile } from '../../settings-utils';
 import type { AppSettings } from '../../../shared/types/settings';
 
 /**
+ * Check if a file exists
+ */
+async function fileExists(filePath: string): Promise<boolean> {
+  try {
+    await fsPromises.access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Load Graphiti state from most recent spec directory
  */
-export function loadGraphitiStateFromSpecs(
+export async function loadGraphitiStateFromSpecs(
   projectPath: string,
   autoBuildPath?: string
-): GraphitiMemoryState | null {
+): Promise<GraphitiMemoryState | null> {
   if (!autoBuildPath) return null;
 
   const specsBaseDir = getSpecsDir(autoBuildPath);
   const specsDir = path.join(projectPath, specsBaseDir);
 
-  if (!existsSync(specsDir)) {
+  if (!(await fileExists(specsDir))) {
     return null;
   }
 
-  const specDirs = readdirSync(specsDir)
-    .filter((f: string) => {
-      const specPath = path.join(specsDir, f);
-      return statSync(specPath).isDirectory();
-    })
-    .sort()
-    .reverse();
+  const allFiles = await fsPromises.readdir(specsDir);
+  const specDirs: string[] = [];
+
+  for (const f of allFiles) {
+    const specPath = path.join(specsDir, f);
+    const stat = await fsPromises.stat(specPath);
+    if (stat.isDirectory()) {
+      specDirs.push(f);
+    }
+  }
+
+  specDirs.sort().reverse();
 
   for (const specDir of specDirs) {
     const statePath = path.join(specsDir, specDir, AUTO_BUILD_PATHS.GRAPHITI_STATE);
-    if (existsSync(statePath)) {
+    if (await fileExists(statePath)) {
       try {
-        const stateContent = readFileSync(statePath, 'utf-8');
+        const stateContent = await fsPromises.readFile(statePath, 'utf-8');
         return JSON.parse(stateContent);
       } catch {
       }
@@ -61,11 +78,11 @@ export function loadGraphitiStateFromSpecs(
  * 1. App-wide memory settings from settings.json (from onboarding)
  * 2. Project's .env files
  */
-export function buildMemoryStatus(
+export async function buildMemoryStatus(
   projectPath: string,
   autoBuildPath?: string,
   memoryState?: GraphitiMemoryState | null
-): GraphitiMemoryStatus {
+): Promise<GraphitiMemoryStatus> {
   // Load app-wide memory settings from settings.json (set during onboarding)
   const appSettings = (readSettingsFile() || {}) as Partial<AppSettings>;
   const memoryEnvVars = buildMemoryEnvVars(appSettings as AppSettings);
@@ -132,7 +149,7 @@ export function registerMemoryStatusHandlers(
         return { success: false, error: 'Project not found' };
       }
 
-      const memoryStatus = buildMemoryStatus(project.path, project.autoBuildPath);
+      const memoryStatus = await buildMemoryStatus(project.path, project.autoBuildPath);
 
       return {
         success: true,

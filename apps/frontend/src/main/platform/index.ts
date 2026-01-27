@@ -17,11 +17,8 @@ import { existsSync } from 'fs';
 import { spawn, ChildProcess } from 'child_process';
 import { OS, ShellType, PathConfig, ShellConfig, BinaryDirectories } from './types';
 
-// Re-export types for consumers
-export { OS, ShellType, PathConfig, ShellConfig, BinaryDirectories } from './types';
-
 // Re-export from paths.ts for backward compatibility
-export { getWindowsShellPaths, getOllamaExecutablePaths, getOllamaInstallCommand, getWhichCommand, getCommonBinPaths } from './paths';
+export { getWindowsShellPaths, getOllamaExecutablePaths, getOllamaInstallCommand, getWhichCommand } from './paths';
 
 /**
  * Get the current operating system
@@ -246,7 +243,7 @@ function getWindowsShellConfig(preferredShell?: ShellType): ShellConfig {
 /**
  * Get Unix shell configuration
  */
-function getUnixShellConfig(preferredShell?: ShellType): ShellConfig {
+function getUnixShellConfig(_preferredShell?: ShellType): ShellConfig {
   const shellPath = process.env.SHELL || '/bin/zsh';
 
   return {

@@ -133,7 +133,7 @@ export function registerTaskExecutionHandlers(
       const profileManager = initResult.profileManager;
 
       // Find task and project
-      const { task, project } = findTaskAndProject(taskId);
+      const { task, project } = await findTaskAndProject(taskId);
 
       if (!task || !project) {
         console.warn('[TASK_START] Task or project not found for taskId:', taskId);
@@ -319,7 +319,9 @@ export function registerTaskExecutionHandlers(
     }
 
     // Find task and project to update the plan file (async, non-blocking)
-    const { task, project } = findTaskAndProject(taskId);
+    // Wrap in async IIFE since this is a sync event handler
+    (async () => {
+      const { task, project } = await findTaskAndProject(taskId);
 
     if (task && project) {
       // Persist status to implementation_plan.json to prevent status flip-flop on refresh
@@ -344,6 +346,7 @@ export function registerTaskExecutionHandlers(
       });
       // Note: File not found is expected for tasks without a plan file (persistPlanStatus handles ENOENT)
     }
+    })().catch((err) => console.error('[TASK_STOP] Error in async handler:', err));
   });
 
   /**
@@ -359,7 +362,7 @@ export function registerTaskExecutionHandlers(
       images?: ImageAttachment[]
     ): Promise<IPCResult> => {
       // Find task and project
-      const { task, project } = findTaskAndProject(taskId);
+      const { task, project } = await findTaskAndProject(taskId);
 
       if (!task || !project) {
         return { success: false, error: 'Task not found' };
@@ -577,7 +580,7 @@ export function registerTaskExecutionHandlers(
       options?: { forceCleanup?: boolean }
     ): Promise<IPCResult & { worktreeExists?: boolean; worktreePath?: string }> => {
       // Find task and project first (needed for worktree check)
-      const { task, project } = findTaskAndProject(taskId);
+      const { task, project } = await findTaskAndProject(taskId);
 
       if (!task || !project) {
         return { success: false, error: 'Task not found' };
@@ -876,7 +879,7 @@ export function registerTaskExecutionHandlers(
       }
 
       // Find task and project
-      const { task, project } = findTaskAndProject(taskId);
+      const { task, project } = await findTaskAndProject(taskId);
 
       if (!task || !project) {
         return { success: false, error: 'Task not found' };

@@ -3,7 +3,7 @@
  */
 
 import path from 'path';
-import { existsSync, mkdirSync, writeFileSync } from 'fs';
+import { promises as fsPromises } from 'fs';
 import type { IpcMainInvokeEvent } from 'electron';
 import { AUTO_BUILD_PATHS, getSpecsDir } from '../../../shared/constants';
 import type {
@@ -20,6 +20,18 @@ import { projectStore } from '../../project-store';
 import { readIdeationFile, writeIdeationFile, updateIdeationTimestamp } from './file-utils';
 import type { RawIdea } from './types';
 import { withSpecNumberLock } from '../../utils/spec-number-lock';
+
+/**
+ * Check if a file exists
+ */
+async function fileExists(filePath: string): Promise<boolean> {
+  try {
+    await fsPromises.access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Create a slugified version of a title for use in directory names
@@ -131,13 +143,13 @@ function buildTaskMetadata(idea: RawIdea): TaskMetadata {
 /**
  * Create spec directory structure and files
  */
-function createSpecFiles(
+async function createSpecFiles(
   specDir: string,
   idea: RawIdea,
   _taskDescription: string
-): void {
+): Promise<void> {
   // Create the spec directory
-  mkdirSync(specDir, { recursive: true });
+  await fsPromises.mkdir(specDir, { recursive: true });
 
   // Create initial implementation_plan.json
   const initialPlan: ImplementationPlan = {
@@ -153,7 +165,7 @@ function createSpecFiles(
     final_acceptance: [],
     spec_file: 'spec.md'
   };
-  writeFileSync(
+  await fsPromises.writeFile(
     path.join(specDir, AUTO_BUILD_PATHS.IMPLEMENTATION_PLAN),
     JSON.stringify(initialPlan, null, 2)
   );
@@ -172,7 +184,7 @@ ${idea.rationale}
 ---
 *This spec was created from ideation and is pending detailed specification.*
 `;
-  writeFileSync(path.join(specDir, AUTO_BUILD_PATHS.SPEC_FILE), specContent);
+  await fsPromises.writeFile(path.join(specDir, AUTO_BUILD_PATHS.SPEC_FILE), specContent);
 }
 
 /**
@@ -195,7 +207,7 @@ export async function convertIdeaToTask(
   );
 
   // Quick check that ideation file exists (actual read happens inside lock)
-  if (!existsSync(ideationPath)) {
+  if (!(await fileExists(ideationPath))) {
     return { success: false, error: 'Ideation not found' };
   }
 
@@ -204,8 +216,8 @@ export async function convertIdeaToTask(
   const specsDir = path.join(project.path, specsBaseDir);
 
   // Ensure specs directory exists
-  if (!existsSync(specsDir)) {
-    mkdirSync(specsDir, { recursive: true });
+  if (!(await fileExists(specsDir))) {
+    await fsPromises.mkdir(specsDir, { recursive: true });
   }
 
   try {
@@ -213,7 +225,7 @@ export async function convertIdeaToTask(
     // CRITICAL: All state checks must happen INSIDE the lock to prevent TOCTOU race conditions
     return await withSpecNumberLock(project.path, async (lock) => {
       // Re-read ideation file INSIDE the lock to get fresh state
-      const ideation = readIdeationFile(ideationPath);
+      const ideation = await readIdeationFile(ideationPath);
       if (!ideation) {
         return { success: false, error: 'Ideation not found' };
       }
@@ -245,17 +257,17 @@ export async function convertIdeaToTask(
       const metadata = buildTaskMetadata(idea);
 
       // Create spec files (inside lock to ensure atomicity)
-      createSpecFiles(specDir, idea, taskDescription);
+      await createSpecFiles(specDir, idea, taskDescription);
 
       // Save metadata
       const metadataPath = path.join(specDir, 'task_metadata.json');
-      writeFileSync(metadataPath, JSON.stringify(metadata, null, 2));
+      await fsPromises.writeFile(metadataPath, JSON.stringify(metadata, null, 2));
 
       // Update idea status to archived (converted ideas are archived)
       idea.status = 'archived';
       idea.linked_task_id = specId;
       updateIdeationTimestamp(ideation);
-      writeIdeationFile(ideationPath, ideation);
+      await writeIdeationFile(ideationPath, ideation);
 
       // Create task object to return
       const task: Task = {

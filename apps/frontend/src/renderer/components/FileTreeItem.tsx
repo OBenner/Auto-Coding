@@ -79,7 +79,7 @@ export function FileTreeItem({
   // This handles cases where component unmounts mid-drag or dragend doesn't fire
   useEffect(() => {
     return () => {
-      if (dragImageRef.current && dragImageRef.current.parentNode) {
+      if (dragImageRef.current?.parentNode) {
         dragImageRef.current.parentNode.removeChild(dragImageRef.current);
         dragImageRef.current = null;
       }
@@ -151,7 +151,7 @@ export function FileTreeItem({
     setIsDragging(false);
 
     // Clean up drag image element
-    if (dragImageRef.current && dragImageRef.current.parentNode) {
+    if (dragImageRef.current?.parentNode) {
       dragImageRef.current.parentNode.removeChild(dragImageRef.current);
       dragImageRef.current = null;
     }
@@ -168,17 +168,13 @@ export function FileTreeItem({
       className={cn(
         'flex items-center gap-1 py-1 px-2 rounded cursor-grab select-none',
         'hover:bg-accent/50 transition-colors',
-        node.isDirectory && 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1',
+        node.isDirectory && 'focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-1',
         isDragging && 'opacity-50 bg-accent ring-2 ring-primary'
       )}
       style={{ paddingLeft: `${depth * 12 + 8}px` }}
       onClick={handleClick}
       onDoubleClick={handleDoubleClick}
-      aria-label={
-        node.isDirectory
-          ? t('accessibility.toggleFolder', { name: node.name })
-          : t('accessibility.dragFile', { name: node.name })
-      }
+      aria-label={node.isDirectory ? t('accessibility.toggleFolder', { name: node.name }) : undefined}
       aria-expanded={node.isDirectory ? isExpanded : undefined}
     >
       {/* Expand/collapse chevron for directories */}
