@@ -1,8 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
+import { TaskList } from './pages/TaskList';
+import { TaskDetail } from './pages/TaskDetail';
 
 // Placeholder for future components
-function WelcomeScreen() {
+function WelcomeScreen({ onNavigateToTasks }: { onNavigateToTasks: () => void }) {
   const { t } = useTranslation(['common']);
 
   return (
@@ -22,14 +24,95 @@ function WelcomeScreen() {
             <li>• Monitor agent progress in real-time</li>
             <li>• Access from any device with a browser</li>
           </ul>
+          <div className="mt-6">
+            <button
+              onClick={onNavigateToTasks}
+              className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              View Tasks
+            </button>
+          </div>
         </div>
       </div>
     </div>
   );
 }
 
+// Route types
+type Route =
+  | { type: 'welcome' }
+  | { type: 'tasks' }
+  | { type: 'task-detail'; taskId: string };
+
+// Parse hash to determine current route
+function parseRoute(hash: string): Route {
+  // Remove leading '#' if present
+  const path = hash.startsWith('#') ? hash.slice(1) : hash;
+
+  if (!path || path === '/') {
+    return { type: 'welcome' };
+  }
+
+  if (path === '/tasks') {
+    return { type: 'tasks' };
+  }
+
+  // Match /tasks/:id pattern
+  const taskDetailMatch = path.match(/^\/tasks\/([^/]+)$/);
+  if (taskDetailMatch) {
+    return { type: 'task-detail', taskId: taskDetailMatch[1] };
+  }
+
+  // Default to welcome for unknown routes
+  return { type: 'welcome' };
+}
+
+// Generate hash for a route
+function routeToHash(route: Route): string {
+  switch (route.type) {
+    case 'welcome':
+      return '#/';
+    case 'tasks':
+      return '#/tasks';
+    case 'task-detail':
+      return `#/tasks/${route.taskId}`;
+  }
+}
+
 export function App() {
   const [isLoading, setIsLoading] = useState(true);
+  const [currentRoute, setCurrentRoute] = useState<Route>(() =>
+    parseRoute(window.location.hash)
+  );
+
+  // Handle hash changes (browser back/forward)
+  useEffect(() => {
+    const handleHashChange = () => {
+      setCurrentRoute(parseRoute(window.location.hash));
+    };
+
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
+
+  // Navigation helpers
+  const navigateTo = useCallback((route: Route) => {
+    const hash = routeToHash(route);
+    window.location.hash = hash;
+    setCurrentRoute(route);
+  }, []);
+
+  const navigateToTasks = useCallback(() => {
+    navigateTo({ type: 'tasks' });
+  }, [navigateTo]);
+
+  const navigateToTaskDetail = useCallback((taskId: string) => {
+    navigateTo({ type: 'task-detail', taskId });
+  }, [navigateTo]);
+
+  const navigateBack = useCallback(() => {
+    navigateTo({ type: 'tasks' });
+  }, [navigateTo]);
 
   // Initial load - check API connection
   useEffect(() => {
@@ -59,5 +142,15 @@ export function App() {
     );
   }
 
-  return <WelcomeScreen />;
+  // Render current route
+  switch (currentRoute.type) {
+    case 'welcome':
+      return <WelcomeScreen onNavigateToTasks={navigateToTasks} />;
+
+    case 'tasks':
+      return <TaskList onTaskClick={navigateToTaskDetail} />;
+
+    case 'task-detail':
+      return <TaskDetail taskId={currentRoute.taskId} onBack={navigateBack} />;
+  }
 }
