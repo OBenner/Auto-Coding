@@ -8,10 +8,11 @@ import logging
 from pathlib import Path
 from typing import Literal, Optional
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
 from core.config import settings
+from core.security import require_auth
 from services.agent_runner import (
     cancel_task,
     cleanup_completed_tasks,
@@ -82,7 +83,7 @@ def _get_project_dir() -> Path:
 
 
 @router.post("/run", response_model=AgentRunResponse, status_code=status.HTTP_202_ACCEPTED)
-async def run_agent(request: AgentRunRequest):
+async def run_agent(request: AgentRunRequest, auth: dict = Depends(require_auth)):
     """
     Start an agent execution task.
 
@@ -163,7 +164,7 @@ async def run_agent(request: AgentRunRequest):
 
 
 @router.get("/status/{task_id}", response_model=AgentStatusResponse, status_code=status.HTTP_200_OK)
-async def get_agent_status(task_id: str):
+async def get_agent_status(task_id: str, auth: dict = Depends(require_auth)):
     """
     Get the status of a running agent task.
 
@@ -210,7 +211,7 @@ async def get_agent_status(task_id: str):
 
 
 @router.post("/cancel/{task_id}", response_model=AgentCancelResponse, status_code=status.HTTP_200_OK)
-async def cancel_agent(task_id: str):
+async def cancel_agent(task_id: str, auth: dict = Depends(require_auth)):
     """
     Cancel a running agent task.
 
