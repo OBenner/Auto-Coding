@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { Task } from '../../../shared/types';
 import {
   Tooltip,
@@ -17,6 +18,7 @@ interface TerminalTitleProps {
 }
 
 export function TerminalTitle({ title, associatedTask, onTitleChange, terminalCount = 1 }: TerminalTitleProps) {
+  const { t } = useTranslation(['common']);
   const [isEditing, setIsEditing] = useState(false);
   const [editedTitle, setEditedTitle] = useState('');
   const maxWidthClass = getTitleMaxWidthClass(terminalCount);
@@ -66,6 +68,7 @@ export function TerminalTitle({ title, associatedTask, onTitleChange, terminalCo
         onClick={(e) => e.stopPropagation()}
         className={cn("text-xs font-medium text-foreground bg-transparent border border-primary/50 rounded px-1 py-0.5 outline-none focus:border-primary", maxWidthClass)}
         style={{ width: `${Math.max(editedTitle.length * 6 + 16, 60)}px` }}
+        aria-label={t('common:aria.editTerminalTitle')}
       />
     );
   }
@@ -81,6 +84,7 @@ export function TerminalTitle({ title, associatedTask, onTitleChange, terminalCo
                 e.stopPropagation();
                 handleStartEdit();
               }}
+              aria-label={t('common:aria.terminalTitle')}
             >
               {title}
             </span>
@@ -104,6 +108,7 @@ export function TerminalTitle({ title, associatedTask, onTitleChange, terminalCo
               e.stopPropagation();
               handleStartEdit();
             }}
+            aria-label={t('common:aria.terminalTitle')}
           >
             {title}
           </span>

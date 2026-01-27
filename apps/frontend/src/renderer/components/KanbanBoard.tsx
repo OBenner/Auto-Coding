@@ -440,7 +440,7 @@ const DroppableColumn = memo(function DroppableColumn({ status, tasks, onTaskCli
                     checked={selectAllCheckedState}
                     onCheckedChange={handleSelectAllChange}
                     disabled={taskCount === 0}
-                    aria-label={isAllSelected ? t('kanban.deselectAll') : t('kanban.selectAll')}
+                    aria-label={isAllSelected ? t('ariaLabels.deselectAll') : t('ariaLabels.selectAll')}
                     className="h-4 w-4"
                   />
                 </div>
@@ -501,6 +501,7 @@ const DroppableColumn = memo(function DroppableColumn({ status, tasks, onTaskCli
                   className="h-7 w-7 hover:bg-cyan-500/10 hover:text-cyan-400 transition-colors"
                   onClick={onQueueAll}
                   title={t('queue.queueAll')}
+                  aria-label={t('ariaLabels.queueAllTasks')}
                 >
                   <ListPlus className="h-4 w-4" />
                 </Button>
@@ -525,6 +526,7 @@ const DroppableColumn = memo(function DroppableColumn({ status, tasks, onTaskCli
               className="h-7 w-7 hover:bg-cyan-500/10 hover:text-cyan-400 transition-colors"
               onClick={onQueueSettings}
               title={t('kanban.queueSettings')}
+              aria-label={t('ariaLabels.queueSettings')}
             >
               <Settings className="h-4 w-4" />
             </Button>
@@ -1508,6 +1510,7 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
               size="sm"
               className="gap-2"
               onClick={handleOpenBulkPRDialog}
+              aria-label={t('ariaLabels.createPRs')}
             >
               <GitPullRequest className="h-4 w-4" />
               {t('kanban.createPRs')}
@@ -1517,6 +1520,7 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
               size="sm"
               className="gap-2 text-muted-foreground hover:text-foreground"
               onClick={deselectAllTasks}
+              aria-label={t('ariaLabels.clearSelection')}
             >
               <X className="h-4 w-4" />
               {t('kanban.clearSelection')}

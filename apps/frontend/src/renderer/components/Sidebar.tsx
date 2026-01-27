@@ -282,6 +282,7 @@ export function Sidebar({
         key={item.id}
         onClick={() => handleNavClick(item.id)}
         disabled={!selectedProjectId}
+        aria-label={item.shortcut ? `${t(item.labelKey)} (${item.shortcut})` : t(item.labelKey)}
         aria-keyshortcuts={item.shortcut}
         className={cn(
           'flex w-full items-center rounded-lg text-sm transition-all duration-200',
@@ -414,6 +415,7 @@ export function Sidebar({
                   size={isCollapsed ? "icon" : "sm"}
                   className={isCollapsed ? "" : "flex-1 justify-start gap-2"}
                   onClick={onSettingsClick}
+                  aria-label={t('navigation:ariaLabels.settingsButton')}
                 >
                   <Settings className="h-4 w-4" />
                   {!isCollapsed && t('actions.settings')}
@@ -427,7 +429,7 @@ export function Sidebar({
                   variant="ghost"
                   size="icon"
                   onClick={() => window.open('https://github.com/AndyMik90/Auto-Claude/issues', '_blank')}
-                  aria-label={t('tooltips.help')}
+                  aria-label={t('navigation:ariaLabels.helpButton')}
                 >
                   <HelpCircle className="h-4 w-4" />
                 </Button>
