@@ -10,7 +10,7 @@ import logging
 from pathlib import Path
 from typing import List, Optional, Tuple
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 
 from api.models.task import (
     TaskDetail,
@@ -19,6 +19,7 @@ from api.models.task import (
     TaskSummary,
 )
 from core.config import settings
+from core.security import require_auth
 
 logger = logging.getLogger(__name__)
 
@@ -226,12 +227,15 @@ def _get_spec_dir(task_id: str) -> Optional[Path]:
 
 
 @router.get("", response_model=TaskListResponse, status_code=status.HTTP_200_OK)
-async def list_tasks():
+async def list_tasks(auth: dict = Depends(require_auth)):
     """
     List all tasks (specs) in the project.
 
     Returns a list of all specs with their current status and progress.
     Tasks and specs are synonymous - each spec represents a task to be implemented.
+
+    Args:
+        auth: Authentication token claims (required)
 
     Returns:
         TaskListResponse with list of tasks and total count
@@ -239,6 +243,7 @@ async def list_tasks():
     Example:
         ```bash
         curl -X GET http://localhost:8000/api/tasks \
+             -H "Authorization: Bearer <token>" \
              -H "Content-Type: application/json"
         # Returns: {"tasks": [...], "total": 5}
         ```
@@ -273,12 +278,13 @@ async def list_tasks():
 
 
 @router.get("/{task_id}", response_model=TaskDetail, status_code=status.HTTP_200_OK)
-async def get_task_detail(task_id: str):
+async def get_task_detail(task_id: str, auth: dict = Depends(require_auth)):
     """
     Get detailed information for a specific task.
 
     Args:
         task_id: Task number (e.g., "001") or full folder name (e.g., "001-feature")
+        auth: Authentication token claims (required)
 
     Returns:
         TaskDetail with complete task information including spec content
@@ -289,6 +295,7 @@ async def get_task_detail(task_id: str):
     Example:
         ```bash
         curl -X GET http://localhost:8000/api/tasks/001 \
+             -H "Authorization: Bearer <token>" \
              -H "Content-Type: application/json"
         # Returns: {"number": "001", "name": "feature", ...}
         ```
