@@ -116,6 +116,29 @@ export interface TaskLogStreamChunk {
   subtask_id?: string;
 }
 
+// Token usage statistics - for tracking token consumption per phase
+export interface PhaseTokenStats {
+  phase: 'planning' | 'coding' | 'validation';
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  sessionCount: number;
+  updatedAt: string;  // ISO timestamp
+}
+
+export interface TaskTokenStats {
+  phases: {
+    planning?: PhaseTokenStats;
+    coding?: PhaseTokenStats;
+    validation?: PhaseTokenStats;
+  };
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  totalTokens: number;
+  createdAt: string;  // ISO timestamp
+  updatedAt: string;  // ISO timestamp
+}
+
 // Image attachment types for task creation
 export interface ImageAttachment {
   id: string;           // Unique identifier (UUID)
