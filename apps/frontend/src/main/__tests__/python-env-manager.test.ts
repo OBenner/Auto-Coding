@@ -27,8 +27,23 @@ vi.mock('../python-detector', () => ({
   getBundledPythonPath: vi.fn().mockReturnValue(null),
 }));
 
+// Mock platform module to allow platform simulation in tests
+vi.mock('../platform', () => ({
+  isWindows: vi.fn(),
+  isLinux: vi.fn(),
+  isMacOS: vi.fn(),
+  getPathDelimiter: vi.fn(),
+}));
+
+// Mock git-isolation to control environment variables in tests
+vi.mock('../utils/git-isolation', () => ({
+  getIsolatedGitEnv: vi.fn(() => ({ ...process.env })),
+}));
+
 // Import after mocking
 import { PythonEnvManager } from '../python-env-manager';
+import { isWindows, isLinux, getPathDelimiter } from '../platform';
+import { getIsolatedGitEnv } from '../utils/git-isolation';
 
 describe('PythonEnvManager', () => {
   let manager: PythonEnvManager;
@@ -78,15 +93,13 @@ describe('PythonEnvManager', () => {
   });
 
   describe('Windows pywin32 DLL loading fix', () => {
-    const originalPlatform = process.platform;
-
     beforeEach(() => {
-      // Mock Windows platform
-      Object.defineProperty(process, 'platform', { value: 'win32' });
-    });
-
-    afterEach(() => {
-      Object.defineProperty(process, 'platform', { value: originalPlatform });
+      // Default to Windows for most tests in this block
+      vi.mocked(isWindows).mockReturnValue(true);
+      vi.mocked(isLinux).mockReturnValue(false);
+      vi.mocked(getPathDelimiter).mockReturnValue(';');
+      // Reset getIsolatedGitEnv to return actual process.env for each test
+      vi.mocked(getIsolatedGitEnv).mockReturnValue({ ...process.env });
     });
 
     it('should add pywin32_system32 to PATH on Windows when sitePackagesPath is set', () => {
@@ -119,8 +132,15 @@ describe('PythonEnvManager', () => {
     });
 
     it('should not add Windows-specific PATH modification on non-Windows platforms', () => {
-      // Restore non-Windows platform
-      Object.defineProperty(process, 'platform', { value: 'darwin' });
+      // Override the beforeEach mock for this specific test
+      vi.mocked(isWindows).mockReturnValue(false);
+      vi.mocked(isLinux).mockReturnValue(true);
+      vi.mocked(getPathDelimiter).mockReturnValue(':');
+
+      // Mock getIsolatedGitEnv to return a clean Unix-style PATH without pywin32_system32
+      vi.mocked(getIsolatedGitEnv).mockReturnValue({
+        PATH: '/usr/bin:/usr/local/bin',
+      });
 
       const sitePackagesPath = '/test/site-packages';
 
