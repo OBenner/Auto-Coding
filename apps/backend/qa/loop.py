@@ -46,6 +46,10 @@ from .report import (
 )
 from .reviewer import run_qa_agent_session
 
+# Test generation imports
+from agents.test_generator import run_test_generator_session
+from analysis.code_analyzer import CodeAnalyzer
+
 # Configuration
 MAX_QA_ITERATIONS = 50
 MAX_CONSECUTIVE_ERRORS = 3  # Stop after 3 consecutive errors without progress
@@ -181,6 +185,89 @@ async def run_qa_validation_loop(
         manual_plan = create_manual_test_plan(spec_dir, spec_dir.name)
         print(f"📝 Manual test plan created: {manual_plan}")
         print("\nNote: Automated testing will be limited for this project.")
+
+    # Generate tests for implemented code
+    print("\n🧪 Analyzing code for test generation...")
+    debug("qa_loop", "Starting test generation step")
+
+    try:
+        # Analyze implementation plan to find modified files
+        impl_plan_file = spec_dir / "implementation_plan.json"
+        modified_files = []
+
+        if impl_plan_file.exists():
+            import json
+            with open(impl_plan_file, "r", encoding="utf-8") as f:
+                impl_plan = json.load(f)
+
+            # Collect files from completed subtasks
+            for phase in impl_plan.get("phases", []):
+                for subtask in phase.get("subtasks", []):
+                    if subtask.get("status") == "completed":
+                        modified_files.extend(subtask.get("files_to_modify", []))
+                        modified_files.extend(subtask.get("files_to_create", []))
+
+            # Remove duplicates and filter Python files
+            modified_files = list(set(f for f in modified_files if f.endswith(".py")))
+            debug("qa_loop", f"Found {len(modified_files)} Python files to analyze", files=modified_files[:5])
+
+        if modified_files:
+            # Analyze code in modified files
+            analyzer = CodeAnalyzer()
+            combined_analysis = {
+                "functions": [],
+                "classes": [],
+                "imports": [],
+                "edge_cases": [],
+            }
+
+            for file_path in modified_files:
+                full_path = project_dir / file_path
+                if full_path.exists() and full_path.suffix == ".py":
+                    try:
+                        analysis = analyzer.analyze_file(full_path)
+                        combined_analysis["functions"].extend(analysis.get("functions", []))
+                        combined_analysis["classes"].extend(analysis.get("classes", []))
+                        combined_analysis["imports"].extend(analysis.get("imports", []))
+                        combined_analysis["edge_cases"].extend(analysis.get("edge_cases", []))
+                        debug("qa_loop", f"Analyzed {file_path}",
+                              functions=len(analysis.get("functions", [])),
+                              classes=len(analysis.get("classes", [])))
+                    except Exception as e:
+                        debug_warning("qa_loop", f"Failed to analyze {file_path}: {e}")
+
+            if combined_analysis["functions"] or combined_analysis["classes"]:
+                print(f"   Found {len(combined_analysis['functions'])} functions and {len(combined_analysis['classes'])} classes")
+                print("   Generating tests...")
+
+                # Run test generator
+                test_result = await run_test_generator_session(
+                    project_dir,
+                    spec_dir,
+                    combined_analysis,
+                    model=model,
+                    verbose=verbose,
+                )
+
+                if test_result.get("success"):
+                    generated_files = test_result.get("generated_files", [])
+                    print(f"   ✅ Generated {len(generated_files)} test file(s)")
+                    debug_success("qa_loop", f"Test generation completed", file_count=len(generated_files))
+                else:
+                    error = test_result.get("error", "Unknown error")
+                    print(f"   ⚠️  Test generation had issues: {error}")
+                    debug_warning("qa_loop", f"Test generation incomplete: {error}")
+            else:
+                print("   No testable functions or classes found")
+                debug("qa_loop", "No testable code found in modified files")
+        else:
+            print("   No modified Python files to analyze")
+            debug("qa_loop", "No modified files found in implementation plan")
+
+    except Exception as e:
+        debug_error("qa_loop", f"Test generation failed: {e}")
+        print(f"\n⚠️  Test generation failed: {e}")
+        print("   Continuing with QA validation...")
 
     # Start validation phase in task logger
     if task_logger:
