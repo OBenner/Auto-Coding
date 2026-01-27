@@ -502,7 +502,17 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       };
     }),
 
-  updateExecutionProgress: (taskId, progress) =>
+  updateExecutionProgress: (taskId, progress) => {
+    // Capture old phase before update for real-time token stats fetching
+    const state = get();
+    const index = findTaskIndex(state.tasks, taskId);
+    if (index === -1) return;
+
+    const oldTask = state.tasks[index];
+    const oldPhase = oldTask.executionProgress?.phase;
+    const newPhase = progress.phase;
+
+    // Perform the state update
     set((state) => {
       const index = findTaskIndex(state.tasks, taskId);
       if (index === -1) return state;
@@ -546,7 +556,19 @@ export const useTaskStore = create<TaskState>((set, get) => ({
           };
         })
       };
-    }),
+    });
+
+    // Fetch updated token stats when phase changes (real-time updates during task execution)
+    // This enables live token display as each phase completes (planning → coding → validation)
+    if (newPhase && newPhase !== oldPhase && newPhase !== 'idle') {
+      debugLog('[updateExecutionProgress] Phase changed, fetching token stats:', {
+        taskId,
+        oldPhase,
+        newPhase
+      });
+      fetchAndUpdateTokenStats(taskId);
+    }
+  },
 
   updateTokenStats: (taskId, tokenStats) =>
     set((state) => {
