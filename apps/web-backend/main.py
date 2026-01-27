@@ -1,63 +1,114 @@
 """
-Auto Claude Web Backend - FastAPI Server
-
-This is the main entry point for the Auto Claude web backend API server.
-It exposes Auto Claude functionality via REST API and WebSocket connections.
+Web Backend - FastAPI Application
+Main entry point for the FastAPI web service
 """
+
+import os
+import logging
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from core.config import settings
-from api.routes import auth, specs, tasks, agents
-from api import websocket
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+
+# Configure logging
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+logging.basicConfig(
+    level=getattr(logging, LOG_LEVEL.upper()),
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger(__name__)
+
+# Application configuration
+HOST = os.getenv("HOST", "0.0.0.0")
+PORT = int(os.getenv("PORT", "8000"))
+DEBUG = os.getenv("DEBUG", "false").lower() == "true"
+CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")
+SECRET_KEY = os.getenv("SECRET_KEY")
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
+WS_HEARTBEAT_INTERVAL = int(os.getenv("WS_HEARTBEAT_INTERVAL", "30"))
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Application lifespan handler for startup and shutdown events
+    """
+    # Startup
+    logger.info("Starting Web Backend API")
+    logger.info(f"Server will run on {HOST}:{PORT}")
+    logger.info(f"Debug mode: {DEBUG}")
+    logger.info(f"CORS origins: {CORS_ORIGINS}")
+
+    # Validate required configuration
+    if not SECRET_KEY or SECRET_KEY == "your-secret-key-here-change-in-production":
+        logger.warning("⚠️  SECRET_KEY not configured! Using default - DO NOT use in production!")
+
+    yield
+
+    # Shutdown
+    logger.info("Shutting down Web Backend API")
+
 
 # Create FastAPI application
 app = FastAPI(
-    title="Auto Claude Web API",
-    description="REST API and WebSocket server for Auto Claude web interface",
+    title="Web Backend API",
+    description="FastAPI backend service for Auto Claude web interface",
     version="1.0.0",
-    docs_url="/docs" if settings.DEBUG else None,
-    redoc_url="/redoc" if settings.DEBUG else None,
+    debug=DEBUG,
+    lifespan=lifespan
 )
 
-# Configure CORS middleware
+# Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Include API routers
-app.include_router(auth.router)
-app.include_router(specs.router)
-app.include_router(tasks.router)
-app.include_router(agents.router)
-
-# Include WebSocket router
-app.include_router(websocket.router)
-
 
 @app.get("/")
 async def root():
-    """Health check endpoint"""
+    """Root endpoint - API information"""
     return {
-        "status": "ok",
-        "service": "auto-claude-web-api",
-        "version": "1.0.0"
+        "name": "Web Backend API",
+        "version": "1.0.0",
+        "status": "running",
+        "docs": "/docs"
     }
 
 
 @app.get("/health")
 async def health_check():
-    """Detailed health check endpoint"""
+    """Health check endpoint for monitoring"""
     return {
         "status": "healthy",
-        "service": "auto-claude-web-api",
-        "version": "1.0.0",
-        "debug_mode": settings.DEBUG
+        "service": "web-backend",
+        "debug": DEBUG
     }
+
+
+# WebSocket endpoint placeholder
+@app.websocket("/ws")
+async def websocket_endpoint(websocket):
+    """
+    WebSocket endpoint for real-time communication
+    TODO: Implement WebSocket logic with heartbeat
+    """
+    await websocket.accept()
+    try:
+        while True:
+            data = await websocket.receive_text()
+            await websocket.send_text(f"Echo: {data}")
+    except Exception as e:
+        logger.error(f"WebSocket error: {e}")
+    finally:
+        await websocket.close()
 
 
 if __name__ == "__main__":
@@ -65,8 +116,8 @@ if __name__ == "__main__":
 
     uvicorn.run(
         "main:app",
-        host=settings.HOST,
-        port=settings.PORT,
-        reload=settings.DEBUG,
-        log_level="debug" if settings.DEBUG else "info"
+        host=HOST,
+        port=PORT,
+        reload=DEBUG,
+        log_level=LOG_LEVEL.lower()
     )
