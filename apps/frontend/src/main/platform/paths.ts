@@ -533,6 +533,48 @@ export async function getWindowsExecutablePathsAsync(
 }
 
 /**
+ * Get common binary directories for PATH augmentation
+ *
+ * Returns platform-specific directories where commonly used tools are installed.
+ * These are locations that should be added to PATH to ensure tools are available.
+ *
+ * @returns Record mapping platform names to arrays of binary directory paths
+ */
+export function getCommonBinPaths(): Record<string, string[]> {
+  return {
+    darwin: [
+      '/opt/homebrew/bin',      // Apple Silicon Homebrew
+      '/usr/local/bin',         // Intel Homebrew / system
+      '/usr/local/share/dotnet', // .NET SDK
+      '/opt/homebrew/sbin',     // Apple Silicon Homebrew sbin
+      '/usr/local/sbin',        // Intel Homebrew sbin
+      '~/.local/bin',           // User-local binaries (Claude CLI)
+      '~/.dotnet/tools',        // .NET global tools
+    ],
+    linux: [
+      '/usr/local/bin',
+      '/usr/bin',               // System binaries (Python, etc.)
+      '/snap/bin',              // Snap packages
+      '~/.local/bin',           // User-local binaries
+      '~/.dotnet/tools',        // .NET global tools
+      '/usr/sbin',              // System admin binaries
+    ],
+    win32: [
+      // Windows usually handles PATH better, but we can add common locations
+      'C:\\Program Files\\Git\\cmd',
+      'C:\\Program Files\\GitHub CLI',
+      // Node.js and npm paths - critical for packaged Electron apps that don't inherit full PATH
+      'C:\\Program Files\\nodejs',                  // Standard Node.js installer (64-bit)
+      'C:\\Program Files (x86)\\nodejs',            // 32-bit Node.js on 64-bit Windows
+      '~\\AppData\\Local\\Programs\\nodejs',        // NVM for Windows / user install
+      '~\\AppData\\Roaming\\npm',                   // npm global scripts (claude.cmd lives here)
+      '~\\scoop\\apps\\nodejs\\current',            // Scoop package manager
+      'C:\\ProgramData\\chocolatey\\bin',           // Chocolatey package manager
+    ],
+  };
+}
+
+/**
  * Find a Windows executable using the `where` command
  *
  * This is the most reliable method as it searches:
