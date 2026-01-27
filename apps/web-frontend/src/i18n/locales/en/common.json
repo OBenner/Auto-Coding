@@ -1,0 +1,9 @@
+{
+  "appName": "Auto Claude Web",
+  "loading": "Loading...",
+  "error": "Error",
+  "welcome": "Welcome",
+  "tasks": "Tasks",
+  "specs": "Specs",
+  "settings": "Settings"
+}
