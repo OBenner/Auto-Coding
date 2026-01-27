@@ -3,6 +3,7 @@ import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { ScrollArea } from '../ui/scroll-area';
 import { TaskCard, CommitCard } from './ChangelogEntry';
+import { ChangelogSkeleton } from '../skeletons/ChangelogSkeleton';
 import type { ChangelogTask, ChangelogSourceMode, GitCommit as GitCommitType } from '../../../shared/types';
 
 interface ChangelogListProps {
@@ -136,12 +137,7 @@ export function ChangelogList({
           {/* Commit list */}
           <ScrollArea className="flex-1 p-6">
             {isLoadingCommits ? (
-              <div className="flex h-full items-center justify-center">
-                <div className="text-center py-12">
-                  <Loader2 className="mx-auto h-8 w-8 animate-spin text-muted-foreground" />
-                  <p className="mt-4 text-sm text-muted-foreground">Loading commits...</p>
-                </div>
-              </div>
+              <ChangelogSkeleton variant="commit" count={5} />
             ) : previewCommits.length === 0 ? (
               <div className="flex h-full items-center justify-center">
                 <div className="text-center py-12">
