@@ -58,7 +58,7 @@ from ui import (
 
 from .base import AUTO_CONTINUE_DELAY_SECONDS, HUMAN_INTERVENTION_FILE
 from .memory_manager import debug_memory_system_status, get_graphiti_context
-from .session import post_session_processing, run_agent_session
+from .session import post_session_processing, run_agent_session, save_token_stats
 from .utils import (
     find_phase_for_subtask,
     get_commit_count,
@@ -422,6 +422,23 @@ async def run_autonomous_agent(
             status, response, usage_metadata = await run_agent_session(
                 client, prompt, spec_dir, verbose, phase=current_log_phase
             )
+
+        # Save token statistics for coding phase
+        if usage_metadata and current_log_phase == LogPhase.CODING:
+            try:
+                saved = save_token_stats(
+                    spec_dir,
+                    "coding",
+                    usage_metadata["input_tokens"],
+                    usage_metadata["output_tokens"],
+                )
+                if saved:
+                    logger.debug(
+                        f"Coding phase token stats saved: {usage_metadata['input_tokens']} in, "
+                        f"{usage_metadata['output_tokens']} out"
+                    )
+            except Exception as e:
+                logger.warning(f"Failed to save coding phase token stats: {e}")
 
         plan_validated = False
         if is_planning_phase and status != "error":
