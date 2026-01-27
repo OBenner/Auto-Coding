@@ -5,6 +5,7 @@ import { cn } from '../../../lib/utils';
 import type { PRData, PRReviewProgress, PRReviewResult } from '../hooks/useGitHubPRs';
 import type { NewCommitsCheck } from '../../../../preload/api/modules/github-api';
 import { useTranslation } from 'react-i18next';
+import { PRListSkeleton } from '../../skeletons/PRListSkeleton';
 
 /**
  * Status Flow Dots Component
@@ -205,12 +206,9 @@ export function PRList({
 
   if (isLoading && prs.length === 0) {
     return (
-      <div className="flex-1 flex items-center justify-center">
-        <div className="text-center text-muted-foreground">
-          <GitPullRequest className="h-8 w-8 mx-auto mb-2 animate-pulse" />
-          <p>{t('prReview.loadingPRs')}</p>
-        </div>
-      </div>
+      <ScrollArea className="flex-1">
+        <PRListSkeleton count={5} />
+      </ScrollArea>
     );
   }
 
