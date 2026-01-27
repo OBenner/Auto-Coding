@@ -6,10 +6,13 @@ Handles running agent sessions and post-session processing including
 memory updates, recovery tracking, and Linear integration.
 """
 
+import json
 import logging
+from datetime import datetime
 from pathlib import Path
 
 from claude_agent_sdk import ClaudeSDKClient
+from core.token_stats import PhaseTokenStats, PhaseType, TaskTokenStats
 from debug import debug, debug_detailed, debug_error, debug_section, debug_success
 from insight_extractor import extract_session_insights
 from linear_updater import (
@@ -44,6 +47,129 @@ from .utils import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def load_token_stats(spec_dir: Path) -> TaskTokenStats | None:
+    """
+    Load token statistics from token_stats.json in spec directory.
+
+    Args:
+        spec_dir: Path to spec directory
+
+    Returns:
+        TaskTokenStats object if file exists, None otherwise
+    """
+    stats_file = spec_dir / "token_stats.json"
+    if not stats_file.exists():
+        return None
+
+    try:
+        with open(stats_file, "r") as f:
+            data = json.load(f)
+
+        # Reconstruct PhaseTokenStats objects
+        phases: dict[PhaseType, PhaseTokenStats] = {}
+        for phase_name, phase_data in data.get("phases", {}).items():
+            phases[phase_name] = PhaseTokenStats(
+                phase=phase_data["phase"],
+                input_tokens=phase_data["input_tokens"],
+                output_tokens=phase_data["output_tokens"],
+                session_count=phase_data.get("session_count", 0),
+                updated_at=datetime.fromisoformat(phase_data["updated_at"]),
+            )
+
+        return TaskTokenStats(
+            phases=phases,
+            total_input_tokens=data["total_input_tokens"],
+            total_output_tokens=data["total_output_tokens"],
+            total_tokens=data["total_tokens"],
+            created_at=datetime.fromisoformat(data["created_at"]),
+            updated_at=datetime.fromisoformat(data["updated_at"]),
+        )
+    except Exception as e:
+        logger.warning(f"Failed to load token stats from {stats_file}: {e}")
+        return None
+
+
+def save_token_stats(
+    spec_dir: Path,
+    phase: PhaseType,
+    input_tokens: int,
+    output_tokens: int,
+) -> bool:
+    """
+    Update token statistics for a phase and persist to token_stats.json.
+
+    This function loads existing stats, updates the specified phase, recalculates
+    totals, and saves atomically.
+
+    Args:
+        spec_dir: Path to spec directory
+        phase: Execution phase (planning, coding, validation)
+        input_tokens: Number of input tokens used in this session
+        output_tokens: Number of output tokens used in this session
+
+    Returns:
+        True if saved successfully, False otherwise
+    """
+    try:
+        # Load existing stats or create new
+        existing_stats = load_token_stats(spec_dir)
+        now = datetime.now()
+
+        if existing_stats:
+            phases = existing_stats.phases.copy()
+            created_at = existing_stats.created_at
+        else:
+            phases = {}
+            created_at = now
+
+        # Update or create phase stats
+        if phase in phases:
+            phase_stats = phases[phase]
+            phase_stats.input_tokens += input_tokens
+            phase_stats.output_tokens += output_tokens
+            phase_stats.session_count += 1
+            phase_stats.updated_at = now
+        else:
+            phase_stats = PhaseTokenStats(
+                phase=phase,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                session_count=1,
+                updated_at=now,
+            )
+            phases[phase] = phase_stats
+
+        # Recalculate totals
+        total_input = sum(p.input_tokens for p in phases.values())
+        total_output = sum(p.output_tokens for p in phases.values())
+
+        # Create updated TaskTokenStats
+        task_stats = TaskTokenStats(
+            phases=phases,
+            total_input_tokens=total_input,
+            total_output_tokens=total_output,
+            total_tokens=total_input + total_output,
+            created_at=created_at,
+            updated_at=now,
+        )
+
+        # Save to file (atomic write)
+        stats_file = spec_dir / "token_stats.json"
+        stats_file.parent.mkdir(parents=True, exist_ok=True)
+
+        with open(stats_file, "w") as f:
+            json.dump(task_stats.to_dict(), f, indent=2)
+
+        logger.debug(
+            f"Saved token stats for {phase} phase: {input_tokens} in, {output_tokens} out"
+        )
+        return True
+
+    except Exception as e:
+        logger.error(f"Failed to save token stats to {spec_dir}: {e}")
+        return False
 
 
 async def post_session_processing(
@@ -317,7 +443,7 @@ async def run_agent_session(
     spec_dir: Path,
     verbose: bool = False,
     phase: LogPhase = LogPhase.CODING,
-) -> tuple[str, str]:
+) -> tuple[str, str, dict[str, int] | None]:
     """
     Run a single agent session using Claude Agent SDK.
 
@@ -329,10 +455,10 @@ async def run_agent_session(
         phase: Current execution phase for logging
 
     Returns:
-        (status, response_text) where status is:
-        - "continue" if agent should continue working
-        - "complete" if all subtasks complete
-        - "error" if an error occurred
+        (status, response_text, usage_metadata) where:
+        - status: "continue", "complete", or "error"
+        - response_text: The agent's response
+        - usage_metadata: Dict with "input_tokens" and "output_tokens" keys (or None if unavailable)
     """
     debug_section("session", f"Agent Session - {phase.value}")
     debug(
@@ -520,6 +646,66 @@ async def run_agent_session(
 
         print("\n" + "-" * 70 + "\n")
 
+        # Extract usage metadata from Claude SDK client
+        usage_metadata = None
+        try:
+            # Try to get usage metadata from the client
+            # The Claude SDK client may expose usage metadata after the session completes
+            if hasattr(client, "usage_metadata"):
+                metadata = client.usage_metadata
+                if metadata and hasattr(metadata, "input_tokens") and hasattr(metadata, "output_tokens"):
+                    usage_metadata = {
+                        "input_tokens": metadata.input_tokens,
+                        "output_tokens": metadata.output_tokens,
+                    }
+                    debug_success(
+                        "session",
+                        "Extracted usage metadata",
+                        input_tokens=metadata.input_tokens,
+                        output_tokens=metadata.output_tokens,
+                    )
+            elif hasattr(client, "_usage"):
+                # Alternative: some SDKs store usage in a _usage attribute
+                usage = client._usage
+                if isinstance(usage, dict) and "input_tokens" in usage and "output_tokens" in usage:
+                    usage_metadata = {
+                        "input_tokens": usage["input_tokens"],
+                        "output_tokens": usage["output_tokens"],
+                    }
+                    debug_success(
+                        "session",
+                        "Extracted usage metadata from _usage",
+                        input_tokens=usage["input_tokens"],
+                        output_tokens=usage["output_tokens"],
+                    )
+        except Exception as e:
+            logger.debug(f"Could not extract usage metadata from client: {e}")
+
+        # Persist usage metadata to token_stats.json if available
+        if usage_metadata:
+            # Map LogPhase to PhaseType
+            phase_type_map = {
+                LogPhase.PLANNING: "planning",
+                LogPhase.CODING: "coding",
+                LogPhase.VALIDATION: "validation",
+            }
+            phase_type = phase_type_map.get(phase, "coding")  # Default to coding if unknown
+
+            try:
+                saved = save_token_stats(
+                    spec_dir,
+                    phase_type,
+                    usage_metadata["input_tokens"],
+                    usage_metadata["output_tokens"],
+                )
+                if saved:
+                    print_status(
+                        f"Token usage recorded: {usage_metadata['input_tokens']} in, {usage_metadata['output_tokens']} out",
+                        "info"
+                    )
+            except Exception as e:
+                logger.warning(f"Failed to persist token stats: {e}")
+
         # Check if build is complete
         if is_build_complete(spec_dir):
             debug_success(
@@ -529,7 +715,7 @@ async def run_agent_session(
                 tool_count=tool_count,
                 response_length=len(response_text),
             )
-            return "complete", response_text
+            return "complete", response_text, usage_metadata
 
         debug_success(
             "session",
@@ -538,7 +724,7 @@ async def run_agent_session(
             tool_count=tool_count,
             response_length=len(response_text),
         )
-        return "continue", response_text
+        return "continue", response_text, usage_metadata
 
     except Exception as e:
         debug_error(
@@ -551,4 +737,4 @@ async def run_agent_session(
         print(f"Error during agent session: {e}")
         if task_logger:
             task_logger.log_error(f"Session error: {e}", phase)
-        return "error", str(e)
+        return "error", str(e), None
