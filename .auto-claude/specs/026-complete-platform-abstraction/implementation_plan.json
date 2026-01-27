@@ -1,0 +1,449 @@
+{
+  "feature": "Complete Platform Abstraction",
+  "workflow_type": "refactor",
+  "workflow_rationale": "Consolidating scattered platform-specific code into centralized platform modules to eliminate cross-platform bugs and ensure 100% consistent behavior across Windows, macOS, and Linux. This is a refactoring task that moves existing code rather than adding new features.",
+  "phases": [
+    {
+      "id": "phase-1-audit",
+      "name": "Platform Check Audit",
+      "type": "investigation",
+      "description": "Comprehensively audit the codebase to identify all remaining direct platform checks and hardcoded platform-specific code that needs consolidation",
+      "depends_on": [],
+      "parallel_safe": true,
+      "subtasks": [
+        {
+          "id": "subtask-1-1",
+          "description": "Search and catalog all direct process.platform checks in frontend code",
+          "service": "frontend",
+          "files_to_modify": [],
+          "files_to_create": [
+            "./.auto-claude/specs/026-complete-platform-abstraction/audit_frontend.md"
+          ],
+          "patterns_from": [],
+          "verification": {
+            "type": "command",
+            "command": "grep -r \"process\\.platform\" apps/frontend/src --include=\"*.ts\" --include=\"*.tsx\" | wc -l",
+            "expected": "Output shows count of direct platform checks"
+          },
+          "status": "completed",
+          "expected_output": "Markdown document listing all files with direct process.platform checks, categorized by type (OS detection, path handling, executable finding)",
+          "notes": "Successfully audited 59 process.platform occurrences: 5 in platform module (expected), 27 in test files (acceptable), 27 in production code (must refactor). High-priority targets: env-utils.ts, windows-paths.ts, worktree-handlers.ts, settings-handlers.ts, credential-utils.ts. Audit document created at ./.auto-claude/specs/026-complete-platform-abstraction/audit_frontend.md",
+          "updated_at": "2026-01-27T05:11:47.875485+00:00"
+        },
+        {
+          "id": "subtask-1-2",
+          "description": "Search and catalog all direct sys.platform/platform.system() checks in backend code",
+          "service": "backend",
+          "files_to_modify": [],
+          "files_to_create": [
+            "./.auto-claude/specs/026-complete-platform-abstraction/audit_backend.md"
+          ],
+          "patterns_from": [],
+          "verification": {
+            "type": "command",
+            "command": "grep -r \"sys\\.platform\\|platform\\.system()\" apps/backend --include=\"*.py\" | wc -l",
+            "expected": "Output shows count of direct platform checks"
+          },
+          "status": "completed",
+          "expected_output": "Markdown document listing all files with direct platform checks, categorized by type (OS detection, path handling, shell execution)",
+          "notes": "Successfully audited 13 platform check occurrences: 6 in core/platform module (expected), 7 in production code (must refactor). High-priority targets: run.py, spec_runner.py, github/runner.py (Windows asyncio policy pattern - should be centralized), ui/capabilities.py, core/workspace/setup.py, integrations/graphiti. Common pattern identified: Windows asyncio policy appears 3 times and should be consolidated into a helper function. Audit document created at ./.auto-claude/specs/026-complete-platform-abstraction/audit_backend.md",
+          "updated_at": "2026-01-27T09:15:00.000000+00:00"
+        },
+        {
+          "id": "subtask-1-3",
+          "description": "Identify hardcoded platform-specific paths and duplicated platform logic",
+          "service": "frontend",
+          "files_to_modify": [],
+          "files_to_create": [
+            "./.auto-claude/specs/026-complete-platform-abstraction/audit_duplicates.md"
+          ],
+          "patterns_from": [
+            "apps/frontend/src/main/env-utils.ts",
+            "apps/frontend/src/main/utils/windows-paths.ts"
+          ],
+          "verification": {
+            "type": "manual",
+            "instructions": "Review audit_duplicates.md for completeness"
+          },
+          "status": "pending",
+          "expected_output": "Markdown document identifying: (1) files with COMMON_BIN_PATHS hardcoded lists, (2) duplicate platform detection logic, (3) files that should use platform module but don't"
+        }
+      ]
+    },
+    {
+      "id": "phase-2-backend-consolidation",
+      "name": "Backend Platform Consolidation",
+      "type": "implementation",
+      "description": "Replace all direct sys.platform and platform.system() checks with imports from core.platform module",
+      "depends_on": [
+        "phase-1-audit"
+      ],
+      "parallel_safe": true,
+      "subtasks": [
+        {
+          "id": "subtask-2-1",
+          "description": "Refactor ui/capabilities.py to use platform module",
+          "service": "backend",
+          "files_to_modify": [
+            "apps/backend/ui/capabilities.py"
+          ],
+          "files_to_create": [],
+          "patterns_from": [
+            "apps/backend/core/platform/__init__.py"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "python -c \"from apps.backend.ui.capabilities import enable_windows_ansi_support; print('OK')\"",
+            "expected": "OK"
+          },
+          "status": "pending",
+          "notes": "Replace sys.platform != 'win32' with is_windows() from core.platform. Preserve existing behavior exactly."
+        },
+        {
+          "id": "subtask-2-2",
+          "description": "Refactor core/workspace/setup.py to use platform module",
+          "service": "backend",
+          "files_to_modify": [
+            "apps/backend/core/workspace/setup.py"
+          ],
+          "files_to_create": [],
+          "patterns_from": [
+            "apps/backend/core/platform/__init__.py"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "python -c \"from apps.backend.core.workspace.setup import choose_workspace; print('OK')\"",
+            "expected": "OK"
+          },
+          "status": "pending",
+          "notes": "If any platform checks exist, replace with platform module functions"
+        },
+        {
+          "id": "subtask-2-3",
+          "description": "Refactor runners (spec_runner.py, github/runner.py, run.py) to use platform module",
+          "service": "backend",
+          "files_to_modify": [
+            "apps/backend/runners/spec_runner.py",
+            "apps/backend/runners/github/runner.py",
+            "apps/backend/run.py"
+          ],
+          "files_to_create": [],
+          "patterns_from": [
+            "apps/backend/core/platform/__init__.py"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "python -c \"import apps.backend.run; print('OK')\"",
+            "expected": "OK"
+          },
+          "status": "pending",
+          "notes": "Replace any direct platform checks with platform module imports"
+        },
+        {
+          "id": "subtask-2-4",
+          "description": "Refactor integrations/graphiti to use platform module if needed",
+          "service": "backend",
+          "files_to_modify": [
+            "apps/backend/integrations/graphiti/queries_pkg/client.py"
+          ],
+          "files_to_create": [],
+          "patterns_from": [
+            "apps/backend/core/platform/__init__.py"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "python -c \"from apps.backend.integrations.graphiti.queries_pkg.client import LadybugDBClient; print('OK')\"",
+            "expected": "OK"
+          },
+          "status": "pending",
+          "notes": "Check if platform checks exist and consolidate if found"
+        }
+      ]
+    },
+    {
+      "id": "phase-3-frontend-duplicate-removal",
+      "name": "Frontend Duplicate Platform Logic Removal",
+      "type": "implementation",
+      "description": "Remove duplicate platform detection logic and consolidate into main platform module",
+      "depends_on": [
+        "phase-1-audit"
+      ],
+      "parallel_safe": true,
+      "subtasks": [
+        {
+          "id": "subtask-3-1",
+          "description": "Deprecate shared/platform.ts by migrating all imports to main/platform",
+          "service": "frontend",
+          "files_to_modify": [
+            "apps/frontend/src/shared/platform.ts"
+          ],
+          "files_to_create": [],
+          "patterns_from": [
+            "apps/frontend/src/main/platform/index.ts"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "grep -r \"from.*shared/platform\" apps/frontend/src --include=\"*.ts\" --include=\"*.tsx\" | wc -l",
+            "expected": "0"
+          },
+          "status": "pending",
+          "notes": "Mark as deprecated and add re-exports from main/platform. Then update all imports across the codebase to use main/platform directly."
+        },
+        {
+          "id": "subtask-3-2",
+          "description": "Consolidate windows-paths.ts functionality into platform/paths.ts",
+          "service": "frontend",
+          "files_to_modify": [
+            "apps/frontend/src/main/utils/windows-paths.ts",
+            "apps/frontend/src/main/platform/paths.ts"
+          ],
+          "files_to_create": [],
+          "patterns_from": [
+            "apps/frontend/src/main/platform/paths.ts"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "npm run build",
+            "expected": "Build succeeds"
+          },
+          "status": "pending",
+          "notes": "Move any unique functionality from windows-paths.ts into platform/paths.ts, then deprecate windows-paths.ts with re-exports"
+        }
+      ]
+    },
+    {
+      "id": "phase-4-frontend-consolidation",
+      "name": "Frontend Platform Check Consolidation",
+      "type": "implementation",
+      "description": "Replace all direct process.platform checks and hardcoded paths with platform module imports",
+      "depends_on": [
+        "phase-3-frontend-duplicate-removal"
+      ],
+      "parallel_safe": false,
+      "subtasks": [
+        {
+          "id": "subtask-4-1",
+          "description": "Refactor env-utils.ts to extract COMMON_BIN_PATHS to platform module",
+          "service": "frontend",
+          "files_to_modify": [
+            "apps/frontend/src/main/env-utils.ts",
+            "apps/frontend/src/main/platform/paths.ts"
+          ],
+          "files_to_create": [],
+          "patterns_from": [
+            "apps/frontend/src/main/platform/paths.ts"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "npm run test -- env-utils.test.ts",
+            "expected": "All tests pass"
+          },
+          "status": "pending",
+          "notes": "Move COMMON_BIN_PATHS constant to platform/paths.ts as getCommonBinaryPaths() function. Update env-utils.ts to import and use this function."
+        },
+        {
+          "id": "subtask-4-2",
+          "description": "Refactor IPC handlers to use platform module",
+          "service": "frontend",
+          "files_to_modify": [
+            "apps/frontend/src/main/ipc-handlers/task/worktree-handlers.ts",
+            "apps/frontend/src/main/ipc-handlers/settings-handlers.ts",
+            "apps/frontend/src/main/ipc-handlers/gitlab/oauth-handlers.ts"
+          ],
+          "files_to_create": [],
+          "patterns_from": [
+            "apps/frontend/src/main/platform/index.ts"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "npm run test -- ipc-handlers.test.ts",
+            "expected": "All tests pass"
+          },
+          "status": "pending",
+          "notes": "Replace any direct process.platform checks with isWindows(), isMacOS(), isLinux() imports from platform module"
+        },
+        {
+          "id": "subtask-4-3",
+          "description": "Refactor remaining files (claude-profile, app-logger) to use platform module",
+          "service": "frontend",
+          "files_to_modify": [
+            "apps/frontend/src/main/claude-profile/credential-utils.ts",
+            "apps/frontend/src/main/app-logger.ts"
+          ],
+          "files_to_create": [],
+          "patterns_from": [
+            "apps/frontend/src/main/platform/index.ts"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "npm run build",
+            "expected": "Build succeeds"
+          },
+          "status": "pending",
+          "notes": "Replace direct platform checks with platform module imports"
+        }
+      ]
+    },
+    {
+      "id": "phase-5-verification",
+      "name": "Cross-Platform Verification",
+      "type": "integration",
+      "description": "Verify that all changes work correctly on Windows, macOS, and Linux with CI tests",
+      "depends_on": [
+        "phase-2-backend-consolidation",
+        "phase-4-frontend-consolidation"
+      ],
+      "parallel_safe": false,
+      "subtasks": [
+        {
+          "id": "subtask-5-1",
+          "description": "Verify zero direct platform checks remain outside platform modules",
+          "all_services": true,
+          "files_to_modify": [],
+          "files_to_create": [
+            "./.auto-claude/specs/026-complete-platform-abstraction/verification_report.md"
+          ],
+          "patterns_from": [],
+          "verification": {
+            "type": "e2e",
+            "steps": [
+              "Run grep to find any remaining process.platform in frontend (excluding platform module and tests)",
+              "Run grep to find any remaining sys.platform in backend (excluding platform module and tests)",
+              "Verify both searches return 0 results or only acceptable exceptions",
+              "Document any remaining platform checks and their justification"
+            ]
+          },
+          "status": "pending",
+          "notes": "Acceptable exceptions: test files mocking platform, and the platform modules themselves"
+        },
+        {
+          "id": "subtask-5-2",
+          "description": "Run full test suite on all platforms via CI",
+          "all_services": true,
+          "files_to_modify": [],
+          "files_to_create": [],
+          "patterns_from": [],
+          "verification": {
+            "type": "e2e",
+            "steps": [
+              "Push changes to trigger CI on Windows, macOS, and Linux",
+              "Verify frontend tests pass on all platforms",
+              "Verify backend tests pass on all platforms",
+              "Check for any platform-specific failures"
+            ]
+          },
+          "status": "pending",
+          "notes": "CI configuration already tests on ubuntu-latest, windows-latest, and macos-latest"
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "total_phases": 5,
+    "total_subtasks": 13,
+    "services_involved": [
+      "backend",
+      "frontend"
+    ],
+    "parallelism": {
+      "max_parallel_phases": 2,
+      "parallel_groups": [
+        {
+          "phases": [
+            "phase-2-backend-consolidation",
+            "phase-3-frontend-duplicate-removal"
+          ],
+          "reason": "Backend and frontend consolidation can happen independently after audit phase"
+        }
+      ],
+      "recommended_workers": 2,
+      "speedup_estimate": "1.5x faster than sequential"
+    },
+    "startup_command": "source apps/backend/.venv/bin/activate && python apps/backend/run.py --spec 026-complete-platform-abstraction --parallel 2"
+  },
+  "verification_strategy": {
+    "risk_level": "medium",
+    "skip_validation": false,
+    "test_creation_phase": "post_implementation",
+    "test_types_required": [
+      "unit",
+      "integration"
+    ],
+    "security_scanning_required": false,
+    "staging_deployment_required": false,
+    "acceptance_criteria": [
+      "Zero direct process.platform checks outside platform modules (excluding tests)",
+      "Zero direct sys.platform checks outside platform modules (excluding tests)",
+      "All existing tests pass on Windows, macOS, and Linux",
+      "No new platform-specific bugs introduced",
+      "Duplicate platform logic removed (shared/platform.ts, windows-paths.ts consolidated)"
+    ],
+    "verification_steps": [
+      {
+        "name": "Backend Tests",
+        "command": "cd apps/backend && .venv/bin/pytest tests/ -v",
+        "expected_outcome": "All tests pass",
+        "type": "test",
+        "required": true,
+        "blocking": true
+      },
+      {
+        "name": "Frontend Tests",
+        "command": "cd apps/frontend && npm test",
+        "expected_outcome": "All tests pass",
+        "type": "test",
+        "required": true,
+        "blocking": true
+      },
+      {
+        "name": "Platform Check Audit",
+        "command": "grep -r \"process\\.platform\" apps/frontend/src --include=\"*.ts\" --exclude-dir=\"platform\" --exclude-dir=\"__tests__\" | grep -v \"// @platform-check-allowed\" || echo 'No violations'",
+        "expected_outcome": "No violations",
+        "type": "security",
+        "required": true,
+        "blocking": true
+      }
+    ],
+    "reasoning": "Medium risk refactoring that touches platform-specific code across both backend and frontend. Requires unit and integration tests to ensure no regressions, but doesn't need security scanning or staging deployment as it's consolidating existing logic."
+  },
+  "qa_acceptance": {
+    "unit_tests": {
+      "required": true,
+      "commands": [
+        "cd apps/backend && .venv/bin/pytest tests/",
+        "cd apps/frontend && npm test"
+      ],
+      "minimum_coverage": null
+    },
+    "integration_tests": {
+      "required": true,
+      "commands": [
+        "cd apps/backend && .venv/bin/pytest tests/integration/",
+        "cd apps/frontend && npm run test:integration"
+      ],
+      "services_to_test": [
+        "backend",
+        "frontend"
+      ]
+    },
+    "e2e_tests": {
+      "required": false,
+      "commands": [],
+      "flows": []
+    },
+    "browser_verification": {
+      "required": false,
+      "pages": []
+    },
+    "database_verification": {
+      "required": false,
+      "checks": []
+    }
+  },
+  "qa_signoff": null,
+  "status": "in_progress",
+  "planStatus": "in_progress",
+  "updated_at": "2026-01-27T09:02:22.065Z",
+  "recoveryNote": "Task recovered from stuck state at 2026-01-27T09:02:13.976Z",
+  "last_updated": "2026-01-27T05:11:47.875485+00:00"
+}
