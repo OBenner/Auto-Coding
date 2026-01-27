@@ -5,8 +5,19 @@ Loads settings from environment variables and provides centralized configuration
 """
 
 import os
+from pathlib import Path
 from typing import List
 from functools import lru_cache
+
+# Try to load .env file if dotenv is available
+try:
+    from dotenv import load_dotenv
+    env_path = Path(__file__).parent.parent / ".env"
+    if env_path.exists():
+        load_dotenv(env_path)
+except ImportError:
+    # dotenv not installed, will use environment variables directly
+    pass
 
 
 class Settings:
