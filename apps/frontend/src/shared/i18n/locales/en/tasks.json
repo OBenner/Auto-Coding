@@ -283,6 +283,23 @@
   "subtasks": {
     "untitled": "Untitled subtask"
   },
+  "tokenStats": {
+    "title": "Token Usage",
+    "noStats": "No token statistics available",
+    "noStatsHint": "Token usage will appear here after task execution begins",
+    "totalTokens": "Total Tokens",
+    "inputTokens": "Input",
+    "outputTokens": "Output",
+    "phases": {
+      "planning": "Planning",
+      "coding": "Coding",
+      "validation": "Validation"
+    },
+    "sessionCount": "{{count}} session",
+    "sessionCount_plural": "{{count}} sessions",
+    "tokensUsed": "{{count}} token",
+    "tokensUsed_plural": "{{count}} tokens"
+  },
   "bulkPR": {
     "selectAllInColumn": "Select all tasks in column",
     "deselectAllInColumn": "Deselect all tasks",

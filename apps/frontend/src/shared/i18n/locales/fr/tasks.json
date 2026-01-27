@@ -1,5 +1,22 @@
 {
   "refreshTasks": "Actualiser les tâches",
+  "tokenStats": {
+    "title": "Utilisation des jetons",
+    "noStats": "Aucune statistique de jetons disponible",
+    "noStatsHint": "L'utilisation des jetons apparaîtra ici après le début de l'exécution de la tâche",
+    "totalTokens": "Total de jetons",
+    "inputTokens": "Entrée",
+    "outputTokens": "Sortie",
+    "phases": {
+      "planning": "Planification",
+      "coding": "Codage",
+      "validation": "Validation"
+    },
+    "sessionCount": "{{count}} session",
+    "sessionCount_plural": "{{count}} sessions",
+    "tokensUsed": "{{count}} jeton",
+    "tokensUsed_plural": "{{count}} jetons"
+  },
   "status": {
     "backlog": "Backlog",
     "todo": "À faire",
