@@ -4,6 +4,7 @@ import { Button } from '../../ui/button';
 import { Input } from '../../ui/input';
 import { ScrollArea } from '../../ui/scroll-area';
 import { MergeRequestItem } from './MergeRequestItem';
+import { PRListSkeleton } from '../../skeletons/PRListSkeleton';
 import type { GitLabMergeRequest } from '../../../../shared/types';
 
 interface MergeRequestListProps {
@@ -82,8 +83,8 @@ export function MergeRequestList({
       {/* List */}
       <ScrollArea className="flex-1">
         {isLoading && mergeRequests.length === 0 ? (
-          <div className="flex items-center justify-center py-8">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          <div className="p-2">
+            <PRListSkeleton count={5} />
           </div>
         ) : filteredMrs.length === 0 ? (
           <div className="py-8 text-center text-sm text-muted-foreground">
