@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket Real-Time Updates Test</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            padding: 20px;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+
+        .status-bar {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 15px;
+            background: #f9f9f9;
+            border-radius: 6px;
+            margin-bottom: 20px;
+        }
+
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #dc3545;
+            animation: pulse 2s infinite;
+        }
+
+        .status-indicator.connected {
+            background: #28a745;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+        }
+
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-weight: 500;
+        }
+
+        button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        .btn-primary {
+            background: #007bff;
+            color: white;
+        }
+
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-warning {
+            background: #ffc107;
+            color: #333;
+        }
+
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .events-container {
+            margin-top: 20px;
+        }
+
+        .events-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        #events {
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            height: 500px;
+            overflow-y: auto;
+            padding: 10px;
+            background: #fafafa;
+        }
+
+        .event {
+            margin: 8px 0;
+            padding: 12px;
+            border-radius: 4px;
+            font-size: 13px;
+            border-left: 4px solid #ccc;
+            background: white;
+        }
+
+        .event-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+
+        .event-time {
+            font-size: 11px;
+            color: #666;
+            font-weight: normal;
+        }
+
+        .event-body {
+            font-family: 'Consolas', 'Monaco', monospace;
+            white-space: pre-wrap;
+            word-break: break-word;
+            font-size: 12px;
+            color: #444;
+        }
+
+        .event.system {
+            border-left-color: #6c757d;
+            background: #f8f9fa;
+        }
+
+        .event.execution {
+            border-left-color: #007bff;
+            background: #e7f3ff;
+        }
+
+        .event.log {
+            border-left-color: #6f42c1;
+            background: #f3e5f5;
+        }
+
+        .event.error {
+            border-left-color: #dc3545;
+            background: #ffebee;
+        }
+
+        .event.subscribed, .event.pong {
+            border-left-color: #28a745;
+            background: #e8f5e9;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+            padding: 15px;
+            background: #f9f9f9;
+            border-radius: 6px;
+        }
+
+        .stat {
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #007bff;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+
+        .test-results {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 6px;
+            background: #fff;
+            border: 1px solid #ddd;
+        }
+
+        .test-results h3 {
+            margin-bottom: 10px;
+            color: #333;
+        }
+
+        .test-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px;
+            margin: 5px 0;
+        }
+
+        .test-item .icon {
+            font-size: 18px;
+        }
+
+        .test-item.pass {
+            color: #28a745;
+        }
+
+        .test-item.fail {
+            color: #dc3545;
+        }
+
+        .test-item.pending {
+            color: #6c757d;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔌 WebSocket Real-Time Updates Test</h1>
+
+        <div class="status-bar">
+            <div class="status-indicator" id="statusIndicator"></div>
+            <strong>Status:</strong>
+            <span id="statusText">Disconnected</span>
+            <span style="margin-left: auto; color: #666;">
+                Endpoint: <code>ws://localhost:8000/ws/agent-events</code>
+            </span>
+        </div>
+
+        <div class="controls">
+            <button class="btn-primary" onclick="connect()" id="btnConnect">Connect</button>
+            <button class="btn-success" onclick="subscribe()" id="btnSubscribe" disabled>Subscribe to test-001</button>
+            <button class="btn-warning" onclick="ping()" id="btnPing" disabled>Send Ping</button>
+            <button class="btn-secondary" onclick="unsubscribe()" id="btnUnsubscribe" disabled>Unsubscribe</button>
+            <button class="btn-danger" onclick="disconnect()" id="btnDisconnect" disabled>Disconnect</button>
+            <button class="btn-secondary" onclick="clearEvents()" style="margin-left: auto;">Clear Events</button>
+            <button class="btn-primary" onclick="runAutomatedTests()">Run Automated Tests</button>
+        </div>
+
+        <div class="stats">
+            <div class="stat">
+                <div class="stat-value" id="eventCount">0</div>
+                <div class="stat-label">Events Received</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value" id="execCount">0</div>
+                <div class="stat-label">Execution Events</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value" id="logCount">0</div>
+                <div class="stat-label">Log Events</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value" id="errorCount">0</div>
+                <div class="stat-label">Error Events</div>
+            </div>
+        </div>
+
+        <div class="events-container">
+            <div class="events-header">
+                <h2>Events Log</h2>
+            </div>
+            <div id="events"></div>
+        </div>
+
+        <div class="test-results" id="testResults" style="display: none;">
+            <h3>Automated Test Results</h3>
+            <div id="testItems"></div>
+        </div>
+    </div>
+
+    <script>
+        let ws = null;
+        let eventCount = 0;
+        let execCount = 0;
+        let logCount = 0;
+        let errorCount = 0;
+        let isSubscribed = false;
+
+        const statusIndicator = document.getElementById('statusIndicator');
+        const statusText = document.getElementById('statusText');
+        const eventsEl = document.getElementById('events');
+        const btnConnect = document.getElementById('btnConnect');
+        const btnDisconnect = document.getElementById('btnDisconnect');
+        const btnSubscribe = document.getElementById('btnSubscribe');
+        const btnUnsubscribe = document.getElementById('btnUnsubscribe');
+        const btnPing = document.getElementById('btnPing');
+
+        function updateUI() {
+            const connected = ws && ws.readyState === WebSocket.OPEN;
+            btnConnect.disabled = connected;
+            btnDisconnect.disabled = !connected;
+            btnSubscribe.disabled = !connected || isSubscribed;
+            btnUnsubscribe.disabled = !connected || !isSubscribed;
+            btnPing.disabled = !connected;
+        }
+
+        function connect() {
+            if (ws) {
+                addEvent('system', 'Already connected');
+                return;
+            }
+
+            ws = new WebSocket('ws://localhost:8000/ws/agent-events');
+
+            ws.onopen = () => {
+                statusIndicator.classList.add('connected');
+                statusText.textContent = 'Connected';
+                statusText.style.color = '#28a745';
+                addEvent('system', '✓ Connected to WebSocket');
+                updateUI();
+            };
+
+            ws.onclose = () => {
+                statusIndicator.classList.remove('connected');
+                statusText.textContent = 'Disconnected';
+                statusText.style.color = '#dc3545';
+                addEvent('system', '✗ Disconnected from WebSocket');
+                ws = null;
+                isSubscribed = false;
+                updateUI();
+            };
+
+            ws.onerror = (error) => {
+                addEvent('error', '✗ WebSocket error occurred');
+                console.error('WebSocket error:', error);
+            };
+
+            ws.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    handleMessage(data);
+                } catch (e) {
+                    addEvent('error', 'Failed to parse message: ' + e.message);
+                }
+            };
+        }
+
+        function disconnect() {
+            if (ws) {
+                ws.close();
+                ws = null;
+                isSubscribed = false;
+            }
+            updateUI();
+        }
+
+        function subscribe() {
+            if (!ws) {
+                alert('Connect first!');
+                return;
+            }
+            ws.send(JSON.stringify({
+                action: 'subscribe',
+                spec_id: 'test-001'
+            }));
+            addEvent('system', '→ Sent subscribe request for spec: test-001');
+        }
+
+        function unsubscribe() {
+            if (!ws) {
+                alert('Connect first!');
+                return;
+            }
+            ws.send(JSON.stringify({
+                action: 'unsubscribe',
+                spec_id: 'test-001'
+            }));
+            addEvent('system', '→ Sent unsubscribe request for spec: test-001');
+        }
+
+        function ping() {
+            if (!ws) {
+                alert('Connect first!');
+                return;
+            }
+            ws.send(JSON.stringify({ action: 'ping' }));
+            addEvent('system', '→ Sent ping');
+        }
+
+        function handleMessage(data) {
+            const eventType = data.event_type || data.status || 'unknown';
+
+            if (data.status === 'subscribed') {
+                isSubscribed = true;
+                addEvent('subscribed', '✓ Successfully subscribed to spec: ' + data.spec_id);
+                updateUI();
+            } else if (data.status === 'unsubscribed') {
+                isSubscribed = false;
+                addEvent('subscribed', '✓ Successfully unsubscribed from spec: ' + data.spec_id);
+                updateUI();
+            } else if (data.status === 'pong') {
+                addEvent('pong', '✓ Received pong response');
+            } else if (data.event_type === 'execution') {
+                execCount++;
+                document.getElementById('execCount').textContent = execCount;
+                const msg = formatExecutionEvent(data);
+                addEvent('execution', msg, data);
+            } else if (data.event_type === 'log') {
+                logCount++;
+                document.getElementById('logCount').textContent = logCount;
+                const msg = `[${data.level}] ${data.log_line}`;
+                addEvent('log', msg, data);
+            } else if (data.event_type === 'error') {
+                errorCount++;
+                document.getElementById('errorCount').textContent = errorCount;
+                const msg = `ERROR: ${data.error_message}\n${data.traceback || ''}`;
+                addEvent('error', msg, data);
+            } else {
+                addEvent(eventType, JSON.stringify(data, null, 2));
+            }
+
+            eventCount++;
+            document.getElementById('eventCount').textContent = eventCount;
+        }
+
+        function formatExecutionEvent(data) {
+            const d = data.data;
+            return `Phase: ${d.phase}
+Phase Progress: ${d.phase_progress.toFixed(1)}%
+Overall Progress: ${d.overall_progress.toFixed(1)}%
+Message: ${d.message || 'N/A'}
+Subtask: ${d.current_subtask || 'N/A'}`;
+        }
+
+        function clearEvents() {
+            eventsEl.innerHTML = '';
+            eventCount = 0;
+            execCount = 0;
+            logCount = 0;
+            errorCount = 0;
+            document.getElementById('eventCount').textContent = '0';
+            document.getElementById('execCount').textContent = '0';
+            document.getElementById('logCount').textContent = '0';
+            document.getElementById('errorCount').textContent = '0';
+        }
+
+        function addEvent(type, message, rawData = null) {
+            const div = document.createElement('div');
+            div.className = 'event ' + type;
+
+            const header = document.createElement('div');
+            header.className = 'event-header';
+            header.innerHTML = `
+                <span>${type.toUpperCase()}</span>
+                <span class="event-time">${new Date().toLocaleTimeString()}</span>
+            `;
+
+            const body = document.createElement('div');
+            body.className = 'event-body';
+            body.textContent = message;
+
+            div.appendChild(header);
+            div.appendChild(body);
+
+            if (rawData) {
+                const details = document.createElement('details');
+                details.style.marginTop = '8px';
+                details.innerHTML = `
+                    <summary style="cursor: pointer; color: #666;">Raw Data</summary>
+                    <pre style="margin-top: 8px; font-size: 11px;">${JSON.stringify(rawData, null, 2)}</pre>
+                `;
+                div.appendChild(details);
+            }
+
+            eventsEl.appendChild(div);
+            eventsEl.scrollTop = eventsEl.scrollHeight;
+        }
+
+        // Automated test suite
+        async function runAutomatedTests() {
+            const resultsEl = document.getElementById('testResults');
+            const itemsEl = document.getElementById('testItems');
+            resultsEl.style.display = 'block';
+            itemsEl.innerHTML = '';
+
+            const tests = [
+                { name: 'WebSocket Connection', fn: testConnection },
+                { name: 'Ping/Pong Protocol', fn: testPingPong },
+                { name: 'Subscription', fn: testSubscription },
+                { name: 'Unsubscription', fn: testUnsubscription },
+            ];
+
+            clearEvents();
+            addEvent('system', '=== Starting Automated Tests ===');
+
+            for (const test of tests) {
+                addTestItem(test.name, 'pending');
+                try {
+                    const result = await test.fn();
+                    updateTestItem(test.name, result ? 'pass' : 'fail');
+                    addEvent('system', `Test "${test.name}": ${result ? 'PASS' : 'FAIL'}`);
+                } catch (e) {
+                    updateTestItem(test.name, 'fail');
+                    addEvent('error', `Test "${test.name}" crashed: ${e.message}`);
+                }
+                await sleep(500);
+            }
+
+            addEvent('system', '=== Tests Complete ===');
+        }
+
+        function addTestItem(name, status) {
+            const itemsEl = document.getElementById('testItems');
+            const div = document.createElement('div');
+            div.className = `test-item ${status}`;
+            div.id = `test-${name.replace(/\s+/g, '-')}`;
+            div.innerHTML = `
+                <span class="icon">${status === 'pass' ? '✓' : status === 'fail' ? '✗' : '○'}</span>
+                <span>${name}</span>
+            `;
+            itemsEl.appendChild(div);
+        }
+
+        function updateTestItem(name, status) {
+            const id = `test-${name.replace(/\s+/g, '-')}`;
+            const el = document.getElementById(id);
+            if (el) {
+                el.className = `test-item ${status}`;
+                el.querySelector('.icon').textContent = status === 'pass' ? '✓' : '✗';
+            }
+        }
+
+        async function testConnection() {
+            if (ws) disconnect();
+            await sleep(500);
+
+            return new Promise((resolve) => {
+                const testWs = new WebSocket('ws://localhost:8000/ws/agent-events');
+                testWs.onopen = () => {
+                    testWs.close();
+                    resolve(true);
+                };
+                testWs.onerror = () => resolve(false);
+            });
+        }
+
+        async function testPingPong() {
+            return new Promise((resolve) => {
+                const testWs = new WebSocket('ws://localhost:8000/ws/agent-events');
+                testWs.onopen = () => {
+                    testWs.send(JSON.stringify({ action: 'ping' }));
+                };
+                testWs.onmessage = (event) => {
+                    const data = JSON.parse(event.data);
+                    testWs.close();
+                    resolve(data.status === 'pong');
+                };
+                testWs.onerror = () => resolve(false);
+                setTimeout(() => resolve(false), 5000);
+            });
+        }
+
+        async function testSubscription() {
+            return new Promise((resolve) => {
+                const testWs = new WebSocket('ws://localhost:8000/ws/agent-events');
+                testWs.onopen = () => {
+                    testWs.send(JSON.stringify({ action: 'subscribe', spec_id: 'test-001' }));
+                };
+                testWs.onmessage = (event) => {
+                    const data = JSON.parse(event.data);
+                    testWs.close();
+                    resolve(data.status === 'subscribed' && data.spec_id === 'test-001');
+                };
+                testWs.onerror = () => resolve(false);
+                setTimeout(() => resolve(false), 5000);
+            });
+        }
+
+        async function testUnsubscription() {
+            return new Promise((resolve) => {
+                const testWs = new WebSocket('ws://localhost:8000/ws/agent-events');
+                let subscribed = false;
+
+                testWs.onopen = () => {
+                    testWs.send(JSON.stringify({ action: 'subscribe', spec_id: 'test-001' }));
+                };
+
+                testWs.onmessage = (event) => {
+                    const data = JSON.parse(event.data);
+
+                    if (data.status === 'subscribed' && !subscribed) {
+                        subscribed = true;
+                        testWs.send(JSON.stringify({ action: 'unsubscribe', spec_id: 'test-001' }));
+                    } else if (data.status === 'unsubscribed') {
+                        testWs.close();
+                        resolve(data.spec_id === 'test-001');
+                    }
+                };
+
+                testWs.onerror = () => resolve(false);
+                setTimeout(() => resolve(false), 5000);
+            });
+        }
+
+        function sleep(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+
+        // Initialize UI
+        updateUI();
+    </script>
+</body>
+</html>
