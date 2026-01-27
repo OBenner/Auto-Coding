@@ -25,13 +25,29 @@ function formatNumber(num: number): string {
 function getPhaseColor(phase: 'planning' | 'coding' | 'validation'): string {
   switch (phase) {
     case 'planning':
-      return 'text-blue-600 dark:text-blue-400';
+      return 'text-[hsl(217,91%,60%)] dark:text-[hsl(217,91%,70%)]';
     case 'coding':
-      return 'text-purple-600 dark:text-purple-400';
+      return 'text-[hsl(271,91%,65%)] dark:text-[hsl(271,91%,75%)]';
     case 'validation':
-      return 'text-green-600 dark:text-green-400';
+      return 'text-[hsl(142,76%,36%)] dark:text-[hsl(142,76%,50%)]';
     default:
       return 'text-foreground';
+  }
+}
+
+/**
+ * Get phase background color classes
+ */
+function getPhaseBackground(phase: 'planning' | 'coding' | 'validation'): string {
+  switch (phase) {
+    case 'planning':
+      return 'bg-blue-50/50 dark:bg-blue-950/20 border-blue-200/50 dark:border-blue-800/50';
+    case 'coding':
+      return 'bg-purple-50/50 dark:bg-purple-950/20 border-purple-200/50 dark:border-purple-800/50';
+    case 'validation':
+      return 'bg-green-50/50 dark:bg-green-950/20 border-green-200/50 dark:border-green-800/50';
+    default:
+      return '';
   }
 }
 
@@ -42,11 +58,11 @@ function getPhaseIcon(phase: 'planning' | 'coding' | 'validation') {
   const className = "h-4 w-4";
   switch (phase) {
     case 'planning':
-      return <BarChart3 className={cn(className, 'text-blue-600 dark:text-blue-400')} />;
+      return <BarChart3 className={cn(className, 'text-[hsl(217,91%,60%)] dark:text-[hsl(217,91%,70%)]')} />;
     case 'coding':
-      return <Activity className={cn(className, 'text-purple-600 dark:text-purple-400')} />;
+      return <Activity className={cn(className, 'text-[hsl(271,91%,65%)] dark:text-[hsl(271,91%,75%)]')} />;
     case 'validation':
-      return <Activity className={cn(className, 'text-green-600 dark:text-green-400')} />;
+      return <Activity className={cn(className, 'text-[hsl(142,76%,36%)] dark:text-[hsl(142,76%,50%)]')} />;
   }
 }
 
@@ -59,7 +75,9 @@ function PhaseTokenDisplay({ phase, stats, t }: { phase: 'planning' | 'coding' |
   return (
     <div
       className={cn(
-        'rounded-xl border border-border bg-secondary/30 p-3 transition-all duration-200 hover:bg-secondary/50'
+        'rounded-xl border p-3 transition-all duration-200',
+        'bg-secondary/30 hover:bg-secondary/50 hover:shadow-sm',
+        getPhaseBackground(phase)
       )}
     >
       <div className="flex items-start gap-2">
@@ -71,36 +89,39 @@ function PhaseTokenDisplay({ phase, stats, t }: { phase: 'planning' | 'coding' |
             </span>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Badge variant="secondary" className="text-xs font-mono cursor-help">
+                <Badge
+                  variant="secondary"
+                  className="text-xs font-mono cursor-help hover:bg-secondary/80 transition-colors"
+                >
                   {formatNumber(stats.totalTokens)}
                 </Badge>
               </TooltipTrigger>
               <TooltipContent side="top">
-                <p className="text-xs">{t('tasks:tokenStats.tokensUsed', { count: stats.totalTokens })}</p>
+                <p className="text-xs font-medium">{t('tasks:tokenStats.tokensUsed', { count: stats.totalTokens })}</p>
               </TooltipContent>
             </Tooltip>
           </div>
-          <div className="space-y-1">
+          <div className="space-y-1.5">
             <div className="flex items-center justify-between text-xs">
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1.5">
                 <TrendingUp className="h-3 w-3 text-muted-foreground" />
                 <span className="text-muted-foreground">{t('tasks:tokenStats.inputTokens')}</span>
               </div>
-              <span className="font-mono tabular-nums text-foreground">
+              <span className="font-mono tabular-nums text-foreground font-medium">
                 {formatNumber(stats.inputTokens)}
               </span>
             </div>
             <div className="flex items-center justify-between text-xs">
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1.5">
                 <TrendingDown className="h-3 w-3 text-muted-foreground" />
                 <span className="text-muted-foreground">{t('tasks:tokenStats.outputTokens')}</span>
               </div>
-              <span className="font-mono tabular-nums text-foreground">
+              <span className="font-mono tabular-nums text-foreground font-medium">
                 {formatNumber(stats.outputTokens)}
               </span>
             </div>
             {stats.sessionCount > 0 && (
-              <div className="pt-1 border-t border-border/50">
+              <div className="pt-1.5 mt-0.5 border-t border-border/50">
                 <span className="text-[10px] text-muted-foreground">
                   {t('tasks:tokenStats.sessionCount', { count: stats.sessionCount })}
                 </span>
@@ -134,17 +155,20 @@ export function TokenStatsDisplay({ task }: TokenStatsDisplayProps) {
           <>
             {/* Total summary */}
             <div className="flex items-center justify-between text-sm pb-2 border-b border-border/50">
-              <span className="font-medium text-foreground">{t('tasks:tokenStats.totalTokens')}</span>
+              <span className="font-medium text-foreground flex items-center gap-2">
+                <Activity className="h-4 w-4 text-muted-foreground" />
+                {t('tasks:tokenStats.totalTokens')}
+              </span>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <span className="font-mono tabular-nums font-medium text-foreground cursor-default">
+                  <span className="font-mono tabular-nums font-semibold text-foreground cursor-help">
                     {formatNumber(tokenStats.totalTokens)}
                   </span>
                 </TooltipTrigger>
                 <TooltipContent side="top" className="max-w-xs">
                   <div className="text-xs space-y-1">
-                    <p>{t('tasks:tokenStats.inputTokens')}: {formatNumber(tokenStats.totalInputTokens)}</p>
-                    <p>{t('tasks:tokenStats.outputTokens')}: {formatNumber(tokenStats.totalOutputTokens)}</p>
+                    <p className="font-medium">{t('tasks:tokenStats.inputTokens')}: {formatNumber(tokenStats.totalInputTokens)}</p>
+                    <p className="font-medium">{t('tasks:tokenStats.outputTokens')}: {formatNumber(tokenStats.totalOutputTokens)}</p>
                   </div>
                 </TooltipContent>
               </Tooltip>
