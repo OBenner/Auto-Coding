@@ -49,7 +49,7 @@ sys.modules['claude_agent_sdk.types'] = mock_agent_types
 
 # Import test generation modules
 from analysis.code_analyzer import CodeAnalyzer, FunctionInfo, ClassInfo
-from agents.test_generator import validate_generated_tests
+from agents.test_generator import validate_generated_tests, run_test_generator_session
 
 
 # Cleanup fixture to restore original modules after all tests
@@ -575,3 +575,356 @@ def validate_input(data):
 
         # Should test class initialization
         assert "test_calculator_initialization" in content
+
+
+# =============================================================================
+# TEST GENERATOR SESSION TESTS
+# =============================================================================
+
+class TestRunTestGeneratorSession:
+    """Tests for run_test_generator_session orchestration function."""
+
+    @pytest.mark.asyncio
+    async def test_successful_test_generation(self, temp_dir: Path, monkeypatch):
+        """run_test_generator_session successfully generates and validates tests."""
+        # Setup directories
+        project_dir = temp_dir / "project"
+        spec_dir = temp_dir / "spec"
+        tests_dir = project_dir / "tests"
+        tests_dir.mkdir(parents=True)
+
+        # Create a mock generated test file
+        test_file = tests_dir / "test_generated.py"
+        test_file.write_text("def test_example(): pass")
+
+        # Mock dependencies
+        mock_client = MagicMock()
+        mock_client.create_agent_session = MagicMock(return_value={"success": True})
+
+        def mock_create_client(**kwargs):
+            return mock_client
+
+        monkeypatch.setattr("agents.test_generator.create_client", mock_create_client)
+        monkeypatch.setattr("agents.test_generator.get_agent_prompt", lambda x: "test prompt")
+        monkeypatch.setattr("agents.test_generator.get_task_logger", lambda x: None)
+        monkeypatch.setattr("agents.test_generator.get_phase_model", lambda x: "claude-sonnet-4")
+        monkeypatch.setattr("agents.test_generator.get_phase_thinking_budget", lambda x: None)
+        monkeypatch.setattr("agents.test_generator.validate_generated_tests", lambda x, y: True)
+
+        # Mock UI functions to suppress output
+        monkeypatch.setattr("agents.test_generator.print_status", lambda *args, **kwargs: None)
+        monkeypatch.setattr("agents.test_generator.print_key_value", lambda *args, **kwargs: None)
+        monkeypatch.setattr("agents.test_generator.print", lambda *args, **kwargs: None)
+        monkeypatch.setattr("agents.test_generator.box", lambda *args, **kwargs: "")
+
+        # Execute
+        analysis = {"functions": [{"name": "test_func"}], "classes": []}
+        result = await run_test_generator_session(
+            project_dir, spec_dir, analysis, model="claude-sonnet-4"
+        )
+
+        # Verify
+        assert result["success"] is True
+        assert len(result["generated_files"]) == 1
+        assert "test_generated.py" in result["generated_files"][0]
+        assert result["error"] is None
+
+        # Verify client was created with correct parameters
+        mock_create_client_calls = [
+            call for call in monkeypatch._setattr
+            if hasattr(call, '__name__') and call.__name__ == 'mock_create_client'
+        ]
+
+    @pytest.mark.asyncio
+    async def test_no_tests_directory(self, temp_dir: Path, monkeypatch):
+        """run_test_generator_session handles missing tests/ directory."""
+        # Setup directories (no tests/ directory)
+        project_dir = temp_dir / "project"
+        spec_dir = temp_dir / "spec"
+        project_dir.mkdir(parents=True)
+
+        # Mock dependencies
+        mock_client = MagicMock()
+        mock_client.create_agent_session = MagicMock(return_value={"success": True})
+
+        monkeypatch.setattr("agents.test_generator.create_client", lambda **kwargs: mock_client)
+        monkeypatch.setattr("agents.test_generator.get_agent_prompt", lambda x: "test prompt")
+        monkeypatch.setattr("agents.test_generator.get_task_logger", lambda x: None)
+        monkeypatch.setattr("agents.test_generator.get_phase_model", lambda x: "claude-sonnet-4")
+        monkeypatch.setattr("agents.test_generator.get_phase_thinking_budget", lambda x: None)
+
+        # Mock UI functions
+        monkeypatch.setattr("agents.test_generator.print_status", lambda *args, **kwargs: None)
+        monkeypatch.setattr("agents.test_generator.print_key_value", lambda *args, **kwargs: None)
+        monkeypatch.setattr("agents.test_generator.print", lambda *args, **kwargs: None)
+        monkeypatch.setattr("agents.test_generator.box", lambda *args, **kwargs: "")
+
+        # Execute
+        analysis = {"functions": [], "classes": []}
+        result = await run_test_generator_session(project_dir, spec_dir, analysis)
+
+        # Verify failure due to missing tests/ directory
+        assert result["success"] is False
+        assert result["error"] == "tests/ directory not found"
+        assert len(result["generated_files"]) == 0
+
+    @pytest.mark.asyncio
+    async def test_no_tests_generated(self, temp_dir: Path, monkeypatch):
+        """run_test_generator_session handles case where no test files are created."""
+        # Setup directories
+        project_dir = temp_dir / "project"
+        spec_dir = temp_dir / "spec"
+        tests_dir = project_dir / "tests"
+        tests_dir.mkdir(parents=True)
+        # tests/ directory exists but is empty
+
+        # Mock dependencies
+        mock_client = MagicMock()
+        mock_client.create_agent_session = MagicMock(return_value={"success": True})
+
+        monkeypatch.setattr("agents.test_generator.create_client", lambda **kwargs: mock_client)
+        monkeypatch.setattr("agents.test_generator.get_agent_prompt", lambda x: "test prompt")
+        monkeypatch.setattr("agents.test_generator.get_task_logger", lambda x: None)
+        monkeypatch.setattr("agents.test_generator.get_phase_model", lambda x: "claude-sonnet-4")
+        monkeypatch.setattr("agents.test_generator.get_phase_thinking_budget", lambda x: None)
+
+        # Mock UI functions
+        monkeypatch.setattr("agents.test_generator.print_status", lambda *args, **kwargs: None)
+        monkeypatch.setattr("agents.test_generator.print_key_value", lambda *args, **kwargs: None)
+        monkeypatch.setattr("agents.test_generator.print", lambda *args, **kwargs: None)
+        monkeypatch.setattr("agents.test_generator.box", lambda *args, **kwargs: "")
+
+        # Execute
+        analysis = {"functions": [], "classes": []}
+        result = await run_test_generator_session(project_dir, spec_dir, analysis)
+
+        # Verify failure due to no generated tests
+        assert result["success"] is False
+        assert result["error"] == "No test files generated"
+        assert len(result["generated_files"]) == 0
+
+    @pytest.mark.asyncio
+    async def test_validation_failure(self, temp_dir: Path, monkeypatch):
+        """run_test_generator_session handles test validation failures."""
+        # Setup directories
+        project_dir = temp_dir / "project"
+        spec_dir = temp_dir / "spec"
+        tests_dir = project_dir / "tests"
+        tests_dir.mkdir(parents=True)
+
+        # Create a test file (will be validated as invalid)
+        test_file = tests_dir / "test_invalid.py"
+        test_file.write_text("def test_bad(): pass")
+
+        # Mock dependencies
+        mock_client = MagicMock()
+        mock_client.create_agent_session = MagicMock(return_value={"success": True})
+
+        monkeypatch.setattr("agents.test_generator.create_client", lambda **kwargs: mock_client)
+        monkeypatch.setattr("agents.test_generator.get_agent_prompt", lambda x: "test prompt")
+        monkeypatch.setattr("agents.test_generator.get_task_logger", lambda x: None)
+        monkeypatch.setattr("agents.test_generator.get_phase_model", lambda x: "claude-sonnet-4")
+        monkeypatch.setattr("agents.test_generator.get_phase_thinking_budget", lambda x: None)
+        monkeypatch.setattr("agents.test_generator.validate_generated_tests", lambda x, y: False)  # Force failure
+
+        # Mock UI functions
+        monkeypatch.setattr("agents.test_generator.print_status", lambda *args, **kwargs: None)
+        monkeypatch.setattr("agents.test_generator.print_key_value", lambda *args, **kwargs: None)
+        monkeypatch.setattr("agents.test_generator.print", lambda *args, **kwargs: None)
+        monkeypatch.setattr("agents.test_generator.box", lambda *args, **kwargs: "")
+
+        # Execute
+        analysis = {"functions": [], "classes": []}
+        result = await run_test_generator_session(project_dir, spec_dir, analysis)
+
+        # Verify validation failure is reported
+        assert result["success"] is False
+        assert result["error"] == "Test validation failed"
+        assert len(result["generated_files"]) == 1
+
+    @pytest.mark.asyncio
+    async def test_client_creation_failure(self, temp_dir: Path, monkeypatch):
+        """run_test_generator_session handles SDK client creation errors."""
+        # Setup directories
+        project_dir = temp_dir / "project"
+        spec_dir = temp_dir / "spec"
+
+        # Mock create_client to raise exception
+        def mock_create_client_error(**kwargs):
+            raise RuntimeError("Failed to authenticate")
+
+        monkeypatch.setattr("agents.test_generator.create_client", mock_create_client_error)
+        monkeypatch.setattr("agents.test_generator.get_agent_prompt", lambda x: "test prompt")
+        monkeypatch.setattr("agents.test_generator.get_task_logger", lambda x: None)
+        monkeypatch.setattr("agents.test_generator.get_phase_model", lambda x: "claude-sonnet-4")
+        monkeypatch.setattr("agents.test_generator.get_phase_thinking_budget", lambda x: None)
+
+        # Mock UI functions
+        monkeypatch.setattr("agents.test_generator.print_status", lambda *args, **kwargs: None)
+        monkeypatch.setattr("agents.test_generator.print_key_value", lambda *args, **kwargs: None)
+        monkeypatch.setattr("agents.test_generator.print", lambda *args, **kwargs: None)
+        monkeypatch.setattr("agents.test_generator.box", lambda *args, **kwargs: "")
+
+        # Execute
+        analysis = {"functions": [], "classes": []}
+        result = await run_test_generator_session(project_dir, spec_dir, analysis)
+
+        # Verify error is captured
+        assert result["success"] is False
+        assert "Failed to create Claude SDK client" in result["error"]
+        assert len(result["generated_files"]) == 0
+
+    @pytest.mark.asyncio
+    async def test_prompt_loading_failure(self, temp_dir: Path, monkeypatch):
+        """run_test_generator_session handles prompt loading errors."""
+        # Setup directories
+        project_dir = temp_dir / "project"
+        spec_dir = temp_dir / "spec"
+
+        # Mock get_agent_prompt to raise exception
+        def mock_get_agent_prompt_error(name):
+            raise FileNotFoundError("Prompt file not found")
+
+        monkeypatch.setattr("agents.test_generator.get_agent_prompt", mock_get_agent_prompt_error)
+        monkeypatch.setattr("agents.test_generator.get_task_logger", lambda x: None)
+        monkeypatch.setattr("agents.test_generator.get_phase_model", lambda x: "claude-sonnet-4")
+        monkeypatch.setattr("agents.test_generator.get_phase_thinking_budget", lambda x: None)
+
+        # Mock UI functions
+        monkeypatch.setattr("agents.test_generator.print_status", lambda *args, **kwargs: None)
+        monkeypatch.setattr("agents.test_generator.print_key_value", lambda *args, **kwargs: None)
+        monkeypatch.setattr("agents.test_generator.print", lambda *args, **kwargs: None)
+        monkeypatch.setattr("agents.test_generator.box", lambda *args, **kwargs: "")
+
+        # Execute
+        analysis = {"functions": [], "classes": []}
+        result = await run_test_generator_session(project_dir, spec_dir, analysis)
+
+        # Verify error is captured
+        assert result["success"] is False
+        assert "Failed to load test_generator prompt" in result["error"]
+        assert len(result["generated_files"]) == 0
+
+    @pytest.mark.asyncio
+    async def test_agent_session_exception(self, temp_dir: Path, monkeypatch):
+        """run_test_generator_session handles agent session exceptions."""
+        # Setup directories
+        project_dir = temp_dir / "project"
+        spec_dir = temp_dir / "spec"
+
+        # Mock client with failing create_agent_session
+        mock_client = MagicMock()
+        mock_client.create_agent_session = MagicMock(side_effect=RuntimeError("API Error"))
+
+        monkeypatch.setattr("agents.test_generator.create_client", lambda **kwargs: mock_client)
+        monkeypatch.setattr("agents.test_generator.get_agent_prompt", lambda x: "test prompt")
+        monkeypatch.setattr("agents.test_generator.get_task_logger", lambda x: None)
+        monkeypatch.setattr("agents.test_generator.get_phase_model", lambda x: "claude-sonnet-4")
+        monkeypatch.setattr("agents.test_generator.get_phase_thinking_budget", lambda x: None)
+
+        # Mock UI functions
+        monkeypatch.setattr("agents.test_generator.print_status", lambda *args, **kwargs: None)
+        monkeypatch.setattr("agents.test_generator.print_key_value", lambda *args, **kwargs: None)
+        monkeypatch.setattr("agents.test_generator.print", lambda *args, **kwargs: None)
+        monkeypatch.setattr("agents.test_generator.box", lambda *args, **kwargs: "")
+
+        # Execute
+        analysis = {"functions": [], "classes": []}
+        result = await run_test_generator_session(project_dir, spec_dir, analysis)
+
+        # Verify error is captured
+        assert result["success"] is False
+        assert "Test Generator Agent session failed" in result["error"]
+        assert len(result["generated_files"]) == 0
+
+    @pytest.mark.asyncio
+    async def test_multiple_test_files_generated(self, temp_dir: Path, monkeypatch):
+        """run_test_generator_session handles multiple generated test files."""
+        # Setup directories
+        project_dir = temp_dir / "project"
+        spec_dir = temp_dir / "spec"
+        tests_dir = project_dir / "tests"
+        tests_dir.mkdir(parents=True)
+
+        # Create multiple mock test files
+        (tests_dir / "test_module_a.py").write_text("def test_a(): pass")
+        (tests_dir / "test_module_b.py").write_text("def test_b(): pass")
+        (tests_dir / "test_utils.py").write_text("def test_utils(): pass")
+
+        # Mock dependencies
+        mock_client = MagicMock()
+        mock_client.create_agent_session = MagicMock(return_value={"success": True})
+
+        monkeypatch.setattr("agents.test_generator.create_client", lambda **kwargs: mock_client)
+        monkeypatch.setattr("agents.test_generator.get_agent_prompt", lambda x: "test prompt")
+        monkeypatch.setattr("agents.test_generator.get_task_logger", lambda x: None)
+        monkeypatch.setattr("agents.test_generator.get_phase_model", lambda x: "claude-sonnet-4")
+        monkeypatch.setattr("agents.test_generator.get_phase_thinking_budget", lambda x: None)
+        monkeypatch.setattr("agents.test_generator.validate_generated_tests", lambda x, y: True)
+
+        # Mock UI functions
+        monkeypatch.setattr("agents.test_generator.print_status", lambda *args, **kwargs: None)
+        monkeypatch.setattr("agents.test_generator.print_key_value", lambda *args, **kwargs: None)
+        monkeypatch.setattr("agents.test_generator.print", lambda *args, **kwargs: None)
+        monkeypatch.setattr("agents.test_generator.box", lambda *args, **kwargs: "")
+
+        # Execute
+        analysis = {"functions": [], "classes": []}
+        result = await run_test_generator_session(project_dir, spec_dir, analysis)
+
+        # Verify all test files are found
+        assert result["success"] is True
+        assert len(result["generated_files"]) == 3
+        assert result["error"] is None
+
+        # Verify all expected files are in the list
+        file_names = [str(f) for f in result["generated_files"]]
+        assert any("test_module_a.py" in f for f in file_names)
+        assert any("test_module_b.py" in f for f in file_names)
+        assert any("test_utils.py" in f for f in file_names)
+
+    @pytest.mark.asyncio
+    async def test_custom_model_and_thinking_budget(self, temp_dir: Path, monkeypatch):
+        """run_test_generator_session respects custom model and thinking budget."""
+        # Setup directories
+        project_dir = temp_dir / "project"
+        spec_dir = temp_dir / "spec"
+        tests_dir = project_dir / "tests"
+        tests_dir.mkdir(parents=True)
+        (tests_dir / "test_custom.py").write_text("def test_custom(): pass")
+
+        # Track create_client calls
+        client_kwargs = {}
+
+        def mock_create_client(**kwargs):
+            client_kwargs.update(kwargs)
+            mock_client = MagicMock()
+            mock_client.create_agent_session = MagicMock(return_value={"success": True})
+            return mock_client
+
+        monkeypatch.setattr("agents.test_generator.create_client", mock_create_client)
+        monkeypatch.setattr("agents.test_generator.get_agent_prompt", lambda x: "test prompt")
+        monkeypatch.setattr("agents.test_generator.get_task_logger", lambda x: None)
+        monkeypatch.setattr("agents.test_generator.validate_generated_tests", lambda x, y: True)
+
+        # Mock UI functions
+        monkeypatch.setattr("agents.test_generator.print_status", lambda *args, **kwargs: None)
+        monkeypatch.setattr("agents.test_generator.print_key_value", lambda *args, **kwargs: None)
+        monkeypatch.setattr("agents.test_generator.print", lambda *args, **kwargs: None)
+        monkeypatch.setattr("agents.test_generator.box", lambda *args, **kwargs: "")
+
+        # Execute with custom parameters
+        analysis = {"functions": [], "classes": []}
+        result = await run_test_generator_session(
+            project_dir,
+            spec_dir,
+            analysis,
+            model="claude-opus-4",
+            max_thinking_tokens=10000,
+        )
+
+        # Verify custom parameters were passed to create_client
+        assert result["success"] is True
+        assert client_kwargs["model"] == "claude-opus-4"
+        assert client_kwargs["max_thinking_tokens"] == 10000
+        assert client_kwargs["agent_type"] == "test_generator"
