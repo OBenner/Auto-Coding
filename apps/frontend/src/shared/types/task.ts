@@ -279,6 +279,7 @@ export interface Task {
   logs: string[];
   metadata?: TaskMetadata;  // Rich metadata from ideation or manual entry
   executionProgress?: ExecutionProgress;  // Real-time execution progress
+  tokenStats?: TaskTokenStats;  // Token usage statistics per phase
   releasedInVersion?: string;  // Version in which this task was released
   stagedInMainProject?: boolean;  // True if changes were staged to main project (worktree merged with --no-commit)
   stagedAt?: string;  // ISO timestamp when changes were staged
