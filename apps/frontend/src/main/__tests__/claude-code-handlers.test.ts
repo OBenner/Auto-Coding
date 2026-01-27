@@ -39,10 +39,14 @@ vi.mock('../settings-utils', () => ({
   writeSettingsFile: vi.fn(),
 }));
 
-// Mock utils/windows-paths
-vi.mock('../utils/windows-paths', () => ({
-  isSecurePath: vi.fn(() => true),
-}));
+// Mock platform/paths
+vi.mock('../platform/paths', async () => {
+  const actual = await vi.importActual<typeof import('../platform/paths')>('../platform/paths');
+  return {
+    ...actual,
+    isSecurePath: vi.fn(() => true),
+  };
+});
 
 // Mock utils/config-path-validator
 vi.mock('../utils/config-path-validator', () => ({
