@@ -2,32 +2,35 @@ import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { TaskList } from './pages/TaskList';
 import { TaskDetail } from './pages/TaskDetail';
+import './styles/responsive.css';
 
 // Placeholder for future components
 function WelcomeScreen({ onNavigateToTasks }: { onNavigateToTasks: () => void }) {
   const { t } = useTranslation(['common']);
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-      <div className="text-center max-w-2xl mx-auto px-4">
-        <h1 className="text-4xl font-bold text-gray-900 mb-4">
+    <div className="responsive-min-height bg-gray-50 flex items-center justify-center responsive-padding-y">
+      <div className="welcome-content text-center mx-auto px-4 md:px-6 lg:px-8">
+        <h1 className="responsive-heading-xl text-gray-900 mb-4 md:mb-6">
           {t('common:appName')}
         </h1>
-        <p className="text-lg text-gray-600 mb-6">
+        <p className="text-base md:text-lg lg:text-xl text-gray-600 mb-6 md:mb-8">
           Browser-based access to Auto Claude autonomous coding framework
         </p>
-        <div className="bg-white rounded-lg shadow-md p-6 text-left">
-          <h2 className="text-xl font-semibold mb-3">Getting Started</h2>
-          <ul className="space-y-2 text-gray-700">
+        <div className="responsive-card bg-white shadow-md text-left">
+          <h2 className="text-lg md:text-xl lg:text-2xl font-semibold mb-3 md:mb-4">
+            Getting Started
+          </h2>
+          <ul className="space-y-2 md:space-y-3 text-sm md:text-base text-gray-700">
             <li>• Connect to your Auto Claude backend</li>
             <li>• View and manage tasks</li>
             <li>• Monitor agent progress in real-time</li>
             <li>• Access from any device with a browser</li>
           </ul>
-          <div className="mt-6">
+          <div className="mt-6 md:mt-8 flex justify-center">
             <button
               onClick={onNavigateToTasks}
-              className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors"
+              className="responsive-button bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
             >
               View Tasks
             </button>
