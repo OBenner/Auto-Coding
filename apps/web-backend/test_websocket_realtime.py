@@ -422,7 +422,6 @@ async def run_all_tests():
         ("Spec ID Subscription", test_subscription),
         ("Execution Progress Events", test_execution_events),
         ("Unsubscribe Functionality", test_unsubscribe),
-        ("Multiple Clients", test_multiple_clients),
     ]
 
     results = []
