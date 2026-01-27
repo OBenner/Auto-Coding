@@ -20,7 +20,9 @@
     "viewPR": "Voir la PR",
     "moveTo": "Déplacer vers",
     "taskActions": "Actions de la tâche",
-    "selectTask": "Sélectionner la tâche : {{title}}"
+    "selectTask": "Sélectionner la tâche : {{title}}",
+    "showMetadata": "Afficher les métadonnées",
+    "hideMetadata": "Masquer les métadonnées"
   },
   "labels": {
     "running": "En cours",
