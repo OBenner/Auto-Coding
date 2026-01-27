@@ -19,7 +19,7 @@ import {
   findWindowsExecutableViaWhere,
   findWindowsExecutableViaWhereAsync,
   isSecurePath
-} from '../utils/windows-paths';
+} from '../platform/paths';
 import { findExecutable, findExecutableAsync } from '../env-utils';
 
 type SpawnOptions = Parameters<(typeof import('../env-utils'))['getSpawnOptions']>[1];
@@ -160,14 +160,18 @@ vi.mock('../utils/homebrew-python', () => ({
 }));
 
 // Mock windows-paths utility
-vi.mock('../utils/windows-paths', () => ({
-  findWindowsExecutableViaWhere: vi.fn(() => null),
-  findWindowsExecutableViaWhereAsync: vi.fn(() => Promise.resolve(null)),
-  isSecurePath: vi.fn(() => true),
-  getWindowsExecutablePaths: vi.fn(() => []),
-  getWindowsExecutablePathsAsync: vi.fn(() => Promise.resolve([])),
-  WINDOWS_GIT_PATHS: {}
-}));
+vi.mock('../platform/paths', async () => {
+  const actual = await vi.importActual<typeof import('../platform/paths')>('../platform/paths');
+  return {
+    ...actual,
+    findWindowsExecutableViaWhere: vi.fn(() => null),
+    findWindowsExecutableViaWhereAsync: vi.fn(() => Promise.resolve(null)),
+    isSecurePath: vi.fn(() => true),
+    getWindowsExecutablePaths: vi.fn(() => []),
+    getWindowsExecutablePathsAsync: vi.fn(() => Promise.resolve([])),
+    WINDOWS_GIT_PATHS: {}
+  };
+});
 
 describe('cli-tool-manager - Claude CLI NVM detection', () => {
   beforeEach(() => {

@@ -8,7 +8,12 @@
 import * as path from 'path';
 import * as os from 'os';
 import { existsSync, readdirSync } from 'fs';
+import { access, constants } from 'fs/promises';
+import { execFileSync, execFile } from 'child_process';
+import { promisify } from 'util';
 import { isWindows, isMacOS, getHomebrewPath, joinPaths, getExecutableExtension } from './index';
+
+const execFileAsync = promisify(execFile);
 
 /**
  * Resolve Claude CLI executable path
@@ -343,4 +348,350 @@ export function getWindowsToolPath(toolName: string, subPath?: string): string[]
   paths.push(path.join(roamingAppData, 'npm'));
 
   return paths;
+}
+
+/**
+ * Windows Tool Paths Configuration
+ *
+ * Defines search patterns for Windows executable detection.
+ * Used by getWindowsExecutablePaths() for systematic tool discovery.
+ */
+export interface WindowsToolPaths {
+  toolName: string;
+  executable: string;
+  patterns: string[];
+}
+
+/**
+ * Git for Windows standard installation patterns
+ */
+export const WINDOWS_GIT_PATHS: WindowsToolPaths = {
+  toolName: 'Git',
+  executable: 'git.exe',
+  patterns: [
+    '%PROGRAMFILES%\\Git\\cmd',
+    '%PROGRAMFILES(X86)%\\Git\\cmd',
+    '%LOCALAPPDATA%\\Programs\\Git\\cmd',
+    '%USERPROFILE%\\scoop\\apps\\git\\current\\cmd',
+    '%PROGRAMFILES%\\Git\\bin',
+    '%PROGRAMFILES(X86)%\\Git\\bin',
+    '%PROGRAMFILES%\\Git\\mingw64\\bin',
+  ],
+};
+
+/**
+ * Validate path for security
+ *
+ * Rejects paths containing shell metacharacters, environment variables,
+ * or directory traversal patterns that could be exploited.
+ *
+ * @param pathStr - Path to validate
+ * @returns true if path is safe, false otherwise
+ */
+export function isSecurePath(pathStr: string): boolean {
+  const dangerousPatterns = [
+    /[;&|`${}[\]<>!"^]/,  // Shell metacharacters (parentheses removed - safe when quoted)
+    /%[^%]+%/,              // Windows environment variable expansion (e.g., %PATH%)
+    /\.\.\//,               // Unix directory traversal
+    /\.\.\\/,               // Windows directory traversal
+    /[\r\n]/,               // Newlines (command injection)
+  ];
+
+  for (const pattern of dangerousPatterns) {
+    if (pattern.test(pathStr)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+/**
+ * Expand Windows environment variables in a path pattern
+ *
+ * Similar to expandWindowsEnvVars() but returns null if expansion fails,
+ * making it suitable for validation scenarios.
+ *
+ * @param pathPattern - Path with %VAR% placeholders
+ * @returns Expanded path or null if variables cannot be resolved
+ */
+export function expandWindowsPath(pathPattern: string): string | null {
+  const envVars: Record<string, string | undefined> = {
+    '%PROGRAMFILES%': process.env.ProgramFiles || 'C:\\Program Files',
+    '%PROGRAMFILES(X86)%': process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)',
+    '%LOCALAPPDATA%': process.env.LOCALAPPDATA,
+    '%APPDATA%': process.env.APPDATA,
+    '%USERPROFILE%': process.env.USERPROFILE || os.homedir(),
+  };
+
+  let expandedPath = pathPattern;
+
+  for (const [placeholder, value] of Object.entries(envVars)) {
+    if (expandedPath.includes(placeholder)) {
+      if (!value) {
+        return null;
+      }
+      expandedPath = expandedPath.replace(placeholder, value);
+    }
+  }
+
+  // Verify no unexpanded placeholders remain (indicates unknown variable)
+  if (/%[^%]+%/.test(expandedPath)) {
+    return null;
+  }
+
+  // Normalize the path (resolve double backslashes, etc.)
+  return path.normalize(expandedPath);
+}
+
+/**
+ * Get Windows executable paths from pattern-based configuration
+ *
+ * Searches for executables in Windows-specific installation directories
+ * by expanding environment variable patterns and validating paths.
+ *
+ * @param toolPaths - Tool configuration with search patterns
+ * @param logPrefix - Prefix for console logging
+ * @returns Array of valid executable paths found
+ */
+export function getWindowsExecutablePaths(
+  toolPaths: WindowsToolPaths,
+  logPrefix: string = '[Windows Paths]'
+): string[] {
+  // Only run on Windows
+  if (!isWindows()) {
+    return [];
+  }
+
+  const validPaths: string[] = [];
+
+  for (const pattern of toolPaths.patterns) {
+    const expandedDir = expandWindowsPath(pattern);
+
+    if (!expandedDir) {
+      continue;
+    }
+
+    const fullPath = path.join(expandedDir, toolPaths.executable);
+
+    // Security validation - reject potentially dangerous paths
+    if (!isSecurePath(fullPath)) {
+      continue;
+    }
+
+    if (existsSync(fullPath)) {
+      validPaths.push(fullPath);
+    }
+  }
+
+  return validPaths;
+}
+
+/**
+ * Async version of getWindowsExecutablePaths
+ *
+ * Use this in async contexts to avoid blocking the main process.
+ *
+ * @param toolPaths - Tool configuration with search patterns
+ * @param logPrefix - Prefix for console logging
+ * @returns Promise resolving to array of valid executable paths
+ */
+export async function getWindowsExecutablePathsAsync(
+  toolPaths: WindowsToolPaths,
+  logPrefix: string = '[Windows Paths]'
+): Promise<string[]> {
+  // Only run on Windows
+  if (!isWindows()) {
+    return [];
+  }
+
+  const validPaths: string[] = [];
+
+  for (const pattern of toolPaths.patterns) {
+    const expandedDir = expandWindowsPath(pattern);
+
+    if (!expandedDir) {
+      continue;
+    }
+
+    const fullPath = path.join(expandedDir, toolPaths.executable);
+
+    // Security validation - reject potentially dangerous paths
+    if (!isSecurePath(fullPath)) {
+      continue;
+    }
+
+    try {
+      await access(fullPath, constants.F_OK);
+      validPaths.push(fullPath);
+    } catch {
+      // File doesn't exist, skip
+    }
+  }
+
+  return validPaths;
+}
+
+/**
+ * Get common binary directories for PATH augmentation
+ *
+ * Returns platform-specific directories where commonly used tools are installed.
+ * These are locations that should be added to PATH to ensure tools are available.
+ *
+ * @returns Record mapping platform names to arrays of binary directory paths
+ */
+export function getCommonBinPaths(): Record<string, string[]> {
+  return {
+    darwin: [
+      '/opt/homebrew/bin',      // Apple Silicon Homebrew
+      '/usr/local/bin',         // Intel Homebrew / system
+      '/usr/local/share/dotnet', // .NET SDK
+      '/opt/homebrew/sbin',     // Apple Silicon Homebrew sbin
+      '/usr/local/sbin',        // Intel Homebrew sbin
+      '~/.local/bin',           // User-local binaries (Claude CLI)
+      '~/.dotnet/tools',        // .NET global tools
+    ],
+    linux: [
+      '/usr/local/bin',
+      '/usr/bin',               // System binaries (Python, etc.)
+      '/snap/bin',              // Snap packages
+      '~/.local/bin',           // User-local binaries
+      '~/.dotnet/tools',        // .NET global tools
+      '/usr/sbin',              // System admin binaries
+    ],
+    win32: [
+      // Windows usually handles PATH better, but we can add common locations
+      'C:\\Program Files\\Git\\cmd',
+      'C:\\Program Files\\GitHub CLI',
+      // Node.js and npm paths - critical for packaged Electron apps that don't inherit full PATH
+      'C:\\Program Files\\nodejs',                  // Standard Node.js installer (64-bit)
+      'C:\\Program Files (x86)\\nodejs',            // 32-bit Node.js on 64-bit Windows
+      '~\\AppData\\Local\\Programs\\nodejs',        // NVM for Windows / user install
+      '~\\AppData\\Roaming\\npm',                   // npm global scripts (claude.cmd lives here)
+      '~\\scoop\\apps\\nodejs\\current',            // Scoop package manager
+      'C:\\ProgramData\\chocolatey\\bin',           // Chocolatey package manager
+    ],
+  };
+}
+
+/**
+ * Find a Windows executable using the `where` command
+ *
+ * This is the most reliable method as it searches:
+ * - All directories in PATH
+ * - App Paths registry entries
+ * - Current directory
+ *
+ * Works regardless of where the tool is installed (custom paths, different drives, etc.)
+ *
+ * @param executable - The executable name (e.g., 'git', 'gh', 'python')
+ * @param logPrefix - Prefix for console logging
+ * @returns The full path to the executable, or null if not found
+ */
+export function findWindowsExecutableViaWhere(
+  executable: string,
+  logPrefix: string = '[Windows Where]'
+): string | null {
+  if (!isWindows()) {
+    return null;
+  }
+
+  // Security: Only allow simple executable names (alphanumeric, dash, underscore, dot)
+  if (!/^[\w.-]+$/.test(executable)) {
+    return null;
+  }
+
+  try {
+    // Use 'where' command to find the executable
+    // where.exe is a built-in Windows command that finds executables
+    const result = execFileSync('where.exe', [executable], {
+      encoding: 'utf-8',
+      timeout: 5000,
+      windowsHide: true,
+    }).trim();
+
+    // 'where' returns multiple paths separated by newlines if found in multiple locations
+    // Prefer paths with .cmd or .exe extensions (executable files)
+    const paths = result.split(/\r?\n/).filter(p => p.trim());
+
+    if (paths.length > 0) {
+      // Prefer .cmd, .bat, or .exe extensions, otherwise take first path
+      const foundPath = (paths.find(p => /\.(cmd|bat|exe)$/i.test(p)) || paths[0]).trim();
+
+      // Validate the path exists and is secure
+      if (existsSync(foundPath) && isSecurePath(foundPath)) {
+        return foundPath;
+      }
+    }
+
+    return null;
+  } catch {
+    // 'where' returns exit code 1 if not found, which throws an error
+    return null;
+  }
+}
+
+/**
+ * Async version of findWindowsExecutableViaWhere
+ *
+ * Use this in async contexts to avoid blocking the main process.
+ *
+ * Find a Windows executable using the `where` command.
+ * This is the most reliable method as it searches:
+ * - All directories in PATH
+ * - App Paths registry entries
+ * - Current directory
+ *
+ * Works regardless of where the tool is installed (custom paths, different drives, etc.)
+ *
+ * @param executable - The executable name (e.g., 'git', 'gh', 'python')
+ * @param logPrefix - Prefix for console logging
+ * @returns Promise resolving to the full path or null if not found
+ */
+export async function findWindowsExecutableViaWhereAsync(
+  executable: string,
+  logPrefix: string = '[Windows Where]'
+): Promise<string | null> {
+  if (!isWindows()) {
+    return null;
+  }
+
+  // Security: Only allow simple executable names (alphanumeric, dash, underscore, dot)
+  if (!/^[\w.-]+$/.test(executable)) {
+    return null;
+  }
+
+  try {
+    // Use 'where' command to find the executable
+    // where.exe is a built-in Windows command that finds executables
+    const { stdout } = await execFileAsync('where.exe', [executable], {
+      encoding: 'utf-8',
+      timeout: 5000,
+      windowsHide: true,
+    });
+
+    // 'where' returns multiple paths separated by newlines if found in multiple locations
+    // Prefer paths with .cmd, .bat, or .exe extensions (executable files)
+    const paths = stdout.trim().split(/\r?\n/).filter(p => p.trim());
+
+    if (paths.length > 0) {
+      // Prefer .cmd, .bat, or .exe extensions, otherwise take first path
+      const foundPath = (paths.find(p => /\.(cmd|bat|exe)$/i.test(p)) || paths[0]).trim();
+
+      // Validate the path exists and is secure
+      try {
+        await access(foundPath, constants.F_OK);
+        if (isSecurePath(foundPath)) {
+          return foundPath;
+        }
+      } catch {
+        // Path doesn't exist
+      }
+    }
+
+    return null;
+  } catch {
+    // 'where' returns exit code 1 if not found, which throws an error
+    return null;
+  }
 }

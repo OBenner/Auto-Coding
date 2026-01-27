@@ -47,12 +47,13 @@ if sys.version_info < (3, 10):  # noqa: UP036
 import asyncio
 import io
 import os
+import platform
 import subprocess
 from pathlib import Path
 
 # Configure safe encoding on Windows BEFORE any imports that might print
 # This handles both TTY and piped output (e.g., from Electron)
-if sys.platform == "win32":
+if platform.system() == "Windows":
     for _stream_name in ("stdout", "stderr"):
         _stream = getattr(sys, _stream_name)
         # Method 1: Try reconfigure (works for TTY)

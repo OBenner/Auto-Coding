@@ -13,6 +13,7 @@ vi.mock('../platform', () => ({
   isMacOS: vi.fn(() => false),
   isWindows: vi.fn(() => false),
   isLinux: vi.fn(() => false),
+  getCurrentOS: vi.fn(() => 'linux'),
 }));
 
 vi.mock('fs', () => ({

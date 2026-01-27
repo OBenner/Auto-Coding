@@ -43,11 +43,12 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import platform
 import sys
 from pathlib import Path
 
 # Fix Windows console encoding for Unicode output (emojis, special chars)
-if sys.platform == "win32":
+if platform.system() == "Windows":
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     if hasattr(sys.stderr, "reconfigure"):
