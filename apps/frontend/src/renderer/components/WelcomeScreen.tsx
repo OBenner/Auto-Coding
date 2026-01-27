@@ -4,6 +4,7 @@ import { Button } from './ui/button';
 import { Card } from './ui/card';
 import { ScrollArea } from './ui/scroll-area';
 import { Separator } from './ui/separator';
+import { ProjectListSkeleton } from './skeletons/ProjectListSkeleton';
 import type { Project } from '../../shared/types';
 
 interface WelcomeScreenProps {
@@ -11,13 +12,15 @@ interface WelcomeScreenProps {
   onNewProject: () => void;
   onOpenProject: () => void;
   onSelectProject: (projectId: string) => void;
+  isLoading?: boolean;
 }
 
 export function WelcomeScreen({
   projects,
   onNewProject,
   onOpenProject,
-  onSelectProject
+  onSelectProject,
+  isLoading = false
 }: WelcomeScreenProps) {
   const { t } = useTranslation(['welcome', 'common']);
 
@@ -74,8 +77,24 @@ export function WelcomeScreen({
           </Button>
         </div>
 
-        {/* Recent Projects Section */}
-        {recentProjects.length > 0 && (
+        {/* Recent Projects Section - Loading State */}
+        {isLoading && (
+          <Card className="border border-border bg-card/50 backdrop-blur-sm">
+            <div className="p-4 pb-3">
+              <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                <Clock className="h-4 w-4" />
+                {t('welcome:recentProjects.title')}
+              </div>
+            </div>
+            <Separator />
+            <ScrollArea className="max-h-[320px]">
+              <ProjectListSkeleton count={5} />
+            </ScrollArea>
+          </Card>
+        )}
+
+        {/* Recent Projects Section - Loaded */}
+        {!isLoading && recentProjects.length > 0 && (
           <Card className="border border-border bg-card/50 backdrop-blur-sm">
             <div className="p-4 pb-3">
               <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
@@ -125,7 +144,7 @@ export function WelcomeScreen({
         )}
 
         {/* Empty State for No Projects */}
-        {projects.length === 0 && (
+        {!isLoading && projects.length === 0 && (
           <Card className="border border-dashed border-border bg-card/30 p-8 text-center">
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-accent/20 mx-auto mb-4">
               <Folder className="h-6 w-6 text-accent-foreground" />

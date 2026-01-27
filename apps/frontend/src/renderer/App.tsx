@@ -124,6 +124,7 @@ export function App() {
   const openProjectTab = useProjectStore((state) => state.openProjectTab);
   const setActiveProject = useProjectStore((state) => state.setActiveProject);
   const reorderTabs = useProjectStore((state) => state.reorderTabs);
+  const projectsLoading = useProjectStore((state) => state.isLoading);
   const tasks = useTaskStore((state) => state.tasks);
   const settings = useSettingsStore((state) => state.settings);
   const settingsLoading = useSettingsStore((state) => state.isLoading);
@@ -940,6 +941,7 @@ export function App() {
                 onSelectProject={(projectId) => {
                   openProjectTab(projectId);
                 }}
+                isLoading={projectsLoading}
               />
             )}
           </main>
