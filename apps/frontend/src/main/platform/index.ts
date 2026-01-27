@@ -17,6 +17,9 @@ import { existsSync } from 'fs';
 import { spawn, ChildProcess } from 'child_process';
 import { OS, ShellType, PathConfig, ShellConfig, BinaryDirectories } from './types';
 
+// Re-export types for consumers
+export { OS, ShellType, PathConfig, ShellConfig, BinaryDirectories } from './types';
+
 // Re-export from paths.ts for backward compatibility
 export { getWindowsShellPaths, getOllamaExecutablePaths, getOllamaInstallCommand, getWhichCommand, getCommonBinPaths } from './paths';
 

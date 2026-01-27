@@ -246,8 +246,9 @@
             "command": "npm run test -- env-utils.test.ts",
             "expected": "All tests pass"
           },
-          "status": "pending",
-          "notes": "Move COMMON_BIN_PATHS constant to platform/paths.ts as getCommonBinaryPaths() function. Update env-utils.ts to import and use this function."
+          "status": "completed",
+          "notes": "Successfully refactored env-utils.ts to extract COMMON_BIN_PATHS to platform module:\n- Added getCommonBinPaths() function to platform/paths.ts returning Record<string, string[]>\n- Removed COMMON_BIN_PATHS constant from env-utils.ts\n- Updated getExpandedPlatformPaths() to call getCommonBinPaths() instead\n- Re-exported getCommonBinPaths from platform/index.ts for easy access\n- All tests passing (46 tests in env-utils.test.ts)",
+          "updated_at": "2026-01-27T09:47:29.375471+00:00"
         },
         {
           "id": "subtask-4-2",
@@ -267,8 +268,9 @@
             "command": "npm run test -- ipc-handlers.test.ts",
             "expected": "All tests pass"
           },
-          "status": "pending",
-          "notes": "Replace any direct process.platform checks with isWindows(), isMacOS(), isLinux() imports from platform module"
+          "status": "completed",
+          "notes": "Refactored IPC handlers to use platform module. Replaced all direct process.platform checks in worktree-handlers.ts, settings-handlers.ts, and gitlab/oauth-handlers.ts with platform abstraction functions (getCurrentOS(), isMacOS(), isWindows(), OS enum). All tests passing (20/20).",
+          "updated_at": "2026-01-27T10:00:43.561400+00:00"
         },
         {
           "id": "subtask-4-3",
@@ -451,7 +453,7 @@
   "qa_signoff": null,
   "status": "in_progress",
   "planStatus": "in_progress",
-  "updated_at": "2026-01-27T09:36:59.280Z",
+  "updated_at": "2026-01-27T09:48:43.713Z",
   "recoveryNote": "Task recovered from stuck state at 2026-01-27T09:02:13.976Z",
-  "last_updated": "2026-01-27T09:36:01.131408+00:00"
+  "last_updated": "2026-01-27T10:00:43.561400+00:00"
 }
