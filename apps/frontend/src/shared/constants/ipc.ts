@@ -58,6 +58,9 @@ export const IPC_CHANNELS = {
   TASK_LOGS_CHANGED: 'task:logsChanged',   // Event: logs changed (main -> renderer)
   TASK_LOGS_STREAM: 'task:logsStream',     // Event: streaming log chunk (main -> renderer)
 
+  // Task token statistics (token usage tracking per phase)
+  TASK_TOKEN_STATS_GET: 'task:tokenStatsGet',  // Get token statistics for a task
+
   // Terminal operations
   TERMINAL_CREATE: 'terminal:create',
   TERMINAL_DESTROY: 'terminal:destroy',
