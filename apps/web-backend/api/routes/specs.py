@@ -10,7 +10,7 @@ import logging
 from pathlib import Path
 from typing import List, Optional, Tuple
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 
 from api.models.spec import (
     SpecDetail,
@@ -19,6 +19,7 @@ from api.models.spec import (
     SpecSummary,
 )
 from core.config import settings
+from core.security import require_auth
 
 logger = logging.getLogger(__name__)
 
@@ -226,7 +227,7 @@ def _get_spec_dir(spec_id: str) -> Optional[Path]:
 
 
 @router.get("", response_model=SpecListResponse, status_code=status.HTTP_200_OK)
-async def list_specs():
+async def list_specs(auth: dict = Depends(require_auth)):
     """
     List all specs in the project.
 
@@ -238,6 +239,7 @@ async def list_specs():
     Example:
         ```bash
         curl -X GET http://localhost:8000/api/specs \
+             -H "Authorization: Bearer <token>" \
              -H "Content-Type: application/json"
         # Returns: {"specs": [...], "total": 5}
         ```
@@ -272,7 +274,7 @@ async def list_specs():
 
 
 @router.get("/{spec_id}", response_model=SpecDetail, status_code=status.HTTP_200_OK)
-async def get_spec_detail(spec_id: str):
+async def get_spec_detail(spec_id: str, auth: dict = Depends(require_auth)):
     """
     Get detailed information for a specific spec.
 
@@ -288,6 +290,7 @@ async def get_spec_detail(spec_id: str):
     Example:
         ```bash
         curl -X GET http://localhost:8000/api/specs/001 \
+             -H "Authorization: Bearer <token>" \
              -H "Content-Type: application/json"
         # Returns: {"number": "001", "name": "feature", ...}
         ```
