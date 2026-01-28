@@ -20,7 +20,7 @@ import { createHash } from 'crypto';
 import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { homedir, userInfo } from 'os';
 import { join } from 'path';
-import { isMacOS, isWindows, isLinux } from '../platform';
+import { isMacOS, isWindows, isLinux, getCurrentOS } from '../platform';
 
 /**
  * Create a safe fingerprint of a token for debug logging.
@@ -936,7 +936,7 @@ export function getCredentialsFromKeychain(configDir?: string, forceRefresh = fa
   }
 
   // Unknown platform - return empty
-  return { token: null, email: null, error: `Unsupported platform: ${process.platform}` };
+  return { token: null, email: null, error: `Unsupported platform: ${getCurrentOS()}` };
 }
 
 /**
@@ -1310,7 +1310,7 @@ export function getFullCredentialsFromKeychain(configDir?: string): FullOAuthCre
   }
 
   // Unknown platform - return empty
-  return { token: null, email: null, refreshToken: null, expiresAt: null, scopes: null, error: `Unsupported platform: ${process.platform}` };
+  return { token: null, email: null, refreshToken: null, expiresAt: null, scopes: null, error: `Unsupported platform: ${getCurrentOS()}` };
 }
 
 /**
@@ -1738,5 +1738,5 @@ export function updateKeychainCredentials(
     return updateWindowsCredentialManagerCredentials(configDir, credentials);
   }
 
-  return { success: false, error: `Unsupported platform: ${process.platform}` };
+  return { success: false, error: `Unsupported platform: ${getCurrentOS()}` };
 }

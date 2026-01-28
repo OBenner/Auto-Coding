@@ -16,7 +16,7 @@ import { promises as fsPromises } from 'fs';
 import { execFileSync, execFile } from 'child_process';
 import { promisify } from 'util';
 import { getSentryEnvForSubprocess } from './sentry';
-import { isWindows, isUnix, getPathDelimiter, getNpmCommand } from './platform';
+import { isWindows, isUnix, getPathDelimiter, getNpmCommand, getCurrentOS } from './platform';
 
 const execFileAsync = promisify(execFile);
 
@@ -161,7 +161,7 @@ const ESSENTIAL_SYSTEM_PATHS: string[] = ['/usr/bin', '/bin', '/usr/sbin', '/sbi
  * @returns Array of expanded paths (without existence checking)
  */
 function getExpandedPlatformPaths(additionalPaths?: string[]): string[] {
-  const platform = process.platform as 'darwin' | 'linux' | 'win32';
+  const platform = getCurrentOS();
   const homeDir = os.homedir();
 
   // Get platform-specific paths and expand home directory
