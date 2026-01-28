@@ -23,6 +23,7 @@ from .batch_commands import (
 )
 from .build_commands import handle_build_command
 from .followup_commands import handle_followup_command
+from .metrics_commands import handle_metrics_command
 from .qa_commands import (
     handle_qa_command,
     handle_qa_status_command,
@@ -72,6 +73,7 @@ Examples:
   # Status checks
   python auto-claude/run.py --spec 001 --review-status  # Check human review status
   python auto-claude/run.py --spec 001 --qa-status      # Check QA validation status
+  python auto-claude/run.py --spec 001 --metrics        # Show learning analytics
 
 Prerequisites:
   1. Authenticate: Run 'claude' and type '/login'
@@ -220,6 +222,13 @@ Environment Variables:
         "--review-status",
         action="store_true",
         help="Show human review/approval status for a spec",
+    )
+
+    # Metrics options
+    parser.add_argument(
+        "--metrics",
+        action="store_true",
+        help="Show learning metrics and improvement trends for a spec",
     )
 
     # Non-interactive mode (for UI/automation)
@@ -443,6 +452,11 @@ def _run_cli() -> None:
 
     if args.review_status:
         handle_review_status_command(spec_dir)
+        return
+
+    # Handle metrics command
+    if args.metrics:
+        handle_metrics_command(spec_dir)
         return
 
     if args.qa:

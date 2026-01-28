@@ -352,6 +352,81 @@ class GraphitiMemory:
             )
             return False
 
+    async def save_root_cause(
+        self,
+        failure_type: str,
+        root_cause: dict,
+        failure_context: dict | None = None,
+    ) -> bool:
+        """Save a root cause analysis for a failure."""
+        if not await self._ensure_initialized():
+            return False
+
+        try:
+            result = await self._queries.add_root_cause(
+                failure_type, root_cause, failure_context
+            )
+
+            if result and self.state:
+                self.state.episode_count += 1
+                self.state.save(self.spec_dir)
+
+            return result
+        except Exception as e:
+            logger.warning(f"Failed to save root cause: {e}")
+            self._record_error(f"save_root_cause failed: {e}")
+            capture_exception(
+                e,
+                component="graphiti",
+                operation="save_root_cause",
+                failure_type=failure_type,
+            )
+            return False
+
+    async def save_user_correction(
+        self,
+        what_was_wrong: str,
+        what_was_corrected: str,
+        correction_context: dict | None = None,
+    ) -> bool:
+        """
+        Save a user correction episode.
+
+        This captures instances where the user had to correct the agent's work,
+        enabling cross-session learning from mistakes.
+
+        Args:
+            what_was_wrong: Description of what the agent did incorrectly
+            what_was_corrected: Description of the user's correction
+            correction_context: Optional additional context (files affected, subtask, etc.)
+
+        Returns:
+            True if saved successfully
+        """
+        if not await self._ensure_initialized():
+            return False
+
+        try:
+            result = await self._queries.add_user_correction(
+                what_was_wrong, what_was_corrected, correction_context
+            )
+
+            if result and self.state:
+                self.state.episode_count += 1
+                self.state.save(self.spec_dir)
+
+            return result
+        except Exception as e:
+            logger.warning(f"Failed to save user correction: {e}")
+            self._record_error(f"save_user_correction failed: {e}")
+            capture_exception(
+                e,
+                component="graphiti",
+                operation="save_user_correction",
+                what_was_wrong_summary=what_was_wrong[:100],
+            )
+            return False
+
     async def save_structured_insights(self, insights: dict) -> bool:
         """Save extracted insights as multiple focused episodes."""
         if not await self._ensure_initialized():
