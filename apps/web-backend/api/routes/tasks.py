@@ -277,6 +277,27 @@ async def list_tasks(auth: dict = Depends(require_auth)):
         )
 
 
+@router.get("/health", status_code=status.HTTP_200_OK)
+async def tasks_health():
+    """
+    Health check for tasks API.
+
+    Returns basic status information about the tasks API endpoint.
+
+    Returns:
+        Dictionary with status and configuration info
+    """
+    project_dir = _get_project_dir()
+    specs_dir = _get_specs_dir()
+
+    return {
+        "status": "ok",
+        "endpoint": "tasks",
+        "project_dir": str(project_dir),
+        "specs_dir_exists": specs_dir.exists(),
+    }
+
+
 @router.get("/{task_id}", response_model=TaskDetail, status_code=status.HTTP_200_OK)
 async def get_task_detail(task_id: str, auth: dict = Depends(require_auth)):
     """
@@ -372,24 +393,3 @@ async def get_task_detail(task_id: str, auth: dict = Depends(require_auth)):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to get task detail: {str(e)}",
         )
-
-
-@router.get("/health", status_code=status.HTTP_200_OK)
-async def tasks_health():
-    """
-    Health check for tasks API.
-
-    Returns basic status information about the tasks API endpoint.
-
-    Returns:
-        Dictionary with status and configuration info
-    """
-    project_dir = _get_project_dir()
-    specs_dir = _get_specs_dir()
-
-    return {
-        "status": "ok",
-        "endpoint": "tasks",
-        "project_dir": str(project_dir),
-        "specs_dir_exists": specs_dir.exists(),
-    }
