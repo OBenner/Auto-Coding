@@ -1,4 +1,4 @@
-import { Loader2, AlertCircle } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
 import { ScrollArea } from '../../ui/scroll-area';
 import { IssueListItem } from './IssueListItem';
 import { EmptyState } from './EmptyStates';

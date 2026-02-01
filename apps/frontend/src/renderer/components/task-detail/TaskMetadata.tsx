@@ -87,7 +87,7 @@ export function TaskMetadata({ task }: TaskMetadataProps) {
                 className={cn('text-xs', TASK_CATEGORY_COLORS[task.metadata.category])}
               >
                 {CategoryIcon[task.metadata.category] && (() => {
-                  const Icon = CategoryIcon[task.metadata.category!];
+                  const Icon = CategoryIcon[task.metadata.category];
                   return <Icon className="h-3 w-3 mr-1" />;
                 })()}
                 {TASK_CATEGORY_LABELS[task.metadata.category]}
@@ -226,7 +226,7 @@ export function TaskMetadata({ task }: TaskMetadataProps) {
               </h3>
               <button
                 type="button"
-                onClick={() => window.electronAPI.openExternal(task.metadata?.prUrl!)}
+                onClick={() => task.metadata?.prUrl && window.electronAPI.openExternal(task.metadata.prUrl)}
                 className="text-sm text-info hover:underline flex items-center gap-1.5 bg-transparent border-none cursor-pointer p-0 text-left"
               >
                 {task.metadata.prUrl}

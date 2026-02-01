@@ -3,7 +3,6 @@ import { arrayMove } from '@dnd-kit/sortable';
 import type { Task, TaskStatus, SubtaskStatus, ImplementationPlan, Subtask, TaskMetadata, ExecutionProgress, ExecutionPhase, ReviewReason, TaskDraft, ImageAttachment, TaskOrderState, TaskTokenStats } from '../../shared/types';
 import { debugLog } from '../../shared/utils/debug-logger';
 import { isTerminalPhase } from '../../shared/constants/phase-protocol';
-import { IPC_CHANNELS } from '../../shared/constants/ipc';
 
 interface TaskState {
   tasks: Task[];
@@ -179,9 +178,8 @@ async function fetchAndUpdateTokenStats(taskId: string): Promise<void> {
       return;
     }
 
-    // Fetch token stats via IPC
-    const result = await (window as any).electron.ipcRenderer.invoke(
-      IPC_CHANNELS.TASK_TOKEN_STATS_GET,
+    // Fetch token stats via electronAPI
+    const result = await window.electronAPI.getTokenStats(
       project.path,
       task.specId
     );

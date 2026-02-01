@@ -234,7 +234,13 @@ const browserMockAPI: ElectronAPI = {
     approveBatches: async () => ({ success: true, batches: [] }),
     onAnalyzePreviewProgress: () => () => {},
     onAnalyzePreviewComplete: () => () => {},
-    onAnalyzePreviewError: () => () => {}
+    onAnalyzePreviewError: () => () => {},
+    // Inline comments operations
+    getInlineComments: async () => [],
+    replyToComment: async () => true,
+    applySuggestion: async () => ({ success: true }),
+    requestReReview: async () => true,
+    onPRUpdated: () => () => {}
   },
 
   // Queue Routing API (rate limit recovery)
@@ -360,7 +366,28 @@ const browserMockAPI: ElectronAPI = {
   openLogsFolder: async () => ({ success: false, error: 'Not available in browser mode' }),
   copyDebugInfo: async () => ({ success: false, error: 'Not available in browser mode' }),
   getRecentErrors: async () => [],
-  listLogFiles: async () => []
+  listLogFiles: async () => [],
+
+  // Merge Analytics Operations
+  getMergeHistory: async () => ({ success: true, data: [] }),
+  getMergeSummary: async () => ({
+    success: true,
+    data: {
+      total_operations: 0,
+      total_files_merged: 0,
+      total_conflicts: 0,
+      successful_operations: 0,
+      failed_operations: 0,
+      total_ai_calls: 0,
+      total_tokens_used: 0,
+      average_duration_seconds: 0,
+      success_rate: 0,
+      auto_merge_rate: 0,
+      conflict_patterns: []
+    }
+  }),
+  getConflictPatterns: async () => ({ success: true, data: [] }),
+  exportMergeAnalytics: async () => ({ success: true, data: { path: '/mock/export' } })
 };
 
 /**

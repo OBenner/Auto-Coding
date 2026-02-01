@@ -95,55 +95,8 @@ export function GitHubOAuthFlow({ onSuccess, onCancel }: GitHubOAuthFlowProps) {
     authTimeoutRef.current = null;
   }, []);
 
-  useEffect(() => {
-    if (hasCheckedRef.current) {
-      debugLog('Skipping duplicate check (Strict Mode)');
-      return;
-    }
-    hasCheckedRef.current = true;
-    debugLog('Component mounted, checking GitHub status...');
-    checkGitHubStatus();
-
-    // Cleanup timeout on unmount
-    return () => {
-      clearAuthTimeout();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- Only run once on mount, checkGitHubStatus is intentionally excluded
-  }, [clearAuthTimeout, checkGitHubStatus]);
-
-  // Listen for device code events from the main process
-  // This allows us to display the code IMMEDIATELY when extracted, not after the auth completes
-  useEffect(() => {
-    if (status !== 'authenticating') {
-      return;
-    }
-
-    debugLog('Setting up device code event listener');
-
-    // Listen for device code from main process (sent immediately when extracted)
-    const cleanup = window.electronAPI.onGitHubAuthDeviceCode((data) => {
-      debugLog('Received device code from main process:', {
-        hasCode: !!data.deviceCode,
-        authUrl: data.authUrl,
-        browserOpened: data.browserOpened
-      });
-
-      if (data.deviceCode) {
-        setDeviceCode(data.deviceCode);
-      }
-      if (data.authUrl) {
-        setAuthUrl(data.authUrl);
-      }
-      setBrowserOpened(data.browserOpened);
-    });
-
-    return () => {
-      debugLog('Cleaning up device code event listener');
-      cleanup();
-    };
-  }, [status]);
-
-  const checkGitHubStatus = async () => {
+  // biome-ignore lint/correctness/useExhaustiveDependencies: fetchAndNotifyToken is intentionally excluded to avoid circular dependency
+  const checkGitHubStatus = useCallback(async () => {
     debugLog('checkGitHubStatus() called');
     setStatus('checking');
     setError(null);
@@ -191,7 +144,55 @@ export function GitHubOAuthFlow({ onSuccess, onCancel }: GitHubOAuthFlowProps) {
       setError(err instanceof Error ? err.message : 'Unknown error');
       setStatus('error');
     }
-  };
+  }, []);
+
+  // Check GitHub status on mount
+  useEffect(() => {
+    if (hasCheckedRef.current) {
+      debugLog('Skipping duplicate check (Strict Mode)');
+      return;
+    }
+    hasCheckedRef.current = true;
+    debugLog('Component mounted, checking GitHub status...');
+    checkGitHubStatus();
+
+    // Cleanup timeout on unmount
+    return () => {
+      clearAuthTimeout();
+    };
+  }, [clearAuthTimeout, checkGitHubStatus]);
+
+  // Listen for device code events from the main process
+  // This allows us to display the code IMMEDIATELY when extracted, not after the auth completes
+  useEffect(() => {
+    if (status !== 'authenticating') {
+      return;
+    }
+
+    debugLog('Setting up device code event listener');
+
+    // Listen for device code from main process (sent immediately when extracted)
+    const cleanup = window.electronAPI.onGitHubAuthDeviceCode((data) => {
+      debugLog('Received device code from main process:', {
+        hasCode: !!data.deviceCode,
+        authUrl: data.authUrl,
+        browserOpened: data.browserOpened
+      });
+
+      if (data.deviceCode) {
+        setDeviceCode(data.deviceCode);
+      }
+      if (data.authUrl) {
+        setAuthUrl(data.authUrl);
+      }
+      setBrowserOpened(data.browserOpened);
+    });
+
+    return () => {
+      debugLog('Cleaning up device code event listener');
+      cleanup();
+    };
+  }, [status]);
 
   const fetchAndNotifyToken = async () => {
     debugLog('fetchAndNotifyToken() called');

@@ -34,6 +34,7 @@ import { registerMcpHandlers } from './mcp-handlers';
 import { registerProfileHandlers } from './profile-handlers';
 import { registerScreenshotHandlers } from './screenshot-handlers';
 import { registerTerminalWorktreeIpcHandlers } from './terminal';
+import { registerMergeAnalyticsHandlers } from './merge-analytics-handlers';
 import { registerTokenStatsHandlers } from './token-stats-handler';
 import { notificationService } from '../notification-service';
 
@@ -123,7 +124,10 @@ export function setupIpcHandlers(
   // Screenshot capture handlers
   registerScreenshotHandlers();
 
-  // Token statistics handlers (token usage tracking per phase)
+  // Merge analytics handlers
+  registerMergeAnalyticsHandlers();
+
+  // Token statistics handlers
   registerTokenStatsHandlers();
 
   console.warn('[IPC] All handler modules registered successfully');
@@ -154,5 +158,6 @@ export {
   registerMcpHandlers,
   registerProfileHandlers,
   registerScreenshotHandlers,
+  registerMergeAnalyticsHandlers,
   registerTokenStatsHandlers
 };

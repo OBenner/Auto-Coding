@@ -86,6 +86,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
     try {
       const result = await window.electronAPI.saveAPIProfile(profile);
       if (result.success && result.data) {
+        const savedProfile = result.data;
         // Re-fetch profiles from backend to get authoritative activeProfileId
         // (backend only auto-activates the first profile)
         try {
@@ -99,14 +100,14 @@ export const useSettingsStore = create<SettingsState>((set) => ({
           } else {
             // Fallback: add profile locally but don't assume activeProfileId
             set((state) => ({
-              profiles: [...state.profiles, result.data!],
+              profiles: [...state.profiles, savedProfile],
               profilesLoading: false
             }));
           }
         } catch {
           // Fallback on fetch error: add profile locally
           set((state) => ({
-            profiles: [...state.profiles, result.data!],
+            profiles: [...state.profiles, savedProfile],
             profilesLoading: false
           }));
         }
@@ -131,9 +132,10 @@ export const useSettingsStore = create<SettingsState>((set) => ({
     try {
       const result = await window.electronAPI.updateAPIProfile(profile);
       if (result.success && result.data) {
+        const updatedProfile = result.data;
         set((state) => ({
           profiles: state.profiles.map((p) =>
-            p.id === result.data?.id ? result.data! : p
+            p.id === updatedProfile.id ? updatedProfile : p
           ),
           profilesLoading: false
         }));

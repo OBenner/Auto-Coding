@@ -195,7 +195,7 @@ async function checkCommandHealth(server: CustomMcpServer, startTime: number): P
     }
 
     const command = isWindows() ? 'where' : 'which';
-    const proc = spawn(command, [server.command!], {
+    const proc = spawn(command, [server.command as string], {
       timeout: 5000,
     });
 
@@ -419,7 +419,7 @@ async function testCommandConnection(server: CustomMcpServer, startTime: number)
     const args = server.args || [];
 
     // On Windows, use shell: true to properly handle .cmd/.bat scripts like npx
-    const proc = spawn(server.command!, args, {
+    const proc = spawn(server.command as string, args, {
       stdio: ['pipe', 'pipe', 'pipe'],
       timeout: 15000, // OS-level timeout for reliable process termination
       shell: isWindows(), // Required for Windows to run npx.cmd

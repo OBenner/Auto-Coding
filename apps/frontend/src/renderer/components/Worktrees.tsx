@@ -479,6 +479,7 @@ export function Worktrees({ projectId }: WorktreesProps) {
         <div className="flex items-center justify-between py-2 mb-4 border-b border-border shrink-0">
           <div className="flex items-center gap-3">
             <button
+              type="button"
               onClick={isAllSelected ? deselectAll : selectAll}
               className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
             >

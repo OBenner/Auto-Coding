@@ -23,7 +23,7 @@ const mockOnAPIKeyPathComplete = vi.fn();
 // Dynamic profiles state for testing
 let mockProfiles: APIProfile[] = [];
 
-const mockUseSettingsStore = (selector?: any) => {
+const mockUseSettingsStore = (selector?: unknown) => {
   const state = {
     profiles: mockProfiles,
     profilesLoading: false,
@@ -129,7 +129,7 @@ describe('AuthChoiceStep', () => {
       );
 
       const oauthButton = screen.getByText('Sign in with Anthropic').closest('.cursor-pointer');
-      fireEvent.click(oauthButton!);
+      if (oauthButton) fireEvent.click(oauthButton);
 
       expect(mockGoToNext).toHaveBeenCalledTimes(1);
     });
@@ -144,7 +144,7 @@ describe('AuthChoiceStep', () => {
       );
 
       const oauthButton = screen.getByText('Sign in with Anthropic').closest('.cursor-pointer');
-      fireEvent.click(oauthButton!);
+      if (oauthButton) fireEvent.click(oauthButton);
 
       expect(mockGoToNext).toHaveBeenCalled();
       expect(mockOnAPIKeyPathComplete).not.toHaveBeenCalled();
@@ -162,7 +162,7 @@ describe('AuthChoiceStep', () => {
       );
 
       const apiKeyButton = screen.getByText('Use Custom API Key').closest('.cursor-pointer');
-      fireEvent.click(apiKeyButton!);
+      if (apiKeyButton) fireEvent.click(apiKeyButton);
 
       // ProfileEditDialog should be rendered
       expect(screen.getByTestId('profile-edit-dialog')).toBeInTheDocument();
@@ -185,7 +185,7 @@ describe('AuthChoiceStep', () => {
 
       // Click API Key button to open dialog
       const apiKeyButton = screen.getByText('Use Custom API Key').closest('.cursor-pointer');
-      fireEvent.click(apiKeyButton!);
+      if (apiKeyButton) fireEvent.click(apiKeyButton);
 
       // Dialog should be open - verifies the API key path works
       expect(screen.getByTestId('profile-edit-dialog')).toBeInTheDocument();

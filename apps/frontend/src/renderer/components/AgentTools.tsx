@@ -897,9 +897,10 @@ export function AgentTools() {
       try {
         const result = await window.electronAPI.checkMcpHealth(server);
         if (result.success && result.data) {
+          const healthData = result.data;
           setServerHealthStatus(prev => ({
             ...prev,
-            [server.id]: result.data!,
+            [server.id]: healthData,
           }));
         }
       } catch (_error) {

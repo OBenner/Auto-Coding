@@ -42,7 +42,7 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
   onNewTaskClick,
   terminalCount = 1,
   dragHandleListeners,
-  isDragging,
+  isDragging: _isDragging,
   isExpanded,
   onToggleExpand,
 }, ref) {
@@ -210,8 +210,10 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
   }, [isActive, focus]);
 
   // Refit terminal when expansion state changes
+  // biome-ignore lint/correctness/useExhaustiveDependencies: isExpanded triggers refit intentionally
   useEffect(() => {
     const timeoutId = setTimeout(() => {
+      // biome-ignore lint/suspicious/noFocusedTests: fit() is xterm.js resize function, not a test
       fit();
     }, TERMINAL_DOM_UPDATE_DELAY_MS);
     return () => clearTimeout(timeoutId);
@@ -255,6 +257,7 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Termi
   }, [isActive, onClose, onToggleExpand]);
 
   // Cleanup on unmount
+  // biome-ignore lint/correctness/useExhaustiveDependencies: id is used for cleanup logging, not reactive updates
   useEffect(() => {
     isMountedRef.current = true;
 
@@ -391,6 +394,9 @@ Please confirm you're ready by saying: I'm ready to work on ${selectedTask.title
   const showClaudeBusyIndicator = terminal?.isClaudeMode && isClaudeBusy !== undefined;
 
   return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: Terminal container needs click/drag handlers
+    // biome-ignore lint/a11y/noNoninteractiveElementInteractions: Terminal is interactive via embedded xterm.js
+    // biome-ignore lint/a11y/useKeyWithClickEvents: Terminal handles keyboard input internally
     <div
       ref={setDropRef}
       className={cn(

@@ -442,6 +442,7 @@ export function CustomMcpDialog({
                                 </span>
                               </span>
                               <button
+                                type="button"
                                 onClick={() => removeHeader(key)}
                                 className="text-muted-foreground hover:text-destructive transition-colors"
                               >

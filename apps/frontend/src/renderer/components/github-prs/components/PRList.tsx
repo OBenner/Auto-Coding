@@ -243,6 +243,7 @@ export function PRList({
 
           return (
             <button
+              type="button"
               key={pr.number}
               onClick={() => onSelectPR(pr.number)}
               className={cn(

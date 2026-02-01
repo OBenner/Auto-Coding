@@ -480,7 +480,8 @@ export const TaskCard = memo(function TaskCard({
               >
                 {CategoryIcon[task.metadata.category] && (
                   (() => {
-                    const Icon = CategoryIcon[task.metadata.category!];
+                    const category = task.metadata.category as keyof typeof CategoryIcon;
+                    const Icon = CategoryIcon[category];
                     return <Icon className="h-2.5 w-2.5 mr-0.5" />;
                   })()
                 )}

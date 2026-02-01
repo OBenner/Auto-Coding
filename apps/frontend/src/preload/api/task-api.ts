@@ -14,7 +14,12 @@ import type {
   SupportedTerminal,
   WorktreeCreatePROptions,
   WorktreeCreatePRResult,
-  ImageAttachment
+  ImageAttachment,
+  MergeOperationRecord,
+  MergeAnalytics,
+  ConflictPattern,
+  MergeAnalyticsFilter,
+  MergeAnalyticsExportOptions
 } from '../../shared/types';
 
 export interface TaskAPI {
@@ -81,6 +86,15 @@ export interface TaskAPI {
   unwatchTaskLogs: (specId: string) => Promise<IPCResult>;
   onTaskLogsChanged: (callback: (specId: string, logs: TaskLogs) => void) => () => void;
   onTaskLogsStream: (callback: (specId: string, chunk: TaskLogStreamChunk) => void) => () => void;
+
+  // Task Token Stats
+  getTokenStats: (projectPath: string, specId: string) => Promise<IPCResult<import('../../shared/types').TaskTokenStats | null>>;
+
+  // Merge Analytics
+  getMergeHistory: (projectId: string, filter?: MergeAnalyticsFilter) => Promise<IPCResult<MergeOperationRecord[]>>;
+  getMergeSummary: (projectId: string, filter?: MergeAnalyticsFilter) => Promise<IPCResult<MergeAnalytics>>;
+  getConflictPatterns: (projectId: string, limit?: number) => Promise<IPCResult<ConflictPattern[]>>;
+  exportMergeAnalytics: (projectId: string, options: MergeAnalyticsExportOptions) => Promise<IPCResult<{ path: string }>>;
 }
 
 export const createTaskAPI = (): TaskAPI => ({
@@ -301,5 +315,22 @@ export const createTaskAPI = (): TaskAPI => ({
     return () => {
       ipcRenderer.removeListener(IPC_CHANNELS.TASK_LOGS_STREAM, handler);
     };
-  }
+  },
+
+  // Task Token Stats
+  getTokenStats: (projectPath: string, specId: string): Promise<IPCResult<import('../../shared/types').TaskTokenStats | null>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.TASK_TOKEN_STATS_GET, projectPath, specId),
+
+  // Merge Analytics
+  getMergeHistory: (projectId: string, filter?: MergeAnalyticsFilter): Promise<IPCResult<MergeOperationRecord[]>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.MERGE_ANALYTICS_GET_HISTORY, projectId, filter),
+
+  getMergeSummary: (projectId: string, filter?: MergeAnalyticsFilter): Promise<IPCResult<MergeAnalytics>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.MERGE_ANALYTICS_GET_SUMMARY, projectId, filter),
+
+  getConflictPatterns: (projectId: string, limit?: number): Promise<IPCResult<ConflictPattern[]>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.MERGE_ANALYTICS_GET_PATTERNS, projectId, limit),
+
+  exportMergeAnalytics: (projectId: string, options: MergeAnalyticsExportOptions): Promise<IPCResult<{ path: string }>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.MERGE_ANALYTICS_EXPORT, projectId, options)
 });

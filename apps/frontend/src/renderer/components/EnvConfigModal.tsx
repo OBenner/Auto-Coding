@@ -332,6 +332,7 @@ export function EnvConfigModal({
                   <div className="space-y-2">
                     {claudeProfiles.map((profile) => (
                       <button
+                        type="button"
                         key={profile.id}
                         onClick={() => setSelectedProfileId(profile.id)}
                         className={cn(
@@ -467,6 +468,7 @@ export function EnvConfigModal({
             {/* Secondary: Manual Token Entry (Collapsible) */}
             <div className="space-y-3">
               <button
+                type="button"
                 onClick={() => setShowManualEntry(!showManualEntry)}
                 className="w-full flex items-center justify-between text-sm text-muted-foreground hover:text-foreground transition-colors"
               >
@@ -492,6 +494,7 @@ export function EnvConfigModal({
                         </code>
                         {' '}
                         <button
+                          type="button"
                           onClick={handleCopyCommand}
                           className="inline-flex items-center text-info hover:text-info/80"
                         >
@@ -501,6 +504,7 @@ export function EnvConfigModal({
                       <li>Copy the token and paste it below</li>
                     </ol>
                     <button
+                      type="button"
                       onClick={handleOpenDocs}
                       className="text-info hover:text-info/80 flex items-center gap-1 mt-2"
                     >

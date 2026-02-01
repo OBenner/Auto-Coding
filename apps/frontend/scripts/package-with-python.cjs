@@ -3,7 +3,10 @@
  * Packaging script that downloads bundled Python, stages runtime modules,
  * and builds the Electron app for the requested platforms and architectures.
  *
- * Usage: node scripts/package-with-python.cjs [--mac|--win|--linux] [--x64|--arm64|--universal]
+ * Usage: node scripts/package-with-python.cjs [--mac|--win|--linux] [--x64|--arm64|--universal] [--sign]
+ *
+ * Options:
+ *   --sign    Enable code signing (disabled by default for local builds)
  */
 const { spawnSync } = require('child_process');
 const fs = require('fs');
@@ -130,6 +133,14 @@ function resolveArchs() {
   return [...archs];
 }
 
+/**
+ * Check if code signing is enabled via --sign flag.
+ * Code signing is disabled by default for local builds to avoid Windows symlink issues.
+ */
+function isSigningEnabled() {
+  return args.includes('--sign');
+}
+
 function buildEnv(frontendDir) {
   const binDir = path.join(frontendDir, 'node_modules', '.bin');
   const rootBinDir = path.join(frontendDir, '..', '..', 'node_modules', '.bin');
@@ -137,7 +148,17 @@ function buildEnv(frontendDir) {
   const pathValue = process.env.PATH
     ? `${pathParts.join(path.delimiter)}${path.delimiter}${process.env.PATH}`
     : pathParts.join(path.delimiter);
-  return { ...process.env, PATH: pathValue };
+
+  const env = { ...process.env, PATH: pathValue };
+
+  // Disable code signing by default (avoids Windows symlink issues with winCodeSign)
+  // Use --sign flag to enable signing for release builds
+  if (!isSigningEnabled()) {
+    env.CSC_IDENTITY_AUTO_DISCOVERY = 'false';
+    console.log('[package] Code signing disabled (use --sign to enable)');
+  }
+
+  return env;
 }
 
 function runCommand(command, commandArgs, cwd, env) {
@@ -185,6 +206,68 @@ function readPackageJson(pkgDir) {
   const pkgPath = path.join(pkgDir, 'package.json');
   if (!fs.existsSync(pkgPath)) return null;
   return JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
+}
+
+/**
+ * Clean up problematic directories in the backend that can cause electron-builder to fail.
+ * Even though these directories are filtered out in package.json, electron-builder still
+ * tries to lstat them which can fail on broken symlinks (e.g., lib64 in .venv on Windows).
+ *
+ * Returns a list of moved directories so they can be restored after packaging.
+ */
+function cleanBackendForPackaging(frontendDir) {
+  const backendDir = path.join(frontendDir, '..', 'backend');
+  const dirsToCheck = ['.venv', '.venv-windows', 'venv'];
+  const movedDirs = [];
+
+  for (const dir of dirsToCheck) {
+    const fullPath = path.join(backendDir, dir);
+    if (fs.existsSync(fullPath)) {
+      const backupPath = path.join(backendDir, `${dir}.packaging-backup`);
+      console.log(`[package] Moving ${dir} out of backend before packaging...`);
+      try {
+        // Remove backup if it exists from a previous failed run
+        if (fs.existsSync(backupPath)) {
+          fs.rmSync(backupPath, { recursive: true, force: true });
+        }
+        fs.renameSync(fullPath, backupPath);
+        movedDirs.push({ original: fullPath, backup: backupPath });
+      } catch (err) {
+        // On Windows, rename may fail on symlinks/junctions - just delete instead
+        console.log(`[package] Cannot move ${dir}, removing it instead...`);
+        try {
+          fs.rmSync(fullPath, { recursive: true, force: true });
+        } catch (rmErr) {
+          if (isWindows()) {
+            // Use PowerShell for reliable removal of symlinks/junctions on Windows
+            console.log(`[package] Using PowerShell to remove ${dir}...`);
+            spawnSync('powershell', ['-Command', `Remove-Item -Path '${fullPath}' -Recurse -Force`], { stdio: 'inherit' });
+          }
+        }
+      }
+    }
+  }
+
+  return movedDirs;
+}
+
+/**
+ * Restore directories that were moved during packaging.
+ */
+function restoreBackendDirs(movedDirs) {
+  for (const { original, backup } of movedDirs) {
+    if (fs.existsSync(backup)) {
+      console.log(`[package] Restoring ${path.basename(original)}...`);
+      try {
+        if (fs.existsSync(original)) {
+          fs.rmSync(original, { recursive: true, force: true });
+        }
+        fs.renameSync(backup, original);
+      } catch (err) {
+        console.warn(`[package] Warning: Failed to restore ${path.basename(original)}: ${err.message}`);
+      }
+    }
+  }
 }
 
 function stageRuntimePackages(frontendDir, platform, arch) {
@@ -265,13 +348,22 @@ async function main() {
     }
   }
 
-  const builderArgs = [...args];
+  // Clean up problematic directories (like .venv with broken symlinks) before packaging
+  const movedDirs = cleanBackendForPackaging(frontendDir);
+
+  // Filter out custom flags that electron-builder doesn't understand
+  const builderArgs = args.filter((arg) => arg !== '--sign');
   const hasPublishFlag = builderArgs.some((arg) => arg === '--publish' || arg.startsWith('--publish='));
   if (!hasPublishFlag) {
     builderArgs.push('--publish', 'never');
   }
 
-  runCommand('electron-builder', builderArgs, frontendDir, env);
+  try {
+    runCommand('electron-builder', builderArgs, frontendDir, env);
+  } finally {
+    // Always restore moved directories, even if packaging fails
+    restoreBackendDirs(movedDirs);
+  }
 }
 
 // Run main() only when this file is executed directly (not when imported for testing)

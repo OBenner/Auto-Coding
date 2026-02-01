@@ -39,8 +39,9 @@ function createFallbackRunnerEnv(): Record<string, string> {
   const fallbackEnv: Record<string, string> = {};
 
   for (const key of safeEnvVars) {
-    if (process.env[key]) {
-      fallbackEnv[key] = process.env[key]!;
+    const value = process.env[key];
+    if (value) {
+      fallbackEnv[key] = value;
     }
   }
 
@@ -336,7 +337,7 @@ export function getRunnerPath(backendPath: string): string {
  */
 export function getBackendPath(project: Project): string | null {
   // Import app module for production path detection
-  let app: any;
+  let app: { isPackaged?: boolean; getAppPath?: () => string } | undefined;
   try {
     app = require('electron').app;
   } catch {
@@ -354,7 +355,7 @@ export function getBackendPath(project: Project): string | null {
     // Dev mode: from dist/main -> ../../backend (apps/frontend/out/main -> apps/backend)
     path.resolve(__dirname, '..', '..', '..', '..', '..', 'backend'),
     // Alternative: from app root -> apps/backend
-    app ? path.resolve(app.getAppPath(), '..', 'backend') : null,
+    app?.getAppPath ? path.resolve(app.getAppPath(), '..', 'backend') : null,
     // If running from repo root with apps structure
     path.resolve(process.cwd(), 'apps', 'backend'),
   ].filter((p): p is string => p !== null);
@@ -464,10 +465,11 @@ export async function validateGitHubModule(project: Project): Promise<GitHubModu
   try {
     await execAsync('gh auth status 2>&1');
     result.ghAuthenticated = true;
-  } catch (error: any) {
+  } catch (error: unknown) {
     // gh auth status returns non-zero when not authenticated
     // Check the output to determine if it's an auth issue
-    const output = error.stdout || error.stderr || '';
+    const execError = error as { stdout?: string; stderr?: string };
+    const output = execError.stdout || execError.stderr || '';
     if (output.includes('not logged in') || output.includes('not authenticated')) {
       result.ghAuthenticated = false;
       result.error = 'GitHub CLI is not authenticated. Run:\n  gh auth login';

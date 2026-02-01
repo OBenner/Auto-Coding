@@ -54,7 +54,7 @@ vi.mock('react-i18next', () => ({
 // Mock the settings store
 const mockUpdateSettings = vi.fn();
 const mockLoadSettings = vi.fn();
-const mockProfiles: any[] = [];
+const mockProfiles: unknown[] = [];
 
 vi.mock('../../stores/settings-store', () => ({
   useSettingsStore: vi.fn((selector) => {

@@ -271,12 +271,12 @@ if sys.version_info >= (3, 12):
     }
 
     this.emit('status', 'Creating Python virtual environment...');
-    const venvPath = this.getVenvBasePath()!;
+    const venvPath = this.getVenvBasePath() as string;
     console.warn('[PythonEnvManager] Creating venv at:', venvPath, 'with:', systemPython);
 
     return new Promise((resolve) => {
       const proc = spawn(systemPython, ['-m', 'venv', venvPath], {
-        cwd: this.autoBuildSourcePath!,
+        cwd: this.autoBuildSourcePath as string,
         stdio: 'pipe'
       });
 
@@ -347,7 +347,7 @@ if sys.version_info >= (3, 12):
     console.warn('[PythonEnvManager] Bootstrapping pip...');
     return new Promise((resolve) => {
       const proc = spawn(venvPython, ['-m', 'ensurepip'], {
-        cwd: this.autoBuildSourcePath!,
+        cwd: this.autoBuildSourcePath as string,
         stdio: 'pipe'
       });
 
@@ -401,7 +401,7 @@ if sys.version_info >= (3, 12):
     return new Promise((resolve) => {
       // Use python -m pip for better compatibility across Python versions
       const proc = spawn(venvPython, ['-m', 'pip', 'install', '-r', requirementsPath], {
-        cwd: this.autoBuildSourcePath!,
+        cwd: this.autoBuildSourcePath as string,
         stdio: 'pipe'
       });
 
@@ -486,7 +486,6 @@ if sys.version_info >= (3, 12):
    * This is separated from initialize() to support the promise queue pattern.
    */
   private async _doInitialize(autoBuildSourcePath: string): Promise<PythonEnvStatus> {
-    this.isInitializing = true;
     this.autoBuildSourcePath = autoBuildSourcePath;
 
     console.warn('[PythonEnvManager] Initializing with path:', autoBuildSourcePath);
@@ -504,7 +503,6 @@ if sys.version_info >= (3, 12):
           this.sitePackagesPath = bundledSitePackages;
           this.usingBundledPackages = true;
           this.isReady = true;
-          this.isInitializing = false;
 
           this.emit('ready', this.pythonPath);
           console.warn('[PythonEnvManager] Ready with bundled Python:', this.pythonPath);
@@ -530,7 +528,6 @@ if sys.version_info >= (3, 12):
         console.warn('[PythonEnvManager] Venv not found, creating...');
         const created = await this.createVenv();
         if (!created) {
-          this.isInitializing = false;
           return {
             ready: false,
             pythonPath: null,
@@ -551,7 +548,6 @@ if sys.version_info >= (3, 12):
         console.warn('[PythonEnvManager] Dependencies not installed, installing...');
         const installed = await this.installDeps();
         if (!installed) {
-          this.isInitializing = false;
           return {
             ready: false,
             pythonPath: this.getVenvPythonPath(),
@@ -596,7 +592,6 @@ if sys.version_info >= (3, 12):
       }
 
       this.isReady = true;
-      this.isInitializing = false;
 
       this.emit('ready', this.pythonPath);
       console.warn('[PythonEnvManager] Ready with Python path:', this.pythonPath);
@@ -610,7 +605,6 @@ if sys.version_info >= (3, 12):
         usingBundledPackages: false
       };
     } catch (error) {
-      this.isInitializing = false;
       const message = error instanceof Error ? error.message : String(error);
       return {
         ready: false,

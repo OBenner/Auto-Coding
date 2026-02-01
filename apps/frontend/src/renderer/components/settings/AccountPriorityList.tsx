@@ -32,7 +32,7 @@ import {
   GripVertical,
   Star,
   Tag,
-  Infinity,
+  Infinity as InfinityIcon,
   AlertCircle,
   Users,
   Server,
@@ -306,7 +306,7 @@ function SortableAccountItem({ account, index }: SortableAccountItemProps) {
       {account.type === 'api' && (
         <div className="flex items-center gap-1.5 shrink-0">
           <span className="text-[10px] bg-muted text-muted-foreground px-2 py-1 rounded flex items-center gap-1">
-            <Infinity className="h-3 w-3" />
+            <InfinityIcon className="h-3 w-3" />
             {t('accounts.priority.payPerUse')}
           </span>
         </div>

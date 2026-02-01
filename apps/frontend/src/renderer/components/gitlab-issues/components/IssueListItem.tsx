@@ -16,6 +16,7 @@ const GITLAB_ISSUE_STATE_LABELS: Record<string, string> = {
 
 export function IssueListItem({ issue, isSelected, onClick, onInvestigate }: IssueListItemProps) {
   return (
+    // biome-ignore lint/a11y/useSemanticElements: Using div with role="button" for complex clickable card layout
     <div
       role="button"
       tabIndex={0}

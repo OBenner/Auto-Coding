@@ -45,6 +45,7 @@ import { GitLabMergeRequests } from './components/gitlab-merge-requests';
 import { Changelog } from './components/Changelog';
 import { Worktrees } from './components/Worktrees';
 import { AgentTools } from './components/AgentTools';
+import { MergeAnalyticsDashboard } from './components/merge-analytics/MergeAnalyticsDashboard';
 import { WelcomeScreen } from './components/WelcomeScreen';
 import { RateLimitModal } from './components/RateLimitModal';
 import { SDKRateLimitModal } from './components/SDKRateLimitModal';
@@ -124,7 +125,6 @@ export function App() {
   const openProjectTab = useProjectStore((state) => state.openProjectTab);
   const setActiveProject = useProjectStore((state) => state.setActiveProject);
   const reorderTabs = useProjectStore((state) => state.reorderTabs);
-  const projectsLoading = useProjectStore((state) => state.isLoading);
   const tasks = useTaskStore((state) => state.tasks);
   const settings = useSettingsStore((state) => state.settings);
   const settingsLoading = useSettingsStore((state) => state.isLoading);
@@ -875,16 +875,16 @@ export function App() {
                   />
                 </div>
                 {activeView === 'roadmap' && (activeProjectId || selectedProjectId) && (
-                  <Roadmap projectId={activeProjectId || selectedProjectId!} onGoToTask={handleGoToTask} />
+                  <Roadmap projectId={(activeProjectId || selectedProjectId) as string} onGoToTask={handleGoToTask} />
                 )}
                 {activeView === 'context' && (activeProjectId || selectedProjectId) && (
-                  <Context projectId={activeProjectId || selectedProjectId!} />
+                  <Context projectId={(activeProjectId || selectedProjectId) as string} />
                 )}
                 {activeView === 'ideation' && (activeProjectId || selectedProjectId) && (
-                  <Ideation projectId={activeProjectId || selectedProjectId!} onGoToTask={handleGoToTask} />
+                  <Ideation projectId={(activeProjectId || selectedProjectId) as string} onGoToTask={handleGoToTask} />
                 )}
                 {activeView === 'insights' && (activeProjectId || selectedProjectId) && (
-                  <Insights projectId={activeProjectId || selectedProjectId!} />
+                  <Insights projectId={(activeProjectId || selectedProjectId) as string} />
                 )}
                 {activeView === 'github-issues' && (activeProjectId || selectedProjectId) && (
                   <GitHubIssues
@@ -918,7 +918,7 @@ export function App() {
                 )}
                 {activeView === 'gitlab-merge-requests' && (activeProjectId || selectedProjectId) && (
                   <GitLabMergeRequests
-                    projectId={activeProjectId || selectedProjectId!}
+                    projectId={(activeProjectId || selectedProjectId) as string}
                     onOpenSettings={() => {
                       setSettingsInitialProjectSection('gitlab');
                       setIsSettingsDialogOpen(true);
@@ -929,7 +929,10 @@ export function App() {
                   <Changelog />
                 )}
                 {activeView === 'worktrees' && (activeProjectId || selectedProjectId) && (
-                  <Worktrees projectId={activeProjectId || selectedProjectId!} />
+                  <Worktrees projectId={(activeProjectId || selectedProjectId) as string} />
+                )}
+                {activeView === 'merge-analytics' && (activeProjectId || selectedProjectId) && (
+                  <MergeAnalyticsDashboard projectId={(activeProjectId || selectedProjectId) as string} />
                 )}
                 {activeView === 'agent-tools' && <AgentTools />}
               </>
@@ -941,7 +944,6 @@ export function App() {
                 onSelectProject={(projectId) => {
                   openProjectTab(projectId);
                 }}
-                isLoading={projectsLoading}
               />
             )}
           </main>
@@ -959,7 +961,7 @@ export function App() {
         {/* Dialogs */}
         {(activeProjectId || selectedProjectId) && (
           <TaskCreationWizard
-            projectId={activeProjectId || selectedProjectId!}
+            projectId={(activeProjectId || selectedProjectId) as string}
             open={isNewTaskDialogOpen}
             onOpenChange={setIsNewTaskDialogOpen}
           />

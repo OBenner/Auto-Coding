@@ -299,6 +299,7 @@ export function isSecurePath(candidatePath: string): boolean {
     /%[^%]+%/,                   // Windows environment variable expansion
     /\.\.\//,                    // Unix directory traversal
     /\.\.\\/,                    // Windows directory traversal
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: Intentionally matching control characters for security validation
     /[\r\n\x00]/                 // Newlines (command injection), null bytes (path truncation)
   ];
 

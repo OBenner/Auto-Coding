@@ -317,7 +317,7 @@ const DroppableColumn = memo(function DroppableColumn({ status, tasks, onTaskCli
       <SortableTaskCard
         key={task.id}
         task={task}
-        onClick={onClickHandlers.current.get(task.id)!}
+        onClick={onClickHandlers.current.get(task.id) ?? (() => undefined)}
         onStatusChange={onStatusChangeHandlers.current.get(task.id)}
         isSelectable={isSelectable}
         isSelected={isSelectable ? selectedTaskIds?.has(task.id) : undefined}
@@ -625,6 +625,8 @@ const DroppableColumn = memo(function DroppableColumn({ status, tasks, onTaskCli
 
       {/* Resize handle on right edge */}
       {onResizeStart && onResizeEnd && (
+        /* biome-ignore lint/a11y/noStaticElementInteractions: Resize handle requires mouse/touch events */
+        /* biome-ignore lint/a11y/noNoninteractiveElementInteractions: This is a custom resize control */
         <div
           className={cn(
             "absolute right-0 top-0 bottom-0 w-1 touch-none z-10",
@@ -1499,7 +1501,7 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
         <DragOverlay>
           {activeTask ? (
             <div className="drag-overlay-card">
-              <TaskCard task={activeTask} onClick={() => {}} />
+              <TaskCard task={activeTask} onClick={() => undefined} />
             </div>
           ) : null}
         </DragOverlay>

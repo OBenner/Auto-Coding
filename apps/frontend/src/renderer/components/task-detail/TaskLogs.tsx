@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useRef, useCallback, useEffect } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import {
   Terminal,
@@ -22,7 +22,7 @@ import {
 import { Badge } from '../ui/badge';
 import { cn } from '../../lib/utils';
 import type { Task, TaskLogs, TaskLogPhase, TaskPhaseLog, TaskLogEntry, TaskMetadata } from '../../../shared/types';
-import type { PhaseModelConfig, PhaseThinkingConfig, ThinkingLevel, ModelTypeShort } from '../../../shared/types/settings';
+import type { PhaseModelConfig, ThinkingLevel, ModelTypeShort } from '../../../shared/types/settings';
 import { useVirtualizedLogs } from '../../hooks/useVirtualizedLogs';
 
 interface TaskLogsProps {
@@ -133,13 +133,26 @@ export function TaskLogs({
     hasLogs
   } = useVirtualizedLogs(phaseLogs, expandedPhases);
 
-  // Set up the virtualizer
+  // Set up the virtualizer with dynamic measurement
   const rowVirtualizer = useVirtualizer({
     count,
     getScrollElement: () => parentRef.current,
     estimateSize,
     overscan: OVERSCAN,
+    // Enable measuring for dynamic heights
+    measureElement: (element) => {
+      return element.getBoundingClientRect().height;
+    },
   });
+
+  // Re-measure all items when flattenedItems change (expand/collapse)
+  useEffect(() => {
+    // Small delay to allow DOM to update before measuring
+    const timer = setTimeout(() => {
+      rowVirtualizer.measure();
+    }, 10);
+    return () => clearTimeout(timer);
+  }, [flattenedItems, rowVirtualizer]);
 
   // Create toggle handler for phase headers
   const createPhaseToggleHandler = useCallback(
@@ -217,12 +230,13 @@ export function TaskLogs({
             return (
               <div
                 key={item.key}
+                data-index={virtualItem.index}
+                ref={rowVirtualizer.measureElement}
                 style={{
                   position: 'absolute',
                   top: 0,
                   left: 0,
                   width: '100%',
-                  height: `${virtualItem.size}px`,
                   transform: `translateY(${virtualItem.start}px)`,
                 }}
               >

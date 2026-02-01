@@ -17,7 +17,8 @@
     "gitlabMRs": "GitLab MRs",
     "worktrees": "Worktrees",
     "agentTools": "MCP Overview",
-    "codeEditor": "Code Editor"
+    "codeEditor": "Code Editor",
+    "mergeAnalytics": "Merge Analytics"
   },
   "actions": {
     "settings": "Settings",

@@ -94,6 +94,9 @@ export function RoadmapTabs({
                 </div>
                 <div className="space-y-2">
                   {features.map((feature: RoadmapFeature) => (
+                    // biome-ignore lint/a11y/noNoninteractiveElementInteractions: Clickable feature card
+                    // biome-ignore lint/a11y/noStaticElementInteractions: Clickable feature card
+                    // biome-ignore lint/a11y/useKeyWithClickEvents: Feature selection card
                     <div
                       key={feature.id}
                       className="p-2 rounded-md bg-muted/50 hover:bg-muted cursor-pointer transition-colors"

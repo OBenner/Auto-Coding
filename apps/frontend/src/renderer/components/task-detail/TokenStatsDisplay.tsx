@@ -69,7 +69,7 @@ function getPhaseIcon(phase: 'planning' | 'coding' | 'validation') {
 /**
  * Render a single phase's token statistics
  */
-function PhaseTokenDisplay({ phase, stats, t }: { phase: 'planning' | 'coding' | 'validation'; stats: PhaseTokenStats; t: any }) {
+function PhaseTokenDisplay({ phase, stats, t }: { phase: 'planning' | 'coding' | 'validation'; stats: PhaseTokenStats; t: (key: string, options?: Record<string, unknown>) => string }) {
   const phaseName = t(`tasks:tokenStats.phases.${phase}`);
 
   return (

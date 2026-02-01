@@ -28,7 +28,7 @@ export function ChangelogSkeleton({ count = 5, variant = 'task' }: ChangelogSkel
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {Array.from({ length: count }).map((_, index) => (
           <div
-            key={index}
+            key={`skeleton-task-${index}`}
             className="flex flex-col rounded-lg border border-border p-4 animate-pulse"
           >
             <div className="flex items-start gap-3">
@@ -65,7 +65,7 @@ export function ChangelogSkeleton({ count = 5, variant = 'task' }: ChangelogSkel
     <div className="space-y-2">
       {Array.from({ length: count }).map((_, index) => (
         <div
-          key={index}
+          key={`skeleton-commit-${index}`}
           className="flex items-start gap-3 rounded-lg border border-border p-3 bg-background animate-pulse"
         >
           {/* Commit icon */}

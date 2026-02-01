@@ -922,7 +922,7 @@ describe('claude-integration-handler - Helper Functions', () => {
         { name: 'Default', isDefault: true },
         '/tmp/project',
         Date.now(),
-        () => mockWindow as any,
+        () => mockWindow as unknown as Electron.BrowserWindow,
         vi.fn()
       );
 
@@ -942,7 +942,7 @@ describe('claude-integration-handler - Helper Functions', () => {
         { name: 'Work Profile', isDefault: false },
         '/tmp/project',
         Date.now(),
-        () => mockWindow as any,
+        () => mockWindow as unknown as Electron.BrowserWindow,
         vi.fn()
       );
 
@@ -963,7 +963,7 @@ describe('claude-integration-handler - Helper Functions', () => {
         undefined,
         '/tmp/project',
         Date.now(),
-        () => mockWindow as any,
+        () => mockWindow as unknown as Electron.BrowserWindow,
         vi.fn()
       );
 
@@ -988,7 +988,7 @@ describe('claude-integration-handler - Helper Functions', () => {
         { name: 'Work Profile', isDefault: false },
         '/tmp/project',
         Date.now(),
-        () => mockWindow as any,
+        () => mockWindow as unknown as Electron.BrowserWindow,
         vi.fn()
       );
 
@@ -1012,7 +1012,7 @@ describe('claude-integration-handler - Helper Functions', () => {
         undefined,
         '/tmp/project',
         Date.now(),
-        () => mockWindow as any,
+        () => mockWindow as unknown as Electron.BrowserWindow,
         vi.fn()
       );
 

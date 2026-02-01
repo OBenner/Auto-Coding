@@ -207,6 +207,7 @@ export function MemoryCard({ memory }: MemoryCardProps) {
                 <SectionHeader icon={CheckCircle2} title="What Worked" count={parsed.what_worked.length} />
                 <ul className="space-y-0.5">
                   {parsed.what_worked.map((item, idx) => (
+                    /* biome-ignore lint/suspicious/noArrayIndexKey: String items without unique IDs */
                     <ListItem key={idx} variant="success">{item}</ListItem>
                   ))}
                 </ul>
@@ -219,6 +220,7 @@ export function MemoryCard({ memory }: MemoryCardProps) {
                 <SectionHeader icon={XCircle} title="What Failed" count={parsed.what_failed.length} />
                 <ul className="space-y-0.5">
                   {parsed.what_failed.map((item, idx) => (
+                    /* biome-ignore lint/suspicious/noArrayIndexKey: String items without unique IDs */
                     <ListItem key={idx} variant="error">{item}</ListItem>
                   ))}
                 </ul>
@@ -261,9 +263,11 @@ export function MemoryCard({ memory }: MemoryCardProps) {
                 />
                 <ul className="space-y-0.5">
                   {parsed.recommendations_for_next_session?.map((item, idx) => (
+                    /* biome-ignore lint/suspicious/noArrayIndexKey: String items without unique IDs */
                     <ListItem key={`rec-${idx}`}>{item}</ListItem>
                   ))}
                   {parsed.discoveries?.recommendations?.map((item, idx) => (
+                    /* biome-ignore lint/suspicious/noArrayIndexKey: String items without unique IDs */
                     <ListItem key={`disc-rec-${idx}`}>{item}</ListItem>
                   ))}
                 </ul>
@@ -278,6 +282,7 @@ export function MemoryCard({ memory }: MemoryCardProps) {
                   {parsed.discoveries.patterns_discovered.map((pattern, idx) => {
                     const text = typeof pattern === 'string' ? pattern : pattern.pattern;
                     return text ? (
+                      /* biome-ignore lint/suspicious/noArrayIndexKey: Pattern items without unique IDs */
                       <Badge key={idx} variant="secondary" className="text-xs">
                         {text}
                       </Badge>
@@ -295,6 +300,7 @@ export function MemoryCard({ memory }: MemoryCardProps) {
                   {parsed.discoveries.gotchas_discovered.map((gotcha, idx) => {
                     const text = typeof gotcha === 'string' ? gotcha : gotcha.gotcha;
                     return text ? (
+                      /* biome-ignore lint/suspicious/noArrayIndexKey: Gotcha items without unique IDs */
                       <ListItem key={idx} variant="error">{text}</ListItem>
                     ) : null;
                   })}
@@ -308,6 +314,7 @@ export function MemoryCard({ memory }: MemoryCardProps) {
                 <SectionHeader icon={FileCode} title="Changed Files" count={parsed.discoveries.changed_files.length} />
                 <div className="flex flex-wrap gap-1.5 pl-4">
                   {parsed.discoveries.changed_files.map((file, idx) => (
+                    /* biome-ignore lint/suspicious/noArrayIndexKey: String items without unique IDs */
                     <Badge key={idx} variant="outline" className="text-xs font-mono">
                       {file}
                     </Badge>
@@ -322,6 +329,7 @@ export function MemoryCard({ memory }: MemoryCardProps) {
                 <SectionHeader icon={FileCode} title="File Insights" count={parsed.discoveries.file_insights.length} />
                 <div className="space-y-2 pl-4">
                   {parsed.discoveries.file_insights.map((insight, idx) => (
+                    /* biome-ignore lint/suspicious/noArrayIndexKey: Insight items without unique IDs */
                     <div key={idx} className="text-sm">
                       {insight.path && (
                         <Badge variant="outline" className="text-xs font-mono mb-1">
@@ -346,6 +354,7 @@ export function MemoryCard({ memory }: MemoryCardProps) {
                 <SectionHeader icon={CheckCircle2} title="Subtasks Completed" count={parsed.subtasks_completed.length} />
                 <div className="flex flex-wrap gap-1.5 pl-4">
                   {parsed.subtasks_completed.map((task, idx) => (
+                    /* biome-ignore lint/suspicious/noArrayIndexKey: String items without unique IDs */
                     <Badge key={idx} variant="secondary" className="text-xs font-mono">
                       {task}
                     </Badge>

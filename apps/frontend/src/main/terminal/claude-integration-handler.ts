@@ -9,7 +9,8 @@ import { promises as fsPromises } from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
 import { IPC_CHANNELS } from '../../shared/constants';
-import { getClaudeProfileManager, initializeClaudeProfileManager } from '../claude-profile-manager';
+import { getClaudeProfileManager, initializeClaudeProfileManager, type ClaudeProfileManager } from '../claude-profile-manager';
+import type { ClaudeProfile } from '../../shared/types';
 import { getCredentialsFromKeychain, clearKeychainCache } from '../claude-profile/credential-utils';
 import { getUsageMonitor } from '../claude-profile/usage-monitor';
 import { getEmailFromConfigDir } from '../claude-profile/profile-utils';
@@ -883,13 +884,13 @@ export function handleClaudeExit(
  */
 interface ExecuteProfileCommandOptions {
   needsEnvOverride: boolean;
-  activeProfile: any;
+  activeProfile: ClaudeProfile | null;
   cwdCommand: string;
   pathPrefix: string;
   escapedClaudeCmd: string;
   extraFlags: string | undefined;
   terminal: TerminalProcess;
-  profileManager: any;
+  profileManager: ClaudeProfileManager;
   projectPath: string | undefined;
   startTime: number;
   getWindow: WindowGetter;
@@ -1113,7 +1114,7 @@ export function invokeClaude(
     // Try to execute using profile-specific method (configDir or temp-file)
     const executed = executeProfileCommand({
       needsEnvOverride,
-      activeProfile,
+      activeProfile: activeProfile ?? null,
       cwdCommand,
       pathPrefix,
       escapedClaudeCmd,
@@ -1317,7 +1318,7 @@ export async function invokeClaudeAsync(
     // Try to execute using profile-specific method (configDir or temp-file) with async file operations
     const executed = await executeProfileCommandAsync({
       needsEnvOverride,
-      activeProfile,
+      activeProfile: activeProfile ?? null,
       cwdCommand,
       pathPrefix,
       escapedClaudeCmd,

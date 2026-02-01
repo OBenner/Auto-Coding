@@ -92,9 +92,12 @@ if not exist "node_modules" (
     exit /b 1
 )
 
-if not exist "apps\frontend\node_modules" (
-    echo [-] Frontend dependencies not installed. Run scripts\dev-setup.bat first.
-    exit /b 1
+:: Check frontend dependencies (npm workspaces hoists to root node_modules)
+if not exist "node_modules\electron" (
+    if not exist "apps\frontend\node_modules" (
+        echo [-] Frontend dependencies not installed. Run scripts\dev-setup.bat first.
+        exit /b 1
+    )
 )
 
 echo [+] Prerequisites OK

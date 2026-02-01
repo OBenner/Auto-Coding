@@ -38,6 +38,7 @@ export function ExternalServicesSection({ services }: ExternalServicesSectionPro
             <span className="text-xs text-muted-foreground">Databases</span>
             <div className="flex flex-wrap gap-1 mt-1">
               {services.databases.map((db, idx) => (
+                /* biome-ignore lint/suspicious/noArrayIndexKey: Service objects don't have unique IDs */
                 <Badge key={idx} variant="secondary" className="text-xs">
                   <HardDrive className="h-3 w-3 mr-1" />
                   {db.type || db.client}
@@ -51,6 +52,7 @@ export function ExternalServicesSection({ services }: ExternalServicesSectionPro
             <span className="text-xs text-muted-foreground">Email</span>
             <div className="flex flex-wrap gap-1 mt-1">
               {services.email.map((email, idx) => (
+                /* biome-ignore lint/suspicious/noArrayIndexKey: Service objects don't have unique IDs */
                 <Badge key={idx} variant="secondary" className="text-xs">
                   <Mail className="h-3 w-3 mr-1" />
                   {email.provider || email.client}
@@ -64,6 +66,7 @@ export function ExternalServicesSection({ services }: ExternalServicesSectionPro
             <span className="text-xs text-muted-foreground">Payments</span>
             <div className="flex flex-wrap gap-1 mt-1">
               {services.payments.map((payment, idx) => (
+                /* biome-ignore lint/suspicious/noArrayIndexKey: Service objects don't have unique IDs */
                 <Badge key={idx} variant="secondary" className="text-xs">
                   <CreditCard className="h-3 w-3 mr-1" />
                   {payment.provider || payment.client}
@@ -77,6 +80,7 @@ export function ExternalServicesSection({ services }: ExternalServicesSectionPro
             <span className="text-xs text-muted-foreground">Cache</span>
             <div className="flex flex-wrap gap-1 mt-1">
               {services.cache.map((cache, idx) => (
+                /* biome-ignore lint/suspicious/noArrayIndexKey: Service objects don't have unique IDs */
                 <Badge key={idx} variant="secondary" className="text-xs">
                   <Zap className="h-3 w-3 mr-1" />
                   {cache.type || cache.client}

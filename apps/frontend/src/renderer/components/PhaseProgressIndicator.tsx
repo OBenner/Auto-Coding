@@ -144,7 +144,7 @@ export const PhaseProgressIndicator = memo(function PhaseProgressIndicator({
               {activeEntries} {activeEntries === 1 ? t('execution.labels.entry') : t('execution.labels.entries')}
             </span>
           ) : isRunning && isIndeterminatePhase && (phaseProgress ?? 0) > 0 ? (
-            `${Math.round(Math.min(phaseProgress!, 100))}%`
+            `${Math.round(Math.min(phaseProgress as number, 100))}%`
           ) : (
             '—'
           )}
@@ -313,7 +313,7 @@ const PhaseStepsIndicator = memo(function PhaseStepsIndicator({
               transition={shouldAnimate ? { duration: 1.5, repeat: Infinity, ease: 'easeInOut' } : undefined}
             >
               {state === 'complete' && (
-                <svg className="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
                 </svg>
               )}

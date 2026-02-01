@@ -44,6 +44,15 @@ export const IPC_CHANNELS = {
   TASK_UNARCHIVE: 'task:unarchive',
   TASK_CLEAR_STAGED_STATE: 'task:clearStagedState',
 
+  // Merge Analytics operations
+  MERGE_ANALYTICS_GET_HISTORY: 'mergeAnalytics:getHistory',
+  MERGE_ANALYTICS_GET_SUMMARY: 'mergeAnalytics:getSummary',
+  MERGE_ANALYTICS_GET_PATTERNS: 'mergeAnalytics:getPatterns',
+  MERGE_ANALYTICS_EXPORT: 'mergeAnalytics:export',
+
+  // Task token stats
+  TASK_TOKEN_STATS_GET: 'task:tokenStatsGet',
+
   // Task events (main -> renderer)
   TASK_PROGRESS: 'task:progress',
   TASK_ERROR: 'task:error',
@@ -57,9 +66,6 @@ export const IPC_CHANNELS = {
   TASK_LOGS_UNWATCH: 'task:logsUnwatch',   // Stop watching for log changes
   TASK_LOGS_CHANGED: 'task:logsChanged',   // Event: logs changed (main -> renderer)
   TASK_LOGS_STREAM: 'task:logsStream',     // Event: streaming log chunk (main -> renderer)
-
-  // Task token statistics (token usage tracking per phase)
-  TASK_TOKEN_STATS_GET: 'task:tokenStatsGet',  // Get token statistics for a task
 
   // Terminal operations
   TERMINAL_CREATE: 'terminal:create',
@@ -498,6 +504,7 @@ export const IPC_CHANNELS = {
   // File explorer operations
   FILE_EXPLORER_LIST: 'fileExplorer:list',
   FILE_EXPLORER_READ: 'fileExplorer:read',
+  FILE_EXPLORER_WRITE: 'fileExplorer:write',
 
   // Git operations
   GIT_GET_BRANCHES: 'git:getBranches',

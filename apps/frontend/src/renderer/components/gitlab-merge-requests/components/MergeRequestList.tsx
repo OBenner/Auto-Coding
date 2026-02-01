@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Loader2, RefreshCw, GitPullRequest } from 'lucide-react';
+import { RefreshCw, GitPullRequest } from 'lucide-react';
 import { Button } from '../../ui/button';
 import { Input } from '../../ui/input';
 import { ScrollArea } from '../../ui/scroll-area';

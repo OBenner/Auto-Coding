@@ -148,8 +148,7 @@ function createWindow(): void {
     const display = screen.getPrimaryDisplay();
     // Validate the returned object has expected structure with valid dimensions
     if (
-      display &&
-      display.workAreaSize &&
+      display?.workAreaSize &&
       typeof display.workAreaSize.width === 'number' &&
       typeof display.workAreaSize.height === 'number' &&
       display.workAreaSize.width > 0 &&
@@ -192,7 +191,7 @@ function createWindow(): void {
     trafficLightPosition: { x: 15, y: 10 },
     icon: getIconPath(),
     webPreferences: {
-      preload: join(__dirname, '../preload/index.mjs'),
+      preload: join(__dirname, '../preload/index.cjs'),
       sandbox: true,
       contextIsolation: true,
       nodeIntegration: false,
@@ -227,8 +226,14 @@ function createWindow(): void {
   });
 
   // Load the renderer
-  if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
-    mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL']);
+  // In dev mode, electron-vite sets ELECTRON_RENDERER_URL to the Vite dev server
+  // Only use the URL if explicitly set - don't fallback based on is.dev
+  // because `npm start` (build + electron .) also has is.dev=true but no dev server
+  const rendererUrl = process.env['ELECTRON_RENDERER_URL'];
+
+  if (rendererUrl) {
+    console.log('[main] Loading renderer from URL:', rendererUrl);
+    mainWindow.loadURL(rendererUrl);
   } else {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'));
   }

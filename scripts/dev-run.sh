@@ -91,7 +91,8 @@ if [ ! -d "node_modules" ]; then
     exit 1
 fi
 
-if [ ! -d "apps/frontend/node_modules" ]; then
+# Check frontend dependencies (npm workspaces hoists to root node_modules)
+if [ ! -d "node_modules/electron" ] && [ ! -d "apps/frontend/node_modules" ]; then
     echo -e "${RED}✗${NC} Frontend dependencies not installed. Run ./scripts/dev-setup.sh first."
     exit 1
 fi

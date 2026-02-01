@@ -74,7 +74,7 @@ interface OllamaEmbeddingModel {
  * Recommended Embedding Model Card
  * Pre-curated models suitable for Auto Claude memory system
  */
-interface OllamaRecommendedModel {
+interface _OllamaRecommendedModel {
   name: string;          // Model identifier
   description: string;   // Human-readable description
   size_estimate: string; // Estimated download size (e.g., '621 MB')

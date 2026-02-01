@@ -3,7 +3,7 @@ export function IssueListSkeleton({ count = 5 }: { count?: number }) {
     <div className="space-y-2">
       {Array.from({ length: count }).map((_, index) => (
         <div
-          key={index}
+          key={`skeleton-issue-${index}`}
           className="p-3 rounded-lg border border-transparent animate-pulse"
         >
           <div className="flex items-start gap-3">
