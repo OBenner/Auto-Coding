@@ -10,10 +10,14 @@ Memory Integration:
 """
 
 from pathlib import Path
+from typing import Optional
 
 # Memory integration for cross-session learning
 from agents.memory_manager import get_graphiti_context, save_session_memory
 from claude_agent_sdk import ClaudeSDKClient
+from core.providers import create_engine_provider
+from core.providers.base import SessionConfig
+from core.providers.config import ProviderConfig
 from debug import debug, debug_detailed, debug_error, debug_section, debug_success
 from security.tool_input_validator import get_safe_tool_input
 from task_logger import (
@@ -319,3 +323,113 @@ async def run_qa_fixer_session(
         if task_logger:
             task_logger.log_error(f"QA fixer error: {e}", LogPhase.VALIDATION)
         return "error", str(e)
+
+
+# =============================================================================
+# QA FIXER FACTORY FUNCTION (Provider Pattern)
+# =============================================================================
+
+
+def create_qa_fixer_session(
+    project_dir: Path,
+    spec_dir: Path,
+    model: Optional[str] = None,
+    max_thinking_tokens: Optional[int] = None,
+):
+    """
+    Create a QA fixer agent session using the configured AI engine provider.
+
+    This function is used by the QA validation loop to create fixer sessions
+    with the appropriate AI backend (Claude, LiteLLM, or OpenRouter).
+
+    Args:
+        project_dir: Root directory for the project
+        spec_dir: Directory containing the spec
+        model: Model to use (overrides provider config)
+        max_thinking_tokens: Token budget for extended thinking
+
+    Returns:
+        AgentSession with a .client property containing the SDK client
+
+    Raises:
+        ProviderError: If provider creation or session creation fails
+    """
+    # Create provider from environment configuration
+    config = ProviderConfig.from_env()
+    provider = create_engine_provider(config)
+
+    # For Claude provider, create session with provider-specific parameters
+    if provider.name == "claude":
+        from core.providers.adapters.claude import ClaudeAgentProvider
+
+        if not isinstance(provider, ClaudeAgentProvider):
+            raise TypeError(f"Expected ClaudeAgentProvider, got {type(provider)}")
+
+        # Create session using provider's create_session method
+        session = provider.create_session(
+            config=SessionConfig(
+                name="qa-fixer-session",
+                model=model,
+            ),
+            project_dir=project_dir,
+            spec_dir=spec_dir,
+            agent_type="qa_fixer",
+            max_thinking_tokens=max_thinking_tokens,
+        )
+        return session
+    else:
+        # For other providers, implement their session creation
+        # TODO: Add support for LiteLLM and OpenRouter providers
+        raise NotImplementedError(
+            f"Provider {provider.name} not yet implemented for QA fixer agent"
+        )
+
+
+async def run_qa_fixer(
+    project_dir: Path,
+    spec_dir: Path,
+    fix_session: int,
+    model: Optional[str] = None,
+    verbose: bool = False,
+    max_thinking_tokens: Optional[int] = None,
+) -> tuple[str, str]:
+    """
+    Run a QA fixer session using the configured AI engine provider.
+
+    This is the main entry point for running QA fixes with provider abstraction.
+    Creates a session using the factory pattern and delegates to run_qa_fixer_session.
+
+    Args:
+        project_dir: Project root directory
+        spec_dir: Spec directory
+        fix_session: Fix iteration number
+        model: Model to use (overrides provider config)
+        verbose: Whether to show detailed output
+        max_thinking_tokens: Token budget for extended thinking
+
+    Returns:
+        (status, response_text) where status is:
+        - "fixed" if fixes were applied
+        - "error" if an error occurred
+    """
+    # Create session using provider factory
+    session = create_qa_fixer_session(
+        project_dir=project_dir,
+        spec_dir=spec_dir,
+        model=model,
+        max_thinking_tokens=max_thinking_tokens,
+    )
+
+    # Get the underlying client from the session
+    # For Claude provider, this is a ClaudeSDKClient
+    client = session.client
+
+    # Use async context manager for proper cleanup
+    async with client:
+        return await run_qa_fixer_session(
+            client=client,
+            spec_dir=spec_dir,
+            fix_session=fix_session,
+            verbose=verbose,
+            project_dir=project_dir,
+        )
