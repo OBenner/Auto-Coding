@@ -11,10 +11,14 @@ Memory Integration:
 """
 
 from pathlib import Path
+from typing import Optional
 
 # Memory integration for cross-session learning
 from agents.memory_manager import get_graphiti_context, save_session_memory
 from claude_agent_sdk import ClaudeSDKClient
+from core.providers import create_engine_provider
+from core.providers.base import SessionConfig
+from core.providers.config import ProviderConfig
 from debug import debug, debug_detailed, debug_error, debug_section, debug_success
 from prompts_pkg import get_qa_reviewer_prompt
 from security.tool_input_validator import get_safe_tool_input
@@ -405,3 +409,120 @@ This is attempt {previous_error.get("consecutive_errors", 1) + 1}. If you fail t
         if task_logger:
             task_logger.log_error(f"QA session error: {e}", LogPhase.VALIDATION)
         return "error", str(e)
+
+
+# =============================================================================
+# QA REVIEWER FACTORY FUNCTION (Provider Pattern)
+# =============================================================================
+
+
+def create_qa_reviewer_session(
+    project_dir: Path,
+    spec_dir: Path,
+    model: Optional[str] = None,
+    max_thinking_tokens: Optional[int] = None,
+):
+    """
+    Create a QA reviewer agent session using the configured AI engine provider.
+
+    This function is used by the QA validation loop to create reviewer sessions
+    with the appropriate AI backend (Claude, LiteLLM, or OpenRouter).
+
+    Args:
+        project_dir: Root directory for the project
+        spec_dir: Directory containing the spec
+        model: Model to use (overrides provider config)
+        max_thinking_tokens: Token budget for extended thinking
+
+    Returns:
+        AgentSession with a .client property containing the SDK client
+
+    Raises:
+        ProviderError: If provider creation or session creation fails
+    """
+    # Create provider from environment configuration
+    config = ProviderConfig.from_env()
+    provider = create_engine_provider(config)
+
+    # For Claude provider, create session with provider-specific parameters
+    if provider.name == "claude":
+        from core.providers.adapters.claude import ClaudeAgentProvider
+
+        if not isinstance(provider, ClaudeAgentProvider):
+            raise TypeError(f"Expected ClaudeAgentProvider, got {type(provider)}")
+
+        # Create session using provider's create_session method
+        session = provider.create_session(
+            config=SessionConfig(
+                name="qa-reviewer-session",
+                model=model,
+            ),
+            project_dir=project_dir,
+            spec_dir=spec_dir,
+            agent_type="qa_reviewer",
+            max_thinking_tokens=max_thinking_tokens,
+        )
+        return session
+    else:
+        # For other providers, implement their session creation
+        # TODO: Add support for LiteLLM and OpenRouter providers
+        raise NotImplementedError(
+            f"Provider {provider.name} not yet implemented for QA reviewer agent"
+        )
+
+
+async def run_qa_reviewer(
+    project_dir: Path,
+    spec_dir: Path,
+    qa_session: int,
+    max_iterations: int,
+    model: Optional[str] = None,
+    verbose: bool = False,
+    previous_error: dict | None = None,
+    max_thinking_tokens: Optional[int] = None,
+) -> tuple[str, str]:
+    """
+    Run a QA reviewer session using the configured AI engine provider.
+
+    This is the main entry point for running QA reviews with provider abstraction.
+    Creates a session using the factory pattern and delegates to run_qa_agent_session.
+
+    Args:
+        project_dir: Project root directory
+        spec_dir: Spec directory
+        qa_session: QA iteration number
+        max_iterations: Maximum number of QA iterations
+        model: Model to use (overrides provider config)
+        verbose: Whether to show detailed output
+        previous_error: Error context from previous iteration for self-correction
+        max_thinking_tokens: Token budget for extended thinking
+
+    Returns:
+        (status, response_text) where status is:
+        - "approved" if QA approves
+        - "rejected" if QA finds issues
+        - "error" if an error occurred
+    """
+    # Create session using provider factory
+    session = create_qa_reviewer_session(
+        project_dir=project_dir,
+        spec_dir=spec_dir,
+        model=model,
+        max_thinking_tokens=max_thinking_tokens,
+    )
+
+    # Get the underlying client from the session
+    # For Claude provider, this is a ClaudeSDKClient
+    client = session.client
+
+    # Use async context manager for proper cleanup
+    async with client:
+        return await run_qa_agent_session(
+            client=client,
+            project_dir=project_dir,
+            spec_dir=spec_dir,
+            qa_session=qa_session,
+            max_iterations=max_iterations,
+            verbose=verbose,
+            previous_error=previous_error,
+        )
