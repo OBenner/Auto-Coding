@@ -43,10 +43,13 @@ Usage:
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 # Model pricing for all supported providers (per 1M tokens)
 # Claude pricing: https://www.anthropic.com/pricing (January 2025)
@@ -329,24 +332,49 @@ class CostTracker:
         output_tokens: int,
     ) -> float:
         """
-        Calculate cost for a model operation.
+        Calculate cost for a model operation across multiple providers.
+
+        Supports models from:
+        - Claude (Anthropic): claude-opus-4-5-*, claude-sonnet-4-5-*, claude-haiku-4-5-*
+        - OpenAI: gpt-4, gpt-4o, gpt-4-turbo, gpt-3.5-turbo
+        - Google Gemini: gemini-1.5-pro, gemini-1.5-flash, gemini-2.0-flash
+        - Ollama (local): ollama/llama3, ollama/mistral, etc. (zero cost)
+
+        If a model is not found in the pricing database, falls back to default
+        pricing (Claude Sonnet rates) and logs a warning.
 
         Args:
-            model: Model identifier
+            model: Model identifier (e.g., "gpt-4", "gemini-1.5-pro", "ollama/llama3")
             input_tokens: Number of input tokens
             output_tokens: Number of output tokens
 
         Returns:
-            Cost in dollars
+            Cost in dollars (0.00 for local models, calculated for API models)
         """
         # Get pricing for model (fallback to default if not found)
-        pricing = MODEL_PRICING.get(model, MODEL_PRICING["default"])
+        if model not in MODEL_PRICING:
+            logger.warning(
+                f"Model '{model}' not found in pricing database. "
+                f"Using default pricing (Claude Sonnet rates). "
+                f"Consider adding this model to MODEL_PRICING in cost_tracking.py"
+            )
+            pricing = MODEL_PRICING["default"]
+        else:
+            pricing = MODEL_PRICING[model]
 
         # Calculate cost (pricing is per 1M tokens)
         input_cost = (input_tokens / 1_000_000) * pricing["input"]
         output_cost = (output_tokens / 1_000_000) * pricing["output"]
 
-        return input_cost + output_cost
+        total_cost = input_cost + output_cost
+
+        logger.debug(
+            f"Cost calculation: model={model}, "
+            f"input_tokens={input_tokens}, output_tokens={output_tokens}, "
+            f"cost=${total_cost:.6f}"
+        )
+
+        return total_cost
 
     def log_usage(
         self,
