@@ -26,6 +26,7 @@ import { registerGitlabHandlers } from './gitlab-handlers';
 import { registerIdeationHandlers } from './ideation-handlers';
 import { registerChangelogHandlers } from './changelog-handlers';
 import { registerInsightsHandlers } from './insights-handlers';
+import { registerAnalyticsHandlers } from './analytics-handlers';
 import { registerMemoryHandlers } from './memory-handlers';
 import { registerAppUpdateHandlers } from './app-update-handlers';
 import { registerDebugHandlers } from './debug-handlers';
@@ -101,6 +102,9 @@ export function setupIpcHandlers(
   // Insights handlers
   registerInsightsHandlers(getMainWindow);
 
+  // Analytics handlers
+  registerAnalyticsHandlers(getMainWindow);
+
   // Memory & infrastructure handlers (for Graphiti/LadybugDB)
   registerMemoryHandlers();
 
@@ -143,6 +147,7 @@ export {
   registerIdeationHandlers,
   registerChangelogHandlers,
   registerInsightsHandlers,
+  registerAnalyticsHandlers,
   registerMemoryHandlers,
   registerAppUpdateHandlers,
   registerDebugHandlers,
