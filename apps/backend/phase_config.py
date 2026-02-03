@@ -456,3 +456,22 @@ def get_spec_phase_thinking_budget(phase_name: str) -> int | None:
     """
     thinking_level = SPEC_PHASE_THINKING_LEVELS.get(phase_name, "medium")
     return get_thinking_budget(thinking_level)
+
+
+def get_provider_for_agent(agent_type: str) -> str:
+    """
+    Get the AI provider to use for a specific agent.
+
+    This delegates to the provider configuration system which reads from
+    AI_ENGINE_PROVIDER environment variable and defaults to 'claude'.
+
+    Args:
+        agent_type: The agent type (e.g., 'coder', 'planner', 'qa_reviewer')
+
+    Returns:
+        Provider name ('claude', 'litellm', or 'openrouter')
+    """
+    from core.providers.config import get_provider_config
+
+    config = get_provider_config()
+    return config.provider
