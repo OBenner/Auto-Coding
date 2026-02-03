@@ -1,0 +1,35 @@
+{
+  "title": "Code Review",
+  "runReview": "Run Code Review",
+  "reviewInProgress": "Review in Progress",
+  "reviewComplete": "Review Complete",
+  "noFindings": "No issues found",
+  "findingsCount": "{{count}} finding",
+  "findingsCount_plural": "{{count}} findings",
+  "status": {
+    "idle": "Ready",
+    "analyzing": "Analyzing...",
+    "complete": "Complete",
+    "failed": "Failed"
+  },
+  "categories": {
+    "security": "Security",
+    "performance": "Performance",
+    "style": "Style",
+    "bestPractices": "Best Practices"
+  },
+  "severity": {
+    "critical": "Critical",
+    "high": "High",
+    "medium": "Medium",
+    "low": "Low"
+  },
+  "actions": {
+    "viewFindings": "View Findings",
+    "dismiss": "Dismiss"
+  },
+  "empty": {
+    "title": "No active review",
+    "description": "Trigger a code review to analyze changes"
+  }
+}
