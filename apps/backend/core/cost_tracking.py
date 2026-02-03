@@ -8,7 +8,7 @@ Provides cost reporting and analysis for budget management.
 Supports multiple providers:
 - Claude (Anthropic): Opus, Sonnet, Haiku
 - OpenAI: GPT-4 Turbo, GPT-4, GPT-4o, GPT-3.5 Turbo
-- Google Gemini (to be added)
+- Google Gemini: Gemini 1.5 Pro, Gemini 1.5 Flash, Gemini 2.0 Flash
 - Ollama (local models, zero cost)
 
 Components:
@@ -51,6 +51,7 @@ from typing import Any
 # Model pricing for all supported providers (per 1M tokens)
 # Claude pricing: https://www.anthropic.com/pricing (January 2025)
 # OpenAI pricing: https://openai.com/api/pricing/ (January 2025)
+# Google Gemini pricing: https://ai.google.dev/pricing (January 2025)
 MODEL_PRICING: dict[str, dict[str, float]] = {
     # ========================================
     # Claude Models (Anthropic)
@@ -126,6 +127,44 @@ MODEL_PRICING: dict[str, dict[str, float]] = {
     "gpt-3.5-turbo-0125": {
         "input": 0.50,
         "output": 1.50,
+    },
+    # ========================================
+    # Google Gemini Models
+    # ========================================
+    # Gemini 1.5 Pro - High capability, balanced cost
+    "gemini-1.5-pro": {
+        "input": 1.25,
+        "output": 5.00,
+    },
+    "gemini-1.5-pro-latest": {
+        "input": 1.25,
+        "output": 5.00,
+    },
+    "gemini-pro": {
+        "input": 1.25,
+        "output": 5.00,
+    },
+    # Gemini 1.5 Flash - Fast and cost-effective
+    "gemini-1.5-flash": {
+        "input": 0.075,
+        "output": 0.30,
+    },
+    "gemini-1.5-flash-latest": {
+        "input": 0.075,
+        "output": 0.30,
+    },
+    "gemini-flash": {
+        "input": 0.075,
+        "output": 0.30,
+    },
+    # Gemini 2.0 Flash - Next generation, experimental
+    "gemini-2.0-flash": {
+        "input": 0.10,
+        "output": 0.40,
+    },
+    "gemini-2.0-flash-exp": {
+        "input": 0.10,
+        "output": 0.40,
     },
     # ========================================
     # Fallback
