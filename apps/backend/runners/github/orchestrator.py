@@ -1379,6 +1379,118 @@ class GitHubOrchestrator:
         return result.summary
 
     # =========================================================================
+    # CODE REVIEW WORKFLOW
+    # =========================================================================
+
+    async def code_review_pr(self, pr_number: int) -> list[PRReviewFinding]:
+        """
+        Run security-focused code review on a pull request.
+
+        Performs:
+        - Security vulnerability scanning (secrets, SAST)
+        - Converts security findings to PR review findings
+        - Does NOT post to GitHub (for manual review of security issues)
+
+        Args:
+            pr_number: The PR number to review
+
+        Returns:
+            List of PRReviewFinding objects with security issues found
+
+        Raises:
+            Exception: If review fails
+        """
+        safe_print(
+            f"[DEBUG orchestrator] code_review_pr() called for PR #{pr_number}",
+            flush=True,
+        )
+
+        self._report_progress(
+            "gathering_context",
+            10,
+            f"Gathering context for PR #{pr_number}...",
+            pr_number=pr_number,
+        )
+
+        try:
+            # Gather PR context
+            safe_print("[DEBUG orchestrator] Creating context gatherer...")
+            gatherer = PRContextGatherer(
+                self.project_dir, pr_number, repo=self.config.repo
+            )
+
+            safe_print("[DEBUG orchestrator] Gathering PR context...")
+            pr_context = await gatherer.gather()
+            safe_print(
+                f"[DEBUG orchestrator] Context gathered: {pr_context.title} "
+                f"({len(pr_context.changed_files)} files changed)",
+                flush=True,
+            )
+
+            self._report_progress(
+                "analyzing",
+                30,
+                "Running security scan...",
+                pr_number=pr_number,
+            )
+
+            # Import code review service
+            try:
+                from .services.code_review_service import CodeReviewService
+            except (ImportError, ValueError, SystemError):
+                from services.code_review_service import CodeReviewService
+
+            # Create code review service
+            code_review_service = CodeReviewService(
+                project_dir=self.project_dir,
+                github_dir=self.github_dir,
+                config=self.config,
+                progress_callback=self.progress_callback,
+            )
+
+            # Run code review (security scan)
+            safe_print("[DEBUG orchestrator] Running security-focused code review...")
+            findings = await code_review_service.review_code_changes(
+                context=pr_context,
+                changed_files=None,  # Scan all changed files
+            )
+
+            safe_print(
+                f"[DEBUG orchestrator] Code review complete: {len(findings)} findings",
+                flush=True,
+            )
+
+            # Get summary statistics
+            summary = code_review_service.get_findings_summary(findings)
+            safe_print(
+                f"[CodeReview] Summary: {summary['total']} total findings "
+                f"({summary['by_severity']['critical']} critical, "
+                f"{summary['by_severity']['high']} high)",
+                flush=True,
+            )
+
+            self._report_progress(
+                "complete",
+                100,
+                f"Code review complete: {len(findings)} findings",
+                pr_number=pr_number,
+            )
+
+            return findings
+
+        except Exception as e:
+            import traceback
+
+            error_details = f"{type(e).__name__}: {e}"
+            full_traceback = traceback.format_exc()
+            safe_print(
+                f"[ERROR orchestrator] Code review failed for PR #{pr_number}: {error_details}",
+                flush=True,
+            )
+            safe_print(f"[ERROR orchestrator] Full traceback:\n{full_traceback}")
+            raise
+
+    # =========================================================================
     # ISSUE TRIAGE WORKFLOW
     # =========================================================================
 

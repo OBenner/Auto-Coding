@@ -327,6 +327,96 @@ async def cmd_followup_review_pr(args) -> int:
         return 1
 
 
+async def cmd_code_review_pr(args) -> int:
+    """Run security-focused code review on a pull request."""
+    import sys
+
+    # Force unbuffered output so Electron sees it in real-time
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(line_buffering=True)
+    if hasattr(sys.stderr, "reconfigure"):
+        sys.stderr.reconfigure(line_buffering=True)
+
+    debug = os.environ.get("DEBUG")
+    if debug:
+        safe_print(f"[DEBUG] Starting code review for PR #{args.pr_number}")
+        safe_print(f"[DEBUG] Project directory: {args.project}")
+        safe_print("[DEBUG] Building config...")
+
+    config = get_config(args)
+
+    if debug:
+        safe_print(
+            f"[DEBUG] Config built: repo={config.repo}, model={config.model}",
+            flush=True,
+        )
+        safe_print("[DEBUG] Creating orchestrator...")
+
+    orchestrator = GitHubOrchestrator(
+        project_dir=args.project,
+        config=config,
+        progress_callback=print_progress,
+    )
+
+    if debug:
+        safe_print("[DEBUG] Orchestrator created")
+        safe_print(
+            f"[DEBUG] Calling orchestrator.code_review_pr({args.pr_number})...",
+            flush=True,
+        )
+
+    try:
+        findings = await orchestrator.code_review_pr(args.pr_number)
+    except Exception as e:
+        safe_print(f"\nCode review failed: {e}")
+        return 1
+
+    if debug:
+        safe_print(
+            f"[DEBUG] code_review_pr returned {len(findings)} findings", flush=True
+        )
+
+    # Print results
+    safe_print(f"\n{'=' * 60}")
+    safe_print(f"PR #{args.pr_number} Code Review Complete")
+    safe_print(f"{'=' * 60}")
+    safe_print(f"Total Findings: {len(findings)}")
+
+    if findings:
+        # Count by severity
+        critical = sum(1 for f in findings if f.severity.value == "critical")
+        high = sum(1 for f in findings if f.severity.value == "high")
+        medium = sum(1 for f in findings if f.severity.value == "medium")
+        low = sum(1 for f in findings if f.severity.value == "low")
+
+        safe_print(f"\nBy Severity:")
+        if critical:
+            safe_print(f"  CRITICAL: {critical}")
+        if high:
+            safe_print(f"  HIGH: {high}")
+        if medium:
+            safe_print(f"  MEDIUM: {medium}")
+        if low:
+            safe_print(f"  LOW: {low}")
+
+        safe_print("\nFindings:")
+        for f in findings:
+            emoji = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "🟢"}
+            safe_print(
+                f"\n  {emoji.get(f.severity.value, '⚪')} [{f.severity.value.upper()}] {f.title}"
+            )
+            safe_print(f"    File: {f.file}:{f.line}")
+            safe_print(f"    Category: {f.category.value}")
+            if f.description:
+                # Print first line of description
+                first_line = f.description.split("\n")[0]
+                safe_print(f"    {first_line}")
+    else:
+        safe_print("\n✅ No security issues found!")
+
+    return 0
+
+
 async def cmd_triage(args) -> int:
     """Triage issues."""
     config = get_config(args)
@@ -707,6 +797,13 @@ def main():
     )
     followup_parser.add_argument("pr_number", type=int, help="PR number to review")
 
+    # code-review-pr command
+    code_review_parser = subparsers.add_parser(
+        "code-review-pr",
+        help="Run security-focused code review on a PR",
+    )
+    code_review_parser.add_argument("pr_number", type=int, help="PR number to review")
+
     # triage command
     triage_parser = subparsers.add_parser("triage", help="Triage issues")
     triage_parser.add_argument(
@@ -796,6 +893,7 @@ def main():
     commands = {
         "review-pr": cmd_review_pr,
         "followup-review-pr": cmd_followup_review_pr,
+        "code-review-pr": cmd_code_review_pr,
         "triage": cmd_triage,
         "auto-fix": cmd_auto_fix,
         "check-auto-fix-labels": cmd_check_labels,
