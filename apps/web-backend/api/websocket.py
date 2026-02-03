@@ -21,6 +21,7 @@ from api.models.agent_event import (
     WebSocketMessage,
     PhaseEvent,
 )
+from api.models.pair_programming import SuggestionEvent
 
 logger = logging.getLogger(__name__)
 
@@ -141,6 +142,68 @@ class ConnectionManager:
                 disconnected.append(websocket)
             except Exception as e:
                 logger.error(f"Error broadcasting to {id(websocket)}: {e}")
+                disconnected.append(websocket)
+
+        # Clean up disconnected clients
+        for websocket in disconnected:
+            self.disconnect(websocket)
+
+    async def broadcast_suggestion(self, suggestion_event: SuggestionEvent):
+        """
+        Broadcast a suggestion event to clients subscribed to the spec ID.
+
+        If the suggestion has no spec_id, broadcasts to all connected clients.
+        This supports both spec-specific suggestions and general pair programming suggestions.
+
+        Args:
+            suggestion_event: The SuggestionEvent to broadcast
+        """
+        spec_id = suggestion_event.spec_id
+
+        # If no spec_id, broadcast to all clients
+        if not spec_id:
+            if not self.active_connections:
+                logger.debug("No active connections for suggestion broadcast")
+                return
+
+            message = suggestion_event.model_dump(mode="json")
+            logger.debug(f"Broadcasting suggestion to all {len(self.active_connections)} clients")
+
+            disconnected = []
+            for websocket in list(self.active_connections.keys()):
+                try:
+                    await websocket.send_json(message)
+                except WebSocketDisconnect:
+                    disconnected.append(websocket)
+                except Exception as e:
+                    logger.error(f"Error broadcasting suggestion to {id(websocket)}: {e}")
+                    disconnected.append(websocket)
+
+            # Clean up disconnected clients
+            for websocket in disconnected:
+                self.disconnect(websocket)
+            return
+
+        # Broadcast to spec-specific subscribers
+        if spec_id not in self.spec_subscriptions:
+            logger.debug(f"No subscribers for spec {spec_id} suggestion")
+            return
+
+        subscribers = list(self.spec_subscriptions[spec_id])
+        if not subscribers:
+            return
+
+        message = suggestion_event.model_dump(mode="json")
+        logger.debug(f"Broadcasting suggestion to {len(subscribers)} subscribers of spec {spec_id}")
+
+        disconnected = []
+        for websocket in subscribers:
+            try:
+                await websocket.send_json(message)
+            except WebSocketDisconnect:
+                disconnected.append(websocket)
+            except Exception as e:
+                logger.error(f"Error broadcasting suggestion to {id(websocket)}: {e}")
                 disconnected.append(websocket)
 
         # Clean up disconnected clients
@@ -341,6 +404,58 @@ async def broadcast_error_event(
     await manager.broadcast_to_spec(spec_id, event)
 
 
+async def broadcast_suggestion_event(
+    suggestion_id: str,
+    suggestion_type: str,
+    content: str,
+    confidence: float,
+    description: str,
+    spec_id: str = None,
+    range_data: dict = None,
+    reasoning: str = None,
+    file_path: str = None
+):
+    """
+    Helper function to broadcast AI pair programming suggestions.
+
+    Can be called from suggestion engine or pair programming agent to stream
+    real-time code suggestions to connected clients.
+
+    Args:
+        suggestion_id: Unique identifier for the suggestion
+        suggestion_type: Type of suggestion (completion, refactor, fix, explanation)
+        content: Suggested code or explanation text
+        confidence: Confidence score (0.0-1.0)
+        description: Human-readable description
+        spec_id: Optional spec/task ID (broadcasts to all if None)
+        range_data: Optional code range dict with start_line, start_column, end_line, end_column
+        reasoning: Optional reasoning for the suggestion
+        file_path: Optional file path the suggestion applies to
+    """
+    from api.models.pair_programming import SuggestionEvent, SuggestionData, CodeRange
+
+    # Build suggestion data
+    suggestion_data = SuggestionData(
+        suggestion_id=suggestion_id,
+        type=suggestion_type,
+        content=content,
+        confidence=confidence,
+        description=description,
+        reasoning=reasoning,
+        file_path=file_path,
+        range=CodeRange(**range_data) if range_data else None
+    )
+
+    event = SuggestionEvent(
+        event_type="pair_suggestion",
+        timestamp=datetime.now().isoformat(),
+        spec_id=spec_id,
+        data=suggestion_data
+    )
+
+    await manager.broadcast_suggestion(event)
+
+
 # Export the manager for use in other modules
 __all__ = [
     "router",
@@ -348,4 +463,5 @@ __all__ = [
     "broadcast_execution_event",
     "broadcast_log_event",
     "broadcast_error_event",
+    "broadcast_suggestion_event",
 ]
