@@ -7,8 +7,11 @@ Handles follow-up planner sessions for adding new subtasks to completed specs.
 
 import logging
 from pathlib import Path
+from typing import Optional
 
-from core.client import create_client
+from core.providers import create_engine_provider
+from core.providers.base import SessionConfig
+from core.providers.config import ProviderConfig
 from phase_config import get_phase_model, get_phase_thinking_budget
 from phase_event import ExecutionPhase, emit_phase
 from task_logger import (
@@ -30,6 +33,61 @@ from ui import (
 from .session import run_agent_session
 
 logger = logging.getLogger(__name__)
+
+
+def create_planner_session(
+    project_dir: Path,
+    spec_dir: Path,
+    model: Optional[str] = None,
+    max_thinking_tokens: Optional[int] = None,
+):
+    """
+    Create a planner agent session using the configured AI engine provider.
+
+    This function is used by both the follow-up planner and verification tests.
+
+    Args:
+        project_dir: Root directory for the project
+        spec_dir: Directory containing the spec
+        model: Model to use (overrides provider config)
+        max_thinking_tokens: Token budget for extended thinking
+
+    Returns:
+        AgentSession with a .client property containing the SDK client
+
+    Raises:
+        ProviderError: If provider creation or session creation fails
+    """
+    # Create provider from environment configuration
+    config = ProviderConfig.from_env()
+    provider = create_engine_provider(config)
+
+    # For Claude provider, create session with provider-specific parameters
+    if provider.name == "claude":
+        from core.providers.adapters.claude import ClaudeAgentProvider
+
+        if not isinstance(provider, ClaudeAgentProvider):
+            raise TypeError(f"Expected ClaudeAgentProvider, got {type(provider)}")
+
+        # Create session using provider's create_session method
+        session = provider.create_session(
+            config=SessionConfig(
+                name="planner-session",
+                model=model,
+            ),
+            project_dir=project_dir,
+            spec_dir=spec_dir,
+            agent_type="planner",
+            max_thinking_tokens=max_thinking_tokens,
+        )
+        return session
+    else:
+        # For other providers, implement their session creation
+        # TODO: Add support for LiteLLM and OpenRouter providers
+        raise NotImplementedError(
+            f"Provider {provider.name} not yet implemented for planner agent"
+        )
+
 
 
 async def run_followup_planner(
@@ -95,12 +153,17 @@ async def run_followup_planner(
     # Respects task_metadata.json configuration when no CLI override
     planning_model = get_phase_model(spec_dir, "planning", model)
     planning_thinking_budget = get_phase_thinking_budget(spec_dir, "planning")
-    client = create_client(
+
+    # Create session using provider factory
+    session = create_planner_session(
         project_dir,
         spec_dir,
-        planning_model,
+        model=planning_model,
         max_thinking_tokens=planning_thinking_budget,
     )
+
+    # Get the underlying SDK client from the session
+    client = session.client
 
     # Generate follow-up planner prompt
     prompt = get_followup_planner_prompt(spec_dir)
