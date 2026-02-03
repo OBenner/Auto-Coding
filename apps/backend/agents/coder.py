@@ -10,7 +10,8 @@ import logging
 import os
 from pathlib import Path
 
-from core.client import create_client
+from core.providers.config import ProviderConfig
+from core.providers.factory import create_engine_provider
 from linear_updater import (
     LinearTaskState,
     is_linear_enabled,
@@ -281,15 +282,35 @@ async def run_autonomous_agent(
         phase_model = get_phase_model(spec_dir, current_phase, model)
         phase_thinking_budget = get_phase_thinking_budget(spec_dir, current_phase)
 
-        # Create client (fresh context) with phase-specific model and thinking
+        # Create provider using factory pattern for multi-provider support
+        # The provider is selected via AI_ENGINE_PROVIDER env var (default: claude)
+        provider_config = ProviderConfig.from_env()
+        provider = create_engine_provider(provider_config)
+
+        # Create session with phase-specific model and thinking
         # Use appropriate agent_type for correct tool permissions and thinking budget
-        client = create_client(
-            project_dir,
-            spec_dir,
-            phase_model,
-            agent_type="planner" if first_run else "coder",
+        agent_type_for_session = "planner" if first_run else "coder"
+        from core.providers.base import SessionConfig
+
+        session_config = SessionConfig(
+            name=f"{agent_type_for_session}-session-{iteration}",
+            model=phase_model,
+            extra={
+                "agent_type": agent_type_for_session,
+                "max_thinking_tokens": phase_thinking_budget,
+            },
+        )
+
+        session = provider.create_session(
+            session_config,
+            project_dir=project_dir,
+            spec_dir=spec_dir,
+            agent_type=agent_type_for_session,
             max_thinking_tokens=phase_thinking_budget,
         )
+
+        # Get the underlying Claude SDK client from the session
+        client = session.client
 
         # Generate appropriate prompt
         if first_run:
