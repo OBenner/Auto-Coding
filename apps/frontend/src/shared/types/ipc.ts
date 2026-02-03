@@ -745,6 +745,14 @@ export interface ElectronAPI {
     callback: (projectId: string, error: string) => void
   ) => () => void;
 
+  // Analytics operations
+  analytics: {
+    getSummary: (projectId: string) => Promise<IPCResult<import('./analytics').MetricsSummary>>;
+    getAgentStats: (projectId: string) => Promise<IPCResult<Record<string, import('./analytics').AgentStats>>>;
+    getTrends: (projectId: string, days?: number) => Promise<IPCResult<import('./analytics').TrendDataPoint[]>>;
+    getReport: (projectId: string) => Promise<IPCResult<import('./analytics').AnalyticsReport>>;
+  };
+
   // Task logs operations
   getTaskLogs: (projectId: string, specId: string) => Promise<IPCResult<TaskLogs | null>>;
   watchTaskLogs: (projectId: string, specId: string) => Promise<IPCResult>;
