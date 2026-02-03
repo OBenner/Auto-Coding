@@ -15,12 +15,21 @@ This module has been refactored for better maintainability:
 - Complex merge operations: remain here (workspace.py)
 
 Public API is exported via workspace/__init__.py for backward compatibility.
+
+Multi-Codebase Support:
+- WorkspaceConfig: Configuration for multiple related codebases
+- WorkspaceManager: Manage multi-project workspaces
+- get_workspace_config(): Load workspace configuration for a project
 """
 
 from pathlib import Path
 
 # Import git command helper for centralized logging and allowlist compliance
 from core.git_executable import run_git
+
+# Import workspace utilities for multi-codebase support
+from core.workspace_config import WorkspaceConfig, ProjectConfig, ProjectRelationship
+from core.workspace_manager import WorkspaceManager, ProjectState
 from ui import (
     Icons,
     bold,
@@ -2094,3 +2103,240 @@ async def _run_parallel_merges(
     )
 
     return final_results
+
+
+# ============================================================================
+# Workspace Configuration Utilities
+# ============================================================================
+
+
+def get_workspace_config(
+    project_dir: Path | str,
+    workspace_name: str | None = None,
+) -> WorkspaceConfig | None:
+    """
+    Load workspace configuration for a project.
+
+    Searches for workspace configuration in:
+    1. Project-specific workspace: {project_dir}/.auto-claude/workspaces/{workspace_name}/
+    2. Global workspaces: .auto-claude/workspaces/{workspace_name}/
+    3. Default workspace if only one exists
+
+    Args:
+        project_dir: Project directory to search for workspace config
+        workspace_name: Optional workspace name (if None, finds default)
+
+    Returns:
+        WorkspaceConfig or None if no workspace found
+
+    Example:
+        # Load specific workspace
+        config = get_workspace_config(Path("/project"), "my-workspace")
+
+        # Load default workspace
+        config = get_workspace_config(Path("/project"))
+    """
+    project_dir = Path(project_dir).resolve()
+
+    # Define search paths
+    search_paths = []
+
+    if workspace_name:
+        # Search for specific workspace
+        search_paths.extend(
+            [
+                project_dir / ".auto-claude" / "workspaces" / workspace_name,
+                Path(".auto-claude") / "workspaces" / workspace_name,
+            ]
+        )
+    else:
+        # Search for default workspace (first one found)
+        workspaces_dir = project_dir / ".auto-claude" / "workspaces"
+        if workspaces_dir.exists():
+            for workspace_dir in workspaces_dir.iterdir():
+                if workspace_dir.is_dir():
+                    search_paths.append(workspace_dir)
+
+        # Also check global workspaces
+        global_workspaces_dir = Path(".auto-claude") / "workspaces"
+        if global_workspaces_dir.exists():
+            for workspace_dir in global_workspaces_dir.iterdir():
+                if workspace_dir.is_dir():
+                    search_paths.append(workspace_dir)
+
+    # Try to load from each path
+    for workspace_dir in search_paths:
+        config_file = workspace_dir / "workspace.json"
+        if config_file.exists():
+            try:
+                return WorkspaceConfig.load(config_file)
+            except Exception as e:
+                debug_warning(
+                    MODULE,
+                    f"Failed to load workspace config from {config_file}: {e}",
+                )
+                continue
+
+    return None
+
+
+def get_workspace_manager(
+    project_dir: Path | str,
+    workspace_name: str | None = None,
+) -> WorkspaceManager | None:
+    """
+    Load workspace manager for a project.
+
+    Args:
+        project_dir: Project directory
+        workspace_name: Optional workspace name (if None, finds default)
+
+    Returns:
+        WorkspaceManager or None if no workspace found
+
+    Example:
+        manager = get_workspace_manager(Path("/project"), "my-workspace")
+        if manager:
+            for project in manager.config.projects:
+                print(f"Project: {project.name} at {project.path}")
+    """
+    project_dir = Path(project_dir).resolve()
+
+    # Search for workspace directory
+    search_paths = []
+
+    if workspace_name:
+        # Search for specific workspace
+        search_paths.extend(
+            [
+                project_dir / ".auto-claude" / "workspaces" / workspace_name,
+                Path(".auto-claude") / "workspaces" / workspace_name,
+            ]
+        )
+    else:
+        # Search for default workspace (first one found)
+        workspaces_dir = project_dir / ".auto-claude" / "workspaces"
+        if workspaces_dir.exists():
+            for workspace_dir in workspaces_dir.iterdir():
+                if workspace_dir.is_dir():
+                    search_paths.append(workspace_dir)
+
+        # Also check global workspaces
+        global_workspaces_dir = Path(".auto-claude") / "workspaces"
+        if global_workspaces_dir.exists():
+            for workspace_dir in global_workspaces_dir.iterdir():
+                if workspace_dir.is_dir():
+                    search_paths.append(workspace_dir)
+
+    # Try to load from each path
+    for workspace_dir in search_paths:
+        config_file = workspace_dir / "workspace.json"
+        if config_file.exists():
+            try:
+                return WorkspaceManager.load_workspace(workspace_dir)
+            except Exception as e:
+                debug_warning(
+                    MODULE,
+                    f"Failed to load workspace manager from {workspace_dir}: {e}",
+                )
+                continue
+
+    return None
+
+
+def find_workspace_for_project(
+    project_path: Path | str,
+    base_dir: Path | None = None,
+) -> WorkspaceManager | None:
+    """
+    Find the workspace that contains a given project path.
+
+    Args:
+        project_path: Path to search for in workspace projects
+        base_dir: Base directory for workspaces (defaults to .auto-claude/workspaces)
+
+    Returns:
+        WorkspaceManager containing the project, or None if not found
+
+    Example:
+        manager = find_workspace_for_project("/path/to/frontend")
+        if manager:
+            print(f"Found in workspace: {manager.config.name}")
+    """
+    project_path = Path(project_path).resolve()
+    base_dir = base_dir or Path(".auto-claude") / "workspaces"
+
+    if not base_dir.exists():
+        return None
+
+    # Search all workspaces
+    for workspace_dir in base_dir.iterdir():
+        if not workspace_dir.is_dir():
+            continue
+
+        config_file = workspace_dir / "workspace.json"
+        if not config_file.exists():
+            continue
+
+        try:
+            manager = WorkspaceManager.load_workspace(workspace_dir)
+            project = manager.get_project_by_path(project_path)
+            if project:
+                return manager
+        except Exception as e:
+            debug_warning(
+                MODULE,
+                f"Failed to load workspace from {workspace_dir}: {e}",
+            )
+            continue
+
+    return None
+
+
+def list_workspaces(base_dir: Path | None = None) -> list[dict[str, str]]:
+    """
+    List all available workspaces.
+
+    Args:
+        base_dir: Base directory for workspaces (defaults to .auto-claude/workspaces)
+
+    Returns:
+        List of workspace info dicts with 'name', 'path', 'project_count'
+
+    Example:
+        workspaces = list_workspaces()
+        for ws in workspaces:
+            print(f"{ws['name']}: {ws['project_count']} projects")
+    """
+    base_dir = base_dir or Path(".auto-claude") / "workspaces"
+
+    if not base_dir.exists():
+        return []
+
+    workspaces = []
+    for workspace_dir in base_dir.iterdir():
+        if not workspace_dir.is_dir():
+            continue
+
+        config_file = workspace_dir / "workspace.json"
+        if not config_file.exists():
+            continue
+
+        try:
+            config = WorkspaceConfig.load(config_file)
+            workspaces.append(
+                {
+                    "name": config.name,
+                    "path": str(workspace_dir),
+                    "project_count": str(config.project_count),
+                    "description": config.description or "",
+                }
+            )
+        except Exception as e:
+            debug_warning(
+                MODULE,
+                f"Failed to load workspace config from {config_file}: {e}",
+            )
+            continue
+
+    return workspaces

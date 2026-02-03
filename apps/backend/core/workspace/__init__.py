@@ -33,6 +33,19 @@ _build_merge_prompt = _workspace_module._build_merge_prompt
 _check_git_conflicts = _workspace_module._check_git_conflicts
 _rebase_spec_branch = _workspace_module._rebase_spec_branch
 
+# Import workspace configuration utilities
+get_workspace_config = _workspace_module.get_workspace_config
+get_workspace_manager = _workspace_module.get_workspace_manager
+find_workspace_for_project = _workspace_module.find_workspace_for_project
+list_workspaces = _workspace_module.list_workspaces
+
+# Import workspace configuration classes
+WorkspaceConfig = _workspace_module.WorkspaceConfig
+WorkspaceManager = _workspace_module.WorkspaceManager
+ProjectConfig = _workspace_module.ProjectConfig
+ProjectState = _workspace_module.ProjectState
+ProjectRelationship = _workspace_module.ProjectRelationship
+
 # Models and Enums
 # Display Functions
 from .display import (
@@ -115,6 +128,16 @@ __all__ = [
     "_build_merge_prompt",  # Internal prompt builder (ACS-194)
     "_check_git_conflicts",  # Internal git conflict detection (ACS-224)
     "_rebase_spec_branch",  # Internal rebase function (ACS-224)
+    # Multi-Codebase Workspace Configuration
+    "WorkspaceConfig",  # Workspace configuration for multiple projects
+    "WorkspaceManager",  # Workspace manager for multi-project operations
+    "ProjectConfig",  # Project configuration within a workspace
+    "ProjectState",  # Project state isolation
+    "ProjectRelationship",  # Project relationship enum
+    "get_workspace_config",  # Load workspace configuration
+    "get_workspace_manager",  # Load workspace manager
+    "find_workspace_for_project",  # Find workspace containing a project
+    "list_workspaces",  # List all available workspaces
     # Models
     "WorkspaceMode",
     "WorkspaceChoice",
