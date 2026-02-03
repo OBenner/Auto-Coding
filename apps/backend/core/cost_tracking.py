@@ -5,8 +5,14 @@ Cost Tracking System for Multi-Model Agent Orchestration
 Tracks AI API costs across different models and agent types.
 Provides cost reporting and analysis for budget management.
 
+Supports multiple providers:
+- Claude (Anthropic): Opus, Sonnet, Haiku
+- OpenAI: GPT-4 Turbo, GPT-4, GPT-4o, GPT-3.5 Turbo
+- Google Gemini (to be added)
+- Ollama (local models, zero cost)
+
 Components:
-- MODEL_PRICING: Pricing data for all Claude models (per 1M tokens)
+- MODEL_PRICING: Pricing data for all supported models (per 1M tokens)
 - CostTracker: Tracks usage and calculates costs per agent session
 
 Usage:
@@ -19,6 +25,14 @@ Usage:
         model="claude-sonnet-4-5-20250929",
         input_tokens=5000,
         output_tokens=2000
+    )
+
+    # Log usage for OpenAI model
+    tracker.log_usage(
+        agent_type="planner",
+        model="gpt-4o",
+        input_tokens=3000,
+        output_tokens=1500
     )
 
     # Get cost summary
@@ -34,10 +48,13 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-# Claude model pricing (per 1M tokens)
-# Based on Anthropic pricing as of January 2025
-# https://www.anthropic.com/pricing
+# Model pricing for all supported providers (per 1M tokens)
+# Claude pricing: https://www.anthropic.com/pricing (January 2025)
+# OpenAI pricing: https://openai.com/api/pricing/ (January 2025)
 MODEL_PRICING: dict[str, dict[str, float]] = {
+    # ========================================
+    # Claude Models (Anthropic)
+    # ========================================
     # Claude 4.5 Opus - Most capable model
     "claude-opus-4-5-20251101": {
         "input": 15.00,
@@ -62,6 +79,57 @@ MODEL_PRICING: dict[str, dict[str, float]] = {
         "input": 15.00,
         "output": 75.00,
     },
+    # ========================================
+    # OpenAI Models
+    # ========================================
+    # GPT-4 Turbo - High capability, balanced cost
+    "gpt-4-turbo": {
+        "input": 10.00,
+        "output": 30.00,
+    },
+    "gpt-4-turbo-2024-04-09": {
+        "input": 10.00,
+        "output": 30.00,
+    },
+    # GPT-4 - Original high capability model
+    "gpt-4": {
+        "input": 30.00,
+        "output": 60.00,
+    },
+    "gpt-4-0613": {
+        "input": 30.00,
+        "output": 60.00,
+    },
+    # GPT-4o - Multimodal, cost-effective flagship
+    "gpt-4o": {
+        "input": 2.50,
+        "output": 10.00,
+    },
+    "gpt-4o-2024-11-20": {
+        "input": 2.50,
+        "output": 10.00,
+    },
+    # GPT-4o-mini - Most cost-effective GPT-4 class
+    "gpt-4o-mini": {
+        "input": 0.15,
+        "output": 0.60,
+    },
+    "gpt-4o-mini-2024-07-18": {
+        "input": 0.15,
+        "output": 0.60,
+    },
+    # GPT-3.5 Turbo - Legacy but still useful
+    "gpt-3.5-turbo": {
+        "input": 0.50,
+        "output": 1.50,
+    },
+    "gpt-3.5-turbo-0125": {
+        "input": 0.50,
+        "output": 1.50,
+    },
+    # ========================================
+    # Fallback
+    # ========================================
     # Fallback pricing (use sonnet pricing)
     "default": {
         "input": 3.00,
