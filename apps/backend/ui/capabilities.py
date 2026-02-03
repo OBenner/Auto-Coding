@@ -12,7 +12,7 @@ import io
 import os
 import sys
 
-from ..core.platform import is_windows
+from core.platform import is_windows
 
 
 def enable_windows_ansi_support() -> bool:
