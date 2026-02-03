@@ -1,35 +1,7 @@
 import { app } from 'electron';
 import { join } from 'path';
 import { existsSync, readFileSync, writeFileSync, mkdirSync, renameSync, unlinkSync } from 'fs';
-
-/**
- * Project relationship types
- */
-export type ProjectRelationship = 'independent' | 'depends_on' | 'library' | 'monorepo_package';
-
-/**
- * Project configuration within a workspace
- */
-export interface Project {
-  name: string;
-  path: string;  // Absolute path to project directory
-  enabled: boolean;
-  relationship: ProjectRelationship;
-  dependencies: string[];  // Names of projects this depends on
-  description?: string;
-  tags: string[];
-}
-
-/**
- * Workspace configuration
- */
-export interface Workspace {
-  name: string;
-  description?: string;
-  projects: Project[];
-  createdAt: string;  // ISO timestamp
-  updatedAt: string;  // ISO timestamp
-}
+import { Workspace, WorkspaceProject } from '../shared/types/workspace';
 
 /**
  * All persisted workspace data
@@ -318,7 +290,7 @@ export class WorkspaceStore {
    */
   addProject(
     workspaceName: string,
-    project: Omit<Project, 'enabled' | 'dependencies' | 'tags'> & {
+    project: Omit<WorkspaceProject, 'enabled' | 'dependencies' | 'tags'> & {
       enabled?: boolean;
       dependencies?: string[];
       tags?: string[];
@@ -335,7 +307,7 @@ export class WorkspaceStore {
     }
 
     // Add project with defaults
-    const newProject: Project = {
+    const newProject: WorkspaceProject = {
       ...project,
       enabled: project.enabled ?? true,
       dependencies: project.dependencies ?? [],
@@ -377,7 +349,7 @@ export class WorkspaceStore {
   /**
    * Update a project in a workspace
    */
-  updateProject(workspaceName: string, projectName: string, updates: Partial<Project>): void {
+  updateProject(workspaceName: string, projectName: string, updates: Partial<WorkspaceProject>): void {
     const workspace = this.data.workspaces[workspaceName];
     if (!workspace) {
       throw new Error(`Workspace '${workspaceName}' not found`);
@@ -396,7 +368,7 @@ export class WorkspaceStore {
   /**
    * Get projects for a workspace
    */
-  getProjects(workspaceName: string): Project[] {
+  getProjects(workspaceName: string): WorkspaceProject[] {
     const workspace = this.data.workspaces[workspaceName];
     return workspace?.projects ?? [];
   }
@@ -404,7 +376,7 @@ export class WorkspaceStore {
   /**
    * Get enabled projects for a workspace
    */
-  getEnabledProjects(workspaceName: string): Project[] {
+  getEnabledProjects(workspaceName: string): WorkspaceProject[] {
     const workspace = this.data.workspaces[workspaceName];
     return workspace?.projects.filter(p => p.enabled) ?? [];
   }
@@ -440,7 +412,7 @@ export class WorkspaceStore {
    * Get build order for projects (topological sort)
    * Returns projects in dependency order (dependencies first)
    */
-  getBuildOrder(workspaceName: string): Project[] {
+  getBuildOrder(workspaceName: string): WorkspaceProject[] {
     const workspace = this.data.workspaces[workspaceName];
     if (!workspace) {
       return [];
@@ -494,9 +466,9 @@ export class WorkspaceStore {
       throw new Error(`Circular dependency detected in workspace '${workspaceName}'`);
     }
 
-    // Convert names back to Project objects
+    // Convert names back to WorkspaceProject objects
     return result
       .map(name => workspace.projects.find(p => p.name === name))
-      .filter((p): p is Project => p !== undefined);
+      .filter((p): p is WorkspaceProject => p !== undefined);
   }
 }
