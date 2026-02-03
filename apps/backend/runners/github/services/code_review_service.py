@@ -23,6 +23,7 @@ from typing import Any
 try:
     from ...analysis.security_scanner import SecurityScanner, SecurityVulnerability
     from ..context_gatherer import PRContext
+    from ..gh_client import GHClient
     from ..models import (
         GitHubRunnerConfig,
         PRReviewFinding,
@@ -33,6 +34,7 @@ try:
 except (ImportError, ValueError, SystemError):
     from analysis.security_scanner import SecurityScanner, SecurityVulnerability
     from context_gatherer import PRContext
+    from gh_client import GHClient
     from models import (
         GitHubRunnerConfig,
         PRReviewFinding,
@@ -361,3 +363,176 @@ class CodeReviewService:
             "by_category": category_counts,
             "should_block": self.should_block_merge(findings),
         }
+
+    def _format_review_body(self, findings: list[PRReviewFinding]) -> str:
+        """
+        Format findings into a markdown review body.
+
+        Args:
+            findings: List of PR review findings
+
+        Returns:
+            Markdown formatted review body
+        """
+        if not findings:
+            return "✅ No security issues found in this PR."
+
+        summary = self.get_findings_summary(findings)
+
+        # Build header with summary
+        body_parts = ["## 🔒 Security Review Results\n"]
+
+        # Add severity summary
+        severity_counts = summary["by_severity"]
+        if severity_counts["critical"] > 0:
+            body_parts.append(f"🚨 **Critical**: {severity_counts['critical']}")
+        if severity_counts["high"] > 0:
+            body_parts.append(f"⚠️ **High**: {severity_counts['high']}")
+        if severity_counts["medium"] > 0:
+            body_parts.append(f"⚡ **Medium**: {severity_counts['medium']}")
+        if severity_counts["low"] > 0:
+            body_parts.append(f"ℹ️ **Low**: {severity_counts['low']}")
+
+        body_parts.append(f"\n**Total Issues**: {summary['total']}\n")
+
+        # Add merge recommendation
+        if summary["should_block"]:
+            body_parts.append(
+                "❌ **Recommendation**: Do not merge until critical issues are resolved.\n"
+            )
+        else:
+            body_parts.append(
+                "⚠️ **Recommendation**: Review findings before merging.\n"
+            )
+
+        # Group findings by severity
+        by_severity = {
+            ReviewSeverity.CRITICAL: [],
+            ReviewSeverity.HIGH: [],
+            ReviewSeverity.MEDIUM: [],
+            ReviewSeverity.LOW: [],
+        }
+
+        for finding in findings:
+            by_severity[finding.severity].append(finding)
+
+        # Add findings in severity order
+        for severity in [
+            ReviewSeverity.CRITICAL,
+            ReviewSeverity.HIGH,
+            ReviewSeverity.MEDIUM,
+            ReviewSeverity.LOW,
+        ]:
+            severity_findings = by_severity[severity]
+            if not severity_findings:
+                continue
+
+            severity_icons = {
+                ReviewSeverity.CRITICAL: "🚨",
+                ReviewSeverity.HIGH: "⚠️",
+                ReviewSeverity.MEDIUM: "⚡",
+                ReviewSeverity.LOW: "ℹ️",
+            }
+
+            body_parts.append(
+                f"\n### {severity_icons[severity]} {severity.value.title()} Severity\n"
+            )
+
+            for finding in severity_findings:
+                body_parts.append(f"#### {finding.title}\n")
+                body_parts.append(f"**Location**: `{finding.file}:{finding.line}`\n")
+                body_parts.append(f"{finding.description}\n")
+
+                if finding.suggested_fix:
+                    body_parts.append(f"**Suggested Fix**: {finding.suggested_fix}\n")
+
+                if finding.evidence:
+                    body_parts.append(f"**Evidence**: {finding.evidence}\n")
+
+                body_parts.append("")  # Empty line between findings
+
+        # Add footer
+        body_parts.append("\n---")
+        body_parts.append("*Automated security review by Auto-Claude*")
+
+        return "\n".join(body_parts)
+
+    async def post_review_to_github(
+        self,
+        pr_number: int,
+        findings: list[PRReviewFinding],
+        repo: str | None = None,
+    ) -> int:
+        """
+        Post review findings to GitHub PR via gh_client.
+
+        Args:
+            pr_number: PR number to post review to
+            findings: List of PR review findings
+            repo: Optional repository in 'owner/repo' format
+
+        Returns:
+            Review ID (currently 0, as gh CLI doesn't return ID)
+
+        Raises:
+            GHCommandError: If posting review fails
+        """
+        self._report_progress(
+            "post_review",
+            10,
+            f"Posting review to PR #{pr_number}...",
+            pr_number=pr_number,
+        )
+
+        safe_print(f"[CodeReview] Posting review to PR #{pr_number}...", flush=True)
+
+        # Initialize GH client
+        gh_client = GHClient(
+            project_dir=self.project_dir,
+            repo=repo,
+        )
+
+        # Format review body
+        review_body = self._format_review_body(findings)
+
+        # Determine review event based on findings
+        event = "comment"
+        if self.should_block_merge(findings):
+            event = "request-changes"
+            safe_print(
+                f"[CodeReview] Requesting changes due to {sum(1 for f in findings if f.severity == ReviewSeverity.CRITICAL)} critical issues",
+                flush=True,
+            )
+        elif not findings:
+            event = "approve"
+            safe_print("[CodeReview] Approving PR - no issues found", flush=True)
+        else:
+            safe_print(
+                "[CodeReview] Posting comment review with non-critical findings",
+                flush=True,
+            )
+
+        # Post review using gh_client
+        review_id = await gh_client.pr_review(
+            pr_number=pr_number,
+            body=review_body,
+            event=event,
+        )
+
+        self._report_progress(
+            "post_review",
+            100,
+            f"Review posted to PR #{pr_number}",
+            pr_number=pr_number,
+            extra={
+                "review_id": review_id,
+                "event": event,
+                "findings_count": len(findings),
+            },
+        )
+
+        safe_print(
+            f"[CodeReview] Review posted successfully (event: {event})", flush=True
+        )
+
+        return review_id
