@@ -167,6 +167,63 @@ MODEL_PRICING: dict[str, dict[str, float]] = {
         "output": 0.40,
     },
     # ========================================
+    # Ollama Models (Local, Zero Cost)
+    # ========================================
+    # Llama 3 - Meta's open source model
+    "ollama/llama3": {
+        "input": 0.00,
+        "output": 0.00,
+    },
+    "ollama/llama3.1": {
+        "input": 0.00,
+        "output": 0.00,
+    },
+    "ollama/llama3.2": {
+        "input": 0.00,
+        "output": 0.00,
+    },
+    # Mistral - Efficient open source models
+    "ollama/mistral": {
+        "input": 0.00,
+        "output": 0.00,
+    },
+    "ollama/mixtral": {
+        "input": 0.00,
+        "output": 0.00,
+    },
+    # CodeLlama - Specialized for code
+    "ollama/codellama": {
+        "input": 0.00,
+        "output": 0.00,
+    },
+    # Gemma - Google's open source model
+    "ollama/gemma": {
+        "input": 0.00,
+        "output": 0.00,
+    },
+    "ollama/gemma2": {
+        "input": 0.00,
+        "output": 0.00,
+    },
+    # Qwen - Alibaba's open source model
+    "ollama/qwen": {
+        "input": 0.00,
+        "output": 0.00,
+    },
+    "ollama/qwen2": {
+        "input": 0.00,
+        "output": 0.00,
+    },
+    # Phi - Microsoft's efficient model
+    "ollama/phi": {
+        "input": 0.00,
+        "output": 0.00,
+    },
+    "ollama/phi3": {
+        "input": 0.00,
+        "output": 0.00,
+    },
+    # ========================================
     # Fallback
     # ========================================
     # Fallback pricing (use sonnet pricing)
