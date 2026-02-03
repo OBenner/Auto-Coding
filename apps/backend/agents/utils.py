@@ -72,6 +72,53 @@ def find_phase_for_subtask(plan: dict, subtask_id: str) -> dict | None:
     return None
 
 
+def load_workspace_context(spec_dir: Path) -> dict | None:
+    """
+    Load workspace context from spec directory.
+
+    The workspace context is saved by spec_runner.py when a spec is created
+    within a multi-project workspace. It contains information about all projects
+    in the workspace.
+
+    Args:
+        spec_dir: Directory containing the spec
+
+    Returns:
+        Workspace context dict with 'name' and 'projects' keys, or None if not found
+    """
+    context_file = spec_dir / "workspace_context.json"
+    if not context_file.exists():
+        return None
+
+    try:
+        with open(context_file, encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError) as e:
+        logger.warning(f"Failed to load workspace context from {context_file}: {e}")
+        return None
+
+
+def get_workspace_project_dirs(workspace_context: dict | None) -> list[Path]:
+    """
+    Extract enabled project directories from workspace context.
+
+    Args:
+        workspace_context: Workspace context dict from load_workspace_context()
+
+    Returns:
+        List of Path objects for enabled projects, or empty list if no context
+    """
+    if not workspace_context:
+        return []
+
+    projects = workspace_context.get("projects", [])
+    return [
+        Path(proj["path"])
+        for proj in projects
+        if proj.get("enabled", True)
+    ]
+
+
 def sync_spec_to_source(spec_dir: Path, source_spec_dir: Path | None) -> bool:
     """
     Sync ALL spec files from worktree back to source spec directory.
