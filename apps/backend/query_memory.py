@@ -11,6 +11,7 @@ Usage:
     python query_memory.py search <db-path> <database> <query> [--limit N]
     python query_memory.py semantic-search <db-path> <database> <query> [--limit N]
     python query_memory.py get-entities <db-path> <database> [--limit N]
+    python query_memory.py get-graph-data <db-path> <database> [--limit N]
 
 Output:
     JSON to stdout with structure: {"success": bool, "data": ..., "error": ...}
@@ -509,6 +510,140 @@ def cmd_get_entities(args):
             output_error(f"Query failed: {e}")
 
 
+def cmd_get_graph_data(args):
+    """Get graph data (nodes and edges) for visualization."""
+    if not apply_monkeypatch():
+        output_error("Neither kuzu nor LadybugDB is installed")
+        return
+
+    conn, error = get_db_connection(args.db_path, args.database)
+    if not conn:
+        output_error(error or "Failed to connect to database")
+        return
+
+    try:
+        limit = args.limit or 50
+
+        # Query episodic nodes
+        episodic_query = """
+            MATCH (e:Episodic)
+            RETURN e.uuid as uuid, e.name as name, e.created_at as created_at,
+                   e.content as content, e.source_description as description
+            ORDER BY e.created_at DESC
+            LIMIT $limit
+        """
+
+        # Query entity nodes
+        entity_query = """
+            MATCH (n:Entity)
+            RETURN n.uuid as uuid, n.name as name, n.created_at as created_at,
+                   n.summary as summary
+            ORDER BY n.created_at DESC
+            LIMIT $limit
+        """
+
+        # Query edges (relationships)
+        # Note: Different relationship types may have different properties
+        # We'll query for common fields and handle missing ones gracefully
+        edge_query = """
+            MATCH (a)-[r]->(b)
+            RETURN id(r) as id, a.uuid as source, b.uuid as target
+            LIMIT $limit
+        """
+
+        nodes = []
+        edges = []
+
+        # Get episodic nodes
+        try:
+            result = conn.execute(episodic_query, parameters={"limit": limit})
+            while result.has_next():
+                row = result.get_next()
+                uuid_val = serialize_value(row[0]) if len(row) > 0 else None
+                name_val = serialize_value(row[1]) if len(row) > 1 else ""
+                created_at_val = serialize_value(row[2]) if len(row) > 2 else None
+                content_val = serialize_value(row[3]) if len(row) > 3 else ""
+                description_val = serialize_value(row[4]) if len(row) > 4 else ""
+
+                if uuid_val:
+                    nodes.append({
+                        "id": uuid_val,
+                        "label": name_val or "Episodic",
+                        "type": "episodic",
+                        "timestamp": created_at_val or datetime.now().isoformat(),
+                        "data": {
+                            "content": content_val or "",
+                            "description": description_val or "",
+                        }
+                    })
+        except Exception as e:
+            # Episodic table might not exist
+            if "Episodic" not in str(e) or (
+                "not exist" not in str(e).lower() and "cannot" not in str(e).lower()
+            ):
+                sys.stderr.write(f"Warning: Failed to query Episodic nodes: {e}\n")
+
+        # Get entity nodes
+        try:
+            result = conn.execute(entity_query, parameters={"limit": limit})
+            while result.has_next():
+                row = result.get_next()
+                uuid_val = serialize_value(row[0]) if len(row) > 0 else None
+                name_val = serialize_value(row[1]) if len(row) > 1 else ""
+                created_at_val = serialize_value(row[2]) if len(row) > 2 else None
+                summary_val = serialize_value(row[3]) if len(row) > 3 else ""
+
+                if uuid_val:
+                    nodes.append({
+                        "id": uuid_val,
+                        "label": name_val or "Entity",
+                        "type": "entity",
+                        "timestamp": created_at_val or datetime.now().isoformat(),
+                        "data": {
+                            "summary": summary_val or "",
+                        }
+                    })
+        except Exception as e:
+            # Entity table might not exist
+            if "Entity" not in str(e) or (
+                "not exist" not in str(e).lower() and "cannot" not in str(e).lower()
+            ):
+                sys.stderr.write(f"Warning: Failed to query Entity nodes: {e}\n")
+
+        # Get edges
+        try:
+            result = conn.execute(edge_query, parameters={"limit": limit})
+            while result.has_next():
+                row = result.get_next()
+                id_val = serialize_value(row[0]) if len(row) > 0 else None
+                source_val = serialize_value(row[1]) if len(row) > 1 else None
+                target_val = serialize_value(row[2]) if len(row) > 2 else None
+
+                if id_val and source_val and target_val:
+                    edges.append({
+                        "id": str(id_val),
+                        "source": source_val,
+                        "target": target_val,
+                        "type": "relates_to",
+                    })
+        except Exception as e:
+            # No edges or relationship tables might not exist
+            sys.stderr.write(f"Warning: Failed to query edges: {e}\n")
+
+        output_json(
+            True,
+            data={
+                "nodes": nodes,
+                "edges": edges,
+                "node_count": len(nodes),
+                "edge_count": len(edges),
+            }
+        )
+
+    except Exception as e:
+        output_error(f"Failed to get graph data: {e}")
+
+
 def cmd_add_episode(args):
     """
     Add a new episode to the memory database.
@@ -713,6 +848,16 @@ def main():
         "--limit", type=int, default=20, help="Maximum results"
     )
 
+    # get-graph-data command
+    graph_parser = subparsers.add_parser(
+        "get-graph-data", help="Get graph data (nodes and edges) for visualization"
+    )
+    graph_parser.add_argument("db_path", help="Path to database directory")
+    graph_parser.add_argument("database", help="Database name")
+    graph_parser.add_argument(
+        "--limit", type=int, default=50, help="Maximum nodes/edges"
+    )
+
     # add-episode command (for saving memories from Electron app)
     add_parser = subparsers.add_parser(
         "add-episode",
@@ -748,6 +893,7 @@ def main():
         "search": cmd_search,
         "semantic-search": cmd_semantic_search,
         "get-entities": cmd_get_entities,
+        "get-graph-data": cmd_get_graph_data,
         "add-episode": cmd_add_episode,
     }
 
