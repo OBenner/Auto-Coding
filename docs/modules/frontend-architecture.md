@@ -204,34 +204,268 @@ preload/
   └── shared/ (types for API contracts)
 ```
 
-## Cross-Platform Support
+## Platform Abstraction
 
-Auto Claude supports Windows, macOS, and Linux through platform abstractions:
+**CRITICAL:** Auto Claude supports Windows, macOS, and Linux. Platform-specific bugs are the #1 source of breakage. All platform-specific code MUST be centralized in the platform abstraction layer.
 
-**Platform module:** `main/platform/`
+### The Problem
 
-```typescript
-// Platform detection
-import { isWindows, isMacOS, isLinux } from './platform';
+When developers fix something using platform-specific assumptions, it breaks on other platforms. This happens because:
 
-// Path handling
-import { getPathDelimiter, joinPaths } from './platform';
+1. **Scattered platform checks** - `process.platform === 'win32'` checks spread across 50+ files
+2. **Hardcoded paths** - Direct paths like `C:\Program Files` or `/opt/homebrew/bin` throughout code
+3. **CI tested only on Linux** - Platform-specific bugs weren't caught until after merge
 
-// Executable detection
-import { findExecutable, getExecutableExtension } from './platform';
+### The Solution
 
-// Binary directories
-import { getBinaryDirectories } from './platform';
+**Centralized Platform Abstraction Layer:** `main/platform/`
+
+All platform-specific code lives in dedicated modules:
+
+```
+main/platform/
+├── index.ts           # Platform detection (isWindows, isMacOS, isLinux)
+├── paths.ts           # Path utilities (joinPaths, getPathDelimiter)
+├── executables.ts     # Executable discovery (findExecutable)
+└── shell.ts           # Shell command handling (requiresShell)
 ```
 
-**Platform-specific features:**
-- **Windows:** .exe extensions, `;` path delimiter, Windows Terminal integration
-- **macOS:** .app bundles, Keychain integration, Touch Bar support
-- **Linux:** .desktop files, system notifications
+**Key principles:**
+- **Never check `process.platform` directly** - Always use platform abstraction functions
+- **Never hardcode paths** - Use `findExecutable()` and dynamic path discovery
+- **Feature detection over OS detection** - Check for file/path existence when possible
+- **Multi-platform CI** - All three platforms tested on every PR
 
-**CI/CD:** All three platforms tested on every PR via GitHub Actions.
+### Platform Abstraction API
 
-See [Cross-Platform Development](../../CLAUDE.md#cross-platform-development) for guidelines.
+#### Platform Detection
+
+```typescript
+import { isWindows, isMacOS, isLinux } from './platform';
+
+// ❌ WRONG - Direct platform check
+if (process.platform === 'win32') {
+  // Windows logic
+}
+
+// ✅ CORRECT - Use abstraction
+if (isWindows()) {
+  // Windows logic
+}
+```
+
+**Available functions:**
+- `isWindows()` - Returns `true` on Windows
+- `isMacOS()` - Returns `true` on macOS
+- `isLinux()` - Returns `true` on Linux
+
+#### Path Handling
+
+```typescript
+import { joinPaths, getPathDelimiter } from './platform';
+
+// ❌ WRONG - Hardcoded Windows path
+const claudePath = 'C:\\Program Files\\Claude\\claude.exe';
+
+// ❌ WRONG - Hardcoded macOS path
+const brewPath = '/opt/homebrew/bin/python3';
+
+// ❌ WRONG - Manual path joining
+const fullPath = dir + '/subdir/file.txt';
+
+// ✅ CORRECT - Use platform abstraction
+const fullPath = joinPaths(dir, 'subdir', 'file.txt');
+const pathDelimiter = getPathDelimiter();  // ';' on Windows, ':' on Unix
+```
+
+**Available functions:**
+- `joinPaths(...parts: string[])` - Join path segments using OS-specific separator
+- `getPathDelimiter()` - Get `;` (Windows) or `:` (Unix) for PATH environment variable
+
+#### Executable Discovery
+
+```typescript
+import { findExecutable, getExecutableExtension } from './platform';
+
+// ❌ WRONG - Assume executable name
+const pythonPath = 'python';  // Doesn't exist on many systems
+
+// ✅ CORRECT - Use findExecutable with fallbacks
+const pythonPath = await findExecutable('python', [
+  'python3',
+  'python',
+]);
+
+// Get platform-specific extension
+const ext = getExecutableExtension();  // '.exe' on Windows, '' on Unix
+```
+
+**Available functions:**
+- `findExecutable(name: string, fallbacks?: string[])` - Find executable in PATH or common locations
+- `getExecutableExtension()` - Get `.exe` (Windows) or `` (Unix)
+- `getBinaryDirectories()` - Get platform-specific binary directories
+
+#### Shell Command Handling
+
+```typescript
+import { requiresShell } from './platform';
+
+// Check if command needs shell on Windows (.cmd, .bat files)
+const needsShell = requiresShell(command);
+
+if (needsShell) {
+  spawn(command, args, { shell: true });
+} else {
+  spawn(command, args);
+}
+```
+
+**Available functions:**
+- `requiresShell(command: string)` - Returns `true` if command needs shell (e.g., .cmd/.bat on Windows)
+
+### Platform-Specific Features
+
+**Windows:**
+- `.exe` file extensions
+- `;` PATH delimiter
+- Windows Terminal integration
+- PowerShell support
+- Case-insensitive filesystem
+
+**macOS:**
+- `.app` application bundles
+- macOS Keychain integration
+- Touch Bar support
+- Code signing requirements
+- `/opt/homebrew/bin` for Homebrew (Apple Silicon)
+- `/usr/local/bin` for Homebrew (Intel)
+
+**Linux:**
+- `.desktop` files
+- System notifications via D-Bus
+- Multiple package managers (apt, yum, pacman)
+- `/usr/bin`, `/usr/local/bin` standard paths
+
+### Usage Patterns
+
+#### Adding Platform-Specific Logic
+
+When you need platform-specific code, add it to the platform module, NOT scattered in your feature code:
+
+```typescript
+// ✅ CORRECT - Add to platform/paths.ts
+export function getMyToolPaths(): string[] {
+  if (isWindows()) {
+    return [
+      joinPaths('C:', 'Program Files', 'MyTool', 'tool.exe'),
+      joinPaths(process.env.USERPROFILE || '', 'MyTool', 'tool.exe'),
+    ];
+  }
+  if (isMacOS()) {
+    return [
+      '/Applications/MyTool.app/Contents/MacOS/tool',
+      joinPaths(process.env.HOME || '', 'Applications', 'MyTool.app', 'Contents', 'MacOS', 'tool'),
+    ];
+  }
+  return [
+    '/usr/local/bin/mytool',
+    '/usr/bin/mytool',
+  ];
+}
+
+// Then use in your code:
+import { findExecutable, getMyToolPaths } from './platform';
+const toolPath = await findExecutable('mytool', getMyToolPaths());
+```
+
+#### Testing Platform-Specific Code
+
+Mock `process.platform` in tests to verify behavior on all platforms:
+
+```typescript
+// Mock platform detection
+jest.mock('./platform', () => ({
+  isWindows: () => true,  // Simulate Windows
+  isMacOS: () => false,
+  isLinux: () => false,
+}));
+
+// Test your code
+test('works on Windows', () => {
+  // Test Windows-specific behavior
+});
+
+// Reset and test other platforms
+jest.mock('./platform', () => ({
+  isWindows: () => false,
+  isMacOS: () => true,  // Simulate macOS
+  isLinux: () => false,
+}));
+
+test('works on macOS', () => {
+  // Test macOS-specific behavior
+});
+```
+
+### Multi-Platform CI
+
+**GitHub Actions tests all three platforms on every PR:**
+
+```yaml
+# .github/workflows/ci.yml
+strategy:
+  matrix:
+    os: [ubuntu-latest, windows-latest, macos-latest]
+```
+
+A PR cannot merge unless all platforms pass:
+- ✅ Ubuntu (Linux)
+- ✅ Windows Server
+- ✅ macOS (latest)
+
+### Best Practices
+
+1. **Never check `process.platform` directly** - Use `isWindows()`, `isMacOS()`, `isLinux()`
+2. **Never hardcode paths** - Use `findExecutable()` and `getBinaryDirectories()`
+3. **Add platform logic to platform module** - Not scattered in feature code
+4. **Use feature detection when possible** - Check for file existence, not just OS
+5. **Test on all platforms** - Rely on CI to catch platform-specific bugs
+6. **Document platform differences** - Explain why platform-specific code is needed
+
+### Common Pitfalls
+
+❌ **Direct platform checks:**
+```typescript
+if (process.platform === 'win32') { ... }
+```
+
+❌ **Hardcoded paths:**
+```typescript
+const path = 'C:\\Program Files\\Tool\\tool.exe';
+```
+
+❌ **Assuming forward slashes work:**
+```typescript
+const path = dir + '/subdir/file.txt';
+```
+
+❌ **Assuming executables have no extension:**
+```typescript
+const executable = 'python';  // Missing .exe on Windows
+```
+
+✅ **Use platform abstraction:**
+```typescript
+import { isWindows, joinPaths, findExecutable } from './platform';
+
+if (isWindows()) { ... }
+const path = joinPaths(dir, 'subdir', 'file.txt');
+const python = await findExecutable('python', ['python3', 'python']);
+```
+
+### Related Documentation
+
+See [Cross-Platform Development](../../CLAUDE.md#cross-platform-development) for detailed guidelines on writing cross-platform code.
 
 ## Internationalization (i18n)
 
