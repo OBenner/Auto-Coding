@@ -12,7 +12,8 @@ import {
   Code,
   AlertTriangle,
   List,
-  Network
+  Network,
+  Download
 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
@@ -23,6 +24,7 @@ import { cn } from '../../lib/utils';
 import { MemoryCard } from './MemoryCard';
 import { InfoItem } from './InfoItem';
 import { MemoryGraph } from './MemoryGraph';
+import { MemoryExportDialog } from './MemoryExportDialog';
 import { memoryFilterCategories } from './constants';
 import type { GraphitiMemoryStatus, GraphitiMemoryState, MemoryEpisode, GraphNode, GraphEdge } from '../../../shared/types';
 
@@ -88,6 +90,7 @@ export function MemoriesTab({
   const [graphNodes, setGraphNodes] = useState<GraphNode[]>([]);
   const [graphEdges, setGraphEdges] = useState<GraphEdge[]>([]);
   const [graphLoading, setGraphLoading] = useState(false);
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
 
   // Calculate memory counts by category
   const memoryCounts = useMemo(() => {
@@ -277,6 +280,17 @@ export function MemoriesTab({
               <span className="text-xs text-muted-foreground">
                 {filteredMemories.length} of {recentMemories.length} memories
               </span>
+              {/* Export Button */}
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 gap-1.5"
+                onClick={() => setExportDialogOpen(true)}
+                disabled={recentMemories.length === 0}
+              >
+                <Download className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Export</span>
+              </Button>
               {/* View Mode Toggle */}
               {memoryStatus?.available && (
                 <div className="flex items-center gap-1 bg-muted/30 rounded-lg p-1">
@@ -401,6 +415,14 @@ export function MemoriesTab({
           )}
         </div>
       </div>
+
+      {/* Export Dialog */}
+      <MemoryExportDialog
+        projectId={projectId}
+        memories={recentMemories}
+        open={exportDialogOpen}
+        onOpenChange={setExportDialogOpen}
+      />
     </ScrollArea>
   );
 }
