@@ -12,6 +12,7 @@ Usage:
     python query_memory.py semantic-search <db-path> <database> <query> [--limit N]
     python query_memory.py get-entities <db-path> <database> [--limit N]
     python query_memory.py get-graph-data <db-path> <database> [--limit N]
+    python query_memory.py delete-memory <db-path> <database> --id <uuid>
 
 Output:
     JSON to stdout with structure: {"success": bool, "data": ..., "error": ...}
@@ -756,6 +757,73 @@ def cmd_add_episode(args):
         output_error(f"Failed to add episode: {e}")
 
 
+def cmd_delete_memory(args):
+    """
+    Delete an episode from the memory database by UUID.
+
+    Args:
+        args.db_path: Path to database directory
+        args.database: Database name
+        args.id: Episode UUID to delete
+    """
+    if not apply_monkeypatch():
+        output_error("Neither kuzu nor LadybugDB is installed")
+        return
+
+    conn, error = get_db_connection(args.db_path, args.database)
+    if not conn:
+        output_error(error or "Failed to connect to database")
+        return
+
+    try:
+        episode_id = args.id
+
+        # First, check if the episode exists
+        check_query = """
+            MATCH (e:Episodic {uuid: $id})
+            RETURN e.uuid as uuid, e.name as name
+        """
+
+        result = conn.execute(check_query, parameters={"id": episode_id})
+
+        # Check if episode was found
+        found = False
+        episode_name = None
+        if result.has_next():
+            row = result.get_next()
+            found = True
+            episode_name = serialize_value(row[1]) if len(row) > 1 else None
+
+        if not found:
+            output_error(f"Episode not found with ID: {episode_id}")
+            return
+
+        # Delete the episode
+        delete_query = """
+            MATCH (e:Episodic {uuid: $id})
+            DELETE e
+        """
+
+        conn.execute(delete_query, parameters={"id": episode_id})
+
+        output_json(
+            True,
+            data={
+                "id": episode_id,
+                "name": episode_name or "",
+                "message": "Episode deleted successfully",
+            },
+        )
+
+    except Exception as e:
+        if "Episodic" in str(e) and (
+            "not exist" in str(e).lower() or "cannot" in str(e).lower()
+        ):
+            output_error("Episodic table does not exist")
+        else:
+            output_error(f"Delete failed: {e}")
+
+
 def infer_episode_type(name: str, content: str = "") -> str:
     """Infer the episode type from its name and content."""
     name_lower = (name or "").lower()
@@ -879,6 +947,15 @@ def main():
         "--group-id", dest="group_id", help="Optional group ID for namespacing"
     )
 
+    # delete-memory command
+    delete_parser = subparsers.add_parser(
+        "delete-memory",
+        help="Delete an episode from the memory database by UUID",
+    )
+    delete_parser.add_argument("db_path", help="Path to database directory")
+    delete_parser.add_argument("database", help="Database name")
+    delete_parser.add_argument("--id", required=True, help="Episode UUID to delete")
+
     args = parser.parse_args()
 
     if not args.command:
@@ -895,6 +972,7 @@ def main():
         "get-entities": cmd_get_entities,
         "get-graph-data": cmd_get_graph_data,
         "add-episode": cmd_add_episode,
+        "delete-memory": cmd_delete_memory,
     }
 
     handler = commands.get(args.command)
