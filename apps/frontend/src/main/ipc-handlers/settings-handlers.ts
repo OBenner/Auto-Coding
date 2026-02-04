@@ -475,6 +475,55 @@ export function registerSettingsHandlers(
     }
   );
 
+  /**
+   * Handler: loadProviderSettings
+   * Loads multi-model provider configuration from project .env file
+   */
+  ipcMain.handle(
+    IPC_CHANNELS.SETTINGS_LOAD_PROVIDER,
+    async (_, projectId: string): Promise<IPCResult<ProviderSettings>> => {
+      try {
+        const project = projectStore.getProject(projectId);
+        if (!project) {
+          return { success: false, error: 'Project not found' };
+        }
+
+        if (!project.autoBuildPath) {
+          return { success: false, error: 'Project not initialized' };
+        }
+
+        const envPath = path.join(project.path, project.autoBuildPath, '.env');
+
+        // Read existing .env content
+        let existingContent = '';
+        if (existsSync(envPath)) {
+          existingContent = readFileSync(envPath, 'utf-8');
+        }
+
+        // Parse environment variables
+        const envVars = parseEnvFile(existingContent);
+
+        // Map env vars to ProviderSettings
+        const providerSettings: ProviderSettings = {
+          provider: (envVars['AI_ENGINE_PROVIDER'] as 'claude' | 'litellm' | 'openrouter') || 'claude',
+          openaiApiKey: envVars['OPENAI_API_KEY'] || '',
+          googleApiKey: envVars['GOOGLE_API_KEY'] || '',
+          openrouterApiKey: envVars['OPENROUTER_API_KEY'] || '',
+          plannerModel: envVars['AGENT_MODEL_PLANNER'] || '',
+          coderModel: envVars['AGENT_MODEL_CODER'] || '',
+          qaModel: envVars['AGENT_MODEL_QA_REVIEWER'] || ''
+        };
+
+        return { success: true, data: providerSettings };
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Failed to load provider settings'
+        };
+      }
+    }
+  );
+
   // ============================================
   // Dialog Operations
   // ============================================
