@@ -99,6 +99,98 @@ Identify security issues across these categories:
    - Identify logging of PII
    - Check encryption boundaries
 
+### Research Security Best Practices (Using WebSearch)
+
+**WebSearch should be used AFTER local security analysis to validate remediation approaches and discover proven security patterns.**
+
+After identifying security vulnerabilities locally, use web search to research security best practices and proven remediation techniques. This helps validate your approach and discover authoritative guidance.
+
+#### Step 1: Search for Security Best Practices
+
+When you identify a security vulnerability, search for established secure coding patterns:
+
+```
+Tool: WebSearch
+Query: "[vulnerability type] prevention best practices [tech stack] 2026"
+```
+
+**Example searches:**
+- `"SQL injection prevention best practices Node.js 2026"` - For injection prevention
+- `"XSS protection React best practices 2026"` - For XSS prevention
+- `"authentication security best practices 2026"` - For auth hardening
+- `"CSRF protection implementation 2026"` - For CSRF prevention
+- `"API security best practices REST 2026"` - For API security
+- `"secret management best practices Node.js 2026"` - For credential handling
+- `"input validation best practices 2026"` - For input sanitization
+- `"session management security best practices 2026"` - For session security
+
+**What to verify:**
+1. **OWASP guidelines** - What does OWASP recommend?
+2. **Framework support** - Does the framework provide built-in protection?
+3. **Industry standards** - What are the compliance requirements?
+4. **Defense in depth** - What multiple layers of protection exist?
+5. **Current threats** - What are the latest attack vectors?
+
+#### Step 2: Search for Secure Implementation Examples
+
+Find real-world examples to understand secure implementation:
+
+```
+Tool: WebSearch
+Query: "[security pattern] secure implementation example 2026"
+```
+
+**Example searches:**
+- `"parameterized queries implementation example Node.js 2026"` - See safe queries
+- `"JWT authentication secure implementation 2026"` - Learn secure auth
+- `"input sanitization React example 2026"` - See sanitization patterns
+- `"HTTPS configuration best practices Node.js 2026"` - Learn TLS setup
+- `"CORS configuration secure example 2026"` - See safe CORS
+- `"password hashing bcrypt example 2026"` - Learn password security
+- `"rate limiting implementation Express 2026"` - See rate limiting
+- `"security headers configuration example 2026"` - Learn header setup
+
+**What to extract:**
+1. **Secure code patterns** - How is the vulnerability mitigated?
+2. **Library usage** - What security libraries are recommended?
+3. **Configuration** - What secure settings are needed?
+4. **Testing approach** - How to test security fixes?
+5. **Migration path** - How to transition from insecure to secure?
+
+#### Step 3: Search for Common Security Mistakes
+
+Research problems others encountered with similar vulnerabilities:
+
+```
+Tool: WebSearch
+Query: "[vulnerability type] common mistakes exploitation 2026"
+```
+
+**Example searches:**
+- `"SQL injection bypass techniques 2026"` - Understand attack vectors
+- `"authentication bypass common mistakes 2026"` - Learn auth failures
+- `"XSS filter bypass techniques 2026"` - See bypass methods
+- `"JWT security vulnerabilities common 2026"` - Understand JWT risks
+- `"CORS misconfiguration security issues 2026"` - Learn CORS pitfalls
+- `"encryption implementation mistakes 2026"` - Avoid crypto errors
+- `"session fixation attack prevention 2026"` - Handle session security
+- `"directory traversal prevention pitfalls 2026"` - Avoid path issues
+
+**What to document:**
+1. **Attack vectors** - How is this vulnerability exploited?
+2. **Incomplete fixes** - What "solutions" don't actually work?
+3. **Bypass techniques** - How do attackers bypass weak protections?
+4. **Real-world exploits** - What are documented attack cases?
+5. **Security testing** - How to verify the fix is complete?
+
+**Integration into analysis:**
+- Use search results to validate your remediation suggestions
+- Reference OWASP, CWE, and CVE standards in your findings
+- Document attack vectors in your `currentRisk` field
+- Include authoritative references in your `references` field
+- Suggest security testing approaches based on research
+- Validate that remediation follows industry standards
+
 ## Output Format
 
 Write your findings to `{output_dir}/security_hardening_ideas.json`:
