@@ -2,14 +2,15 @@ import { ipcMain, app } from 'electron';
 import { promises as fsPromises } from 'fs';
 import path from 'path';
 import { execFileSync } from 'child_process';
-import { IPC_CHANNELS } from '../../shared/constants';
+import { IPC_CHANNELS, getSpecsDir } from '../../shared/constants';
 import type {
   Project,
   ProjectSettings,
   IPCResult,
   InitializationResult,
   AutoBuildVersionInfo,
-  GitStatus
+  GitStatus,
+  CostReport
 } from '../../shared/types';
 import { projectStore } from '../project-store';
 import {
@@ -516,6 +517,46 @@ export function registerProjectHandlers(
         return {
           success: false,
           error: error instanceof Error ? error.message : 'Unknown error'
+        };
+      }
+    }
+  );
+
+  // ============================================
+  // Cost Reporting Operations
+  // ============================================
+
+  // Load cost report for a spec (loadCostReport)
+  ipcMain.handle(
+    IPC_CHANNELS.PROJECT_LOAD_COST_REPORT,
+    async (_, projectId: string, specId: string): Promise<IPCResult<CostReport>> => {
+      try {
+        const project = projectStore.getProject(projectId);
+        if (!project) {
+          return { success: false, error: 'Project not found' };
+        }
+
+        // Build path to cost_report.json
+        const specsDir = getSpecsDir(project.autoBuildPath);
+        const costReportPath = path.join(specsDir, specId, 'cost_report.json');
+
+        // Check if cost report exists
+        if (!(await fileExists(costReportPath))) {
+          return {
+            success: false,
+            error: 'Cost report not found for this spec'
+          };
+        }
+
+        // Read and parse cost report
+        const costReportContent = await fsPromises.readFile(costReportPath, 'utf-8');
+        const costReport: CostReport = JSON.parse(costReportContent);
+
+        return { success: true, data: costReport };
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Failed to load cost report'
         };
       }
     }
