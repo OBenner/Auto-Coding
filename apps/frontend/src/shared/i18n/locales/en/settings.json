@@ -691,6 +691,24 @@
         "description": "Cloud multi-model routing with 400+ models"
       }
     },
+    "apiKeys": {
+      "title": "API Keys",
+      "openai": {
+        "label": "OpenAI API Key",
+        "placeholder": "sk-...",
+        "description": "Required for GPT-4 and other OpenAI models"
+      },
+      "google": {
+        "label": "Google AI API Key",
+        "placeholder": "AI...",
+        "description": "Required for Gemini models"
+      },
+      "openrouter": {
+        "label": "OpenRouter API Key",
+        "placeholder": "sk-or-...",
+        "description": "Required for OpenRouter multi-model routing"
+      }
+    },
     "configuration": {
       "title": "Provider Configuration",
       "apiKey": "API Key",

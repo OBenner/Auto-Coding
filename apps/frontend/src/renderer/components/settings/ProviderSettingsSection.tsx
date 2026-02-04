@@ -1,6 +1,8 @@
 import { useTranslation } from 'react-i18next';
 import { useState } from 'react';
 import { Label } from '../ui/label';
+import { Input } from '../ui/input';
+import { Button } from '../ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { SettingsSection } from './SettingsSection';
 
@@ -14,8 +16,21 @@ interface ProviderSettingsSectionProps {
  * Provider settings component for configuring AI providers
  */
 export function ProviderSettingsSection(props: ProviderSettingsSectionProps) {
-  const { t } = useTranslation('settings');
+  const { t } = useTranslation(['settings', 'common']);
   const [selectedProvider, setSelectedProvider] = useState<ProviderType>('claude');
+  const [openaiApiKey, setOpenaiApiKey] = useState('');
+  const [googleApiKey, setGoogleApiKey] = useState('');
+  const [openrouterApiKey, setOpenrouterApiKey] = useState('');
+
+  const handleSave = () => {
+    // TODO: Implement save functionality via IPC
+    console.log('Saving provider settings:', {
+      provider: selectedProvider,
+      openaiApiKey,
+      googleApiKey,
+      openrouterApiKey,
+    });
+  };
 
   return (
     <SettingsSection
@@ -68,6 +83,83 @@ export function ProviderSettingsSection(props: ProviderSettingsSectionProps) {
             {t('aiProvider.hints.envOverride')}
           </p>
         </div>
+
+        {/* API Key Configuration - conditionally shown based on provider */}
+        {selectedProvider !== 'claude' && (
+          <div className="space-y-4 pt-4 border-t border-border">
+            <div>
+              <h3 className="text-sm font-medium text-foreground mb-3">
+                {t('aiProvider.apiKeys.title')}
+              </h3>
+            </div>
+
+            {/* LiteLLM provider shows OpenAI and Google keys */}
+            {selectedProvider === 'litellm' && (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="openaiApiKey" className="text-sm font-medium text-foreground">
+                    {t('aiProvider.apiKeys.openai.label')}
+                  </Label>
+                  <Input
+                    id="openaiApiKey"
+                    type="password"
+                    placeholder={t('aiProvider.apiKeys.openai.placeholder')}
+                    value={openaiApiKey}
+                    onChange={(e) => setOpenaiApiKey(e.target.value)}
+                    className="max-w-md"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    {t('aiProvider.apiKeys.openai.description')}
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="googleApiKey" className="text-sm font-medium text-foreground">
+                    {t('aiProvider.apiKeys.google.label')}
+                  </Label>
+                  <Input
+                    id="googleApiKey"
+                    type="password"
+                    placeholder={t('aiProvider.apiKeys.google.placeholder')}
+                    value={googleApiKey}
+                    onChange={(e) => setGoogleApiKey(e.target.value)}
+                    className="max-w-md"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    {t('aiProvider.apiKeys.google.description')}
+                  </p>
+                </div>
+              </>
+            )}
+
+            {/* OpenRouter provider shows OpenRouter key */}
+            {selectedProvider === 'openrouter' && (
+              <div className="space-y-2">
+                <Label htmlFor="openrouterApiKey" className="text-sm font-medium text-foreground">
+                  {t('aiProvider.apiKeys.openrouter.label')}
+                </Label>
+                <Input
+                  id="openrouterApiKey"
+                  type="password"
+                  placeholder={t('aiProvider.apiKeys.openrouter.placeholder')}
+                  value={openrouterApiKey}
+                  onChange={(e) => setOpenrouterApiKey(e.target.value)}
+                  className="max-w-md"
+                />
+                <p className="text-xs text-muted-foreground">
+                  {t('aiProvider.apiKeys.openrouter.description')}
+                </p>
+              </div>
+            )}
+
+            {/* Save button */}
+            <div className="pt-2">
+              <Button onClick={handleSave}>
+                {t('common:actions.save')}
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
     </SettingsSection>
   );
