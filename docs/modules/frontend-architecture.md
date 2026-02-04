@@ -469,21 +469,82 @@ See [Cross-Platform Development](../../CLAUDE.md#cross-platform-development) for
 
 ## Internationalization (i18n)
 
-All user-facing text uses `react-i18next` for internationalization.
+Auto Claude frontend uses `react-i18next` for comprehensive internationalization support. All user-facing text must use translation keys.
 
+### Architecture
+
+**Library:** `react-i18next` with `i18next`
+**Configuration:** `shared/i18n/index.ts`
 **Translation files:** `shared/i18n/locales/{lang}/*.json`
+**Default language:** English (`en`)
+**Fallback language:** English (`en`)
+**Suspense:** Disabled for Electron compatibility
 
-**Namespaces:**
-- `common.json` - Shared labels, buttons, common terms
-- `navigation.json` - Sidebar navigation items
-- `settings.json` - Settings page content
-- `dialogs.json` - Dialog boxes and modals
-- `tasks.json` - Task/spec related content
-- `errors.json` - Error messages (with substitution)
-- `onboarding.json` - Onboarding wizard
-- `welcome.json` - Welcome screen
+### Directory Structure
 
-**Usage:**
+```
+shared/i18n/
+├── index.ts                    # i18n initialization and configuration
+└── locales/
+    ├── en/                     # English translations
+    │   ├── common.json         # Shared UI elements (buttons, labels, accessibility)
+    │   ├── navigation.json     # Sidebar navigation and sections
+    │   ├── settings.json       # Settings page content
+    │   ├── tasks.json          # Task/spec management content
+    │   ├── welcome.json        # Welcome screen content
+    │   ├── onboarding.json     # Onboarding wizard content
+    │   ├── dialogs.json        # Dialog boxes and modals
+    │   ├── gitlab.json         # GitLab integration UI
+    │   ├── taskReview.json     # Task review and QA content
+    │   ├── terminal.json       # Terminal-related content
+    │   └── errors.json         # Error messages with interpolation
+    └── fr/                     # French translations
+        ├── common.json
+        ├── navigation.json
+        ├── settings.json
+        ├── tasks.json
+        ├── welcome.json
+        ├── onboarding.json
+        ├── dialogs.json
+        ├── gitlab.json
+        ├── taskReview.json
+        ├── terminal.json
+        └── errors.json
+```
+
+### Translation Namespaces
+
+| Namespace | Purpose | Example Keys |
+|-----------|---------|--------------|
+| **common** | Shared UI elements, buttons, labels, accessibility strings | `projectTab.settings`, `accessibility.deleteFeatureAriaLabel` |
+| **navigation** | Sidebar navigation items, sections, actions, tooltips | `items.kanban`, `sections.project`, `actions.newTask` |
+| **settings** | Settings page content, preferences, configuration | Settings-specific translations |
+| **tasks** | Task/spec management, kanban board, statuses | Task-related content |
+| **welcome** | Welcome screen content and onboarding flow | Welcome page strings |
+| **onboarding** | Onboarding wizard steps and instructions | Wizard content |
+| **dialogs** | Dialog boxes, modals, confirmation prompts | Dialog titles, buttons, messages |
+| **gitlab** | GitLab integration UI (issues, merge requests) | GitLab-specific content |
+| **taskReview** | Task review, QA workflow, acceptance criteria | Review process strings |
+| **terminal** | Terminal-related UI, commands, status messages | Terminal content |
+| **errors** | Error messages with interpolation support | `task.parseImplementationPlan`, `task.jsonError.titleSuffix` |
+
+### Translation Key Structure
+
+Translation keys follow a hierarchical structure using dot notation:
+
+```
+namespace:section.subsection.key
+```
+
+**Examples:**
+- `navigation:items.githubPRs` - GitHub PRs menu item
+- `common:projectTab.settings` - Project settings label
+- `common:accessibility.deleteFeatureAriaLabel` - Accessibility label for delete button
+- `errors:task.parseImplementationPlan` - Error message with interpolation
+
+### Usage in Components
+
+**Basic usage:**
 
 ```tsx
 import { useTranslation } from 'react-i18next';
@@ -492,13 +553,163 @@ const MyComponent = () => {
   const { t } = useTranslation(['navigation', 'common']);
 
   return (
-    <span>{t('navigation:items.githubPRs')}</span>  // ✅ CORRECT
-    // NOT: <span>GitHub PRs</span>                 // ❌ WRONG
+    <div>
+      <span>{t('navigation:items.githubPRs')}</span>
+      <button>{t('common:projectTab.settings')}</button>
+    </div>
   );
 };
 ```
 
-**CRITICAL:** Never hardcode user-facing strings. Always use translation keys.
+**With interpolation (dynamic values):**
+
+```tsx
+import { useTranslation } from 'react-i18next';
+
+const ErrorDisplay = ({ error }) => {
+  const { t } = useTranslation(['errors']);
+
+  // errors.json: { "task": { "parseImplementationPlan": "Failed to parse implementation_plan.json for {{specId}}: {{error}}" } }
+  return (
+    <span>
+      {t('errors:task.parseImplementationPlan', {
+        specId: '001-my-feature',
+        error: error.message
+      })}
+    </span>
+  );
+};
+```
+
+**With accessibility labels:**
+
+```tsx
+import { useTranslation } from 'react-i18next';
+
+const DeleteButton = () => {
+  const { t } = useTranslation(['common']);
+
+  return (
+    <button aria-label={t('common:accessibility.deleteFeatureAriaLabel')}>
+      <TrashIcon />
+    </button>
+  );
+};
+```
+
+### Adding New Translations
+
+**1. Add translation keys to ALL language files:**
+
+```bash
+# Add to en/common.json
+{
+  "myFeature": {
+    "title": "My Feature",
+    "description": "This is my feature"
+  }
+}
+
+# Add to fr/common.json
+{
+  "myFeature": {
+    "title": "Ma Fonctionnalité",
+    "description": "Ceci est ma fonctionnalité"
+  }
+}
+```
+
+**2. Import and register in `shared/i18n/index.ts` (if adding a new namespace):**
+
+```typescript
+import enMyFeature from './locales/en/myFeature.json';
+import frMyFeature from './locales/fr/myFeature.json';
+
+export const resources = {
+  en: {
+    // ... existing namespaces
+    myFeature: enMyFeature
+  },
+  fr: {
+    // ... existing namespaces
+    myFeature: frMyFeature
+  }
+};
+```
+
+**3. Use in components:**
+
+```tsx
+const { t } = useTranslation(['myFeature']);
+<h1>{t('myFeature:title')}</h1>
+```
+
+### Supported Languages
+
+- **English (en)** - Default and fallback language
+- **French (fr)** - Fully supported
+
+The language preference is stored in the user's settings and persists across sessions.
+
+### Best Practices
+
+**DO:**
+- ✅ Always use translation keys for user-facing text
+- ✅ Use interpolation for dynamic values: `{{variableName}}`
+- ✅ Add translations to ALL language files when adding new keys
+- ✅ Use descriptive, hierarchical key names
+- ✅ Group related translations under common sections
+- ✅ Use the `common` namespace for shared UI elements
+- ✅ Provide accessibility labels using translation keys
+
+**DON'T:**
+- ❌ Never hardcode user-facing strings in JSX
+- ❌ Don't use hardcoded strings even in console.log for UI-visible errors
+- ❌ Don't skip translations for "temporary" features
+- ❌ Don't use emojis in translation keys (emojis are fine in values)
+- ❌ Don't create duplicate keys across namespaces
+
+**Examples:**
+
+```tsx
+// ❌ WRONG - Hardcoded string
+<button>Delete Feature</button>
+
+// ✅ CORRECT - Translation key
+const { t } = useTranslation(['common']);
+<button>{t('common:accessibility.deleteAriaLabel')}</button>
+
+// ❌ WRONG - Missing interpolation
+<span>Failed to parse implementation_plan.json for 001-my-feature</span>
+
+// ✅ CORRECT - Using interpolation
+const { t } = useTranslation(['errors']);
+<span>{t('errors:task.parseImplementationPlan', { specId, error })}</span>
+```
+
+### Error Message Patterns
+
+The `errors.json` namespace uses structured error information with substitution:
+
+```json
+{
+  "task": {
+    "parseImplementationPlan": "Failed to parse implementation_plan.json for {{specId}}: {{error}}",
+    "jsonError": {
+      "titleSuffix": "(JSON Error)",
+      "description": "⚠️ JSON Parse Error: {{error}}\n\nThe implementation_plan.json file is malformed. Run the backend auto-fix or manually repair the file."
+    }
+  }
+}
+```
+
+This allows for consistent error messaging across the application with dynamic context.
+
+### Language Switching
+
+Users can change the language preference in the application settings. The selected language persists across sessions and is applied globally to all UI elements.
+
+**Rule:** All new UI components MUST use translation keys. Hardcoded strings are not permitted.
 
 ## State Management
 
