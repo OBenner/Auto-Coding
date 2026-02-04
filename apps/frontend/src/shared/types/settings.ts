@@ -308,3 +308,19 @@ export interface SourceEnvCheckResult {
   sourcePath?: string;
   error?: string;
 }
+
+// Provider Settings for Multi-Model Support
+export interface ProviderSettings {
+  // Selected provider (claude, litellm, openrouter)
+  provider?: 'claude' | 'litellm' | 'openrouter';
+
+  // API Keys
+  openaiApiKey?: string;
+  googleApiKey?: string;
+  openrouterApiKey?: string;
+
+  // Per-agent model configuration
+  plannerModel?: string;
+  coderModel?: string;
+  qaModel?: string;
+}

@@ -141,6 +141,9 @@ export const IPC_CHANNELS = {
   SETTINGS_GET: 'settings:get',
   SETTINGS_SAVE: 'settings:save',
   SETTINGS_GET_CLI_TOOLS_INFO: 'settings:getCliToolsInfo',
+  SETTINGS_SAVE_PROVIDER: 'settings:saveProviderSettings',
+  SETTINGS_LOAD_PROVIDER: 'settings:loadProviderSettings',
+  SETTINGS_GET_AVAILABLE_MODELS: 'settings:getAvailableModels',
 
   // API Profile management (custom Anthropic-compatible endpoints)
   PROFILES_GET: 'profiles:get',

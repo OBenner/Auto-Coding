@@ -13,7 +13,8 @@ import type {
   AppSettings,
   IPCResult,
   SourceEnvConfig,
-  SourceEnvCheckResult
+  SourceEnvCheckResult,
+  ProviderSettings
 } from '../../shared/types';
 import { AgentManager } from '../agent';
 import type { BrowserWindow } from 'electron';
@@ -21,6 +22,7 @@ import { setUpdateChannel, setUpdateChannelWithDowngradeCheck } from '../app-upd
 import { getSettingsPath, readSettingsFile } from '../settings-utils';
 import { configureTools, getToolPath, getToolInfo, isPathFromWrongPlatform, preWarmToolCache } from '../cli-tool-manager';
 import { parseEnvFile } from './utils';
+import { projectStore } from '../project-store';
 
 const settingsPath = getSettingsPath();
 
@@ -89,6 +91,100 @@ const detectAutoBuildSourcePath = (): string | null => {
   console.warn('[detectAutoBuildSourcePath] Set DEBUG=1 environment variable for detailed path checking.');
   return null;
 };
+
+/**
+ * Generate .env file content with updated provider settings
+ * Preserves existing file structure and only updates provider-related variables
+ */
+function generateProviderEnvContent(
+  vars: Record<string, string>,
+  existingContent: string
+): string {
+  if (!existingContent) {
+    // No existing content, create minimal provider section
+    return `# Multi-Provider Configuration
+AI_ENGINE_PROVIDER=${vars['AI_ENGINE_PROVIDER'] || 'claude'}
+
+# Provider API Keys
+${vars['OPENAI_API_KEY'] ? `OPENAI_API_KEY=${vars['OPENAI_API_KEY']}` : '# OPENAI_API_KEY='}
+${vars['GOOGLE_API_KEY'] ? `GOOGLE_API_KEY=${vars['GOOGLE_API_KEY']}` : '# GOOGLE_API_KEY='}
+${vars['OPENROUTER_API_KEY'] ? `OPENROUTER_API_KEY=${vars['OPENROUTER_API_KEY']}` : '# OPENROUTER_API_KEY='}
+
+# Per-Agent Model Configuration
+${vars['AGENT_MODEL_PLANNER'] ? `AGENT_MODEL_PLANNER=${vars['AGENT_MODEL_PLANNER']}` : '# AGENT_MODEL_PLANNER='}
+${vars['AGENT_MODEL_CODER'] ? `AGENT_MODEL_CODER=${vars['AGENT_MODEL_CODER']}` : '# AGENT_MODEL_CODER='}
+${vars['AGENT_MODEL_QA_REVIEWER'] ? `AGENT_MODEL_QA_REVIEWER=${vars['AGENT_MODEL_QA_REVIEWER']}` : '# AGENT_MODEL_QA_REVIEWER='}
+`;
+  }
+
+  // Parse existing content line by line and update provider-related variables
+  const lines = existingContent.split('\n');
+  const updatedLines = lines.map(line => {
+    const trimmed = line.trim();
+
+    // Skip empty lines and comments (but preserve them)
+    if (!trimmed || trimmed.startsWith('#')) {
+      // Check if it's a commented-out variable we want to uncomment and set
+      const commentMatch = trimmed.match(/^#\s*([A-Z_]+)=/);
+      if (commentMatch) {
+        const varName = commentMatch[1];
+        if (vars[varName] !== undefined) {
+          // Uncomment and set the value
+          return `${varName}=${vars[varName]}`;
+        }
+      }
+      return line;
+    }
+
+    // Check if this line is a variable assignment
+    const match = trimmed.match(/^([A-Z_]+)=/);
+    if (match) {
+      const varName = match[1];
+
+      // Update if we have a new value for this variable
+      if (vars[varName] !== undefined) {
+        return `${varName}=${vars[varName]}`;
+      }
+    }
+
+    return line;
+  });
+
+  // Check if we need to append any new variables that weren't in the file
+  const existingVarNames = new Set(
+    lines
+      .map(line => {
+        const match = line.trim().match(/^#?\s*([A-Z_]+)=/);
+        return match ? match[1] : null;
+      })
+      .filter(Boolean)
+  );
+
+  const newVars: string[] = [];
+  const providerVars = [
+    'AI_ENGINE_PROVIDER',
+    'OPENAI_API_KEY',
+    'GOOGLE_API_KEY',
+    'OPENROUTER_API_KEY',
+    'AGENT_MODEL_PLANNER',
+    'AGENT_MODEL_CODER',
+    'AGENT_MODEL_QA_REVIEWER'
+  ];
+
+  providerVars.forEach(varName => {
+    if (!existingVarNames.has(varName) && vars[varName]) {
+      newVars.push(`${varName}=${vars[varName]}`);
+    }
+  });
+
+  if (newVars.length > 0) {
+    updatedLines.push('');
+    updatedLines.push('# Provider Settings (added by UI)');
+    updatedLines.push(...newVars);
+  }
+
+  return updatedLines.join('\n');
+}
 
 /**
  * Register all settings-related IPC handlers
@@ -275,6 +371,105 @@ export function registerSettingsHandlers(
         return {
           success: false,
           error: error instanceof Error ? error.message : 'Failed to get CLI tools info',
+        };
+      }
+    }
+  );
+
+  // ============================================
+  // Provider Settings Operations
+  // ============================================
+
+  /**
+   * Handler: saveProviderSettings
+   * Saves multi-model provider configuration to project .env file
+   */
+  ipcMain.handle(
+    IPC_CHANNELS.SETTINGS_SAVE_PROVIDER,
+    async (_, projectId: string, settings: ProviderSettings): Promise<IPCResult> => {
+      try {
+        const project = projectStore.getProject(projectId);
+        if (!project) {
+          return { success: false, error: 'Project not found' };
+        }
+
+        if (!project.autoBuildPath) {
+          return { success: false, error: 'Project not initialized' };
+        }
+
+        const envPath = path.join(project.path, project.autoBuildPath, '.env');
+
+        // Read existing .env content
+        let existingContent = '';
+        if (existsSync(envPath)) {
+          existingContent = readFileSync(envPath, 'utf-8');
+        }
+
+        // Parse existing environment variables
+        const existingVars = parseEnvFile(existingContent);
+
+        // Update provider settings
+        if (settings.provider !== undefined) {
+          existingVars['AI_ENGINE_PROVIDER'] = settings.provider;
+        }
+
+        // Update API keys
+        if (settings.openaiApiKey !== undefined) {
+          if (settings.openaiApiKey) {
+            existingVars['OPENAI_API_KEY'] = settings.openaiApiKey;
+          } else {
+            delete existingVars['OPENAI_API_KEY'];
+          }
+        }
+        if (settings.googleApiKey !== undefined) {
+          if (settings.googleApiKey) {
+            existingVars['GOOGLE_API_KEY'] = settings.googleApiKey;
+          } else {
+            delete existingVars['GOOGLE_API_KEY'];
+          }
+        }
+        if (settings.openrouterApiKey !== undefined) {
+          if (settings.openrouterApiKey) {
+            existingVars['OPENROUTER_API_KEY'] = settings.openrouterApiKey;
+          } else {
+            delete existingVars['OPENROUTER_API_KEY'];
+          }
+        }
+
+        // Update per-agent model configuration
+        if (settings.plannerModel !== undefined) {
+          if (settings.plannerModel) {
+            existingVars['AGENT_MODEL_PLANNER'] = settings.plannerModel;
+          } else {
+            delete existingVars['AGENT_MODEL_PLANNER'];
+          }
+        }
+        if (settings.coderModel !== undefined) {
+          if (settings.coderModel) {
+            existingVars['AGENT_MODEL_CODER'] = settings.coderModel;
+          } else {
+            delete existingVars['AGENT_MODEL_CODER'];
+          }
+        }
+        if (settings.qaModel !== undefined) {
+          if (settings.qaModel) {
+            existingVars['AGENT_MODEL_QA_REVIEWER'] = settings.qaModel;
+          } else {
+            delete existingVars['AGENT_MODEL_QA_REVIEWER'];
+          }
+        }
+
+        // Generate new .env content preserving structure
+        const newContent = generateProviderEnvContent(existingVars, existingContent);
+
+        // Write to file
+        writeFileSync(envPath, newContent);
+
+        return { success: true };
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Failed to save provider settings'
         };
       }
     }
