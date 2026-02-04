@@ -1003,4 +1003,144 @@ export function registerSettingsHandlers(
       }
     }
   );
+
+  // Handler: getAvailableModels - Fetch available models for a provider
+  ipcMain.handle(
+    IPC_CHANNELS.SETTINGS_GET_AVAILABLE_MODELS,
+    async (_, provider: string): Promise<IPCResult<{ models: string[] }>> => {
+      try {
+        // Return available models based on provider type
+        let models: string[] = [];
+
+        switch (provider) {
+          case 'claude':
+            // Claude models (via Anthropic API)
+            models = [
+              'claude-sonnet-4-5-20250929',
+              'claude-opus-4-20250514',
+              'claude-haiku-4-5-20251001',
+              'claude-3-5-sonnet-20241022',
+              'claude-3-5-haiku-20241022',
+              'claude-3-opus-20240229'
+            ];
+            break;
+
+          case 'litellm':
+            // LiteLLM supports multiple providers
+            models = [
+              // OpenAI
+              'gpt-4',
+              'gpt-4-turbo',
+              'gpt-4o',
+              'gpt-4o-mini',
+              'gpt-3.5-turbo',
+              // Anthropic
+              'anthropic/claude-3-opus-20240229',
+              'anthropic/claude-3-sonnet-20240229',
+              'anthropic/claude-3-haiku-20240307',
+              // Google
+              'gemini/gemini-pro',
+              'gemini/gemini-1.5-pro',
+              'gemini/gemini-1.5-flash',
+              'gemini/gemini-2.0-flash',
+              // Ollama
+              'ollama/llama3',
+              'ollama/llama3.1',
+              'ollama/llama3.2',
+              'ollama/mistral',
+              'ollama/mixtral',
+              'ollama/codellama',
+              'ollama/qwen',
+              'ollama/qwen2',
+              'ollama/gemma',
+              'ollama/gemma2'
+            ];
+            break;
+
+          case 'openrouter':
+            // OpenRouter aggregates many providers
+            models = [
+              'anthropic/claude-3.5-sonnet',
+              'anthropic/claude-3-opus',
+              'openai/gpt-4-turbo',
+              'openai/gpt-4o',
+              'google/gemini-pro-1.5',
+              'meta-llama/llama-3.1-405b-instruct',
+              'meta-llama/llama-3.1-70b-instruct',
+              'mistralai/mixtral-8x7b-instruct'
+            ];
+            break;
+
+          case 'ollama':
+            // For Ollama, call the Python detector script to get live models
+            try {
+              const { sourcePath } = getSourceEnvPath();
+              if (!sourcePath) {
+                return {
+                  success: false,
+                  error: 'Auto-build source path not configured. Cannot detect Ollama models.'
+                };
+              }
+
+              const scriptPath = path.join(sourcePath, 'ollama_model_detector.py');
+              if (!existsSync(scriptPath)) {
+                return {
+                  success: false,
+                  error: 'Ollama model detector script not found'
+                };
+              }
+
+              // Get Python path using cli-tool-manager
+              const pythonPath = getToolPath('python');
+              if (!pythonPath) {
+                return {
+                  success: false,
+                  error: 'Python not found. Please install Python 3.10 or higher.'
+                };
+              }
+
+              // Call ollama_model_detector.py list-models
+              const output = execFileSync(pythonPath, [scriptPath, 'list-models'], {
+                encoding: 'utf-8',
+                timeout: 5000
+              });
+
+              const result = JSON.parse(output);
+              if (result.success && result.data && result.data.models) {
+                models = result.data.models.map((m: any) => m.name);
+              } else {
+                return {
+                  success: false,
+                  error: result.error || 'Failed to detect Ollama models'
+                };
+              }
+            } catch (error) {
+              // If Ollama detection fails, return empty list (Ollama might not be installed)
+              return {
+                success: true,
+                data: { models: [] }
+              };
+            }
+            break;
+
+          default:
+            return {
+              success: false,
+              error: `Unknown provider: ${provider}`
+            };
+        }
+
+        return {
+          success: true,
+          data: { models }
+        };
+      } catch (error) {
+        console.error('[SETTINGS_GET_AVAILABLE_MODELS] Error:', error);
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Failed to get available models'
+        };
+      }
+    }
+  );
 }
