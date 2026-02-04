@@ -26,6 +26,7 @@ import { InfoItem } from './InfoItem';
 import { MemoryGraph } from './MemoryGraph';
 import { MemoryExportDialog } from './MemoryExportDialog';
 import { memoryFilterCategories } from './constants';
+import { loadRecentMemories } from '../../stores/context-store';
 import type { GraphitiMemoryStatus, GraphitiMemoryState, MemoryEpisode, GraphNode, GraphEdge } from '../../../shared/types';
 
 type FilterCategory = keyof typeof memoryFilterCategories;
@@ -150,6 +151,19 @@ export function MemoriesTab({
 
     void fetchGraphData();
   }, [viewMode, memoryStatus?.available, projectId]);
+
+  // Handle memory deletion
+  const handleDeleteMemory = async (memoryId: string) => {
+    try {
+      const result = await window.electronAPI.deleteMemory(projectId, memoryId);
+      if (result.success) {
+        // Refresh memories list after successful deletion
+        await loadRecentMemories(projectId);
+      }
+    } catch (error) {
+      // Silently handle errors - the memory list will remain unchanged
+    }
+  };
 
   return (
     <ScrollArea className="h-full">
@@ -393,7 +407,7 @@ export function MemoriesTab({
               {filteredMemories.length > 0 && (
                 <div className="space-y-3">
                   {filteredMemories.map((memory) => (
-                    <MemoryCard key={memory.id} memory={memory} />
+                    <MemoryCard key={memory.id} memory={memory} onDelete={handleDeleteMemory} />
                   ))}
                 </div>
               )}
