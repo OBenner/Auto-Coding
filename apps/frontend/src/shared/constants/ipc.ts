@@ -12,6 +12,18 @@ export const IPC_CHANNELS = {
   PROJECT_INITIALIZE: 'project:initialize',
   PROJECT_CHECK_VERSION: 'project:checkVersion',
 
+  // Workspace operations (multi-codebase orchestration)
+  WORKSPACE_LIST: 'workspace:list',
+  WORKSPACE_GET: 'workspace:get',
+  WORKSPACE_CREATE: 'workspace:create',
+  WORKSPACE_UPDATE: 'workspace:update',
+  WORKSPACE_DELETE: 'workspace:delete',
+  WORKSPACE_RENAME: 'workspace:rename',
+  WORKSPACE_ADD_PROJECT: 'workspace:addProject',
+  WORKSPACE_REMOVE_PROJECT: 'workspace:removeProject',
+  WORKSPACE_UPDATE_PROJECT: 'workspace:updateProject',
+  WORKSPACE_GET_BUILD_ORDER: 'workspace:getBuildOrder',
+
   // Tab state operations (persisted in main process)
   TAB_STATE_GET: 'tabState:get',
   TAB_STATE_SAVE: 'tabState:save',

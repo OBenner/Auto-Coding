@@ -12,6 +12,7 @@ import { PythonEnvManager } from '../python-env-manager';
 
 // Import all handler registration functions
 import { registerProjectHandlers } from './project-handlers';
+import { registerWorkspaceHandlers } from './workspace-handlers';
 import { registerTaskHandlers } from './task-handlers';
 import { registerTerminalHandlers } from './terminal-handlers';
 import { registerAgenteventsHandlers } from './agent-events-handlers';
@@ -55,6 +56,9 @@ export function setupIpcHandlers(
 
   // Project handlers (including Python environment setup)
   registerProjectHandlers(pythonEnvManager, agentManager, getMainWindow);
+
+  // Workspace handlers (multi-codebase orchestration)
+  registerWorkspaceHandlers();
 
   // Task handlers
   registerTaskHandlers(agentManager, pythonEnvManager, getMainWindow);
@@ -128,6 +132,7 @@ export function setupIpcHandlers(
 // Re-export all individual registration functions for potential custom usage
 export {
   registerProjectHandlers,
+  registerWorkspaceHandlers,
   registerTaskHandlers,
   registerTerminalHandlers,
   registerTerminalWorktreeIpcHandlers,
