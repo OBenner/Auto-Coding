@@ -3,6 +3,19 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+      Content Security Policy (CSP) - Defense-in-Depth Fallback
+
+      PRIMARY ENFORCEMENT: CSP is enforced via Electron's session.defaultSession.webRequest API
+      (see apps/frontend/src/main/index.ts and apps/frontend/src/main/security/csp-config.ts)
+
+      This meta tag serves as a fallback mechanism and must be kept in sync with the
+      session API configuration. Both use identical CSP directives to ensure consistent
+      protection against XSS attacks and code injection.
+
+      IMPORTANT: Changes to CSP must be made in apps/frontend/src/main/security/csp-config.ts
+      and synchronized here.
+    -->
     <meta http-equiv="Content-Security-Policy" content="default-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https://*.githubusercontent.com https://*.supabase.co; connect-src 'self' https://*.ingest.us.sentry.io; font-src 'self' https://fonts.gstatic.com data:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
