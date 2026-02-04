@@ -10,6 +10,7 @@ export interface Project {
   settings: ProjectSettings;
   createdAt: Date;
   updatedAt: Date;
+  workspaceName?: string;  // Optional workspace this project belongs to
 }
 
 export interface ProjectSettings {
