@@ -66,7 +66,7 @@
             "type": "manual",
             "instructions": "Verify Mermaid diagram renders at https://mermaid.live/"
           },
-          "status": "pending"
+          "status": "completed"
         }
       ]
     },
@@ -97,7 +97,9 @@
             "command": "test -f docs/modules/frontend-architecture.md && grep -q '## Architecture' docs/modules/frontend-architecture.md && echo 'OK'",
             "expected": "OK"
           },
-          "status": "pending"
+          "status": "completed",
+          "notes": "Created comprehensive frontend-architecture.md documenting main/, renderer/, shared/, and preload/ modules. Includes architecture overview, module responsibilities, IPC communication patterns, platform support, i18n, testing, and development workflow. File was added with git -f flag due to docs directory being in .gitignore.",
+          "updated_at": "2026-02-04T16:14:12.389420+00:00"
         },
         {
           "id": "subtask-2-2",
@@ -115,7 +117,9 @@
             "command": "grep -q 'Platform Abstraction' docs/modules/frontend-architecture.md && echo 'OK'",
             "expected": "OK"
           },
-          "status": "pending"
+          "status": "completed",
+          "notes": "Added comprehensive documentation for the platform abstraction layer including: problem/solution overview, API documentation (platform detection, path handling, executable discovery, shell command handling), platform-specific features, usage patterns, testing approaches, best practices, and common pitfalls. Expanded the Cross-Platform Support section with detailed technical guidance.",
+          "updated_at": "2026-02-04T16:16:47.274088+00:00"
         },
         {
           "id": "subtask-2-3",
@@ -133,7 +137,9 @@
             "command": "grep -q 'Internationalization' docs/modules/frontend-architecture.md && echo 'OK'",
             "expected": "OK"
           },
-          "status": "pending"
+          "status": "completed",
+          "notes": "Comprehensive i18n documentation added to frontend-architecture.md. Documented: system architecture (react-i18next config), directory structure with all 11 translation namespaces (common, navigation, settings, tasks, welcome, onboarding, dialogs, gitlab, taskReview, terminal, errors), translation key structure (namespace:section.key format), usage patterns (basic, interpolation, accessibility labels), best practices for adding new translations, supported languages (en, fr), and error message patterns with interpolation examples. Includes complete code examples for all usage scenarios.",
+          "updated_at": "2026-02-04T16:20:59.568541+00:00"
         }
       ]
     },
@@ -164,7 +170,9 @@
             "type": "manual",
             "instructions": "Verify Mermaid diagram renders at https://mermaid.live/"
           },
-          "status": "pending"
+          "status": "completed",
+          "notes": "Created comprehensive agent-pipeline.mermaid diagram showing both spec creation pipeline (SIMPLE/STANDARD/COMPLEX flows with gatherer, researcher, writer, critic agents) and implementation pipeline (Planner → Coder → QA Reviewer → QA Fixer). Diagram includes workspace isolation, memory system integration (Graphiti), parallel execution via subagents, and completion workflow. Uses consistent styling with other diagrams (memory-system.mermaid, security-model.mermaid). File committed successfully.",
+          "updated_at": "2026-02-04T16:25:56.781879+00:00"
         },
         {
           "id": "subtask-3-2",
@@ -181,7 +189,9 @@
             "type": "manual",
             "instructions": "Verify Mermaid diagram renders at https://mermaid.live/"
           },
-          "status": "pending"
+          "status": "completed",
+          "notes": "Created comprehensive data-flow.mermaid diagram showing service communication patterns across all 4 services (Backend Python CLI, Frontend Electron Desktop, Web Backend FastAPI, Web Frontend React). Diagram includes: IPC communication patterns (Electron main ↔ renderer via contextBridge), HTTP REST API communication (Web Frontend ↔ Web Backend), backend CLI integration (child process spawning), external service integrations (Claude SDK, MCP servers, Graphiti/LadybugDB, Git), optional integrations (Linear, GitHub), and internal data flows. Uses consistent styling with other diagrams (agent-pipeline.mermaid, memory-system.mermaid, security-model.mermaid). File committed successfully.",
+          "updated_at": "2026-02-04T16:29:32.864532+00:00"
         },
         {
           "id": "subtask-3-3",
@@ -199,7 +209,9 @@
             "type": "manual",
             "instructions": "Verify Mermaid diagram renders at https://mermaid.live/"
           },
-          "status": "pending"
+          "status": "completed",
+          "notes": "Created comprehensive component-interaction.mermaid sequence diagram showing IPC and HTTP communication patterns. Diagram includes: (1) Electron Desktop App IPC flow - Renderer → Preload Bridge (contextBridge) → Main Process → Backend CLI spawning, (2) Web Application HTTP flow - React Frontend → FastAPI Backend → Backend CLI subprocess management, (3) Real-time WebSocket communication for progress updates, (4) Direct CLI usage without IPC/HTTP, (5) IPC Security Architecture highlighting the security boundary (untrusted renderer, preload bridge, trusted main process), (6) HTTP API patterns (client-side Fetch/WebSocket, server-side FastAPI/CORS/JWT). Uses sequence diagram format with detailed step-by-step numbering. Consistent styling with other diagrams. File committed successfully.",
+          "updated_at": "2026-02-04T16:33:39.514533+00:00"
         }
       ]
     },
@@ -230,7 +242,9 @@
             "command": "test -f docs/modules/web-backend-architecture.md && grep -q '## API Endpoints' docs/modules/web-backend-architecture.md && echo 'OK'",
             "expected": "OK"
           },
-          "status": "pending"
+          "status": "completed",
+          "notes": "Created comprehensive web-backend-architecture.md documenting FastAPI architecture, all API endpoints (specs, tasks, agents, auth), WebSocket real-time events, data models, services layer, security model, and integration patterns. Follows the same documentation style as backend-architecture.md.",
+          "updated_at": "2026-02-04T16:38:54.078421+00:00"
         },
         {
           "id": "subtask-4-2",
@@ -251,7 +265,9 @@
             "command": "test -f docs/modules/web-frontend-architecture.md && grep -q '## Architecture' docs/modules/web-frontend-architecture.md && echo 'OK'",
             "expected": "OK"
           },
-          "status": "pending"
+          "status": "completed",
+          "notes": "Created comprehensive web-frontend-architecture.md documenting React components, API integration, state management, i18n system, and UI component architecture for the web frontend module.",
+          "updated_at": "2026-02-04T16:53:02.184103+00:00"
         }
       ]
     },
@@ -284,7 +300,9 @@
             "command": "test -f docs/api/backend-api.md && grep -q '## Commands' docs/api/backend-api.md && echo 'OK'",
             "expected": "OK"
           },
-          "status": "pending"
+          "status": "completed",
+          "notes": "Created comprehensive backend-api.md documenting Python CLI commands (run.py, spec_runner.py, validate_spec.py) and core modules (core.client, core.auth, core.workspace, core.security, agents, integrations.graphiti, context, cli, spec, prompts). Includes command reference with all options, Python API usage examples, environment variables, error handling, security considerations, performance notes, and troubleshooting. Documentation follows CLAUDE.md pattern with clear structure, code examples, and cross-references. Verification passed successfully. File committed with git add -f flag due to docs directory being in .gitignore.",
+          "updated_at": "2026-02-04T16:58:30.000000+00:00"
         },
         {
           "id": "subtask-5-2",
@@ -303,7 +321,9 @@
             "command": "test -f docs/api/web-backend-api.md && grep -q '## Endpoints' docs/api/web-backend-api.md && echo 'OK'",
             "expected": "OK"
           },
-          "status": "pending"
+          "status": "completed",
+          "notes": "Created comprehensive web-backend-api.md documenting all FastAPI endpoints (root, health, specs, tasks, agents, auth), WebSocket real-time communication protocol, data models, security (CORS, JWT), configuration settings, error handling, and integration with backend CLI. Includes detailed request/response examples with curl commands, JavaScript/Python WebSocket client examples, and developer guide for adding new endpoints. Documentation follows the same style and structure as backend-api.md. File created with 956 lines covering all web backend functionality. Verification passed successfully. File committed with git add -f flag due to docs directory being in .gitignore.",
+          "updated_at": "2026-02-04T17:03:57.165298+00:00"
         }
       ]
     },
@@ -439,7 +459,8 @@
     }
   },
   "qa_signoff": null,
-  "status": "in_progress",
-  "planStatus": "in_progress",
-  "updated_at": "2026-02-04T15:57:25.452Z"
+  "status": "ai_review",
+  "planStatus": "review",
+  "updated_at": "2026-02-04T16:40:20.177Z",
+  "last_updated": "2026-02-04T17:03:57.165298+00:00"
 }
