@@ -1,0 +1,205 @@
+---
+title: Auto-Claude Service Communication & Data Flow
+---
+flowchart TB
+    subgraph User["👤 User Interfaces"]
+        UI1["Electron Desktop App<br/>(Primary Interface)"]
+        UI2["Web Browser<br/>(Web Frontend)"]
+        CLI["Command Line<br/>(Direct CLI)"]
+    end
+
+    subgraph ElectronApp["🖥️ Electron Desktop Application"]
+        direction TB
+
+        subgraph MainProcess["Main Process (Node.js)"]
+            Main["Main Entry Point<br/>(src/main/index.ts)"]
+            IPC_Main["IPC Handlers"]
+            Platform["Platform Abstraction<br/>(Windows/macOS/Linux)"]
+        end
+
+        subgraph PreloadBridge["Preload Bridge (Context Isolation)"]
+            IPC_Bridge["IPC API Bridge<br/>(contextBridge)"]
+            APIs["API Modules<br/>• agent-api<br/>• project-api<br/>• task-api<br/>• terminal-api<br/>• settings-api"]
+        end
+
+        subgraph RendererProcess["Renderer Process (React)"]
+            React["React UI Components"]
+            Zustand["Zustand State<br/>(Client State)"]
+            I18n["i18next<br/>(Internationalization)"]
+        end
+    end
+
+    subgraph Backend["🐍 Backend Python CLI"]
+        direction TB
+
+        subgraph CoreServices["Core Services"]
+            RunPy["run.py<br/>(Implementation)"]
+            SpecRunner["spec_runner.py<br/>(Spec Creation)"]
+            Client["Claude SDK Client<br/>(core/client.py)"]
+            Security["Security Layer<br/>(core/security.py)"]
+        end
+
+        subgraph AgentLayer["Agent Orchestration"]
+            Planner["Planner Agent"]
+            Coder["Coder Agent"]
+            QA["QA Reviewer/Fixer"]
+            SpecAgents["Spec Agents<br/>(gatherer, writer, critic)"]
+        end
+
+        subgraph Memory["Memory & Context"]
+            MemoryMgr["Memory Manager"]
+            Graphiti["Graphiti Memory<br/>(Graph-based)"]
+        end
+    end
+
+    subgraph WebBackend["🌐 Web Backend (FastAPI)"]
+        direction TB
+        FastAPI["FastAPI Server<br/>(main.py)"]
+
+        subgraph WebAPI["REST API Endpoints"]
+            API1["/api/specs<br/>(List specs)"]
+            API2["/api/specs/{id}<br/>(Spec details)"]
+            API3["/api/agents<br/>(Agent management)"]
+        end
+
+        WebSocket["WebSocket<br/>/ws<br/>(Real-time updates)"]
+    end
+
+    subgraph WebFrontend["⚛️ Web Frontend (React)"]
+        direction TB
+        WebApp["React App<br/>(src/App.tsx)"]
+        WebState["Zustand State"]
+        WebHTTP["HTTP Client<br/>(Fetch API)"]
+        WebWS["WebSocket Client"]
+    end
+
+    subgraph External["🔌 External Services & APIs"]
+        direction TB
+
+        subgraph ClaudeSDK["Claude Agent SDK"]
+            AnthropicAPI["Anthropic API<br/>(Claude AI)"]
+        end
+
+        subgraph MCPServers["MCP Servers"]
+            Context7["Context7<br/>(Documentation)"]
+            LinearMCP["Linear MCP<br/>(Issue tracking)"]
+            GitHubMCP["GitHub MCP<br/>(Issues/PRs)"]
+            ElectronMCP["Electron MCP<br/>(E2E Testing)"]
+            PuppeteerMCP["Puppeteer MCP<br/>(Browser automation)"]
+        end
+
+        subgraph Storage["Storage Systems"]
+            GraphitiDB["Graphiti/LadybugDB<br/>(Embedded graph DB)"]
+            Git["Git Repository<br/>(Worktrees)"]
+            FileSystem["File System<br/>(.auto-claude/)"]
+        end
+
+        subgraph OptionalIntegrations["Optional Integrations"]
+            LinearAPI["Linear API<br/>(Progress tracking)"]
+            GitHubAPI["GitHub API<br/>(via gh CLI)"]
+        end
+    end
+
+    %% User Interface Connections
+    User -->|"Desktop app"| UI1
+    User -->|"Web browser"| UI2
+    User -->|"Terminal commands"| CLI
+
+    %% Electron Internal Flow
+    UI1 --> React
+    React <-->|"State management"| Zustand
+    React -->|"Translation keys"| I18n
+    React <-->|"IPC calls via window.api"| IPC_Bridge
+    IPC_Bridge <-->|"contextBridge"| APIs
+    APIs <-->|"IPC channels"| IPC_Main
+    IPC_Main <-->|"Process management"| Main
+    Main -->|"OS-specific code"| Platform
+
+    %% Electron to Backend Communication
+    Main -->|"Child process spawn<br/>python run.py"| RunPy
+    Main -->|"Child process spawn<br/>python spec_runner.py"| SpecRunner
+    IPC_Main <-->|"stdout/stderr streams"| CoreServices
+
+    %% Web Frontend to Web Backend
+    UI2 --> WebApp
+    WebApp <-->|"State management"| WebState
+    WebApp -->|"HTTP GET/POST"| WebHTTP
+    WebApp <-->|"Real-time updates"| WebWS
+    WebHTTP <-->|"REST API calls"| FastAPI
+    WebWS <-->|"ws://"| WebSocket
+    FastAPI -->|"Route to endpoints"| API1 & API2 & API3
+
+    %% Web Backend to Backend CLI
+    FastAPI -->|"Subprocess calls"| RunPy
+    FastAPI -->|"Subprocess calls"| SpecRunner
+
+    %% CLI Direct Access
+    CLI -->|"python run.py --spec X"| RunPy
+    CLI -->|"python spec_runner.py"| SpecRunner
+
+    %% Backend Internal Flow
+    RunPy & SpecRunner --> Client
+    RunPy & SpecRunner --> Security
+    Client -->|"Create sessions"| Planner & Coder & QA & SpecAgents
+    Planner & Coder & QA & SpecAgents <-->|"Get/Store context"| MemoryMgr
+    MemoryMgr <-->|"Graph operations"| Graphiti
+
+    %% Backend to External Services
+    Client <-->|"AI requests"| AnthropicAPI
+    Client <-->|"Tool calls"| MCPServers
+    ElectronMCP <-->|"Chrome DevTools Protocol<br/>port 9222"| Main
+    Graphiti <-->|"Graph storage"| GraphitiDB
+    RunPy & SpecRunner <-->|"Worktree management<br/>git commands"| Git
+    RunPy & SpecRunner <-->|"Read/Write specs<br/>plans, reports"| FileSystem
+    Backend -.->|"Optional: Progress sync"| LinearAPI
+    Backend -.->|"Optional: Issue/PR mgmt"| GitHubAPI
+
+    %% Data Flow Labels
+    linkStyle 0,1,2 stroke:#1976d2,stroke-width:3px
+    linkStyle 3,4,5,6,7,8,9,10 stroke:#7b1fa2,stroke-width:2px
+    linkStyle 11,12,13 stroke:#f57c00,stroke-width:3px
+    linkStyle 14,15,16,17,18,19 stroke:#c2185b,stroke-width:2px
+    linkStyle 20,21 stroke:#388e3c,stroke-width:3px
+    linkStyle 22,23 stroke:#0277bd,stroke-width:2px
+    linkStyle 24,25,26,27,28 stroke:#00796b,stroke-width:2px
+    linkStyle 29,30,31,32,33,34,35 stroke:#d32f2f,stroke-width:2px
+
+    %% Styling
+    style User fill:#e3f2fd,stroke:#1976d2,stroke-width:3px
+    style ElectronApp fill:#f3e5f5,stroke:#7b1fa2,stroke-width:3px
+    style Backend fill:#e8f5e9,stroke:#388e3c,stroke-width:3px
+    style WebBackend fill:#fce4ec,stroke:#c2185b,stroke-width:3px
+    style WebFrontend fill:#fff3e0,stroke:#f57c00,stroke-width:3px
+    style External fill:#e0f2f1,stroke:#00796b,stroke-width:3px
+
+    style MainProcess fill:#e1bee7,stroke:#7b1fa2,stroke-width:2px
+    style PreloadBridge fill:#ce93d8,stroke:#8e24aa,stroke-width:2px
+    style RendererProcess fill:#ba68c8,stroke:#6a1b9a,stroke-width:2px
+
+    style CoreServices fill:#c8e6c9,stroke:#388e3c,stroke-width:2px
+    style AgentLayer fill:#a5d6a7,stroke:#2e7d32,stroke-width:2px
+    style Memory fill:#81c784,stroke:#1b5e20,stroke-width:2px
+
+    style WebAPI fill:#f8bbd0,stroke:#c2185b,stroke-width:2px
+
+    style ClaudeSDK fill:#b2dfdb,stroke:#00796b,stroke-width:2px
+    style MCPServers fill:#b2ebf2,stroke:#0097a7,stroke-width:2px
+    style Storage fill:#c5cae9,stroke:#3f51b5,stroke-width:2px
+    style OptionalIntegrations fill:#f0f4c3,stroke:#9e9d24,stroke-width:2px
+
+    %% Highlight key components
+    style UI1 fill:#64b5f6,stroke:#0d47a1,stroke-width:3px,color:#000
+    style React fill:#ba68c8,stroke:#4a148c,stroke-width:3px,color:#fff
+    style Client fill:#81c784,stroke:#1b5e20,stroke-width:3px,color:#000
+    style FastAPI fill:#f06292,stroke:#880e4f,stroke-width:3px,color:#fff
+    style AnthropicAPI fill:#4db6ac,stroke:#004d40,stroke-width:3px,color:#fff
+    style GraphitiDB fill:#26a69a,stroke:#004d40,stroke-width:3px,color:#fff
+    style ElectronMCP fill:#4fc3f7,stroke:#01579b,stroke-width:3px,color:#000
+
+    %% Highlight IPC Bridge (critical security boundary)
+    style IPC_Bridge fill:#ffb74d,stroke:#e65100,stroke-width:3px,color:#000
+    style APIs fill:#ffcc80,stroke:#ef6c00,stroke-width:2px
+
+    %% Highlight Memory System
+    style Graphiti fill:#66bb6a,stroke:#1b5e20,stroke-width:3px,color:#fff
+    style MemoryMgr fill:#a5d6a7,stroke:#2e7d32,stroke-width:2px
