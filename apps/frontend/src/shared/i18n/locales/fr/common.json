@@ -696,5 +696,10 @@
       "hideCommentsAriaLabel": "Masquer les commentaires",
       "commentByAuthor": "Commentaire de {{author}}"
     }
+  },
+  "memory": {
+    "graphView": "Vue graphique",
+    "deleteMemory": "Supprimer la mémoire",
+    "exportMemories": "Exporter les mémoires"
   }
 }
