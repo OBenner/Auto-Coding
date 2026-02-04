@@ -727,6 +727,74 @@ export class MemoryService {
   }
 
   /**
+   * Delete a memory by ID
+   *
+   * @param memoryId The UUID of the memory to delete
+   * @returns Promise with success status and optional error message
+   */
+  async deleteMemory(memoryId: string): Promise<{ success: boolean; error?: string }> {
+    const args = [
+      this.config.dbPath,
+      this.config.database,
+      '--id',
+      memoryId
+    ];
+
+    const result = await executeQuery('delete-memory', args);
+
+    if (!result.success) {
+      console.error('Failed to delete memory:', result.error);
+      return { success: false, error: result.error };
+    }
+
+    return { success: true };
+  }
+
+  /**
+   * Export memories to a JSON file
+   *
+   * Exports all episodic memories and entities to the specified file path.
+   * The export includes metadata (timestamp, database name, counts).
+   *
+   * @param outputPath The file path where the export should be saved
+   * @returns Promise with success status, total count, and optional error message
+   */
+  async exportMemories(outputPath: string): Promise<{
+    success: boolean;
+    episodicCount?: number;
+    entityCount?: number;
+    totalCount?: number;
+    error?: string;
+  }> {
+    const args = [
+      this.config.dbPath,
+      this.config.database,
+      '--output',
+      outputPath
+    ];
+
+    const result = await executeQuery('export-memories', args);
+
+    if (!result.success) {
+      console.error('Failed to export memories:', result.error);
+      return { success: false, error: result.error };
+    }
+
+    const data = result.data as {
+      episodic_count: number;
+      entity_count: number;
+      total_count: number;
+    };
+
+    return {
+      success: true,
+      episodicCount: data.episodic_count,
+      entityCount: data.entity_count,
+      totalCount: data.total_count
+    };
+  }
+
+  /**
    * Close the database connection (no-op for subprocess model)
    */
   async close(): Promise<void> {
