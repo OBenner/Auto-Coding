@@ -16,6 +16,9 @@ import type {
   GraphitiMemoryStatus,
   ContextSearchResult,
   MemoryEpisode,
+  GraphNode,
+  GraphEdge,
+  GraphDataResult,
   ProjectEnvConfig,
   InfrastructureStatus,
   GraphitiValidationResult,
@@ -404,6 +407,9 @@ export interface ElectronAPI {
   getMemoryStatus: (projectId: string) => Promise<IPCResult<GraphitiMemoryStatus>>;
   searchMemories: (projectId: string, query: string) => Promise<IPCResult<ContextSearchResult[]>>;
   getRecentMemories: (projectId: string, limit?: number) => Promise<IPCResult<MemoryEpisode[]>>;
+  getGraphData: (projectId: string, limit?: number) => Promise<IPCResult<GraphDataResult>>;
+  deleteMemory: (projectId: string, memoryId: string) => Promise<IPCResult<{ success: boolean }>>;
+  exportMemories: (projectId: string, outputPath: string) => Promise<IPCResult<{ memory_count: number; entity_count: number }>>;
 
   // Environment configuration operations
   getProjectEnv: (projectId: string) => Promise<IPCResult<ProjectEnvConfig>>;

@@ -279,6 +279,32 @@ export interface ContextSearchResult {
   type: string;
 }
 
+export interface GraphNode {
+  id: string;
+  label: string;
+  type: 'episodic' | 'entity';
+  timestamp: string;
+  data: {
+    content?: string;
+    description?: string;
+    summary?: string;
+  };
+}
+
+export interface GraphEdge {
+  id: string;
+  source: string;
+  target: string;
+  type: string;
+}
+
+export interface GraphDataResult {
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+  node_count: number;
+  edge_count: number;
+}
+
 export interface ProjectContextData {
   projectIndex: ProjectIndex | null;
   memoryStatus: GraphitiMemoryStatus | null;
