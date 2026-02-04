@@ -22,6 +22,11 @@ export function ProviderSettingsSection(props: ProviderSettingsSectionProps) {
   const [googleApiKey, setGoogleApiKey] = useState('');
   const [openrouterApiKey, setOpenrouterApiKey] = useState('');
 
+  // Model selection per agent type
+  const [plannerModel, setPlannerModel] = useState('');
+  const [coderModel, setCoderModel] = useState('');
+  const [qaModel, setQaModel] = useState('');
+
   const handleSave = () => {
     // TODO: Implement save functionality via IPC
     console.log('Saving provider settings:', {
@@ -29,6 +34,9 @@ export function ProviderSettingsSection(props: ProviderSettingsSectionProps) {
       openaiApiKey,
       googleApiKey,
       openrouterApiKey,
+      plannerModel,
+      coderModel,
+      qaModel,
     });
   };
 
@@ -151,6 +159,72 @@ export function ProviderSettingsSection(props: ProviderSettingsSectionProps) {
                 </p>
               </div>
             )}
+
+            {/* Model Selection per Agent Type */}
+            <div className="space-y-4 pt-4 border-t border-border">
+              <div>
+                <h3 className="text-sm font-medium text-foreground mb-1">
+                  {t('aiProvider.models.title')}
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  {t('aiProvider.models.description')}
+                </p>
+              </div>
+
+              {/* Planner Model */}
+              <div className="space-y-2">
+                <Label htmlFor="plannerModel" className="text-sm font-medium text-foreground">
+                  {t('aiProvider.models.planner.label')}
+                </Label>
+                <Input
+                  id="plannerModel"
+                  type="text"
+                  placeholder={t('aiProvider.models.planner.placeholder')}
+                  value={plannerModel}
+                  onChange={(e) => setPlannerModel(e.target.value)}
+                  className="max-w-md"
+                />
+                <p className="text-xs text-muted-foreground">
+                  {t('aiProvider.models.planner.description')}
+                </p>
+              </div>
+
+              {/* Coder Model */}
+              <div className="space-y-2">
+                <Label htmlFor="coderModel" className="text-sm font-medium text-foreground">
+                  {t('aiProvider.models.coder.label')}
+                </Label>
+                <Input
+                  id="coderModel"
+                  type="text"
+                  placeholder={t('aiProvider.models.coder.placeholder')}
+                  value={coderModel}
+                  onChange={(e) => setCoderModel(e.target.value)}
+                  className="max-w-md"
+                />
+                <p className="text-xs text-muted-foreground">
+                  {t('aiProvider.models.coder.description')}
+                </p>
+              </div>
+
+              {/* QA Model */}
+              <div className="space-y-2">
+                <Label htmlFor="qaModel" className="text-sm font-medium text-foreground">
+                  {t('aiProvider.models.qa.label')}
+                </Label>
+                <Input
+                  id="qaModel"
+                  type="text"
+                  placeholder={t('aiProvider.models.qa.placeholder')}
+                  value={qaModel}
+                  onChange={(e) => setQaModel(e.target.value)}
+                  className="max-w-md"
+                />
+                <p className="text-xs text-muted-foreground">
+                  {t('aiProvider.models.qa.description')}
+                </p>
+              </div>
+            </div>
 
             {/* Save button */}
             <div className="pt-2">

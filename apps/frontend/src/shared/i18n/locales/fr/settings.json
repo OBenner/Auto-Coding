@@ -657,6 +657,25 @@
         "description": "Requise pour le routage multi-modèles OpenRouter"
       }
     },
+    "models": {
+      "title": "Sélection du modèle",
+      "description": "Configurez les modèles à utiliser pour chaque type d'agent",
+      "planner": {
+        "label": "Modèle Planificateur",
+        "placeholder": "ex: gpt-4, gemini-pro, anthropic/claude-3-sonnet",
+        "description": "Modèle pour créer les plans d'implémentation"
+      },
+      "coder": {
+        "label": "Modèle Codeur",
+        "placeholder": "ex: gpt-4, gemini-pro, anthropic/claude-3-sonnet",
+        "description": "Modèle pour implémenter le code"
+      },
+      "qa": {
+        "label": "Modèle QA",
+        "placeholder": "ex: gpt-4, gemini-pro, anthropic/claude-3-sonnet",
+        "description": "Modèle pour l'assurance qualité et la validation"
+      }
+    },
     "configuration": {
       "title": "Configuration du fournisseur",
       "apiKey": "Clé API",

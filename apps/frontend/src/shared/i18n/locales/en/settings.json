@@ -709,6 +709,25 @@
         "description": "Required for OpenRouter multi-model routing"
       }
     },
+    "models": {
+      "title": "Model Selection",
+      "description": "Configure which models to use for each agent type",
+      "planner": {
+        "label": "Planner Model",
+        "placeholder": "e.g., gpt-4, gemini-pro, anthropic/claude-3-sonnet",
+        "description": "Model for creating implementation plans"
+      },
+      "coder": {
+        "label": "Coder Model",
+        "placeholder": "e.g., gpt-4, gemini-pro, anthropic/claude-3-sonnet",
+        "description": "Model for implementing code"
+      },
+      "qa": {
+        "label": "QA Model",
+        "placeholder": "e.g., gpt-4, gemini-pro, anthropic/claude-3-sonnet",
+        "description": "Model for quality assurance and validation"
+      }
+    },
     "configuration": {
       "title": "Provider Configuration",
       "apiKey": "API Key",
