@@ -133,9 +133,57 @@ export function registerGetRepositories(): void {
 }
 
 /**
+ * Trigger code review for a repository
+ * Channel: github:code-review:trigger
+ */
+export function registerCodeReviewTrigger(): void {
+  ipcMain.handle(
+    IPC_CHANNELS.GITHUB_CODE_REVIEW_TRIGGER,
+    async (_, projectId: string, prNumber?: number): Promise<IPCResult<{ reviewId: string }>> => {
+      const project = projectStore.getProject(projectId);
+      if (!project) {
+        return { success: false, error: 'Project not found' };
+      }
+
+      const config = getGitHubConfig(project);
+      if (!config) {
+        return { success: false, error: 'No GitHub token or repository configured' };
+      }
+
+      try {
+        // Normalize repo reference
+        const normalizedRepo = normalizeRepoReference(config.repo);
+        if (!normalizedRepo) {
+          return {
+            success: false,
+            error: 'Invalid repository format. Use owner/repo or GitHub URL.'
+          };
+        }
+
+        // Generate a review ID for tracking
+        const reviewId = `review-${Date.now()}`;
+
+        // TODO: Call backend code review service via Python runner
+        // For now, return success with review ID
+        return {
+          success: true,
+          data: { reviewId }
+        };
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Failed to trigger code review'
+        };
+      }
+    }
+  );
+}
+
+/**
  * Register all repository-related handlers
  */
 export function registerRepositoryHandlers(): void {
   registerCheckConnection();
   registerGetRepositories();
+  registerCodeReviewTrigger();
 }
