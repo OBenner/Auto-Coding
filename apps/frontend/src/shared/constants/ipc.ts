@@ -44,15 +44,6 @@ export const IPC_CHANNELS = {
   TASK_UNARCHIVE: 'task:unarchive',
   TASK_CLEAR_STAGED_STATE: 'task:clearStagedState',
 
-  // Merge Analytics operations
-  MERGE_ANALYTICS_GET_HISTORY: 'mergeAnalytics:getHistory',
-  MERGE_ANALYTICS_GET_SUMMARY: 'mergeAnalytics:getSummary',
-  MERGE_ANALYTICS_GET_PATTERNS: 'mergeAnalytics:getPatterns',
-  MERGE_ANALYTICS_EXPORT: 'mergeAnalytics:export',
-
-  // Task token stats
-  TASK_TOKEN_STATS_GET: 'task:tokenStatsGet',
-
   // Task events (main -> renderer)
   TASK_PROGRESS: 'task:progress',
   TASK_ERROR: 'task:error',
@@ -406,16 +397,11 @@ export const IPC_CHANNELS = {
   GITHUB_PR_CHECK_MERGE_READINESS: 'github:pr:checkMergeReadiness',
   GITHUB_PR_MARK_REVIEW_POSTED: 'github:pr:markReviewPosted',
   GITHUB_PR_UPDATE_BRANCH: 'github:pr:updateBranch',
-  GITHUB_PR_GET_INLINE_COMMENTS: 'github:pr:getInlineComments',
-  GITHUB_PR_REPLY_TO_COMMENT: 'github:pr:replyToComment',
-  GITHUB_PR_APPLY_SUGGESTION: 'github:pr:applySuggestion',
-  GITHUB_PR_REQUEST_REREVIEW: 'github:pr:requestReReview',
 
   // GitHub PR Review events (main -> renderer)
   GITHUB_PR_REVIEW_PROGRESS: 'github:pr:reviewProgress',
   GITHUB_PR_REVIEW_COMPLETE: 'github:pr:reviewComplete',
   GITHUB_PR_REVIEW_ERROR: 'github:pr:reviewError',
-  GITHUB_PR_UPDATED: 'github:pr:updated',
 
   // GitHub PR Logs (for viewing AI review logs)
   GITHUB_PR_GET_LOGS: 'github:pr:getLogs',
@@ -504,7 +490,6 @@ export const IPC_CHANNELS = {
   // File explorer operations
   FILE_EXPLORER_LIST: 'fileExplorer:list',
   FILE_EXPLORER_READ: 'fileExplorer:read',
-  FILE_EXPLORER_WRITE: 'fileExplorer:write',
 
   // Git operations
   GIT_GET_BRANCHES: 'git:getBranches',
@@ -575,5 +560,12 @@ export const IPC_CHANNELS = {
   // Queue routing events (main -> renderer)
   QUEUE_PROFILE_SWAPPED: 'queue:profileSwapped',      // Task switched to different profile
   QUEUE_SESSION_CAPTURED: 'queue:sessionCaptured',    // Session ID captured from running task
-  QUEUE_BLOCKED_NO_PROFILES: 'queue:blockedNoProfiles' // All profiles unavailable
+  QUEUE_BLOCKED_NO_PROFILES: 'queue:blockedNoProfiles', // All profiles unavailable
+
+  // Plugin operations
+  PLUGIN_LIST: 'plugin:list',
+  PLUGIN_ENABLE: 'plugin:enable',
+  PLUGIN_DISABLE: 'plugin:disable',
+  PLUGIN_INSTALL: 'plugin:install',
+  PLUGIN_UNINSTALL: 'plugin:uninstall'
 } as const;

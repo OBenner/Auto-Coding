@@ -15,10 +15,9 @@
     "githubPRs": "GitHub PRs",
     "gitlabIssues": "GitLab Issues",
     "gitlabMRs": "GitLab MRs",
+    "plugins": "Plugins",
     "worktrees": "Worktrees",
-    "agentTools": "MCP Overview",
-    "codeEditor": "Code Editor",
-    "mergeAnalytics": "Merge Analytics"
+    "agentTools": "MCP Overview"
   },
   "actions": {
     "settings": "Settings",
@@ -83,19 +82,5 @@
     "pathChangeWarningDescription": "Switching CLI installations will use a different Claude Code binary. Any running sessions will continue using the previous installation until restarted.",
     "switchInstallationConfirm": "Switch",
     "versionUnknown": "version unknown"
-  },
-  "ariaLabels": {
-    "navigateTo": "Navigate to {{view}} ({{shortcut}})",
-    "navigateToView": "Navigate to {{view}}",
-    "collapseSidebar": "Collapse sidebar",
-    "expandSidebar": "Expand sidebar",
-    "settingsButton": "Open settings",
-    "helpButton": "Open help and feedback",
-    "newTaskButton": "Create new task",
-    "mainNavigation": "Main navigation",
-    "projectSection": "Project section",
-    "toolsSection": "Tools section",
-    "sidebarToggle": "Toggle sidebar",
-    "navigationMenu": "Navigation menu"
   }
 }
