@@ -11,6 +11,9 @@ export const IPC_CHANNELS = {
   PROJECT_UPDATE_SETTINGS: 'project:updateSettings',
   PROJECT_INITIALIZE: 'project:initialize',
   PROJECT_CHECK_VERSION: 'project:checkVersion',
+  PROJECT_GET_BY_WORKSPACE: 'project:getByWorkspace',
+  PROJECT_GET_WORKSPACE: 'project:getWorkspace',
+  PROJECT_SET_WORKSPACE: 'project:setWorkspace',
 
   // Workspace operations (multi-codebase orchestration)
   WORKSPACE_LIST: 'workspace:list',
