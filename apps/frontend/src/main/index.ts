@@ -53,6 +53,7 @@ import { initSentryMain } from './sentry';
 import { preWarmToolCache } from './cli-tool-manager';
 import { initializeClaudeProfileManager, getClaudeProfileManager } from './claude-profile-manager';
 import { isMacOS, isWindows } from './platform';
+import { CSP_CONFIG } from './security/csp-config';
 import type { AppSettings, AuthFailureInfo } from '../shared/types';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -262,6 +263,18 @@ if (isWindows()) {
 app.whenReady().then(() => {
   // Set app user model id for Windows
   electronApp.setAppUserModelId('com.autoclaude.ui');
+
+  // Enforce Content Security Policy via session API
+  // This provides defense-in-depth against XSS attacks and code injection
+  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    const responseHeaders = { ...details.responseHeaders };
+
+    // Inject CSP header for all responses to ensure comprehensive coverage
+    // The CSP_CONFIG defines strict policies for scripts, styles, images, and connections
+    responseHeaders['Content-Security-Policy'] = [CSP_CONFIG];
+
+    callback({ responseHeaders });
+  });
 
   // Clear cache on Windows to prevent permission errors from stale cache
   if (isWindows()) {
