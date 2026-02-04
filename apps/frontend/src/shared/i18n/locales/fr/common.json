@@ -696,5 +696,11 @@
       "hideCommentsAriaLabel": "Masquer les commentaires",
       "commentByAuthor": "Commentaire de {{author}}"
     }
+  },
+  "cost": {
+    "breakdown": "Répartition des coûts par fournisseur",
+    "total": "total",
+    "noCosts": "Aucun coût enregistré pour le moment",
+    "localModelsNote": "Les modèles locaux (Ollama) s'exécutent sur votre machine sans frais d'API"
   }
 }

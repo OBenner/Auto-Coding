@@ -696,5 +696,11 @@
       "hideCommentsAriaLabel": "Hide comments",
       "commentByAuthor": "Comment by {{author}}"
     }
+  },
+  "cost": {
+    "breakdown": "Cost Breakdown by Provider",
+    "total": "total",
+    "noCosts": "No costs recorded yet",
+    "localModelsNote": "Local models (Ollama) run on your machine at no API cost"
   }
 }
