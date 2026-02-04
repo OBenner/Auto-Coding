@@ -431,6 +431,14 @@ export const IPC_CHANNELS = {
   GITHUB_TRIAGE_COMPLETE: 'github:triage:complete',
   GITHUB_TRIAGE_ERROR: 'github:triage:error',
 
+  // GitHub Code Review operations
+  GITHUB_CODE_REVIEW_TRIGGER: 'github:code-review:trigger',
+
+  // GitHub Code Review events (main -> renderer)
+  GITHUB_CODE_REVIEW_PROGRESS: 'github:code-review:progress',
+  GITHUB_CODE_REVIEW_COMPLETE: 'github:code-review:complete',
+  GITHUB_CODE_REVIEW_ERROR: 'github:code-review:error',
+
   // Memory Infrastructure status (LadybugDB - no Docker required)
   MEMORY_STATUS: 'memory:status',
   MEMORY_LIST_DATABASES: 'memory:listDatabases',
