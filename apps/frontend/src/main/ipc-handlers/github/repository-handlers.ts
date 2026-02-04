@@ -8,6 +8,15 @@ import type { IPCResult, GitHubRepository, GitHubSyncStatus } from '../../../sha
 import { projectStore } from '../../project-store';
 import { getGitHubConfig, githubFetch, normalizeRepoReference } from './utils';
 import type { GitHubAPIRepository } from './types';
+import {
+  runPythonSubprocess,
+  getPythonPath,
+  getRunnerPath,
+  validateGitHubModule,
+  buildRunnerArgs,
+  parseJSONFromOutput,
+} from './utils/subprocess-runner';
+import { getRunnerEnv } from './utils/runner-env';
 
 /**
  * Check GitHub connection status
@@ -139,7 +148,7 @@ export function registerGetRepositories(): void {
 export function registerCodeReviewTrigger(): void {
   ipcMain.handle(
     IPC_CHANNELS.GITHUB_CODE_REVIEW_TRIGGER,
-    async (_, projectId: string, prNumber?: number): Promise<IPCResult<{ reviewId: string }>> => {
+    async (_, projectId: string, prNumber?: number): Promise<IPCResult<{ reviewId: string; findings?: any[] }>> => {
       const project = projectStore.getProject(projectId);
       if (!project) {
         return { success: false, error: 'Project not found' };
@@ -160,14 +169,72 @@ export function registerCodeReviewTrigger(): void {
           };
         }
 
+        // Validate GitHub module is available
+        const validation = await validateGitHubModule(project);
+        if (!validation.valid) {
+          return {
+            success: false,
+            error: validation.error || 'GitHub runner not available'
+          };
+        }
+
         // Generate a review ID for tracking
         const reviewId = `review-${Date.now()}`;
 
-        // TODO: Call backend code review service via Python runner
-        // For now, return success with review ID
+        // Call backend code review service via Python runner
+        const backendPath = validation.backendPath!;
+        const pythonPath = getPythonPath(backendPath);
+        const runnerPath = getRunnerPath(backendPath);
+
+        // Build command arguments
+        const args = buildRunnerArgs(
+          runnerPath,
+          project.path,
+          'code-review-pr',
+          prNumber ? [String(prNumber)] : []
+        );
+
+        // Get runner environment with authentication
+        const env = await getRunnerEnv(project);
+
+        // Execute the Python subprocess
+        const { promise } = runPythonSubprocess<any>({
+          pythonPath,
+          args,
+          cwd: project.path,
+          env,
+          onStdout: (line: string) => {
+            console.log('[Code Review]', line);
+          },
+          onStderr: (line: string) => {
+            console.error('[Code Review Error]', line);
+          },
+          onComplete: (stdout: string, stderr: string) => {
+            // Try to parse findings from output
+            try {
+              return parseJSONFromOutput(stdout);
+            } catch {
+              // If no JSON, return stdout as message
+              return { message: stdout };
+            }
+          },
+        });
+
+        const result = await promise;
+
+        if (!result.success) {
+          return {
+            success: false,
+            error: result.error || 'Code review failed'
+          };
+        }
+
         return {
           success: true,
-          data: { reviewId }
+          data: {
+            reviewId,
+            findings: result.data?.findings || [],
+          }
         };
       } catch (error) {
         return {
