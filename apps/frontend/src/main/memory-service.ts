@@ -87,6 +87,32 @@ interface StatusResult {
   error?: string | null;
 }
 
+export interface GraphNode {
+  id: string;
+  label: string;
+  type: 'episodic' | 'entity';
+  timestamp: string;
+  data: {
+    content?: string;
+    description?: string;
+    summary?: string;
+  };
+}
+
+export interface GraphEdge {
+  id: string;
+  source: string;
+  target: string;
+  type: string;
+}
+
+export interface GraphDataResult {
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+  node_count: number;
+  edge_count: number;
+}
+
 /**
  * Get the default database path
  * Uses XDG-compliant paths on Linux for AppImage/Flatpak/Snap support
@@ -514,6 +540,31 @@ export class MemoryService {
     memories.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
     return memories.slice(0, limit);
+  }
+
+  /**
+   * Get graph data (nodes and edges) for visualization
+   */
+  async getGraphData(limit: number = 50): Promise<GraphDataResult> {
+    const result = await executeQuery('get-graph-data', [
+      this.config.dbPath,
+      this.config.database,
+      '--limit',
+      String(limit),
+    ]);
+
+    if (!result.success || !result.data) {
+      console.error('Failed to get graph data:', result.error);
+      return {
+        nodes: [],
+        edges: [],
+        node_count: 0,
+        edge_count: 0,
+      };
+    }
+
+    const data = result.data as GraphDataResult;
+    return data;
   }
 
   /**
