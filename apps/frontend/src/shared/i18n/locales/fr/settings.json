@@ -33,6 +33,10 @@
       "title": "Comptes",
       "description": "Comptes Claude & endpoints API"
     },
+    "providers": {
+      "title": "Fournisseurs IA",
+      "description": "Configurer les fournisseurs de modèles IA"
+    },
     "updates": {
       "title": "Mises à jour",
       "description": "Mises à jour Auto Claude"

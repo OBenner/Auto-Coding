@@ -33,6 +33,10 @@
       "title": "Accounts",
       "description": "Claude accounts & API endpoints"
     },
+    "providers": {
+      "title": "AI Providers",
+      "description": "Configure AI model providers"
+    },
     "updates": {
       "title": "Updates",
       "description": "Auto Claude updates"
