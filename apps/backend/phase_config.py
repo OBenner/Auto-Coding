@@ -113,6 +113,57 @@ AGENT_DEFAULT_MODELS: dict[str, str] = {
     "ideation": "sonnet",
 }
 
+# Agent-level default provider mapping
+# Maps each agent type to a default AI provider
+# Used for multi-provider orchestration where different agents can use different providers
+AGENT_DEFAULT_PROVIDERS: dict[str, str] = {
+    # ═══════════════════════════════════════════════════════════════════════
+    # SPEC CREATION AGENTS (Use claude as default provider)
+    # ═══════════════════════════════════════════════════════════════════════
+    "spec_gatherer": "claude",
+    "spec_researcher": "claude",
+    "spec_writer": "claude",
+    "spec_critic": "claude",
+    "spec_discovery": "claude",
+    "spec_context": "claude",
+    "spec_validation": "claude",
+    "spec_compaction": "claude",
+    # ═══════════════════════════════════════════════════════════════════════
+    # BUILD AGENTS (Use claude as default provider)
+    # ═══════════════════════════════════════════════════════════════════════
+    "planner": "claude",
+    "coder": "claude",
+    # ═══════════════════════════════════════════════════════════════════════
+    # QA AGENTS (Use claude as default provider)
+    # ═══════════════════════════════════════════════════════════════════════
+    "qa_reviewer": "claude",
+    "qa_fixer": "claude",
+    # ═══════════════════════════════════════════════════════════════════════
+    # UTILITY AGENTS (Use claude as default provider)
+    # ═══════════════════════════════════════════════════════════════════════
+    "insights": "claude",
+    "merge_resolver": "claude",
+    "commit_message": "claude",
+    # ═══════════════════════════════════════════════════════════════════════
+    # PR AGENTS (Use claude as default provider)
+    # ═══════════════════════════════════════════════════════════════════════
+    "pr_reviewer": "claude",
+    "pr_orchestrator_parallel": "claude",
+    "pr_followup_parallel": "claude",
+    # ═══════════════════════════════════════════════════════════════════════
+    # ANALYSIS AGENTS (Use claude as default provider)
+    # ═══════════════════════════════════════════════════════════════════════
+    "analysis": "claude",
+    "batch_analysis": "claude",
+    "batch_validation": "claude",
+    # ═══════════════════════════════════════════════════════════════════════
+    # ROADMAP & IDEATION (Use claude as default provider)
+    # ═══════════════════════════════════════════════════════════════════════
+    "roadmap_discovery": "claude",
+    "competitor_analysis": "claude",
+    "ideation": "claude",
+}
+
 
 class PhaseModelConfig(TypedDict, total=False):
     spec: str
