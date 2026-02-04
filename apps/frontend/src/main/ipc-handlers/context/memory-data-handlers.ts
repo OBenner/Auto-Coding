@@ -262,4 +262,130 @@ export function registerMemoryDataHandlers(
       return { success: true, data: results };
     }
   );
+
+  // Get graph data for visualization
+  ipcMain.handle(
+    IPC_CHANNELS.CONTEXT_GET_GRAPH_DATA,
+    async (_, projectId: string, limit: number = 50): Promise<IPCResult<any>> => {
+      const project = projectStore.getProject(projectId);
+      if (!project) {
+        return { success: false, error: 'Project not found' };
+      }
+
+      const projectEnvVars = loadProjectEnvVars(project.path, project.autoBuildPath);
+      const graphitiEnabled = isGraphitiEnabled(projectEnvVars);
+
+      // Only available with LadybugDB
+      if (!graphitiEnabled || !isKuzuAvailable()) {
+        return {
+          success: false,
+          error: 'Graph data requires LadybugDB (Graphiti must be enabled)'
+        };
+      }
+
+      try {
+        const dbDetails = getGraphitiDatabaseDetails(projectEnvVars);
+        const memoryService = getMemoryService({
+          dbPath: dbDetails.dbPath,
+          database: dbDetails.database,
+        });
+        const graphData = await memoryService.getGraphData(limit);
+        return { success: true, data: graphData };
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        return { success: false, error: `Failed to get graph data: ${errorMessage}` };
+      }
+    }
+  );
+
+  // Delete a memory
+  ipcMain.handle(
+    IPC_CHANNELS.CONTEXT_DELETE_MEMORY,
+    async (_, projectId: string, memoryId: string): Promise<IPCResult<void>> => {
+      const project = projectStore.getProject(projectId);
+      if (!project) {
+        return { success: false, error: 'Project not found' };
+      }
+
+      const projectEnvVars = loadProjectEnvVars(project.path, project.autoBuildPath);
+      const graphitiEnabled = isGraphitiEnabled(projectEnvVars);
+
+      // Only available with LadybugDB
+      if (!graphitiEnabled || !isKuzuAvailable()) {
+        return {
+          success: false,
+          error: 'Delete memory requires LadybugDB (Graphiti must be enabled)'
+        };
+      }
+
+      try {
+        const dbDetails = getGraphitiDatabaseDetails(projectEnvVars);
+        const memoryService = getMemoryService({
+          dbPath: dbDetails.dbPath,
+          database: dbDetails.database,
+        });
+        const result = await memoryService.deleteMemory(memoryId);
+
+        if (!result.success) {
+          return { success: false, error: result.error || 'Failed to delete memory' };
+        }
+
+        return { success: true };
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        return { success: false, error: `Failed to delete memory: ${errorMessage}` };
+      }
+    }
+  );
+
+  // Export memories to JSON file
+  ipcMain.handle(
+    IPC_CHANNELS.CONTEXT_EXPORT_MEMORIES,
+    async (_, projectId: string, outputPath: string): Promise<IPCResult<{
+      episodicCount: number;
+      entityCount: number;
+      totalCount: number;
+    }>> => {
+      const project = projectStore.getProject(projectId);
+      if (!project) {
+        return { success: false, error: 'Project not found' };
+      }
+
+      const projectEnvVars = loadProjectEnvVars(project.path, project.autoBuildPath);
+      const graphitiEnabled = isGraphitiEnabled(projectEnvVars);
+
+      // Only available with LadybugDB
+      if (!graphitiEnabled || !isKuzuAvailable()) {
+        return {
+          success: false,
+          error: 'Export memories requires LadybugDB (Graphiti must be enabled)'
+        };
+      }
+
+      try {
+        const dbDetails = getGraphitiDatabaseDetails(projectEnvVars);
+        const memoryService = getMemoryService({
+          dbPath: dbDetails.dbPath,
+          database: dbDetails.database,
+        });
+        const result = await memoryService.exportMemories(outputPath);
+
+        if (!result.success) {
+          return { success: false, error: result.error || 'Failed to export memories' };
+        }
+
+        return {
+          success: true,
+          data: {
+            episodicCount: result.episodicCount || 0,
+            entityCount: result.entityCount || 0,
+            totalCount: result.totalCount || 0
+          }
+        };
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        return { success: false, error: `Failed to export memories: ${errorMessage}` };
+      }
+    }
+  );
 }
