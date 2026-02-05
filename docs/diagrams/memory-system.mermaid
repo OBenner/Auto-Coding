@@ -1,0 +1,126 @@
+---
+title: Graphiti Memory System Architecture
+---
+flowchart TB
+    subgraph Agents["🤖 Agent Layer"]
+        Planner["Planner Agent"]
+        Coder["Coder Agent"]
+        QA_Reviewer["QA Reviewer Agent"]
+        QA_Fixer["QA Fixer Agent"]
+    end
+
+    subgraph MemoryManager["📦 Memory Manager"]
+        MemoryMgr["MemoryManager<br/>(agents/memory_manager.py)"]
+        FileFallback["File-based Memory<br/>(Fallback)"]
+    end
+
+    subgraph GraphitiMemory["🧠 Graphiti Memory (Main Facade)"]
+        Graphiti["GraphitiMemory<br/>(integrations/graphiti/<br/>queries_pkg/graphiti.py)"]
+    end
+
+    subgraph ModularComponents["🔧 Modular Components"]
+        subgraph Client["📡 Client Layer"]
+            GraphitiClient["GraphitiClient<br/>(client.py)<br/><br/>• DB Connection<br/>• LadybugDB Init<br/>• Lifecycle Mgmt"]
+        end
+
+        subgraph Queries["💾 Queries Layer"]
+            GraphitiQueries["GraphitiQueries<br/>(queries.py)<br/><br/>• add_session_insight()<br/>• add_codebase_discovery()<br/>• add_pattern()<br/>• add_gotcha()<br/>• add_task_outcome()"]
+        end
+
+        subgraph Search["🔍 Search Layer"]
+            GraphitiSearch["GraphitiSearch<br/>(search.py)<br/><br/>• get_relevant_context()<br/>• get_session_history()<br/>• search_by_type()<br/>• Semantic Search"]
+        end
+
+        subgraph Schema["📋 Schema Layer"]
+            GraphitiSchema["Schema Constants<br/>(schema.py)<br/><br/>• Episode Types<br/>• GroupIdMode<br/>• MAX_CONTEXT_RESULTS"]
+        end
+    end
+
+    subgraph Providers["🔌 Multi-Provider System"]
+        subgraph LLMProviders["🗣️ LLM Providers"]
+            OpenAI["OpenAI"]
+            Anthropic["Anthropic"]
+            Azure["Azure OpenAI"]
+            Ollama["Ollama"]
+            Google["Google AI"]
+        end
+
+        subgraph EmbedderProviders["📊 Embedder Providers"]
+            OpenAIEmb["OpenAI"]
+            Voyage["Voyage AI"]
+            AzureEmb["Azure OpenAI"]
+            OllamaEmb["Ollama"]
+            GoogleEmb["Google AI"]
+        end
+
+        ProviderFactory["Provider Factory<br/>(graphiti_providers/)"]
+    end
+
+    subgraph Storage["💿 Storage Layer"]
+        LadybugDB["LadybugDB<br/>(Embedded Graph Database)<br/><br/>• No Docker Required<br/>• Python 3.12+<br/>• real_ladybug package"]
+        GraphData["Graph Data<br/><br/>• Episodes (Nodes)<br/>• Relationships (Edges)<br/>• Embeddings"]
+        EpisodeTypes["Episode Types<br/><br/>• session_insight<br/>• codebase_discovery<br/>• pattern<br/>• gotcha<br/>• task_outcome<br/>• qa_result"]
+    end
+
+    subgraph Configuration["⚙️ Configuration"]
+        GraphitiConfig["GraphitiConfig<br/>(config.py)<br/><br/>• Multi-provider settings<br/>• Database config<br/>• Environment vars"]
+        State["GraphitiState<br/>(.graphiti_state.json)<br/><br/>• Initialization status<br/>• Connection info"]
+    end
+
+    %% Agent to Memory Manager connections
+    Planner -->|"Store session insights<br/>Retrieve context"| MemoryMgr
+    Coder -->|"Record discoveries<br/>Get patterns"| MemoryMgr
+    QA_Reviewer -->|"Store QA results<br/>Access history"| MemoryMgr
+    QA_Fixer -->|"Log fixes<br/>Query gotchas"| MemoryMgr
+
+    %% Memory Manager to Graphiti
+    MemoryMgr -->|"Primary (if enabled)"| Graphiti
+    MemoryMgr -.->|"Fallback"| FileFallback
+
+    %% Graphiti to Modular Components
+    Graphiti -->|"Delegates to"| GraphitiClient
+    Graphiti -->|"Delegates to"| GraphitiQueries
+    Graphiti -->|"Delegates to"| GraphitiSearch
+    Graphiti -->|"Uses"| GraphitiSchema
+
+    %% Component inter-dependencies
+    GraphitiClient -->|"Provides DB connection"| GraphitiQueries
+    GraphitiClient -->|"Provides DB connection"| GraphitiSearch
+    GraphitiQueries -->|"Uses"| GraphitiSchema
+    GraphitiSearch -->|"Uses"| GraphitiSchema
+
+    %% Client to Storage
+    GraphitiClient -->|"Manages"| LadybugDB
+
+    %% Storage to Data
+    LadybugDB -->|"Stores"| GraphData
+    GraphData -->|"Contains"| EpisodeTypes
+
+    %% Provider connections
+    ProviderFactory -->|"Creates LLM client"| LLMProviders
+    ProviderFactory -->|"Creates embedder"| EmbedderProviders
+    LLMProviders -->|"LLM Inference"| GraphitiClient
+    EmbedderProviders -->|"Generate Embeddings"| LadybugDB
+
+    %% Configuration
+    GraphitiConfig -->|"Configures"| ProviderFactory
+    GraphitiConfig -->|"Validates"| Graphiti
+    State -->|"Loads/Saves"| Graphiti
+
+    %% Styling
+    style Agents fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    style MemoryManager fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    style GraphitiMemory fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+    style ModularComponents fill:#e8f5e9,stroke:#388e3c,stroke-width:2px
+    style Providers fill:#fce4ec,stroke:#c2185b,stroke-width:2px
+    style Storage fill:#e0f2f1,stroke:#00796b,stroke-width:2px
+    style Configuration fill:#fff9c4,stroke:#f9a825,stroke-width:2px
+
+    style Graphiti fill:#ba68c8,stroke:#4a148c,stroke-width:3px,color:#fff
+    style MemoryMgr fill:#ffb74d,stroke:#e65100,stroke-width:3px
+
+    style LadybugDB fill:#4db6ac,stroke:#004d40,stroke-width:3px,color:#fff
+    style GraphitiClient fill:#81c784,stroke:#1b5e20,stroke-width:2px
+    style GraphitiQueries fill:#81c784,stroke:#1b5e20,stroke-width:2px
+    style GraphitiSearch fill:#81c784,stroke:#1b5e20,stroke-width:2px
+    style GraphitiSchema fill:#81c784,stroke:#1b5e20,stroke-width:2px
