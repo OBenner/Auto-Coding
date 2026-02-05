@@ -607,7 +607,7 @@ class TestSelfCorrection:
             prompt = session_call[1]["message"]
             assert "PREVIOUS ITERATION FAILED" in prompt
             assert "Failed to create review report" in prompt
-            assert "Consecutive Failures: 1" in prompt
+            assert "**Consecutive Failures**: 1" in prompt
 
 
 # =============================================================================

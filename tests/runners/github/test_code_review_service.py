@@ -43,10 +43,8 @@ def mock_config():
     from runners.github.models import GitHubRunnerConfig
 
     config = GitHubRunnerConfig(
-        github_token="test_token",
-        repo_owner="test_owner",
-        repo_name="test_repo",
-        enabled=True,
+        token="test_token",
+        repo="test_owner/test_repo",
     )
     return config
 
