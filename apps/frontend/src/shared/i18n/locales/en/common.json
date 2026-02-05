@@ -81,6 +81,9 @@
     "continue": "Continue",
     "saving": "Saving..."
   },
+  "actions": {
+    "view": "View"
+  },
   "labels": {
     "loading": "Loading...",
     "error": "Error",

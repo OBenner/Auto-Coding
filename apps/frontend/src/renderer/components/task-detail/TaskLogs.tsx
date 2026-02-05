@@ -1,4 +1,4 @@
-import { useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useMemo } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import {
   Terminal,
@@ -17,12 +17,13 @@ import {
   Wrench,
   Info,
   Brain,
-  Cpu
+  Cpu,
+  X
 } from 'lucide-react';
 import { Badge } from '../ui/badge';
 import { cn } from '../../lib/utils';
 import type { Task, TaskLogs, TaskLogPhase, TaskPhaseLog, TaskLogEntry, TaskMetadata } from '../../../shared/types';
-import type { PhaseModelConfig, ThinkingLevel, ModelTypeShort } from '../../../shared/types/settings';
+import type { PhaseModelConfig, PhaseThinkingConfig, ThinkingLevel, ModelTypeShort } from '../../../shared/types/settings';
 import { useVirtualizedLogs } from '../../hooks/useVirtualizedLogs';
 
 interface TaskLogsProps {
@@ -112,6 +113,16 @@ function getPhaseConfig(
 // Number of items to render outside the visible area for smoother scrolling
 const OVERSCAN = 5;
 
+// Filter types
+type LogFilterType = 'all' | 'errors' | 'tools' | 'info';
+
+const FILTER_LABELS: Record<LogFilterType, string> = {
+  all: 'All',
+  errors: 'Errors',
+  tools: 'Tools',
+  info: 'Info'
+};
+
 export function TaskLogs({
   task,
   phaseLogs,
@@ -124,6 +135,8 @@ export function TaskLogs({
   onTogglePhase
 }: TaskLogsProps) {
   const parentRef = useRef<HTMLDivElement>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterType, setFilterType] = useState<LogFilterType>('all');
 
   const {
     flattenedItems,
@@ -133,26 +146,70 @@ export function TaskLogs({
     hasLogs
   } = useVirtualizedLogs(phaseLogs, expandedPhases);
 
-  // Set up the virtualizer with dynamic measurement
+  // Filter items based on search query and filter type
+  const filteredItems = useMemo(() => {
+    let items = flattenedItems;
+
+    // Apply filter type
+    if (filterType !== 'all') {
+      items = items.filter(item => {
+        // Always show phase headers
+        if (item.type === 'phase-header') return true;
+
+        // Filter log entries
+        const entry = item.entry;
+        if (!entry) return false;
+
+        switch (filterType) {
+          case 'errors':
+            return entry.type === 'error';
+          case 'tools':
+            return entry.type === 'tool_start' || entry.type === 'tool_end';
+          case 'info':
+            return entry.type === 'info' || entry.type === 'success';
+          default:
+            return true;
+        }
+      });
+    }
+
+    // Apply search query
+    if (searchQuery.trim()) {
+      const lowerQuery = searchQuery.toLowerCase();
+      items = items.filter(item => {
+        // Always show phase headers
+        if (item.type === 'phase-header') return true;
+
+        // Search in log entries
+        const entry = item.entry;
+        if (!entry) return false;
+
+        // Search in content
+        if (entry.content?.toLowerCase().includes(lowerQuery)) return true;
+
+        // Search in detail
+        if (entry.detail?.toLowerCase().includes(lowerQuery)) return true;
+
+        // Search in tool name
+        if (entry.tool_name?.toLowerCase().includes(lowerQuery)) return true;
+
+        // Search in tool input
+        if (entry.tool_input?.toLowerCase().includes(lowerQuery)) return true;
+
+        return false;
+      });
+    }
+
+    return items;
+  }, [flattenedItems, searchQuery, filterType]);
+
+  // Set up the virtualizer with filtered items
   const rowVirtualizer = useVirtualizer({
-    count,
+    count: filteredItems.length,
     getScrollElement: () => parentRef.current,
     estimateSize,
     overscan: OVERSCAN,
-    // Enable measuring for dynamic heights
-    measureElement: (element) => {
-      return element.getBoundingClientRect().height;
-    },
   });
-
-  // Re-measure all items when flattenedItems change (expand/collapse)
-  useEffect(() => {
-    // Small delay to allow DOM to update before measuring
-    const timer = setTimeout(() => {
-      rowVirtualizer.measure();
-    }, 10);
-    return () => clearTimeout(timer);
-  }, [flattenedItems, rowVirtualizer]);
 
   // Create toggle handler for phase headers
   const createPhaseToggleHandler = useCallback(
@@ -208,65 +265,139 @@ export function TaskLogs({
   }
 
   return (
-    <div
-      ref={parentRef}
-      className="h-full overflow-y-auto scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent"
-      onScroll={onLogsScroll}
-    >
-      <div className="p-4">
-        {/* The large inner element to hold all of the items */}
-        <div
-          style={{
-            height: `${rowVirtualizer.getTotalSize()}px`,
-            width: '100%',
-            position: 'relative',
-          }}
-        >
-          {/* Only the visible items in the virtualizer */}
-          {rowVirtualizer.getVirtualItems().map((virtualItem) => {
-            const item = flattenedItems[virtualItem.index];
-            if (!item) return null;
+    <div className="h-full flex flex-col">
+      {/* Search and Filter Controls */}
+      <div className="flex-shrink-0 p-3 border-b border-border bg-background/50">
+        <div className="flex items-center gap-2">
+          {/* Search Input */}
+          <div className="relative flex-1 max-w-md">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+            <input
+              type="text"
+              placeholder="Search logs..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className={cn(
+                'w-full h-8 pl-8 pr-8 text-xs rounded-md',
+                'bg-secondary/50 border border-border',
+                'focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent',
+                'placeholder:text-muted-foreground'
+              )}
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
 
-            return (
+          {/* Filter Buttons */}
+          <div className="flex items-center gap-1">
+            {(Object.keys(FILTER_LABELS) as LogFilterType[]).map((type) => (
+              <button
+                key={type}
+                onClick={() => setFilterType(type)}
+                className={cn(
+                  'px-2.5 py-1 text-xs rounded-md transition-colors',
+                  filterType === type
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-secondary/50 text-muted-foreground hover:bg-secondary hover:text-foreground'
+                )}
+              >
+                {FILTER_LABELS[type]}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Active filters indicator */}
+        {(searchQuery || filterType !== 'all') && (
+          <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+            <span>
+              Showing {filteredItems.length} of {flattenedItems.length} items
+            </span>
+            {filterType !== 'all' && (
+              <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                {FILTER_LABELS[filterType]}
+              </Badge>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Logs List */}
+      <div
+        ref={parentRef}
+        className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent"
+        onScroll={onLogsScroll}
+      >
+        <div className="p-4">
+          {filteredItems.length === 0 ? (
+            <div className="text-center text-sm text-muted-foreground py-8">
+              <Search className="mx-auto mb-2 h-8 w-8 opacity-50" />
+              <p>No matching logs</p>
+              <p className="text-xs mt-1">Try adjusting your search or filter</p>
+            </div>
+          ) : (
+            <>
+              {/* The large inner element to hold all of the items */}
               <div
-                key={item.key}
-                data-index={virtualItem.index}
-                ref={rowVirtualizer.measureElement}
                 style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
+                  height: `${rowVirtualizer.getTotalSize()}px`,
                   width: '100%',
-                  transform: `translateY(${virtualItem.start}px)`,
+                  position: 'relative',
                 }}
               >
-                {item.type === 'phase-header' ? (
-                  <div className="pb-2">
-                    <PhaseLogSection
-                      phase={item.phase}
-                      phaseLog={item.phaseLog || null}
-                      isExpanded={item.isPhaseExpanded || false}
-                      onToggle={createPhaseToggleHandler(item.phase)}
-                      isTaskStuck={isStuck}
-                      phaseConfig={getPhaseConfig(task.metadata, item.phase)}
-                    />
-                  </div>
-                ) : (
-                  item.entry && (
-                    <div className="ml-6 border-l-2 border-border pl-4 py-1">
-                      <LogEntry
-                        entry={item.entry}
-                        isExpanded={item.isDetailExpanded || false}
-                        onToggleExpand={createDetailToggleHandler(item.phase, item.entryIndex || 0)}
-                      />
+                {/* Only the visible items in the virtualizer */}
+                {rowVirtualizer.getVirtualItems().map((virtualItem) => {
+                  const item = filteredItems[virtualItem.index];
+                  if (!item) return null;
+
+                  return (
+                    <div
+                      key={item.key}
+                      style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        width: '100%',
+                        height: `${virtualItem.size}px`,
+                        transform: `translateY(${virtualItem.start}px)`,
+                      }}
+                    >
+                      {item.type === 'phase-header' ? (
+                        <div className="pb-2">
+                          <PhaseLogSection
+                            phase={item.phase}
+                            phaseLog={item.phaseLog || null}
+                            isExpanded={item.isPhaseExpanded || false}
+                            onToggle={createPhaseToggleHandler(item.phase)}
+                            isTaskStuck={isStuck}
+                            phaseConfig={getPhaseConfig(task.metadata, item.phase)}
+                          />
+                        </div>
+                      ) : (
+                        item.entry && (
+                          <div className="ml-6 border-l-2 border-border pl-4 py-1">
+                            <LogEntry
+                              entry={item.entry}
+                              isExpanded={item.isDetailExpanded || false}
+                              onToggleExpand={createDetailToggleHandler(item.phase, item.entryIndex || 0)}
+                            />
+                          </div>
+                        )
+                      )}
                     </div>
-                  )
-                )}
+                  );
+                })}
               </div>
-            );
-          })}
+              <div ref={logsEndRef} />
+            </>
+          )}
         </div>
-        <div ref={logsEndRef} />
       </div>
     </div>
   );

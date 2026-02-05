@@ -34,6 +34,17 @@ export interface ExecutionProgress {
   // When a phase completes, it's added to this array before transitioning to the next phase
   // This ensures that planning is marked complete before coding starts, etc.
   completedPhases?: CompletablePhase[];  // Phases that have successfully completed
+
+  // Resource usage metrics (from backend resource_tracker.py)
+  cpu_percent?: number;  // CPU usage percentage
+  memory_mb?: number;  // Memory usage in megabytes
+  memory_percent?: number;  // Memory usage percentage
+  elapsed_seconds?: number;  // Elapsed time since phase started
+
+  // Timing estimates (from backend timing_history.py)
+  estimated_seconds?: number;  // Estimated time to completion
+  confidence?: 'high' | 'medium' | 'low';  // Estimate confidence level
+  sample_size?: number;  // Number of historical samples used for estimate
 }
 
 export interface Subtask {
@@ -116,27 +127,27 @@ export interface TaskLogStreamChunk {
   subtask_id?: string;
 }
 
-// Token usage statistics - for tracking token consumption per phase
-export interface PhaseTokenStats {
-  phase: 'planning' | 'coding' | 'validation';
-  inputTokens: number;
-  outputTokens: number;
-  totalTokens: number;
-  sessionCount: number;
-  updatedAt: string;  // ISO timestamp
+// Log filtering and search types
+export interface LogFilterState {
+  searchQuery: string;
+  phases: TaskLogPhase[];  // Empty array = all phases
+  entryTypes: TaskLogEntryType[];  // Empty array = all types
+  tools: string[];  // Empty array = all tools (e.g., 'Read', 'Write', 'Bash')
+  showToolOutput: boolean;  // Whether to show tool_start/tool_end entries
 }
 
-export interface TaskTokenStats {
-  phases: {
-    planning?: PhaseTokenStats;
-    coding?: PhaseTokenStats;
-    validation?: PhaseTokenStats;
-  };
-  totalInputTokens: number;
-  totalOutputTokens: number;
-  totalTokens: number;
-  createdAt: string;  // ISO timestamp
-  updatedAt: string;  // ISO timestamp
+export interface LogSearchResult {
+  phase: TaskLogPhase;
+  entryIndex: number;
+  matchType: 'content' | 'tool_name' | 'tool_input' | 'detail';
+  matchText: string;  // The actual text that matched
+}
+
+export interface LogSearchState {
+  query: string;
+  results: LogSearchResult[];
+  currentResultIndex: number;  // For navigating through results
+  isSearching: boolean;
 }
 
 // Image attachment types for task creation
@@ -283,7 +294,6 @@ export interface Task {
   logs: string[];
   metadata?: TaskMetadata;  // Rich metadata from ideation or manual entry
   executionProgress?: ExecutionProgress;  // Real-time execution progress
-  tokenStats?: TaskTokenStats;  // Token usage statistics per phase
   releasedInVersion?: string;  // Version in which this task was released
   stagedInMainProject?: boolean;  // True if changes were staged to main project (worktree merged with --no-commit)
   stagedAt?: string;  // ISO timestamp when changes were staged

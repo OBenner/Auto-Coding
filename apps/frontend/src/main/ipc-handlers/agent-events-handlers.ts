@@ -345,6 +345,22 @@ export function registerAgenteventsHandlers(
         taskProjectId
       );
 
+      // Send notifications when task requires attention (FIX: Enhanced real-time progress indicators)
+      // Notify immediately on phase transition, not waiting for process exit
+      if (task && project) {
+        const taskTitle = task.title || task.specId;
+
+        // Notify on task completion
+        if (progress.phase === 'complete') {
+          notificationService.notifyTaskComplete(taskTitle, project.id, taskId);
+        }
+
+        // Notify on task failure
+        if (progress.phase === 'failed') {
+          notificationService.notifyTaskFailed(taskTitle, project.id, taskId);
+        }
+      }
+
       // CRITICAL: Persist status to plan file(s) to prevent flip-flop on task list refresh
       // When getTasks() is called, it reads status from the plan file. Without persisting,
       // the status in the file might differ from the UI, causing inconsistent state.

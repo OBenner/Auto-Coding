@@ -150,7 +150,49 @@
       "plan": "Plan",
       "code": "Code",
       "qa": "QA"
+    },
+    "resources": {
+      "cpu": "CPU",
+      "memory": "Memory",
+      "elapsed": "Elapsed"
+    },
+    "time": {
+      "elapsed": "Elapsed",
+      "remaining": "Est. remaining",
+      "subtask": "Subtask",
+      "about": "About",
+      "roughly": "Roughly",
+      "unknown": "Unknown",
+      "lessThanMinute": "Less than 1 minute",
+      "minute": "{{count}} minute",
+      "minute_plural": "{{count}} minutes",
+      "hour": "{{count}} hour",
+      "hour_plural": "{{count}} hours",
+      "day": "{{count}} day",
+      "day_plural": "{{count}} days"
+    },
+    "confidence": {
+      "high": "High confidence",
+      "medium": "Medium confidence",
+      "low": "Low confidence",
+      "samples": "{{count}} samples"
     }
+  },
+  "logs": {
+    "search": {
+      "placeholder": "Search logs...",
+      "showing": "Showing {{filtered}} of {{total}} items",
+      "noResults": "No matching logs",
+      "noResultsHint": "Try adjusting your search or filter"
+    },
+    "filters": {
+      "all": "All",
+      "errors": "Errors",
+      "tools": "Tools",
+      "info": "Info"
+    },
+    "empty": "No logs yet",
+    "emptyHint": "Logs will appear here when the task runs"
   },
   "files": {
     "title": "Files",
@@ -175,7 +217,11 @@
   },
   "notifications": {
     "backgroundTaskTitle": "Task continues in background",
-    "backgroundTaskDescription": "The task is still running. You can reopen this dialog to monitor progress."
+    "backgroundTaskDescription": "The task is still running. You can reopen this dialog to monitor progress.",
+    "taskComplete": "Task Complete",
+    "taskCompleteDescription": "Your task has finished successfully and is ready for review.",
+    "taskFailed": "Task Failed",
+    "taskFailedDescription": "Your task encountered an issue and requires your attention."
   },
   "ariaLabels": {
     "taskCard": "Task card: {{title}}",
@@ -315,23 +361,6 @@
   },
   "subtasks": {
     "untitled": "Untitled subtask"
-  },
-  "tokenStats": {
-    "title": "Token Usage",
-    "noStats": "No token statistics available",
-    "noStatsHint": "Token usage will appear here after task execution begins",
-    "totalTokens": "Total Tokens",
-    "inputTokens": "Input",
-    "outputTokens": "Output",
-    "phases": {
-      "planning": "Planning",
-      "coding": "Coding",
-      "validation": "Validation"
-    },
-    "sessionCount": "{{count}} session",
-    "sessionCount_plural": "{{count}} sessions",
-    "tokensUsed": "{{count}} token",
-    "tokensUsed_plural": "{{count}} tokens"
   },
   "bulkPR": {
     "selectAllInColumn": "Select all tasks in column",

@@ -45,7 +45,6 @@ import { GitLabMergeRequests } from './components/gitlab-merge-requests';
 import { Changelog } from './components/Changelog';
 import { Worktrees } from './components/Worktrees';
 import { AgentTools } from './components/AgentTools';
-import { MergeAnalyticsDashboard } from './components/merge-analytics/MergeAnalyticsDashboard';
 import { WelcomeScreen } from './components/WelcomeScreen';
 import { RateLimitModal } from './components/RateLimitModal';
 import { SDKRateLimitModal } from './components/SDKRateLimitModal';
@@ -53,6 +52,7 @@ import { AuthFailureModal } from './components/AuthFailureModal';
 import { VersionWarningModal } from './components/VersionWarningModal';
 import { OnboardingWizard } from './components/onboarding';
 import { AppUpdateNotification } from './components/AppUpdateNotification';
+import { AgentAttentionNotification } from './components/AgentAttentionNotification';
 import { ProactiveSwapListener } from './components/ProactiveSwapListener';
 import { GitHubSetupModal } from './components/GitHubSetupModal';
 import { useProjectStore, loadProjects, addProject, initializeProject, removeProject } from './stores/project-store';
@@ -875,16 +875,16 @@ export function App() {
                   />
                 </div>
                 {activeView === 'roadmap' && (activeProjectId || selectedProjectId) && (
-                  <Roadmap projectId={(activeProjectId || selectedProjectId) as string} onGoToTask={handleGoToTask} />
+                  <Roadmap projectId={activeProjectId || selectedProjectId!} onGoToTask={handleGoToTask} />
                 )}
                 {activeView === 'context' && (activeProjectId || selectedProjectId) && (
-                  <Context projectId={(activeProjectId || selectedProjectId) as string} />
+                  <Context projectId={activeProjectId || selectedProjectId!} />
                 )}
                 {activeView === 'ideation' && (activeProjectId || selectedProjectId) && (
-                  <Ideation projectId={(activeProjectId || selectedProjectId) as string} onGoToTask={handleGoToTask} />
+                  <Ideation projectId={activeProjectId || selectedProjectId!} onGoToTask={handleGoToTask} />
                 )}
                 {activeView === 'insights' && (activeProjectId || selectedProjectId) && (
-                  <Insights projectId={(activeProjectId || selectedProjectId) as string} />
+                  <Insights projectId={activeProjectId || selectedProjectId!} />
                 )}
                 {activeView === 'github-issues' && (activeProjectId || selectedProjectId) && (
                   <GitHubIssues
@@ -918,7 +918,7 @@ export function App() {
                 )}
                 {activeView === 'gitlab-merge-requests' && (activeProjectId || selectedProjectId) && (
                   <GitLabMergeRequests
-                    projectId={(activeProjectId || selectedProjectId) as string}
+                    projectId={activeProjectId || selectedProjectId!}
                     onOpenSettings={() => {
                       setSettingsInitialProjectSection('gitlab');
                       setIsSettingsDialogOpen(true);
@@ -929,10 +929,7 @@ export function App() {
                   <Changelog />
                 )}
                 {activeView === 'worktrees' && (activeProjectId || selectedProjectId) && (
-                  <Worktrees projectId={(activeProjectId || selectedProjectId) as string} />
-                )}
-                {activeView === 'merge-analytics' && (activeProjectId || selectedProjectId) && (
-                  <MergeAnalyticsDashboard projectId={(activeProjectId || selectedProjectId) as string} />
+                  <Worktrees projectId={activeProjectId || selectedProjectId!} />
                 )}
                 {activeView === 'agent-tools' && <AgentTools />}
               </>
@@ -961,7 +958,7 @@ export function App() {
         {/* Dialogs */}
         {(activeProjectId || selectedProjectId) && (
           <TaskCreationWizard
-            projectId={(activeProjectId || selectedProjectId) as string}
+            projectId={activeProjectId || selectedProjectId!}
             open={isNewTaskDialogOpen}
             onOpenChange={setIsNewTaskDialogOpen}
           />
@@ -1153,6 +1150,9 @@ export function App() {
 
         {/* App Update Notification - shows when new app version is available */}
         <AppUpdateNotification />
+
+        {/* Agent Attention Notification - shows toast when agent requires attention */}
+        <AgentAttentionNotification />
 
         {/* Global Download Indicator - shows Ollama model download progress */}
         <GlobalDownloadIndicator />

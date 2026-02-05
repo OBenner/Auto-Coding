@@ -81,6 +81,9 @@
     "continue": "Continuer",
     "saving": "Enregistrement..."
   },
+  "actions": {
+    "view": "Voir"
+  },
   "labels": {
     "loading": "Chargement...",
     "error": "Erreur",

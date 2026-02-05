@@ -42,7 +42,7 @@ import { TaskSubtasks } from './TaskSubtasks';
 import { TaskLogs } from './TaskLogs';
 import { TaskFiles } from './TaskFiles';
 import { TaskReview } from './TaskReview';
-import { TokenStatsDisplay } from './TokenStatsDisplay';
+import { ResourceUsageIndicator } from '../ResourceUsageIndicator';
 import type { Task, WorktreeCreatePROptions } from '../../../shared/types';
 
 interface TaskDetailModalProps {
@@ -304,7 +304,7 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
            {task.metadata?.prUrl && (
              <button
                type="button"
-               onClick={() => task.metadata?.prUrl && window.electronAPI?.openExternal(task.metadata.prUrl)}
+               onClick={() => window.electronAPI?.openExternal(task.metadata?.prUrl!)}
                className="completion-state text-sm flex items-center gap-2 text-info cursor-pointer hover:underline bg-transparent border-none p-0"
              >
               <GitPullRequest className="h-5 w-5" />
@@ -482,12 +482,6 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
                       {t('tasks:files.tab')}
                     </TabsTrigger>
                   )}
-                  <TabsTrigger
-                    value="tokens"
-                    className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 py-2.5 text-sm"
-                  >
-                    {t('tasks:tokenStats.title')}
-                  </TabsTrigger>
                 </TabsList>
 
                 {/* Overview Tab */}
@@ -496,6 +490,20 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
                     <div className="p-5 space-y-5 overflow-x-hidden max-w-full">
                       {/* Metadata */}
                       <TaskMetadata task={task} />
+
+                      {/* Resource Usage Indicator */}
+                      {(state.hasActiveExecution || task.executionProgress) && (
+                        <>
+                          <Separator />
+                          <div>
+                            <h3 className="text-sm font-semibold mb-3">Resource Usage</h3>
+                            <ResourceUsageIndicator
+                              progress={task.executionProgress}
+                              isRunning={state.hasActiveExecution}
+                            />
+                          </div>
+                        </>
+                      )}
 
                       {/* Human Review Section */}
                       {state.needsReview && (
@@ -572,11 +580,6 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
                     <TaskFiles task={task} />
                   </TabsContent>
                 )}
-
-                {/* Token Stats Tab */}
-                <TabsContent value="tokens" className="flex-1 min-h-0 overflow-hidden mt-0">
-                  <TokenStatsDisplay task={task} />
-                </TabsContent>
               </Tabs>
             </div>
 
