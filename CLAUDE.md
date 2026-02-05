@@ -20,7 +20,10 @@ autonomous-coding/
 │   │   ├── integrations/  # Graphiti, Linear, GitHub
 │   │   └── prompts/       # Agent system prompts
 │   └── frontend/          # Electron desktop UI
-├── guides/                # Documentation
+├── docs/                  # Documentation templates and style guide
+│   ├── templates/         # Reusable templates for features, architecture, APIs
+│   └── STYLE_GUIDE.md     # Documentation writing conventions
+├── guides/                # User and developer guides
 ├── tests/                 # Test suite
 └── scripts/               # Build and utility scripts
 ```
@@ -36,6 +39,14 @@ autonomous-coding/
 - AI agents can perform E2E testing using the Electron MCP server
 - When bug fixing or implementing features, use the Electron MCP server for automated testing
 - See "End-to-End Testing" section below for details
+
+**Documentation:**
+- `docs/` - Documentation templates and writing style guide
+- `docs/templates/` - Reusable templates for feature docs, architecture, and API documentation
+- `docs/STYLE_GUIDE.md` - Documentation writing conventions and best practices
+- `guides/` - User and developer guides for the project
+- Use templates from `docs/templates/` when documenting new features, modules, or APIs
+- Follow the style guide for consistent documentation across the project
 
 ## Commands
 
