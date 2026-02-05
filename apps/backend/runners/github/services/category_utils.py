@@ -13,7 +13,7 @@ from __future__ import annotations
 try:
     from ..models import ReviewCategory
 except (ImportError, ValueError, SystemError):
-    from models import ReviewCategory
+    from runners.github.models import ReviewCategory
 
 
 # Map AI-generated category names to valid ReviewCategory enum values

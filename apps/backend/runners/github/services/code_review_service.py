@@ -33,15 +33,15 @@ try:
     from .io_utils import safe_print
 except (ImportError, ValueError, SystemError):
     from analysis.security_scanner import SecurityScanner, SecurityVulnerability
-    from context_gatherer import PRContext
-    from gh_client import GHClient
-    from models import (
+    from runners.github.context_gatherer import PRContext
+    from runners.github.gh_client import GHClient
+    from runners.github.models import (
         GitHubRunnerConfig,
         PRReviewFinding,
         ReviewCategory,
         ReviewSeverity,
     )
-    from services.io_utils import safe_print
+    from runners.github.services.io_utils import safe_print
 
 
 # Define a local ProgressCallback to avoid circular import

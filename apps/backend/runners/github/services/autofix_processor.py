@@ -14,8 +14,8 @@ try:
     from ..models import AutoFixState, AutoFixStatus, GitHubRunnerConfig
     from ..permissions import GitHubPermissionChecker
 except (ImportError, ValueError, SystemError):
-    from models import AutoFixState, AutoFixStatus, GitHubRunnerConfig
-    from permissions import GitHubPermissionChecker
+    from runners.github.models import AutoFixState, AutoFixStatus, GitHubRunnerConfig
+    from runners.github.permissions import GitHubPermissionChecker
 
 
 class AutoFixProcessor:
