@@ -33,6 +33,7 @@ export class AgentManager extends EventEmitter {
     baseBranch?: string;
     swapCount: number;
   }> = new Map();
+  private isPairProgrammingMode: boolean = false;
 
   constructor() {
     super();
@@ -524,5 +525,32 @@ export class AgentManager extends EventEmitter {
    */
   getTaskSessionId(taskId: string): string | undefined {
     return this.state.getTaskSessionId(taskId);
+  }
+
+  // ============================================
+  // Pair Programming Mode
+  // ============================================
+
+  /**
+   * Set pair programming mode
+   * Enables seamless transition between autonomous and pair modes
+   * @param enabled - True to enable pair mode, false for autonomous mode
+   */
+  setPairMode(enabled: boolean): void {
+    const previousMode = this.isPairProgrammingMode;
+    this.isPairProgrammingMode = enabled;
+
+    // Only emit event if mode actually changed
+    if (previousMode !== enabled) {
+      this.emit('mode-changed', enabled ? 'pair' : 'autonomous');
+    }
+  }
+
+  /**
+   * Check if pair programming mode is currently active
+   * @returns True if in pair mode, false if in autonomous mode
+   */
+  isPairMode(): boolean {
+    return this.isPairProgrammingMode;
   }
 }
