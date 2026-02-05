@@ -17,7 +17,8 @@
     "gitlabMRs": "MRs GitLab",
     "plugins": "Plugins",
     "worktrees": "Worktrees",
-    "agentTools": "Aperçu MCP"
+    "agentTools": "Aperçu MCP",
+    "mergeAnalytics": "Analyse des fusions"
   },
   "actions": {
     "settings": "Paramètres",
