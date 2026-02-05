@@ -279,30 +279,21 @@ export interface ContextSearchResult {
   type: string;
 }
 
-export interface GraphNode {
-  id: string;
-  label: string;
-  type: 'episodic' | 'entity';
+export interface PatternSuggestion {
+  /** Pattern description */
+  pattern: string;
+  /** Pattern category (e.g., "state-management", "error-handling") */
+  category: string;
+  /** Categorization confidence (0.0-1.0) */
+  confidence: number;
+  /** Reasoning for categorization */
+  reasoning: string;
+  /** Semantic search relevance score (0.0-1.0) */
+  score: number;
+  /** Spec ID where pattern originated */
+  spec_id: string;
+  /** When pattern was created */
   timestamp: string;
-  data: {
-    content?: string;
-    description?: string;
-    summary?: string;
-  };
-}
-
-export interface GraphEdge {
-  id: string;
-  source: string;
-  target: string;
-  type: string;
-}
-
-export interface GraphDataResult {
-  nodes: GraphNode[];
-  edges: GraphEdge[];
-  node_count: number;
-  edge_count: number;
 }
 
 export interface ProjectContextData {

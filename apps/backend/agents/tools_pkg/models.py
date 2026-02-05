@@ -38,7 +38,6 @@ TOOL_RECORD_DISCOVERY = "mcp__auto-claude__record_discovery"
 TOOL_RECORD_GOTCHA = "mcp__auto-claude__record_gotcha"
 TOOL_GET_SESSION_CONTEXT = "mcp__auto-claude__get_session_context"
 TOOL_UPDATE_QA_STATUS = "mcp__auto-claude__update_qa_status"
-TOOL_GET_SPEC_STATISTICS = "mcp__auto-claude__get_spec_statistics"
 
 # =============================================================================
 # External MCP Tools
@@ -197,7 +196,6 @@ AGENT_CONFIGS = {
             TOOL_GET_BUILD_PROGRESS,
             TOOL_GET_SESSION_CONTEXT,
             TOOL_RECORD_DISCOVERY,
-            TOOL_GET_SPEC_STATISTICS,
         ],
         "thinking_default": "high",
     },
@@ -211,7 +209,6 @@ AGENT_CONFIGS = {
             TOOL_RECORD_DISCOVERY,
             TOOL_RECORD_GOTCHA,
             TOOL_GET_SESSION_CONTEXT,
-            TOOL_GET_SPEC_STATISTICS,
         ],
         "thinking_default": "none",  # Coding doesn't use extended thinking
     },
@@ -265,6 +262,12 @@ AGENT_CONFIGS = {
         "mcp_servers": [],
         "auto_claude_tools": [],
         "thinking_default": "low",
+    },
+    "pattern_categorizer": {
+        "tools": [],  # Text-only classification
+        "mcp_servers": [],
+        "auto_claude_tools": [],
+        "thinking_default": "none",  # Haiku model doesn't support thinking
     },
     "pr_reviewer": {
         "tools": BASE_READ_TOOLS + WEB_TOOLS,  # Read-only

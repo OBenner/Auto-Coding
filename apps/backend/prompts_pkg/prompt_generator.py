@@ -373,12 +373,20 @@ def format_context_for_prompt(context: dict) -> str:
     Format loaded context into a prompt section.
 
     Args:
-        context: Dict from load_subtask_context
+        context: Dict from load_subtask_context, may include:
+            - patterns: Dict of reference file paths to contents
+            - files_to_modify: Dict of file paths to current contents
+            - pattern_suggestions: Pre-formatted string of pattern suggestions from Graphiti
 
     Returns:
         Formatted string to append to prompt
     """
     sections = []
+
+    # Add pattern suggestions from Graphiti (if available)
+    if context.get("pattern_suggestions"):
+        sections.append(context["pattern_suggestions"])
+        sections.append("")  # Add spacing after pattern suggestions
 
     if context.get("patterns"):
         sections.append("## Reference Files (Patterns to Follow)\n")

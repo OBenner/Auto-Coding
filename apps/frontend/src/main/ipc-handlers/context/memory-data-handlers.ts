@@ -6,7 +6,8 @@ import { IPC_CHANNELS, getSpecsDir } from '../../../shared/constants';
 import type {
   IPCResult,
   MemoryEpisode,
-  ContextSearchResult
+  ContextSearchResult,
+  PatternSuggestion
 } from '../../../shared/types';
 import { projectStore } from '../../project-store';
 import { getMemoryService, isKuzuAvailable } from '../../memory-service';
@@ -15,6 +16,8 @@ import {
   isGraphitiEnabled,
   getGraphitiDatabaseDetails
 } from './utils';
+import { runPythonSubprocess } from '../github/utils/subprocess-runner';
+import { parsePythonCommand } from '../../python-detector';
 
 /**
  * Check if a file exists
@@ -263,10 +266,16 @@ export function registerMemoryDataHandlers(
     }
   );
 
-  // Get graph data for visualization
+  // Get pattern suggestions
   ipcMain.handle(
-    IPC_CHANNELS.CONTEXT_GET_GRAPH_DATA,
-    async (_, projectId: string, limit: number = 50): Promise<IPCResult<any>> => {
+    IPC_CHANNELS.CONTEXT_GET_PATTERN_SUGGESTIONS,
+    async (
+      _,
+      projectId: string,
+      query: string,
+      categories?: string[],
+      numResults: number = 5
+    ): Promise<IPCResult<PatternSuggestion[]>> => {
       const project = projectStore.getProject(projectId);
       if (!project) {
         return { success: false, error: 'Project not found' };
@@ -275,116 +284,243 @@ export function registerMemoryDataHandlers(
       const projectEnvVars = loadProjectEnvVars(project.path, project.autoBuildPath);
       const graphitiEnabled = isGraphitiEnabled(projectEnvVars);
 
-      // Only available with LadybugDB
-      if (!graphitiEnabled || !isKuzuAvailable()) {
+      if (!graphitiEnabled) {
         return {
           success: false,
-          error: 'Graph data requires LadybugDB (Graphiti must be enabled)'
+          error: 'Graphiti memory system is not enabled for this project'
         };
       }
 
       try {
-        const dbDetails = getGraphitiDatabaseDetails(projectEnvVars);
-        const memoryService = getMemoryService({
-          dbPath: dbDetails.dbPath,
-          database: dbDetails.database,
+        // Call Python backend to get pattern suggestions
+        const [pythonCommand, baseArgs] = parsePythonCommand(project.path);
+        const backendPath = path.join(project.path, 'apps', 'backend');
+
+        // Prepare arguments for pattern_suggester.py
+        const args = [
+          '-c',
+          `
+import sys
+import json
+import asyncio
+from pathlib import Path
+sys.path.insert(0, '${backendPath.replace(/\\/g, '\\\\')}')
+
+async def main():
+    from integrations.graphiti.pattern_suggester import suggest_patterns
+    from integrations.graphiti.queries_pkg.client import get_graphiti_client_sync
+
+    query = ${JSON.stringify(query)}
+    categories = ${JSON.stringify(categories || null)}
+    num_results = ${numResults}
+    project_dir = Path('${project.path.replace(/\\/g, '\\\\')}')
+
+    # Get client
+    client = get_graphiti_client_sync(str(project_dir))
+    if not client:
+        print(json.dumps({"error": "Failed to initialize Graphiti client"}))
+        return
+
+    # Generate group_id from project path
+    import hashlib
+    project_name = project_dir.name
+    path_hash = hashlib.md5(str(project_dir.resolve()).encode(), usedforsecurity=False).hexdigest()[:8]
+    group_id = f"project_{project_name}_{path_hash}"
+
+    # Get pattern suggestions
+    patterns = await suggest_patterns(
+        client=client,
+        group_id=group_id,
+        spec_context_id="",
+        query=query,
+        categories=categories,
+        num_results=num_results,
+        min_score=0.5,
+        include_project_context=True,
+        project_dir=project_dir
+    )
+
+    print(json.dumps({"patterns": patterns}))
+
+asyncio.run(main())
+          `.trim()
+        ];
+
+        const { promise } = runPythonSubprocess<{ patterns: PatternSuggestion[] }>({
+          pythonPath: pythonCommand,
+          args: [...baseArgs, ...args],
+          cwd: backendPath,
+          env: { ...process.env, PYTHONPATH: backendPath }
         });
-        const graphData = await memoryService.getGraphData(limit);
-        return { success: true, data: graphData };
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        return { success: false, error: `Failed to get graph data: ${errorMessage}` };
-      }
-    }
-  );
 
-  // Delete a memory
-  ipcMain.handle(
-    IPC_CHANNELS.CONTEXT_DELETE_MEMORY,
-    async (_, projectId: string, memoryId: string): Promise<IPCResult<void>> => {
-      const project = projectStore.getProject(projectId);
-      if (!project) {
-        return { success: false, error: 'Project not found' };
-      }
-
-      const projectEnvVars = loadProjectEnvVars(project.path, project.autoBuildPath);
-      const graphitiEnabled = isGraphitiEnabled(projectEnvVars);
-
-      // Only available with LadybugDB
-      if (!graphitiEnabled || !isKuzuAvailable()) {
-        return {
-          success: false,
-          error: 'Delete memory requires LadybugDB (Graphiti must be enabled)'
-        };
-      }
-
-      try {
-        const dbDetails = getGraphitiDatabaseDetails(projectEnvVars);
-        const memoryService = getMemoryService({
-          dbPath: dbDetails.dbPath,
-          database: dbDetails.database,
-        });
-        const result = await memoryService.deleteMemory(memoryId);
+        const result = await promise;
 
         if (!result.success) {
-          return { success: false, error: result.error || 'Failed to delete memory' };
+          return {
+            success: false,
+            error: result.error || 'Failed to get pattern suggestions'
+          };
         }
 
-        return { success: true };
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        return { success: false, error: `Failed to delete memory: ${errorMessage}` };
-      }
-    }
-  );
-
-  // Export memories to JSON file
-  ipcMain.handle(
-    IPC_CHANNELS.CONTEXT_EXPORT_MEMORIES,
-    async (_, projectId: string, outputPath: string): Promise<IPCResult<{
-      episodicCount: number;
-      entityCount: number;
-      totalCount: number;
-    }>> => {
-      const project = projectStore.getProject(projectId);
-      if (!project) {
-        return { success: false, error: 'Project not found' };
-      }
-
-      const projectEnvVars = loadProjectEnvVars(project.path, project.autoBuildPath);
-      const graphitiEnabled = isGraphitiEnabled(projectEnvVars);
-
-      // Only available with LadybugDB
-      if (!graphitiEnabled || !isKuzuAvailable()) {
-        return {
-          success: false,
-          error: 'Export memories requires LadybugDB (Graphiti must be enabled)'
-        };
-      }
-
-      try {
-        const dbDetails = getGraphitiDatabaseDetails(projectEnvVars);
-        const memoryService = getMemoryService({
-          dbPath: dbDetails.dbPath,
-          database: dbDetails.database,
-        });
-        const result = await memoryService.exportMemories(outputPath);
-
-        if (!result.success) {
-          return { success: false, error: result.error || 'Failed to export memories' };
-        }
-
-        return {
-          success: true,
-          data: {
-            episodicCount: result.episodicCount || 0,
-            entityCount: result.entityCount || 0,
-            totalCount: result.totalCount || 0
+        // Parse Python output
+        try {
+          const lines = result.stdout.split('\n');
+          const jsonLine = lines.find(line => line.trim().startsWith('{'));
+          if (!jsonLine) {
+            return { success: false, error: 'No JSON output from Python script' };
           }
-        };
+
+          const data = JSON.parse(jsonLine);
+          if (data.error) {
+            return { success: false, error: data.error };
+          }
+
+          return { success: true, data: data.patterns || [] };
+        } catch (parseError) {
+          return {
+            success: false,
+            error: `Failed to parse pattern suggestions: ${parseError}`
+          };
+        }
       } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        return { success: false, error: `Failed to export memories: ${errorMessage}` };
+        return {
+          success: false,
+          error: `Failed to get pattern suggestions: ${error}`
+        };
+      }
+    }
+  );
+
+  // Confirm pattern (user action)
+  ipcMain.handle(
+    IPC_CHANNELS.CONTEXT_CONFIRM_PATTERN,
+    async (
+      _,
+      projectId: string,
+      pattern: PatternSuggestion,
+      action: 'confirmed' | 'rejected' | 'modified',
+      modifiedPattern?: string
+    ): Promise<IPCResult<void>> => {
+      const project = projectStore.getProject(projectId);
+      if (!project) {
+        return { success: false, error: 'Project not found' };
+      }
+
+      const projectEnvVars = loadProjectEnvVars(project.path, project.autoBuildPath);
+      const graphitiEnabled = isGraphitiEnabled(projectEnvVars);
+
+      if (!graphitiEnabled) {
+        return {
+          success: false,
+          error: 'Graphiti memory system is not enabled for this project'
+        };
+      }
+
+      try {
+        // Call Python backend to record pattern confirmation
+        const [pythonCommand, baseArgs] = parsePythonCommand(project.path);
+        const backendPath = path.join(project.path, 'apps', 'backend');
+
+        // Prepare arguments to record pattern action
+        const args = [
+          '-c',
+          `
+import sys
+import json
+import asyncio
+from pathlib import Path
+from datetime import datetime
+sys.path.insert(0, '${backendPath.replace(/\\/g, '\\\\')}')
+
+async def main():
+    from integrations.graphiti.queries_pkg.client import get_graphiti_client_sync
+    from integrations.graphiti.queries_pkg.schema import EPISODE_TYPE_PATTERN
+
+    pattern_data = ${JSON.stringify(pattern)}
+    action = ${JSON.stringify(action)}
+    modified_pattern = ${JSON.stringify(modifiedPattern || null)}
+    project_dir = Path('${project.path.replace(/\\/g, '\\\\')}')
+
+    # Get client
+    client = get_graphiti_client_sync(str(project_dir))
+    if not client:
+        print(json.dumps({"error": "Failed to initialize Graphiti client"}))
+        return
+
+    # Generate group_id from project path
+    import hashlib
+    project_name = project_dir.name
+    path_hash = hashlib.md5(str(project_dir.resolve()).encode(), usedforsecurity=False).hexdigest()[:8]
+    group_id = f"project_{project_name}_{path_hash}"
+
+    # Record pattern action as an episode
+    episode_content = {
+        "type": "pattern_action",
+        "action": action,
+        "original_pattern": pattern_data["pattern"],
+        "category": pattern_data["category"],
+        "spec_id": pattern_data.get("spec_id", ""),
+        "timestamp": datetime.utcnow().isoformat() + "Z"
+    }
+
+    if modified_pattern:
+        episode_content["modified_pattern"] = modified_pattern
+
+    await client.graphiti.add_episode(
+        name=f"Pattern {action}: {pattern_data['category']}",
+        episode_body=json.dumps(episode_content),
+        source_description="User pattern confirmation",
+        reference_time=datetime.utcnow(),
+        group_id=group_id
+    )
+
+    print(json.dumps({"success": True}))
+
+asyncio.run(main())
+          `.trim()
+        ];
+
+        const { promise } = runPythonSubprocess<{ success: boolean }>({
+          pythonPath: pythonCommand,
+          args: [...baseArgs, ...args],
+          cwd: backendPath,
+          env: { ...process.env, PYTHONPATH: backendPath }
+        });
+
+        const result = await promise;
+
+        if (!result.success) {
+          return {
+            success: false,
+            error: result.error || 'Failed to confirm pattern'
+          };
+        }
+
+        // Parse Python output
+        try {
+          const lines = result.stdout.split('\n');
+          const jsonLine = lines.find(line => line.trim().startsWith('{'));
+          if (!jsonLine) {
+            return { success: false, error: 'No JSON output from Python script' };
+          }
+
+          const data = JSON.parse(jsonLine);
+          if (data.error) {
+            return { success: false, error: data.error };
+          }
+
+          return { success: true, data: undefined };
+        } catch (parseError) {
+          return {
+            success: false,
+            error: `Failed to parse confirmation result: ${parseError}`
+          };
+        }
+      } catch (error) {
+        return {
+          success: false,
+          error: `Failed to confirm pattern: ${error}`
+        };
       }
     }
   );

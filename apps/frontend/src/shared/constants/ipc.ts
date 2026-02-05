@@ -58,9 +58,6 @@ export const IPC_CHANNELS = {
   TASK_LOGS_CHANGED: 'task:logsChanged',   // Event: logs changed (main -> renderer)
   TASK_LOGS_STREAM: 'task:logsStream',     // Event: streaming log chunk (main -> renderer)
 
-  // Task token statistics
-  TASK_TOKEN_STATS_GET: 'task:tokenStats:get',
-
   // Terminal operations
   TERMINAL_CREATE: 'terminal:create',
   TERMINAL_DESTROY: 'terminal:destroy',
@@ -196,9 +193,8 @@ export const IPC_CHANNELS = {
   CONTEXT_MEMORY_STATUS: 'context:memoryStatus',
   CONTEXT_SEARCH_MEMORIES: 'context:searchMemories',
   CONTEXT_GET_MEMORIES: 'context:getMemories',
-  CONTEXT_GET_GRAPH_DATA: 'context:getGraphData',
-  CONTEXT_DELETE_MEMORY: 'context:deleteMemory',
-  CONTEXT_EXPORT_MEMORIES: 'context:exportMemories',
+  CONTEXT_GET_PATTERN_SUGGESTIONS: 'context:getPatternSuggestions',
+  CONTEXT_CONFIRM_PATTERN: 'context:confirmPattern',
 
   // Environment configuration
   ENV_GET: 'env:get',
@@ -403,11 +399,16 @@ export const IPC_CHANNELS = {
   GITHUB_PR_CHECK_MERGE_READINESS: 'github:pr:checkMergeReadiness',
   GITHUB_PR_MARK_REVIEW_POSTED: 'github:pr:markReviewPosted',
   GITHUB_PR_UPDATE_BRANCH: 'github:pr:updateBranch',
+  GITHUB_PR_GET_INLINE_COMMENTS: 'github:pr:getInlineComments',
+  GITHUB_PR_REPLY_TO_COMMENT: 'github:pr:replyToComment',
+  GITHUB_PR_APPLY_SUGGESTION: 'github:pr:applySuggestion',
+  GITHUB_PR_REQUEST_REREVIEW: 'github:pr:requestReReview',
 
   // GitHub PR Review events (main -> renderer)
   GITHUB_PR_REVIEW_PROGRESS: 'github:pr:reviewProgress',
   GITHUB_PR_REVIEW_COMPLETE: 'github:pr:reviewComplete',
   GITHUB_PR_REVIEW_ERROR: 'github:pr:reviewError',
+  GITHUB_PR_UPDATED: 'github:pr:updated',
 
   // GitHub PR Logs (for viewing AI review logs)
   GITHUB_PR_GET_LOGS: 'github:pr:getLogs',
@@ -415,15 +416,6 @@ export const IPC_CHANNELS = {
   // GitHub PR Memory operations (saves review insights to memory layer)
   GITHUB_PR_MEMORY_GET: 'github:pr:memory:get',        // Get PR review memories
   GITHUB_PR_MEMORY_SEARCH: 'github:pr:memory:search',  // Search PR review memories
-
-  // GitHub PR Inline Comments and Suggestions
-  GITHUB_PR_GET_INLINE_COMMENTS: 'github:pr:getInlineComments',
-  GITHUB_PR_REPLY_TO_COMMENT: 'github:pr:replyToComment',
-  GITHUB_PR_APPLY_SUGGESTION: 'github:pr:applySuggestion',
-  GITHUB_PR_REQUEST_REREVIEW: 'github:pr:requestRereview',
-
-  // GitHub PR events (main -> renderer)
-  GITHUB_PR_UPDATED: 'github:pr:updated',
 
   // GitHub Workflow Approval (for fork PRs)
   GITHUB_WORKFLOWS_AWAITING_APPROVAL: 'github:workflows:awaitingApproval',
@@ -440,12 +432,6 @@ export const IPC_CHANNELS = {
   GITHUB_TRIAGE_PROGRESS: 'github:triage:progress',
   GITHUB_TRIAGE_COMPLETE: 'github:triage:complete',
   GITHUB_TRIAGE_ERROR: 'github:triage:error',
-
-  // Merge Analytics operations
-  MERGE_ANALYTICS_GET_HISTORY: 'merge:analytics:getHistory',
-  MERGE_ANALYTICS_GET_SUMMARY: 'merge:analytics:getSummary',
-  MERGE_ANALYTICS_GET_PATTERNS: 'merge:analytics:getPatterns',
-  MERGE_ANALYTICS_EXPORT: 'merge:analytics:export',
 
   // Memory Infrastructure status (LadybugDB - no Docker required)
   MEMORY_STATUS: 'memory:status',
@@ -511,7 +497,6 @@ export const IPC_CHANNELS = {
   // File explorer operations
   FILE_EXPLORER_LIST: 'fileExplorer:list',
   FILE_EXPLORER_READ: 'fileExplorer:read',
-  FILE_EXPLORER_WRITE: 'fileExplorer:write',
 
   // Git operations
   GIT_GET_BRANCHES: 'git:getBranches',
@@ -582,12 +567,5 @@ export const IPC_CHANNELS = {
   // Queue routing events (main -> renderer)
   QUEUE_PROFILE_SWAPPED: 'queue:profileSwapped',      // Task switched to different profile
   QUEUE_SESSION_CAPTURED: 'queue:sessionCaptured',    // Session ID captured from running task
-  QUEUE_BLOCKED_NO_PROFILES: 'queue:blockedNoProfiles', // All profiles unavailable
-
-  // Plugin operations
-  PLUGIN_LIST: 'plugin:list',
-  PLUGIN_ENABLE: 'plugin:enable',
-  PLUGIN_DISABLE: 'plugin:disable',
-  PLUGIN_INSTALL: 'plugin:install',
-  PLUGIN_UNINSTALL: 'plugin:uninstall'
+  QUEUE_BLOCKED_NO_PROFILES: 'queue:blockedNoProfiles' // All profiles unavailable
 } as const;
