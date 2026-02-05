@@ -1,0 +1,13 @@
+{
+  "suggestion": {
+    "title": "AI Suggestion",
+    "context": "Context",
+    "accept": "Accept",
+    "reject": "Reject"
+  },
+  "confidence": {
+    "high": "High Confidence",
+    "medium": "Medium Confidence",
+    "low": "Low Confidence"
+  }
+}

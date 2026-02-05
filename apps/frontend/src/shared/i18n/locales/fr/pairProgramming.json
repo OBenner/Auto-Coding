@@ -1,0 +1,13 @@
+{
+  "suggestion": {
+    "title": "Suggestion IA",
+    "context": "Contexte",
+    "accept": "Accepter",
+    "reject": "Rejeter"
+  },
+  "confidence": {
+    "high": "Haute Confiance",
+    "medium": "Confiance Moyenne",
+    "low": "Faible Confiance"
+  }
+}
