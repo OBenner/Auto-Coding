@@ -433,6 +433,12 @@ export const IPC_CHANNELS = {
   GITHUB_TRIAGE_COMPLETE: 'github:triage:complete',
   GITHUB_TRIAGE_ERROR: 'github:triage:error',
 
+  // Merge Analytics operations
+  MERGE_ANALYTICS_GET_HISTORY: 'mergeAnalytics:getHistory',
+  MERGE_ANALYTICS_GET_SUMMARY: 'mergeAnalytics:getSummary',
+  MERGE_ANALYTICS_GET_PATTERNS: 'mergeAnalytics:getPatterns',
+  MERGE_ANALYTICS_EXPORT: 'mergeAnalytics:export',
+
   // Memory Infrastructure status (LadybugDB - no Docker required)
   MEMORY_STATUS: 'memory:status',
   MEMORY_LIST_DATABASES: 'memory:listDatabases',
