@@ -151,7 +151,7 @@ export interface RoadmapProgressData {
   message?: string;
 }
 
-export type EventType = "execution" | "ideation" | "roadmap" | "log" | "error";
+export type EventType = "execution" | "ideation" | "roadmap" | "log" | "error" | "pair_suggestion" | "pair_session" | "pair_voice" | "pair_action";
 
 export interface BaseAgentEvent {
   event_type: EventType;
@@ -188,12 +188,24 @@ export interface ErrorEvent extends BaseAgentEvent {
   traceback?: string;
 }
 
+export interface SuggestionData {
+  suggestion: string;
+  context?: string;
+  confidence?: number;
+}
+
+export interface SuggestionEvent extends BaseAgentEvent {
+  event_type: "pair_suggestion";
+  data: SuggestionData;
+}
+
 export type AgentEvent =
   | ExecutionEvent
   | IdeationEvent
   | RoadmapEvent
   | LogEvent
-  | ErrorEvent;
+  | ErrorEvent
+  | SuggestionEvent;
 
 export interface PhaseEvent {
   phase: string;
