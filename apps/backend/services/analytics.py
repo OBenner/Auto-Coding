@@ -30,7 +30,7 @@ import json
 import re
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -467,7 +467,7 @@ class AnalyticsService:
             List of TrendDataPoint for each day
         """
         # Group specs by date (using last_updated or created_at)
-        cutoff_date = datetime.utcnow() - timedelta(days=days)
+        cutoff_date = datetime.now(timezone.utc) - timedelta(days=days)
         daily_data = defaultdict(
             lambda: {"total": 0, "completed": 0, "cost": 0.0}
         )

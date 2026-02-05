@@ -33,7 +33,7 @@ async function executeAnalyticsCommand(
   args: string[]
 ): Promise<any> {
   return new Promise((resolve, reject) => {
-    const pythonPath = getConfiguredPythonPath(projectPath);
+    const pythonPath = getConfiguredPythonPath();
     const [pythonCommand, pythonBaseArgs] = parsePythonCommand(pythonPath);
     const sourcePath = getEffectiveSourcePath();
     const backendPath = path.join(sourcePath, "apps", "backend");
@@ -42,7 +42,7 @@ async function executeAnalyticsCommand(
     // Build command: python -m apps.backend.cli.analytics_cli <command> <args>
     const fullArgs = [...pythonBaseArgs, scriptPath, command, ...args];
 
-    const env = getAugmentedEnv(backendPath);
+    const env = getAugmentedEnv();
     const pythonProcess = spawn(pythonCommand, fullArgs, {
       cwd: projectPath,
       env,
