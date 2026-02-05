@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   RefreshCw,
   Database,
@@ -10,7 +10,10 @@ import {
   Lightbulb,
   FolderTree,
   Code,
-  AlertTriangle
+  AlertTriangle,
+  List,
+  Network,
+  Download
 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
@@ -20,12 +23,16 @@ import { ScrollArea } from '../ui/scroll-area';
 import { cn } from '../../lib/utils';
 import { MemoryCard } from './MemoryCard';
 import { InfoItem } from './InfoItem';
+import { MemoryGraph } from './MemoryGraph';
+import { MemoryExportDialog } from './MemoryExportDialog';
 import { memoryFilterCategories } from './constants';
-import type { GraphitiMemoryStatus, GraphitiMemoryState, MemoryEpisode } from '../../../shared/types';
+import { loadRecentMemories } from '../../stores/context-store';
+import type { GraphitiMemoryStatus, GraphitiMemoryState, MemoryEpisode, GraphNode, GraphEdge } from '../../../shared/types';
 
 type FilterCategory = keyof typeof memoryFilterCategories;
 
 interface MemoriesTabProps {
+  projectId: string;
   memoryStatus: GraphitiMemoryStatus | null;
   memoryState: GraphitiMemoryState | null;
   recentMemories: MemoryEpisode[];
@@ -69,6 +76,7 @@ const filterIcons: Record<FilterCategory, React.ElementType> = {
 };
 
 export function MemoriesTab({
+  projectId,
   memoryStatus,
   memoryState: _memoryState,
   recentMemories,
@@ -79,6 +87,11 @@ export function MemoriesTab({
 }: MemoriesTabProps) {
   const [localSearchQuery, setLocalSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<FilterCategory>('all');
+  const [viewMode, setViewMode] = useState<'list' | 'graph'>('list');
+  const [graphNodes, setGraphNodes] = useState<GraphNode[]>([]);
+  const [graphEdges, setGraphEdges] = useState<GraphEdge[]>([]);
+  const [graphLoading, setGraphLoading] = useState(false);
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
 
   // Calculate memory counts by category
   const memoryCounts = useMemo(() => {
@@ -114,6 +127,41 @@ export function MemoriesTab({
   const handleSearchKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       handleSearch();
+    }
+  };
+
+  // Fetch graph data when switching to graph view
+  useEffect(() => {
+    const fetchGraphData = async () => {
+      if (viewMode === 'graph' && memoryStatus?.available && projectId) {
+        setGraphLoading(true);
+        try {
+          const result = await window.electronAPI.getGraphData(projectId, 50);
+          if (result.success && result.data) {
+            setGraphNodes(result.data.nodes);
+            setGraphEdges(result.data.edges);
+          }
+        } catch (error) {
+          // Silently handle errors - graph view will show empty state
+        } finally {
+          setGraphLoading(false);
+        }
+      }
+    };
+
+    void fetchGraphData();
+  }, [viewMode, memoryStatus?.available, projectId]);
+
+  // Handle memory deletion
+  const handleDeleteMemory = async (memoryId: string) => {
+    try {
+      const result = await window.electronAPI.deleteMemory(projectId, memoryId);
+      if (result.success) {
+        // Refresh memories list after successful deletion
+        await loadRecentMemories(projectId);
+      }
+    } catch (error) {
+      // Silently handle errors - the memory list will remain unchanged
     }
   };
 
@@ -243,92 +291,153 @@ export function MemoriesTab({
             <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
               Memory Browser
             </h3>
-            <span className="text-xs text-muted-foreground">
-              {filteredMemories.length} of {recentMemories.length} memories
-            </span>
-          </div>
-
-          {/* Filter Pills */}
-          <div className="flex flex-wrap gap-2">
-            {(Object.keys(memoryFilterCategories) as FilterCategory[]).map((category) => {
-              const config = memoryFilterCategories[category];
-              const count = memoryCounts[category];
-              const Icon = filterIcons[category];
-              const isActive = activeFilter === category;
-
-              return (
-                <Button
-                  key={category}
-                  variant={isActive ? 'default' : 'outline'}
-                  size="sm"
-                  className={cn(
-                    'gap-1.5 h-8',
-                    isActive && 'bg-accent text-accent-foreground',
-                    !isActive && count === 0 && 'opacity-50'
-                  )}
-                  onClick={() => setActiveFilter(category)}
-                  disabled={count === 0 && category !== 'all'}
-                >
-                  <Icon className="h-3.5 w-3.5" />
-                  <span>{config.label}</span>
-                  {count > 0 && (
-                    <Badge
-                      variant="secondary"
-                      className={cn(
-                        'ml-1 px-1.5 py-0 text-xs',
-                        isActive && 'bg-background/20'
-                      )}
-                    >
-                      {count}
-                    </Badge>
-                  )}
-                </Button>
-              );
-            })}
-          </div>
-
-          {/* Memory List */}
-          {memoriesLoading && (
-            <div className="flex items-center justify-center py-8">
-              <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
-            </div>
-          )}
-
-          {!memoriesLoading && filteredMemories.length === 0 && recentMemories.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-8 text-center">
-              <Brain className="h-10 w-10 text-muted-foreground mb-3" />
-              <p className="text-sm text-muted-foreground">
-                No memories recorded yet. Memories are created during AI agent sessions and PR reviews.
-              </p>
-            </div>
-          )}
-
-          {!memoriesLoading && filteredMemories.length === 0 && recentMemories.length > 0 && (
-            <div className="flex flex-col items-center justify-center py-8 text-center">
-              <Brain className="h-10 w-10 text-muted-foreground mb-3" />
-              <p className="text-sm text-muted-foreground">
-                No memories match the selected filter.
-              </p>
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-muted-foreground">
+                {filteredMemories.length} of {recentMemories.length} memories
+              </span>
+              {/* Export Button */}
               <Button
-                variant="link"
+                variant="outline"
                 size="sm"
-                onClick={() => setActiveFilter('all')}
-                className="mt-2"
+                className="h-7 gap-1.5"
+                onClick={() => setExportDialogOpen(true)}
+                disabled={recentMemories.length === 0}
               >
-                Show all memories
+                <Download className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Export</span>
               </Button>
+              {/* View Mode Toggle */}
+              {memoryStatus?.available && (
+                <div className="flex items-center gap-1 bg-muted/30 rounded-lg p-1">
+                  <Button
+                    variant={viewMode === 'list' ? 'default' : 'ghost'}
+                    size="sm"
+                    className="h-7 px-2"
+                    onClick={() => setViewMode('list')}
+                  >
+                    <List className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    variant={viewMode === 'graph' ? 'default' : 'ghost'}
+                    size="sm"
+                    className="h-7 px-2"
+                    onClick={() => setViewMode('graph')}
+                  >
+                    <Network className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              )}
             </div>
+          </div>
+
+          {/* List View */}
+          {viewMode === 'list' && (
+            <>
+              {/* Filter Pills */}
+              <div className="flex flex-wrap gap-2">
+                {(Object.keys(memoryFilterCategories) as FilterCategory[]).map((category) => {
+                  const config = memoryFilterCategories[category];
+                  const count = memoryCounts[category];
+                  const Icon = filterIcons[category];
+                  const isActive = activeFilter === category;
+
+                  return (
+                    <Button
+                      key={category}
+                      variant={isActive ? 'default' : 'outline'}
+                      size="sm"
+                      className={cn(
+                        'gap-1.5 h-8',
+                        isActive && 'bg-accent text-accent-foreground',
+                        !isActive && count === 0 && 'opacity-50'
+                      )}
+                      onClick={() => setActiveFilter(category)}
+                      disabled={count === 0 && category !== 'all'}
+                    >
+                      <Icon className="h-3.5 w-3.5" />
+                      <span>{config.label}</span>
+                      {count > 0 && (
+                        <Badge
+                          variant="secondary"
+                          className={cn(
+                            'ml-1 px-1.5 py-0 text-xs',
+                            isActive && 'bg-background/20'
+                          )}
+                        >
+                          {count}
+                        </Badge>
+                      )}
+                    </Button>
+                  );
+                })}
+              </div>
+
+              {/* Memory List */}
+              {memoriesLoading && (
+                <div className="flex items-center justify-center py-8">
+                  <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              )}
+
+              {!memoriesLoading && filteredMemories.length === 0 && recentMemories.length === 0 && (
+                <div className="flex flex-col items-center justify-center py-8 text-center">
+                  <Brain className="h-10 w-10 text-muted-foreground mb-3" />
+                  <p className="text-sm text-muted-foreground">
+                    No memories recorded yet. Memories are created during AI agent sessions and PR reviews.
+                  </p>
+                </div>
+              )}
+
+              {!memoriesLoading && filteredMemories.length === 0 && recentMemories.length > 0 && (
+                <div className="flex flex-col items-center justify-center py-8 text-center">
+                  <Brain className="h-10 w-10 text-muted-foreground mb-3" />
+                  <p className="text-sm text-muted-foreground">
+                    No memories match the selected filter.
+                  </p>
+                  <Button
+                    variant="link"
+                    size="sm"
+                    onClick={() => setActiveFilter('all')}
+                    className="mt-2"
+                  >
+                    Show all memories
+                  </Button>
+                </div>
+              )}
+
+              {filteredMemories.length > 0 && (
+                <div className="space-y-3">
+                  {filteredMemories.map((memory) => (
+                    <MemoryCard key={memory.id} memory={memory} onDelete={handleDeleteMemory} />
+                  ))}
+                </div>
+              )}
+            </>
           )}
 
-          {filteredMemories.length > 0 && (
-            <div className="space-y-3">
-              {filteredMemories.map((memory) => (
-                <MemoryCard key={memory.id} memory={memory} />
-              ))}
-            </div>
+          {/* Graph View */}
+          {viewMode === 'graph' && (
+            <>
+              {graphLoading && (
+                <div className="flex items-center justify-center py-8">
+                  <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              )}
+              {!graphLoading && (
+                <MemoryGraph nodes={graphNodes} edges={graphEdges} />
+              )}
+            </>
           )}
         </div>
       </div>
+
+      {/* Export Dialog */}
+      <MemoryExportDialog
+        projectId={projectId}
+        memories={recentMemories}
+        open={exportDialogOpen}
+        onOpenChange={setExportDialogOpen}
+      />
     </ScrollArea>
   );
 }
