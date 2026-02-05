@@ -46,6 +46,32 @@ class Settings:
         # WebSocket configuration
         self.WS_HEARTBEAT_INTERVAL: int = int(os.getenv("WS_HEARTBEAT_INTERVAL", "30"))
 
+        # Database configuration
+        self.DATABASE_URL: str = os.getenv(
+            "DATABASE_URL",
+            "postgresql://postgres:postgres@localhost:5432/autoclaude"
+        )
+
+        # OAuth configuration - GitHub
+        self.GITHUB_CLIENT_ID: str = os.getenv("GITHUB_CLIENT_ID", "")
+        self.GITHUB_CLIENT_SECRET: str = os.getenv("GITHUB_CLIENT_SECRET", "")
+
+        # OAuth configuration - GitLab
+        self.GITLAB_CLIENT_ID: str = os.getenv("GITLAB_CLIENT_ID", "")
+        self.GITLAB_CLIENT_SECRET: str = os.getenv("GITLAB_CLIENT_SECRET", "")
+
+        # OAuth redirect URI
+        self.OAUTH_REDIRECT_URI: str = os.getenv(
+            "OAUTH_REDIRECT_URI",
+            "http://localhost:8000/api/git/callback"
+        )
+
+        # Redis configuration for usage tracking
+        self.REDIS_HOST: str = os.getenv("REDIS_HOST", "localhost")
+        self.REDIS_PORT: int = int(os.getenv("REDIS_PORT", "6379"))
+        self.REDIS_DB: int = int(os.getenv("REDIS_DB", "0"))
+        self.REDIS_PASSWORD: str = os.getenv("REDIS_PASSWORD", "")
+
         # Validate critical settings
         self._validate()
 

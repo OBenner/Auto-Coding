@@ -262,14 +262,14 @@ main (user's branch)
 
 ### Contributing to Upstream
 
-**CRITICAL: When submitting PRs to AndyMik90/Auto-Claude, always target the `develop` branch, NOT `main`.**
+**CRITICAL: When submitting PRs to OBenner/Auto-Coding, always target the `develop` branch, NOT `main`.**
 
 **Correct workflow for contributions:**
 1. Fetch upstream: `git fetch upstream`
 2. Create feature branch from upstream/develop: `git checkout -b fix/my-fix upstream/develop`
 3. Make changes and commit with sign-off: `git commit -s -m "fix: description"`
 4. Push to your fork: `git push origin fix/my-fix`
-5. Create PR targeting `develop`: `gh pr create --repo AndyMik90/Auto-Claude --base develop`
+5. Create PR targeting `develop`: `gh pr create --repo OBenner/Auto-Coding --base develop`
 
 **Verify before PR:**
 ```bash

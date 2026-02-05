@@ -2,15 +2,15 @@
   "name": "auto-claude-web-ui",
   "version": "2.7.5",
   "type": "module",
-  "description": "Web UI for Auto Claude autonomous coding framework",
-  "homepage": "https://github.com/AndyMik90/Auto-Claude",
+  "description": "Web UI for Auto-Coding autonomous coding framework",
+  "homepage": "https://github.com/OBenner/Auto-Coding",
   "repository": {
     "type": "git",
-    "url": "https://github.com/AndyMik90/Auto-Claude.git"
+    "url": "https://github.com/OBenner/Auto-Coding.git"
   },
   "author": {
-    "name": "Auto Claude Team",
-    "email": "119136210+AndyMik90@users.noreply.github.com"
+    "name": "Auto-Coding Team",
+    "email": "mrobenner@gmail.com"
   },
   "license": "AGPL-3.0",
   "engines": {
@@ -53,6 +53,8 @@
     "react-i18next": "^16.5.0",
     "react-markdown": "^10.1.0",
     "react-resizable-panels": "^4.2.0",
+    "react-router-dom": "^7.13.0",
+    "recharts": "^3.7.0",
     "remark-gfm": "^4.0.1",
     "tailwind-merge": "^3.4.0",
     "zustand": "^5.0.9"

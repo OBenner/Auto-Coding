@@ -40,7 +40,7 @@ npm --version   # Should be >= 10.0.0
 ### 1. Clone Repository
 
 ```bash
-git clone https://github.com/AndyMik90/Auto-Claude.git
+git clone https://github.com/OBenner/Auto-Coding.git
 cd Auto-Claude/apps/web-frontend
 ```
 
@@ -916,7 +916,7 @@ jobs:
 
 For deployment issues:
 
-- **GitHub Issues**: https://github.com/AndyMik90/Auto-Claude/issues
+- **GitHub Issues**: https://github.com/OBenner/Auto-Coding/issues
 - **Documentation**: See main repository README
 - **Community**: Join discussions on GitHub
 

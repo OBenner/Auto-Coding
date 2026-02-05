@@ -2,12 +2,52 @@
 
 **Autonomous multi-agent coding framework that plans, builds, and validates software for you.**
 
-![Auto Claude Kanban Board](.github/assets/Auto-Claude-Kanban.png)
+![Auto Claude Kanban Board](.github/assets/Auto-Coding-Kanban.png)
 
 [![License](https://img.shields.io/badge/license-AGPL--3.0-green?style=flat-square)](./agpl-3.0.txt)
 [![Discord](https://img.shields.io/badge/Discord-Join%20Community-5865F2?style=flat-square&logo=discord&logoColor=white)](https://discord.gg/KCXaPBr4Dj)
 [![YouTube](https://img.shields.io/badge/YouTube-Subscribe-FF0000?style=flat-square&logo=youtube&logoColor=white)](https://www.youtube.com/@AndreMikalsen)
-[![CI](https://img.shields.io/github/actions/workflow/status/AndyMik90/Auto-Claude/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/AndyMik90/Auto-Claude/actions)
+[![CI](https://img.shields.io/github/actions/workflow/status/OBenner/Auto-Coding/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/OBenner/Auto-Coding/actions)
+
+---
+
+> **🔱 This is a fork of [AndyMik90/Auto-Claude](https://github.com/AndyMik90/Auto-Claude)**
+>
+> This repository contains custom modifications and enhancements on top of the original project.
+> I aim to keep it in sync with upstream changes while maintaining my own features.
+>
+> **Fork repository:** [OBenner/Auto-Coding](https://github.com/OBenner/Auto-Coding)
+
+---
+
+## Fork Enhancements
+
+### Completed Features
+
+| Feature | Description |
+|---------|-------------|
+| **Memory System Dashboard** | Graph visualization of memories, delete/export functionality |
+| **Resource Monitoring** | Enhanced progress tracking with resource usage display |
+| **Ollama Integration** | Local model support via Ollama service |
+| **Platform Abstraction** | Complete cross-platform support (Windows, macOS, Linux) |
+| **Automated Test Generation** | AI-generated tests in QA validation loop |
+| **Token Statistics** | Per-phase token usage tracking and visualization |
+| **Skeleton Loading States** | Improved UX with loading skeletons for data-heavy components |
+| **QA Status Tool** | Read tool for checking QA validation status |
+| **Spec Statistics Tool** | Analytics for spec creation and completion |
+| **Troubleshooting Guide** | Comprehensive FAQ for common issues |
+| **Web Interface** | Browser-based access option |
+| **Research Improvements** | Enhanced web search guidance in spec creation |
+
+### Roadmap
+
+| Feature | Description |
+|---------|-------------|
+| **Multi-Model Provider Support** | OpenAI GPT, Google Gemini, local models via Ollama |
+| **Code Review Agent** | Specialized agent for security/performance code review |
+| **AI Pair Programming Mode** | Real-time interactive coding assistance |
+| **Multi-Codebase Orchestration** | Manage multiple repos from single instance |
+| **Intelligent Pattern Recognition** | Auto-extract and suggest coding patterns from memory |
 
 ---
 
@@ -15,43 +55,6 @@
 
 ### Stable Release
 
-<!-- STABLE_VERSION_BADGE -->
-[![Stable](https://img.shields.io/badge/stable-2.7.5-blue?style=flat-square)](https://github.com/AndyMik90/Auto-Claude/releases/tag/v2.7.5)
-<!-- STABLE_VERSION_BADGE_END -->
-
-<!-- STABLE_DOWNLOADS -->
-| Platform | Download |
-|----------|----------|
-| **Windows** | [Auto-Claude-2.7.5-win32-x64.exe](https://github.com/AndyMik90/Auto-Claude/releases/download/v2.7.5/Auto-Claude-2.7.5-win32-x64.exe) |
-| **macOS (Apple Silicon)** | [Auto-Claude-2.7.5-darwin-arm64.dmg](https://github.com/AndyMik90/Auto-Claude/releases/download/v2.7.5/Auto-Claude-2.7.5-darwin-arm64.dmg) |
-| **macOS (Intel)** | [Auto-Claude-2.7.5-darwin-x64.dmg](https://github.com/AndyMik90/Auto-Claude/releases/download/v2.7.5/Auto-Claude-2.7.5-darwin-x64.dmg) |
-| **Linux** | [Auto-Claude-2.7.5-linux-x86_64.AppImage](https://github.com/AndyMik90/Auto-Claude/releases/download/v2.7.5/Auto-Claude-2.7.5-linux-x86_64.AppImage) |
-| **Linux (Debian)** | [Auto-Claude-2.7.5-linux-amd64.deb](https://github.com/AndyMik90/Auto-Claude/releases/download/v2.7.5/Auto-Claude-2.7.5-linux-amd64.deb) |
-| **Linux (Flatpak)** | [Auto-Claude-2.7.5-linux-x86_64.flatpak](https://github.com/AndyMik90/Auto-Claude/releases/download/v2.7.5/Auto-Claude-2.7.5-linux-x86_64.flatpak) |
-<!-- STABLE_DOWNLOADS_END -->
-
-### Beta Release
-
-> ⚠️ Beta releases may contain bugs and breaking changes. [View all releases](https://github.com/AndyMik90/Auto-Claude/releases)
-
-<!-- BETA_VERSION_BADGE -->
-[![Beta](https://img.shields.io/badge/beta-2.7.2--beta.10-orange?style=flat-square)](https://github.com/AndyMik90/Auto-Claude/releases/tag/v2.7.2-beta.10)
-<!-- BETA_VERSION_BADGE_END -->
-
-<!-- BETA_DOWNLOADS -->
-| Platform | Download |
-|----------|----------|
-| **Windows** | [Auto-Claude-2.7.2-beta.10-win32-x64.exe](https://github.com/AndyMik90/Auto-Claude/releases/download/v2.7.2-beta.10/Auto-Claude-2.7.2-beta.10-win32-x64.exe) |
-| **macOS (Apple Silicon)** | [Auto-Claude-2.7.2-beta.10-darwin-arm64.dmg](https://github.com/AndyMik90/Auto-Claude/releases/download/v2.7.2-beta.10/Auto-Claude-2.7.2-beta.10-darwin-arm64.dmg) |
-| **macOS (Intel)** | [Auto-Claude-2.7.2-beta.10-darwin-x64.dmg](https://github.com/AndyMik90/Auto-Claude/releases/download/v2.7.2-beta.10/Auto-Claude-2.7.2-beta.10-darwin-x64.dmg) |
-| **Linux** | [Auto-Claude-2.7.2-beta.10-linux-x86_64.AppImage](https://github.com/AndyMik90/Auto-Claude/releases/download/v2.7.2-beta.10/Auto-Claude-2.7.2-beta.10-linux-x86_64.AppImage) |
-| **Linux (Debian)** | [Auto-Claude-2.7.2-beta.10-linux-amd64.deb](https://github.com/AndyMik90/Auto-Claude/releases/download/v2.7.2-beta.10/Auto-Claude-2.7.2-beta.10-linux-amd64.deb) |
-| **Linux (Flatpak)** | [Auto-Claude-2.7.2-beta.10-linux-x86_64.flatpak](https://github.com/AndyMik90/Auto-Claude/releases/download/v2.7.2-beta.10/Auto-Claude-2.7.2-beta.10-linux-x86_64.flatpak) |
-<!-- BETA_DOWNLOADS_END -->
-
-> All releases include SHA256 checksums and VirusTotal scan results for security verification.
-
----
 
 ## Requirements
 
@@ -83,6 +86,7 @@
 | **Memory Layer** | Agents retain insights across sessions for smarter builds |
 | **GitHub/GitLab Integration** | Import issues, investigate with AI, create merge requests |
 | **Linear Integration** | Sync tasks with Linear for team progress tracking |
+| **Cloud-Hosted Option** | Fully managed cloud deployment - no local installation required |
 | **Cross-Platform** | Native desktop apps for Windows, macOS, and Linux |
 | **Auto-Updates** | App updates automatically when new versions are released |
 
@@ -96,12 +100,12 @@ Visual task management from planning through completion. Create tasks and monito
 ### Agent Terminals
 AI-powered terminals with one-click task context injection. Spawn multiple agents for parallel work.
 
-![Agent Terminals](.github/assets/Auto-Claude-Agents-terminals.png)
+![Agent Terminals](.github/assets/Auto-Coding-Agents-terminals.png)
 
 ### Roadmap
 AI-assisted feature planning with competitor analysis and audience targeting.
 
-![Roadmap](.github/assets/Auto-Claude-roadmap.png)
+![Roadmap](.github/assets/Auto-Coding-roadmap.png)
 
 ### Additional Features
 - **Insights** - Chat interface for exploring your codebase
@@ -143,6 +147,36 @@ python run.py --spec 001 --merge
 ```
 
 See [guides/CLI-USAGE.md](guides/CLI-USAGE.md) for complete CLI documentation.
+
+---
+
+## Deployment Options
+
+Auto Claude can be deployed in multiple ways to suit your needs:
+
+### 🖥️ Local Desktop (Recommended for Individual Developers)
+
+Download and run the native desktop application on Windows, macOS, or Linux. All processing happens locally on your machine.
+
+**Best for:** Individual developers, small teams, full control over execution environment
+
+### ☁️ Cloud-Hosted (Recommended for Teams & Enterprise)
+
+Deploy Auto Claude to cloud infrastructure for centralized access without local installation. Users access via web interface with OAuth authentication.
+
+**Best for:** Teams, enterprises, users who want instant access without setup
+
+**Features:**
+- Multi-user authentication and authorization
+- Centralized usage tracking and rate limiting
+- Git repository integration (GitHub/GitLab OAuth)
+- Scalable infrastructure with Kubernetes support
+- No local installation required
+
+**Documentation:**
+- **[Cloud Overview](guides/CLOUD_README.md)** - Understanding the cloud-hosted architecture
+- **[Cloud Setup Guide](guides/CLOUD_SETUP.md)** - Initial deployment and configuration
+- **[Cloud Deployment Guide](guides/CLOUD_DEPLOYMENT.md)** - Production operations and scaling
 
 ---
 
@@ -200,8 +234,8 @@ We welcome contributions! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for:
 ## Community
 
 - **Discord** - [Join our community](https://discord.gg/KCXaPBr4Dj)
-- **Issues** - [Report bugs or request features](https://github.com/AndyMik90/Auto-Claude/issues)
-- **Discussions** - [Ask questions](https://github.com/AndyMik90/Auto-Claude/discussions)
+- **Issues** - [Report bugs or request features](https://github.com/OBenner/Auto-Coding/issues)
+- **Discussions** - [Ask questions](https://github.com/OBenner/Auto-Coding/discussions)
 
 ---
 
@@ -217,6 +251,6 @@ Commercial licensing available for closed-source use cases.
 
 ## Star History
 
-[![GitHub Repo stars](https://img.shields.io/github/stars/AndyMik90/Auto-Claude?style=social)](https://github.com/AndyMik90/Auto-Claude/stargazers)
+[![GitHub Repo stars](https://img.shields.io/github/stars/OBenner/Auto-Coding?style=social)](https://github.com/OBenner/Auto-Coding/stargazers)
 
-[![Star History Chart](https://api.star-history.com/svg?repos=AndyMik90/Auto-Claude&type=Date)](https://star-history.com/#AndyMik90/Auto-Claude&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=OBenner/Auto-Coding&type=Date)](https://star-history.com/#OBenner/Auto-Coding&Date)

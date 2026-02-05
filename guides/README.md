@@ -7,8 +7,10 @@ Detailed documentation for Auto Claude setup and usage.
 | Guide | Description |
 |-------|-------------|
 | **[CLI-USAGE.md](CLI-USAGE.md)** | Terminal-only usage for power users, headless servers, and CI/CD |
+| **[CLOUD_README.md](CLOUD_README.md)** | Cloud-hosted option overview - architecture, benefits, and how it works |
+| **[CLOUD_SETUP.md](CLOUD_SETUP.md)** | Cloud infrastructure setup - initial deployment and configuration |
+| **[CLOUD_DEPLOYMENT.md](CLOUD_DEPLOYMENT.md)** | Cloud production deployment - operations, scaling, and maintenance |
 | **[SPEC-CREATION-PIPELINE.md](SPEC-CREATION-PIPELINE.md)** | Comprehensive guide to spec creation pipeline architecture and internals |
-| **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** | Common issues and solutions for Auto Claude setup and operation |
 | **[windows-development.md](windows-development.md)** | Windows-specific development guide (file encoding, paths, line endings) |
 | **[linux.md](linux.md)** | Linux-specific installation and build guide (Flatpak, AppImage) |
 

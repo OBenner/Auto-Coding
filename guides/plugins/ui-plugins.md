@@ -1507,7 +1507,7 @@ export default ProjectStatsWidget;
 
 We welcome contributions to improve this guide or add more UI plugin examples!
 
-- [GitHub Issues](https://github.com/AndyMik90/Auto-Claude/issues)
-- [GitHub Discussions](https://github.com/AndyMik90/Auto-Claude/discussions)
+- [GitHub Issues](https://github.com/OBenner/Auto-Coding/issues)
+- [GitHub Discussions](https://github.com/OBenner/Auto-Coding/discussions)
 
 Happy building! 🎨

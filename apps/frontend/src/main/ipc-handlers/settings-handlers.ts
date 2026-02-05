@@ -138,7 +138,7 @@ export function registerSettingsHandlers(
       // Migration: Clear CLI tool paths that are from a different platform
       // Fixes issue where Windows paths persisted on macOS (and vice versa)
       // when settings were synced/transferred between platforms
-      // See: https://github.com/AndyMik90/Auto-Claude/issues/XXX
+      // See: https://github.com/OBenner/Auto-Coding/issues/XXX
       const pathFields = ['pythonPath', 'gitPath', 'githubCLIPath', 'claudePath', 'autoBuildPath'] as const;
       for (const field of pathFields) {
         const pathValue = settings[field];

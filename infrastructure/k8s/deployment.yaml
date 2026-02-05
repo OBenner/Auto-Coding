@@ -1,0 +1,359 @@
+---
+# PostgreSQL Database Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: default
+  labels:
+    app: autoclaude
+    component: database
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate  # Use Recreate for stateful applications
+  selector:
+    matchLabels:
+      app: autoclaude
+      component: database
+  template:
+    metadata:
+      labels:
+        app: autoclaude
+        component: database
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:16-alpine
+        ports:
+        - containerPort: 5432
+          name: postgres
+        env:
+        - name: POSTGRES_USER
+          valueFrom:
+            configMapKeyRef:
+              name: autoclaude-config
+              key: POSTGRES_USER
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: autoclaude-secrets
+              key: POSTGRES_PASSWORD
+        - name: POSTGRES_DB
+          valueFrom:
+            configMapKeyRef:
+              name: autoclaude-config
+              key: POSTGRES_DB
+        - name: POSTGRES_INITDB_ARGS
+          value: "-E UTF8"
+        volumeMounts:
+        - name: postgres-storage
+          mountPath: /var/lib/postgresql/data
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - postgres
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 5
+        readinessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - postgres
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+      volumes:
+      - name: postgres-storage
+        persistentVolumeClaim:
+          claimName: postgres-pvc
+
+---
+# PostgreSQL Persistent Volume Claim
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+  namespace: default
+  labels:
+    app: autoclaude
+    component: database
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  # Uncomment and set storageClassName for specific storage class
+  # storageClassName: standard
+
+---
+# Redis Cache Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: default
+  labels:
+    app: autoclaude
+    component: cache
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate  # Use Recreate for stateful applications
+  selector:
+    matchLabels:
+      app: autoclaude
+      component: cache
+  template:
+    metadata:
+      labels:
+        app: autoclaude
+        component: cache
+    spec:
+      containers:
+      - name: redis
+        image: redis:7-alpine
+        command:
+        - redis-server
+        - --appendonly
+        - "yes"
+        ports:
+        - containerPort: 6379
+          name: redis
+        volumeMounts:
+        - name: redis-storage
+          mountPath: /data
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+        livenessProbe:
+          exec:
+            command:
+            - redis-cli
+            - ping
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 5
+        readinessProbe:
+          exec:
+            command:
+            - redis-cli
+            - ping
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+      volumes:
+      - name: redis-storage
+        persistentVolumeClaim:
+          claimName: redis-pvc
+
+---
+# Redis Persistent Volume Claim
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redis-pvc
+  namespace: default
+  labels:
+    app: autoclaude
+    component: cache
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  # Uncomment and set storageClassName for specific storage class
+  # storageClassName: standard
+
+---
+# Auto Claude Web Backend Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-backend
+  namespace: default
+  labels:
+    app: autoclaude
+    component: backend
+spec:
+  replicas: 2  # Multiple replicas for high availability
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: autoclaude
+      component: backend
+  template:
+    metadata:
+      labels:
+        app: autoclaude
+        component: backend
+    spec:
+      containers:
+      - name: web-backend
+        # Replace with your container registry URL
+        image: your-registry.io/autoclaude-backend:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8000
+          name: http
+        env:
+        # Server configuration from ConfigMap
+        - name: HOST
+          valueFrom:
+            configMapKeyRef:
+              name: autoclaude-config
+              key: HOST
+        - name: PORT
+          valueFrom:
+            configMapKeyRef:
+              name: autoclaude-config
+              key: PORT
+        - name: DEBUG
+          valueFrom:
+            configMapKeyRef:
+              name: autoclaude-config
+              key: DEBUG
+        - name: LOG_LEVEL
+          valueFrom:
+            configMapKeyRef:
+              name: autoclaude-config
+              key: LOG_LEVEL
+        # CORS configuration from ConfigMap
+        - name: CORS_ORIGINS
+          valueFrom:
+            configMapKeyRef:
+              name: autoclaude-config
+              key: CORS_ORIGINS
+        # Authentication from Secrets
+        - name: SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: autoclaude-secrets
+              key: SECRET_KEY
+        - name: ACCESS_TOKEN_EXPIRE_MINUTES
+          valueFrom:
+            configMapKeyRef:
+              name: autoclaude-config
+              key: ACCESS_TOKEN_EXPIRE_MINUTES
+        # Database configuration (build URL from secrets)
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: autoclaude-secrets
+              key: POSTGRES_PASSWORD
+        - name: DATABASE_URL
+          value: "postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@postgres:5432/$(POSTGRES_DB)"
+        - name: POSTGRES_USER
+          valueFrom:
+            configMapKeyRef:
+              name: autoclaude-config
+              key: POSTGRES_USER
+        - name: POSTGRES_DB
+          valueFrom:
+            configMapKeyRef:
+              name: autoclaude-config
+              key: POSTGRES_DB
+        # Redis configuration from ConfigMap
+        - name: REDIS_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: autoclaude-config
+              key: REDIS_HOST
+        - name: REDIS_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: autoclaude-config
+              key: REDIS_PORT
+        - name: REDIS_DB
+          valueFrom:
+            configMapKeyRef:
+              name: autoclaude-config
+              key: REDIS_DB
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: autoclaude-secrets
+              key: REDIS_PASSWORD
+        # OAuth configuration from Secrets
+        - name: GITHUB_CLIENT_ID
+          valueFrom:
+            secretKeyRef:
+              name: autoclaude-secrets
+              key: GITHUB_CLIENT_ID
+        - name: GITHUB_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: autoclaude-secrets
+              key: GITHUB_CLIENT_SECRET
+        - name: GITLAB_CLIENT_ID
+          valueFrom:
+            secretKeyRef:
+              name: autoclaude-secrets
+              key: GITLAB_CLIENT_ID
+        - name: GITLAB_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: autoclaude-secrets
+              key: GITLAB_CLIENT_SECRET
+        - name: OAUTH_REDIRECT_URI
+          valueFrom:
+            configMapKeyRef:
+              name: autoclaude-config
+              key: OAUTH_REDIRECT_URI
+        # WebSocket configuration from ConfigMap
+        - name: WS_HEARTBEAT_INTERVAL
+          valueFrom:
+            configMapKeyRef:
+              name: autoclaude-config
+              key: WS_HEARTBEAT_INTERVAL
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+      # Image pull secrets (if using private registry)
+      # imagePullSecrets:
+      # - name: registry-credentials

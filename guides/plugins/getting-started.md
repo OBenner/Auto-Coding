@@ -570,8 +570,8 @@ This ensures:
 
 ## Getting Help
 
-- **Issues:** [GitHub Issues](https://github.com/AndyMik90/Auto-Claude/issues)
-- **Discussions:** [GitHub Discussions](https://github.com/AndyMik90/Auto-Claude/discussions)
+- **Issues:** [GitHub Issues](https://github.com/OBenner/Auto-Coding/issues)
+- **Discussions:** [GitHub Discussions](https://github.com/OBenner/Auto-Coding/discussions)
 - **Documentation:** [guides/plugins/](.)
 
 ## Contributing Your Plugin

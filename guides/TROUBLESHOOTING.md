@@ -866,7 +866,7 @@ python run.py --spec 001
 
 ### How do I report a bug?
 
-1. **Check existing issues:** https://github.com/AndyMik90/Auto-Claude/issues
+1. **Check existing issues:** https://github.com/OBenner/Auto-Coding/issues
 2. **Collect debug info:**
    ```bash
    cd apps/backend
@@ -884,9 +884,9 @@ python run.py --spec 001
 
 ### Where can I get help?
 
-- **GitHub Issues:** https://github.com/AndyMik90/Auto-Claude/issues
+- **GitHub Issues:** https://github.com/OBenner/Auto-Coding/issues
 - **Discord:** [Auto Claude Community](https://discord.gg/auto-claude) *(check README for current invite)*
-- **Documentation:** https://github.com/AndyMik90/Auto-Claude/tree/main/guides
+- **Documentation:** https://github.com/OBenner/Auto-Coding/tree/main/guides
 
 ---
 

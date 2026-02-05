@@ -1,9 +1,9 @@
 {
   "title": "Plugins",
-  "description": "Manage Auto Claude plugins and extensions",
+  "description": "Manage Auto-Coding plugins and extensions",
   "empty": {
     "title": "No Plugins Installed",
-    "description": "Install plugins to extend Auto Claude with custom agents, integrations, and UI components.",
+    "description": "Install plugins to extend Auto-Coding with custom agents, integrations, and UI components.",
     "action": "Install Plugin"
   },
   "status": {
@@ -49,7 +49,7 @@
     "fromZip": "From Zip File",
     "zipDescription": "Install from a packaged plugin zip file",
     "fromMarketplace": "From Marketplace",
-    "marketplaceDescription": "Install from the Auto Claude plugin marketplace",
+    "marketplaceDescription": "Install from the Auto-Coding plugin marketplace",
     "pluginDirectory": "Plugin Directory",
     "pluginZipFile": "Plugin Zip File",
     "noPathSelected": "No path selected",

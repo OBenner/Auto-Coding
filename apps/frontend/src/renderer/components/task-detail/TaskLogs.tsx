@@ -138,13 +138,52 @@ export function TaskLogs({
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<LogFilterType>('all');
 
+  // Helper function to check if an entry matches the current filter
+  const entryMatchesFilter = useCallback((entry: TaskLogEntry | undefined, filter: LogFilterType): boolean => {
+    if (!entry || filter === 'all') return true;
+    switch (filter) {
+      case 'errors':
+        return entry.type === 'error';
+      case 'tools':
+        return entry.type === 'tool_start' || entry.type === 'tool_end';
+      case 'info':
+        return entry.type === 'info' || entry.type === 'success' ||
+               entry.type === 'text' || entry.type === 'phase_start' || entry.type === 'phase_end';
+      default:
+        return true;
+    }
+  }, []);
+
+  // Compute which phases have matching entries for current filter
+  const phasesWithMatchingEntries = useMemo(() => {
+    const phases = new Set<TaskLogPhase>();
+    if (!phaseLogs || filterType === 'all') return phases;
+
+    const phaseKeys: TaskLogPhase[] = ['planning', 'coding', 'validation'];
+    for (const phase of phaseKeys) {
+      const phaseLog = phaseLogs.phases[phase];
+      if (phaseLog?.entries?.some(entry => entryMatchesFilter(entry, filterType))) {
+        phases.add(phase);
+      }
+    }
+    return phases;
+  }, [phaseLogs, filterType, entryMatchesFilter]);
+
+  // Effective expanded phases: union of user-expanded and filter-matched phases
+  const effectiveExpandedPhases = useMemo(() => {
+    if (filterType === 'all') return expandedPhases;
+    const combined = new Set(expandedPhases);
+    phasesWithMatchingEntries.forEach(phase => combined.add(phase));
+    return combined;
+  }, [expandedPhases, phasesWithMatchingEntries, filterType]);
+
   const {
     flattenedItems,
     count,
     toggleDetail,
     estimateSize,
     hasLogs
-  } = useVirtualizedLogs(phaseLogs, expandedPhases);
+  } = useVirtualizedLogs(phaseLogs, effectiveExpandedPhases);
 
   // Filter items based on search query and filter type
   const filteredItems = useMemo(() => {
@@ -166,7 +205,9 @@ export function TaskLogs({
           case 'tools':
             return entry.type === 'tool_start' || entry.type === 'tool_end';
           case 'info':
-            return entry.type === 'info' || entry.type === 'success';
+            // Info filter includes: info, success, text, phase_start, phase_end
+            return entry.type === 'info' || entry.type === 'success' ||
+                   entry.type === 'text' || entry.type === 'phase_start' || entry.type === 'phase_end';
           default:
             return true;
         }
@@ -558,12 +599,12 @@ function LogEntry({ entry, isExpanded, onToggleExpand }: LogEntryProps) {
   if (entry.type === 'tool_start' && entry.tool_name) {
     const { icon: Icon, label, color } = getToolInfo(entry.tool_name);
     return (
-      <div className="flex flex-col">
-        <div className={cn('inline-flex items-center gap-2 rounded-md px-2 py-1 text-xs', color)}>
-          <Icon className="h-3 w-3 animate-pulse" />
-          <span className="font-medium">{label}</span>
+      <div className="flex flex-col min-w-0">
+        <div className={cn('inline-flex items-center gap-2 rounded-md px-2 py-1 text-xs min-w-0', color)}>
+          <Icon className="h-3 w-3 animate-pulse shrink-0" />
+          <span className="font-medium shrink-0">{label}</span>
           {entry.tool_input && (
-            <span className="text-muted-foreground truncate max-w-[500px]" title={entry.tool_input}>
+            <span className="text-muted-foreground truncate min-w-0" title={entry.tool_input}>
               {entry.tool_input}
             </span>
           )}
@@ -576,9 +617,9 @@ function LogEntry({ entry, isExpanded, onToggleExpand }: LogEntryProps) {
   if (entry.type === 'tool_end' && entry.tool_name) {
     const { icon: Icon, color } = getToolInfo(entry.tool_name);
     return (
-      <div className="flex flex-col">
-        <div className="flex items-center gap-2">
-          <div className={cn('inline-flex items-center gap-2 rounded-md px-2 py-1 text-xs', color, 'opacity-60')}>
+      <div className="flex flex-col min-w-0">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className={cn('inline-flex items-center gap-2 rounded-md px-2 py-1 text-xs shrink-0', color, 'opacity-60')}>
             <Icon className="h-3 w-3" />
             <CheckCircle2 className="h-3 w-3 text-success" />
             <span className="text-muted-foreground">Done</span>
@@ -587,7 +628,7 @@ function LogEntry({ entry, isExpanded, onToggleExpand }: LogEntryProps) {
             <button
               onClick={onToggleExpand}
               className={cn(
-                'flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded',
+                'flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded shrink-0',
                 'text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors',
                 isExpanded && 'bg-secondary/50'
               )}
@@ -607,7 +648,7 @@ function LogEntry({ entry, isExpanded, onToggleExpand }: LogEntryProps) {
           )}
         </div>
         {hasDetail && isExpanded && (
-          <div className="mt-1.5 ml-4 p-2 bg-secondary/30 rounded-md border border-border/50 overflow-x-auto">
+          <div className="mt-1.5 ml-4 p-2 bg-secondary/30 rounded-md border border-border/50 overflow-hidden">
             <pre className="text-[10px] text-muted-foreground whitespace-pre-wrap break-words font-mono max-h-[300px] overflow-y-auto">
               {entry.detail}
             </pre>
@@ -619,26 +660,28 @@ function LogEntry({ entry, isExpanded, onToggleExpand }: LogEntryProps) {
 
   if (entry.type === 'error') {
     return (
-      <div className="flex flex-col">
-        <div className="flex items-start gap-2 text-xs text-destructive bg-destructive/10 rounded-md px-2 py-1">
+      <div className="flex flex-col min-w-0">
+        <div className="flex items-start gap-2 text-xs text-destructive bg-destructive/10 rounded-md px-2 py-1 min-w-0">
           <XCircle className="h-3 w-3 mt-0.5 shrink-0" />
-          <span className="break-words flex-1">{entry.content}</span>
-          <SubphaseBadge />
-          {hasDetail && (
-            <button
-              onClick={onToggleExpand}
-              className={cn(
-                'flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded shrink-0',
-                'text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors',
-                isExpanded && 'bg-secondary/50'
-              )}
-            >
-              {isExpanded ? <ChevronDown className="h-2.5 w-2.5" /> : <ChevronRight className="h-2.5 w-2.5" />}
-            </button>
-          )}
+          <span className="break-words min-w-0 flex-1 overflow-hidden">{entry.content}</span>
+          <div className="flex items-center gap-1 shrink-0">
+            <SubphaseBadge />
+            {hasDetail && (
+              <button
+                onClick={onToggleExpand}
+                className={cn(
+                  'flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded',
+                  'text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors',
+                  isExpanded && 'bg-secondary/50'
+                )}
+              >
+                {isExpanded ? <ChevronDown className="h-2.5 w-2.5" /> : <ChevronRight className="h-2.5 w-2.5" />}
+              </button>
+            )}
+          </div>
         </div>
         {hasDetail && isExpanded && (
-          <div className="mt-1.5 ml-4 p-2 bg-destructive/5 rounded-md border border-destructive/20 overflow-x-auto">
+          <div className="mt-1.5 ml-4 p-2 bg-destructive/5 rounded-md border border-destructive/20 overflow-hidden">
             <pre className="text-[10px] text-destructive/80 whitespace-pre-wrap break-words font-mono max-h-[300px] overflow-y-auto">
               {entry.detail}
             </pre>
@@ -650,9 +693,9 @@ function LogEntry({ entry, isExpanded, onToggleExpand }: LogEntryProps) {
 
   if (entry.type === 'success') {
     return (
-      <div className="flex items-start gap-2 text-xs text-success bg-success/10 rounded-md px-2 py-1">
+      <div className="flex items-start gap-2 text-xs text-success bg-success/10 rounded-md px-2 py-1 min-w-0">
         <CheckCircle2 className="h-3 w-3 mt-0.5 shrink-0" />
-        <span className="break-words flex-1">{entry.content}</span>
+        <span className="break-words min-w-0 flex-1 overflow-hidden">{entry.content}</span>
         <SubphaseBadge />
       </div>
     );
@@ -660,9 +703,9 @@ function LogEntry({ entry, isExpanded, onToggleExpand }: LogEntryProps) {
 
   if (entry.type === 'info') {
     return (
-      <div className="flex items-start gap-2 text-xs text-info bg-info/10 rounded-md px-2 py-1">
+      <div className="flex items-start gap-2 text-xs text-info bg-info/10 rounded-md px-2 py-1 min-w-0">
         <Info className="h-3 w-3 mt-0.5 shrink-0" />
-        <span className="break-words flex-1">{entry.content}</span>
+        <span className="break-words min-w-0 flex-1 overflow-hidden">{entry.content}</span>
         <SubphaseBadge />
       </div>
     );
@@ -670,38 +713,40 @@ function LogEntry({ entry, isExpanded, onToggleExpand }: LogEntryProps) {
 
   // Default text entry
   return (
-    <div className="flex flex-col">
-      <div className="flex items-start gap-2 text-xs text-muted-foreground py-0.5">
+    <div className="flex flex-col min-w-0">
+      <div className="flex items-start gap-2 text-xs text-muted-foreground py-0.5 min-w-0">
         <span className="text-[10px] text-muted-foreground/60 tabular-nums shrink-0">
           {formatTime(entry.timestamp)}
         </span>
-        <span className="break-words whitespace-pre-wrap flex-1">{entry.content}</span>
-        <SubphaseBadge />
-        {hasDetail && (
-          <button
-            onClick={onToggleExpand}
-            className={cn(
-              'flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded shrink-0',
-              'text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors',
-              isExpanded && 'bg-secondary/50'
-            )}
-          >
-            {isExpanded ? (
-              <>
-                <ChevronDown className="h-2.5 w-2.5" />
-                <span>Less</span>
-              </>
-            ) : (
-              <>
-                <ChevronRight className="h-2.5 w-2.5" />
-                <span>More</span>
-              </>
-            )}
-          </button>
-        )}
+        <span className="break-words whitespace-pre-wrap min-w-0 flex-1 overflow-hidden">{entry.content}</span>
+        <div className="flex items-center gap-1 shrink-0">
+          <SubphaseBadge />
+          {hasDetail && (
+            <button
+              onClick={onToggleExpand}
+              className={cn(
+                'flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded',
+                'text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors',
+                isExpanded && 'bg-secondary/50'
+              )}
+            >
+              {isExpanded ? (
+                <>
+                  <ChevronDown className="h-2.5 w-2.5" />
+                  <span>Less</span>
+                </>
+              ) : (
+                <>
+                  <ChevronRight className="h-2.5 w-2.5" />
+                  <span>More</span>
+                </>
+              )}
+            </button>
+          )}
+        </div>
       </div>
       {hasDetail && isExpanded && (
-        <div className="mt-1.5 ml-12 p-2 bg-secondary/30 rounded-md border border-border/50 overflow-x-auto">
+        <div className="mt-1.5 ml-12 p-2 bg-secondary/30 rounded-md border border-border/50 overflow-hidden">
           <pre className="text-[10px] text-muted-foreground whitespace-pre-wrap break-words font-mono max-h-[300px] overflow-y-auto">
             {entry.detail}
           </pre>

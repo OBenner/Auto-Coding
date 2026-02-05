@@ -1,9 +1,9 @@
 {
   "title": "Extensions",
-  "description": "Gérer les extensions et plugins Auto Claude",
+  "description": "Gérer les extensions et plugins Auto-Coding",
   "empty": {
     "title": "Aucune Extension Installée",
-    "description": "Installez des extensions pour étendre Auto Claude avec des agents personnalisés, des intégrations et des composants UI.",
+    "description": "Installez des extensions pour étendre Auto-Coding avec des agents personnalisés, des intégrations et des composants UI.",
     "action": "Installer une Extension"
   },
   "status": {
@@ -49,7 +49,7 @@
     "fromZip": "Depuis un Fichier Zip",
     "zipDescription": "Installer depuis un fichier zip d'extension",
     "fromMarketplace": "Depuis le Marketplace",
-    "marketplaceDescription": "Installer depuis le marketplace d'extensions Auto Claude",
+    "marketplaceDescription": "Installer depuis le marketplace d'extensions Auto-Coding",
     "pluginDirectory": "Répertoire de l'Extension",
     "pluginZipFile": "Fichier Zip de l'Extension",
     "noPathSelected": "Aucun chemin sélectionné",
