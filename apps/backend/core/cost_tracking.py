@@ -6,9 +6,10 @@ Tracks AI API costs across different models and agent types.
 Provides cost reporting and analysis for budget management.
 
 Supports multiple providers:
-- Claude (Anthropic): Opus, Sonnet, Haiku
+- Claude (Anthropic): Claude 4.5 (Opus, Sonnet, Haiku), Claude 3.5 Sonnet, Claude 3 (Opus, Sonnet, Haiku)
 - OpenAI: GPT-4 Turbo, GPT-4, GPT-4o, GPT-3.5 Turbo
 - Google Gemini: Gemini 1.5 Pro, Gemini 1.5 Flash, Gemini 2.0 Flash
+- Zhipu AI GLM: GLM-4.7, GLM-4.5, GLM-4 series (Plus, Air, Flash)
 - Ollama (local models, zero cost)
 
 Components:
@@ -82,6 +83,30 @@ MODEL_PRICING: dict[str, dict[str, float]] = {
     "claude-opus-4-5-20251101-thinking": {
         "input": 15.00,
         "output": 75.00,
+    },
+    # Claude 3.5 Sonnet - Previous generation balanced model
+    "claude-3-5-sonnet-20241022": {
+        "input": 3.00,
+        "output": 15.00,
+    },
+    "claude-3-5-sonnet-20240620": {
+        "input": 3.00,
+        "output": 15.00,
+    },
+    # Claude 3 Opus - Previous generation high capability
+    "claude-3-opus-20240229": {
+        "input": 15.00,
+        "output": 75.00,
+    },
+    # Claude 3 Sonnet - Previous generation balanced
+    "claude-3-sonnet-20240229": {
+        "input": 3.00,
+        "output": 15.00,
+    },
+    # Claude 3 Haiku - Previous generation fast and economical
+    "claude-3-haiku-20240307": {
+        "input": 0.25,
+        "output": 1.25,
     },
     # ========================================
     # OpenAI Models
@@ -227,6 +252,54 @@ MODEL_PRICING: dict[str, dict[str, float]] = {
         "output": 0.00,
     },
     # ========================================
+    # Zhipu AI GLM Models (ChatGLM)
+    # ========================================
+    # GLM-4.7 - Latest model (December 2025)
+    "glm-4.7": {
+        "input": 0.40,
+        "output": 1.50,
+    },
+    # GLM-4.5 - Previous generation
+    "glm-4.5": {
+        "input": 0.35,
+        "output": 1.55,
+    },
+    # GLM-4-Plus - High capability variant
+    "glm-4-plus": {
+        "input": 0.50,
+        "output": 2.00,
+    },
+    # GLM-4 - Standard model
+    "glm-4": {
+        "input": 0.10,
+        "output": 0.10,
+    },
+    # GLM-4-Air - Lightweight, cost-effective
+    "glm-4-air": {
+        "input": 0.001,
+        "output": 0.001,
+    },
+    # GLM-4-AirX - Extended air model
+    "glm-4-airx": {
+        "input": 0.001,
+        "output": 0.001,
+    },
+    # GLM-4-Flash - Fast inference
+    "glm-4-flash": {
+        "input": 0.001,
+        "output": 0.001,
+    },
+    # GLM-4-FlashX - Extended flash model
+    "glm-4-flashx": {
+        "input": 0.001,
+        "output": 0.001,
+    },
+    # GLM-3-Turbo - Legacy model
+    "glm-3-turbo": {
+        "input": 0.001,
+        "output": 0.001,
+    },
+    # ========================================
     # Fallback
     # ========================================
     # Fallback pricing (use sonnet pricing)
@@ -335,16 +408,18 @@ class CostTracker:
         Calculate cost for a model operation across multiple providers.
 
         Supports models from:
-        - Claude (Anthropic): claude-opus-4-5-*, claude-sonnet-4-5-*, claude-haiku-4-5-*
+        - Claude (Anthropic): claude-opus-4-5-*, claude-sonnet-4-5-*, claude-haiku-4-5-*,
+          claude-3-5-sonnet-*, claude-3-opus-*, claude-3-sonnet-*, claude-3-haiku-*
         - OpenAI: gpt-4, gpt-4o, gpt-4-turbo, gpt-3.5-turbo
         - Google Gemini: gemini-1.5-pro, gemini-1.5-flash, gemini-2.0-flash
+        - Zhipu AI GLM: glm-4.7, glm-4.5, glm-4-plus, glm-4, glm-4-air, glm-4-flash, glm-3-turbo
         - Ollama (local): ollama/llama3, ollama/mistral, etc. (zero cost)
 
         If a model is not found in the pricing database, falls back to default
         pricing (Claude Sonnet rates) and logs a warning.
 
         Args:
-            model: Model identifier (e.g., "gpt-4", "gemini-1.5-pro", "ollama/llama3")
+            model: Model identifier (e.g., "gpt-4", "gemini-1.5-pro", "glm-4.7", "ollama/llama3")
             input_tokens: Number of input tokens
             output_tokens: Number of output tokens
 
