@@ -58,6 +58,9 @@ export const IPC_CHANNELS = {
   TASK_LOGS_CHANGED: 'task:logsChanged',   // Event: logs changed (main -> renderer)
   TASK_LOGS_STREAM: 'task:logsStream',     // Event: streaming log chunk (main -> renderer)
 
+  // Task token statistics
+  TASK_TOKEN_STATS_GET: 'task:tokenStats:get',
+
   // Terminal operations
   TERMINAL_CREATE: 'terminal:create',
   TERMINAL_DESTROY: 'terminal:destroy',
@@ -410,6 +413,15 @@ export const IPC_CHANNELS = {
   GITHUB_PR_MEMORY_GET: 'github:pr:memory:get',        // Get PR review memories
   GITHUB_PR_MEMORY_SEARCH: 'github:pr:memory:search',  // Search PR review memories
 
+  // GitHub PR Inline Comments and Suggestions
+  GITHUB_PR_GET_INLINE_COMMENTS: 'github:pr:getInlineComments',
+  GITHUB_PR_REPLY_TO_COMMENT: 'github:pr:replyToComment',
+  GITHUB_PR_APPLY_SUGGESTION: 'github:pr:applySuggestion',
+  GITHUB_PR_REQUEST_REREVIEW: 'github:pr:requestRereview',
+
+  // GitHub PR events (main -> renderer)
+  GITHUB_PR_UPDATED: 'github:pr:updated',
+
   // GitHub Workflow Approval (for fork PRs)
   GITHUB_WORKFLOWS_AWAITING_APPROVAL: 'github:workflows:awaitingApproval',
   GITHUB_WORKFLOW_APPROVE: 'github:workflow:approve',
@@ -425,6 +437,12 @@ export const IPC_CHANNELS = {
   GITHUB_TRIAGE_PROGRESS: 'github:triage:progress',
   GITHUB_TRIAGE_COMPLETE: 'github:triage:complete',
   GITHUB_TRIAGE_ERROR: 'github:triage:error',
+
+  // Merge Analytics operations
+  MERGE_ANALYTICS_GET_HISTORY: 'merge:analytics:getHistory',
+  MERGE_ANALYTICS_GET_SUMMARY: 'merge:analytics:getSummary',
+  MERGE_ANALYTICS_GET_PATTERNS: 'merge:analytics:getPatterns',
+  MERGE_ANALYTICS_EXPORT: 'merge:analytics:export',
 
   // Memory Infrastructure status (LadybugDB - no Docker required)
   MEMORY_STATUS: 'memory:status',
@@ -490,6 +508,7 @@ export const IPC_CHANNELS = {
   // File explorer operations
   FILE_EXPLORER_LIST: 'fileExplorer:list',
   FILE_EXPLORER_READ: 'fileExplorer:read',
+  FILE_EXPLORER_WRITE: 'fileExplorer:write',
 
   // Git operations
   GIT_GET_BRANCHES: 'git:getBranches',
