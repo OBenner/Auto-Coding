@@ -44,6 +44,9 @@ export const IPC_CHANNELS = {
   TASK_UNARCHIVE: 'task:unarchive',
   TASK_CLEAR_STAGED_STATE: 'task:clearStagedState',
 
+  // Task token statistics
+  TASK_TOKEN_STATS_GET: 'task:tokenStats:get',
+
   // Task events (main -> renderer)
   TASK_PROGRESS: 'task:progress',
   TASK_ERROR: 'task:error',
@@ -233,6 +236,7 @@ export const IPC_CHANNELS = {
 
   // GitHub integration
   GITHUB_GET_REPOSITORIES: 'github:getRepositories',
+  GITHUB_GET_PULL_REQUESTS: 'github:getPullRequests',
   GITHUB_GET_ISSUES: 'github:getIssues',
   GITHUB_GET_ISSUE: 'github:getIssue',
   GITHUB_GET_ISSUE_COMMENTS: 'github:getIssueComments',
@@ -503,6 +507,7 @@ export const IPC_CHANNELS = {
   // File explorer operations
   FILE_EXPLORER_LIST: 'fileExplorer:list',
   FILE_EXPLORER_READ: 'fileExplorer:read',
+  FILE_EXPLORER_WRITE: 'fileExplorer:write',
 
   // Git operations
   GIT_GET_BRANCHES: 'git:getBranches',
