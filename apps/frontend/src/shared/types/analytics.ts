@@ -22,10 +22,10 @@ export interface AgentStats {
 // Task Complexity Statistics
 // ============================================
 
-export type TaskComplexity = 'simple' | 'standard' | 'complex' | 'unknown';
+export type SpecComplexity = 'simple' | 'standard' | 'complex' | 'unknown';
 
 export interface TaskComplexityStats {
-  complexity: TaskComplexity;
+  complexity: SpecComplexity;
   total_tasks: number;
   successful_tasks: number;
   success_rate: number; // Percentage (0-100)
@@ -102,7 +102,7 @@ export type AnalyticsView = 'overview' | 'agents' | 'trends' | 'qa';
 export interface AnalyticsDashboardState {
   currentView: AnalyticsView;
   selectedAgentType?: string;
-  selectedComplexity?: TaskComplexity;
+  selectedComplexity?: SpecComplexity;
   trendDays: number; // Number of days to show in trend analysis
   loading: boolean;
   error?: string;
