@@ -1,19 +1,33 @@
-## [3.0.0] - 2026-01-27
+## [3.0.0] - 2026-02-05
 
-### Added
-- Support for multiple AI backends beyond Claude, including 75+ LLM providers
-- Integration with OpenCode framework for expanded model compatibility
-- Support for open-source models via Ollama
-- Support for cloud LLM services via OpenRouter and LiteLLM
-- Support for enterprise AI solutions via Azure and Google Cloud
-- Ability to switch between different AI providers based on user preference
+### ✨ New Features
+- **Plugin Integrations** - Extensible plugin system for custom integrations
+- **Ollama Service Auto-Start** - Automatic Ollama service detection and startup
+- **Web Interface** - Browser-based access via FastAPI backend for remote access
+- **Token Tracking** - Per-phase token statistics (planning, coding, QA) with UI display
+- **Code Editor** - Built-in code editor view in sidebar with CodeMirror
+- **AI Provider Selection** - Support for LiteLLM, OpenRouter, and 75+ LLM providers
+- **Multi-Profile Account Swapping** - Token refresh and queue routing between profiles
+- **Queue System v2** - Auto-promotion and smart task management
+- **Merge Analytics Dashboard** - Analytics view for merge operations and conflict patterns
+- **WebSearch Guidance** - Enhanced ideation agents with web search capabilities
+- **Skeleton Loading States** - Improved UX with loading skeletons for data-heavy components
+- **Automated Test Generation** - AI-powered test generation in QA pipeline
 
-### Changed
-- Converted Auto-Claude from a Claude-only architecture to a flexible, pluggable multi-backend system
-- Users can now select their preferred AI provider when setting up the application
+### 🛠️ Improvements
+- **Accessibility** - Comprehensive ARIA labels across all interactive components
+- **Cross-Platform Support** - Complete platform abstraction for Windows, macOS, Linux
+- **Collapsible Sidebar** - Toggle sidebar collapse for more workspace
+- **Troubleshooting Guide** - New FAQ documentation for common issues
+- **Spec Creation Pipeline** - Enhanced documentation and WebSearch integration
 
-### Fixed
-- Enhanced system compatibility with various LLM backends and providers
+### 🐛 Bug Fixes
+- Fixed missing IPC channel constants causing app startup crash
+- Fixed worktree errors on repeated task starts
+- Fixed PR review agent token refresh on account swap
+- Fixed task modal conflict check status refresh
+- Fixed Electron app version detection bug
+- Fixed PR list diff display metrics
 
 ## [2.7.5] - 2026-01-27
 
