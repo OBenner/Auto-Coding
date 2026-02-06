@@ -109,7 +109,7 @@ class ArtifactManager:
             logger.debug(f"Build log saved: {artifact_path}")
             return artifact_path
 
-        except (OSError, json.JSONEncodeError, TypeError) as e:
+        except (OSError, ValueError, TypeError) as e:
             logger.warning(f"Failed to save build log: {e}")
             return None
 
@@ -158,7 +158,7 @@ class ArtifactManager:
             logger.debug(f"Test report saved: {artifact_path}")
             return artifact_path
 
-        except (OSError, json.JSONEncodeError, TypeError) as e:
+        except (OSError, ValueError, TypeError) as e:
             logger.warning(f"Failed to save test report: {e}")
             return None
 
@@ -207,7 +207,7 @@ class ArtifactManager:
             logger.debug(f"Coverage report saved: {artifact_path}")
             return artifact_path
 
-        except (OSError, json.JSONEncodeError, TypeError) as e:
+        except (OSError, ValueError, TypeError) as e:
             logger.warning(f"Failed to save coverage report: {e}")
             return None
 
@@ -261,7 +261,7 @@ class ArtifactManager:
             logger.debug(f"Custom artifact saved: {artifact_path}")
             return artifact_path
 
-        except (OSError, json.JSONEncodeError, TypeError) as e:
+        except (OSError, ValueError, TypeError) as e:
             logger.warning(f"Failed to save custom artifact '{artifact_name}': {e}")
             return None
 
