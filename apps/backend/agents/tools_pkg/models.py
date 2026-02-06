@@ -39,6 +39,8 @@ TOOL_RECORD_GOTCHA = "mcp__auto-claude__record_gotcha"
 TOOL_GET_SESSION_CONTEXT = "mcp__auto-claude__get_session_context"
 TOOL_UPDATE_QA_STATUS = "mcp__auto-claude__update_qa_status"
 TOOL_GET_SPEC_STATISTICS = "mcp__auto-claude__get_spec_statistics"
+TOOL_SEARCH_TEAM_DOCS = "mcp__auto-claude__search_team_docs"
+TOOL_GET_TEAM_DOCS = "mcp__auto-claude__get_team_docs"
 
 # =============================================================================
 # External MCP Tools
@@ -197,6 +199,7 @@ AGENT_CONFIGS = {
             TOOL_GET_BUILD_PROGRESS,
             TOOL_GET_SESSION_CONTEXT,
             TOOL_RECORD_DISCOVERY,
+            TOOL_SEARCH_TEAM_DOCS,  # Query team documentation for planning
         ],
         "thinking_default": "high",
     },
@@ -210,6 +213,8 @@ AGENT_CONFIGS = {
             TOOL_RECORD_DISCOVERY,
             TOOL_RECORD_GOTCHA,
             TOOL_GET_SESSION_CONTEXT,
+            TOOL_SEARCH_TEAM_DOCS,  # Query team documentation for conventions
+            TOOL_GET_TEAM_DOCS,  # Get all team documentation
         ],
         "thinking_default": "none",  # Coding doesn't use extended thinking
     },
@@ -226,6 +231,7 @@ AGENT_CONFIGS = {
             TOOL_GET_BUILD_PROGRESS,
             TOOL_UPDATE_QA_STATUS,
             TOOL_GET_SESSION_CONTEXT,
+            TOOL_SEARCH_TEAM_DOCS,  # Verify against team standards
         ],
         "thinking_default": "high",
     },
