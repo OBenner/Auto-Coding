@@ -1,0 +1,194 @@
+{
+  "feature": "Pull Request Analysis Dashboard",
+  "description": "Analyze and categorize available pull requests from Auto-Claude GitHub repository for contribution decisions",
+  "workflow_type": "investigation",
+  "workflow_rationale": "This task involves researching external GitHub pull requests without modifying local codebase. The goal is to gather, categorize, and present information to enable informed contribution decisions.",
+  "phases": [
+    {
+      "id": "phase-1-fetch",
+      "name": "Data Fetch",
+      "type": "investigation",
+      "description": "Fetch pull request data from GitHub repository",
+      "depends_on": [],
+      "parallel_safe": true,
+      "subtasks": [
+        {
+          "id": "subtask-1-1",
+          "description": "Fetch open PRs from Auto-Claude repository using webReader",
+          "service": "backend",
+          "files_to_modify": [],
+          "files_to_create": [
+            "pr_data_raw.json"
+          ],
+          "patterns_from": [],
+          "verification": {
+            "type": "manual",
+            "instructions": "Verify pr_data_raw.json contains PR list with numbers, titles, and metadata"
+          },
+          "status": "completed"
+        }
+      ]
+    },
+    {
+      "id": "phase-2-analysis",
+      "name": "Analysis",
+      "type": "investigation",
+      "description": "Categorize PRs by complexity and technical scope",
+      "depends_on": [
+        "phase-1-fetch"
+      ],
+      "parallel_safe": false,
+      "subtasks": [
+        {
+          "id": "subtask-2-1",
+          "description": "Categorize PRs by complexity level (simple/medium/complex)",
+          "service": "backend",
+          "files_to_modify": [],
+          "files_to_create": [
+            "pr_analysis.md"
+          ],
+          "patterns_from": [],
+          "verification": {
+            "type": "manual",
+            "instructions": "Verify pr_analysis.md has PRs grouped by complexity with justifications"
+          },
+          "status": "completed"
+        },
+        {
+          "id": "subtask-2-2",
+          "description": "Identify technical scope for each PR (backend/frontend/fullstack)",
+          "service": "backend",
+          "files_to_modify": [
+            "pr_analysis.md"
+          ],
+          "files_to_create": [],
+          "patterns_from": [],
+          "verification": {
+            "type": "manual",
+            "instructions": "Verify each PR has service classification (backend/frontend/fullstack)"
+          },
+          "status": "completed"
+        },
+        {
+          "id": "subtask-2-3",
+          "description": "Extract metadata (task progress, reactions, draft status)",
+          "service": "backend",
+          "files_to_modify": [
+            "pr_analysis.md"
+          ],
+          "files_to_create": [],
+          "patterns_from": [],
+          "verification": {
+            "type": "manual",
+            "instructions": "Verify each PR includes task count, reaction count, and draft status"
+          },
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": "phase-3-documentation",
+      "name": "Documentation",
+      "type": "integration",
+      "description": "Create comprehensive PR analysis document with recommendations",
+      "depends_on": [
+        "phase-2-analysis"
+      ],
+      "parallel_safe": false,
+      "subtasks": [
+        {
+          "id": "subtask-3-1",
+          "description": "Create executive summary with top recommendations",
+          "service": "backend",
+          "files_to_modify": [],
+          "files_to_create": [
+            "PR_ANALYSIS_REPORT.md"
+          ],
+          "patterns_from": [],
+          "verification": {
+            "type": "manual",
+            "instructions": "Verify executive summary provides clear prioritized recommendations"
+          },
+          "status": "pending"
+        },
+        {
+          "id": "subtask-3-2",
+          "description": "Compile PR listings by complexity (simple, medium, complex)",
+          "service": "backend",
+          "files_to_modify": [
+            "PR_ANALYSIS_REPORT.md"
+          ],
+          "files_to_create": [],
+          "patterns_from": [],
+          "verification": {
+            "type": "manual",
+            "instructions": "Verify report includes all PRs organized by complexity sections"
+          },
+          "status": "pending"
+        },
+        {
+          "id": "subtask-3-3",
+          "description": "Add technical requirements and rationale for each PR",
+          "service": "backend",
+          "files_to_modify": [
+            "PR_ANALYSIS_REPORT.md"
+          ],
+          "files_to_create": [],
+          "patterns_from": [],
+          "verification": {
+            "type": "manual",
+            "instructions": "Verify each PR entry includes requirements and recommendation rationale"
+          },
+          "status": "pending"
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "total_phases": 3,
+    "total_subtasks": 7,
+    "services_involved": [
+      "backend"
+    ],
+    "parallelism": {
+      "max_parallel_phases": 1,
+      "parallel_groups": [],
+      "recommended_workers": 1,
+      "speedup_estimate": "Sequential workflow - research depends on fetched data"
+    },
+    "startup_command": "source auto-claude/.venv/bin/activate && python auto-claude/run.py --spec 140"
+  },
+  "verification_strategy": {
+    "risk_level": "low",
+    "skip_validation": true,
+    "reasoning": "Research/documentation task with no code modifications. Output verification through manual review of generated documentation."
+  },
+  "qa_acceptance": {
+    "unit_tests": {
+      "required": false
+    },
+    "integration_tests": {
+      "required": false
+    },
+    "e2e_tests": {
+      "required": false
+    },
+    "browser_verification": {
+      "required": false
+    },
+    "documentation_review": {
+      "required": true,
+      "checks": [
+        "PR data accuracy verified against GitHub",
+        "All PRs categorized by complexity",
+        "Technical scope identified for each PR",
+        "Recommendations are actionable and prioritized",
+        "Report format follows spec requirements"
+      ]
+    }
+  },
+  "qa_signoff": null,
+  "status": "in_progress",
+  "planStatus": "in_progress",
+  "updated_at": "2026-02-06T09:33:15.280Z"
+}
