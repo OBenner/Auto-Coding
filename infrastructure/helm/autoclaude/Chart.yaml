@@ -1,0 +1,54 @@
+---
+apiVersion: v2
+name: autoclaude
+description: Autonomous multi-agent coding framework powered by Claude AI
+type: application
+version: 0.1.0
+appVersion: "3.0.0"
+
+keywords:
+  - ai
+  - claude
+  - autonomous
+  - coding
+  - agents
+  - kubernetes
+  - self-hosted
+
+home: https://github.com/OBenner/Auto-Coding
+
+sources:
+  - https://github.com/OBenner/Auto-Coding
+
+maintainers:
+  - name: Auto-Coding Team
+    email: support@auto-coding.io
+
+license: AGPL-3.0
+
+annotations:
+  # Artifact Hub annotations
+  artifacthub.io/category: developer-tools
+  artifacthub.io/links: |
+    - name: Documentation
+      url: https://github.com/OBenner/Auto-Coding
+    - name: Support
+      url: https://github.com/OBenner/Auto-Coding/issues
+  artifacthub.io/containsSecurityUpdates: "false"
+  artifacthub.io/prerelease: "false"
+  # Features for display
+  artifacthub.io/features: |
+    - Self-hosted AI coding assistant
+    - Multi-agent autonomous development
+    - Kubernetes deployment
+    - PostgreSQL and Redis included
+    - OAuth authentication (GitHub, GitLab)
+    - Memory system for cross-session context
+  artifacthub.io/operator: "false"
+  artifacthub.io/operatorCapabilities: ""
+  artifacthub.io/changes: |
+    - Initial release of self-hosted Helm chart
+    - Support for PostgreSQL and Redis
+    - Configurable resources and scaling
+    - TLS/Ingress support
+    - Air-gapped deployment support
