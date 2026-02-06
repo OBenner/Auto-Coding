@@ -1,0 +1,336 @@
+# Auto Claude CI/CD Integration
+#
+# Example workflow demonstrating how to run Auto Claude builds in CI/CD pipelines.
+# This workflow runs autonomous AI-powered builds with JSON output, proper exit
+# code handling, and artifact generation.
+#
+# Usage:
+# 1. Copy this workflow to your repository
+# 2. Configure environment variables (see env section below)
+# 3. Adjust the spec number or task description for your use case
+# 4. Customize triggered branches and paths as needed
+
+name: Auto Claude Build
+
+on:
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'apps/**'
+      - 'tests/**'
+      - 'guides/**'
+      - '.github/workflows/auto-claude-build.yml'
+  push:
+    branches: [main, develop]
+    paths:
+      - 'apps/**'
+      - 'tests/**'
+      - 'guides/**'
+      - '.github/workflows/auto-claude-build.yml'
+  workflow_dispatch:
+    inputs:
+      spec_number:
+        description: 'Spec number to build (e.g., 001)'
+        required: false
+        default: '001'
+      task_description:
+        description: 'Task description (if no spec)'
+        required: false
+        default: ''
+
+concurrency:
+  group: auto-claude-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  actions: read
+  pull-requests: write
+
+env:
+  # Auto Claude Configuration
+  AUTO_CLAUDE_CI: 'true'                    # Enable CI mode (non-interactive)
+  AUTO_CLAUDE_JSON_OUTPUT: 'true'           # Enable JSON output
+  ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
+  # Optional: Configure Claude model
+  # CLAUDE_MODEL: 'claude-sonnet-4-5-20250929'
+
+  # Optional: Graphiti memory configuration
+  # GRAPHITI_ENABLED: 'true'
+  # GRAPHITI_LLM_PROVIDER: 'openai'
+  # OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+
+jobs:
+  # --------------------------------------------------------------------------
+  # Auto Claude Build Job
+  # --------------------------------------------------------------------------
+  auto-claude-build:
+    name: Auto Claude Build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for better analysis
+
+      - name: Setup Python backend
+        uses: ./.github/actions/setup-python-backend
+        with:
+          python-version: '3.12'
+          install-test-deps: 'true'
+
+      - name: Determine spec to build
+        id: spec-config
+        shell: bash
+        run: |
+          if [ -n "${{ github.event.inputs.task_description }}" ]; then
+            echo "Using task description instead of spec"
+            echo "mode=task" >> $GITHUB_OUTPUT
+            echo "target=${{ github.event.inputs.task_description }}" >> $GITHUB_OUTPUT
+          else
+            # Use input spec or default to 001
+            SPEC="${{ github.event.inputs.spec_number }}"
+            if [ -z "$SPEC" ]; then
+              SPEC="001"
+            fi
+            echo "mode=spec" >> $GITHUB_OUTPUT
+            echo "target=$SPEC" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run Auto Claude build (Spec mode)
+        if: steps.spec-config.outputs.mode == 'spec'
+        working-directory: apps/backend
+        shell: bash
+        env:
+          PYTHONPATH: ${{ github.workspace }}/apps/backend
+        run: |
+          # Activate virtual environment
+          if [ "$RUNNER_OS" == "Windows" ]; then
+            source .venv/Scripts/activate
+          else
+            source .venv/bin/activate
+          fi
+
+          # Run Auto Claude in CI mode
+          echo "Running Auto Claude build for spec ${{ steps.spec-config.outputs.target }}"
+          python run.py \
+            --spec ${{ steps.spec-config.outputs.target }} \
+            --ci \
+            --json
+
+      - name: Run Auto Claude build (Task mode)
+        if: steps.spec-config.outputs.mode == 'task'
+        working-directory: apps/backend
+        shell: bash
+        env:
+          PYTHONPATH: ${{ github.workspace }}/apps/backend
+        run: |
+          # Activate virtual environment
+          if [ "$RUNNER_OS" == "Windows" ]; then
+            source .venv/Scripts/activate
+          else
+            source .venv/bin/activate
+          fi
+
+          # Run Auto Claude with task description
+          echo "Running Auto Claude for task: ${{ steps.spec-config.outputs.target }}"
+          python run.py \
+            --task "${{ steps.spec-config.outputs.target }}" \
+            --ci \
+            --json
+
+      # Exit codes are handled automatically by GitHub Actions:
+      # 0 = success (build passed, QA approved)
+      # 1 = build failed (implementation errors)
+      # 2 = QA failed (validation rejected)
+      # 3 = system error (configuration, auth, etc.)
+
+      - name: Upload build artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: auto-claude-artifacts-${{ matrix.os }}
+          path: |
+            .auto-claude/specs/**/artifacts/
+            .auto-claude/specs/**/build-log.json
+            .auto-claude/specs/**/test-report.json
+            .auto-claude/specs/**/qa-report.md
+          retention-days: 30
+          if-no-files-found: ignore
+
+      - name: Upload spec documentation
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: auto-claude-specs-${{ matrix.os }}
+          path: |
+            .auto-claude/specs/**/spec.md
+            .auto-claude/specs/**/implementation_plan.json
+            .auto-claude/specs/**/qa_report.md
+          retention-days: 30
+          if-no-files-found: ignore
+
+      - name: Comment PR with results
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const specDir = '.auto-claude/specs';
+
+            // Find the most recent spec directory
+            let latestSpec = null;
+            let latestTime = 0;
+
+            if (fs.existsSync(specDir)) {
+              const specs = fs.readdirSync(specDir, { withFileTypes: true })
+                .filter(dirent => dirent.isDirectory())
+                .map(dirent => dirent.name);
+
+              for (const spec of specs) {
+                const specPath = `${specDir}/${spec}`;
+                const stat = fs.statSync(specPath);
+                if (stat.mtimeMs > latestTime) {
+                  latestTime = stat.mtimeMs;
+                  latestSpec = spec;
+                }
+              }
+            }
+
+            if (!latestSpec) {
+              console.log('No spec directory found');
+              return;
+            }
+
+            // Read build log if it exists
+            const buildLogPath = `${specDir}/${latestSpec}/build-log.json`;
+            let buildLog = null;
+            if (fs.existsSync(buildLogPath)) {
+              try {
+                buildLog = JSON.parse(fs.readFileSync(buildLogPath, 'utf8'));
+              } catch (e) {
+                console.log('Failed to read build log:', e);
+              }
+            }
+
+            // Read QA report if it exists
+            const qaReportPath = `${specDir}/${latestSpec}/qa_report.md`;
+            let qaReport = null;
+            if (fs.existsSync(qaReportPath)) {
+              qaReport = fs.readFileSync(qaReportPath, 'utf8');
+            }
+
+            // Build comment
+            let comment = '## 🤖 Auto Claude Build Results\n\n';
+
+            if (buildLog) {
+              const status = buildLog.status || 'unknown';
+              const emoji = status === 'success' ? '✅' :
+                           status === 'failed' ? '❌' :
+                           status === 'qa_failed' ? '⚠️' : '❓';
+
+              comment += `**Status:** ${emoji} ${status.toUpperCase()}\n\n`;
+              comment += `**Exit Code:** ${buildLog.exit_code || 'N/A'}\n\n`;
+              comment += `**Duration:** ${buildLog.duration || 'N/A'}\n\n`;
+
+              if (buildLog.error_message) {
+                comment += `**Error:** \`${buildLog.error_message}\`\n\n`;
+              }
+
+              if (buildLog.changed_files && buildLog.changed_files.length > 0) {
+                comment += `**Files Changed:** ${buildLog.changed_files.length}\n`;
+                comment += '```diff\n' + buildLog.changed_files.slice(0, 10).join('\n') + '\n```\n\n';
+              }
+            } else {
+              comment += '**Status:** ❓ Build log not found\n\n';
+            }
+
+            // Add QA report section if available
+            if (qaReport) {
+              comment += '---\n\n### QA Report\n\n';
+              // Truncate if too long
+              const maxLength = 5000;
+              if (qaReport.length > maxLength) {
+                comment += qaReport.substring(0, maxLength) + '\n\n...(truncated)';
+              } else {
+                comment += qaReport;
+              }
+            }
+
+            comment += '\n\n---\n\n';
+            comment += '*View full artifacts in the workflow run*';
+
+            // Post comment
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const botComment = comments.find(comment =>
+              comment.user.type === 'Bot' &&
+              comment.body.includes('Auto Claude Build Results')
+            );
+
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: comment
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: comment
+              });
+            }
+
+  # --------------------------------------------------------------------------
+  # Summary Job
+  # --------------------------------------------------------------------------
+  build-summary:
+    name: Build Summary
+    runs-on: ubuntu-latest
+    needs: [auto-claude-build]
+    if: always()
+    steps:
+      - name: Check build results
+        run: |
+          echo "## Auto Claude Build Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Matrix Job Result: ${{ needs.auto-claude-build.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [[ "${{ needs.auto-claude-build.result }}" == "success" ]]; then
+            echo "✅ Build completed successfully" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "- Exit code: 0 (success)" >> $GITHUB_STEP_SUMMARY
+            echo "- QA: Approved" >> $GITHUB_STEP_SUMMARY
+          elif [[ "${{ needs.auto-claude-build.result }}" == "failure" ]]; then
+            echo "❌ Build failed" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Possible causes:" >> $GITHUB_STEP_SUMMARY
+            echo "- Exit code: 1 (implementation failed)" >> $GITHUB_STEP_SUMMARY
+            echo "- Exit code: 2 (QA rejected)" >> $GITHUB_STEP_SUMMARY
+            echo "- Exit code: 3 (system error)" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Check the artifacts for detailed logs and reports." >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Artifacts" >> $GITHUB_STEP_SUMMARY
+          echo "- Build logs (build-log.json)" >> $GITHUB_STEP_SUMMARY
+          echo "- Test reports (test-report.json)" >> $GITHUB_STEP_SUMMARY
+          echo "- QA reports (qa-report.md)" >> $GITHUB_STEP_SUMMARY
+          echo "- Spec documentation" >> $GITHUB_STEP_SUMMARY
