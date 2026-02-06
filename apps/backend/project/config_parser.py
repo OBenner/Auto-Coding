@@ -7,8 +7,6 @@ Utilities for reading and parsing project configuration files
 """
 
 import json
-
-# tomllib is available in Python 3.11+, use tomli for older versions
 import tomllib
 from pathlib import Path
 
