@@ -113,6 +113,15 @@ echo "=== END RECOVERY CONTEXT ==="
 - Required fixes
 - Verification criteria
 
+**USER INTERVENTION DETECTION**:
+- Check if `QA_FIX_REQUEST.md` contains the marker `<!-- AUTO_GENERATED_BY_QA_AGENT -->`
+- If the marker is **MISSING**, the user has manually edited this file
+- Treat user-edited files with special attention:
+  - The user may have corrected misidentified issues
+  - The user may have added context or specific guidance
+  - The user may have overridden automated QA decisions
+  - **Prioritize user guidance over automated issue descriptions**
+
 **RECOVERY AWARENESS**: If you see previous QA fix sessions in the history:
 - Previous fix attempts FAILED QA validation
 - Review what was tried before
