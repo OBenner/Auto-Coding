@@ -22,6 +22,7 @@ if str(_PARENT_DIR) not in sys.path:
 from progress import print_paused_banner
 from review import ReviewState
 
+from cli.artifacts import create_artifact_manager
 from cli.exit_codes import ExitCode
 from cli.json_output import format_build_result
 from ui import (
@@ -109,6 +110,11 @@ def handle_build_command(
     build_status = ExitCode.SUCCESS
     error_message = None
     changed_files = []
+
+    # Initialize artifact manager for CI mode
+    artifact_manager = None
+    if json_mode:
+        artifact_manager = create_artifact_manager(spec_dir=spec_dir, enabled=True)
 
     # Get the resolved model for the planning phase (first phase of build)
     # This respects task_metadata.json phase configuration from the UI
@@ -345,6 +351,18 @@ def handle_build_command(
             traceback.print_exc()
         if json_mode:
             duration = time.time() - build_start_time
+
+            # Save build log artifact even on error
+            if artifact_manager:
+                build_log_data = {
+                    "status": build_status.name,
+                    "timestamp": None,  # Will be added by artifact manager
+                    "duration": round(duration, 2),
+                    "exitCode": ExitCode.SYSTEM_ERROR,
+                    "error": error_message,
+                }
+                artifact_manager.save_build_log(build_log_data)
+
             json_output = format_build_result(
                 status=build_status,
                 spec_name=spec_dir.name,
@@ -391,6 +409,32 @@ def handle_build_command(
             "workspaceMode": "isolated" if worktree_manager else "direct",
         }
 
+        # Collect artifact information if artifact manager is enabled
+        artifacts_dict = {}
+        if artifact_manager:
+            # Save build log artifact
+            build_log_data = {
+                "status": build_status.name,
+                "timestamp": None,  # Will be added by artifact manager
+                "duration": round(duration, 2),
+                "exitCode": int(build_status),
+            }
+
+            if error_message:
+                build_log_data["error"] = error_message
+
+            if changed_files:
+                build_log_data["changedFiles"] = changed_files
+                build_log_data["filesChanged"] = len(changed_files)
+
+            if metadata:
+                build_log_data["metadata"] = metadata
+
+            # Save the build log
+            build_log_path = artifact_manager.save_build_log(build_log_data)
+            if build_log_path:
+                artifacts_dict["build-log"] = str(build_log_path)
+
         # Format and print JSON output
         json_output = format_build_result(
             status=build_status,
@@ -399,6 +443,7 @@ def handle_build_command(
             duration_seconds=duration,
             error_message=error_message,
             changed_files=changed_files if changed_files else None,
+            artifacts=artifacts_dict if artifacts_dict else None,
             metadata=metadata,
         )
         print(json_output)
@@ -431,6 +476,11 @@ def _handle_build_interrupt(
     """
     from agent import run_autonomous_agent
 
+    # Create artifact manager for saving build logs on interrupt
+    artifact_manager = None
+    if json_mode:
+        artifact_manager = create_artifact_manager(spec_dir=spec_dir, enabled=True)
+
     # Print paused banner
     print_paused_banner(spec_dir, spec_dir.name, has_worktree=bool(worktree_manager))
 
@@ -444,6 +494,16 @@ def _handle_build_interrupt(
         print_status("Build interrupted in non-interactive mode. Exiting...", "warning")
         status_manager.set_inactive()
         if json_mode:
+            # Save build log artifact on interrupt
+            if artifact_manager:
+                build_log_data = {
+                    "status": "interrupted",
+                    "timestamp": None,  # Will be added by artifact manager
+                    "exitCode": ExitCode.SUCCESS,
+                    "error": "Build interrupted in non-interactive mode",
+                }
+                artifact_manager.save_build_log(build_log_data)
+
             json_output = format_build_result(
                 status=ExitCode.SUCCESS,
                 spec_name=spec_dir.name,
@@ -501,6 +561,16 @@ def _handle_build_interrupt(
             print_status("Exiting...", "info")
             status_manager.set_inactive()
             if json_mode:
+                # Save build log artifact on quit
+                if artifact_manager:
+                    build_log_data = {
+                        "status": "paused",
+                        "timestamp": None,  # Will be added by artifact manager
+                        "exitCode": ExitCode.SUCCESS,
+                        "error": "Build paused by user",
+                    }
+                    artifact_manager.save_build_log(build_log_data)
+
                 json_output = format_build_result(
                     status=ExitCode.SUCCESS,
                     spec_name=spec_dir.name,
@@ -526,6 +596,16 @@ def _handle_build_interrupt(
                 print_status("Exiting without saving instructions...", "warning")
                 status_manager.set_inactive()
                 if json_mode:
+                    # Save build log artifact on cancel
+                    if artifact_manager:
+                        build_log_data = {
+                            "status": "paused",
+                            "timestamp": None,  # Will be added by artifact manager
+                            "exitCode": ExitCode.SUCCESS,
+                            "error": "Build paused by user",
+                        }
+                        artifact_manager.save_build_log(build_log_data)
+
                     json_output = format_build_result(
                         status=ExitCode.SUCCESS,
                         spec_name=spec_dir.name,
@@ -572,6 +652,16 @@ def _handle_build_interrupt(
             )
             # Build completed or was interrupted again - exit
             if json_mode:
+                # Save build log artifact on completion after resume
+                if artifact_manager:
+                    build_log_data = {
+                        "status": "success",
+                        "timestamp": None,  # Will be added by artifact manager
+                        "exitCode": ExitCode.SUCCESS,
+                        "error": "Build completed after resuming",
+                    }
+                    artifact_manager.save_build_log(build_log_data)
+
                 json_output = format_build_result(
                     status=ExitCode.SUCCESS,
                     spec_name=spec_dir.name,
@@ -589,6 +679,16 @@ def _handle_build_interrupt(
         status_manager = StatusManager(project_dir)
         status_manager.set_inactive()
         if json_mode:
+            # Save build log artifact on double Ctrl+C
+            if artifact_manager:
+                build_log_data = {
+                    "status": "paused",
+                    "timestamp": None,  # Will be added by artifact manager
+                    "exitCode": ExitCode.SUCCESS,
+                    "error": "Build paused by user (Ctrl+C)",
+                }
+                artifact_manager.save_build_log(build_log_data)
+
             json_output = format_build_result(
                 status=ExitCode.SUCCESS,
                 spec_name=spec_dir.name,
@@ -601,6 +701,16 @@ def _handle_build_interrupt(
     except EOFError:
         # stdin closed
         if json_mode:
+            # Save build log artifact on EOF
+            if artifact_manager:
+                build_log_data = {
+                    "status": "error",
+                    "timestamp": None,  # Will be added by artifact manager
+                    "exitCode": ExitCode.SYSTEM_ERROR,
+                    "error": "Build interrupted (EOF)",
+                }
+                artifact_manager.save_build_log(build_log_data)
+
             json_output = format_build_result(
                 status=ExitCode.SYSTEM_ERROR,
                 spec_name=spec_dir.name,
