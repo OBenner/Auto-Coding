@@ -127,6 +127,12 @@ Environment Variables:
         help="Enable verbose output",
     )
 
+    parser.add_argument(
+        "--ci",
+        action="store_true",
+        help="Enable CI/CD pipeline mode (non-interactive, structured output)",
+    )
+
     # Workspace options
     workspace_group = parser.add_mutually_exclusive_group()
     workspace_group.add_argument(
