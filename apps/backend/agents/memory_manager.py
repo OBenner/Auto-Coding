@@ -627,6 +627,157 @@ async def save_session_memory(
         return False, "none"
 
 
+async def get_team_context(
+    spec_dir: Path,
+    project_dir: Path,
+    subtask: dict,
+) -> str | None:
+    """
+    Retrieve relevant context from team knowledge base for the current subtask.
+
+    This searches the indexed documentation (Notion, Confluence, GitHub Wiki, GitBook)
+    for content relevant to the subtask's task description, returning team standards,
+    conventions, and best practices.
+
+    Args:
+        spec_dir: Spec directory
+        project_dir: Project root directory
+        subtask: The current subtask being worked on
+
+    Returns:
+        Formatted context string or None if unavailable
+    """
+    if is_debug_enabled():
+        debug(
+            "memory",
+            "Retrieving team knowledge base context for subtask",
+            subtask_id=subtask.get("id", "unknown"),
+            subtask_desc=subtask.get("description", "")[:100],
+        )
+
+    manager = None
+    try:
+        # Import here to avoid circular imports
+        from integrations.knowledge_base import KnowledgeBaseManager
+        from integrations.knowledge_base.indexer import DocumentationIndexer
+
+        # Initialize manager
+        manager = KnowledgeBaseManager(spec_dir, project_dir)
+
+        if not manager.is_enabled:
+            if is_debug_enabled():
+                debug(
+                    "memory",
+                    "Team knowledge base not configured",
+                    note="Configure NOTION_TOKEN, CONFLUENCE_API_TOKEN, GITHUB_TOKEN, or GITBOOK_API_KEY in .env",
+                )
+            return None
+
+        # Initialize if needed
+        if not await manager.initialize():
+            if is_debug_enabled():
+                debug_warning(
+                    "memory", "Failed to initialize team knowledge base"
+                )
+            return None
+
+        # Build search query from subtask description
+        subtask_desc = subtask.get("description", "")
+        subtask_id = subtask.get("id", "")
+        query = f"{subtask_desc} {subtask_id}".strip()
+
+        if not query:
+            if is_debug_enabled():
+                debug_warning("memory", "Empty query, skipping team context retrieval")
+            return None
+
+        if is_debug_enabled():
+            debug_detailed(
+                "memory",
+                "Searching team knowledge base",
+                query=query[:200],
+            )
+
+        # Create indexer and search
+        indexer = DocumentationIndexer(spec_dir, project_dir, manager.state)
+        context_items = await indexer.get_relevant_context(
+            query=query, num_results=5, min_score=0.3
+        )
+
+        if is_debug_enabled():
+            debug(
+                "memory",
+                "Team knowledge base search complete",
+                results_found=len(context_items) if context_items else 0,
+            )
+
+        if not context_items:
+            if is_debug_enabled():
+                debug("memory", "No relevant team documentation found")
+            return None
+
+        # Format the context
+        sections = ["## Team Knowledge Base\n"]
+        sections.append("_Relevant team documentation and standards:_\n")
+
+        # Group by source
+        by_source: dict[str, list[dict]] = {}
+        for item in context_items:
+            source = item.get("source", "unknown")
+            if source not in by_source:
+                by_source[source] = []
+            by_source[source].append(item)
+
+        # Format each source
+        for source, items in by_source.items():
+            sections.append(f"### {source.replace('-', ' ').replace('_', ' ').title()}\n")
+            for item in items:
+                content = item.get("content", "")
+                title = item.get("title", "")
+                url = item.get("url", "")
+                score = item.get("score", 0.0)
+
+                sections.append(f"- **{title}** (relevance: {score:.2f})\n")
+                if url:
+                    sections.append(f"  _Source_: {url}\n")
+                # Truncate content for readability
+                max_content_length = 800
+                if len(content) > max_content_length:
+                    content = content[:max_content_length] + "..."
+                sections.append(f"  {content}\n")
+
+        if is_debug_enabled():
+            debug_success(
+                "memory",
+                "Team knowledge base context formatted",
+                total_sources=len(by_source),
+                total_items=len(context_items),
+            )
+
+        return "\n".join(sections)
+
+    except Exception as e:
+        logger.warning(f"Failed to get team knowledge base context: {e}")
+        if is_debug_enabled():
+            debug_error("memory", "Team knowledge base context retrieval failed", error=str(e))
+        capture_exception(
+            e,
+            operation="get_team_context",
+            subtask_id=subtask.get("id", "unknown"),
+            subtask_desc=subtask.get("description", "")[:200],
+            spec_dir=str(spec_dir),
+            project_dir=str(project_dir),
+        )
+        return None
+    finally:
+        # Always close the manager connection
+        if manager is not None:
+            try:
+                await manager.close()
+            except Exception:
+                pass
+
+
 async def save_user_correction(
     spec_dir: Path,
     project_dir: Path,
