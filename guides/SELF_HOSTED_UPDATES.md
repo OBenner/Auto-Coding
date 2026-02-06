@@ -489,6 +489,265 @@ EOF
 # If failed, remove canary immediately
 ```
 
+#### Values Migration
+
+When upgrading between major versions, your `values.yaml` may require updates to match the new chart structure.
+
+**1. Check for Breaking Changes**
+
+```bash
+# Review release notes for values changes
+# https://github.com/OBenner/Auto-Coding/releases
+
+# Diff default values between versions
+helm show values autoclaude/autoclaude --version 2.8.0 > old-values.yaml
+helm show values autoclaude/autoclaude --version 2.9.0 > new-values.yaml
+diff old-values.yaml new-values.yaml
+```
+
+**2. Migrate Custom Values**
+
+```bash
+# Export your current values
+helm get values autoclaude -n autoclaude > my-values.yaml
+
+# Download new default values as reference
+helm show values autoclaude/autoclaude --version 2.9.0 > default-values-2.9.0.yaml
+
+# Compare and identify changes
+diff my-values.yaml default-values-2.9.0.yaml
+```
+
+**3. Common Value Migrations**
+
+**Renamed or moved values:**
+```yaml
+# Old (2.8.0)
+backend:
+  replicas: 3
+
+# New (2.9.0)
+backend:
+  deployment:
+    replicas: 3
+```
+
+**New required values:**
+```yaml
+# 2.9.0 adds required imagePullSecrets
+imagePullSecrets:
+  - name: ghcr-login
+```
+
+**Deprecated values:**
+```yaml
+# Removed in 2.9.0 - remove from your values.yaml
+# backend:
+#   legacyConfig: true
+```
+
+**4. Validate Migrated Values**
+
+```bash
+# Dry-run upgrade to validate
+helm upgrade autoclaude autoclaude/autoclaude \
+  --namespace autoclaude \
+  --values my-migrated-values.yaml \
+  --version 2.9.0 \
+  --dry-run \
+  --debug
+
+# Check for errors or warnings
+# Fix any issues in my-migrated-values.yaml
+```
+
+**5. Apply Migrated Values**
+
+```bash
+# Backup old values
+helm get values autoclaude -n autoclaude > values-backup-2.8.0.yaml
+
+# Apply new values
+helm upgrade autoclaude autoclaude/autoclaude \
+  --namespace autoclaude \
+  --values my-migrated-values.yaml \
+  --version 2.9.0 \
+  --wait \
+  --timeout 10m
+```
+
+**Values Migration Checklist:**
+
+- [ ] Review release notes for breaking changes
+- [ ] Download new default values for reference
+- [ ] Compare current values with new defaults
+- [ ] Update renamed/moved configuration keys
+- [ ] Add new required values
+- [ ] Remove deprecated values
+- [ ] Validate with `--dry-run`
+- [ ] Test in staging environment
+- [ ] Backup current values before applying
+
+#### Helm Rollback Workflow
+
+Helm makes rolling back updates quick and safe with built-in revision history.
+
+**View Release History**
+
+```bash
+# List all revisions with metadata
+helm history autoclaude -n autoclaude
+
+# Output example:
+# REVISION UPDATED                   STATUS      CHART         APP VERSION  DESCRIPTION
+# 1        Mon Jan 15 10:00:00 2024  superseded  autoclaude-2.7.0  2.7.0        Install complete
+# 2        Tue Jan 20 14:30:00 2024  superseded  autoclaude-2.8.0  2.8.0        Upgrade complete
+# 3        Wed Jan 25 09:15:00 2024  deployed    autoclaude-2.9.0  2.9.0        Upgrade complete
+
+# Get detailed info about a specific revision
+helm get values autoclaude -n autoclaude --revision 2
+helm get manifest autoclaude -n autoclaude --revision 2
+```
+
+**Quick Rollback to Previous Version**
+
+```bash
+# Rollback to previous revision (immediate)
+helm rollback autoclaude -n autoclaude
+
+# Rollback to specific revision
+helm rollback autoclaude 2 -n autoclaude
+
+# Monitor rollback progress
+kubectl rollout status deployment/autoclaude-backend -n autoclaude
+kubectl get pods -n autoclaude -w
+```
+
+**Controlled Rollback with Validation**
+
+```bash
+# 1. Verify target revision
+helm history autoclaude -n autoclaude
+helm get values autoclaude -n autoclaude --revision 2
+
+# 2. Perform rollback
+helm rollback autoclaude 2 -n autoclaude \
+  --wait \
+  --timeout 10m \
+  --recreate-pods
+
+# 3. Verify rollback
+helm list -n autoclaude
+kubectl get pods -n autoclaude
+kubectl get endpoints -n autoclaude
+
+# 4. Verify application version
+kubectl exec -n autoclaude deployment/autoclaude-backend -- \
+  python -c "import autocode; print(autocode.__version__)"
+```
+
+**Rollback Scenarios**
+
+**Scenario 1: Immediate Rollback (Critical Failure)**
+
+```bash
+# Quick rollback without waiting
+helm rollback autoclaude -n autoclaude --force
+
+# Verify pods are restarting
+kubectl get pods -n autoclaude
+
+# Watch logs for recovery
+kubectl logs -f -n autoclaude deployment/autoclaude-backend
+```
+
+**Scenario 2: Rollback with Configuration Changes**
+
+```bash
+# If you need to rollback with different values
+helm rollback autoclaude 2 -n autoclaude \
+  --values values-2.8.0.yaml \
+  --wait \
+  --timeout 10m
+
+# Or reinstall previous version completely
+helm uninstall autoclaude -n autoclaude
+helm install autoclaude autoclaude/autoclaude \
+  --namespace autoclaude \
+  --version 2.8.0 \
+  --values values-2.8.0.yaml \
+  --wait
+```
+
+**Scenario 3: Database Rollback with Helm**
+
+```bash
+# 1. Rollback Helm release
+helm rollback autoclaude 2 -n autoclaude
+
+# 2. Restore database (if migrations are incompatible)
+kubectl exec -i deployment/autoclaude-postgres -n autoclaude -- \
+  psql -U postgres -d autoclaude < backup-20250125.sql
+
+# 3. Restart backend to pick up old schema
+kubectl rollout restart deployment/autoclaude-backend -n autoclaude
+
+# 4. Verify
+kubectl exec -n autoclaude deployment/autoclaude-backend -- \
+  alembic current
+```
+
+**Post-Rollback Verification**
+
+```bash
+# Verify release version
+helm list -n autoclaude
+
+# Verify all pods are healthy
+kubectl get pods -n autoclaude
+kubectl describe pod <pod-name> -n autoclaude
+
+# Check logs for errors
+kubectl logs -n autoclaude deployment/autoclaude-backend --tail=100
+
+# Verify application health
+kubectl exec -n autoclaude deployment/autoclaude-backend -- \
+  curl http://localhost:8000/health
+
+# Verify database connectivity
+kubectl exec -n autoclaude deployment/autoclaude-backend -- \
+  python -c "from core.database import engine; print(engine.execute('SELECT 1').scalar())"
+```
+
+**Rollback Best Practices**
+
+1. **Always backup before updating** - Essential for database rollbacks
+2. **Keep history** - Don't use `--history-max` to delete old revisions
+3. **Test rollback in staging** - Verify rollback procedure works before production
+4. **Document rollback triggers** - Clear criteria for when to rollback
+5. **Monitor after rollback** - Watch logs and metrics for 30+ minutes
+6. **Investigate failure** - Understand why the update failed before retrying
+
+**Common Rollback Issues**
+
+```bash
+# Issue: Rollback hangs
+# Solution: Force recreation of pods
+helm rollback autoclaude 2 -n autoclaude --recreate-pods --force
+
+# Issue: Database schema incompatibility
+# Solution: Restore database backup
+kubectl exec -i deployment/autoclaude-postgres -n autoclaude -- \
+  psql -U postgres -d autoclaude < backup-latest.sql
+
+# Issue: ConfigMap/Secret not found
+# Solution: Recreate missing resources
+kubectl get configmaps -n autoclaude
+kubectl get secrets -n autoclaude
+# Recreate from backup or previous revision
+helm get manifest autoclaude -n autoclaude --revision 2 | kubectl apply -f -
+```
+
 #### Air-Gapped Updates
 
 For air-gapped Kubernetes clusters:
