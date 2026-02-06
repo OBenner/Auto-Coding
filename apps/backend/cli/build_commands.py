@@ -6,8 +6,11 @@ CLI commands for building specs and handling the main build flow.
 """
 
 import asyncio
+import json
 import sys
+import time
 from pathlib import Path
+from typing import Any
 
 # Ensure parent directory is in path for imports (before other imports)
 _PARENT_DIR = Path(__file__).parent.parent
@@ -20,6 +23,7 @@ from progress import print_paused_banner
 from review import ReviewState
 
 from cli.exit_codes import ExitCode
+from cli.json_output import format_build_result
 from ui import (
     BuildState,
     Icons,
@@ -63,6 +67,7 @@ def handle_build_command(
     skip_qa: bool,
     force_bypass_approval: bool,
     base_branch: str | None = None,
+    json_mode: bool = False,
 ) -> None:
     """
     Handle the main build command.
@@ -79,6 +84,7 @@ def handle_build_command(
         skip_qa: Skip automatic QA validation
         force_bypass_approval: Force bypass approval check
         base_branch: Base branch for worktree creation (default: current branch)
+        json_mode: Enable JSON output mode for CI/CD pipelines
     """
     # Lazy imports to avoid loading heavy modules
     from agent import run_autonomous_agent, sync_spec_to_source
@@ -93,6 +99,12 @@ def handle_build_command(
     from qa_loop import run_qa_validation_loop, should_run_qa
 
     from .utils import print_banner, validate_environment
+
+    # Track build start time for JSON output
+    build_start_time = time.time()
+    build_status = ExitCode.SUCCESS
+    error_message = None
+    changed_files = []
 
     # Get the resolved model for the planning phase (first phase of build)
     # This respects task_metadata.json phase configuration from the UI
@@ -316,14 +328,75 @@ def handle_build_command(
             model=model,
             max_iterations=max_iterations,
             verbose=verbose,
+            json_mode=json_mode,
         )
     except Exception as e:
+        error_message = str(e)
+        build_status = ExitCode.SYSTEM_ERROR
         print(f"\nFatal error: {e}")
         if verbose:
             import traceback
 
             traceback.print_exc()
+        if json_mode:
+            duration = time.time() - build_start_time
+            json_output = format_build_result(
+                status=build_status,
+                spec_name=spec_dir.name,
+                exit_code=ExitCode.SYSTEM_ERROR,
+                duration_seconds=duration,
+                error_message=error_message,
+            )
+            print(json_output)
         sys.exit(ExitCode.SYSTEM_ERROR)
+
+    # Calculate build duration and prepare JSON output if requested
+    if json_mode:
+        duration = time.time() - build_start_time
+
+        # Try to get changed files list if build succeeded
+        if build_status == ExitCode.SUCCESS and worktree_manager:
+            try:
+                import subprocess
+
+                worktree_path = get_existing_build_worktree(project_dir, spec_dir.name)
+                if worktree_path:
+                    result = subprocess.run(
+                        ["git", "diff", "--name-only", "HEAD~1", "HEAD"],
+                        cwd=worktree_path,
+                        capture_output=True,
+                        text=True,
+                        timeout=10,
+                    )
+                    if result.returncode == 0:
+                        changed_files = [
+                            f.strip() for f in result.stdout.strip().split("\n") if f.strip()
+                        ]
+            except Exception:
+                # If we can't get changed files, continue without them
+                pass
+
+        # Prepare metadata
+        metadata = {
+            "model": model,
+            "planningModel": planning_model,
+            "codingModel": coding_model,
+            "qaModel": qa_model,
+            "maxIterations": max_iterations,
+            "workspaceMode": "isolated" if worktree_manager else "direct",
+        }
+
+        # Format and print JSON output
+        json_output = format_build_result(
+            status=build_status,
+            spec_name=spec_dir.name,
+            exit_code=build_status,
+            duration_seconds=duration,
+            error_message=error_message,
+            changed_files=changed_files if changed_files else None,
+            metadata=metadata,
+        )
+        print(json_output)
 
 
 def _handle_build_interrupt(
@@ -334,6 +407,7 @@ def _handle_build_interrupt(
     model: str,
     max_iterations: int | None,
     verbose: bool,
+    json_mode: bool = False,
 ) -> None:
     """
     Handle keyboard interrupt during build.
@@ -346,6 +420,7 @@ def _handle_build_interrupt(
         model: Model being used
         max_iterations: Maximum iterations
         verbose: Verbose mode flag
+        json_mode: Enable JSON output mode
     """
     from agent import run_autonomous_agent
 
@@ -402,6 +477,15 @@ def _handle_build_interrupt(
             print()
             print_status("Exiting...", "info")
             status_manager.set_inactive()
+            if json_mode:
+                json_output = format_build_result(
+                    status=ExitCode.SUCCESS,
+                    spec_name=spec_dir.name,
+                    exit_code=ExitCode.SUCCESS,
+                    duration_seconds=None,
+                    error_message="Build paused by user",
+                )
+                print(json_output)
             sys.exit(ExitCode.SUCCESS)
 
         human_input = ""
@@ -418,6 +502,15 @@ def _handle_build_interrupt(
                 print()
                 print_status("Exiting without saving instructions...", "warning")
                 status_manager.set_inactive()
+                if json_mode:
+                    json_output = format_build_result(
+                        status=ExitCode.SUCCESS,
+                        spec_name=spec_dir.name,
+                        exit_code=ExitCode.SUCCESS,
+                        duration_seconds=None,
+                        error_message="Build paused by user",
+                    )
+                    print(json_output)
                 sys.exit(ExitCode.SUCCESS)
 
         if human_input:
@@ -455,6 +548,15 @@ def _handle_build_interrupt(
                 )
             )
             # Build completed or was interrupted again - exit
+            if json_mode:
+                json_output = format_build_result(
+                    status=ExitCode.SUCCESS,
+                    spec_name=spec_dir.name,
+                    exit_code=ExitCode.SUCCESS,
+                    duration_seconds=None,
+                    error_message="Build completed after resuming",
+                )
+                print(json_output)
             sys.exit(ExitCode.SUCCESS)
 
     except KeyboardInterrupt:
@@ -463,9 +565,27 @@ def _handle_build_interrupt(
         print_status("Exiting...", "warning")
         status_manager = StatusManager(project_dir)
         status_manager.set_inactive()
+        if json_mode:
+            json_output = format_build_result(
+                status=ExitCode.SUCCESS,
+                spec_name=spec_dir.name,
+                exit_code=ExitCode.SUCCESS,
+                duration_seconds=None,
+                error_message="Build paused by user (Ctrl+C)",
+            )
+            print(json_output)
         sys.exit(ExitCode.SUCCESS)
     except EOFError:
         # stdin closed
+        if json_mode:
+            json_output = format_build_result(
+                status=ExitCode.SYSTEM_ERROR,
+                spec_name=spec_dir.name,
+                exit_code=ExitCode.SYSTEM_ERROR,
+                duration_seconds=None,
+                error_message="Build interrupted (EOF)",
+            )
+            print(json_output)
         pass
 
     # Resume instructions (shown when user provided instructions or chose file/type/paste)
