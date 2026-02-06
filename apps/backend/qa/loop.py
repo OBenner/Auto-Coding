@@ -8,7 +8,7 @@ approval or max iterations.
 
 import os
 import time as time_module
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -100,13 +100,13 @@ def check_user_correction(spec_dir: Path) -> tuple[bool, dict[str, Any] | None]:
         if is_user_correction:
             # Get file metadata
             stat = fix_request_file.stat()
-            modification_time = datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc)
+            modification_time = datetime.fromtimestamp(stat.st_mtime, tz=UTC)
 
             correction_details = {
                 "file_path": str(fix_request_file),
                 "modified_at": modification_time.isoformat(),
                 "content_preview": content[:500],  # First 500 chars for context
-                "detected_at": datetime.now(timezone.utc).isoformat(),
+                "detected_at": datetime.now(UTC).isoformat(),
             }
 
             debug(

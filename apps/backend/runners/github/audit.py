@@ -21,7 +21,7 @@ import time
 import uuid
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 from pathlib import Path
 from typing import Any
@@ -107,7 +107,7 @@ class AuditContext:
     repo: str | None = None
     pr_number: int | None = None
     issue_number: int | None = None
-    started_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    started_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -237,7 +237,7 @@ class AuditLogger:
 
     def _get_log_file_path(self) -> Path:
         """Get path for current day's log file."""
-        date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        date_str = datetime.now(UTC).strftime("%Y-%m-%d")
         return self.log_dir / f"audit_{date_str}.jsonl"
 
     def _rotate_if_needed(self) -> None:
@@ -251,7 +251,7 @@ class AuditLogger:
             size_mb = log_file.stat().st_size / (1024 * 1024)
             if size_mb >= self.max_file_size_mb:
                 # Rotate: add timestamp suffix
-                timestamp = datetime.now(timezone.utc).strftime("%H%M%S")
+                timestamp = datetime.now(UTC).strftime("%H%M%S")
                 rotated = log_file.with_suffix(f".{timestamp}.jsonl")
                 log_file.rename(rotated)
                 logger.info(f"Rotated audit log to {rotated}")
@@ -263,7 +263,7 @@ class AuditLogger:
         if not self.enabled or not self.log_dir.exists():
             return
 
-        cutoff = datetime.now(timezone.utc).timestamp() - (
+        cutoff = datetime.now(UTC).timestamp() - (
             self.retention_days * 24 * 60 * 60
         )
 
@@ -338,11 +338,11 @@ class AuditLogger:
         """
         # Calculate duration from context start if not provided
         if duration_ms is None and context.started_at:
-            elapsed = datetime.now(timezone.utc) - context.started_at
+            elapsed = datetime.now(UTC) - context.started_at
             duration_ms = int(elapsed.total_seconds() * 1000)
 
         entry = AuditEntry(
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             correlation_id=context.correlation_id,
             action=action,
             actor_type=context.actor_type,

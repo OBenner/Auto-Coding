@@ -36,7 +36,7 @@ from __future__ import annotations
 import json
 import sys
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -205,7 +205,7 @@ class GitHubMemoryIntegration:
             json.dump(
                 {
                     "repo": self.repo,
-                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                    "updated_at": datetime.now(UTC).isoformat(),
                     "insights": self._local_insights[-1000:],  # Keep last 1000
                 },
                 f,
@@ -370,7 +370,7 @@ class GitHubMemoryIntegration:
             category: Category (gotcha, pattern, warning, insight)
             severity: Severity level
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         # Store locally
         self._local_insights.append(
@@ -433,7 +433,7 @@ class GitHubMemoryIntegration:
             was_correct: Whether prediction was correct
             notes: Additional notes
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         # Store locally
         self._local_insights.append(

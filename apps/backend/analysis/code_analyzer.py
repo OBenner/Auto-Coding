@@ -327,7 +327,7 @@ class CodeAnalyzer:
 
         for child in ast.walk(node):
             # Count decision points
-            if isinstance(child, (ast.If, ast.While, ast.For, ast.ExceptHandler)):
+            if isinstance(child, ast.If | ast.While | ast.For | ast.ExceptHandler):
                 complexity += 1
             elif isinstance(child, ast.BoolOp):
                 # Count and/or operators

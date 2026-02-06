@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import json
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -427,7 +427,7 @@ def get_detailed_metrics(spec_dir: Path) -> dict[str, Any]:
         "trend_metrics": trend_metrics,
         "learning_metrics": learning_metrics,
         "issue_breakdown": issue_breakdown,
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generated_at": datetime.now(UTC).isoformat(),
     }
 
 
@@ -505,7 +505,7 @@ def update_learning_metrics(
         if patterns_applied is not None:
             metrics["patterns_applied"] = patterns_applied
 
-        metrics["last_updated"] = datetime.now(timezone.utc).isoformat()
+        metrics["last_updated"] = datetime.now(UTC).isoformat()
 
         with open(plan_file, "w", encoding="utf-8") as f:
             json.dump(plan, f, indent=2)

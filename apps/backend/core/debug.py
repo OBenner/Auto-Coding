@@ -82,7 +82,7 @@ def _format_value(value: Any, max_length: int = 200) -> str:
     if value is None:
         return "None"
 
-    if isinstance(value, (dict, list)):
+    if isinstance(value, dict | list):
         try:
             formatted = json.dumps(value, indent=2, default=str)
             if len(formatted) > max_length:

@@ -38,7 +38,6 @@ Example usage:
 import logging
 import os
 from pathlib import Path
-from typing import Optional
 
 from agents.tools_pkg import get_agent_config, get_default_thinking_level
 from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient
@@ -210,11 +209,11 @@ def is_using_claude_provider_for_simple() -> bool:
 
 def create_simple_client_for_provider(
     agent_type: str = "merge_resolver",
-    model: Optional[str] = None,
-    system_prompt: Optional[str] = None,
-    cwd: Optional[Path] = None,
+    model: str | None = None,
+    system_prompt: str | None = None,
+    cwd: Path | None = None,
     max_turns: int = 1,
-    max_thinking_tokens: Optional[int] = None,
+    max_thinking_tokens: int | None = None,
 ) -> tuple[AIEngineProvider, AgentSession]:
     """
     Create a simple AI client using the provider factory.

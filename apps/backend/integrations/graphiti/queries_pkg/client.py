@@ -7,7 +7,7 @@ Uses LadybugDB as the embedded graph database (no Docker required, Python 3.12+)
 
 import logging
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from core.platform import is_windows
 from core.sentry import capture_exception
@@ -251,7 +251,7 @@ class GraphitiClient:
                     state.indices_built = True
                     state.initialized = True
                     state.database = self.config.database
-                    state.created_at = datetime.now(timezone.utc).isoformat()
+                    state.created_at = datetime.now(UTC).isoformat()
                     state.llm_provider = self.config.llm_provider
                     state.embedder_provider = self.config.embedder_provider
 

@@ -31,7 +31,6 @@ Environment Variables:
 import os
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
 
 
 class AIEngineProvider(str, Enum):
@@ -166,7 +165,7 @@ class ProviderConfig:
             return f"OpenRouter ({self.openrouter_model})"
         return f"Unknown ({self.provider})"
 
-    def get_model_for_provider(self) -> Optional[str]:
+    def get_model_for_provider(self) -> str | None:
         """Get the configured model for the current provider."""
         if self.provider == AIEngineProvider.CLAUDE.value:
             return self.claude_model

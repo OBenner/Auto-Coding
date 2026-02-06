@@ -15,7 +15,7 @@ import logging
 from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     pass
@@ -41,13 +41,13 @@ class SessionConfig:
 
     name: str
     system_prompt: str = ""
-    model: Optional[str] = None
-    max_tokens: Optional[int] = None
-    temperature: Optional[float] = None
-    tools: Optional[list[str]] = None
-    working_directory: Optional[str] = None
-    allowed_commands: Optional[list[str]] = None
-    extra: Optional[dict[str, Any]] = None
+    model: str | None = None
+    max_tokens: int | None = None
+    temperature: float | None = None
+    tools: list[str] | None = None
+    working_directory: str | None = None
+    allowed_commands: list[str] | None = None
+    extra: dict[str, Any] | None = None
 
 
 class AgentSession:

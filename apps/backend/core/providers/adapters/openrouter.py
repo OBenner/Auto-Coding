@@ -26,7 +26,7 @@ Note:
 import logging
 import uuid
 from collections.abc import AsyncIterator
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 from core.providers.base import AgentSession, AIEngineProvider, SessionConfig
 from core.providers.exceptions import (
@@ -91,8 +91,8 @@ class OpenRouterSession(AgentSession):
         api_key: str,
         system_prompt: str = "",
         base_url: str = DEFAULT_OPENROUTER_BASE_URL,
-        temperature: Optional[float] = None,
-        max_tokens: Optional[int] = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
     ):
         """Initialize OpenRouter session.
 
@@ -293,7 +293,7 @@ class OpenRouterProvider(AIEngineProvider):
             config: Provider configuration with credentials
         """
         self._config = config
-        self._active_session: Optional[OpenRouterSession] = None
+        self._active_session: OpenRouterSession | None = None
         self._validation_errors: list[str] = []
 
     @property
@@ -448,7 +448,7 @@ class OpenRouterProvider(AIEngineProvider):
             self._validation_errors.append("openai package is not installed")
             return False
 
-    def get_active_session(self) -> Optional[OpenRouterSession]:
+    def get_active_session(self) -> OpenRouterSession | None:
         """Get the currently active session, if any.
 
         Returns:

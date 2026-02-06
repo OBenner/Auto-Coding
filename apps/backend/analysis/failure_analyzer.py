@@ -15,7 +15,7 @@ import json
 import logging
 import os
 import subprocess
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -399,7 +399,7 @@ def analyze_failure(
     # Build analysis result
     analysis = {
         "failure_type": failure_type,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "root_cause": root_cause,
         "qa_history_length": len(qa_history),
         "recommendations": root_cause.get("recommendations", []),

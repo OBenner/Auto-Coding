@@ -57,7 +57,7 @@ def _is_retryable_http_error(stderr: str) -> bool:
     return False
 
 
-def _with_retry(
+def _with_retry[T](
     operation: Callable[[], tuple[bool, T | None, str]],
     max_retries: int = 3,
     is_retryable: Callable[[str], bool] | None = None,

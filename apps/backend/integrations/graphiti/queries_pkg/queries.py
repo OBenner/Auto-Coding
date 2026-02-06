@@ -6,7 +6,7 @@ Handles episode storage, retrieval, and filtering operations.
 
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from core.sentry import capture_exception
 
@@ -64,7 +64,7 @@ class GraphitiQueries:
                 "type": EPISODE_TYPE_SESSION_INSIGHT,
                 "spec_id": self.spec_context_id,
                 "session_number": session_num,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
                 **insights,
             }
 
@@ -73,7 +73,7 @@ class GraphitiQueries:
                 episode_body=json.dumps(episode_content),
                 source=EpisodeType.text,
                 source_description=f"Auto-build session insight for {self.spec_context_id}",
-                reference_time=datetime.now(timezone.utc),
+                reference_time=datetime.now(UTC),
                 group_id=self.group_id,
             )
 
@@ -115,16 +115,16 @@ class GraphitiQueries:
             episode_content = {
                 "type": EPISODE_TYPE_CODEBASE_DISCOVERY,
                 "spec_id": self.spec_context_id,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
                 "files": discoveries,
             }
 
             await self.client.graphiti.add_episode(
-                name=f"codebase_discovery_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}",
+                name=f"codebase_discovery_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}",
                 episode_body=json.dumps(episode_content),
                 source=EpisodeType.text,
                 source_description=f"Codebase file discoveries for {self.group_id}",
-                reference_time=datetime.now(timezone.utc),
+                reference_time=datetime.now(UTC),
                 group_id=self.group_id,
             )
 
@@ -161,7 +161,7 @@ class GraphitiQueries:
             episode_content = {
                 "type": EPISODE_TYPE_PATTERN,
                 "spec_id": self.spec_context_id,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
                 "pattern": pattern,
             }
 
@@ -174,11 +174,11 @@ class GraphitiQueries:
                 episode_content["reasoning"] = category_metadata.get("reasoning", "")
 
             await self.client.graphiti.add_episode(
-                name=f"pattern_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}",
+                name=f"pattern_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}",
                 episode_body=json.dumps(episode_content),
                 source=EpisodeType.text,
                 source_description=f"Code pattern for {self.group_id}",
-                reference_time=datetime.now(timezone.utc),
+                reference_time=datetime.now(UTC),
                 group_id=self.group_id,
             )
 
@@ -217,16 +217,16 @@ class GraphitiQueries:
             episode_content = {
                 "type": EPISODE_TYPE_GOTCHA,
                 "spec_id": self.spec_context_id,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
                 "gotcha": gotcha,
             }
 
             await self.client.graphiti.add_episode(
-                name=f"gotcha_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}",
+                name=f"gotcha_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}",
                 episode_body=json.dumps(episode_content),
                 source=EpisodeType.text,
                 source_description=f"Gotcha/pitfall for {self.group_id}",
-                reference_time=datetime.now(timezone.utc),
+                reference_time=datetime.now(UTC),
                 group_id=self.group_id,
             )
 
@@ -272,16 +272,16 @@ class GraphitiQueries:
                 "task_id": task_id,
                 "success": success,
                 "outcome": outcome,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
                 **(metadata or {}),
             }
 
             await self.client.graphiti.add_episode(
-                name=f"task_outcome_{task_id}_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}",
+                name=f"task_outcome_{task_id}_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}",
                 episode_body=json.dumps(episode_content),
                 source=EpisodeType.text,
                 source_description=f"Task outcome for {task_id}",
-                reference_time=datetime.now(timezone.utc),
+                reference_time=datetime.now(UTC),
                 group_id=self.group_id,
             )
 
@@ -328,7 +328,7 @@ class GraphitiQueries:
                     episode_content = {
                         "type": EPISODE_TYPE_CODEBASE_DISCOVERY,
                         "spec_id": self.spec_context_id,
-                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "timestamp": datetime.now(UTC).isoformat(),
                         "file_path": file_insight.get("path", "unknown"),
                         "purpose": file_insight.get("purpose", ""),
                         "changes_made": file_insight.get("changes_made", ""),
@@ -341,7 +341,7 @@ class GraphitiQueries:
                         episode_body=json.dumps(episode_content),
                         source=EpisodeType.text,
                         source_description=f"File insight: {file_insight.get('path', 'unknown')}",
-                        reference_time=datetime.now(timezone.utc),
+                        reference_time=datetime.now(UTC),
                         group_id=self.group_id,
                     )
                     saved_count += 1
@@ -373,18 +373,18 @@ class GraphitiQueries:
                     episode_content = {
                         "type": EPISODE_TYPE_PATTERN,
                         "spec_id": self.spec_context_id,
-                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "timestamp": datetime.now(UTC).isoformat(),
                         "pattern": pattern_text,
                         "applies_to": applies_to,
                         "example": example,
                     }
 
                     await self.client.graphiti.add_episode(
-                        name=f"pattern_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S%f')}",
+                        name=f"pattern_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S%f')}",
                         episode_body=json.dumps(episode_content),
                         source=EpisodeType.text,
                         source_description=f"Pattern: {pattern_text[:50]}...",
-                        reference_time=datetime.now(timezone.utc),
+                        reference_time=datetime.now(UTC),
                         group_id=self.group_id,
                     )
                     saved_count += 1
@@ -414,18 +414,18 @@ class GraphitiQueries:
                     episode_content = {
                         "type": EPISODE_TYPE_GOTCHA,
                         "spec_id": self.spec_context_id,
-                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "timestamp": datetime.now(UTC).isoformat(),
                         "gotcha": gotcha_text,
                         "trigger": trigger,
                         "solution": solution,
                     }
 
                     await self.client.graphiti.add_episode(
-                        name=f"gotcha_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S%f')}",
+                        name=f"gotcha_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S%f')}",
                         episode_body=json.dumps(episode_content),
                         source=EpisodeType.text,
                         source_description=f"Gotcha: {gotcha_text[:50]}...",
-                        reference_time=datetime.now(timezone.utc),
+                        reference_time=datetime.now(UTC),
                         group_id=self.group_id,
                     )
                     saved_count += 1
@@ -453,16 +453,16 @@ class GraphitiQueries:
                         "why_worked": outcome.get("why_it_worked"),
                         "why_failed": outcome.get("why_it_failed"),
                         "alternatives_tried": outcome.get("alternatives_tried", []),
-                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "timestamp": datetime.now(UTC).isoformat(),
                         "changed_files": insights.get("changed_files", []),
                     }
 
                     await self.client.graphiti.add_episode(
-                        name=f"task_outcome_{subtask_id}_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}",
+                        name=f"task_outcome_{subtask_id}_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}",
                         episode_body=json.dumps(episode_content),
                         source=EpisodeType.text,
                         source_description=f"Task outcome: {subtask_id} {'succeeded' if success else 'failed'}",
-                        reference_time=datetime.now(timezone.utc),
+                        reference_time=datetime.now(UTC),
                         group_id=self.group_id,
                     )
                     saved_count += 1
@@ -483,7 +483,7 @@ class GraphitiQueries:
                     episode_content = {
                         "type": EPISODE_TYPE_SESSION_INSIGHT,
                         "spec_id": self.spec_context_id,
-                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "timestamp": datetime.now(UTC).isoformat(),
                         "subtask_id": insights.get("subtask_id", "unknown"),
                         "session_number": insights.get("session_num", 0),
                         "recommendations": recommendations,
@@ -495,7 +495,7 @@ class GraphitiQueries:
                         episode_body=json.dumps(episode_content),
                         source=EpisodeType.text,
                         source_description=f"Recommendations for {insights.get('subtask_id', 'unknown')}",
-                        reference_time=datetime.now(timezone.utc),
+                        reference_time=datetime.now(UTC),
                         group_id=self.group_id,
                     )
                     saved_count += 1

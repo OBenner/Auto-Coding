@@ -30,7 +30,7 @@ MODEL_FALLBACK_CHAIN: dict[str, list[str]] = {
 T = TypeVar("T")
 
 
-def retry_with_fallback(
+def retry_with_fallback[T](
     callable_fn: Callable[[str], T],
     model: str,
     max_retries_per_model: int = 1,

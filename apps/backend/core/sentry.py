@@ -313,7 +313,7 @@ def capture_exception(error: Exception, **kwargs) -> None:
                 # Apply defensive path masking for extra data
                 masked_value = (
                     _mask_object_paths(value)
-                    if isinstance(value, (str, dict, list))
+                    if isinstance(value, str | dict | list)
                     else value
                 )
                 scope.set_extra(key, masked_value)
@@ -346,7 +346,7 @@ def capture_message(message: str, level: str = "info", **kwargs) -> None:
                 # Apply defensive path masking for extra data (same as capture_exception)
                 masked_value = (
                     _mask_object_paths(value)
-                    if isinstance(value, (str, dict, list))
+                    if isinstance(value, str | dict | list)
                     else value
                 )
                 scope.set_extra(key, masked_value)

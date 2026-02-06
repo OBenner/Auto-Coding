@@ -430,7 +430,7 @@ class PRContextGatherer:
                     flush=True,
                 )
                 return False
-        except asyncio.TimeoutError:
+        except TimeoutError:
             safe_print("[Context] Timeout fetching PR refs")
             return False
         except Exception as e:
@@ -534,7 +534,7 @@ class PRContextGatherer:
                 return ""
 
             return stdout.decode("utf-8")
-        except asyncio.TimeoutError:
+        except TimeoutError:
             safe_print(f"[Context] Timeout reading {path} from {ref}")
             return ""
         except Exception as e:
@@ -590,7 +590,7 @@ class PRContextGatherer:
                 return ""
 
             return stdout.decode("utf-8")
-        except asyncio.TimeoutError:
+        except TimeoutError:
             safe_print(f"[Context] Timeout getting patch for {path}")
             return ""
         except Exception as e:
