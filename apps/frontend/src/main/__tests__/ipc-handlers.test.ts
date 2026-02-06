@@ -4,7 +4,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { EventEmitter } from "events";
-import { mkdirSync, mkdtempSync, writeFileSync, rmSync, existsSync } from "fs";
+import { mkdirSync, mkdtempSync, writeFileSync, rmSync, existsSync, readFileSync } from "fs";
 import { tmpdir } from "os";
 import path from "path";
 
@@ -293,8 +293,19 @@ describe("IPC Handlers", { timeout: 15000 }, () => {
         mockPythonEnvManager as never
       );
 
+      // Pre-populate the store file so that ProjectStore's async initializeAsync()
+      // loads a known state instead of racing with addProject(). Without this,
+      // initializeAsync can complete after addProject, overwriting in-memory data.
+      const storeFile = path.join(TEST_DIR, "userData", "store", "projects.json");
+      writeFileSync(storeFile, JSON.stringify({ projects: [], settings: {} }));
+
+      // Wait for ProjectStore's async initialization to complete (reads the file above).
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
       // Add project twice
       const result1 = await ipcMain.invokeHandler("project:add", {}, TEST_PROJECT_PATH);
+      // Wait for the fire-and-forget saveAsync to flush
+      await new Promise((resolve) => setTimeout(resolve, 200));
       const result2 = await ipcMain.invokeHandler("project:add", {}, TEST_PROJECT_PATH);
 
       const data1 = (result1 as { data: { id: string } }).data;
@@ -633,7 +644,14 @@ describe("IPC Handlers", { timeout: 15000 }, () => {
         mockPythonEnvManager as never
       );
 
+      // Wait for ProjectStore's async initialization to complete
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
       mockAgentManager.emit("log", "task-1", "Test log message");
+
+      // The event handler uses an async IIFE (awaits findTaskAndProject),
+      // so we must flush the microtask queue before checking the assertion.
+      await new Promise((resolve) => setTimeout(resolve, 100));
 
       expect(mockMainWindow.webContents.send).toHaveBeenCalledWith(
         "task:log",
@@ -652,7 +670,14 @@ describe("IPC Handlers", { timeout: 15000 }, () => {
         mockPythonEnvManager as never
       );
 
+      // Wait for ProjectStore's async initialization to complete
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
       mockAgentManager.emit("error", "task-1", "Test error message");
+
+      // The event handler uses an async IIFE (awaits findTaskAndProject),
+      // so we must flush the microtask queue before checking the assertion.
+      await new Promise((resolve) => setTimeout(resolve, 100));
 
       expect(mockMainWindow.webContents.send).toHaveBeenCalledWith(
         "task:error",
@@ -671,6 +696,9 @@ describe("IPC Handlers", { timeout: 15000 }, () => {
         mockPythonEnvManager as never
       );
 
+      // Wait for ProjectStore's async initialization to complete
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
       // Add project first
       await ipcMain.invokeHandler("project:add", {}, TEST_PROJECT_PATH);
 
@@ -683,6 +711,11 @@ describe("IPC Handlers", { timeout: 15000 }, () => {
       );
 
       mockAgentManager.emit("exit", "task-1", 1, "task-execution");
+
+      // The exit handler uses an async IIFE with multiple awaits
+      // (findTaskAndProject, getTasks, etc.), so we must flush the promise
+      // queue before checking the assertion.
+      await new Promise((resolve) => setTimeout(resolve, 500));
 
       expect(mockMainWindow.webContents.send).toHaveBeenCalledWith(
         "task:statusChange",

@@ -19,7 +19,7 @@ import {
   findWindowsExecutableViaWhere,
   findWindowsExecutableViaWhereAsync,
   isSecurePath
-} from '../utils/windows-paths';
+} from '../platform/paths';
 import { findExecutable, findExecutableAsync } from '../env-utils';
 
 type SpawnOptions = Parameters<(typeof import('../env-utils'))['getSpawnOptions']>[1];
@@ -159,8 +159,8 @@ vi.mock('../utils/homebrew-python', () => ({
   findHomebrewPython: vi.fn(() => null)
 }));
 
-// Mock windows-paths utility
-vi.mock('../utils/windows-paths', () => ({
+// Mock platform/paths utility (where cli-tool-manager imports windows-specific functions from)
+vi.mock('../platform/paths', () => ({
   findWindowsExecutableViaWhere: vi.fn(() => null),
   findWindowsExecutableViaWhereAsync: vi.fn(() => Promise.resolve(null)),
   isSecurePath: vi.fn(() => true),
