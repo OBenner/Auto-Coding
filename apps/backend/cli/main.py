@@ -133,6 +133,12 @@ Environment Variables:
         help="Enable CI/CD pipeline mode (non-interactive, structured output)",
     )
 
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Enable JSON output mode for structured machine-readable output",
+    )
+
     # Workspace options
     workspace_group = parser.add_mutually_exclusive_group()
     workspace_group.add_argument(
