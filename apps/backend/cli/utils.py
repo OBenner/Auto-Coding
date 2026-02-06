@@ -88,6 +88,20 @@ def is_ci_mode() -> bool:
     return ci_value in ("true", "1")
 
 
+def is_json_output_enabled() -> bool:
+    """
+    Check if JSON output mode is enabled.
+
+    JSON output mode is enabled when the AUTO_CLAUDE_JSON_OUTPUT environment variable
+    is set to 'true' or '1'. This enables structured JSON output for programmatic consumption.
+
+    Returns:
+        True if JSON output is enabled, False otherwise
+    """
+    json_value = os.environ.get("AUTO_CLAUDE_JSON_OUTPUT", "").lower()
+    return json_value in ("true", "1")
+
+
 def setup_environment() -> Path:
     """
     Set up the environment and return the script directory.
