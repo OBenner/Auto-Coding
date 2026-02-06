@@ -9,10 +9,11 @@ Supported Providers:
 - claude: Claude Agent SDK (default, recommended) - Full agentic capabilities
 - litellm: LiteLLM unified API - 100+ LLMs via single interface
 - openrouter: OpenRouter cloud routing - 400+ models with pay-per-use
+- zhipuai: Zhipu AI GLM models - Chinese language models (e.g., glm-4, glm-4-flash)
 
 Environment Variables:
     # Core
-    AI_ENGINE_PROVIDER: Provider selection (claude|litellm|openrouter, default: claude)
+    AI_ENGINE_PROVIDER: Provider selection (claude|litellm|openrouter|zhipuai, default: claude)
 
     # Claude Agent SDK (default)
     ANTHROPIC_API_KEY: Required for Claude provider
@@ -26,6 +27,10 @@ Environment Variables:
     OPENROUTER_API_KEY: Required for OpenRouter provider
     OPENROUTER_MODEL: Model identifier (default: anthropic/claude-sonnet-4)
     OPENROUTER_BASE_URL: API base URL (default: https://openrouter.ai/api/v1)
+
+    # Zhipu AI (GLM)
+    ZHIPUAI_API_KEY: Required for ZhipuAI provider
+    ZHIPUAI_MODEL: Model identifier (default: glm-4-flash)
 """
 
 import os
@@ -39,12 +44,14 @@ class AIEngineProvider(str, Enum):
     CLAUDE = "claude"
     LITELLM = "litellm"
     OPENROUTER = "openrouter"
+    ZHIPUAI = "zhipuai"
 
 
 # Default values
 DEFAULT_PROVIDER = "claude"
 DEFAULT_OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 DEFAULT_OPENROUTER_MODEL = "anthropic/claude-sonnet-4"
+DEFAULT_ZHIPUAI_MODEL = "glm-4-flash"
 
 
 @dataclass
@@ -71,6 +78,10 @@ class ProviderConfig:
     openrouter_api_key: str = ""
     openrouter_model: str = DEFAULT_OPENROUTER_MODEL
     openrouter_base_url: str = DEFAULT_OPENROUTER_BASE_URL
+
+    # Zhipu AI settings
+    zhipuai_api_key: str = ""
+    zhipuai_model: str = DEFAULT_ZHIPUAI_MODEL
 
     @classmethod
     def from_env(cls) -> "ProviderConfig":
@@ -100,6 +111,10 @@ class ProviderConfig:
             "OPENROUTER_BASE_URL", DEFAULT_OPENROUTER_BASE_URL
         )
 
+        # Zhipu AI settings
+        zhipuai_api_key = os.environ.get("ZHIPUAI_API_KEY", "")
+        zhipuai_model = os.environ.get("ZHIPUAI_MODEL", DEFAULT_ZHIPUAI_MODEL)
+
         return cls(
             provider=provider,
             anthropic_api_key=anthropic_api_key,
@@ -110,6 +125,8 @@ class ProviderConfig:
             openrouter_api_key=openrouter_api_key,
             openrouter_model=openrouter_model,
             openrouter_base_url=openrouter_base_url,
+            zhipuai_api_key=zhipuai_api_key,
+            zhipuai_model=zhipuai_model,
         )
 
     def is_valid(self) -> bool:
@@ -125,6 +142,8 @@ class ProviderConfig:
             return bool(self.litellm_model)
         elif self.provider == AIEngineProvider.OPENROUTER.value:
             return bool(self.openrouter_api_key)
+        elif self.provider == AIEngineProvider.ZHIPUAI.value:
+            return bool(self.zhipuai_api_key)
         return False
 
     def get_validation_errors(self) -> list[str]:
@@ -146,6 +165,11 @@ class ProviderConfig:
                 errors.append(
                     "OpenRouter provider requires OPENROUTER_API_KEY environment variable"
                 )
+        elif self.provider == AIEngineProvider.ZHIPUAI.value:
+            if not self.zhipuai_api_key:
+                errors.append(
+                    "ZhipuAI provider requires ZHIPUAI_API_KEY environment variable"
+                )
         else:
             errors.append(f"Unknown provider: {self.provider}")
 
@@ -159,6 +183,8 @@ class ProviderConfig:
             return f"LiteLLM ({self.litellm_model or 'no model configured'})"
         elif self.provider == AIEngineProvider.OPENROUTER.value:
             return f"OpenRouter ({self.openrouter_model})"
+        elif self.provider == AIEngineProvider.ZHIPUAI.value:
+            return f"ZhipuAI ({self.zhipuai_model})"
         return f"Unknown ({self.provider})"
 
     def get_model_for_provider(self) -> str | None:
@@ -169,6 +195,8 @@ class ProviderConfig:
             return self.litellm_model or None
         elif self.provider == AIEngineProvider.OPENROUTER.value:
             return self.openrouter_model
+        elif self.provider == AIEngineProvider.ZHIPUAI.value:
+            return self.zhipuai_model
         return None
 
 
@@ -201,6 +229,9 @@ def get_available_providers() -> list[str]:
 
     if config.openrouter_api_key:
         available.append(AIEngineProvider.OPENROUTER.value)
+
+    if config.zhipuai_api_key:
+        available.append(AIEngineProvider.ZHIPUAI.value)
 
     return available
 
