@@ -258,7 +258,7 @@ Ready for QA Revalidation: {ready_for_revalidation}"""
             if issues:
                 result += f"\n\nIssues Found: {len(issues)}"
                 for i, issue in enumerate(issues, 1):
-                    issue_desc = issue.get("description", str(issue))
+                    issue_desc = issue.get("description", str(issue)) if isinstance(issue, dict) else str(issue)
                     result += f"\n  {i}. {issue_desc}"
             else:
                 result += "\n\nIssues Found: None"

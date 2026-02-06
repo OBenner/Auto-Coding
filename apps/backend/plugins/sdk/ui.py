@@ -18,7 +18,7 @@ import logging
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Optional
+from typing import TYPE_CHECKING, Any, Callable
 
 from ..base import PluginBase, PluginMetadata, PluginType
 
@@ -65,9 +65,9 @@ class UIComponentDefinition:
     id: str
     extension_point: UIExtensionPoint
     title: str
-    icon: Optional[str] = None
-    component_path: Optional[str] = None
-    route: Optional[str] = None
+    icon: str | None = None
+    component_path: str | None = None
+    route: str | None = None
     order: int = 100
     props: dict[str, Any] = field(default_factory=dict)
 
@@ -255,7 +255,7 @@ class UIPlugin(PluginBase):
                 f"UIPlugin requires plugin_type=UI, got {metadata.plugin_type}"
             )
         super().__init__(metadata)
-        self.plugin_dir: Optional[Path] = None
+        self.plugin_dir: Path | None = None
         self._ipc_handlers: dict[str, Callable] = {}
         logger.debug(f"UIPlugin initialized: {metadata.name}")
 

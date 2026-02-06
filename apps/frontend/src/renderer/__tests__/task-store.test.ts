@@ -4,7 +4,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { useTaskStore } from '../stores/task-store';
-import type { Task, TaskStatus, ImplementationPlan } from '../../shared/types';
+import type { Task, TaskStatus, ImplementationPlan, PlanSubtask, ExecutionProgress } from '../../shared/types';
 
 // Helper to create test tasks
 function createTestTask(overrides: Partial<Task> = {}): Task {
@@ -644,7 +644,7 @@ describe('Task Store', () => {
           tasks: [createTestTask({ id: 'task-1', subtasks: [] })]
         });
 
-        const invalidPlan = { feature: 'Test' } as unknown as { phases: unknown[] };
+        const invalidPlan = { feature: 'Test' } as unknown as ImplementationPlan;
 
         useTaskStore.getState().updateTaskFromPlan('task-1', invalidPlan);
 
@@ -663,7 +663,7 @@ describe('Task Store', () => {
         const invalidPlan = {
           feature: 'Test',
           phases: null
-        } as unknown;
+        } as unknown as ImplementationPlan;
 
         useTaskStore.getState().updateTaskFromPlan('task-1', invalidPlan);
 
@@ -688,7 +688,7 @@ describe('Task Store', () => {
               // Missing subtasks
             }
           ]
-        } as unknown;
+        } as unknown as ImplementationPlan;
 
         useTaskStore.getState().updateTaskFromPlan('task-1', invalidPlan);
 
@@ -713,7 +713,7 @@ describe('Task Store', () => {
               subtasks: 'not-an-array'
             }
           ]
-        } as unknown;
+        } as unknown as ImplementationPlan;
 
         useTaskStore.getState().updateTaskFromPlan('task-1', invalidPlan);
 
@@ -738,7 +738,7 @@ describe('Task Store', () => {
               subtasks: ['not-an-object', 'also-not-an-object']
             }
           ]
-        } as unknown;
+        } as unknown as ImplementationPlan;
 
         useTaskStore.getState().updateTaskFromPlan('task-1', invalidPlan);
 
@@ -765,7 +765,7 @@ describe('Task Store', () => {
               ]
             }
           ]
-        } as unknown;
+        } as unknown as ImplementationPlan;
 
         useTaskStore.getState().updateTaskFromPlan('task-1', invalidPlan);
 
@@ -792,7 +792,7 @@ describe('Task Store', () => {
               ]
             }
           ]
-        } as unknown;
+        } as unknown as ImplementationPlan;
 
         useTaskStore.getState().updateTaskFromPlan('task-1', invalidPlan);
 
@@ -819,7 +819,7 @@ describe('Task Store', () => {
               ]
             }
           ]
-        } as unknown;
+        } as unknown as ImplementationPlan;
 
         useTaskStore.getState().updateTaskFromPlan('task-1', invalidPlan);
 
@@ -867,7 +867,7 @@ describe('Task Store', () => {
               name: 'Phase 1',
               type: 'implementation',
               subtasks: [
-                { description: 'Subtask without id', status: 'pending' } as unknown
+                { description: 'Subtask without id', status: 'pending' } as unknown as PlanSubtask
               ]
             }
           ]
@@ -948,7 +948,7 @@ describe('Task Store', () => {
               name: 'Phase 1',
               type: 'implementation',
               subtasks: [
-                { id: 'subtask-1', description: 'Test subtask' } as unknown
+                { id: 'subtask-1', description: 'Test subtask' } as unknown as PlanSubtask
               ]
             }
           ]
@@ -1784,7 +1784,7 @@ describe('Task Store', () => {
           tasks: [createTestTask({
             id: 'task-1',
             status: 'in_progress',
-            executionProgress: { phaseProgress: 0, overallProgress: 0 } as unknown
+            executionProgress: { phaseProgress: 0, overallProgress: 0 } as unknown as ExecutionProgress
           })]
         });
 

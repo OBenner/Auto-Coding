@@ -16,7 +16,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 from ..base import PluginBase, PluginMetadata, PluginType
 
@@ -45,9 +45,9 @@ class AgentContext:
 
     project_dir: Path
     spec_dir: Path
-    session_id: Optional[str] = None
-    client: Optional[ClaudeSDKClient] = None
-    phase: Optional[str] = None
+    session_id: str | None = None
+    client: ClaudeSDKClient | None = None
+    phase: str | None = None
     metadata: dict[str, Any] = None
 
     def __post_init__(self):

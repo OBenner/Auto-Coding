@@ -16,7 +16,6 @@ import json
 import logging
 import sys
 from pathlib import Path
-from typing import Optional
 
 from .base import PluginBase, PluginMetadata, PluginType
 from .isolation import PluginSandbox, ResourceLimits
@@ -87,9 +86,9 @@ class PluginLoader:
 
     def __init__(
         self,
-        user_plugins_dir: Optional[Path] = None,
-        system_plugins_dir: Optional[Path] = None,
-        default_limits: Optional[ResourceLimits] = None,
+        user_plugins_dir: Path | None = None,
+        system_plugins_dir: Path | None = None,
+        default_limits: ResourceLimits | None = None,
     ):
         """
         Initialize plugin loader.
@@ -184,8 +183,8 @@ class PluginLoader:
     def load_plugin(
         self,
         plugin_dir: Path,
-        project_dir: Optional[Path] = None,
-        limits: Optional[ResourceLimits] = None,
+        project_dir: Path | None = None,
+        limits: ResourceLimits | None = None,
     ) -> PluginBase:
         """
         Load a plugin from a directory.
@@ -317,7 +316,7 @@ class PluginLoader:
 
         return metadata
 
-    def _find_plugin_module(self, plugin_dir: Path) -> Optional[Path]:
+    def _find_plugin_module(self, plugin_dir: Path) -> Path | None:
         """
         Find plugin module file (plugin.py or __init__.py).
 
@@ -405,8 +404,8 @@ class PluginLoader:
 
 
 def discover_plugins(
-    user_plugins_dir: Optional[Path] = None,
-    system_plugins_dir: Optional[Path] = None,
+    user_plugins_dir: Path | None = None,
+    system_plugins_dir: Path | None = None,
 ) -> list[PluginMetadata]:
     """
     Convenience function to discover all plugins.

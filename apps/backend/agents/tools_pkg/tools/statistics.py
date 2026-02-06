@@ -181,12 +181,16 @@ def _calculate_completion_velocity(
     subtasks_per_day = subtasks_per_hour * 24
 
     # Calculate average subtask duration
-    avg_duration = elapsed_seconds / completed if completed > 0 else 0
+    if completed > 0:
+        avg_duration = elapsed_seconds / completed
+        avg_duration_str = _format_duration(avg_duration)
+    else:
+        avg_duration_str = "N/A"
 
     return {
         "subtasks_per_hour": round(subtasks_per_hour, 2),
         "subtasks_per_day": round(subtasks_per_day, 2),
-        "average_subtask_duration": _format_duration(avg_duration),
+        "average_subtask_duration": avg_duration_str,
     }
 
 

@@ -51,10 +51,14 @@ interface SelectPRTestParams {
     newCommitsCheck: NewCommitsCheck | null;
   } | null;
   diskReviewResult: PRReviewResult | null;
-  mockCheckNewCommits: (projectId: string, prNumber: number) => Promise<NewCommitsCheck>;
-  mockGetPRReview: (projectId: string, prNumber: number) => Promise<PRReviewResult | null>;
-  mockSetNewCommitsCheck: (projectId: string, prNumber: number, check: NewCommitsCheck) => void;
-  mockSetPRReviewResult: (projectId: string, result: PRReviewResult) => void;
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
+  mockCheckNewCommits: Function;
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
+  mockGetPRReview: Function;
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
+  mockSetNewCommitsCheck: Function;
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
+  mockSetPRReviewResult: Function;
   abortSignal?: AbortSignal;
 }
 

@@ -22,7 +22,8 @@ describe('ModelSearchableSelect', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(useSettingsStore).mockImplementation((selector?: (state: unknown) => unknown): unknown => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(useSettingsStore).mockImplementation((selector?: (state: any) => any): any => {
       const state = { discoverModels: mockDiscoverModels };
       return selector ? selector(state) : state;
     });

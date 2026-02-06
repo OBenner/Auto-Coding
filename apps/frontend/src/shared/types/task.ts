@@ -299,6 +299,7 @@ export interface Task {
   stagedAt?: string;  // ISO timestamp when changes were staged
   location?: 'main' | 'worktree';  // Where task was loaded from (main project or worktree)
   specsPath?: string;  // Full path to specs directory for this task
+  tokenStats?: TaskTokenStats;  // Token usage statistics from token_stats.json
   createdAt: Date;
   updatedAt: Date;
 }
@@ -527,4 +528,23 @@ export interface TaskStartOptions {
   workers?: number;
   model?: string;
   baseBranch?: string; // Override base branch for worktree creation
+}
+
+// Token statistics types (mirrors Python core/token_stats.py)
+export interface PhaseTokenStats {
+  phase: 'planning' | 'coding' | 'validation';
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
+  session_count: number;
+  updated_at: string;
+}
+
+export interface TaskTokenStats {
+  phases: Record<string, PhaseTokenStats>;
+  total_input_tokens: number;
+  total_output_tokens: number;
+  total_tokens: number;
+  created_at: string;
+  updated_at: string;
 }

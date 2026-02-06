@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Optional
 
 from .base import PluginBase, PluginType
 from .loader import PluginLoader
@@ -69,13 +68,13 @@ class PluginRegistry:
         ...     print(f"{plugin.name}: {'enabled' if plugin.is_enabled else 'disabled'}")
     """
 
-    _instance: Optional[PluginRegistry] = None
+    _instance: PluginRegistry | None = None
 
     def __init__(
         self,
-        user_plugins_dir: Optional[Path] = None,
-        system_plugins_dir: Optional[Path] = None,
-        project_dir: Optional[Path] = None,
+        user_plugins_dir: Path | None = None,
+        system_plugins_dir: Path | None = None,
+        project_dir: Path | None = None,
     ):
         """
         Initialize plugin registry.
@@ -98,9 +97,9 @@ class PluginRegistry:
     @classmethod
     def get_instance(
         cls,
-        user_plugins_dir: Optional[Path] = None,
-        system_plugins_dir: Optional[Path] = None,
-        project_dir: Optional[Path] = None,
+        user_plugins_dir: Path | None = None,
+        system_plugins_dir: Path | None = None,
+        project_dir: Path | None = None,
     ) -> PluginRegistry:
         """
         Get singleton instance of PluginRegistry.
@@ -214,7 +213,7 @@ class PluginRegistry:
         self._plugins.clear()
         debug_success("Unloaded all plugins")
 
-    def get_plugin(self, name: str) -> Optional[PluginBase]:
+    def get_plugin(self, name: str) -> PluginBase | None:
         """
         Get a plugin by name.
 
@@ -233,7 +232,7 @@ class PluginRegistry:
 
     def list_plugins(
         self,
-        plugin_type: Optional[PluginType] = None,
+        plugin_type: PluginType | None = None,
         enabled_only: bool = False,
     ) -> list[PluginBase]:
         """
@@ -379,7 +378,7 @@ class PluginRegistry:
 # Convenience functions for common operations
 
 
-def get_plugin(name: str) -> Optional[PluginBase]:
+def get_plugin(name: str) -> PluginBase | None:
     """
     Get a plugin by name from the singleton registry.
 
@@ -402,7 +401,7 @@ def get_plugin(name: str) -> Optional[PluginBase]:
 
 
 def list_plugins(
-    plugin_type: Optional[PluginType] = None,
+    plugin_type: PluginType | None = None,
     enabled_only: bool = False,
 ) -> list[PluginBase]:
     """

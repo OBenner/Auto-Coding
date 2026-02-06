@@ -149,12 +149,10 @@ export function MemoryGraph({ nodes: graphNodes, edges: graphEdges }: MemoryGrap
         <Controls
           showInteractive={false}
           style={{
-            button: {
-              backgroundColor: 'hsl(var(--background))',
-              border: '1px solid hsl(var(--border))',
-              color: 'hsl(var(--foreground))'
-            }
-          }}
+            backgroundColor: 'hsl(var(--background))',
+            border: '1px solid hsl(var(--border))',
+            color: 'hsl(var(--foreground))'
+          } as React.CSSProperties}
         />
         <MiniMap
           nodeColor={(node) => {

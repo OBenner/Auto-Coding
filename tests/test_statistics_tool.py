@@ -19,6 +19,27 @@ import pytest
 backend_path = Path(__file__).parent.parent / "apps" / "backend"
 sys.path.insert(0, str(backend_path))
 
+# Ensure claude_agent_sdk has a proper tool decorator (passthrough)
+# This is needed when the full test suite runs and another test module
+# already mocked claude_agent_sdk with a MagicMock
+def _mock_tool_decorator(name, description, params):
+    def decorator(func):
+        func._tool_name = name
+        return func
+    return decorator
+
+_mock_sdk = MagicMock()
+_mock_sdk.tool = _mock_tool_decorator
+sys.modules.setdefault('claude_agent_sdk', _mock_sdk)
+
+# Patch the statistics module directly if already imported
+try:
+    import agents.tools_pkg.tools.statistics as _stats_mod
+    _stats_mod.tool = _mock_tool_decorator
+    _stats_mod.SDK_TOOLS_AVAILABLE = True
+except ImportError:
+    pass
+
 
 class TestTimestampParsing:
     """Tests for _parse_timestamp() helper function."""

@@ -14,7 +14,7 @@ import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Optional
+from typing import Any
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -274,8 +274,8 @@ class PluginMetadata:
     plugin_type: PluginType
     required_permissions: list[PluginPermission] = field(default_factory=list)
     dependencies: list[str] = field(default_factory=list)
-    homepage: Optional[str] = None
-    license: Optional[str] = None
+    homepage: str | None = None
+    license: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Convert metadata to dictionary for serialization."""

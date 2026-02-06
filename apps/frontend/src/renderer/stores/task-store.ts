@@ -189,7 +189,7 @@ async function fetchAndUpdateTokenStats(taskId: string): Promise<void> {
       store.updateTokenStats(taskId, result.data);
       debugLog('[fetchAndUpdateTokenStats] Token stats updated:', {
         taskId,
-        totalTokens: result.data.totalTokens
+        total_tokens: result.data.total_tokens
       });
     } else if (!result.success && result.error) {
       debugLog('[fetchAndUpdateTokenStats] Failed to fetch token stats:', result.error);

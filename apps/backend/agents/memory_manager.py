@@ -629,6 +629,95 @@ async def save_session_memory(
         return False, "none"
 
 
+async def save_user_correction(
+    spec_dir: Path,
+    project_dir: Path,
+    what_was_wrong: str,
+    what_was_corrected: str,
+    correction_context: dict | None = None,
+) -> bool:
+    """
+    Save a user correction to Graphiti memory.
+
+    Called when the user manually edits QA_FIX_REQUEST.md to provide
+    better guidance than the QA agent generated.
+
+    Args:
+        spec_dir: Spec directory
+        project_dir: Project root directory
+        what_was_wrong: Description of what the agent got wrong
+        what_was_corrected: The user's corrected content
+        correction_context: Additional context (spec_id, file_path, etc.)
+
+    Returns:
+        True if saved successfully, False otherwise
+    """
+    if not is_graphiti_enabled():
+        if is_debug_enabled():
+            debug("memory", "Graphiti not enabled, skipping user correction save")
+        return False
+
+    memory = None
+    try:
+        memory = await get_graphiti_memory(spec_dir, project_dir)
+        if memory is None:
+            if is_debug_enabled():
+                debug_warning("memory", "GraphitiMemory not available for user correction")
+            return False
+
+        # Store as a user correction episode
+        episode_data = {
+            "episode_type": "user_correction",
+            "what_was_wrong": what_was_wrong,
+            "what_was_corrected": what_was_corrected,
+            "correction_context": correction_context or {},
+        }
+
+        result = await memory.save_session_insights(
+            session_num=0,
+            insights={
+                "what_failed": [what_was_wrong],
+                "what_worked": [what_was_corrected],
+                "discoveries": {
+                    "gotchas_encountered": [
+                        {
+                            "gotcha": what_was_wrong,
+                            "solution": what_was_corrected[:500],
+                            "source": "user_correction",
+                        }
+                    ],
+                },
+                "recommendations_for_next_session": [what_was_corrected[:500]],
+                "subtasks_completed": [],
+                "_user_correction": episode_data,
+            },
+        )
+
+        if result:
+            logger.info("User correction saved to Graphiti memory")
+            if is_debug_enabled():
+                debug_success("memory", "User correction saved to Graphiti")
+        return bool(result)
+
+    except Exception as e:
+        logger.warning(f"Failed to save user correction: {e}")
+        if is_debug_enabled():
+            debug_error("memory", "User correction save failed", error=str(e))
+        capture_exception(
+            e,
+            operation="save_user_correction",
+            spec_dir=str(spec_dir),
+            project_dir=str(project_dir),
+        )
+        return False
+    finally:
+        if memory is not None:
+            try:
+                await memory.close()
+            except Exception:
+                pass
+
+
 # Keep the old function name as an alias for backwards compatibility
 async def save_session_to_graphiti(
     spec_dir: Path,

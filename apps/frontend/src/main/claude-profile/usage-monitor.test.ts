@@ -66,7 +66,7 @@ vi.mock('./credential-utils', () => ({
 }));
 
 // Mock global fetch
-global.fetch = vi.fn(() =>
+(global as Record<string, unknown>).fetch = vi.fn(() =>
   Promise.resolve({
     ok: true,
     status: 200,
@@ -78,7 +78,7 @@ global.fetch = vi.fn(() =>
       seven_day_reset_at: '2025-01-20T12:00:00Z'
     })
   } as unknown as Response)
-) as ReturnType<typeof vi.fn>;
+);
 
 describe('usage-monitor', () => {
   beforeEach(() => {

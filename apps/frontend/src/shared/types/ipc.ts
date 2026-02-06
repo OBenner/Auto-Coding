@@ -881,6 +881,16 @@ export interface ElectronAPI {
   }>>>;
   capture: (options: { sourceId: string }) => Promise<IPCResult<string>>;
 
+  // Token statistics
+  getTokenStats: (projectPath: string, specId: string) => Promise<IPCResult<import('./task').TaskTokenStats | null>>;
+
+  // Plugin management
+  listPlugins: (options?: { pluginType?: string; enabledOnly?: boolean }) => Promise<IPCResult<import('../../main/plugins/types').PluginInfo[]>>;
+  enablePlugin: (pluginName: string) => Promise<IPCResult<{ success: boolean }>>;
+  disablePlugin: (pluginName: string) => Promise<IPCResult<{ success: boolean }>>;
+  installPlugin: (source: { type: string; path?: string; marketplace_id?: string }) => Promise<IPCResult<{ success: boolean; plugin?: { name: string; version: string } }>>;
+  uninstallPlugin: (pluginName: string) => Promise<IPCResult<{ success: boolean }>>;
+
   // Queue Routing API (rate limit recovery)
   queue: import('../../preload/api/queue-api').QueueAPI;
 }

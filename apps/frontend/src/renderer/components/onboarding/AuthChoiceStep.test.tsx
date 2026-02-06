@@ -23,7 +23,8 @@ const mockOnAPIKeyPathComplete = vi.fn();
 // Dynamic profiles state for testing
 let mockProfiles: APIProfile[] = [];
 
-const mockUseSettingsStore = (selector?: unknown) => {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mockUseSettingsStore = (selector?: (state: any) => any) => {
   const state = {
     profiles: mockProfiles,
     profilesLoading: false,

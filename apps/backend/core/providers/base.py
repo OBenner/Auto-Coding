@@ -180,13 +180,13 @@ class AIEngineProvider(ABC):
         """
         return self.validate_config()
 
-    def close(self) -> None:
+    def close(self) -> None:  # noqa: B027
         """Clean up provider resources.
 
         Called when provider is no longer needed.
         Default implementation does nothing.
+        Subclasses should override if they need cleanup.
         """
-        pass
 
     def __repr__(self) -> str:
         """Return string representation of provider."""

@@ -357,8 +357,8 @@ class TestModelFallback:
             nonlocal call_count
             call_count += 1
             if call_count == 1:
-                # First call with opus fails
-                raise Exception("Model unavailable")
+                # First call with opus fails (must be a retryable error)
+                raise Exception("Rate limit exceeded - too many requests")
             # Second call with sonnet succeeds
             return f"Success with {model}"
 

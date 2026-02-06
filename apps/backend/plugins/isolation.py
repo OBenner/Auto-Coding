@@ -19,7 +19,7 @@ import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -146,7 +146,7 @@ class SandboxResult:
     stderr: str = ""
     return_code: int = 0
     execution_time: float = 0.0
-    error: Optional[str] = None
+    error: str | None = None
     violated_limits: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
@@ -193,8 +193,8 @@ class PluginSandbox:
     def __init__(
         self,
         plugin_dir: Path,
-        allowed_dirs: Optional[list[Path]] = None,
-        limits: Optional[ResourceLimits] = None,
+        allowed_dirs: list[Path] | None = None,
+        limits: ResourceLimits | None = None,
     ):
         """
         Initialize plugin sandbox.
@@ -209,7 +209,7 @@ class PluginSandbox:
         if allowed_dirs:
             self.allowed_dirs.extend([Path(d).resolve() for d in allowed_dirs])
         self.limits = limits or ResourceLimits()
-        self._process: Optional[subprocess.Popen] = None
+        self._process: subprocess.Popen | None = None
         self._start_time: float = 0.0
 
         logger.debug(f"Initialized sandbox for plugin at: {self.plugin_dir}")
@@ -275,8 +275,8 @@ class PluginSandbox:
     def execute_python(
         self,
         script: str,
-        args: Optional[list[str]] = None,
-        working_dir: Optional[Path] = None,
+        args: list[str] | None = None,
+        working_dir: Path | None = None,
     ) -> SandboxResult:
         """
         Execute a Python script in the sandbox.

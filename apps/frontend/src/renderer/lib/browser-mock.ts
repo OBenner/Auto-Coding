@@ -387,7 +387,22 @@ const browserMockAPI: ElectronAPI = {
     }
   }),
   getConflictPatterns: async () => ({ success: true, data: [] }),
-  exportMergeAnalytics: async () => ({ success: true, data: { path: '/mock/export' } })
+  exportMergeAnalytics: async () => ({ success: true, data: { path: '/mock/export' } }),
+
+  // Memory graph operations
+  getGraphData: async () => ({ success: true, data: { nodes: [], edges: [], node_count: 0, edge_count: 0 } }),
+  deleteMemory: async () => ({ success: true, data: { success: true } }),
+  exportMemories: async () => ({ success: true, data: { memory_count: 0, entity_count: 0 } }),
+
+  // Token statistics
+  getTokenStats: async () => ({ success: true, data: null }),
+
+  // Plugin operations
+  listPlugins: async () => ({ success: true, data: [] }),
+  enablePlugin: async () => ({ success: true, data: { success: true } }),
+  disablePlugin: async () => ({ success: true, data: { success: true } }),
+  installPlugin: async () => ({ success: true, data: { success: true } }),
+  uninstallPlugin: async () => ({ success: true, data: { success: true } })
 };
 
 /**
