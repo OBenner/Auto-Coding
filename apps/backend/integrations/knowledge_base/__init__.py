@@ -13,6 +13,7 @@ from integrations.knowledge_base.config import (
 )
 from integrations.knowledge_base.connectors import (
     ConfluenceConnector,
+    GitHubWikiConnector,
     NotionConnector,
 )
 
@@ -21,5 +22,6 @@ __all__ = [
     "KnowledgeBaseConfig",
     "KnowledgeBaseState",
     "ConfluenceConnector",
+    "GitHubWikiConnector",
     "NotionConnector",
 ]
