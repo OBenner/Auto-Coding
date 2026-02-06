@@ -69,7 +69,7 @@ interface AccountSettingsProps {
 /**
  * Unified account settings with tabs for Claude Code and Custom Endpoints
  */
-export function AccountSettings({ settings, onSettingsChange, isOpen }: AccountSettingsProps) {
+export function AccountSettings({ settings: _settings, onSettingsChange: _onSettingsChange, isOpen }: AccountSettingsProps) {
   const { t } = useTranslation('settings');
   const { t: tCommon } = useTranslation('common');
   const { toast } = useToast();
@@ -246,6 +246,7 @@ export function AccountSettings({ settings, onSettingsChange, isOpen }: AccountS
   };
 
   // Load data when section is opened
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Functions are stable and don't need to trigger re-render
   useEffect(() => {
     if (isOpen) {
       loadClaudeProfiles();
@@ -255,7 +256,7 @@ export function AccountSettings({ settings, onSettingsChange, isOpen }: AccountS
       // This bypasses the 1-minute cache to ensure accurate duplicate detection
       loadProfileUsageData(true);
     }
-  }, [isOpen, loadProfileUsageData, loadAutoSwitchSettings, loadClaudeProfiles, loadPriorityOrder]);
+  }, [isOpen]);
 
   // Subscribe to usage updates for real-time data
   useEffect(() => {
@@ -483,11 +484,12 @@ export function AccountSettings({ settings, onSettingsChange, isOpen }: AccountS
     setAuthenticatingProfileId(null);
   }, []);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: loadClaudeProfiles is stable
   const handleAuthTerminalSuccess = useCallback(async () => {
     setAuthTerminal(null);
     setAuthenticatingProfileId(null);
     await loadClaudeProfiles();
-  }, [loadClaudeProfiles]);
+  }, []);
 
   const handleAuthTerminalError = useCallback(() => {
     // Don't auto-close on error

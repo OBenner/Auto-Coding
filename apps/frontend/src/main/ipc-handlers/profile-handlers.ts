@@ -321,7 +321,7 @@ export function registerProfileHandlers(): void {
         }
 
         // Extract error type if available
-        const errorType = (error as any).errorType;
+        const errorType = (error as { errorType?: string }).errorType;
         const errorMessage = error instanceof Error ? error.message : 'Failed to discover models';
 
         // Log for debugging

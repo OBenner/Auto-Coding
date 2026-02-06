@@ -646,7 +646,13 @@ export class AgentProcessManager {
           currentSubtask,
           message: lastMessage,
           sequenceNumber: ++sequenceNumber,
-          completedPhases: [...completedPhases]
+          completedPhases: [...completedPhases],
+          ...(phaseUpdate.resources && {
+            cpu_percent: phaseUpdate.resources.cpu_percent,
+            memory_mb: phaseUpdate.resources.memory_mb,
+            memory_percent: phaseUpdate.resources.memory_percent,
+            elapsed_seconds: phaseUpdate.resources.elapsed_seconds
+          })
         });
       }
     };

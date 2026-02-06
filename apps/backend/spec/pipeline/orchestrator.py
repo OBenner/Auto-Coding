@@ -9,8 +9,10 @@ import json
 from collections.abc import Callable
 from pathlib import Path
 
+from agents.memory_manager import get_pattern_suggestions
 from analysis.analyzers import analyze_project
 from core.workspace.models import SpecNumberLock
+from debug import debug, debug_detailed
 from phase_config import get_thinking_budget
 from prompts_pkg.project_context import should_refresh_project_index
 from review import run_review_checkpoint
@@ -151,6 +153,48 @@ class SpecOrchestrator:
 
         # Format prior phase summaries for context
         prior_summaries = format_phase_summaries(self._phase_summaries)
+
+        # Fetch pattern suggestions for spec creation phases
+        # Patterns are most useful during spec writing, planning, and quick spec phases
+        pattern_phases = {"spec_writing", "planning", "quick_spec"}
+        if phase_name in pattern_phases:
+            try:
+                debug(
+                    "orchestrator",
+                    f"Fetching pattern suggestions for {phase_name} phase",
+                )
+                # Use task description as query for pattern matching
+                query = self.task_description or "spec creation"
+                patterns = await get_pattern_suggestions(
+                    spec_dir=self.spec_dir,
+                    project_dir=self.project_dir,
+                    query=query,
+                    categories=None,  # Get patterns from all categories
+                    num_results=5,
+                    min_score=0.5,
+                )
+
+                if patterns:
+                    debug_detailed(
+                        "orchestrator",
+                        f"Pattern suggestions retrieved for {phase_name}",
+                        patterns_length=len(patterns),
+                    )
+                    # Append patterns to additional context
+                    additional_context = (
+                        f"{additional_context}\n\n{patterns}"
+                        if additional_context
+                        else patterns
+                    )
+                else:
+                    debug("orchestrator", f"No pattern suggestions found for {phase_name}")
+            except Exception as e:
+                # Don't fail the phase if pattern fetching fails
+                debug(
+                    "orchestrator",
+                    f"Pattern fetching failed for {phase_name} (continuing without patterns)",
+                    error=str(e),
+                )
 
         return await runner.run_agent(
             prompt_file,

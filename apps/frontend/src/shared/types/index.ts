@@ -17,6 +17,7 @@ export * from './roadmap';
 export * from './integrations';
 export * from './app-update';
 export * from './cli';
+export * from './merge-analytics';
 export * from './workspace';
 
 // IPC types (must be last to use types from other modules)

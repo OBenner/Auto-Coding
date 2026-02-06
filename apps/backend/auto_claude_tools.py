@@ -1,5 +1,5 @@
 """
-Auto Claude tools module facade.
+Auto Code tools module facade.
 
 Provides MCP tools for agent operations.
 Re-exports from agents.tools_pkg for clean imports.
@@ -9,6 +9,7 @@ from agents.tools_pkg.models import (  # noqa: F401
     ELECTRON_TOOLS,
     TOOL_GET_BUILD_PROGRESS,
     TOOL_GET_SESSION_CONTEXT,
+    TOOL_GET_SPEC_STATISTICS,
     TOOL_RECORD_DISCOVERY,
     TOOL_RECORD_GOTCHA,
     TOOL_UPDATE_QA_STATUS,
@@ -30,6 +31,7 @@ __all__ = [
     "TOOL_RECORD_DISCOVERY",
     "TOOL_RECORD_GOTCHA",
     "TOOL_GET_SESSION_CONTEXT",
+    "TOOL_GET_SPEC_STATISTICS",
     "TOOL_UPDATE_QA_STATUS",
     "ELECTRON_TOOLS",
     "is_electron_mcp_enabled",

@@ -75,7 +75,7 @@ describe('getOAuthModeClearVars', () => {
   describe('Edge cases', () => {
     it('should handle undefined gracefully (treat as empty)', () => {
       // TypeScript should prevent this, but runtime safety
-      const result = getOAuthModeClearVars(undefined as any);
+      const result = getOAuthModeClearVars(undefined as unknown as Record<string, string>);
 
       // Should treat undefined as empty object -> OAuth mode
       expect(result).toBeDefined();
@@ -83,7 +83,7 @@ describe('getOAuthModeClearVars', () => {
 
     it('should handle null gracefully (treat as empty)', () => {
       // Runtime safety for null values
-      const result = getOAuthModeClearVars(null as any);
+      const result = getOAuthModeClearVars(null as unknown as Record<string, string>);
 
       // Should treat null as OAuth mode and return clearing vars
       expect(result).toEqual({

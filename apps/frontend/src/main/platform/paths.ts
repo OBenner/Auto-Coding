@@ -456,7 +456,7 @@ export function expandWindowsPath(pathPattern: string): string | null {
  */
 export function getWindowsExecutablePaths(
   toolPaths: WindowsToolPaths,
-  logPrefix: string = '[Windows Paths]'
+  _logPrefix: string = '[Windows Paths]'
 ): string[] {
   // Only run on Windows
   if (!isWindows()) {
@@ -498,7 +498,7 @@ export function getWindowsExecutablePaths(
  */
 export async function getWindowsExecutablePathsAsync(
   toolPaths: WindowsToolPaths,
-  logPrefix: string = '[Windows Paths]'
+  _logPrefix: string = '[Windows Paths]'
 ): Promise<string[]> {
   // Only run on Windows
   if (!isWindows()) {
@@ -590,7 +590,7 @@ export function getCommonBinPaths(): Record<string, string[]> {
  */
 export function findWindowsExecutableViaWhere(
   executable: string,
-  logPrefix: string = '[Windows Where]'
+  _logPrefix: string = '[Windows Where]'
 ): string | null {
   if (!isWindows()) {
     return null;
@@ -650,7 +650,7 @@ export function findWindowsExecutableViaWhere(
  */
 export async function findWindowsExecutableViaWhereAsync(
   executable: string,
-  logPrefix: string = '[Windows Where]'
+  _logPrefix: string = '[Windows Where]'
 ): Promise<string | null> {
   if (!isWindows()) {
     return null;

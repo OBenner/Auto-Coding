@@ -1,12 +1,15 @@
-# Auto Claude Guides
+# Auto Code Guides
 
-Detailed documentation for Auto Claude setup and usage.
+Detailed documentation for Auto Code setup and usage.
 
 ## Available Guides
 
 | Guide | Description |
 |-------|-------------|
 | **[CLI-USAGE.md](CLI-USAGE.md)** | Terminal-only usage for power users, headless servers, and CI/CD |
+| **[CLOUD_README.md](CLOUD_README.md)** | Cloud-hosted option overview - architecture, benefits, and how it works |
+| **[CLOUD_SETUP.md](CLOUD_SETUP.md)** | Cloud infrastructure setup - initial deployment and configuration |
+| **[CLOUD_DEPLOYMENT.md](CLOUD_DEPLOYMENT.md)** | Cloud production deployment - operations, scaling, and maintenance |
 | **[MULTI-CODEBASE-ORCHESTRATION.md](MULTI-CODEBASE-ORCHESTRATION.md)** | Managing multiple related codebases (monorepos, microservices, libraries) |
 | **[SPEC-CREATION-PIPELINE.md](SPEC-CREATION-PIPELINE.md)** | Comprehensive guide to spec creation pipeline architecture and internals |
 | **[windows-development.md](windows-development.md)** | Windows-specific development guide (file encoding, paths, line endings) |

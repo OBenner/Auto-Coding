@@ -52,6 +52,7 @@ import { AuthFailureModal } from './components/AuthFailureModal';
 import { VersionWarningModal } from './components/VersionWarningModal';
 import { OnboardingWizard } from './components/onboarding';
 import { AppUpdateNotification } from './components/AppUpdateNotification';
+import { AgentAttentionNotification } from './components/AgentAttentionNotification';
 import { ProactiveSwapListener } from './components/ProactiveSwapListener';
 import { GitHubSetupModal } from './components/GitHubSetupModal';
 import { useProjectStore, loadProjects, addProject, initializeProject, removeProject } from './stores/project-store';
@@ -154,7 +155,7 @@ export function App() {
   const [skippedInitProjectId, setSkippedInitProjectId] = useState<string | null>(null);
   const [showAddProjectModal, setShowAddProjectModal] = useState(false);
 
-  // GitHub setup state (shown after Auto Claude init)
+  // GitHub setup state (shown after Auto Code init)
   const [showGitHubSetup, setShowGitHubSetup] = useState(false);
   const [gitHubSetupProject, setGitHubSetupProject] = useState<Project | null>(null);
 
@@ -727,7 +728,7 @@ export function App() {
       } else {
         // Initialization failed - show error but keep dialog open
         console.warn('[InitDialog] Initialization failed, showing error');
-        const errorMessage = result?.error || 'Failed to initialize Auto Claude. Please try again.';
+        const errorMessage = result?.error || 'Failed to initialize Auto Code. Please try again.';
         setInitError(errorMessage);
         setIsInitializing(false);
       }
@@ -992,7 +993,7 @@ export function App() {
           onProjectAdded={handleProjectAdded}
         />
 
-        {/* Initialize Auto Claude Dialog */}
+        {/* Initialize Auto Code Dialog */}
         <Dialog open={showInitDialog} onOpenChange={(open) => {
           console.warn('[InitDialog] onOpenChange called', { open, pendingProject: !!pendingProject, isInitializing, initSuccess });
           // Only trigger skip if user manually closed the dialog
@@ -1071,7 +1072,7 @@ export function App() {
           </DialogContent>
         </Dialog>
 
-        {/* GitHub Setup Modal - shows after Auto Claude init to configure GitHub */}
+        {/* GitHub Setup Modal - shows after Auto Code init to configure GitHub */}
         {gitHubSetupProject && (
           <GitHubSetupModal
             open={showGitHubSetup}
@@ -1149,6 +1150,9 @@ export function App() {
 
         {/* App Update Notification - shows when new app version is available */}
         <AppUpdateNotification />
+
+        {/* Agent Attention Notification - shows toast when agent requires attention */}
+        <AgentAttentionNotification />
 
         {/* Global Download Indicator - shows Ollama model download progress */}
         <GlobalDownloadIndicator />

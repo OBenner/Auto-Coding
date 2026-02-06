@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { arrayMove } from '@dnd-kit/sortable';
-import type { Task, TaskStatus, SubtaskStatus, ImplementationPlan, Subtask, TaskMetadata, ExecutionProgress, ExecutionPhase, ReviewReason, TaskDraft, ImageAttachment, TaskOrderState } from '../../shared/types';
+import type { Task, TaskStatus, SubtaskStatus, ImplementationPlan, Subtask, TaskMetadata, ExecutionProgress, ExecutionPhase, ReviewReason, TaskDraft, ImageAttachment, TaskOrderState, TaskTokenStats } from '../../shared/types';
 import { debugLog } from '../../shared/utils/debug-logger';
 import { isTerminalPhase } from '../../shared/constants/phase-protocol';
 
@@ -18,6 +18,7 @@ interface TaskState {
   updateTaskStatus: (taskId: string, status: TaskStatus) => void;
   updateTaskFromPlan: (taskId: string, plan: ImplementationPlan) => void;
   updateExecutionProgress: (taskId: string, progress: Partial<ExecutionProgress>) => void;
+  updateTokenStats: (taskId: string, tokenStats: TaskTokenStats) => void;
   appendLog: (taskId: string, log: string) => void;
   batchAppendLogs: (taskId: string, logs: string[]) => void;
   selectTask: (taskId: string | null) => void;
@@ -152,6 +153,53 @@ function createEmptyTaskOrder(): TaskOrderState {
   };
 }
 
+/**
+ * Fetch token stats for a task from the backend and update the store
+ * @param taskId - The task ID to fetch stats for
+ */
+async function fetchAndUpdateTokenStats(taskId: string): Promise<void> {
+  try {
+    // Get the store state to access tasks
+    const store = useTaskStore.getState();
+    const task = store.tasks.find((t) => t.id === taskId || t.specId === taskId);
+
+    if (!task) {
+      debugLog('[fetchAndUpdateTokenStats] Task not found:', taskId);
+      return;
+    }
+
+    // Import project store dynamically to avoid circular dependencies
+    const { useProjectStore } = await import('./project-store');
+    const projectStore = useProjectStore.getState();
+    const project = projectStore.projects.find((p) => p.id === task.projectId);
+
+    if (!project) {
+      debugLog('[fetchAndUpdateTokenStats] Project not found:', task.projectId);
+      return;
+    }
+
+    // Fetch token stats via electronAPI
+    const result = await window.electronAPI.getTokenStats(
+      project.path,
+      task.specId
+    );
+
+    if (result.success && result.data) {
+      // Update the store with fetched token stats
+      store.updateTokenStats(taskId, result.data);
+      debugLog('[fetchAndUpdateTokenStats] Token stats updated:', {
+        taskId,
+        totalTokens: result.data.totalTokens
+      });
+    } else if (!result.success && result.error) {
+      debugLog('[fetchAndUpdateTokenStats] Failed to fetch token stats:', result.error);
+    }
+    // If result.data is null, token_stats.json doesn't exist yet (not an error)
+  } catch (error) {
+    console.error('[fetchAndUpdateTokenStats] Error fetching token stats:', error);
+  }
+}
+
 export const useTaskStore = create<TaskState>((set, get) => ({
   tasks: [],
   selectedTaskId: null,
@@ -255,6 +303,11 @@ export const useTaskStore = create<TaskState>((set, get) => ({
     queueMicrotask(() => {
       notifyTaskStatusChange(taskId, oldStatus, status);
     });
+
+    // Fetch token stats when task transitions to in_progress or done status
+    if (status === 'in_progress' || status === 'done') {
+      fetchAndUpdateTokenStats(taskId);
+    }
   },
 
   updateTaskFromPlan: (taskId, plan) =>
@@ -447,7 +500,17 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       };
     }),
 
-  updateExecutionProgress: (taskId, progress) =>
+  updateExecutionProgress: (taskId, progress) => {
+    // Capture old phase before update for real-time token stats fetching
+    const state = get();
+    const index = findTaskIndex(state.tasks, taskId);
+    if (index === -1) return;
+
+    const oldTask = state.tasks[index];
+    const oldPhase = oldTask.executionProgress?.phase;
+    const newPhase = progress.phase;
+
+    // Perform the state update
     set((state) => {
       const index = findTaskIndex(state.tasks, taskId);
       if (index === -1) return state;
@@ -491,6 +554,31 @@ export const useTaskStore = create<TaskState>((set, get) => ({
           };
         })
       };
+    });
+
+    // Fetch updated token stats when phase changes (real-time updates during task execution)
+    // This enables live token display as each phase completes (planning → coding → validation)
+    if (newPhase && newPhase !== oldPhase && newPhase !== 'idle') {
+      debugLog('[updateExecutionProgress] Phase changed, fetching token stats:', {
+        taskId,
+        oldPhase,
+        newPhase
+      });
+      fetchAndUpdateTokenStats(taskId);
+    }
+  },
+
+  updateTokenStats: (taskId, tokenStats) =>
+    set((state) => {
+      const index = findTaskIndex(state.tasks, taskId);
+      if (index === -1) return state;
+
+      return {
+        tasks: updateTaskAtIndex(state.tasks, index, (t) => ({
+          ...t,
+          tokenStats
+        }))
+      };
     }),
 
   appendLog: (taskId, log) =>
@@ -521,7 +609,13 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       };
     }),
 
-  selectTask: (taskId) => set({ selectedTaskId: taskId }),
+  selectTask: (taskId) => {
+    set({ selectedTaskId: taskId });
+    // Fetch token stats for the selected task
+    if (taskId) {
+      fetchAndUpdateTokenStats(taskId);
+    }
+  },
 
   setLoading: (isLoading) => set({ isLoading }),
 

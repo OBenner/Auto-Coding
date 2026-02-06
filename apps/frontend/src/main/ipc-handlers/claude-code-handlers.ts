@@ -806,6 +806,7 @@ export async function openTerminalWithCommand(command: string): Promise<void> {
         console.warn('[Claude Code] Opened terminal:', cmd);
         break;
       } catch {
+        // Try next terminal in the list
       }
     }
 
@@ -928,7 +929,7 @@ export function registerClaudeCodeHandlers(): void {
         console.warn('[Claude Code] Checking version...');
 
         // Get installed version via cli-tool-manager
-        let detectionResult;
+        let detectionResult: ReturnType<typeof getToolInfo> | undefined;
         try {
           detectionResult = getToolInfo('claude');
           console.warn('[Claude Code] Detection result:', JSON.stringify(detectionResult, null, 2));

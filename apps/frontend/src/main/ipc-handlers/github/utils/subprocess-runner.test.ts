@@ -48,8 +48,8 @@ import { detectAuthFailure } from '../../../rate-limit-detector';
 import { isWindows } from '../../../platform';
 
 describe('runPythonSubprocess', () => {
-  let mockSpawn: any;
-  let mockChildProcess: any;
+  let mockSpawn: ReturnType<typeof vi.mocked<typeof childProcess.spawn>>;
+  let mockChildProcess: EventEmitter & { stdout: EventEmitter; stderr: EventEmitter; kill: ReturnType<typeof vi.fn>; pid?: number };
 
   beforeEach(() => {
     mockSpawn = vi.mocked(childProcess.spawn);
@@ -417,7 +417,7 @@ describe('runPythonSubprocess', () => {
       });
 
       mockChildProcess.pid = 12345;
-      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
       vi.spyOn(process, 'kill').mockImplementation(() => true);
 
       // Act

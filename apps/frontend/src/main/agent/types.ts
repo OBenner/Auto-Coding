@@ -24,6 +24,11 @@ export interface ExecutionProgressData {
   message?: string;
   // FIX (ACS-203): Track completed phases to prevent phase overlaps
   completedPhases?: CompletablePhase[];
+  // Resource usage metrics (from backend resource_tracker.py via phase events)
+  cpu_percent?: number;
+  memory_mb?: number;
+  memory_percent?: number;
+  elapsed_seconds?: number;
 }
 
 export type ProcessType = 'spec-creation' | 'task-execution' | 'qa-process';

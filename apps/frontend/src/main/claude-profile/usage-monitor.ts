@@ -1438,14 +1438,14 @@ export class UsageMonitor extends EventEmitter {
 
         // Check for auth failures via status code (works for all providers)
         if (response.status === 401 || response.status === 403) {
-          const error = new Error(`API Auth Failure: ${response.status} (${provider})`);
-          (error as any).statusCode = response.status;
+          const error = new Error(`API Auth Failure: ${response.status} (${provider})`) as Error & { statusCode?: number };
+          error.statusCode = response.status;
           throw error;
         }
 
         // For other error statuses, try to parse response body to detect auth failures
         // This handles cases where providers might return different status codes for auth errors
-        let errorData: any;
+        let errorData: unknown;
         try {
           errorData = await response.json();
         } catch (parseError) {
@@ -1483,9 +1483,9 @@ export class UsageMonitor extends EventEmitter {
         const hasAuthError = authErrorPatterns.some(pattern => errorText.includes(pattern));
 
         if (hasAuthError) {
-          const error = new Error(`API Auth Failure detected in response body (${provider}): ${JSON.stringify(errorData)}`);
-          (error as any).statusCode = response.status; // Include original status code
-          (error as any).detectedInBody = true;
+          const error = new Error(`API Auth Failure detected in response body (${provider}): ${JSON.stringify(errorData)}`) as Error & { statusCode?: number; detectedInBody?: boolean };
+          error.statusCode = response.status; // Include original status code
+          error.detectedInBody = true;
           throw error;
         }
 
@@ -1565,10 +1565,11 @@ export class UsageMonitor extends EventEmitter {
       this.debugLog('[UsageMonitor:API_FETCH] API fetch completed successfully');
 
       return normalizedUsage;
-    } catch (error: any) {
+    } catch (error: unknown) {
       // Re-throw auth failures to be handled by checkUsageAndSwap
       // This includes both status code auth failures (401/403) and body-detected failures
-      if (error?.message?.includes('Auth Failure') || error?.statusCode === 401 || error?.statusCode === 403) {
+      const err = error as Error & { statusCode?: number };
+      if (err?.message?.includes('Auth Failure') || err?.statusCode === 401 || err?.statusCode === 403) {
         throw error;
       }
 
@@ -1595,6 +1596,7 @@ export class UsageMonitor extends EventEmitter {
    * }
    */
   private normalizeAnthropicResponse(
+    // biome-ignore lint/suspicious/noExplicitAny: API response shape varies by provider and version
     data: any,
     profileId: string,
     profileName: string,
@@ -1662,6 +1664,7 @@ export class UsageMonitor extends EventEmitter {
    * @returns Normalized usage snapshot or null on parse failure
    */
   private normalizeQuotaLimitResponse(
+    // biome-ignore lint/suspicious/noExplicitAny: API response shape varies by provider
     data: any,
     profileId: string,
     profileName: string,
@@ -1692,7 +1695,9 @@ export class UsageMonitor extends EventEmitter {
       }
 
       // Find TOKENS_LIMIT (5-hour usage) and TIME_LIMIT (monthly usage)
+      // biome-ignore lint/suspicious/noExplicitAny: API response item shape varies
       const tokensLimit = data.limits.find((item: any) => item.type === 'TOKENS_LIMIT');
+      // biome-ignore lint/suspicious/noExplicitAny: API response item shape varies
       const timeLimit = data.limits.find((item: any) => item.type === 'TIME_LIMIT');
 
       if (this.isDebug) {
@@ -1812,6 +1817,7 @@ export class UsageMonitor extends EventEmitter {
    * Maps TIME_LIMIT → monthly usage (displayed as weekly in UI)
    */
   private normalizeZAIResponse(
+    // biome-ignore lint/suspicious/noExplicitAny: API response shape varies by provider
     data: any,
     profileId: string,
     profileName: string,
@@ -1830,6 +1836,7 @@ export class UsageMonitor extends EventEmitter {
    * TOKENS_LIMIT and TIME_LIMIT items.
    */
   private normalizeZhipuResponse(
+    // biome-ignore lint/suspicious/noExplicitAny: API response shape varies by provider
     data: any,
     profileId: string,
     profileName: string,

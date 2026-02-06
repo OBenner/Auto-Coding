@@ -99,12 +99,52 @@ Wait for confirmation or correction.
 
 ## PHASE 4: GATHER REQUIREMENTS
 
-Ask targeted questions:
+### 4.1: Research Similar Features (RECOMMENDED)
+
+Before asking detailed questions, use WebSearch to inform your understanding:
+
+**When to search:**
+- For new features - Find how others implement similar functionality
+- For common patterns - Research best practices (e.g., "authentication", "file upload", "API rate limiting")
+- For UI features - Find UX patterns and user expectations
+
+**Search patterns:**
+
+```
+Tool: WebSearch
+Query: "[feature name] best practices 2026"
+```
+
+Example searches:
+- `"user authentication best practices 2026"` - For auth features
+- `"react file upload component patterns"` - For upload features
+- `"API rate limiting implementation"` - For performance features
+- `"form validation UX patterns"` - For form features
+
+**What to look for in search results:**
+1. **Common edge cases** - Issues others encountered
+2. **Best practices** - Industry-standard approaches
+3. **Security concerns** - Known vulnerabilities to avoid
+4. **User expectations** - How users expect the feature to behave
+5. **Performance considerations** - Scalability patterns
+
+**Use findings to inform your questions** - Don't just ask generic questions. Use what you learned to ask specific, informed questions.
+
+### 4.2: Ask Targeted Questions
+
+Based on the task and your research, ask:
 
 1. **"What exactly should happen when [key scenario]?"**
+   - Reference patterns you found: "I saw most implementations do X. Does that fit your needs?"
+
 2. **"Are there any edge cases I should know about?"**
+   - Suggest common ones from research: "Should we handle [common edge case]?"
+
 3. **"What does success look like? How will you know it works?"**
+   - Suggest measurable criteria based on industry standards
+
 4. **"Any constraints?"** (performance, compatibility, etc.)
+   - Ask about concerns you found in research (security, scaling, etc.)
 
 Collect answers.
 

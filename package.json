@@ -1,9 +1,9 @@
 {
   "name": "auto-claude",
-  "version": "2.7.5",
-  "description": "Autonomous multi-agent coding framework powered by Claude AI",
+  "version": "3.0.0",
+  "description": "Auto-Coding: Autonomous multi-agent coding framework powered by Claude AI",
   "license": "AGPL-3.0",
-  "author": "Auto Claude Team",
+  "author": "Auto-Coding Team",
   "workspaces": [
     "apps/*",
     "libs/*"
@@ -31,7 +31,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/AndyMik90/Auto-Claude.git"
+    "url": "https://github.com/OBenner/Auto-Coding.git"
   },
   "keywords": [
     "ai",

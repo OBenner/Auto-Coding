@@ -143,10 +143,7 @@ from core.auth import (
     require_auth_token,
     validate_token_not_encrypted,
 )
-from core.cost_tracking import CostTracker
-from core.model_fallback import retry_with_fallback
 from linear_updater import is_linear_enabled
-from phase_config import get_agent_model
 from prompts_pkg.project_context import detect_project_capabilities, load_project_index
 from security import bash_security_hook
 
@@ -445,6 +442,91 @@ def load_claude_md(project_dir: Path) -> str | None:
     return None
 
 
+def load_plugin_mcp_servers(
+    project_dir: Path, spec_dir: Path
+) -> dict[str, Any]:
+    """
+    Load MCP servers from enabled integration plugins.
+
+    Queries the PluginRegistry for enabled integration plugins and creates
+    MCP servers from their tools. This allows third-party plugins to extend
+    Auto Code with custom integrations.
+
+    Args:
+        project_dir: Root directory of the project
+        spec_dir: Directory containing the current spec
+
+    Returns:
+        Dictionary mapping plugin IDs to MCP server instances
+        Example: {"my-plugin": <MCP server instance>}
+    """
+    try:
+        from plugins.base import PluginType
+        from plugins.registry import PluginRegistry
+        from plugins.sdk.integration import IntegrationContext, IntegrationPlugin
+    except ImportError:
+        logger.debug("Plugin system not available")
+        return {}
+
+    plugin_servers = {}
+
+    try:
+        # Get singleton registry instance
+        registry = PluginRegistry.get_instance()
+
+        # Get all enabled integration plugins
+        integration_plugins = registry.list_plugins(
+            plugin_type=PluginType.INTEGRATION,
+            enabled_only=True,
+        )
+
+        logger.debug(
+            f"Found {len(integration_plugins)} enabled integration plugin(s)"
+        )
+
+        # Create MCP server for each enabled plugin
+        for plugin in integration_plugins:
+            if not isinstance(plugin, IntegrationPlugin):
+                logger.warning(
+                    f"Plugin {plugin.name} is not an IntegrationPlugin, skipping"
+                )
+                continue
+
+            # Check if plugin is available (has valid config, connectivity, etc.)
+            if not plugin.is_available():
+                logger.debug(
+                    f"Integration plugin {plugin.name} is not available, skipping"
+                )
+                continue
+
+            # Create integration context
+            context = IntegrationContext(
+                project_dir=project_dir,
+                spec_dir=spec_dir,
+            )
+
+            # Create MCP server from plugin
+            try:
+                mcp_server = plugin.create_mcp_server(context)
+                if mcp_server:
+                    plugin_servers[plugin.name] = mcp_server
+                    logger.info(f"Loaded MCP server from plugin: {plugin.name}")
+                else:
+                    logger.debug(
+                        f"Plugin {plugin.name} returned no MCP server"
+                    )
+            except Exception as e:
+                logger.error(
+                    f"Failed to create MCP server for plugin {plugin.name}: {e}"
+                )
+                continue
+
+    except Exception as e:
+        logger.error(f"Error loading plugin MCP servers: {e}")
+
+    return plugin_servers
+
+
 def create_client(
     project_dir: Path,
     spec_dir: Path,
@@ -493,10 +575,6 @@ def create_client(
        (see security.py for ALLOWED_COMMANDS)
     4. Tool filtering - Each agent type only sees relevant tools (prevents misuse)
     """
-    # Resolve model using agent-specific configuration
-    # Priority: CLI arg (model) > task_metadata.json agentModels > AGENT_DEFAULT_MODELS > fallback
-    resolved_model = get_agent_model(spec_dir, agent_type, model)
-
     # Get OAuth token - Claude CLI handles token lifecycle internally
     oauth_token = require_auth_token()
 
@@ -804,7 +882,7 @@ def create_client(
 
     # Build options dict, conditionally including output_format
     options_kwargs: dict[str, Any] = {
-        "model": resolved_model,
+        "model": model,
         "system_prompt": base_prompt,
         "allowed_tools": allowed_tools_list,
         "mcp_servers": mcp_servers,
@@ -843,65 +921,4 @@ def create_client(
     if agents:
         options_kwargs["agents"] = agents
 
-    # Wrap client creation with fallback logic
-    # If the requested model fails (rate limit, unavailable, etc.),
-    # automatically retry with degraded models (opus -> sonnet -> haiku)
-    def _create_client_with_model(model_to_use: str) -> ClaudeSDKClient:
-        """Helper to create client with a specific model."""
-        options_with_model = {**options_kwargs, "model": model_to_use}
-        return ClaudeSDKClient(options=ClaudeAgentOptions(**options_with_model))
-
-    # Use retry_with_fallback to handle model failures gracefully
-    # This will automatically try fallback models if the primary model fails
-    return retry_with_fallback(
-        callable_fn=_create_client_with_model,
-        model=resolved_model,
-        max_retries_per_model=1,
-    )
-
-
-def log_agent_usage(
-    spec_dir: Path,
-    agent_type: str,
-    model: str,
-    input_tokens: int,
-    output_tokens: int,
-) -> float:
-    """
-    Log model usage for an agent session to cost tracking.
-
-    This is a cost tracking hook that should be called after each agent session
-    to record token usage and calculate costs.
-
-    Args:
-        spec_dir: Directory containing the spec
-        agent_type: Type of agent (e.g., "coder", "planner", "qa_reviewer")
-        model: Claude model identifier (e.g., "claude-sonnet-4-5-20250929")
-        input_tokens: Number of input tokens consumed
-        output_tokens: Number of output tokens consumed
-
-    Returns:
-        Cost of this operation in dollars
-
-    Example:
-        # After an agent session completes
-        cost = log_agent_usage(
-            spec_dir=Path(".auto-claude/specs/001"),
-            agent_type="coder",
-            model="claude-sonnet-4-5-20250929",
-            input_tokens=5000,
-            output_tokens=2000
-        )
-        print(f"Session cost: ${cost:.4f}")
-    """
-    tracker = CostTracker(spec_dir=spec_dir)
-    cost = tracker.log_usage(
-        agent_type=agent_type,
-        model=model,
-        input_tokens=input_tokens,
-        output_tokens=output_tokens,
-    )
-    logger.debug(
-        f"Logged usage for {agent_type}: {input_tokens} input + {output_tokens} output tokens = ${cost:.4f}"
-    )
-    return cost
+    return ClaudeSDKClient(options=ClaudeAgentOptions(**options_kwargs))

@@ -1,12 +1,12 @@
 """
-Security and authentication utilities for Auto Claude Web Backend
+Security and authentication utilities for Auto Code Web Backend
 
 Provides JWT token validation, authentication middleware, and FastAPI dependencies
 for securing API endpoints.
 """
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 from typing import Optional
 
 from fastapi import Depends, HTTPException, status
@@ -35,9 +35,9 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     to_encode = data.copy()
 
     if expires_delta:
-        expire = datetime.utcnow() + expires_delta
+        expire = datetime.now(UTC) + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+        expire = datetime.now(UTC) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
 
     to_encode.update({"exp": expire})
 
@@ -124,3 +124,34 @@ async def require_auth(token: dict = Depends(get_current_token)) -> dict:
             return {"authenticated": True}
     """
     return token
+
+
+def hash_password(password: str) -> str:
+    """
+    Hash a password using bcrypt.
+
+    Args:
+        password: Plain text password to hash
+
+    Returns:
+        Hashed password string
+    """
+    from passlib.context import CryptContext
+    pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+    return pwd_context.hash(password)
+
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """
+    Verify a password against a hash.
+
+    Args:
+        plain_password: Plain text password to verify
+        hashed_password: Hashed password to verify against
+
+    Returns:
+        True if password matches, False otherwise
+    """
+    from passlib.context import CryptContext
+    pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+    return pwd_context.verify(plain_password, hashed_password)

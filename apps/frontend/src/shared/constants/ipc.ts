@@ -59,6 +59,9 @@ export const IPC_CHANNELS = {
   TASK_UNARCHIVE: 'task:unarchive',
   TASK_CLEAR_STAGED_STATE: 'task:clearStagedState',
 
+  // Task token statistics
+  TASK_TOKEN_STATS_GET: 'task:tokenStats:get',
+
   // Task events (main -> renderer)
   TASK_PROGRESS: 'task:progress',
   TASK_ERROR: 'task:error',
@@ -208,6 +211,8 @@ export const IPC_CHANNELS = {
   CONTEXT_MEMORY_STATUS: 'context:memoryStatus',
   CONTEXT_SEARCH_MEMORIES: 'context:searchMemories',
   CONTEXT_GET_MEMORIES: 'context:getMemories',
+  CONTEXT_GET_PATTERN_SUGGESTIONS: 'context:getPatternSuggestions',
+  CONTEXT_CONFIRM_PATTERN: 'context:confirmPattern',
 
   // Environment configuration
   ENV_GET: 'env:get',
@@ -246,6 +251,7 @@ export const IPC_CHANNELS = {
 
   // GitHub integration
   GITHUB_GET_REPOSITORIES: 'github:getRepositories',
+  GITHUB_GET_PULL_REQUESTS: 'github:getPullRequests',
   GITHUB_GET_ISSUES: 'github:getIssues',
   GITHUB_GET_ISSUE: 'github:getIssue',
   GITHUB_GET_ISSUE_COMMENTS: 'github:getIssueComments',
@@ -446,6 +452,12 @@ export const IPC_CHANNELS = {
   GITHUB_TRIAGE_COMPLETE: 'github:triage:complete',
   GITHUB_TRIAGE_ERROR: 'github:triage:error',
 
+  // Merge Analytics operations
+  MERGE_ANALYTICS_GET_HISTORY: 'mergeAnalytics:getHistory',
+  MERGE_ANALYTICS_GET_SUMMARY: 'mergeAnalytics:getSummary',
+  MERGE_ANALYTICS_GET_PATTERNS: 'mergeAnalytics:getPatterns',
+  MERGE_ANALYTICS_EXPORT: 'mergeAnalytics:export',
+
   // Memory Infrastructure status (LadybugDB - no Docker required)
   MEMORY_STATUS: 'memory:status',
   MEMORY_LIST_DATABASES: 'memory:listDatabases',
@@ -464,7 +476,7 @@ export const IPC_CHANNELS = {
   OLLAMA_PULL_MODEL: 'ollama:pullModel',
   OLLAMA_PULL_PROGRESS: 'ollama:pullProgress',
 
-  // Auto Claude source environment configuration
+  // Auto Code source environment configuration
   AUTOBUILD_SOURCE_ENV_GET: 'autobuild:source:env:get',
   AUTOBUILD_SOURCE_ENV_UPDATE: 'autobuild:source:env:update',
   AUTOBUILD_SOURCE_ENV_CHECK_TOKEN: 'autobuild:source:env:checkToken',
@@ -510,6 +522,7 @@ export const IPC_CHANNELS = {
   // File explorer operations
   FILE_EXPLORER_LIST: 'fileExplorer:list',
   FILE_EXPLORER_READ: 'fileExplorer:read',
+  FILE_EXPLORER_WRITE: 'fileExplorer:write',
 
   // Git operations
   GIT_GET_BRANCHES: 'git:getBranches',

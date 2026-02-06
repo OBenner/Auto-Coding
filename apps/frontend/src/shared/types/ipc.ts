@@ -16,6 +16,9 @@ import type {
   GraphitiMemoryStatus,
   ContextSearchResult,
   MemoryEpisode,
+  GraphNode,
+  GraphEdge,
+  GraphDataResult,
   ProjectEnvConfig,
   InfrastructureStatus,
   GraphitiValidationResult,
@@ -45,6 +48,13 @@ import type {
   TaskLogStreamChunk,
   ImageAttachment
 } from './task';
+import type {
+  MergeOperationRecord,
+  MergeAnalytics,
+  ConflictPattern,
+  MergeAnalyticsFilter,
+  MergeAnalyticsExportOptions
+} from './merge-analytics';
 import type {
   TerminalCreateOptions,
   TerminalSession,
@@ -186,6 +196,12 @@ export interface ElectronAPI {
   // Task archive operations
   archiveTasks: (projectId: string, taskIds: string[], version?: string) => Promise<IPCResult<boolean>>;
   unarchiveTasks: (projectId: string, taskIds: string[]) => Promise<IPCResult<boolean>>;
+
+  // Merge analytics operations
+  getMergeHistory: (projectId: string, filter?: MergeAnalyticsFilter) => Promise<IPCResult<MergeOperationRecord[]>>;
+  getMergeSummary: (projectId: string, filter?: MergeAnalyticsFilter) => Promise<IPCResult<MergeAnalytics>>;
+  getConflictPatterns: (projectId: string, limit?: number) => Promise<IPCResult<ConflictPattern[]>>;
+  exportMergeAnalytics: (projectId: string, options: MergeAnalyticsExportOptions) => Promise<IPCResult<{ path: string }>>;
 
   // Event listeners
   onTaskProgress: (callback: (taskId: string, plan: ImplementationPlan) => void) => () => void;
@@ -404,6 +420,9 @@ export interface ElectronAPI {
   getMemoryStatus: (projectId: string) => Promise<IPCResult<GraphitiMemoryStatus>>;
   searchMemories: (projectId: string, query: string) => Promise<IPCResult<ContextSearchResult[]>>;
   getRecentMemories: (projectId: string, limit?: number) => Promise<IPCResult<MemoryEpisode[]>>;
+  getGraphData: (projectId: string, limit?: number) => Promise<IPCResult<GraphDataResult>>;
+  deleteMemory: (projectId: string, memoryId: string) => Promise<IPCResult<{ success: boolean }>>;
+  exportMemories: (projectId: string, outputPath: string) => Promise<IPCResult<{ memory_count: number; entity_count: number }>>;
 
   // Environment configuration operations
   getProjectEnv: (projectId: string) => Promise<IPCResult<ProjectEnvConfig>>;
@@ -668,7 +687,7 @@ export interface ElectronAPI {
   openExternal: (url: string) => Promise<void>;
   openTerminal: (dirPath: string) => Promise<IPCResult<void>>;
 
-  // Auto Claude source environment operations
+  // Auto Code source environment operations
   getSourceEnv: () => Promise<IPCResult<SourceEnvConfig>>;
   updateSourceEnv: (config: { claudeOAuthToken?: string }) => Promise<IPCResult>;
   checkSourceToken: () => Promise<IPCResult<SourceEnvCheckResult>>;

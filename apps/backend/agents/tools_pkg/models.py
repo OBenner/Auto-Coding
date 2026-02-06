@@ -10,7 +10,7 @@ the Claude Agent SDK client. Tool lists are organized by category:
 - Base tools: Core file operations (Read, Write, Edit, etc.)
 - Web tools: Documentation and research (WebFetch, WebSearch)
 - MCP tools: External integrations (Context7, Linear, Graphiti, etc.)
-- Auto-Claude tools: Custom build management tools
+- Auto-Code tools: Custom build management tools
 """
 
 import os
@@ -28,10 +28,10 @@ BASE_WRITE_TOOLS = ["Write", "Edit", "Bash"]
 WEB_TOOLS = ["WebFetch", "WebSearch"]
 
 # =============================================================================
-# Auto-Claude MCP Tools (Custom build management)
+# Auto-Code MCP Tools (Custom build management)
 # =============================================================================
 
-# Auto-Claude MCP tool names (prefixed with mcp__auto-claude__)
+# Auto-Code MCP tool names (prefixed with mcp__auto-claude__)
 TOOL_UPDATE_SUBTASK_STATUS = "mcp__auto-claude__update_subtask_status"
 TOOL_GET_BUILD_PROGRESS = "mcp__auto-claude__get_build_progress"
 TOOL_RECORD_DISCOVERY = "mcp__auto-claude__record_discovery"
@@ -262,6 +262,12 @@ AGENT_CONFIGS = {
         "mcp_servers": [],
         "auto_claude_tools": [],
         "thinking_default": "low",
+    },
+    "pattern_categorizer": {
+        "tools": [],  # Text-only classification
+        "mcp_servers": [],
+        "auto_claude_tools": [],
+        "thinking_default": "none",  # Haiku model doesn't support thinking
     },
     "pr_reviewer": {
         "tools": BASE_READ_TOOLS + WEB_TOOLS,  # Read-only

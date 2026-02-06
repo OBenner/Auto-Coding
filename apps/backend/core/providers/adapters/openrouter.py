@@ -150,8 +150,8 @@ class OpenRouterSession(AgentSession):
                 api_key=self._api_key,
                 base_url=self._base_url,
                 default_headers={
-                    "HTTP-Referer": "https://github.com/AndyMik90/Auto-Claude",
-                    "X-Title": "Auto-Claude",
+                    "HTTP-Referer": "https://github.com/OBenner/Auto-Coding",
+                    "X-Title": "Auto-Coding",
                 },
             )
 

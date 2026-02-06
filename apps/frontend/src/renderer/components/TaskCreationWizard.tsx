@@ -59,7 +59,7 @@ export function TaskCreationWizard({
   const { settings } = useSettingsStore();
   const selectedProfile = DEFAULT_AGENT_PROFILES.find(
     p => p.id === settings.selectedAgentProfile
-  ) || DEFAULT_AGENT_PROFILES.find(p => p.id === 'auto')!;
+  ) ?? DEFAULT_AGENT_PROFILES.find(p => p.id === 'auto') ?? DEFAULT_AGENT_PROFILES[0];
 
   // Form state
   const [title, setTitle] = useState('');
@@ -529,10 +529,11 @@ export function TaskCreationWizard({
       }}
     >
       {description.split(/(@[\w\-./\\]+\.\w+)/g).map((part, i) => {
+        const key = `${i}-${part.slice(0, 20)}`;
         if (part.match(/^@[\w\-./\\]+\.\w+$/)) {
           return (
             <span
-              key={i}
+              key={key}
               className="bg-info/20 text-info-foreground rounded px-0.5"
               style={{ color: 'hsl(var(--info))' }}
             >
@@ -540,7 +541,7 @@ export function TaskCreationWizard({
             </span>
           );
         }
-        return <span key={i}>{part}</span>;
+        return <span key={key}>{part}</span>;
       })}
     </div>
   );

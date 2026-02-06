@@ -3,7 +3,7 @@
 Token Usage Tracking Utility
 ============================
 
-Centralized token usage tracking for the Auto-Claude framework.
+Centralized token usage tracking for the Auto-Code framework.
 Controlled via environment variables:
   - DEBUG=true          Enable debug mode (required for token logging)
   - DEBUG_LEVEL=1|2|3   Log verbosity (1=basic, 2=detailed, 3=verbose)

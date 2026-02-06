@@ -383,6 +383,7 @@ export function UsageIndicator() {
         <Tooltip>
           <TooltipTrigger asChild>
             <button
+              type="button"
               className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border cursor-help ${
                 needsReauth
                   ? 'bg-red-500/10 border-red-500/20 text-red-500'
@@ -412,6 +413,7 @@ export function UsageIndicator() {
                     {t('common:usage.reauthRequiredDescription')}
                   </p>
                   <button
+                    type="button"
                     onClick={handleOpenAccounts}
                     className="text-[10px] text-primary mt-1 font-medium underline hover:text-primary/80 cursor-pointer"
                   >
@@ -470,6 +472,7 @@ export function UsageIndicator() {
     <Popover open={isOpen} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
         <button
+          type="button"
           className={`flex items-center gap-1 px-2 py-1.5 rounded-md border transition-all hover:opacity-80 ${badgeColorClasses}`}
           aria-label={t('common:usage.usageStatusAriaLabel')}
           onMouseEnter={handleMouseEnter}
@@ -702,6 +705,7 @@ export function UsageIndicator() {
                       {/* Swap button - only show for authenticated profiles */}
                       {profile.isAuthenticated && (
                         <button
+                          type="button"
                           onClick={(e) => handleSwapProfile(e, profile.profileId)}
                           className="text-[9px] px-1.5 py-0.5 bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground rounded transition-colors ml-auto"
                         >

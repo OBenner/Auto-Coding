@@ -2,7 +2,7 @@
 setlocal EnableDelayedExpansion
 
 :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
-:: Auto Claude - Development Server Start Script (Windows)
+:: Auto Code - Development Server Start Script (Windows)
 :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 ::
 :: PURPOSE:
@@ -56,7 +56,7 @@ goto :parse_args
 :: Show help if requested
 if %SHOW_HELP% equ 1 (
     echo.
-    echo Auto Claude - Development Server
+    echo Auto Code - Development Server
     echo.
     echo USAGE:
     echo   scripts\dev-run.bat           Start dev server
@@ -72,7 +72,7 @@ if %SHOW_HELP% equ 1 (
 
 echo.
 echo ========================================================================
-echo            Auto Claude - Starting Development Server
+echo            Auto Code - Starting Development Server
 echo ========================================================================
 echo.
 
@@ -92,9 +92,12 @@ if not exist "node_modules" (
     exit /b 1
 )
 
-if not exist "apps\frontend\node_modules" (
-    echo [-] Frontend dependencies not installed. Run scripts\dev-setup.bat first.
-    exit /b 1
+:: Check frontend dependencies (npm workspaces hoists to root node_modules)
+if not exist "node_modules\electron" (
+    if not exist "apps\frontend\node_modules" (
+        echo [-] Frontend dependencies not installed. Run scripts\dev-setup.bat first.
+        exit /b 1
+    )
 )
 
 echo [+] Prerequisites OK

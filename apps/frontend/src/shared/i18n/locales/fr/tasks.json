@@ -2,6 +2,7 @@
   "refreshTasks": "Actualiser les tâches",
   "status": {
     "backlog": "Backlog",
+    "queue": "File d'attente",
     "todo": "À faire",
     "in_progress": "En cours",
     "review": "Révision",
@@ -149,7 +150,49 @@
       "plan": "Plan",
       "code": "Code",
       "qa": "QA"
+    },
+    "resources": {
+      "cpu": "CPU",
+      "memory": "Mémoire",
+      "elapsed": "Écoulé"
+    },
+    "time": {
+      "elapsed": "Écoulé",
+      "remaining": "Temps restant est.",
+      "subtask": "Sous-tâche",
+      "about": "Environ",
+      "roughly": "Approximativement",
+      "unknown": "Inconnu",
+      "lessThanMinute": "Moins de 1 minute",
+      "minute": "{{count}} minute",
+      "minute_plural": "{{count}} minutes",
+      "hour": "{{count}} heure",
+      "hour_plural": "{{count}} heures",
+      "day": "{{count}} jour",
+      "day_plural": "{{count}} jours"
+    },
+    "confidence": {
+      "high": "Confiance élevée",
+      "medium": "Confiance moyenne",
+      "low": "Confiance faible",
+      "samples": "{{count}} échantillons"
     }
+  },
+  "logs": {
+    "search": {
+      "placeholder": "Rechercher dans les journaux...",
+      "showing": "Affichage de {{filtered}} sur {{total}} éléments",
+      "noResults": "Aucun journal correspondant",
+      "noResultsHint": "Essayez d'ajuster votre recherche ou filtre"
+    },
+    "filters": {
+      "all": "Tous",
+      "errors": "Erreurs",
+      "tools": "Outils",
+      "info": "Info"
+    },
+    "empty": "Aucun journal pour le moment",
+    "emptyHint": "Les journaux apparaîtront ici lorsque la tâche s'exécutera"
   },
   "files": {
     "title": "Fichiers",
@@ -174,7 +217,11 @@
   },
   "notifications": {
     "backgroundTaskTitle": "La tâche continue en arrière-plan",
-    "backgroundTaskDescription": "La tâche est toujours en cours. Vous pouvez rouvrir cette boîte de dialogue pour suivre la progression."
+    "backgroundTaskDescription": "La tâche est toujours en cours. Vous pouvez rouvrir cette boîte de dialogue pour suivre la progression.",
+    "taskComplete": "Tâche terminée",
+    "taskCompleteDescription": "Votre tâche s'est terminée avec succès et est prête pour révision.",
+    "taskFailed": "Tâche échouée",
+    "taskFailedDescription": "Votre tâche a rencontré un problème et nécessite votre attention."
   },
   "ariaLabels": {
     "taskCard": "Carte de tâche : {{title}}",

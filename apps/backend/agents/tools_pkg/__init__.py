@@ -1,6 +1,6 @@
 """
-Custom MCP Tools for Auto-Claude Agents
-========================================
+Custom MCP Tools for Auto-Code Agents
+======================================
 
 This module provides custom MCP tools that agents can use for reliable
 operations on auto-claude data structures. These tools replace prompt-based
@@ -41,7 +41,7 @@ from .models import (
     GRAPHITI_MCP_TOOLS,
     LINEAR_TOOLS,
     PUPPETEER_TOOLS,
-    # Auto-Claude tool names
+    # Auto-Code tool names
     TOOL_GET_BUILD_PROGRESS,
     TOOL_GET_SESSION_CONTEXT,
     TOOL_RECORD_DISCOVERY,
@@ -79,7 +79,7 @@ __all__ = [
     "GRAPHITI_MCP_TOOLS",
     "ELECTRON_TOOLS",
     "PUPPETEER_TOOLS",
-    # Auto-Claude tool name constants
+    # Auto-Code tool name constants
     "TOOL_UPDATE_SUBTASK_STATUS",
     "TOOL_GET_BUILD_PROGRESS",
     "TOOL_RECORD_DISCOVERY",

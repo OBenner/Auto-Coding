@@ -21,7 +21,9 @@ import {
   HelpCircle,
   Wrench,
   PanelLeft,
-  PanelLeftClose
+  PanelLeftClose,
+  Puzzle,
+  BarChart3
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { ScrollArea } from './ui/scroll-area';
@@ -52,9 +54,9 @@ import { GitSetupModal } from './GitSetupModal';
 import { RateLimitIndicator } from './RateLimitIndicator';
 import { ClaudeCodeStatusBadge } from './ClaudeCodeStatusBadge';
 import { UpdateBanner } from './UpdateBanner';
-import type { Project, GitStatus, ProjectEnvConfig } from '../../shared/types';
+import type { Project, AutoBuildVersionInfo, GitStatus, ProjectEnvConfig } from '../../shared/types';
 
-export type SidebarView = 'kanban' | 'terminals' | 'roadmap' | 'context' | 'ideation' | 'github-issues' | 'gitlab-issues' | 'github-prs' | 'gitlab-merge-requests' | 'changelog' | 'insights' | 'worktrees' | 'agent-tools';
+export type SidebarView = 'kanban' | 'terminals' | 'roadmap' | 'context' | 'ideation' | 'github-issues' | 'gitlab-issues' | 'github-prs' | 'gitlab-merge-requests' | 'changelog' | 'insights' | 'worktrees' | 'agent-tools' | 'plugins' | 'merge-analytics';
 
 interface SidebarProps {
   onSettingsClick: () => void;
@@ -80,7 +82,9 @@ const baseNavItems: NavItem[] = [
   { id: 'changelog', labelKey: 'navigation:items.changelog', icon: FileText, shortcut: 'L' },
   { id: 'context', labelKey: 'navigation:items.context', icon: BookOpen, shortcut: 'C' },
   { id: 'agent-tools', labelKey: 'navigation:items.agentTools', icon: Wrench, shortcut: 'M' },
-  { id: 'worktrees', labelKey: 'navigation:items.worktrees', icon: GitBranch, shortcut: 'W' }
+  { id: 'plugins', labelKey: 'navigation:items.plugins', icon: Puzzle, shortcut: 'U' },
+  { id: 'worktrees', labelKey: 'navigation:items.worktrees', icon: GitBranch, shortcut: 'W' },
+  { id: 'merge-analytics', labelKey: 'navigation:items.mergeAnalytics', icon: BarChart3, shortcut: 'Y' }
 ];
 
 // GitHub nav items shown when GitHub is enabled
@@ -335,7 +339,7 @@ export function Sidebar({
           isCollapsed ? "justify-center px-2" : "px-4"
         )}>
           {!isCollapsed && (
-            <span className="electron-no-drag text-lg font-bold text-primary">Auto Claude</span>
+            <span className="electron-no-drag text-lg font-bold text-primary">Auto Code</span>
           )}
         </div>
 
@@ -424,7 +428,7 @@ export function Sidebar({
                 <Button
                   variant="ghost"
                   size="icon"
-                  onClick={() => window.open('https://github.com/AndyMik90/Auto-Claude/issues', '_blank')}
+                  onClick={() => window.open('https://github.com/OBenner/Auto-Coding/issues', '_blank')}
                   aria-label={t('tooltips.help')}
                 >
                   <HelpCircle className="h-4 w-4" />
@@ -459,7 +463,7 @@ export function Sidebar({
         </div>
       </div>
 
-      {/* Initialize Auto Claude Dialog */}
+      {/* Initialize Auto Code Dialog */}
       <Dialog open={showInitDialog} onOpenChange={(open) => {
         // Only allow closing if user manually closes (not during initialization)
         if (!open && !isInitializing) {

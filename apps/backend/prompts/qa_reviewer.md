@@ -124,6 +124,149 @@ E2E TESTS:
 - [flow-name]: PASS/FAIL
 ```
 
+### 3.4: Validate Generated Tests
+
+**CRITICAL**: If tests were automatically generated, validate their quality before approval.
+
+#### 3.4.1: Check Generated Tests Exist
+
+```bash
+# Check for generated tests in the spec directory
+ls -la .auto-claude/specs/*/generated_tests/ 2>/dev/null || echo "No generated tests found"
+
+# Also check tests/ directory for newly created test files
+git diff {{BASE_BRANCH}}...HEAD --name-only | grep "^tests/.*test_.*\.py$"
+```
+
+#### 3.4.2: Verify Test Syntax and Collection
+
+```bash
+# Verify generated tests are syntactically valid
+pytest --collect-only tests/ -q
+
+# Check for collection errors
+pytest --collect-only tests/ 2>&1 | grep -i error
+```
+
+**Expected**: All tests should be collected successfully with no syntax errors.
+
+#### 3.4.3: Validate Test Conventions
+
+Check that generated tests follow project conventions:
+
+```bash
+# 1. Naming convention (test_*.py)
+git diff {{BASE_BRANCH}}...HEAD --name-only | grep "tests/" | grep -v "test_.*\.py$" && echo "FAIL: Non-standard test file names" || echo "PASS: Naming conventions followed"
+
+# 2. Check for proper imports and fixtures
+grep -r "import pytest" tests/test_*.py | wc -l
+grep -r "@pytest.fixture" tests/test_*.py | wc -l
+
+# 3. Verify tests use conftest.py fixtures (if applicable)
+cat tests/conftest.py 2>/dev/null | grep "def " | sed 's/def \([^(]*\).*/\1/' | while read fixture; do
+  grep -r "$fixture" tests/test_*.py && echo "Fixture '$fixture' is used"
+done
+```
+
+**Document results:**
+```
+TEST CONVENTIONS:
+- Naming: PASS/FAIL
+- pytest imports: [count] files
+- Fixtures used: [list or "None"]
+```
+
+#### 3.4.4: Validate Edge Case Coverage
+
+```bash
+# Check that generated tests include edge cases
+# Look for common edge case patterns:
+
+# 1. Error handling tests (try/except, raises)
+grep -r "pytest.raises\|with raises\|try:" tests/test_*.py | wc -l
+
+# 2. Boundary condition tests (None, empty, zero, negative)
+grep -ri "None\|empty\|zero\|\[\]" tests/test_*.py | wc -l
+
+# 3. Type validation tests
+grep -r "isinstance\|type(" tests/test_*.py | wc -l
+```
+
+**Document results:**
+```
+EDGE CASE COVERAGE:
+- Error handling tests: [count]
+- Boundary condition tests: [count]
+- Type validation tests: [count]
+```
+
+#### 3.4.5: Run Generated Tests and Check Coverage
+
+```bash
+# Run the newly generated tests
+pytest tests/ -v --tb=short
+
+# Check coverage of generated tests on target code
+# Extract target files from build-progress.txt or implementation_plan.json
+pytest tests/ --cov=apps/backend --cov-report=term-missing --cov-report=json
+
+# Parse coverage report
+python -c "
+import json
+try:
+    with open('coverage.json', 'r') as f:
+        cov = json.load(f)
+    total_coverage = cov['totals']['percent_covered']
+    print(f'Total Coverage: {total_coverage:.1f}%')
+    if total_coverage >= 80:
+        print('PASS: Coverage >= 80%')
+    else:
+        print(f'FAIL: Coverage {total_coverage:.1f}% < 80%')
+except FileNotFoundError:
+    print('WARNING: No coverage report found')
+"
+```
+
+**Document results:**
+```
+GENERATED TESTS EXECUTION:
+- Tests run: PASS/FAIL (X/Y tests)
+- Coverage: X% (Target: 80%+)
+- Edge cases covered: PASS/FAIL
+```
+
+#### 3.4.6: Review Test Quality Manually
+
+Read a sample of generated tests and verify:
+
+```bash
+# Show first 3 generated test files
+git diff {{BASE_BRANCH}}...HEAD --name-only | grep "tests/test_.*\.py$" | head -3 | while read file; do
+  echo "=== $file ==="
+  cat "$file"
+  echo ""
+done
+```
+
+**Manual Review Checklist:**
+- [ ] Tests are readable and well-structured
+- [ ] Test names clearly describe what they test
+- [ ] Assertions are meaningful (not just `assert True`)
+- [ ] Mocking is used appropriately for external dependencies
+- [ ] Tests are independent (no shared state between tests)
+- [ ] Setup and teardown are handled correctly
+
+**Document results:**
+```
+GENERATED TESTS QUALITY:
+- Readability: PASS/FAIL
+- Test names: PASS/FAIL
+- Assertions: PASS/FAIL
+- Mocking: PASS/FAIL
+- Independence: PASS/FAIL
+- Setup/teardown: PASS/FAIL
+```
+
 ---
 
 ## PHASE 4: BROWSER VERIFICATION (If Frontend)

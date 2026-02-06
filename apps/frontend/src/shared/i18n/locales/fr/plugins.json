@@ -1,0 +1,75 @@
+{
+  "title": "Extensions",
+  "description": "Gérer les extensions et plugins Auto-Coding",
+  "empty": {
+    "title": "Aucune Extension Installée",
+    "description": "Installez des extensions pour étendre Auto-Coding avec des agents personnalisés, des intégrations et des composants UI.",
+    "action": "Installer une Extension"
+  },
+  "status": {
+    "loaded": "Chargée",
+    "enabled": "Activée",
+    "disabled": "Désactivée",
+    "error": "Erreur"
+  },
+  "types": {
+    "agent": "Agent",
+    "integration": "Intégration",
+    "ui": "Extension UI"
+  },
+  "permissions": {
+    "title": "Permissions",
+    "read_files": "Lecture de Fichiers",
+    "write_files": "Écriture de Fichiers",
+    "network_access": "Accès Réseau",
+    "execute_commands": "Exécution de Commandes",
+    "access_secrets": "Accès aux Secrets",
+    "create_mcp_tools": "Créer des Outils MCP"
+  },
+  "actions": {
+    "enable": "Activer",
+    "disable": "Désactiver",
+    "uninstall": "Désinstaller",
+    "install": "Installer une Extension",
+    "viewDocs": "Voir la Documentation"
+  },
+  "info": {
+    "version": "Version",
+    "author": "Auteur",
+    "license": "Licence",
+    "loadedAt": "Chargée à",
+    "enabledAt": "Activée à"
+  },
+  "install": {
+    "title": "Installer une Extension",
+    "description": "Installez une extension depuis un répertoire local, un fichier zip ou le marketplace.",
+    "sourceType": "Source d'Installation",
+    "fromDirectory": "Depuis un Répertoire",
+    "directoryDescription": "Installer depuis un répertoire d'extension local (pour le développement)",
+    "fromZip": "Depuis un Fichier Zip",
+    "zipDescription": "Installer depuis un fichier zip d'extension",
+    "fromMarketplace": "Depuis le Marketplace",
+    "marketplaceDescription": "Installer depuis le marketplace d'extensions Auto-Coding",
+    "pluginDirectory": "Répertoire de l'Extension",
+    "pluginZipFile": "Fichier Zip de l'Extension",
+    "noPathSelected": "Aucun chemin sélectionné",
+    "browse": "Parcourir",
+    "selectDirectory": "Veuillez sélectionner un répertoire d'extension",
+    "selectZip": "Veuillez sélectionner un fichier zip d'extension",
+    "enterMarketplaceId": "Veuillez entrer un ID d'extension du marketplace",
+    "zipNotYetSupported": "L'installation depuis un fichier zip sera supportée dans une future mise à jour.",
+    "installing": "Installation...",
+    "install": "Installer"
+  },
+  "toast": {
+    "enableSuccess": "Extension activée avec succès",
+    "enableError": "Échec de l'activation de l'extension",
+    "disableSuccess": "Extension désactivée avec succès",
+    "disableError": "Échec de la désactivation de l'extension",
+    "uninstallSuccess": "Extension désinstallée avec succès",
+    "uninstallError": "Échec de la désinstallation de l'extension",
+    "installSuccess": "Extension installée avec succès",
+    "installError": "Échec de l'installation de l'extension",
+    "loadError": "Échec du chargement des extensions"
+  }
+}

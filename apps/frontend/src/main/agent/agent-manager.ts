@@ -461,7 +461,7 @@ export class AgentManager extends EventEmitter {
         this.startSpecCreation(
           taskId,
           context.projectPath,
-          context.taskDescription!,
+          context.taskDescription ?? '',
           context.specDir,
           context.metadata,
           context.baseBranch

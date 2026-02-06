@@ -83,6 +83,164 @@ def debug_memory_system_status() -> None:
         )
 
 
+async def get_pattern_suggestions(
+    spec_dir: Path,
+    project_dir: Path,
+    query: str,
+    categories: list[str] | None = None,
+    num_results: int = 5,
+    min_score: float = 0.5,
+) -> str | None:
+    """
+    Retrieve pattern suggestions from Graphiti for the current task.
+
+    This searches the knowledge graph for relevant code patterns that match
+    the task query, returning categorized patterns with confidence scores.
+
+    Args:
+        spec_dir: Spec directory
+        project_dir: Project root directory
+        query: Task description or search query
+        categories: Optional list of pattern categories to filter by
+        num_results: Maximum number of patterns to return (default: 5)
+        min_score: Minimum relevance score 0.0-1.0 (default: 0.5)
+
+    Returns:
+        Formatted pattern suggestions string or None if unavailable
+    """
+    if is_debug_enabled():
+        debug(
+            "memory",
+            "Retrieving pattern suggestions",
+            query=query[:100],
+            categories=categories,
+            num_results=num_results,
+        )
+
+    if not is_graphiti_enabled():
+        if is_debug_enabled():
+            debug("memory", "Graphiti not enabled, skipping pattern suggestions")
+        return None
+
+    memory = None
+    try:
+        # Get GraphitiMemory instance
+        memory = await get_graphiti_memory(spec_dir, project_dir)
+        if memory is None:
+            if is_debug_enabled():
+                debug_warning(
+                    "memory", "GraphitiMemory not available for pattern suggestions"
+                )
+            return None
+
+        # Import pattern suggester
+        from integrations.graphiti.pattern_suggester import suggest_patterns
+
+        # Get group_id and spec_context_id from memory
+        group_id = memory.group_id
+        spec_context_id = memory.spec_context_id
+
+        if is_debug_enabled():
+            debug_detailed(
+                "memory",
+                "Searching for pattern suggestions",
+                query=query[:200],
+                group_id=group_id,
+                categories=categories,
+            )
+
+        # Get pattern suggestions
+        patterns = await suggest_patterns(
+            client=memory.client,
+            group_id=group_id,
+            spec_context_id=spec_context_id,
+            query=query,
+            categories=categories,
+            num_results=num_results,
+            min_score=min_score,
+            include_project_context=True,
+            project_dir=project_dir,
+        )
+
+        if is_debug_enabled():
+            debug(
+                "memory",
+                "Pattern suggestion retrieval complete",
+                patterns_found=len(patterns) if patterns else 0,
+            )
+
+        if not patterns:
+            if is_debug_enabled():
+                debug("memory", "No pattern suggestions found")
+            return None
+
+        # Format the patterns
+        sections = ["## Pattern Suggestions\n"]
+        sections.append(
+            "_Relevant code patterns from previous implementations:_\n"
+        )
+
+        # Group patterns by category
+        by_category: dict[str, list[dict]] = {}
+        for pattern in patterns:
+            category = pattern.get("category", "uncategorized")
+            if category not in by_category:
+                by_category[category] = []
+            by_category[category].append(pattern)
+
+        # Format each category
+        for category, category_patterns in by_category.items():
+            sections.append(f"### {category.replace('-', ' ').title()}\n")
+            for p in category_patterns:
+                pattern_text = p.get("pattern", "")
+                reasoning = p.get("reasoning", "")
+                confidence = p.get("confidence", 0.0)
+                score = p.get("score", 0.0)
+                spec_id = p.get("spec_id", "")
+
+                sections.append(f"- **Pattern**: {pattern_text}\n")
+                if reasoning:
+                    sections.append(f"  _Reasoning_: {reasoning}\n")
+                sections.append(
+                    f"  _Confidence_: {confidence:.2f} | _Relevance_: {score:.2f}"
+                )
+                if spec_id:
+                    sections.append(f" | _From_: {spec_id}")
+                sections.append("\n")
+
+        formatted = "".join(sections)
+
+        if is_debug_enabled():
+            debug_success(
+                "memory",
+                "Pattern suggestions formatted",
+                categories=len(by_category),
+                total_patterns=len(patterns),
+            )
+
+        return formatted
+
+    except Exception as e:
+        if is_debug_enabled():
+            debug_error("memory", "Failed to get pattern suggestions", error=str(e))
+        logger.warning(f"Failed to get pattern suggestions: {e}")
+        capture_exception(
+            e,
+            query_summary=query[:100] if query else "",
+            spec_dir=str(spec_dir),
+            project_dir=str(project_dir),
+            operation="get_pattern_suggestions",
+        )
+        return None
+    finally:
+        # Close memory connection if we opened it
+        if memory is not None:
+            try:
+                await memory.close()
+            except Exception:
+                pass
+
+
 async def get_graphiti_context(
     spec_dir: Path,
     project_dir: Path,

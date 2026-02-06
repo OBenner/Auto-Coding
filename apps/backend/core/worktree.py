@@ -1242,7 +1242,7 @@ class WorktreeManager:
             )
 
         if not spec_path.exists():
-            return "Auto-generated PR from Auto-Claude build."
+            return "Auto-generated PR from Auto-Code build."
 
         try:
             content = spec_path.read_text(encoding="utf-8")
@@ -1274,7 +1274,7 @@ class WorktreeManager:
                 "worktree", f"Could not extract spec summary for PR body: {e}"
             )
 
-        return "Auto-generated PR from Auto-Claude build."
+        return "Auto-generated PR from Auto-Code build."
 
     def _get_existing_pr_url(self, spec_name: str, target_branch: str) -> str | None:
         """Get the URL of an existing PR for this branch."""

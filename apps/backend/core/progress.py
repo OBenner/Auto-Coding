@@ -9,9 +9,11 @@ Enhanced with colored output, icons, and better visual formatting.
 """
 
 import json
+import time
 from pathlib import Path
 
 from core.plan_normalization import normalize_subtask_aliases
+from core.timing_history import TimingHistory, get_timing_history
 from ui import (
     Icons,
     bold,
@@ -484,3 +486,159 @@ def format_duration(seconds: float) -> str:
     else:
         hours = seconds / 3600
         return f"{hours:.1f}h"
+
+
+# Timing History Integration Functions
+
+
+def record_subtask_completion(
+    spec_dir: Path,
+    subtask_id: str,
+    started_at: float,
+    completed_at: float | None = None,
+    status: str = "completed",
+) -> None:
+    """
+    Record completion of a subtask for future time estimates.
+
+    Args:
+        spec_dir: Directory containing timing_history.json
+        subtask_id: Subtask identifier (e.g., "subtask-1-1")
+        started_at: Unix timestamp when subtask started
+        completed_at: Unix timestamp when completed (defaults to now)
+        status: Completion status (default: "completed")
+    """
+    try:
+        history = get_timing_history(spec_dir)
+        history.record_completion(
+            operation_type="subtask",
+            operation_id=subtask_id,
+            started_at=started_at,
+            completed_at=completed_at,
+            status=status,
+        )
+    except (OSError, ValueError, AttributeError):
+        pass  # Silent failure - timing history is non-critical
+
+
+def record_phase_completion(
+    spec_dir: Path,
+    phase_id: str,
+    started_at: float,
+    completed_at: float | None = None,
+    status: str = "completed",
+) -> None:
+    """
+    Record completion of a phase for future time estimates.
+
+    Args:
+        spec_dir: Directory containing timing_history.json
+        phase_id: Phase identifier (e.g., "phase-1-backend-metrics")
+        started_at: Unix timestamp when phase started
+        completed_at: Unix timestamp when completed (defaults to now)
+        status: Completion status (default: "completed")
+    """
+    try:
+        history = get_timing_history(spec_dir)
+        history.record_completion(
+            operation_type="phase",
+            operation_id=phase_id,
+            started_at=started_at,
+            completed_at=completed_at,
+            status=status,
+        )
+    except (OSError, ValueError, AttributeError):
+        pass  # Silent failure - timing history is non-critical
+
+
+def get_estimated_completion_time(
+    spec_dir: Path,
+    operation_type: str = "subtask",
+    operation_id: str | None = None,
+) -> dict:
+    """
+    Get estimated completion time based on historical data.
+
+    Args:
+        spec_dir: Directory containing timing_history.json
+        operation_type: Type of operation ("subtask", "phase", "agent_session")
+        operation_id: Optional specific operation ID for exact matches
+
+    Returns:
+        Dict with 'estimated_seconds', 'confidence', 'sample_size', and
+        'formatted' (human-readable time string)
+    """
+    try:
+        history = get_timing_history(spec_dir)
+        estimate = history.estimate_completion(operation_type, operation_id)
+
+        # Add formatted duration
+        formatted = format_duration(estimate["estimated_seconds"])
+        return {
+            **estimate,
+            "formatted": formatted,
+        }
+    except (OSError, ValueError, AttributeError):
+        # Return conservative default on error
+        return {
+            "estimated_seconds": 300.0,
+            "confidence": "low",
+            "sample_size": 0,
+            "formatted": "5m",
+        }
+
+
+def get_remaining_time_estimate(spec_dir: Path) -> dict:
+    """
+    Estimate total remaining time for all pending subtasks.
+
+    Args:
+        spec_dir: Directory containing implementation_plan.json and timing_history.json
+
+    Returns:
+        Dict with 'total_seconds', 'formatted', 'confidence', and 'pending_count'
+    """
+    try:
+        counts = count_subtasks_detailed(spec_dir)
+        pending_count = counts["pending"] + counts["in_progress"]
+
+        if pending_count == 0:
+            return {
+                "total_seconds": 0.0,
+                "formatted": "0s",
+                "confidence": "high",
+                "pending_count": 0,
+            }
+
+        # Get average subtask duration from history
+        history = get_timing_history(spec_dir)
+        avg_duration = history.get_average_duration("subtask", min_samples=2)
+
+        if avg_duration is None:
+            # No historical data - use conservative estimate
+            total_seconds = pending_count * 300.0  # 5 minutes per subtask
+            confidence = "low"
+        else:
+            total_seconds = pending_count * avg_duration
+            # Confidence based on sample size
+            sample_size = len(history.get_records("subtask"))
+            if sample_size >= 5:
+                confidence = "high"
+            elif sample_size >= 2:
+                confidence = "medium"
+            else:
+                confidence = "low"
+
+        return {
+            "total_seconds": round(total_seconds, 2),
+            "formatted": format_duration(total_seconds),
+            "confidence": confidence,
+            "pending_count": pending_count,
+        }
+    except (OSError, ValueError, AttributeError):
+        return {
+            "total_seconds": 0.0,
+            "formatted": "unknown",
+            "confidence": "low",
+            "pending_count": 0,
+        }

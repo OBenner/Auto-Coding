@@ -9,6 +9,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.sessions import SessionMiddleware
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -56,7 +57,7 @@ async def lifespan(app: FastAPI):
 # Create FastAPI application
 app = FastAPI(
     title="Web Backend API",
-    description="FastAPI backend service for Auto Claude web interface",
+    description="FastAPI backend service for Auto Code web interface",
     version="1.0.0",
     debug=DEBUG,
     lifespan=lifespan
@@ -70,6 +71,30 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Configure session middleware for OAuth state management
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=SECRET_KEY or "dev-secret-key-change-in-production"
+)
+
+# Configure usage tracking middleware
+from core.middleware import UsageTrackingMiddleware
+
+app.add_middleware(
+    UsageTrackingMiddleware,
+    rate_limit_enabled=False,  # Disable rate limiting by default (can be enabled in production)
+    rate_limit_requests=1000,
+    rate_limit_period="hourly"
+)
+
+# Import and register API routes
+from api.routes import users, auth, git, usage
+
+app.include_router(users.router)
+app.include_router(auth.router)
+app.include_router(git.router)
+app.include_router(usage.router)
 
 
 @app.get("/")

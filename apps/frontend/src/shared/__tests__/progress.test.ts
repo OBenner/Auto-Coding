@@ -8,7 +8,11 @@ import {
   countSubtasksByStatus,
   determineOverallStatus,
   formatProgressString,
-  estimateRemainingTime
+  estimateRemainingTime,
+  formatElapsedTime,
+  formatRemainingTime,
+  formatConfidence,
+  millisecondsToSeconds
 } from '../progress';
 import type { Subtask, SubtaskStatus } from '../types';
 
@@ -274,5 +278,141 @@ describe('estimateRemainingTime', () => {
 
     // Should be a small positive number or 0, not negative
     expect(remaining).toBeGreaterThanOrEqual(0);
+  });
+});
+
+describe('formatElapsedTime', () => {
+  it('should format zero seconds', () => {
+    expect(formatElapsedTime(0)).toBe('0:00');
+  });
+
+  it('should format negative seconds as 0:00', () => {
+    expect(formatElapsedTime(-10)).toBe('0:00');
+  });
+
+  it('should format seconds less than 1 minute', () => {
+    expect(formatElapsedTime(5)).toBe('0:05');
+    expect(formatElapsedTime(30)).toBe('0:30');
+    expect(formatElapsedTime(59)).toBe('0:59');
+  });
+
+  it('should format minutes and seconds', () => {
+    expect(formatElapsedTime(60)).toBe('1:00');
+    expect(formatElapsedTime(83)).toBe('1:23');
+    expect(formatElapsedTime(725)).toBe('12:05');
+    expect(formatElapsedTime(3599)).toBe('59:59');
+  });
+
+  it('should format hours, minutes, and seconds', () => {
+    expect(formatElapsedTime(3600)).toBe('1:00:00');
+    expect(formatElapsedTime(3605)).toBe('1:00:05');
+    expect(formatElapsedTime(3665)).toBe('1:01:05');
+    expect(formatElapsedTime(43200)).toBe('12:00:00');
+  });
+
+  it('should pad minutes and seconds with leading zeros when hours present', () => {
+    expect(formatElapsedTime(3665)).toBe('1:01:05');
+    expect(formatElapsedTime(36005)).toBe('10:00:05');
+  });
+});
+
+describe('formatRemainingTime', () => {
+  it('should return "Unknown" for negative seconds', () => {
+    expect(formatRemainingTime(-10)).toBe('Unknown');
+  });
+
+  it('should return "Less than 1 minute" for < 60 seconds', () => {
+    expect(formatRemainingTime(0)).toBe('Less than 1 minute');
+    expect(formatRemainingTime(30)).toBe('Less than 1 minute');
+    expect(formatRemainingTime(59)).toBe('Less than 1 minute');
+  });
+
+  it('should format minutes with "About" prefix by default', () => {
+    expect(formatRemainingTime(60)).toBe('About 1 minute');
+    expect(formatRemainingTime(120)).toBe('About 2 minutes');
+    expect(formatRemainingTime(300)).toBe('About 5 minutes');
+    expect(formatRemainingTime(3540)).toBe('About 59 minutes');
+  });
+
+  it('should format hours with "About" prefix by default', () => {
+    expect(formatRemainingTime(3600)).toBe('About 1 hour');
+    expect(formatRemainingTime(7200)).toBe('About 2 hours');
+    expect(formatRemainingTime(43200)).toBe('About 12 hours');
+  });
+
+  it('should format days with "About" prefix by default', () => {
+    expect(formatRemainingTime(86400)).toBe('About 1 day');
+    expect(formatRemainingTime(172800)).toBe('About 2 days');
+  });
+
+  it('should use "About" prefix for high confidence', () => {
+    expect(formatRemainingTime(300, 'high')).toBe('About 5 minutes');
+    expect(formatRemainingTime(3600, 'high')).toBe('About 1 hour');
+  });
+
+  it('should use "Roughly" prefix for low confidence', () => {
+    expect(formatRemainingTime(300, 'low')).toBe('Roughly 5 minutes');
+    expect(formatRemainingTime(3600, 'low')).toBe('Roughly 1 hour');
+  });
+
+  it('should use "About" prefix for medium confidence', () => {
+    expect(formatRemainingTime(300, 'medium')).toBe('About 5 minutes');
+    expect(formatRemainingTime(3600, 'medium')).toBe('About 1 hour');
+  });
+
+  it('should round to nearest unit', () => {
+    expect(formatRemainingTime(90)).toBe('About 2 minutes'); // 1.5 minutes rounds to 2
+    expect(formatRemainingTime(5400)).toBe('About 2 hours'); // 1.5 hours rounds to 2
+  });
+});
+
+describe('formatConfidence', () => {
+  it('should return empty string for undefined confidence', () => {
+    expect(formatConfidence(undefined)).toBe('');
+  });
+
+  it('should format high confidence', () => {
+    expect(formatConfidence('high')).toBe('● High confidence');
+  });
+
+  it('should format medium confidence', () => {
+    expect(formatConfidence('medium')).toBe('◐ Medium confidence');
+  });
+
+  it('should format low confidence', () => {
+    expect(formatConfidence('low')).toBe('○ Low confidence');
+  });
+
+  it('should include sample size when provided', () => {
+    expect(formatConfidence('high', 10)).toBe('● High confidence (10 samples)');
+    expect(formatConfidence('medium', 5)).toBe('◐ Medium confidence (5 samples)');
+    expect(formatConfidence('low', 2)).toBe('○ Low confidence (2 samples)');
+  });
+
+  it('should not show sample size for 0 samples', () => {
+    expect(formatConfidence('high', 0)).toBe('● High confidence');
+  });
+
+  it('should handle undefined sample size', () => {
+    expect(formatConfidence('high', undefined)).toBe('● High confidence');
+  });
+});
+
+describe('millisecondsToSeconds', () => {
+  it('should convert milliseconds to seconds', () => {
+    expect(millisecondsToSeconds(0)).toBe(0);
+    expect(millisecondsToSeconds(1000)).toBe(1);
+    expect(millisecondsToSeconds(5000)).toBe(5);
+    expect(millisecondsToSeconds(60000)).toBe(60);
+  });
+
+  it('should floor fractional seconds', () => {
+    expect(millisecondsToSeconds(1500)).toBe(1);
+    expect(millisecondsToSeconds(1999)).toBe(1);
+    expect(millisecondsToSeconds(2001)).toBe(2);
+  });
+
+  it('should handle negative values', () => {
+    expect(millisecondsToSeconds(-1000)).toBe(-1);
   });
 });

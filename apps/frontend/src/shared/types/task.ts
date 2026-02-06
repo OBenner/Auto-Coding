@@ -34,6 +34,17 @@ export interface ExecutionProgress {
   // When a phase completes, it's added to this array before transitioning to the next phase
   // This ensures that planning is marked complete before coding starts, etc.
   completedPhases?: CompletablePhase[];  // Phases that have successfully completed
+
+  // Resource usage metrics (from backend resource_tracker.py)
+  cpu_percent?: number;  // CPU usage percentage
+  memory_mb?: number;  // Memory usage in megabytes
+  memory_percent?: number;  // Memory usage percentage
+  elapsed_seconds?: number;  // Elapsed time since phase started
+
+  // Timing estimates (from backend timing_history.py)
+  estimated_seconds?: number;  // Estimated time to completion
+  confidence?: 'high' | 'medium' | 'low';  // Estimate confidence level
+  sample_size?: number;  // Number of historical samples used for estimate
 }
 
 export interface Subtask {
@@ -114,6 +125,29 @@ export interface TaskLogStreamChunk {
     success?: boolean;
   };
   subtask_id?: string;
+}
+
+// Log filtering and search types
+export interface LogFilterState {
+  searchQuery: string;
+  phases: TaskLogPhase[];  // Empty array = all phases
+  entryTypes: TaskLogEntryType[];  // Empty array = all types
+  tools: string[];  // Empty array = all tools (e.g., 'Read', 'Write', 'Bash')
+  showToolOutput: boolean;  // Whether to show tool_start/tool_end entries
+}
+
+export interface LogSearchResult {
+  phase: TaskLogPhase;
+  entryIndex: number;
+  matchType: 'content' | 'tool_name' | 'tool_input' | 'detail';
+  matchText: string;  // The actual text that matched
+}
+
+export interface LogSearchState {
+  query: string;
+  results: LogSearchResult[];
+  currentResultIndex: number;  // For navigating through results
+  isSearching: boolean;
 }
 
 // Image attachment types for task creation

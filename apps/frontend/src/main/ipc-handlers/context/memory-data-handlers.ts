@@ -6,7 +6,8 @@ import { IPC_CHANNELS, getSpecsDir } from '../../../shared/constants';
 import type {
   IPCResult,
   MemoryEpisode,
-  ContextSearchResult
+  ContextSearchResult,
+  PatternSuggestion
 } from '../../../shared/types';
 import { projectStore } from '../../project-store';
 import { getMemoryService, isKuzuAvailable } from '../../memory-service';
@@ -15,6 +16,8 @@ import {
   isGraphitiEnabled,
   getGraphitiDatabaseDetails
 } from './utils';
+import { runPythonSubprocess } from '../github/utils/subprocess-runner';
+import { parsePythonCommand } from '../../python-detector';
 
 /**
  * Check if a file exists
@@ -260,6 +263,265 @@ export function registerMemoryDataHandlers(
       const results = await searchFileBasedMemories(specsDir, query, 20);
 
       return { success: true, data: results };
+    }
+  );
+
+  // Get pattern suggestions
+  ipcMain.handle(
+    IPC_CHANNELS.CONTEXT_GET_PATTERN_SUGGESTIONS,
+    async (
+      _,
+      projectId: string,
+      query: string,
+      categories?: string[],
+      numResults: number = 5
+    ): Promise<IPCResult<PatternSuggestion[]>> => {
+      const project = projectStore.getProject(projectId);
+      if (!project) {
+        return { success: false, error: 'Project not found' };
+      }
+
+      const projectEnvVars = loadProjectEnvVars(project.path, project.autoBuildPath);
+      const graphitiEnabled = isGraphitiEnabled(projectEnvVars);
+
+      if (!graphitiEnabled) {
+        return {
+          success: false,
+          error: 'Graphiti memory system is not enabled for this project'
+        };
+      }
+
+      try {
+        // Call Python backend to get pattern suggestions
+        const [pythonCommand, baseArgs] = parsePythonCommand(project.path);
+        const backendPath = path.join(project.path, 'apps', 'backend');
+
+        // Prepare arguments for pattern_suggester.py
+        const args = [
+          '-c',
+          `
+import sys
+import json
+import asyncio
+from pathlib import Path
+sys.path.insert(0, '${backendPath.replace(/\\/g, '\\\\')}')
+
+async def main():
+    from integrations.graphiti.pattern_suggester import suggest_patterns
+    from integrations.graphiti.queries_pkg.client import get_graphiti_client_sync
+
+    query = ${JSON.stringify(query)}
+    categories = ${JSON.stringify(categories || null)}
+    num_results = ${numResults}
+    project_dir = Path('${project.path.replace(/\\/g, '\\\\')}')
+
+    # Get client
+    client = get_graphiti_client_sync(str(project_dir))
+    if not client:
+        print(json.dumps({"error": "Failed to initialize Graphiti client"}))
+        return
+
+    # Generate group_id from project path
+    import hashlib
+    project_name = project_dir.name
+    path_hash = hashlib.md5(str(project_dir.resolve()).encode(), usedforsecurity=False).hexdigest()[:8]
+    group_id = f"project_{project_name}_{path_hash}"
+
+    # Get pattern suggestions
+    patterns = await suggest_patterns(
+        client=client,
+        group_id=group_id,
+        spec_context_id="",
+        query=query,
+        categories=categories,
+        num_results=num_results,
+        min_score=0.5,
+        include_project_context=True,
+        project_dir=project_dir
+    )
+
+    print(json.dumps({"patterns": patterns}))
+
+asyncio.run(main())
+          `.trim()
+        ];
+
+        const { promise } = runPythonSubprocess<{ patterns: PatternSuggestion[] }>({
+          pythonPath: pythonCommand,
+          args: [...baseArgs, ...args],
+          cwd: backendPath,
+          env: { ...process.env, PYTHONPATH: backendPath }
+        });
+
+        const result = await promise;
+
+        if (!result.success) {
+          return {
+            success: false,
+            error: result.error || 'Failed to get pattern suggestions'
+          };
+        }
+
+        // Parse Python output
+        try {
+          const lines = result.stdout.split('\n');
+          const jsonLine = lines.find(line => line.trim().startsWith('{'));
+          if (!jsonLine) {
+            return { success: false, error: 'No JSON output from Python script' };
+          }
+
+          const data = JSON.parse(jsonLine);
+          if (data.error) {
+            return { success: false, error: data.error };
+          }
+
+          return { success: true, data: data.patterns || [] };
+        } catch (parseError) {
+          return {
+            success: false,
+            error: `Failed to parse pattern suggestions: ${parseError}`
+          };
+        }
+      } catch (error) {
+        return {
+          success: false,
+          error: `Failed to get pattern suggestions: ${error}`
+        };
+      }
+    }
+  );
+
+  // Confirm pattern (user action)
+  ipcMain.handle(
+    IPC_CHANNELS.CONTEXT_CONFIRM_PATTERN,
+    async (
+      _,
+      projectId: string,
+      pattern: PatternSuggestion,
+      action: 'confirmed' | 'rejected' | 'modified',
+      modifiedPattern?: string
+    ): Promise<IPCResult<void>> => {
+      const project = projectStore.getProject(projectId);
+      if (!project) {
+        return { success: false, error: 'Project not found' };
+      }
+
+      const projectEnvVars = loadProjectEnvVars(project.path, project.autoBuildPath);
+      const graphitiEnabled = isGraphitiEnabled(projectEnvVars);
+
+      if (!graphitiEnabled) {
+        return {
+          success: false,
+          error: 'Graphiti memory system is not enabled for this project'
+        };
+      }
+
+      try {
+        // Call Python backend to record pattern confirmation
+        const [pythonCommand, baseArgs] = parsePythonCommand(project.path);
+        const backendPath = path.join(project.path, 'apps', 'backend');
+
+        // Prepare arguments to record pattern action
+        const args = [
+          '-c',
+          `
+import sys
+import json
+import asyncio
+from pathlib import Path
+from datetime import datetime
+sys.path.insert(0, '${backendPath.replace(/\\/g, '\\\\')}')
+
+async def main():
+    from integrations.graphiti.queries_pkg.client import get_graphiti_client_sync
+    from integrations.graphiti.queries_pkg.schema import EPISODE_TYPE_PATTERN
+
+    pattern_data = ${JSON.stringify(pattern)}
+    action = ${JSON.stringify(action)}
+    modified_pattern = ${JSON.stringify(modifiedPattern || null)}
+    project_dir = Path('${project.path.replace(/\\/g, '\\\\')}')
+
+    # Get client
+    client = get_graphiti_client_sync(str(project_dir))
+    if not client:
+        print(json.dumps({"error": "Failed to initialize Graphiti client"}))
+        return
+
+    # Generate group_id from project path
+    import hashlib
+    project_name = project_dir.name
+    path_hash = hashlib.md5(str(project_dir.resolve()).encode(), usedforsecurity=False).hexdigest()[:8]
+    group_id = f"project_{project_name}_{path_hash}"
+
+    # Record pattern action as an episode
+    episode_content = {
+        "type": "pattern_action",
+        "action": action,
+        "original_pattern": pattern_data["pattern"],
+        "category": pattern_data["category"],
+        "spec_id": pattern_data.get("spec_id", ""),
+        "timestamp": datetime.utcnow().isoformat() + "Z"
+    }
+
+    if modified_pattern:
+        episode_content["modified_pattern"] = modified_pattern
+
+    await client.graphiti.add_episode(
+        name=f"Pattern {action}: {pattern_data['category']}",
+        episode_body=json.dumps(episode_content),
+        source_description="User pattern confirmation",
+        reference_time=datetime.utcnow(),
+        group_id=group_id
+    )
+
+    print(json.dumps({"success": True}))
+
+asyncio.run(main())
+          `.trim()
+        ];
+
+        const { promise } = runPythonSubprocess<{ success: boolean }>({
+          pythonPath: pythonCommand,
+          args: [...baseArgs, ...args],
+          cwd: backendPath,
+          env: { ...process.env, PYTHONPATH: backendPath }
+        });
+
+        const result = await promise;
+
+        if (!result.success) {
+          return {
+            success: false,
+            error: result.error || 'Failed to confirm pattern'
+          };
+        }
+
+        // Parse Python output
+        try {
+          const lines = result.stdout.split('\n');
+          const jsonLine = lines.find(line => line.trim().startsWith('{'));
+          if (!jsonLine) {
+            return { success: false, error: 'No JSON output from Python script' };
+          }
+
+          const data = JSON.parse(jsonLine);
+          if (data.error) {
+            return { success: false, error: data.error };
+          }
+
+          return { success: true, data: undefined };
+        } catch (parseError) {
+          return {
+            success: false,
+            error: `Failed to parse confirmation result: ${parseError}`
+          };
+        }
+      } catch (error) {
+        return {
+          success: false,
+          error: `Failed to confirm pattern: ${error}`
+        };
+      }
     }
   );
 }

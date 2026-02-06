@@ -121,7 +121,7 @@ export function shallowEqual(objA: any, objB: any): boolean {
 
   // Compare each property value using strict equality
   for (const key of keysA) {
-    if (!Object.prototype.hasOwnProperty.call(objB, key) || objA[key] !== objB[key]) {
+    if (!Object.hasOwn(objB, key) || objA[key] !== objB[key]) {
       return false;
     }
   }

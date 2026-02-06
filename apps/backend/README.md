@@ -1,4 +1,4 @@
-# Auto Claude Backend
+# Auto Code Backend
 
 Autonomous coding framework powered by Claude AI. Builds software features through coordinated multi-agent sessions.
 
@@ -66,6 +66,12 @@ Optional `.env` settings:
 | `DEBUG=true` | Enable debug logging |
 | `LINEAR_API_KEY` | Enable Linear integration |
 | `GRAPHITI_ENABLED=true` | Enable memory system |
+| `OLLAMA_EMBEDDING_MODEL` | Ollama embedder for pattern suggestions (e.g., `nomic-embed-text`) |
+| `OPENAI_API_KEY` | OpenAI API key for embeddings (alternative to Ollama) |
+
+## Feature Documentation
+
+- **[Intelligent Pattern Recognition](../../guides/INTELLIGENT-PATTERN-RECOGNITION.md)** - Automatic pattern extraction, categorization, and suggestion system
 
 ## Troubleshooting
 

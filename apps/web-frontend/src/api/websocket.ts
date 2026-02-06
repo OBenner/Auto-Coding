@@ -1,7 +1,7 @@
 /**
  * WebSocket Client
  *
- * WebSocket client for real-time agent progress updates from the Auto Claude web backend.
+ * WebSocket client for real-time agent progress updates from the Auto Code web backend.
  * Provides event-driven API for subscribing to agent execution events.
  */
 

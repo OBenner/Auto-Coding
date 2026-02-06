@@ -12,7 +12,7 @@ interface GitLabMergeRequestsProps {
   onOpenSettings?: () => void;
 }
 
-export function GitLabMergeRequests({ projectId, onOpenSettings }: GitLabMergeRequestsProps) {
+export function GitLabMergeRequests({ projectId, onOpenSettings: _onOpenSettings }: GitLabMergeRequestsProps) {
   const [stateFilter, setStateFilter] = useState<'opened' | 'closed' | 'merged' | 'all'>('opened');
   const [showCreateDialog, setShowCreateDialog] = useState(false);
 

@@ -82,7 +82,7 @@ class AIEngineProvider(ABC):
     """Abstract base class for AI engine providers.
 
     All AI engine providers must implement this interface to work
-    with the Auto-Claude agent system. This abstraction enables:
+    with the Auto-Code agent system. This abstraction enables:
 
     - Swapping between Claude, LiteLLM, OpenRouter, etc.
     - Consistent session management across providers

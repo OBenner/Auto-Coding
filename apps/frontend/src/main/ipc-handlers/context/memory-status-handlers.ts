@@ -64,6 +64,7 @@ export async function loadGraphitiStateFromSpecs(
         const stateContent = await fsPromises.readFile(statePath, 'utf-8');
         return JSON.parse(stateContent);
       } catch {
+        // Ignore parse errors, continue to next spec directory
       }
     }
   }

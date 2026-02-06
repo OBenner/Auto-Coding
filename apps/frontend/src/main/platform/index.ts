@@ -17,6 +17,10 @@ import { existsSync } from 'fs';
 import { spawn, ChildProcess } from 'child_process';
 import { OS, ShellType, PathConfig, ShellConfig, BinaryDirectories } from './types';
 
+// Re-export types
+export { OS, ShellType } from './types';
+export type { PathConfig, ShellConfig, BinaryDirectories } from './types';
+
 // Re-export from paths.ts for backward compatibility
 export { getWindowsShellPaths, getOllamaExecutablePaths, getOllamaInstallCommand, getWhichCommand } from './paths';
 
@@ -295,6 +299,7 @@ export function isSecurePath(candidatePath: string): boolean {
     /%[^%]+%/,                   // Windows environment variable expansion
     /\.\.\//,                    // Unix directory traversal
     /\.\.\\/,                    // Windows directory traversal
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: Intentionally matching control characters for security validation
     /[\r\n\x00]/                 // Newlines (command injection), null bytes (path truncation)
   ];
 

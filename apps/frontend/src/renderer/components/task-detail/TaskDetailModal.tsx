@@ -42,6 +42,7 @@ import { TaskSubtasks } from './TaskSubtasks';
 import { TaskLogs } from './TaskLogs';
 import { TaskFiles } from './TaskFiles';
 import { TaskReview } from './TaskReview';
+import { ResourceUsageIndicator } from '../ResourceUsageIndicator';
 import type { Task, WorktreeCreatePROptions } from '../../../shared/types';
 
 interface TaskDetailModalProps {
@@ -489,6 +490,20 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
                     <div className="p-5 space-y-5 overflow-x-hidden max-w-full">
                       {/* Metadata */}
                       <TaskMetadata task={task} />
+
+                      {/* Resource Usage Indicator */}
+                      {(state.hasActiveExecution || task.executionProgress) && (
+                        <>
+                          <Separator />
+                          <div>
+                            <h3 className="text-sm font-semibold mb-3">Resource Usage</h3>
+                            <ResourceUsageIndicator
+                              progress={task.executionProgress}
+                              isRunning={state.hasActiveExecution}
+                            />
+                          </div>
+                        </>
+                      )}
 
                       {/* Human Review Section */}
                       {state.needsReview && (

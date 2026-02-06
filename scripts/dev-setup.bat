@@ -2,7 +2,7 @@
 setlocal EnableDelayedExpansion
 
 :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
-:: Auto Claude - Development Environment Setup Script (Windows)
+:: Auto Code - Development Environment Setup Script (Windows)
 :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 ::
 :: PURPOSE:
@@ -28,7 +28,7 @@ set ERRORS=0
 
 echo.
 echo ========================================================================
-echo            Auto Claude - Development Setup (Windows)
+echo            Auto Code - Development Setup (Windows)
 echo ========================================================================
 echo.
 

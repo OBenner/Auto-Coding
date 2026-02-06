@@ -142,12 +142,15 @@ class GraphitiQueries:
             )
             return False
 
-    async def add_pattern(self, pattern: str) -> bool:
+    async def add_pattern(
+        self, pattern: str, category_metadata: dict | None = None
+    ) -> bool:
         """
         Save a code pattern to the knowledge graph.
 
         Args:
             pattern: Description of the code pattern
+            category_metadata: Optional categorization metadata (category, confidence, reasoning)
 
         Returns:
             True if saved successfully
@@ -162,6 +165,14 @@ class GraphitiQueries:
                 "pattern": pattern,
             }
 
+            # Add category metadata if provided
+            if category_metadata:
+                episode_content["category"] = category_metadata.get(
+                    "category", "uncategorized"
+                )
+                episode_content["confidence"] = category_metadata.get("confidence", 0.0)
+                episode_content["reasoning"] = category_metadata.get("reasoning", "")
+
             await self.client.graphiti.add_episode(
                 name=f"pattern_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}",
                 episode_body=json.dumps(episode_content),
@@ -171,7 +182,12 @@ class GraphitiQueries:
                 group_id=self.group_id,
             )
 
-            logger.info(f"Saved pattern to Graphiti: {pattern[:50]}...")
+            category_str = (
+                f" ({category_metadata.get('category', 'uncategorized')})"
+                if category_metadata
+                else ""
+            )
+            logger.info(f"Saved pattern to Graphiti{category_str}: {pattern[:50]}...")
             return True
 
         except Exception as e:

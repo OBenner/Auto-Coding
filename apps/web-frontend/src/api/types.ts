@@ -2,7 +2,7 @@
  * API Type Definitions
  *
  * TypeScript types matching the backend Pydantic models.
- * These types ensure type safety when communicating with the Auto Claude web backend.
+ * These types ensure type safety when communicating with the Auto Code web backend.
  */
 
 // ============================================
