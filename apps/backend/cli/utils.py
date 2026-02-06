@@ -74,6 +74,20 @@ from ui import (
 DEFAULT_MODEL = "sonnet"  # Changed from "opus" (fix #433)
 
 
+def is_ci_mode() -> bool:
+    """
+    Check if running in CI/CD mode.
+
+    CI mode is enabled when the AUTO_CLAUDE_CI environment variable is set to 'true' or '1'.
+    This enables headless operation with exit codes and JSON output.
+
+    Returns:
+        True if in CI mode, False otherwise
+    """
+    ci_value = os.environ.get("AUTO_CLAUDE_CI", "").lower()
+    return ci_value in ("true", "1")
+
+
 def setup_environment() -> Path:
     """
     Set up the environment and return the script directory.
@@ -205,6 +219,12 @@ def validate_environment(spec_dir: Path) -> bool:
             print("  Status: Will be initialized during planner session")
     else:
         print("Linear integration: DISABLED (set LINEAR_API_KEY to enable)")
+
+    # Check CI mode
+    if is_ci_mode():
+        print("CI/CD mode: ENABLED (AUTO_CLAUDE_CI=true)")
+    else:
+        print("CI/CD mode: DISABLED (set AUTO_CLAUDE_CI=true to enable)")
 
     # Check Graphiti integration (optional but show status)
     # Lazy import to avoid triggering pywintypes import before validation (ACS-253)
