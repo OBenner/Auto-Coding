@@ -26,6 +26,7 @@ from .criteria import get_qa_signoff_status
 
 # Configuration
 QA_PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
+MAX_FIXER_ITERATIONS = 10  # Max recovery attempts for a single QA fix session
 
 
 # =============================================================================
@@ -123,199 +124,234 @@ async def run_qa_fixer_session(
     prompt += f"\n**IMPORTANT**: All spec files are located in: `{spec_dir}/`\n"
     prompt += f"The fix request file is at: `{spec_dir}/QA_FIX_REQUEST.md`\n"
 
-    try:
-        debug("qa_fixer", "Sending query to Claude SDK...")
-        await client.query(prompt)
-        debug_success("qa_fixer", "Query sent successfully")
-
-        response_text = ""
-        debug("qa_fixer", "Starting to receive response stream...")
-        async for msg in client.receive_response():
-            msg_type = type(msg).__name__
-            message_count += 1
-            debug_detailed(
+    # Recovery iteration loop - retry if agent gets stuck or fails
+    last_error = None
+    for fixer_iteration in range(1, MAX_FIXER_ITERATIONS + 1):
+        if fixer_iteration > 1:
+            print(f"\n{'=' * 70}")
+            print(f"  QA FIXER RECOVERY ATTEMPT {fixer_iteration}/{MAX_FIXER_ITERATIONS}")
+            print(f"{'=' * 70}\n")
+            debug(
                 "qa_fixer",
-                f"Received message #{message_count}",
-                msg_type=msg_type,
+                f"Starting recovery attempt {fixer_iteration}",
+                max_iterations=MAX_FIXER_ITERATIONS,
             )
 
-            if msg_type == "AssistantMessage" and hasattr(msg, "content"):
-                for block in msg.content:
-                    block_type = type(block).__name__
+        try:
+            debug("qa_fixer", "Sending query to Claude SDK...")
+            await client.query(prompt)
+            debug_success("qa_fixer", "Query sent successfully")
 
-                    if block_type == "TextBlock" and hasattr(block, "text"):
-                        response_text += block.text
-                        print(block.text, end="", flush=True)
-                        # Log text to task logger (persist without double-printing)
-                        if task_logger and block.text.strip():
-                            task_logger.log(
-                                block.text,
-                                LogEntryType.TEXT,
-                                LogPhase.VALIDATION,
-                                print_to_console=False,
-                            )
-                    elif block_type == "ToolUseBlock" and hasattr(block, "name"):
-                        tool_name = block.name
-                        tool_input_display = None
-                        tool_count += 1
+            response_text = ""
+            debug("qa_fixer", "Starting to receive response stream...")
+            async for msg in client.receive_response():
+                msg_type = type(msg).__name__
+                message_count += 1
+                debug_detailed(
+                    "qa_fixer",
+                    f"Received message #{message_count}",
+                    msg_type=msg_type,
+                )
 
-                        # Safely extract tool input (handles None, non-dict, etc.)
-                        inp = get_safe_tool_input(block)
+                if msg_type == "AssistantMessage" and hasattr(msg, "content"):
+                    for block in msg.content:
+                        block_type = type(block).__name__
 
-                        if inp:
-                            if "file_path" in inp:
-                                fp = inp["file_path"]
-                                if len(fp) > 50:
-                                    fp = "..." + fp[-47:]
-                                tool_input_display = fp
-                            elif "command" in inp:
-                                cmd = inp["command"]
-                                if len(cmd) > 50:
-                                    cmd = cmd[:47] + "..."
-                                tool_input_display = cmd
-
-                        debug(
-                            "qa_fixer",
-                            f"Tool call #{tool_count}: {tool_name}",
-                            tool_input=tool_input_display,
-                        )
-
-                        # Log tool start (handles printing)
-                        if task_logger:
-                            task_logger.tool_start(
-                                tool_name,
-                                tool_input_display,
-                                LogPhase.VALIDATION,
-                                print_to_console=True,
-                            )
-                        else:
-                            print(f"\n[Fixer Tool: {tool_name}]", flush=True)
-
-                        if verbose and hasattr(block, "input"):
-                            input_str = str(block.input)
-                            if len(input_str) > 300:
-                                print(f"   Input: {input_str[:300]}...", flush=True)
-                            else:
-                                print(f"   Input: {input_str}", flush=True)
-                        current_tool = tool_name
-
-            elif msg_type == "UserMessage" and hasattr(msg, "content"):
-                for block in msg.content:
-                    block_type = type(block).__name__
-
-                    if block_type == "ToolResultBlock":
-                        is_error = getattr(block, "is_error", False)
-                        result_content = getattr(block, "content", "")
-
-                        if is_error:
-                            debug_error(
-                                "qa_fixer",
-                                f"Tool error: {current_tool}",
-                                error=str(result_content)[:200],
-                            )
-                            error_str = str(result_content)[:500]
-                            print(f"   [Error] {error_str}", flush=True)
-                            if task_logger and current_tool:
-                                # Store full error in detail for expandable view
-                                task_logger.tool_end(
-                                    current_tool,
-                                    success=False,
-                                    result=error_str[:100],
-                                    detail=str(result_content),
-                                    phase=LogPhase.VALIDATION,
+                        if block_type == "TextBlock" and hasattr(block, "text"):
+                            response_text += block.text
+                            print(block.text, end="", flush=True)
+                            # Log text to task logger (persist without double-printing)
+                            if task_logger and block.text.strip():
+                                task_logger.log(
+                                    block.text,
+                                    LogEntryType.TEXT,
+                                    LogPhase.VALIDATION,
+                                    print_to_console=False,
                                 )
-                        else:
-                            debug_detailed(
+                        elif block_type == "ToolUseBlock" and hasattr(block, "name"):
+                            tool_name = block.name
+                            tool_input_display = None
+                            tool_count += 1
+
+                            # Safely extract tool input (handles None, non-dict, etc.)
+                            inp = get_safe_tool_input(block)
+
+                            if inp:
+                                if "file_path" in inp:
+                                    fp = inp["file_path"]
+                                    if len(fp) > 50:
+                                        fp = "..." + fp[-47:]
+                                    tool_input_display = fp
+                                elif "command" in inp:
+                                    cmd = inp["command"]
+                                    if len(cmd) > 50:
+                                        cmd = cmd[:47] + "..."
+                                    tool_input_display = cmd
+
+                            debug(
                                 "qa_fixer",
-                                f"Tool success: {current_tool}",
-                                result_length=len(str(result_content)),
+                                f"Tool call #{tool_count}: {tool_name}",
+                                tool_input=tool_input_display,
                             )
-                            if verbose:
-                                result_str = str(result_content)[:200]
-                                print(f"   [Done] {result_str}", flush=True)
-                            else:
-                                print("   [Done]", flush=True)
-                            if task_logger and current_tool:
-                                # Store full result in detail for expandable view
-                                detail_content = None
-                                if current_tool in (
-                                    "Read",
-                                    "Grep",
-                                    "Bash",
-                                    "Edit",
-                                    "Write",
-                                ):
-                                    result_str = str(result_content)
-                                    if len(result_str) < 50000:
-                                        detail_content = result_str
-                                task_logger.tool_end(
-                                    current_tool,
-                                    success=True,
-                                    detail=detail_content,
-                                    phase=LogPhase.VALIDATION,
+
+                            # Log tool start (handles printing)
+                            if task_logger:
+                                task_logger.tool_start(
+                                    tool_name,
+                                    tool_input_display,
+                                    LogPhase.VALIDATION,
+                                    print_to_console=True,
                                 )
+                            else:
+                                print(f"\n[Fixer Tool: {tool_name}]", flush=True)
 
-                        current_tool = None
+                            if verbose and hasattr(block, "input"):
+                                input_str = str(block.input)
+                                if len(input_str) > 300:
+                                    print(f"   Input: {input_str[:300]}...", flush=True)
+                                else:
+                                    print(f"   Input: {input_str}", flush=True)
+                            current_tool = tool_name
 
-        print("\n" + "-" * 70 + "\n")
+                elif msg_type == "UserMessage" and hasattr(msg, "content"):
+                    for block in msg.content:
+                        block_type = type(block).__name__
 
-        # Check if fixes were applied
-        status = get_qa_signoff_status(spec_dir)
-        debug(
-            "qa_fixer",
-            "Fixer session completed",
-            message_count=message_count,
-            tool_count=tool_count,
-            response_length=len(response_text),
-            ready_for_revalidation=status.get("ready_for_qa_revalidation")
-            if status
-            else False,
-        )
+                        if block_type == "ToolResultBlock":
+                            is_error = getattr(block, "is_error", False)
+                            result_content = getattr(block, "content", "")
 
-        # Save fixer session insights to memory
-        fixer_discoveries = {
-            "files_understood": {},
-            "patterns_found": [
-                f"QA fixer session {fix_session}: Applied fixes from QA_FIX_REQUEST.md"
-            ],
-            "gotchas_encountered": [],
-        }
+                            if is_error:
+                                debug_error(
+                                    "qa_fixer",
+                                    f"Tool error: {current_tool}",
+                                    error=str(result_content)[:200],
+                                )
+                                error_str = str(result_content)[:500]
+                                print(f"   [Error] {error_str}", flush=True)
+                                if task_logger and current_tool:
+                                    # Store full error in detail for expandable view
+                                    task_logger.tool_end(
+                                        current_tool,
+                                        success=False,
+                                        result=error_str[:100],
+                                        detail=str(result_content),
+                                        phase=LogPhase.VALIDATION,
+                                    )
+                            else:
+                                debug_detailed(
+                                    "qa_fixer",
+                                    f"Tool success: {current_tool}",
+                                    result_length=len(str(result_content)),
+                                )
+                                if verbose:
+                                    result_str = str(result_content)[:200]
+                                    print(f"   [Done] {result_str}", flush=True)
+                                else:
+                                    print("   [Done]", flush=True)
+                                if task_logger and current_tool:
+                                    # Store full result in detail for expandable view
+                                    detail_content = None
+                                    if current_tool in (
+                                        "Read",
+                                        "Grep",
+                                        "Bash",
+                                        "Edit",
+                                        "Write",
+                                    ):
+                                        result_str = str(result_content)
+                                        if len(result_str) < 50000:
+                                            detail_content = result_str
+                                    task_logger.tool_end(
+                                        current_tool,
+                                        success=True,
+                                        detail=detail_content,
+                                        phase=LogPhase.VALIDATION,
+                                    )
 
-        if status and status.get("ready_for_qa_revalidation"):
-            debug_success("qa_fixer", "Fixes applied, ready for QA revalidation")
-            # Save successful fix session to memory
-            await save_session_memory(
-                spec_dir=spec_dir,
-                project_dir=project_dir,
-                subtask_id=f"qa_fixer_{fix_session}",
-                session_num=fix_session,
-                success=True,
-                subtasks_completed=[f"qa_fixer_{fix_session}"],
-                discoveries=fixer_discoveries,
+                            current_tool = None
+
+            print("\n" + "-" * 70 + "\n")
+
+            # Check if fixes were applied
+            status = get_qa_signoff_status(spec_dir)
+            debug(
+                "qa_fixer",
+                "Fixer session completed",
+                message_count=message_count,
+                tool_count=tool_count,
+                response_length=len(response_text),
+                ready_for_revalidation=status.get("ready_for_qa_revalidation")
+                if status
+                else False,
             )
-            return "fixed", response_text
-        else:
-            # Fixer didn't update the status properly, but we'll trust it worked
-            debug_success("qa_fixer", "Fixes assumed applied (status not updated)")
-            # Still save to memory as successful (fixes were attempted)
-            await save_session_memory(
-                spec_dir=spec_dir,
-                project_dir=project_dir,
-                subtask_id=f"qa_fixer_{fix_session}",
-                session_num=fix_session,
-                success=True,
-                subtasks_completed=[f"qa_fixer_{fix_session}"],
-                discoveries=fixer_discoveries,
-            )
-            return "fixed", response_text
 
-    except Exception as e:
-        debug_error(
-            "qa_fixer",
-            f"Fixer session exception: {e}",
-            exception_type=type(e).__name__,
-        )
-        print(f"Error during fixer session: {e}")
-        if task_logger:
-            task_logger.log_error(f"QA fixer error: {e}", LogPhase.VALIDATION)
-        return "error", str(e)
+            # Save fixer session insights to memory
+            fixer_discoveries = {
+                "files_understood": {},
+                "patterns_found": [
+                    f"QA fixer session {fix_session}: Applied fixes from QA_FIX_REQUEST.md"
+                ],
+                "gotchas_encountered": [],
+            }
+
+            if status and status.get("ready_for_qa_revalidation"):
+                debug_success("qa_fixer", "Fixes applied, ready for QA revalidation")
+                # Save successful fix session to memory
+                await save_session_memory(
+                    spec_dir=spec_dir,
+                    project_dir=project_dir,
+                    subtask_id=f"qa_fixer_{fix_session}",
+                    session_num=fix_session,
+                    success=True,
+                    subtasks_completed=[f"qa_fixer_{fix_session}"],
+                    discoveries=fixer_discoveries,
+                )
+                return "fixed", response_text
+            else:
+                # Fixer didn't update the status properly, but we'll trust it worked
+                debug_success("qa_fixer", "Fixes assumed applied (status not updated)")
+                # Still save to memory as successful (fixes were attempted)
+                await save_session_memory(
+                    spec_dir=spec_dir,
+                    project_dir=project_dir,
+                    subtask_id=f"qa_fixer_{fix_session}",
+                    session_num=fix_session,
+                    success=True,
+                    subtasks_completed=[f"qa_fixer_{fix_session}"],
+                    discoveries=fixer_discoveries,
+                )
+                return "fixed", response_text
+
+        except Exception as e:
+            last_error = str(e)
+            debug_error(
+                "qa_fixer",
+                f"Fixer session exception (attempt {fixer_iteration}/{MAX_FIXER_ITERATIONS}): {e}",
+                exception_type=type(e).__name__,
+            )
+            print(f"Error during fixer session: {e}")
+            if task_logger:
+                task_logger.log_error(f"QA fixer error: {e}", LogPhase.VALIDATION)
+
+            # If this is the last iteration, return error
+            if fixer_iteration == MAX_FIXER_ITERATIONS:
+                debug_error(
+                    "qa_fixer",
+                    f"Max fixer iterations ({MAX_FIXER_ITERATIONS}) reached, giving up",
+                )
+                return "error", last_error
+
+            # Otherwise, continue to next iteration
+            debug(
+                "qa_fixer",
+                f"Will retry (attempt {fixer_iteration + 1}/{MAX_FIXER_ITERATIONS})",
+            )
+            continue
+
+    # If we exhausted all iterations without success
+    debug_error(
+        "qa_fixer",
+        f"Exhausted all {MAX_FIXER_ITERATIONS} fixer iterations without success",
+    )
+    return "error", last_error if last_error else "Max fixer iterations reached"
