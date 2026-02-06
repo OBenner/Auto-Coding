@@ -53,6 +53,7 @@ from .input_handlers import (
     read_from_file,
     read_multiline_input,
 )
+from .utils import is_ci_mode
 
 
 def handle_build_command(
@@ -99,6 +100,9 @@ def handle_build_command(
     from qa_loop import run_qa_validation_loop, should_run_qa
 
     from .utils import print_banner, validate_environment
+
+    # Determine if we should skip interactive prompts (CI mode or auto-continue)
+    non_interactive = auto_continue or is_ci_mode()
 
     # Track build start time for JSON output
     build_start_time = time.time()
@@ -182,10 +186,10 @@ def handle_build_command(
 
     # Check for existing build
     if get_existing_build_worktree(project_dir, spec_dir.name):
-        if auto_continue:
+        if non_interactive:
             # Non-interactive mode: auto-continue with existing build
-            debug("run.py", "Auto-continue mode: continuing with existing build")
-            print("Auto-continue: Resuming existing build...")
+            debug("run.py", "Non-interactive mode: continuing with existing build")
+            print("Non-interactive: Resuming existing build...")
         else:
             continue_existing = check_existing_build(project_dir, spec_dir.name)
             if continue_existing:
@@ -200,13 +204,13 @@ def handle_build_command(
     worktree_manager = None
     source_spec_dir = None  # Track original spec dir for syncing back from worktree
 
-    # Let user choose workspace mode (or auto-select if --auto-continue)
+    # Let user choose workspace mode (or auto-select if --auto-continue or CI mode)
     workspace_mode = choose_workspace(
         project_dir,
         spec_dir.name,
         force_isolated=force_isolated,
         force_direct=force_direct,
-        auto_continue=auto_continue,
+        auto_continue=non_interactive,
     )
 
     # If base_branch not provided via CLI, try to read from task_metadata.json
@@ -313,7 +317,7 @@ def handle_build_command(
                 project_dir,
                 spec_dir.name,
                 worktree_manager,
-                auto_continue=auto_continue,
+                auto_continue=non_interactive,
             )
             handle_workspace_choice(
                 choice, project_dir, spec_dir.name, worktree_manager
@@ -329,6 +333,7 @@ def handle_build_command(
             max_iterations=max_iterations,
             verbose=verbose,
             json_mode=json_mode,
+            non_interactive=non_interactive,
         )
     except Exception as e:
         error_message = str(e)
@@ -408,6 +413,7 @@ def _handle_build_interrupt(
     max_iterations: int | None,
     verbose: bool,
     json_mode: bool = False,
+    non_interactive: bool = False,
 ) -> None:
     """
     Handle keyboard interrupt during build.
@@ -421,6 +427,7 @@ def _handle_build_interrupt(
         max_iterations: Maximum iterations
         verbose: Verbose mode flag
         json_mode: Enable JSON output mode
+        non_interactive: Skip interactive prompts (CI mode or auto-continue)
     """
     from agent import run_autonomous_agent
 
@@ -430,6 +437,22 @@ def _handle_build_interrupt(
     # Update status file
     status_manager = StatusManager(project_dir)
     status_manager.update(state=BuildState.PAUSED)
+
+    # In non-interactive mode (CI or auto-continue), exit immediately
+    if non_interactive:
+        print()
+        print_status("Build interrupted in non-interactive mode. Exiting...", "warning")
+        status_manager.set_inactive()
+        if json_mode:
+            json_output = format_build_result(
+                status=ExitCode.SUCCESS,
+                spec_name=spec_dir.name,
+                exit_code=ExitCode.SUCCESS,
+                duration_seconds=None,
+                error_message="Build interrupted in non-interactive mode",
+            )
+            print(json_output)
+        sys.exit(ExitCode.SUCCESS)
 
     # Offer to add human input with enhanced menu
     try:
