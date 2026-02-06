@@ -204,7 +204,26 @@ For production deployments with browser access:
 
 **Best for:** Quick start, single-server, testing, small teams
 
+#### Prerequisites
+
+Before starting, ensure you have:
+- **Docker Engine 20.10+** and **Docker Compose 2.0+** installed
+- **Git** for cloning the repository
+- **OpenSSL** for generating secure secrets
+- **Ports 8000, 5432, and 6379** available
+- At least **4GB RAM** and **20GB disk space** (see [Resource Requirements](../infrastructure/RESOURCE_REQUIREMENTS.md))
+
+```bash
+# Verify prerequisites
+docker --version        # Docker 20.10+
+docker-compose --version  # Docker Compose 2.0+
+git --version           # Git 2.0+
+openssl version         # OpenSSL 1.1+
+```
+
 #### Quick Start
+
+Get Auto Code running in under 5 minutes:
 
 ```bash
 # 1. Clone repository
@@ -222,167 +241,286 @@ export SECRET_KEY=$(openssl rand -hex 32)
 export POSTGRES_PASSWORD=$(openssl rand -base64 32)
 
 # 5. Update .env with secrets
-echo "SECRET_KEY=$SECRET_KEY" >> .env
-echo "POSTGRES_PASSWORD=$POSTGRES_PASSWORD" >> .env
+sed -i.bak "s/SECRET_KEY=.*/SECRET_KEY=$SECRET_KEY/" .env
+sed -i.bak "s/postgres:postgres@postgres/postgres:$POSTGRES_PASSWORD@postgres/" .env
 
 # 6. Start services
 docker-compose up -d
 
-# 7. Initialize database
-docker-compose exec backend alembic upgrade head
+# 7. Wait for services to be healthy (up to 60 seconds)
+echo "Waiting for services to start..."
+sleep 30
 
-# 8. Verify deployment
+# 8. Check service status
+docker-compose ps
+
+# 9. Verify deployment
 curl http://localhost:8000/health
+
+# Expected response:
+# {"status":"healthy","database":"connected","redis":"connected"}
 ```
+
+**If everything looks good**, skip to [Verification](#verification). If you encountered issues, see the [Troubleshooting](#docker-compose-troubleshooting) section below.
 
 #### Detailed Configuration
 
-**1. Create `.env` file:**
+For production deployments or custom configurations, follow this detailed setup.
+
+**Step 1: Create `.env` file**
 
 ```bash
 cd infrastructure
 cp .env.example .env
 ```
 
-**2. Edit `.env` with your settings:**
+**Step 2: Generate secure secrets**
+
+```bash
+# Generate SECRET_KEY for JWT signing (64 hex characters)
+export SECRET_KEY=$(openssl rand -hex 32)
+
+# Generate POSTGRES_PASSWORD (secure random password)
+export POSTGRES_PASSWORD=$(openssl rand -base64 32 | tr -d "=+/" | cut -c1-32)
+
+# (Optional) Generate REDIS_PASSWORD
+export REDIS_PASSWORD=$(openssl rand -base64 16 | tr -d "=+/" | cut -c1-16)
+
+# Display generated passwords (save these securely!)
+echo "SECRET_KEY=$SECRET_KEY"
+echo "POSTGRES_PASSWORD=$POSTGRES_PASSWORD"
+echo "REDIS_PASSWORD=$REDIS_PASSWORD"
+```
+
+**Step 3: Edit `.env` with your settings**
+
+Open `.env` in your editor and configure the following:
 
 ```env
 # =============================================================================
 # SERVER CONFIGURATION
 # =============================================================================
-
+# Server host (0.0.0.0 listens on all interfaces)
 HOST=0.0.0.0
+
+# Server port (default: 8000)
 PORT=8000
+
+# Debug mode - set to "false" in production!
 DEBUG=false
+
+# Logging level: DEBUG, INFO, WARNING, ERROR, CRITICAL
 LOG_LEVEL=INFO
 
 # =============================================================================
-# SECURITY
+# SECURITY (REQUIRED)
 # =============================================================================
-
 # CRITICAL: Generate with: openssl rand -hex 32
-SECRET_KEY=your-generated-secret-key-here
+# This is used for JWT token signing - keep it secret!
+SECRET_KEY=your-64-char-hex-secret-key-here
+
+# JWT access token expiration time in minutes
+ACCESS_TOKEN_EXPIRE_MINUTES=60
 
 # =============================================================================
-# DATABASE CONFIGURATION
+# DATABASE CONFIGURATION (REQUIRED)
 # =============================================================================
-
-# PostgreSQL (Docker Compose)
+# PostgreSQL connection URL for Docker Compose
+# Format: postgresql://user:password@host:port/database
 DATABASE_URL=postgresql://postgres:your-postgres-password@postgres:5432/autoclaude
 
 # =============================================================================
 # REDIS CONFIGURATION
 # =============================================================================
-
+# Redis hostname (service name in docker-compose)
 REDIS_HOST=redis
+
+# Redis port
 REDIS_PORT=6379
+
+# Redis database number
 REDIS_DB=0
+
+# Redis password (optional but recommended for production)
+# Leave empty if not using password authentication
 REDIS_PASSWORD=
 
 # =============================================================================
 # CORS CONFIGURATION
 # =============================================================================
-
-# For self-hosted with local frontend
-CORS_ORIGINS=http://localhost:3000,http://localhost:8000
+# Allowed CORS origins (comma-separated list)
+# For self-hosted with local frontend, include frontend URL
+# For web deployment, include your domain
+CORS_ORIGINS=http://localhost:3000,http://localhost:8000,https://autoclaude.yourcompany.com
 
 # =============================================================================
-# AI PROVIDER (Anthropic Claude API)
+# AI PROVIDER (Optional - for AI features)
 # =============================================================================
-
-# Get API key from: https://console.anthropic.com/
+# Anthropic Claude API key for AI-powered features
+# Get your API key from: https://console.anthropic.com/
+# Leave empty to disable AI features (air-gapped mode)
 ANTHROPIC_API_KEY=your-anthropic-api-key-here
 
 # =============================================================================
 # OAUTH CONFIGURATION (Optional - for Git provider integration)
 # =============================================================================
-
-# GitHub/GitLab OAuth (if using cloud Git providers)
+# GitHub OAuth credentials (for GitHub.com or GitHub Enterprise)
+# Register app at: https://github.com/settings/developers
 GITHUB_CLIENT_ID=
 GITHUB_CLIENT_SECRET=
+
+# GitLab OAuth credentials (for GitLab.com or self-hosted GitLab)
+# Register app at: https://gitlab.com/-/profile/applications
 GITLAB_CLIENT_ID=
 GITLAB_CLIENT_SECRET=
+
+# OAuth redirect URI (must match your deployment URL)
+OAUTH_REDIRECT_URI=http://localhost:8000/api/git/callback
+
+# For internal GitLab/GitHub Enterprise, override default URLs:
+# GITLAB_URL=https://gitlab.yourcompany.com
+# GITHUB_URL=https://github.yourcompany.com
 
 # =============================================================================
 # TELEMETRY CONFIGURATION
 # =============================================================================
-
-# Disable all telemetry for privacy
+# Disable all telemetry for privacy (recommended for self-hosted)
 DISABLE_TELEMETRY=true
 
 # =============================================================================
 # WORKSPACE CONFIGURATION
 # =============================================================================
-
 # Default workspace location (mounted volume)
 WORKSPACE_DIR=/workspace
 
 # =============================================================================
 # WEBSOCKET CONFIGURATION
 # =============================================================================
-
+# WebSocket heartbeat interval in seconds
+# Helps detect disconnected clients
 WS_HEARTBEAT_INTERVAL=30
 ```
 
-**3. Create `docker-compose.yml`:**
+**Important Notes:**
+- **SECRET_KEY**: Never use the default value in production. Generate a secure random key.
+- **POSTGRES_PASSWORD**: Use a strong password. The default "postgres" is only for development.
+- **ANTHROPIC_API_KEY**: Required for AI features. Can be omitted in air-gapped environments.
+- **CORS_ORIGINS**: Must include all frontend URLs that will access the backend.
+- **DISABLE_TELEMETRY**: Set to `true` for privacy or compliance requirements.
+
+**Step 4: Create `docker-compose.yml`**
+
+Create `infrastructure/docker-compose.yml` with the following configuration:
 
 ```yaml
 version: '3.8'
 
 services:
-  backend:
-    image: autoclaude/backend:latest
-    container_name: autoclaude-backend
-    restart: unless-stopped
-    ports:
-      - "8000:8000"
-    environment:
-      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/autoclaude
-      - REDIS_HOST=redis
-      - SECRET_KEY=${SECRET_KEY}
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      - DISABLE_TELEMETRY=${DISABLE_TELEMETRY:-true}
-    volumes:
-      - workspace_data:/workspace
-      - ./specs:/app/specs
-    depends_on:
-      - postgres
-      - redis
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-
+  # PostgreSQL database for user data and repositories
   postgres:
     image: postgres:16-alpine
     container_name: autoclaude-postgres
-    restart: unless-stopped
     environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_DB=autoclaude
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: autoclaude
+      POSTGRES_INITDB_ARGS: "-E UTF8"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - autoclaude-network
+    restart: unless-stopped
 
+  # Redis for usage tracking and caching
   redis:
     image: redis:7-alpine
     container_name: autoclaude-redis
-    restart: unless-stopped
     command: redis-server --appendonly yes
     volumes:
       - redis_data:/data
+    ports:
+      - "6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - autoclaude-network
+    restart: unless-stopped
+
+  # Auto Code backend API
+  backend:
+    image: autoclaude/backend:latest
+    container_name: autoclaude-backend
+    environment:
+      # Server configuration
+      HOST: 0.0.0.0
+      PORT: 8000
+      DEBUG: "false"
+      LOG_LEVEL: INFO
+
+      # CORS configuration
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://localhost:8000}
+
+      # Authentication
+      SECRET_KEY: ${SECRET_KEY}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-60}
+
+      # Database configuration (connects to postgres service)
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/autoclaude
+
+      # Redis configuration (connects to redis service)
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_DB: 0
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+
+      # OAuth configuration
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
+      GITLAB_CLIENT_ID: ${GITLAB_CLIENT_ID:-}
+      GITLAB_CLIENT_SECRET: ${GITLAB_CLIENT_SECRET:-}
+      OAUTH_REDIRECT_URI: ${OAUTH_REDIRECT_URI:-http://localhost:8000/api/git/callback}
+
+      # WebSocket configuration
+      WS_HEARTBEAT_INTERVAL: ${WS_HEARTBEAT_INTERVAL:-30}
+
+      # Telemetry
+      DISABLE_TELEMETRY: ${DISABLE_TELEMETRY:-true}
+
+      # AI Provider (optional)
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - autoclaude-network
+    restart: unless-stopped
+    volumes:
+      - workspace_data:/workspace
+      - ./specs:/app/specs
+
+networks:
+  autoclaude-network:
+    driver: bridge
 
 volumes:
   postgres_data:
@@ -393,39 +531,70 @@ volumes:
     driver: local
 ```
 
-**4. Start services:**
+**Key Features of This Configuration:**
+
+1. **Health Checks**: All services have health checks to ensure they're running properly
+2. **Service Dependencies**: Backend waits for PostgreSQL and Redis to be healthy before starting
+3. **Persistent Volumes**: Data persists across container restarts
+4. **Network Isolation**: Services communicate on a private bridge network
+5. **Environment Variable Defaults**: Uses `${VAR:-default}` syntax for safe defaults
+6. **Restart Policies**: Services automatically restart on failure (unless manually stopped)
+7. **UTF8 Database**: PostgreSQL initialized with UTF-8 encoding for international character support
+
+**Step 5: Start services**
 
 ```bash
-# Start all services
+# Start all services in detached mode (background)
 docker-compose up -d
+
+# Expected output:
+# Creating network "infrastructure_autoclaude-network"  ... done
+# Creating volume "infrastructure_postgres_data"        ... done
+# Creating volume "infrastructure_redis_data"           ... done
+# Creating volume "infrastructure_workspace_data"       ... done
+# Creating autoclaude-postgres                          ... done
+# Creating autoclaude-redis                             ... done
+# Creating autoclaude-backend                           ... done
+```
+
+**Step 6: Monitor service startup**
+
+```bash
+# Watch logs in real-time (Ctrl+C to exit)
+docker-compose logs -f
+
+# Or watch specific service
+docker-compose logs -f backend
 
 # Check service status
 docker-compose ps
 
-# View logs
-docker-compose logs -f backend
-
-# Expected output:
+# Expected output (after services are healthy):
 # NAME                    STATUS              PORTS
 # autoclaude-backend      running (healthy)   0.0.0.0:8000->8000/tcp
 # autoclaude-postgres     running (healthy)   5432/tcp
 # autoclaude-redis        running (healthy)   6379/tcp
 ```
 
-**5. Initialize database:**
+**Note**: It may take 30-60 seconds for all services to become healthy. The backend service waits for PostgreSQL and Redis to be healthy before starting.
+
+**Step 7: Initialize database**
 
 ```bash
 # Run database migrations
 docker-compose exec backend alembic upgrade head
 
-# Verify migrations
+# Expected output:
+# INFO  [alembic.runtime.migration] Running upgrade ->  <revision_id>
+
+# Verify migrations completed successfully
 docker-compose exec backend alembic current
 
 # Expected output:
-# INFO  [alembic.runtime.migration] Running upgrade -> <latest-revision>
+# INFO  [alembic.runtime.migration] Current revision(s): <revision_id>
 ```
 
-**6. Access the deployment:**
+**Step 8: Verify deployment**
 
 ```bash
 # Test health endpoint
@@ -433,44 +602,263 @@ curl http://localhost:8000/health
 
 # Expected response:
 # {"status":"healthy","database":"connected","redis":"connected"}
+
+# Test with verbose output (for debugging)
+curl -v http://localhost:8000/health
+
+# Check all service health
+docker-compose ps
+
+# View recent backend logs
+docker-compose logs --tail=50 backend
 ```
+
+**Success Indicators:**
+- ✅ All three services show `running (healthy)` status
+- ✅ Health endpoint returns `{"status":"healthy",...}`
+- ✅ No error messages in logs
+- ✅ Database migrations completed successfully
 
 #### Managing the Deployment
 
 **Stop services:**
 ```bash
+# Stop all services (preserves data)
 docker-compose down
+
+# Expected output:
+# Stopping autoclaude-backend    ... done
+# Stopping autoclaude-redis      ... done
+# Stopping autoclaude-postgres   ... done
+# Removing network infrastructure_autoclaude-network  ... done
 ```
 
-**Stop and remove data:**
+**Stop and remove all data (⚠️ WARNING: Deletes all data):**
 ```bash
+# Stop services and remove volumes (deletes database, workspace data)
 docker-compose down -v
+
+# ⚠️ Use this only if you want to completely reset the deployment
+# All your data will be lost!
 ```
 
-**View logs:**
+**Start services:**
 ```bash
-# All services
-docker-compose logs -f
+# Start all services
+docker-compose up -d
 
-# Specific service
-docker-compose logs -f backend
+# Start specific service
+docker-compose up -d backend
 ```
 
 **Restart services:**
 ```bash
+# Restart all services
+docker-compose restart
+
+# Restart specific service
 docker-compose restart backend
+
+# Restart with force (recreate container)
+docker-compose up -d --force-recreate backend
+```
+
+**View logs:**
+```bash
+# Follow all logs (real-time)
+docker-compose logs -f
+
+# Follow specific service logs
+docker-compose logs -f backend
+
+# View last 100 lines
+docker-compose logs --tail=100 backend
+
+# View logs with timestamps
+docker-compose logs -t backend
+
+# View logs since a specific time
+docker-compose logs --since 2024-01-01T10:00:00 backend
 ```
 
 **Update to latest version:**
 ```bash
-# Pull new images
+# 1. Pull new images
 docker-compose pull
 
-# Recreate containers
+# 2. Stop services
+docker-compose down
+
+# 3. Start with new images
 docker-compose up -d
 
-# Run migrations
+# 4. Run database migrations
 docker-compose exec backend alembic upgrade head
+
+# 5. Verify deployment
+curl http://localhost:8000/health
+```
+
+**Backup and restore:**
+
+```bash
+# Backup PostgreSQL database
+docker-compose exec postgres pg_dump -U postgres autoclaude > backup.sql
+
+# Restore PostgreSQL database
+docker-compose exec -T postgres psql -U postgres autoclaude < backup.sql
+
+# Backup workspace data
+docker run --rm -v infrastructure_workspace_data:/data -v $(pwd):/backup \
+  alpine tar czf /backup/workspace-backup.tar.gz -C /data .
+
+# Restore workspace data
+docker run --rm -v infrastructure_workspace_data:/data -v $(pwd):/backup \
+  alpine tar xzf /backup/workspace-backup.tar.gz -C /data
+```
+
+**Check resource usage:**
+```bash
+# View container resource usage
+docker stats
+
+# View disk usage
+docker system df
+
+# View volume details
+docker volume ls
+docker volume inspect infrastructure_postgres_data
+```
+
+---
+
+#### Docker Compose Troubleshooting
+
+**Problem: Services fail to start**
+
+```bash
+# Check service status
+docker-compose ps
+
+# View logs for errors
+docker-compose logs
+
+# Common issues:
+# - Port already in use: Change port mapping in docker-compose.yml
+# - Volume permission error: Run with appropriate permissions
+# - Image not found: Run `docker-compose pull` first
+```
+
+**Problem: Backend service unhealthy**
+
+```bash
+# Check backend health status
+docker-compose ps
+
+# View backend logs
+docker-compose logs backend
+
+# Common causes:
+# 1. Database connection failed → Check postgres is healthy
+# 2. Redis connection failed → Check redis is healthy
+# 3. SECRET_KEY not set → Check .env file
+# 4. Port 8000 already in use → lsof -i :8000 to find process
+
+# Manually test health endpoint from inside container
+docker-compose exec backend python -c "import requests; print(requests.get('http://localhost:8000/health').json())"
+```
+
+**Problem: Database migrations fail**
+
+```bash
+# Check database connection
+docker-compose exec backend python -c "
+from sqlalchemy import create_engine
+engine = create_engine('postgresql://postgres:postgres@postgres:5432/autoclaude')
+print(engine.connect())
+"
+
+# Reset database (⚠️ WARNING: Deletes all data)
+docker-compose exec postgres psql -U postgres -c "DROP DATABASE IF EXISTS autoclaude;"
+docker-compose exec postgres psql -U postgres -c "CREATE DATABASE autoclaude;"
+docker-compose exec backend alembic upgrade head
+```
+
+**Problem: High memory usage**
+
+```bash
+# Check resource usage
+docker stats
+
+# Limit memory in docker-compose.yml:
+services:
+  backend:
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
+```
+
+**Problem: Can't access backend from host**
+
+```bash
+# Verify service is running
+docker-compose ps
+
+# Check port mapping
+docker port autoclaude-backend
+
+# Test from inside container
+docker-compose exec backend curl http://localhost:8000/health
+
+# Test from host
+curl http://localhost:8000/health
+
+# If failing, check:
+# 1. Firewall settings
+# 2. Port 8000 not blocked
+# 3. Correct port mapping in docker-compose.yml
+```
+
+**Problem: Logs show "Telemetry disabled" but you want it enabled**
+
+```bash
+# Edit .env file
+nano .env
+
+# Change:
+# DISABLE_TELEMETRY=true
+# To:
+# DISABLE_TELEMETRY=false
+
+# Restart backend
+docker-compose restart backend
+```
+
+**Problem: Need to completely reset deployment**
+
+```bash
+# Stop and remove everything (⚠️ DELETES ALL DATA)
+docker-compose down -v
+
+# Remove images (optional)
+docker rmi autoclaude/backend:latest
+
+# Start fresh
+docker-compose up -d
+```
+
+**Get detailed diagnostics:**
+
+```bash
+# Export full diagnostics for support
+docker-compose > diagnostics.txt
+docker ps >> diagnostics.txt
+docker stats --no-stream >> diagnostics.txt
+docker system df >> diagnostics.txt
+docker-compose logs >> diagnostics-full.log
 ```
 
 ---
