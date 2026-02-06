@@ -11,11 +11,15 @@ from integrations.knowledge_base.config import (
     KnowledgeBaseConfig,
     KnowledgeBaseState,
 )
-from integrations.knowledge_base.connectors import NotionConnector
+from integrations.knowledge_base.connectors import (
+    ConfluenceConnector,
+    NotionConnector,
+)
 
 __all__ = [
     "BaseConnector",
     "KnowledgeBaseConfig",
     "KnowledgeBaseState",
+    "ConfluenceConnector",
     "NotionConnector",
 ]
