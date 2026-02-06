@@ -101,6 +101,31 @@ def _create_openrouter_provider(config: "ProviderConfig") -> "AIEngineProvider":
     return OpenRouterProvider(config)
 
 
+def _create_zhipuai_provider(config: "ProviderConfig") -> "AIEngineProvider":
+    """
+    Create a Zhipu AI provider.
+
+    Args:
+        config: ProviderConfig with Zhipu AI settings
+
+    Returns:
+        ZhipuAIProvider instance
+
+    Raises:
+        ProviderNotInstalled: If zai-sdk package is not installed
+        ProviderError: If provider creation fails
+    """
+    try:
+        from core.providers.adapters.zhipuai import ZhipuAIProvider
+    except ImportError as e:
+        raise ProviderNotInstalled(
+            "ZhipuAI adapter not installed. Install with: pip install zai-sdk"
+        ) from e
+
+    logger.debug(f"Creating ZhipuAI provider with model: {config.zhipuai_model}")
+    return ZhipuAIProvider(config)
+
+
 def create_engine_provider(config: "ProviderConfig") -> "AIEngineProvider":
     """
     Create an AI engine provider based on configuration.
@@ -139,10 +164,12 @@ def create_engine_provider(config: "ProviderConfig") -> "AIEngineProvider":
         return _create_litellm_provider(config)
     elif provider == "openrouter":
         return _create_openrouter_provider(config)
+    elif provider == "zhipuai":
+        return _create_zhipuai_provider(config)
     else:
         raise ProviderError(
             f"Unknown AI engine provider: {provider}. "
-            f"Supported providers: claude, litellm, openrouter"
+            f"Supported providers: claude, litellm, openrouter, zhipuai"
         )
 
 
@@ -153,4 +180,4 @@ def get_available_provider_names() -> list[str]:
     Returns:
         List of provider name strings
     """
-    return ["claude", "litellm", "openrouter"]
+    return ["claude", "litellm", "openrouter", "zhipuai"]
