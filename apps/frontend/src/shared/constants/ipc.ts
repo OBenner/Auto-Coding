@@ -199,6 +199,11 @@ export const IPC_CHANNELS = {
   CONTEXT_GET_PATTERN_SUGGESTIONS: 'context:getPatternSuggestions',
   CONTEXT_CONFIRM_PATTERN: 'context:confirmPattern',
 
+  // Knowledge Base operations
+  KNOWLEDGE_BASE_GET_CONFIG: 'knowledgeBase:getConfig',
+  KNOWLEDGE_BASE_UPDATE_CONFIG: 'knowledgeBase:updateConfig',
+  KNOWLEDGE_BASE_TEST_CONNECTION: 'knowledgeBase:testConnection',
+
   // Environment configuration
   ENV_GET: 'env:get',
   ENV_UPDATE: 'env:update',
