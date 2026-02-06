@@ -241,7 +241,8 @@ class CodeReviewService:
 
         # Extract file paths from context
         if changed_files is None:
-            changed_files = [f.path for f in context.changed_files]
+            # Handle both object.path and plain strings
+            changed_files = [getattr(f, 'path', f) for f in context.changed_files]
 
         # Run security scan
         spec_dir = self.github_dir / "pr" / f"pr_{getattr(context, 'pr_number', 0)}"
@@ -354,7 +355,8 @@ class CodeReviewService:
 
         category_counts = {}
         for finding in findings:
-            cat = finding.category.value
+            # Handle both enum.value and plain string
+            cat = getattr(finding.category, 'value', finding.category)
             category_counts[cat] = category_counts.get(cat, 0) + 1
 
         return {

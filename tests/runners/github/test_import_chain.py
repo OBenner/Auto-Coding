@@ -115,8 +115,8 @@ class TestImportChain:
             sys.path.insert(0, str(backend_dir))
             sys.path.insert(0, str(runners_dir))
 
-            # This is how runner.py would import it
-            from services.code_review_service import CodeReviewService
+            # Use absolute import path
+            from runners.github.services.code_review_service import CodeReviewService
 
             assert CodeReviewService is not None
 

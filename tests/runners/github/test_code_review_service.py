@@ -353,7 +353,7 @@ class TestSecretConversion:
 
         finding = service._convert_secret_to_finding(secret)
 
-        assert "Secret detected: AWS Access Key" in finding.title
+        assert "Detected secret: AWS Access Key" in finding.title
         assert finding.severity == ReviewSeverity.CRITICAL  # Always critical
         assert finding.category == ReviewCategory.SECURITY
         assert finding.file == "config/settings.py"
@@ -388,9 +388,12 @@ class TestReviewCodeChanges:
             "runners.github.services.code_review_service.SecurityScanner"
         ) as MockScanner:
             mock_scanner_instance = MagicMock()
-            mock_scanner_instance.scan_project = MagicMock(
-                return_value=[sample_vulnerability]
-            )
+            # Mock scan() method (not scan_project)
+            mock_scan_result = MagicMock()
+            mock_scan_result.vulnerabilities = [sample_vulnerability]
+            mock_scan_result.secrets = []
+            mock_scan_result.errors = []
+            mock_scanner_instance.scan = MagicMock(return_value=mock_scan_result)
             MockScanner.return_value = mock_scanner_instance
 
             service = CodeReviewService(project_dir, github_dir, mock_config)
@@ -481,10 +484,12 @@ class TestPostReviewToGitHub:
             mock_gh_instance.pr_review.assert_called_once()
             call_args = mock_gh_instance.pr_review.call_args
 
-            # Should be REQUEST_CHANGES for critical issues
-            assert "REQUEST_CHANGES" in str(call_args) or call_args[1].get(
-                "event"
-            ) in ["REQUEST_CHANGES", "request_changes"]
+            # Should be request-changes for critical issues
+            assert call_args[1].get("event") in [
+                "REQUEST_CHANGES",
+                "request_changes",
+                "request-changes",
+            ]
 
     @pytest.mark.asyncio
     async def test_post_review_with_low_findings(self, test_env, mock_config):
