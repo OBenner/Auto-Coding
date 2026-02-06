@@ -57,6 +57,85 @@ from .input_handlers import (
 from .utils import is_ci_mode
 
 
+def _generate_test_report_data(
+    spec_dir: Path,
+    qa_approved: bool,
+) -> dict[str, Any]:
+    """
+    Generate test report data from QA results.
+
+    Collects QA iteration history, test generation info, and approval status
+    for CI/CD artifact generation.
+
+    Args:
+        spec_dir: Spec directory
+        qa_approved: Whether QA approved the build
+
+    Returns:
+        Dictionary with test report data for artifact manager
+    """
+    import json
+
+    # Load implementation plan to get QA stats
+    impl_plan_path = spec_dir / "implementation_plan.json"
+    qa_stats = {}
+    iteration_history = []
+
+    if impl_plan_path.exists():
+        try:
+            with open(impl_plan_path, encoding="utf-8") as f:
+                impl_plan = json.load(f)
+            qa_stats = impl_plan.get("qa_stats", {})
+            iteration_history = impl_plan.get("qa_iteration_history", [])
+        except (OSError, json.JSONDecodeError):
+            pass
+
+    # Count iterations by status
+    iterations_approved = sum(1 for it in iteration_history if it.get("status") == "approved")
+    iterations_rejected = sum(1 for it in iteration_history if it.get("status") == "rejected")
+    iterations_error = sum(1 for it in iteration_history if it.get("status") == "error")
+    total_iterations = len(iteration_history)
+
+    # Count total issues found
+    total_issues = sum(len(it.get("issues", [])) for it in iteration_history)
+
+    # Check for generated tests
+    generated_tests_dir = spec_dir / "generated_tests_review"
+    generated_test_count = 0
+    if generated_tests_dir.exists():
+        generated_test_count = sum(
+            1 for f in generated_tests_dir.iterdir() if f.is_file() and f.suffix == ".py"
+        )
+
+    # Build test report data
+    test_report_data = {
+        "qaApproved": qa_approved,
+        "totalIterations": total_iterations,
+        "iterationsApproved": iterations_approved,
+        "iterationsRejected": iterations_rejected,
+        "iterationsError": iterations_error,
+        "totalIssues": total_issues,
+        "generatedTests": generated_test_count,
+    }
+
+    # Add issue breakdown if available
+    issues_by_type = qa_stats.get("issues_by_type", {})
+    if issues_by_type:
+        test_report_data["issuesByType"] = issues_by_type
+
+    # Add duration summary if available
+    durations = [
+        it.get("duration_seconds", 0)
+        for it in iteration_history
+        if it.get("duration_seconds") is not None
+    ]
+    if durations:
+        test_report_data["totalDuration"] = round(sum(durations), 2)
+        test_report_data["averageDuration"] = round(sum(durations) / len(durations), 2)
+
+    return test_report_data
+
+
 def handle_build_command(
     project_dir: Path,
     spec_dir: Path,
@@ -305,6 +384,11 @@ def handle_build_command(
                         f"\nResume QA: python auto-claude/run.py --spec {spec_dir.name} --qa\n"
                     )
 
+                # Generate test report artifact for CI mode
+                if artifact_manager:
+                    test_report_data = _generate_test_report_data(spec_dir, qa_approved)
+                    artifact_manager.save_test_report(test_report_data)
+
                 # Sync implementation plan to main project after QA
                 # This ensures the main project has the latest status (human_review)
                 if sync_spec_to_source(spec_dir, source_spec_dir):
@@ -315,6 +399,11 @@ def handle_build_command(
                 print("\n\nQA validation paused.")
                 print(f"Resume: python auto-claude/run.py --spec {spec_dir.name} --qa")
                 qa_approved = False
+
+                # Generate test report artifact even on interrupt
+                if artifact_manager:
+                    test_report_data = _generate_test_report_data(spec_dir, qa_approved)
+                    artifact_manager.save_test_report(test_report_data)
 
         # Post-build finalization (only for isolated sequential mode)
         # This happens AFTER QA validation so the worktree still exists
@@ -434,6 +523,11 @@ def handle_build_command(
             build_log_path = artifact_manager.save_build_log(build_log_data)
             if build_log_path:
                 artifacts_dict["build-log"] = str(build_log_path)
+
+            # Add test report if it was generated during QA
+            test_report_path = artifact_manager.get_artifact_path("test-report.json")
+            if test_report_path:
+                artifacts_dict["test-report"] = str(test_report_path)
 
         # Format and print JSON output
         json_output = format_build_result(
