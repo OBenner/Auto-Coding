@@ -105,6 +105,7 @@ AI-assisted feature planning with competitor analysis and audience targeting.
 
 ### Additional Features
 - **Insights** - Chat interface for exploring your codebase
+- **Analytics** - Track agent performance metrics, success rates, and quality trends
 - **Ideation** - Discover improvements, performance issues, and vulnerabilities
 - **Changelog** - Generate release notes from completed tasks
 
