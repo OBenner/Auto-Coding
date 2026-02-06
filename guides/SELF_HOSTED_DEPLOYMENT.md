@@ -1088,6 +1088,894 @@ kubectl rollout status deployment/autoclaude-backend -n autoclaude
 helm rollback autoclaude -n autoclaude
 ```
 
+#### Helm Values Configuration
+
+**Production-Ready `values.yaml` Example:**
+
+```yaml
+# =============================================================================
+# GLOBAL CONFIGURATION
+# =============================================================================
+global:
+  # Common environment variables for all containers
+  env:
+    DISABLE_TELEMETRY: "true"
+    LOG_LEVEL: "INFO"
+
+# =============================================================================
+# BACKEND CONFIGURATION
+# =============================================================================
+backend:
+  enabled: true
+
+  # Replica count for high availability
+  replicaCount: 3
+
+  # Container image configuration
+  image:
+    repository: autoclaude/backend
+    tag: v1.0.0
+    pullPolicy: IfNotPresent
+
+  # Image pull secrets (for private registries)
+  imagePullSecrets:
+    - name: registry-credentials
+
+  # Service configuration
+  service:
+    type: ClusterIP
+    port: 80
+    targetPort: 8000
+    annotations:
+      # Cloud provider annotations (AWS/GCP/Azure)
+      service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+
+  # Ingress configuration (external access)
+  ingress:
+    enabled: true
+    className: nginx
+    annotations:
+      # TLS certificate management
+      cert-manager.io/cluster-issuer: "letsencrypt-prod"
+      nginx.ingress.kubernetes.io/ssl-redirect: "true"
+      # Security headers
+      nginx.ingress.kubernetes.io/frame-deny: "true"
+      nginx.ingress.kubernetes.io/content-type-nosniff: "true"
+      # CORS handling
+      nginx.ingress.kubernetes.io/cors-allow-origin: "https://autoclaude.yourcompany.com"
+    hosts:
+      - host: autoclaude.yourcompany.com
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: autoclaude-tls
+        hosts:
+          - autoclaude.yourcompany.com
+
+  # Resource limits and requests
+  resources:
+    requests:
+      memory: "1Gi"
+      cpu: "500m"
+    limits:
+      memory: "2Gi"
+      cpu: "1000m"
+
+  # Horizontal Pod Autoscaler
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 80
+    targetMemoryUtilizationPercentage: 80
+    behavior:
+      scaleDown:
+        stabilizationWindowSeconds: 300
+        policies:
+          - type: Percent
+            value: 50
+            periodSeconds: 15
+      scaleUp:
+        stabilizationWindowSeconds: 0
+        policies:
+          - type: Percent
+            value: 100
+            periodSeconds: 15
+          - type: Pods
+            value: 4
+            periodSeconds: 15
+        selectPolicy: Max
+
+  # Pod disruption budget (for zero-downtime updates)
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+
+  # Liveness and readiness probes
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: 8000
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    successThreshold: 1
+    failureThreshold: 3
+
+  readinessProbe:
+    httpGet:
+      path: /health
+      port: 8000
+    initialDelaySeconds: 10
+    periodSeconds: 5
+    timeoutSeconds: 3
+    successThreshold: 1
+    failureThreshold: 3
+
+  # Startup probe (for slow-starting containers)
+  startupProbe:
+    httpGet:
+      path: /health
+      port: 8000
+    initialDelaySeconds: 0
+    periodSeconds: 5
+    timeoutSeconds: 3
+    successThreshold: 1
+    failureThreshold: 30
+
+  # Node selector (control which nodes run the backend)
+  nodeSelector:
+    workload: application
+
+  # Tolerations (allow scheduling on tainted nodes)
+  tolerations:
+    - key: "workload"
+      operator: "Equal"
+      value: "application"
+      effect: "NoSchedule"
+
+  # Affinity rules (pod anti-affinity for HA)
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            labelSelector:
+              matchExpressions:
+                - key: app.kubernetes.io/name
+                  operator: In
+                  values:
+                    - autoclaude
+            topologyKey: kubernetes.io/hostname
+
+  # Environment variables (use Kubernetes secrets for sensitive data)
+  env:
+    SECRET_KEY:
+      valueFrom:
+        secretKeyRef:
+          name: autoclaude-secrets
+          key: SECRET_KEY
+    DATABASE_URL:
+      valueFrom:
+        secretKeyRef:
+          name: autoclaude-db-secret
+          key: DATABASE_URL
+    REDIS_HOST:
+      value: "autoclaude-redis-master"
+    REDIS_PORT:
+      value: "6379"
+    REDIS_PASSWORD:
+      valueFrom:
+        secretKeyRef:
+          name: autoclaude-redis-secret
+          key: REDIS_PASSWORD
+    CORS_ORIGINS:
+      value: "https://autoclaude.yourcompany.com,https://app.yourcompany.com"
+    ANTHROPIC_API_KEY:
+      valueFrom:
+        secretKeyRef:
+          name: autoclaude-secrets
+          key: ANTHROPIC_API_KEY
+    DISABLE_TELEMETRY:
+      value: "true"
+    LOG_LEVEL:
+      value: "INFO"
+
+  # Volume mounts (for workspace data)
+  volumeMounts:
+    - name: workspace-data
+      mountPath: /workspace
+    - name: specs-data
+      mountPath: /app/specs
+
+  # Volumes
+  volumes:
+    - name: workspace-data
+      persistentVolumeClaim:
+        claimName: autoclaude-workspace-pvc
+    - name: specs-data
+      persistentVolumeClaim:
+        claimName: autoclaude-specs-pvc
+
+  # Service account
+  serviceAccount:
+    create: true
+    name: autoclaude-backend
+    annotations:
+      eks.amazonaws.com/role-arn: "arn:aws:iam::ACCOUNT_ID:role/autoclaude-role"
+
+# =============================================================================
+# POSTGRESQL DATABASE CONFIGURATION
+# =============================================================================
+postgresql:
+  enabled: true
+
+  # Use Bitnami PostgreSQL chart
+  auth:
+    password: ""
+    existingSecret: autoclaude-db-secret
+    database: autoclaude
+    username: postgres
+
+  primary:
+    # Resource limits
+    resources:
+      requests:
+        memory: "2Gi"
+        cpu: "1000m"
+      limits:
+        memory: "4Gi"
+        cpu: "2000m"
+
+    # Persistence configuration
+    persistence:
+      enabled: true
+      storageClass: "fast-ssd"  # Use fast SSD storage class
+      size: 50Gi
+
+    # Node selector for database nodes
+    nodeSelector:
+      workload: database
+
+    # PostgreSQL configuration
+    configuration: |
+      max_connections = 200
+      shared_buffers = 512MB
+      effective_cache_size = 2GB
+      maintenance_work_mem = 128MB
+      checkpoint_completion_target = 0.9
+      wal_buffers = 16MB
+      default_statistics_target = 100
+      random_page_cost = 1.1
+      effective_io_concurrency = 200
+      work_mem = 2621kB
+      min_wal_size = 1GB
+      max_wal_size = 4GB
+
+  # Read replicas (optional, for read-heavy workloads)
+  readReplicas:
+    replicaCount: 0  # Set to 2+ for read replicas
+
+  # Backup configuration
+  backup:
+    enabled: true
+    cronjob:
+      schedule: "0 2 * * *"  # Daily at 2 AM
+      storageClass: "fast-ssd"
+      persistence:
+        size: 100Gi
+
+# =============================================================================
+# REDIS CONFIGURATION
+# =============================================================================
+redis:
+  enabled: true
+
+  # Use Bitnami Redis chart
+  auth:
+    enabled: true
+    existingSecret: autoclaude-redis-secret
+    password: ""
+
+  master:
+    resources:
+      requests:
+        memory: "1Gi"
+        cpu: "500m"
+      limits:
+        memory: "2Gi"
+        cpu: "1000m"
+
+    persistence:
+      enabled: true
+      storageClass: "fast-ssd"
+      size: 10Gi
+
+  # Replication for high availability
+  replica:
+    replicaCount: 2  # 2 replicas for HA
+
+  # Redis configuration
+  configuration: |
+    maxmemory 1gb
+    maxmemory-policy allkeys-lru
+    save 900 1
+    save 300 10
+    save 60 10000
+
+# =============================================================================
+# PERSISTENT VOLUME CLAIMS
+# =============================================================================
+persistence:
+  enabled: true
+  storageClass: "fast-ssd"
+
+  # Workspace data PVC
+  workspace:
+    enabled: true
+    size: 100Gi
+    accessMode: ReadWriteMany
+
+  # Specs data PVC
+  specs:
+    enabled: true
+    size: 20Gi
+    accessMode: ReadWriteMany
+
+# =============================================================================
+# MONITORING CONFIGURATION
+# =============================================================================
+monitoring:
+  # Prometheus ServiceMonitor
+  serviceMonitor:
+    enabled: true
+    namespace: monitoring
+    interval: 30s
+    scrapeTimeout: 10s
+
+  # Prometheus rules
+  prometheusRules:
+    enabled: true
+    namespace: monitoring
+
+# =============================================================================
+# SECURITY CONFIGURATION
+# =============================================================================
+security:
+  # Pod security context
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    fsGroup: 1000
+    seccompProfile:
+      type: RuntimeDefault
+
+  # Container security context
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: false  # Set to true if app doesn't need write access
+    capabilities:
+      drop:
+        - ALL
+    runAsUser: 1000
+
+  # Network policies
+  networkPolicy:
+    enabled: true
+    ingress:
+      - from:
+          - namespaceSelector:
+              matchLabels:
+                name: ingress-nginx
+        ports:
+          - protocol: TCP
+            port: 8000
+    egress:
+      - to:
+          - namespaceSelector:
+              matchLabels:
+                name: autoclaude
+        ports:
+          - protocol: TCP
+            port: 5432  # PostgreSQL
+          - protocol: TCP
+            port: 6379  # Redis
+      - to:
+          - namespaceSelector: {}  # Allow egress to external APIs
+        ports:
+          - protocol: TCP
+            port: 443  # HTTPS
+
+# =============================================================================
+# LOGGING CONFIGURATION
+# =============================================================================
+logging:
+  # JSON structured logs
+  jsonFormat: true
+
+  # Log level
+  level: INFO
+
+  # Log aggregation annotations
+  annotations:
+    fluentbit.io/parser: "auto-claude"
+```
+
+#### Managing Helm Releases
+
+**List Helm releases:**
+```bash
+# List all releases
+helm list --namespace autoclaude
+
+# List all releases across all namespaces
+helm list --all-namespaces
+
+# Show release history
+helm history autoclaude --namespace autoclaude
+```
+
+**Get release status:**
+```bash
+# Get release status
+helm status autoclaude --namespace autoclaude
+
+# Get release values (what was used during install)
+helm get values autoclaude --namespace autoclaude
+
+# Get all release values (including defaults)
+helm get values autoclaude --namespace autoclaude --all
+
+# Get release manifest (rendered Kubernetes resources)
+helm get manifest autoclaude --namespace autoclaude
+
+# Get release notes (if chart has NOTES.txt)
+helm get notes autoclaude --namespace autoclaude
+```
+
+**Upgrade releases:**
+```bash
+# Upgrade with values file
+helm upgrade autoclaude . \
+  --values my-values.yaml \
+  --namespace autoclaude
+
+# Upgrade with specific value overrides
+helm upgrade autoclaude . \
+  --set backend.image.tag=v1.1.0 \
+  --set backend.replicaCount=5 \
+  --namespace autoclaude
+
+# Upgrade with multiple values files (later files override earlier ones)
+helm upgrade autoclaude . \
+  --values base-values.yaml \
+  --values production-overrides.yaml \
+  --namespace autoclaude
+
+# Upgrade with JSON values
+helm upgrade autoclaude . \
+  --set-json='backend.env={"LOG_LEVEL":"DEBUG","DEBUG":"true"}' \
+  --namespace autoclaude
+
+# Dry-run upgrade (preview changes without applying)
+helm upgrade autoclaude . \
+  --values my-values.yaml \
+  --dry-run \
+  --namespace autoclaude
+
+# Upgrade with timeout (default is 5m)
+helm upgrade autoclaude . \
+  --values my-values.yaml \
+  --timeout 10m \
+  --namespace autoclaude
+
+# Upgrade with wait (wait until all pods are ready)
+helm upgrade autoclaude . \
+  --values my-values.yaml \
+  --wait \
+  --namespace autoclaude
+
+# Force upgrade (recreate pods even if no changes)
+helm upgrade autoclaude . \
+  --values my-values.yaml \
+  --force \
+  --namespace autoclaude
+
+# Upgrade with atomic mode (rollback on failure)
+helm upgrade autoclaude . \
+  --values my-values.yaml \
+  --atomic \
+  --namespace autoclaude
+
+# Upgrade with cleanup (remove old release revisions)
+helm upgrade autoclaude . \
+  --values my-values.yaml \
+  --cleanup-on-fail \
+  --namespace autoclaude
+```
+
+**Rollback releases:**
+```bash
+# Rollback to previous release
+helm rollback autoclaude --namespace autoclaude
+
+# Rollback to specific revision
+helm rollback autoclaude 2 --namespace autoclaude
+
+# Rollback with timeout
+helm rollback autoclaude --timeout 5m --namespace autoclaude
+
+# Rollback with wait (wait until rollback completes)
+helm rollback autoclaude --wait --namespace autoclaude
+
+# Dry-run rollback (preview without applying)
+helm rollback autoclaude --dry-run --namespace autoclaude
+
+# View release revisions
+helm history autoclaude --namespace autoclaude
+
+# Expected output:
+# REVISION  UPDATED                   STATUS      CHART           APP VERSION  DESCRIPTION
+# 1         Mon Jan 1 10:00:00 2026   superseded  autoclaude-1.0  v1.0.0       Initial install
+# 2         Tue Jan 2 10:00:00 2026   superseded  autoclaude-1.0  v1.0.0       Upgraded to v1.0.1
+# 3         Wed Jan 3 10:00:00 2026   deployed    autoclaude-1.0  v1.1.0       Upgraded to v1.1.0
+```
+
+**Uninstall releases:**
+```bash
+# Uninstall release (keeps release history)
+helm uninstall autoclaude --namespace autoclaude
+
+# Uninstall and remove release history
+helm uninstall autoclaude --namespace autoclaude --keep-history false
+
+# Dry-run uninstall
+helm uninstall autoclaude --namespace autoclaude --dry-run
+
+# Uninstall with timeout
+helm uninstall autoclaude --namespace autoclaude --timeout 5m
+
+# Uninstall and delete all associated resources (including PVCs)
+# ⚠️ WARNING: This will delete all data!
+helm uninstall autoclaude --namespace autoclaude
+kubectl delete pvc -l app.kubernetes.io/name=autoclaude --namespace autoclaude
+```
+
+**Upgrade strategies:**
+```bash
+# Strategy 1: Rolling update (default)
+helm upgrade autoclaude . \
+  --values my-values.yaml \
+  --namespace autoclaude
+
+# Strategy 2: Blue-green deployment
+# 1. Install new version alongside old version
+helm install autoclaude-new . \
+  --values my-values.yaml \
+  --set backend.image.tag=v1.1.0 \
+  --namespace autoclaude
+
+# 2. Test new version
+kubectl port-forward -n autoclaude svc/autoclaude-new-backend 8001:80
+
+# 3. Switch ingress to new version
+kubectl patch ingress autoclaude -n autoclaude --type='json' \
+  -p='[{"op": "replace", "path": "/spec/rules/0/http/paths/0/backend/service/name", "value":"autoclaude-new-backend"}]'
+
+# 4. Remove old version
+helm uninstall autoclaude --namespace autoclaude
+helm install autoclaude . --values my-values.yaml --namespace autoclaude
+
+# Strategy 3: Canary deployment
+# 1. Create canary release
+helm install autoclaude-canary . \
+  --values my-values.yaml \
+  --set backend.image.tag=v1.1.0-canary \
+  --set backend.ingress.enabled=false \
+  --namespace autoclaude
+
+# 2. Split traffic between stable and canary (requires service mesh or ingress controller)
+# 3. Monitor canary metrics
+# 4. Gradually increase traffic to canary
+# 5. Promote canary to stable if metrics look good
+```
+
+#### Helm Chart Repository
+
+**Setting up a Helm chart repository:**
+
+```bash
+# 1. Package the Helm chart
+cd infrastructure/helm/autoclaude
+helm package .
+
+# Expected output:
+# Successfully packaged chart and saved it to: autoclaude-1.0.0.tgz
+
+# 2. Create a chart repository index
+helm repo index . --url https://charts.autoclaude.io/
+
+# Expected output: index.yaml file created
+
+# 3. Host the chart repository (choose one option below)
+
+# Option A: Host on GitHub Pages
+git checkout --orphan gh-pages
+rm -rf *
+cp ../autoclaude-*.tgz .
+cp ../index.yaml .
+git add .
+git commit -m "Publish Helm charts"
+git push origin gh-pages
+
+# Option B: Host on AWS S3 + CloudFront
+aws s3 sync . s3://charts.autoclaude.io/
+aws cloudfront create-invalidation \
+  --distribution-id YOUR_DISTRIBUTION_ID \
+  --paths "/*"
+
+# Option C: Host on dedicated chart museum server
+docker run -d \
+  --name chartmuseum \
+  -p 8080:8080 \
+  -e STORAGE=local \
+  -e STORAGE_LOCAL_ROOTDIR=/charts \
+  -v $(pwd)/charts:/charts \
+  ghcr.io/helm/chartmuseum:v0.14.0
+
+# Upload charts
+curl --data-binary "@autoclaude-1.0.0.tgz" http://localhost:8080/api/charts
+
+# 4. Add the repository to clients
+helm repo add autoclaude https://charts.autoclaude.io
+helm repo update
+
+# Expected output:
+# "autoclaude" has been added to your repositories
+# Hang tight while we grab the latest from your repository...
+# ...Successfully got an update from the "autoclaude" chart repository
+
+# 5. Install from repository
+helm install autoclaude autoclaude/autoclaude \
+  --values my-values.yaml \
+  --namespace autoclaude \
+  --create-namespace
+```
+
+**Updating the Helm chart repository:**
+
+```bash
+# 1. Build and package new version
+helm package .
+# Creates: autoclaude-1.1.0.tgz
+
+# 2. Update index
+helm repo index . --url https://charts.autoclaude.io/
+# Updates: index.yaml
+
+# 3. Upload to repository
+# GitHub Pages
+git add .
+git commit -m "Release autoclaude-1.1.0"
+git push
+
+# S3
+aws s3 sync . s3://charts.autoclaude.io/
+
+# Chart Museum
+curl --data-binary "@autoclaude-1.1.0.tgz" http://localhost:8080/api/charts
+
+# 4. Clients update and upgrade
+helm repo update
+helm upgrade autoclaude autoclaude/autoclaude \
+  --values my-values.yaml \
+  --namespace autoclaude
+```
+
+#### Helm-Specific Troubleshooting
+
+**Problem: Helm install hangs or times out**
+
+```bash
+# Check Helm release status
+helm status autoclaude --namespace autoclaude
+
+# Check if pods are stuck
+kubectl get pods -n autoclaude
+
+# Describe stuck pod
+kubectl describe pod <pod-name> -n autoclaude
+
+# Common causes:
+# 1. Image pull errors → Check image registry access
+# 2. Resource constraints → Check node capacity
+# 3. Persistent volume pending → Check storage class
+# 4. ConfigMap/Secret missing → Check prerequisites
+
+# Force timeout and retry
+helm uninstall autoclaude --namespace autoclaude
+helm install autoclaude . \
+  --values my-values.yaml \
+  --timeout 15m \
+  --namespace autoclaude
+```
+
+**Problem: Helm upgrade fails with "rendered manifest contains a resource that already exists"**
+
+```bash
+# Check existing resources
+kubectl get all -n autoclaude
+
+# Remove stuck resources manually
+kubectl delete pod <stuck-pod> -n autoclaude --force --grace-period=0
+
+# Retry upgrade with --force
+helm upgrade autoclaude . \
+  --values my-values.yaml \
+  --force \
+  --namespace autoclaude
+```
+
+**Problem: Helm release is in "failed" state**
+
+```bash
+# Check release history
+helm history autoclaude --namespace autoclaude
+
+# Rollback to last good revision
+helm rollback autoclaude --namespace autoclaude
+
+# Or delete and reinstall (⚠️ WARNING: May cause data loss)
+helm uninstall autoclaude --namespace autoclaude
+helm install autoclaude . \
+  --values my-values.yaml \
+  --namespace autoclaude
+```
+
+**Problem: Values not being applied correctly**
+
+```bash
+# Debug template rendering
+helm template autoclaude . \
+  --values my-values.yaml \
+  --namespace autoclaude > rendered.yaml
+
+# Review rendered.yaml to see what resources will be created
+
+# Check current values
+helm get values autoclaude --namespace autoclaude
+
+# Verify values syntax
+helm lint . --values my-values.yaml
+
+# Common issues:
+# 1. Wrong indentation in YAML
+# 2. Incorrect key names
+# 3. Missing required values
+# 4. Type mismatches (string vs number vs boolean)
+```
+
+**Problem: Pods crash after Helm upgrade**
+
+```bash
+# Check pod logs
+kubectl logs -n autoclaude <pod-name>
+
+# Check previous deployment logs
+kubectl logs -n autoclaude <pod-name> --previous
+
+# Describe pod to see events
+kubectl describe pod <pod-name> -n autoclaude
+
+# Rollback immediately
+helm rollback autoclaude --namespace autoclaude
+
+# Debug the issue offline
+kubectl port-forward -n autoclaude <pod-name> 8000:8000
+curl http://localhost:8000/health
+
+# Check resource usage
+kubectl top pods -n autoclaude
+kubectl top nodes
+```
+
+**Problem: Persistent volume claims are stuck in "pending" state**
+
+```bash
+# Check PVC status
+kubectl get pvc -n autoclaude
+
+# Describe PVC to see events
+kubectl describe pvc autoclaude-workspace-pvc -n autoclaude
+
+# Check available storage classes
+kubectl get storageclass
+
+# Common causes:
+# 1. No default storage class → Set default: kubectl patch storageclass <name> -p '{"metadata": {"annotations":{"storageclass.kubernetes.io/is-default-class":"true"}}}'
+# 2. Storage class doesn't exist → Create or use existing storage class
+# 3. No available PVs → Provision PVs or use dynamic provisioning
+
+# Fix: Add storage class to values
+cat >> my-values.yaml << EOF
+persistence:
+  storageClass: "standard"  # Use your cluster's storage class
+EOF
+
+helm upgrade autoclaude . \
+  --values my-values.yaml \
+  --namespace autoclaude
+```
+
+**Problem: Helm secrets management**
+
+```bash
+# Don't put secrets in values.yaml! Use Kubernetes secrets instead.
+
+# Create secrets manually
+kubectl create secret generic autoclaude-secrets \
+  --from-literal=SECRET_KEY=$(openssl rand -hex 32) \
+  --from-literal=ANTHROPIC_API_KEY=your-api-key \
+  --namespace=autoclaude
+
+kubectl create secret generic autoclaude-db-secret \
+  --from-literal=DATABASE_URL=postgresql://postgres:password@autoclaude-postgresql:5432/autoclaude \
+  --from-literal=POSTGRES_PASSWORD=your-password \
+  --namespace=autoclaude
+
+# Reference secrets in values.yaml
+cat >> my-values.yaml << EOF
+backend:
+  env:
+    SECRET_KEY:
+      valueFrom:
+        secretKeyRef:
+          name: autoclaude-secrets
+          key: SECRET_KEY
+    DATABASE_URL:
+      valueFrom:
+        secretKeyRef:
+          name: autoclaude-db-secret
+          key: DATABASE_URL
+EOF
+
+# Or use Helm's --set functionality for secrets (less secure, not recommended)
+helm install autoclaude . \
+  --set backend.env.SECRET_KEY=$(openssl rand -hex 32) \
+  --namespace autoclaude
+
+# Best practice: Use external secrets operator (e.g., External Secrets Operator)
+# https://external-secrets.io/
+```
+
+**Get comprehensive Helm diagnostics:**
+
+```bash
+# Export all release information for support
+helm status autoclaude --namespace autoclaude > helm-status.txt
+helm get values autoclaude --namespace autoclaude > helm-values.txt
+helm get manifest autoclaude --namespace autoclaude > helm-manifest.yaml
+helm history autoclaude --namespace autoclaude > helm-history.txt
+
+# Get all resources in namespace
+kubectl get all -n autoclaude -o yaml > k8s-resources.yaml
+
+# Get pod logs
+kubectl logs -n autoclaude -l app.kubernetes.io/name=autoclaude --tail=1000 > app.log
+
+# Create diagnostics package
+tar czf autoclaude-diagnostics.tar.gz \
+  helm-status.txt \
+  helm-values.txt \
+  helm-manifest.yaml \
+  helm-history.txt \
+  k8s-resources.yaml \
+  app.log
+
+# Send to support team
+```
+
 ---
 
 ## Configuration
