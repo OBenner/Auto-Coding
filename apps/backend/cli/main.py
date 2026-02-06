@@ -118,7 +118,15 @@ Environment Variables:
         "--model",
         type=str,
         default=None,
-        help=f"Claude model to use (default: {DEFAULT_MODEL})",
+        help=f"Model to use (default: {DEFAULT_MODEL})",
+    )
+
+    parser.add_argument(
+        "--provider",
+        type=str,
+        default=None,
+        choices=["claude", "litellm", "openrouter", "zhipuai"],
+        help="AI provider to use (default: from env or claude)",
     )
 
     parser.add_argument(
@@ -374,6 +382,9 @@ def _run_cli() -> None:
     # This allows get_phase_model() to fall back to task_metadata.json
     model = args.model or os.environ.get("AUTO_BUILD_MODEL")
 
+    # Get provider from CLI arg (default: from env or claude)
+    provider = args.provider
+
     # Handle --list command
     if args.list:
         print_banner()
@@ -535,6 +546,7 @@ def _run_cli() -> None:
         project_dir=project_dir,
         spec_dir=spec_dir,
         model=model,
+        provider=provider,
         max_iterations=args.max_iterations,
         verbose=args.verbose,
         force_isolated=args.isolated,
