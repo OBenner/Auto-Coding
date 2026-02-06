@@ -1,17 +1,16 @@
-# Auto Claude
+# Auto Code
 
 **Autonomous multi-agent coding framework that plans, builds, and validates software for you.**
 
-![Auto Claude Kanban Board](.github/assets/Auto-Coding-Kanban.png)
+![Auto Code Kanban Board](.github/assets/Auto-Coding-Kanban.png)
 
 [![License](https://img.shields.io/badge/license-AGPL--3.0-green?style=flat-square)](./agpl-3.0.txt)
-[![Discord](https://img.shields.io/badge/Discord-Join%20Community-5865F2?style=flat-square&logo=discord&logoColor=white)](https://discord.gg/KCXaPBr4Dj)
-[![YouTube](https://img.shields.io/badge/YouTube-Subscribe-FF0000?style=flat-square&logo=youtube&logoColor=white)](https://www.youtube.com/@AndreMikalsen)
+
 [![CI](https://img.shields.io/github/actions/workflow/status/OBenner/Auto-Coding/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/OBenner/Auto-Coding/actions)
 
 ---
 
-> **🔱 This is a fork of [AndyMik90/Auto-Claude](https://github.com/AndyMik90/Auto-Claude)**
+> **🔱 This is a fork of [AndyMik90/Auto-Code](https://github.com/AndyMik90/Auto-Code)**
 >
 > This repository contains custom modifications and enhancements on top of the original project.
 > I aim to keep it in sync with upstream changes while maintaining my own features.
@@ -117,7 +116,7 @@ AI-assisted feature planning with competitor analysis and audience targeting.
 ## Project Structure
 
 ```
-Auto-Claude/
+Auto-Code/
 ├── apps/
 │   ├── backend/     # Python agents, specs, QA pipeline
 │   └── frontend/    # Electron desktop application
@@ -152,7 +151,7 @@ See [guides/CLI-USAGE.md](guides/CLI-USAGE.md) for complete CLI documentation.
 
 ## Deployment Options
 
-Auto Claude can be deployed in multiple ways to suit your needs:
+Auto Code can be deployed in multiple ways to suit your needs:
 
 ### 🖥️ Local Desktop (Recommended for Individual Developers)
 
@@ -162,7 +161,7 @@ Download and run the native desktop application on Windows, macOS, or Linux. All
 
 ### ☁️ Cloud-Hosted (Recommended for Teams & Enterprise)
 
-Deploy Auto Claude to cloud infrastructure for centralized access without local installation. Users access via web interface with OAuth authentication.
+Deploy Auto Code to cloud infrastructure for centralized access without local installation. Users access via web interface with OAuth authentication.
 
 **Best for:** Teams, enterprises, users who want instant access without setup
 
@@ -190,7 +189,7 @@ For Linux-specific builds (Flatpak, AppImage), see [guides/linux.md](guides/linu
 
 ## Security
 
-Auto Claude uses a three-layer security model:
+Auto Code uses a three-layer security model:
 
 1. **OS Sandbox** - Bash commands run in isolation
 2. **Filesystem Restrictions** - Operations limited to project directory
@@ -243,7 +242,7 @@ We welcome contributions! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for:
 
 **AGPL-3.0** - GNU Affero General Public License v3.0
 
-Auto Claude is free to use. If you modify and distribute it, or run it as a service, your code must also be open source under AGPL-3.0.
+Auto Code is free to use. If you modify and distribute it, or run it as a service, your code must also be open source under AGPL-3.0.
 
 Commercial licensing available for closed-source use cases.
 

@@ -2,11 +2,11 @@
 
 **Feature ID**: 032
 **Status**: Production Ready
-**Version**: Introduced in Auto Claude 3.0+
+**Version**: Introduced in Auto Code 3.0+
 
 ## Overview
 
-Intelligent Pattern Recognition enhances Auto Claude's Graphiti memory system to automatically identify, categorize, and suggest coding patterns from completed builds. This feature creates **compounding value** - the system gets smarter over time as you build more features, unlike competitors that start fresh each session.
+Intelligent Pattern Recognition enhances Auto Code's Graphiti memory system to automatically identify, categorize, and suggest coding patterns from completed builds. This feature creates **compounding value** - the system gets smarter over time as you build more features, unlike competitors that start fresh each session.
 
 ## What It Does
 
@@ -18,7 +18,7 @@ The system automatically:
 
 ## Why It Matters
 
-Cross-session memory is a key differentiator for Auto Claude. This feature makes that memory actionable:
+Cross-session memory is a key differentiator for Auto Code. This feature makes that memory actionable:
 
 - **Consistency**: Future features follow established patterns automatically
 - **Knowledge retention**: Architectural decisions persist across sessions
@@ -92,7 +92,7 @@ Cross-session memory is a key differentiator for Auto Claude. This feature makes
 
 ### For End Users
 
-1. **Create a new spec** in the Auto Claude UI
+1. **Create a new spec** in the Auto Code UI
 2. **Enter your feature description** (e.g., "Add user authentication")
 3. **Review suggested patterns** that appear automatically
 4. **For each suggestion**:
@@ -274,7 +274,7 @@ Potential improvements for future versions:
 **Solution**:
 1. Check `memory-data-handlers.ts` for TypeScript errors
 2. Verify Python backend imports work: `python -c "from integrations.graphiti.pattern_suggester import suggest_patterns; print('OK')"`
-3. Check logs in Auto Claude terminal
+3. Check logs in Auto Code terminal
 
 ## References
 

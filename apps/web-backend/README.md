@@ -1,10 +1,10 @@
-# Auto Claude Web Backend
+# Auto Code Web Backend
 
-FastAPI-based REST API and WebSocket server that exposes Auto Claude functionality for browser-based access.
+FastAPI-based REST API and WebSocket server that exposes Auto Code functionality for browser-based access.
 
 ## Overview
 
-The Auto Claude Web Backend provides a web API layer on top of the Auto Claude autonomous coding framework. It enables:
+The Auto Code Web Backend provides a web API layer on top of the Auto Code autonomous coding framework. It enables:
 
 - **REST API endpoints** for task and spec management
 - **WebSocket connections** for real-time agent progress updates
@@ -22,7 +22,7 @@ The Auto Claude Web Backend provides a web API layer on top of the Auto Claude a
                                                  │ Python API
                                                  │
                                        ┌─────────▼─────────┐
-                                       │  Auto Claude      │
+                                       │  Auto Code        │
                                        │  Backend Core     │
                                        │  (agents, specs)  │
                                        └───────────────────┘
@@ -33,7 +33,7 @@ The Auto Claude Web Backend provides a web API layer on top of the Auto Claude a
 ### Prerequisites
 
 - Python 3.12 or higher
-- Auto Claude backend (located at `../backend`)
+- Auto Code backend (located at `../backend`)
 
 ### Installation
 
@@ -221,10 +221,10 @@ PORT=8001 python main.py
 - Check that credentials are allowed if sending cookies
 - Verify preflight OPTIONS requests are handled correctly
 
-### Cannot connect to Auto Claude backend
+### Cannot connect to Auto Code backend
 
 - Verify `AUTO_CLAUDE_BACKEND_DIR` points to correct location
-- Ensure Auto Claude backend is properly installed
+- Ensure Auto Code backend is properly installed
 - Check that backend dependencies are available
 
 ## Contributing
@@ -239,4 +239,4 @@ When contributing to the web backend:
 
 ## License
 
-Part of the Auto Claude project. See root LICENSE file for details.
+Part of the Auto Code project. See root LICENSE file for details.

@@ -15,7 +15,7 @@ Provide a clear, concise description of what this feature does and why it's need
 Answer: What problem does this solve? What value does it provide?
 
 Example:
-"Create a comprehensive documentation structure for Auto Claude and establish reusable
+"Create a comprehensive documentation structure for Auto Code and establish reusable
 templates for documenting features, architecture, and integrations. This spec defines
 a standardized approach to documenting the project at multiple levels."
 -->

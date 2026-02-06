@@ -261,7 +261,7 @@ export function InstallPluginDialog({
                     </span>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    {t('plugins:install.marketplaceDescription', 'Install from the Auto Claude plugin marketplace')}
+                    {t('plugins:install.marketplaceDescription', 'Install from the Auto Code plugin marketplace')}
                   </p>
                 </Label>
               </div>

@@ -1,6 +1,6 @@
 # Backend API Reference
 
-Complete reference for Auto Claude's Python backend CLI commands and programmatic API.
+Complete reference for Auto Code's Python backend CLI commands and programmatic API.
 
 ## Commands
 
@@ -837,7 +837,7 @@ Error: Graphiti memory system not enabled
 
 **Python Version Mismatch:**
 ```
-Error: Auto Claude requires Python 3.10 or higher
+Error: Auto Code requires Python 3.10 or higher
 ```
 **Solution:** Upgrade to Python 3.12+ (required for Graphiti).
 
@@ -982,4 +982,4 @@ DEBUG=true python run.py --spec 001 --verbose
 
 **Version:** 2.8.0
 **Last Updated:** 2026-02-04
-**Maintained By:** Auto Claude Team
+**Maintained By:** Auto Code Team

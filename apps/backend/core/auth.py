@@ -1,5 +1,5 @@
 """
-Authentication helpers for Auto Claude.
+Authentication helpers for Auto Code.
 
 Provides centralized authentication token resolution with fallback support
 for multiple environment variables, and SDK environment variable passthrough
@@ -33,7 +33,7 @@ else:
 
 # Priority order for auth token resolution
 # NOTE: We intentionally do NOT fall back to ANTHROPIC_API_KEY.
-# Auto Claude is designed to use Claude Code OAuth tokens only.
+# Auto Code is designed to use Claude Code OAuth tokens only.
 # This prevents silent billing to user's API credits when OAuth fails.
 AUTH_TOKEN_ENV_VARS = [
     "CLAUDE_CODE_OAUTH_TOKEN",  # OAuth token from Claude Code CLI
@@ -647,7 +647,7 @@ def require_auth_token(config_dir: str | None = None) -> str:
     if not token:
         error_msg = (
             "No OAuth token found.\n\n"
-            "Auto Claude requires Claude Code OAuth authentication.\n"
+            "Auto Code requires Claude Code OAuth authentication.\n"
             "Direct API keys (ANTHROPIC_API_KEY) are not supported.\n\n"
         )
         # Provide platform-specific guidance
@@ -790,7 +790,7 @@ def get_sdk_env_vars() -> dict[str, str]:
     # Explicitly unset PYTHONPATH in SDK subprocess environment to prevent
     # pollution of agent subprocess environments. This fixes ACS-251 where
     # external projects with different Python versions would fail due to
-    # inheriting Auto-Claude's PYTHONPATH (which points to Python 3.12 packages).
+    # inheriting Auto-Code's PYTHONPATH (which points to Python 3.12 packages).
     #
     # The SDK merges os.environ with the env dict we provide, so setting
     # PYTHONPATH to an empty string here overrides any inherited value.

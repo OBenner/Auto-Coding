@@ -1,6 +1,6 @@
 # Backend Architecture
 
-Auto Claude backend is a Python-based AI agent orchestration system that coordinates multi-agent sessions for autonomous software development. The architecture is organized into modular components, each with clear responsibilities and well-defined interfaces.
+Auto Code backend is a Python-based AI agent orchestration system that coordinates multi-agent sessions for autonomous software development. The architecture is organized into modular components, each with clear responsibilities and well-defined interfaces.
 
 ## Architecture Overview
 
@@ -601,7 +601,7 @@ Agent system prompts for different agent types and workflows.
 
 ## CLI Module (`cli/`)
 
-Command-line interface for Auto Claude.
+Command-line interface for Auto Code.
 
 **Key Files:**
 - Entry point for CLI commands

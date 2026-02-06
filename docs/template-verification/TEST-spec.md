@@ -2,7 +2,7 @@
 
 ## Overview
 
-Add dark mode support to the Auto Claude desktop application, allowing users to switch between light and dark themes. This improves accessibility for users who prefer dark interfaces and reduces eye strain during extended coding sessions.
+Add dark mode support to the Auto Code desktop application, allowing users to switch between light and dark themes. This improves accessibility for users who prefer dark interfaces and reduces eye strain during extended coding sessions.
 
 ## Workflow Type
 

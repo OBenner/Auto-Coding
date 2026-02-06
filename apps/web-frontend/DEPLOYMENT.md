@@ -1,6 +1,6 @@
-# Deployment Guide - Auto Claude Web Frontend
+# Deployment Guide - Auto Code Web Frontend
 
-This guide covers deploying the Auto Claude Web Frontend (React/Vite application) to production environments.
+This guide covers deploying the Auto Code Web Frontend (React/Vite application) to production environments.
 
 ## Table of Contents
 

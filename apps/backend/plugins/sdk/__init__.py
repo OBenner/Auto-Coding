@@ -2,7 +2,7 @@
 Plugin SDK Module
 ==================
 
-SDK for developing Auto Claude plugins.
+SDK for developing Auto Code plugins.
 
 This package provides base classes, utilities, and APIs for creating:
 - Agent plugins: Custom agent behaviors and tools

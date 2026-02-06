@@ -2,7 +2,7 @@
 
 <!--
 INSTRUCTIONS: Replace [Integration Name] with the third-party service name (e.g., "Graphiti Memory", "Linear", "GitHub API")
-This template helps you document external integrations following Auto Claude's documentation patterns.
+This template helps you document external integrations following Auto Code's documentation patterns.
 Fill in each section below, removing placeholder comments when done.
 -->
 
@@ -12,7 +12,7 @@ Fill in each section below, removing placeholder comments when done.
 
 <!--
 INSTRUCTIONS: Provide a brief overview of the integration.
-Explain what the external service does and how it integrates with Auto Claude.
+Explain what the external service does and how it integrates with Auto Code.
 -->
 
 **Integration Type:** [API/SDK/MCP Server/Database/Service]
@@ -113,7 +113,7 @@ INTEGRATION_OPTION_2=value
 ## Architecture
 
 <!--
-INSTRUCTIONS: Show how the integration fits into Auto Claude's architecture.
+INSTRUCTIONS: Show how the integration fits into Auto Code's architecture.
 Include file structure and component relationships.
 -->
 
@@ -155,7 +155,7 @@ apps/backend/integrations/[integration_name]/
 ### Integration Points
 
 <!--
-INSTRUCTIONS: Document where in Auto Claude this integration is used.
+INSTRUCTIONS: Document where in Auto Code this integration is used.
 List the files/modules that call the integration.
 -->
 
@@ -624,7 +624,7 @@ INSTRUCTIONS: Link to related documentation that users might need.
 - [Provider Official Documentation]([URL])
 - [API Reference]([URL])
 - [Integration Changelog](./CHANGELOG.md)
-- [Auto Claude Architecture Documentation](../../CLAUDE.md)
+- [Auto Code Architecture Documentation](../../CLAUDE.md)
 - [Related Integration Guide](./related-integration-guide.md)
 
 ## Support & Resources
@@ -640,7 +640,7 @@ INSTRUCTIONS: Provide support channels and additional resources.
 - **Status Page:** [Status page URL]
 - **Community:** [Forum/Discord/Slack URL]
 
-### Auto Claude Support
+### Auto Code Support
 
 - **Issues:** [GitHub issues for integration]
 - **Discussions:** [GitHub discussions]

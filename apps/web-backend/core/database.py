@@ -1,5 +1,5 @@
 """
-Database configuration and connection manager for Auto Claude Web Backend
+Database configuration and connection manager for Auto Code Web Backend
 
 Provides SQLAlchemy engine, session management, and database dependency injection.
 """

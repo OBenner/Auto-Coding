@@ -2,11 +2,11 @@
 setlocal EnableDelayedExpansion
 
 :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
-:: Auto Claude - Production Build Script (Windows)
+:: Auto Code - Production Build Script (Windows)
 :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 ::
 :: PURPOSE:
-:: Builds the production version of Auto Claude (Electron app with bundled Python).
+:: Builds the production version of Auto Code (Electron app with bundled Python).
 ::
 :: USAGE:
 ::   scripts\build.bat              - Build only (fast, for testing)
@@ -117,7 +117,7 @@ goto :parse_args
 :: Show help if requested
 if %SHOW_HELP% equ 1 (
     echo.
-    echo Auto Claude - Production Build Script
+    echo Auto Code - Production Build Script
     echo.
     echo USAGE:
     echo   scripts\build.bat              Build only ^(fast, for testing^)
@@ -154,7 +154,7 @@ if %SHOW_HELP% equ 1 (
 
 echo.
 echo ========================================================================
-echo            Auto Claude - Production Build
+echo            Auto Code - Production Build
 echo ========================================================================
 echo.
 

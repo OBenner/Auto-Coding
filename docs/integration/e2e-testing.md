@@ -1,10 +1,10 @@
 # End-to-End Testing with Electron MCP Server
 
-Comprehensive guide for automated E2E testing of the Auto Claude Electron frontend using the Electron MCP (Model Context Protocol) server integration.
+Comprehensive guide for automated E2E testing of the Auto Code Electron frontend using the Electron MCP (Model Context Protocol) server integration.
 
 ## Overview
 
-Auto Claude's QA agents can perform automated end-to-end testing of the Electron desktop application using the Electron MCP server. This integration allows AI agents to:
+Auto Code's QA agents can perform automated end-to-end testing of the Electron desktop application using the Electron MCP server. This integration allows AI agents to:
 
 - Interact with the running Electron app via Chrome DevTools Protocol (CDP)
 - Click buttons, fill forms, and navigate the UI
@@ -706,7 +706,7 @@ Screenshots are automatically compressed to fit Claude SDK's 1MB message limit:
 
 ## Summary
 
-End-to-end testing with Electron MCP provides automated UI testing capabilities for Auto Claude's Electron frontend. QA agents can:
+End-to-end testing with Electron MCP provides automated UI testing capabilities for Auto Code's Electron frontend. QA agents can:
 
 ✅ Interact with the UI (click, fill forms, navigate)
 ✅ Take screenshots for visual verification

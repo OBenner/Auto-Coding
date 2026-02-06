@@ -1,9 +1,9 @@
 <#
 .SYNOPSIS
-    Auto Claude - Production Build Script (PowerShell)
+    Auto Code - Production Build Script (PowerShell)
 
 .DESCRIPTION
-    Builds the production version of Auto Claude (Electron app with bundled Python).
+    Builds the production version of Auto Code (Electron app with bundled Python).
 
 .PARAMETER Win
     Package for Windows (.exe)
@@ -52,7 +52,7 @@ $FrontendDir = Join-Path $ProjectRoot "apps\frontend"
 # Show help
 if ($Help) {
     Write-Host ""
-    Write-Host "Auto Claude - Production Build Script" -ForegroundColor Cyan
+    Write-Host "Auto Code - Production Build Script" -ForegroundColor Cyan
     Write-Host ""
     Write-Host "USAGE:"
     Write-Host "  .\build.ps1             Build only (fast, for testing)"
@@ -73,7 +73,7 @@ if ($Help) {
 
 Write-Host ""
 Write-Host "========================================================================" -ForegroundColor Blue
-Write-Host "           Auto Claude - Production Build" -ForegroundColor Blue
+Write-Host "           Auto Code - Production Build" -ForegroundColor Blue
 Write-Host "========================================================================" -ForegroundColor Blue
 Write-Host ""
 

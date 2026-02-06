@@ -1,7 +1,7 @@
 /**
  * Login Page
  *
- * User authentication form for cloud-hosted Auto Claude.
+ * User authentication form for cloud-hosted Auto Code.
  * Handles email/password login and redirects to dashboard.
  */
 
@@ -62,7 +62,7 @@ export function Login() {
             Welcome Back
           </h1>
           <p className="text-gray-600">
-            Sign in to your Auto Claude account
+            Sign in to your Auto Code account
           </p>
         </div>
 

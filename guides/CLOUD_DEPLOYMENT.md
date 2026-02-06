@@ -1,6 +1,6 @@
-# Cloud Deployment Guide - Auto Claude
+# Cloud Deployment Guide - Auto Code
 
-This guide covers deploying, operating, and maintaining Auto Claude's cloud-hosted infrastructure in production environments.
+This guide covers deploying, operating, and maintaining Auto Code's cloud-hosted infrastructure in production environments.
 
 ## Table of Contents
 
@@ -26,7 +26,7 @@ This guide covers deploying, operating, and maintaining Auto Claude's cloud-host
 
 ## Overview
 
-Auto Claude's cloud-hosted option provides a fully managed platform where users can access Auto Claude without local installation. This guide focuses on production deployment and operations.
+Auto Code's cloud-hosted option provides a fully managed platform where users can access Auto Code without local installation. This guide focuses on production deployment and operations.
 
 **Key Features:**
 - Multi-user authentication and authorization
@@ -36,7 +36,7 @@ Auto Claude's cloud-hosted option provides a fully managed platform where users 
 - High availability support
 
 **Target Audience:**
-- DevOps engineers deploying Auto Claude to production
+- DevOps engineers deploying Auto Code to production
 - Platform administrators managing cloud infrastructure
 - SREs maintaining uptime and performance
 
@@ -1846,4 +1846,4 @@ This guide covered:
 
 ---
 
-**Maintained by the Auto Claude team. Last updated: 2024-02-04**
+**Maintained by the Auto Code team. Last updated: 2024-02-04**

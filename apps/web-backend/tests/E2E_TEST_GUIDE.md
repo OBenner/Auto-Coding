@@ -1,6 +1,6 @@
 # Cloud E2E Integration Test Guide
 
-This guide provides step-by-step instructions for testing the full cloud-hosted Auto Claude workflow.
+This guide provides step-by-step instructions for testing the full cloud-hosted Auto Code workflow.
 
 ## Test Overview
 

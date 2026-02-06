@@ -57,7 +57,7 @@ async def lifespan(app: FastAPI):
 # Create FastAPI application
 app = FastAPI(
     title="Web Backend API",
-    description="FastAPI backend service for Auto Claude web interface",
+    description="FastAPI backend service for Auto Code web interface",
     version="1.0.0",
     debug=DEBUG,
     lifespan=lifespan

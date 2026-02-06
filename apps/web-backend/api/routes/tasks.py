@@ -2,7 +2,7 @@
 Task Management API routes
 
 Provides endpoints for listing and managing tasks (specs).
-Tasks and specs are synonymous in Auto Claude.
+Tasks and specs are synonymous in Auto Code.
 """
 
 import json

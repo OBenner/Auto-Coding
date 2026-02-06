@@ -41,7 +41,7 @@ services:
       - autoclaude-network
     restart: unless-stopped
 
-  # Auto Claude web backend API
+  # Auto Code web backend API
   web-backend:
     build:
       context: .

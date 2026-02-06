@@ -1,6 +1,6 @@
 # Web Backend Architecture
 
-The Web Backend is a FastAPI-based REST API service that provides HTTP endpoints and WebSocket connections for the Auto Claude web interface. It acts as a bridge between the frontend UI and the Python backend agent system, enabling remote agent execution and real-time progress monitoring.
+The Web Backend is a FastAPI-based REST API service that provides HTTP endpoints and WebSocket connections for the Auto Code web interface. It acts as a bridge between the frontend UI and the Python backend agent system, enabling remote agent execution and real-time progress monitoring.
 
 ## Architecture Overview
 
@@ -88,7 +88,7 @@ async def protected_route(auth: dict = Depends(require_auth)):
 
 ### Specs API (`api/routes/specs.py`, 388 lines)
 
-Manages specs (feature specifications). Specs and tasks are synonymous in Auto Claude.
+Manages specs (feature specifications). Specs and tasks are synonymous in Auto Code.
 
 **Endpoints:**
 - `GET /api/specs` - List all specs with status and progress

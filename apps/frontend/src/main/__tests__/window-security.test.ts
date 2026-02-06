@@ -55,7 +55,7 @@ vi.mock("electron", () => {
       whenReady: vi.fn(() => Promise.resolve()),
       quit: vi.fn(),
       setName: vi.fn(),
-      getName: vi.fn(() => "Auto Claude"),
+      getName: vi.fn(() => "Auto Code"),
       dock: {
         setIcon: vi.fn(),
       },

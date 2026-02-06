@@ -1,7 +1,7 @@
 #!/bin/bash
 
 ###############################################################################
-# Auto Claude - Web Frontend Build and Start Script (Unix/Linux/macOS)
+# Auto Code - Web Frontend Build and Start Script (Unix/Linux/macOS)
 ###############################################################################
 #
 # PURPOSE:
@@ -39,7 +39,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
 echo -e "${BLUE}╔════════════════════════════════════════════════════════════════╗${NC}"
-echo -e "${BLUE}║     Auto Claude - Web Frontend Build and Start (Unix)         ║${NC}"
+echo -e "${BLUE}║     Auto Code - Web Frontend Build and Start (Unix)           ║${NC}"
 echo -e "${BLUE}╚════════════════════════════════════════════════════════════════╝${NC}"
 echo ""
 

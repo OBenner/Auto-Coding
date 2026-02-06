@@ -1,6 +1,6 @@
 # Web Frontend Module
 
-React-based web interface for Auto Claude autonomous coding framework. This module provides a browser-based UI for managing specs, monitoring agent execution, and viewing project insights.
+React-based web interface for Auto Code autonomous coding framework. This module provides a browser-based UI for managing specs, monitoring agent execution, and viewing project insights.
 
 ## Architecture
 

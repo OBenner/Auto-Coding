@@ -1,6 +1,6 @@
 # Documentation Style Guide
 
-This guide defines writing style, formatting conventions, and best practices for all Auto Claude documentation.
+This guide defines writing style, formatting conventions, and best practices for all Auto Code documentation.
 
 ## Table of Contents
 
@@ -20,7 +20,7 @@ This guide defines writing style, formatting conventions, and best practices for
 
 ## Tone and Voice
 
-Auto Claude documentation should be **technical but approachable**.
+Auto Code documentation should be **technical but approachable**.
 
 ### ✅ DO
 

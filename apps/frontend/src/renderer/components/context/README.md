@@ -1,16 +1,16 @@
 # Context Component
 
-This directory contains the Context component, which provides project index information and the **Memory System Dashboard** - Auto Claude's unique cross-session memory visualization and management system.
+This directory contains the Context component, which provides project index information and the **Memory System Dashboard** - Auto Code's unique cross-session memory visualization and management system.
 
 ---
 
 ## Memory System Dashboard
 
-The Memory System Dashboard is a powerful interface for exploring, visualizing, and managing Auto Claude's Graphiti-based memory graph. It enables users to see what the AI remembers across sessions, understand relationships between memories, and manage stored knowledge.
+The Memory System Dashboard is a powerful interface for exploring, visualizing, and managing Auto Code's Graphiti-based memory graph. It enables users to see what the AI remembers across sessions, understand relationships between memories, and manage stored knowledge.
 
 ### Overview
 
-Auto Claude uses Graphiti (graph-based memory system) to retain context across sessions. Unlike other AI assistants that start fresh each time, Auto Claude remembers:
+Auto Code uses Graphiti (graph-based memory system) to retain context across sessions. Unlike other AI assistants that start fresh each time, Auto Code remembers:
 - Previous sessions and their insights
 - Codebase discoveries and patterns
 - Gotchas and pitfalls to avoid
@@ -233,7 +233,7 @@ User clicks Export → MemoryExportDialog opens
 
 #### How to Access
 
-1. Open Auto Claude application
+1. Open Auto Code application
 2. Select a project from the Kanban board
 3. Click the **Context** tab in the top navigation
 4. Click the **Memories** sub-tab

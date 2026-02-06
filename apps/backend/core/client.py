@@ -450,7 +450,7 @@ def load_plugin_mcp_servers(
 
     Queries the PluginRegistry for enabled integration plugins and creates
     MCP servers from their tools. This allows third-party plugins to extend
-    Auto Claude with custom integrations.
+    Auto Code with custom integrations.
 
     Args:
         project_dir: Root directory of the project

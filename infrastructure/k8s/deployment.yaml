@@ -187,7 +187,7 @@ spec:
   # storageClassName: standard
 
 ---
-# Auto Claude Web Backend Deployment
+# Auto Code Web Backend Deployment
 apiVersion: apps/v1
 kind: Deployment
 metadata:

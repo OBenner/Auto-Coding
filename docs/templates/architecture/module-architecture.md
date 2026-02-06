@@ -2,7 +2,7 @@
 
 <!--
 INSTRUCTIONS: Replace [Module Name] with your module name (e.g., "Agents", "Core Security", "Memory System")
-This template helps you document module architecture following Auto Claude's documentation patterns.
+This template helps you document module architecture following Auto Code's documentation patterns.
 Fill in each section below, removing placeholder comments when done.
 -->
 

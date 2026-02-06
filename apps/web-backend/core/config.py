@@ -1,5 +1,5 @@
 """
-Configuration management for Auto Claude Web Backend
+Configuration management for Auto Code Web Backend
 
 Loads settings from environment variables and provides centralized configuration.
 """
@@ -37,7 +37,7 @@ class Settings:
         self.SECRET_KEY: str = os.getenv("SECRET_KEY", "dev-secret-key-change-in-production")
         self.ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
 
-        # Auto Claude backend integration
+        # Auto Code backend integration
         self.AUTO_CLAUDE_BACKEND_DIR: str = os.getenv(
             "AUTO_CLAUDE_BACKEND_DIR",
             os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "backend"))

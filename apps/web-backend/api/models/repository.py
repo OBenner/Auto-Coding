@@ -17,7 +17,7 @@ from core.database import Base
 
 class GitRepository(Base):
     """
-    Git repository model for cloud-hosted Auto Claude
+    Git repository model for cloud-hosted Auto Code
 
     Stores user Git repository connections via OAuth. Links users to their
     repositories on GitHub, GitLab, or other Git providers.

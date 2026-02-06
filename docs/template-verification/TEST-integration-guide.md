@@ -7,7 +7,7 @@
 
 ## Overview
 
-Graphiti provides a knowledge graph and semantic search system for Auto Claude's agent memory. It stores episodic memories, extracts entities and relationships, and enables context-aware retrieval across agent sessions.
+Graphiti provides a knowledge graph and semantic search system for Auto Code's agent memory. It stores episodic memories, extracts entities and relationships, and enables context-aware retrieval across agent sessions.
 
 ## Purpose
 

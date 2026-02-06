@@ -1,5 +1,5 @@
 {
-  "name": "auto-claude-web-ui",
+  "name": "auto-code-web-ui",
   "version": "2.7.5",
   "type": "module",
   "description": "Web UI for Auto-Coding autonomous coding framework",

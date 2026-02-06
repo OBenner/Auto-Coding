@@ -1,11 +1,11 @@
 #!/bin/bash
 
 ###############################################################################
-# Auto Claude - Production Build Script (Unix)
+# Auto Code - Production Build Script (Unix)
 ###############################################################################
 #
 # PURPOSE:
-# Builds the production version of Auto Claude (Electron app with bundled Python).
+# Builds the production version of Auto Code (Electron app with bundled Python).
 #
 # USAGE:
 #   ./scripts/build.sh              - Build only (fast, for testing)
@@ -93,7 +93,7 @@ done
 # Show help if requested
 if [ $SHOW_HELP -eq 1 ]; then
     echo ""
-    echo "Auto Claude - Production Build Script"
+    echo "Auto Code - Production Build Script"
     echo ""
     echo "USAGE:"
     echo "  ./scripts/build.sh              Build only (fast, for testing)"
@@ -129,7 +129,7 @@ if [ $SHOW_HELP -eq 1 ]; then
 fi
 
 echo -e "${BLUE}╔════════════════════════════════════════════════════════════════╗${NC}"
-echo -e "${BLUE}║           Auto Claude - Production Build                       ║${NC}"
+echo -e "${BLUE}║           Auto Code - Production Build                       ║${NC}"
 echo -e "${BLUE}╚════════════════════════════════════════════════════════════════╝${NC}"
 echo ""
 

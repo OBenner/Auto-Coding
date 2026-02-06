@@ -2,7 +2,7 @@
 
 ## Overview
 
-This guide explains how dark mode was implemented in Auto Claude, covering the theme system architecture, CSS variable strategy, and state management approach.
+This guide explains how dark mode was implemented in Auto Code, covering the theme system architecture, CSS variable strategy, and state management approach.
 
 ## Architecture
 

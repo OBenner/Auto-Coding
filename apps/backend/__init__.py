@@ -1,6 +1,6 @@
 """
-Auto Claude Backend - Autonomous Coding Framework
-==================================================
+Auto Code Backend - Autonomous Coding Framework
+================================================
 
 Multi-agent autonomous coding framework that builds software through
 coordinated AI agent sessions.
@@ -20,4 +20,4 @@ See README.md for full documentation.
 """
 
 __version__ = "3.0.0"
-__author__ = "Auto Claude Team"
+__author__ = "Auto Code Team"

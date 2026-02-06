@@ -127,7 +127,7 @@ export function GitHubConnect() {
       ) : (
         <div className="mb-6">
           <p className="text-sm text-gray-600">
-            Connecting your GitHub account allows Auto Claude to access your repositories and create builds.
+            Connecting your GitHub account allows Auto Code to access your repositories and create builds.
           </p>
         </div>
       )}

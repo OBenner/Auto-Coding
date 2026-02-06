@@ -1,7 +1,7 @@
 """
 Agent Runner Service
 
-Service layer for executing Auto Claude agents (planner, coder, qa_reviewer, qa_fixer).
+Service layer for executing Auto Code agents (planner, coder, qa_reviewer, qa_fixer).
 This service wraps the backend agent execution logic and provides async task management.
 """
 
@@ -19,7 +19,7 @@ _running_tasks: Dict[str, asyncio.Task] = {}
 
 def _get_backend_path() -> Path:
     """
-    Get the path to the Auto Claude backend.
+    Get the path to the Auto Code backend.
 
     Returns:
         Path to the backend directory
@@ -31,7 +31,7 @@ def _get_backend_path() -> Path:
     if not backend_dir.exists():
         raise FileNotFoundError(
             f"Backend directory not found: {backend_dir}. "
-            "Ensure Auto Claude backend is installed."
+            "Ensure Auto Code backend is installed."
         )
 
     return backend_dir

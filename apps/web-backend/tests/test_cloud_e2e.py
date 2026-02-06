@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-End-to-end integration test for cloud-hosted Auto Claude.
+End-to-end integration test for cloud-hosted Auto Code.
 
 Tests the full workflow:
 1. User signup

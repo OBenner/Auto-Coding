@@ -343,7 +343,7 @@ async function fetchLatestStableRelease(): Promise<AppUpdateInfo | null> {
     });
 
     request.setHeader('Accept', 'application/vnd.github.v3+json');
-    request.setHeader('User-Agent', `Auto-Claude/${getCurrentVersion()}`);
+    request.setHeader('User-Agent', `Auto-Code/${getCurrentVersion()}`);
 
     let data = '';
 

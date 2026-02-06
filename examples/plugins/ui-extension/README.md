@@ -1,10 +1,10 @@
 # UI Extension Example Plugin
 
-A comprehensive example UI plugin that demonstrates how to create custom dashboard widgets with React components and IPC communication in Auto Claude.
+A comprehensive example UI plugin that demonstrates how to create custom dashboard widgets with React components and IPC communication in Auto Code.
 
 ## Overview
 
-This plugin adds a **Project Statistics** widget to the Auto Claude dashboard that displays real-time metrics about your specs, including completion rates, in-progress builds, and success rates. It's a complete implementation demonstrating all key aspects of UI plugin development.
+This plugin adds a **Project Statistics** widget to the Auto Code dashboard that displays real-time metrics about your specs, including completion rates, in-progress builds, and success rates. It's a complete implementation demonstrating all key aspects of UI plugin development.
 
 ## What It Does
 
@@ -72,7 +72,7 @@ if (result.success) {
 ### From Directory
 
 1. **Using the Electron UI** (Recommended):
-   - Open Auto Claude desktop app
+   - Open Auto Code desktop app
    - Navigate to **Plugins** (keyboard shortcut: `U`)
    - Click **Install Plugin**
    - Select **Directory** as installation source

@@ -1,5 +1,5 @@
 {
-  "name": "auto-claude-ui",
+  "name": "auto-code-ui",
   "version": "3.0.0",
   "type": "module",
   "description": "Desktop UI for Auto-Coding autonomous coding framework",

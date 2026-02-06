@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Memory Query CLI for auto-claude-ui.
+Memory Query CLI for auto-code-ui.
 
 Provides a subprocess interface for querying the LadybugDB/Graphiti memory database.
 Called from Node.js (Electron main process) via child_process.spawn().
@@ -1001,7 +1001,7 @@ def extract_session_number(name: str) -> int | None:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Query LadybugDB memory database for auto-claude-ui"
+        description="Query LadybugDB memory database for auto-code-ui"
     )
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 

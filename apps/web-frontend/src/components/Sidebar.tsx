@@ -87,7 +87,7 @@ export function Sidebar({
       {/* Header */}
       <div className="flex h-14 items-center justify-between border-b px-4">
         {!isCollapsed && (
-          <h2 className="text-lg font-semibold">Auto Claude</h2>
+          <h2 className="text-lg font-semibold">Auto Code</h2>
         )}
         <Button
           variant="ghost"

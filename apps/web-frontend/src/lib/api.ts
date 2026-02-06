@@ -1,5 +1,5 @@
 /**
- * API Client for Auto Claude Web Frontend
+ * API Client for Auto Code Web Frontend
  *
  * Provides functions to interact with the backend API for user authentication
  * and account management.

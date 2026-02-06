@@ -1,5 +1,5 @@
 """
-Integration tests for cloud-hosted Auto Claude
+Integration tests for cloud-hosted Auto Code
 
 Tests the integration of:
 - Database models and ORM

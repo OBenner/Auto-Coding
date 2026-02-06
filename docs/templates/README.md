@@ -1,6 +1,6 @@
-# Auto Claude Documentation Templates
+# Auto Code Documentation Templates
 
-Reusable templates for creating consistent, high-quality documentation across the Auto Claude project.
+Reusable templates for creating consistent, high-quality documentation across the Auto Code project.
 
 ## Overview
 
@@ -121,9 +121,9 @@ cp docs/templates/feature/spec.md .auto-claude/specs/001-my-feature/spec.md
 3. [ ] It should work properly
 ```
 
-## Integration with Auto Claude
+## Integration with Auto Code
 
-These templates align with Auto Claude's spec creation pipeline:
+These templates align with Auto Code's spec creation pipeline:
 
 - **spec.md** → Used by spec creation agents to generate feature specifications
 - **implementation-guide.md** → Referenced during implementation phase

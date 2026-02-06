@@ -1,5 +1,5 @@
 /**
- * Plugin system types for Auto Claude
+ * Plugin system types for Auto Code
  *
  * This module defines the TypeScript interfaces for the plugin system,
  * mirroring the backend Python implementation for type-safe IPC communication.
@@ -11,7 +11,7 @@
  */
 
 /**
- * Types of plugins supported by Auto Claude
+ * Types of plugins supported by Auto Code
  */
 export enum PluginType {
   AGENT = 'agent',

@@ -1,6 +1,6 @@
-# Deployment Guide - Auto Claude Web Backend
+# Deployment Guide - Auto Code Web Backend
 
-This guide covers deploying the Auto Claude Web Backend (FastAPI server) to production environments.
+This guide covers deploying the Auto Code Web Backend (FastAPI server) to production environments.
 
 ## Table of Contents
 
@@ -211,7 +211,7 @@ Create `/etc/systemd/system/auto-claude-web.service`:
 
 ```ini
 [Unit]
-Description=Auto Claude Web Backend
+Description=Auto Code Web Backend
 After=network.target
 
 [Service]

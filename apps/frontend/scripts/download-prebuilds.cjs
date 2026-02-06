@@ -60,7 +60,7 @@ function getLatestRelease() {
       hostname: 'api.github.com',
       path: `/repos/${GITHUB_REPO}/releases/latest`,
       headers: {
-        'User-Agent': 'Auto-Claude-Installer',
+        'User-Agent': 'Auto-Code-Installer',
         Accept: 'application/vnd.github.v3+json',
       },
     };
@@ -104,7 +104,7 @@ function downloadFile(url, destPath) {
 
     const request = (url) => {
       https
-        .get(url, { headers: { 'User-Agent': 'Auto-Claude-Installer' } }, (res) => {
+        .get(url, { headers: { 'User-Agent': 'Auto-Code-Installer' } }, (res) => {
           if (res.statusCode === 302 || res.statusCode === 301) {
             // Follow redirect
             request(res.headers.location);

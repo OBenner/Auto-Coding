@@ -1,10 +1,10 @@
-# Auto Claude Documentation
+# Auto Code Documentation
 
-Central documentation hub for Auto Claude architecture, templates, and guides.
+Central documentation hub for Auto Code architecture, templates, and guides.
 
 ## Documentation Structure
 
-This directory contains comprehensive documentation for understanding, extending, and contributing to Auto Claude.
+This directory contains comprehensive documentation for understanding, extending, and contributing to Auto Code.
 
 ### Directory Organization
 
@@ -74,7 +74,7 @@ cp docs/templates/api/endpoint-documentation.md docs/api/my-endpoint.md
 
 ## Documentation Locations
 
-Auto Claude documentation is spread across multiple locations, each serving a specific purpose:
+Auto Code documentation is spread across multiple locations, each serving a specific purpose:
 
 | Location | Purpose | Examples |
 |----------|---------|----------|

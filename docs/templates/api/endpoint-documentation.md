@@ -3,7 +3,7 @@
 <!--
 INSTRUCTIONS: Replace [HTTP Method] with GET, POST, PUT, PATCH, DELETE, etc.
 Replace [Endpoint Path] with the full path (e.g., /api/v1/specs/{spec_id}/status)
-This template helps document REST API endpoints following Auto Claude's documentation patterns.
+This template helps document REST API endpoints following Auto Code's documentation patterns.
 Fill in each section below, removing placeholder comments when done.
 -->
 
@@ -547,7 +547,7 @@ async function makeRequest() {
 makeRequest();
 ```
 
-### Auto Claude Backend Example
+### Auto Code Backend Example
 
 ```python
 from fastapi import APIRouter, HTTPException, Depends

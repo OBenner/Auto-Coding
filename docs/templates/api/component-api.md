@@ -2,7 +2,7 @@
 
 <!--
 INSTRUCTIONS: Replace [Component Name] with the actual component name (e.g., TaskCard, AuthManager, MemoryClient)
-This template helps document components/modules/classes following Auto Claude's documentation patterns.
+This template helps document components/modules/classes following Auto Code's documentation patterns.
 Suitable for: React components, Python classes, TypeScript modules, Python modules
 Fill in each section below, removing placeholder comments and sections that don't apply.
 -->

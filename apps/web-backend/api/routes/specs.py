@@ -2,7 +2,7 @@
 Spec Management API routes
 
 Provides endpoints for listing and managing specs.
-Specs and tasks are synonymous in Auto Claude - this is an alias endpoint.
+Specs and tasks are synonymous in Auto Code - this is an alias endpoint.
 """
 
 import json

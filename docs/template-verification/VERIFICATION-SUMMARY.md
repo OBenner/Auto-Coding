@@ -1,7 +1,7 @@
 # Template Verification Summary
 
 **Date**: 2026-02-05
-**Verified By**: Auto Claude QA
+**Verified By**: Auto Code QA
 **Status**: ✅ PASSED
 
 ## Overview
@@ -89,7 +89,7 @@ For each template, we:
 
 ### Scenario 5: System Architecture
 **Template**: `system-overview.md`
-**Sample System**: Auto Claude
+**Sample System**: Auto Code
 **Result**: ✅ Successfully created system overview with:
 - Executive summary with key facts
 - High-level architecture diagram
@@ -230,6 +230,6 @@ All test files are located in `docs/template-verification/`:
 
 ---
 
-**Verified By**: Auto Claude Coder Agent
+**Verified By**: Auto Code Coder Agent
 **Date**: 2026-02-05
 **Subtask**: subtask-6-2 (Verify all templates are usable)

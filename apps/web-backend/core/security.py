@@ -1,5 +1,5 @@
 """
-Security and authentication utilities for Auto Claude Web Backend
+Security and authentication utilities for Auto Code Web Backend
 
 Provides JWT token validation, authentication middleware, and FastAPI dependencies
 for securing API endpoints.

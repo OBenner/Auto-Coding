@@ -1,12 +1,12 @@
-# Cloud-Hosted Auto Claude - Overview
+# Cloud-Hosted Auto Code - Overview
 
-**A fully managed cloud deployment of Auto Claude where users can access autonomous AI agents without local installation.**
+**A fully managed cloud deployment of Auto Code where users can access autonomous AI agents without local installation.**
 
 ---
 
 ## Table of Contents
 
-- [What is Cloud-Hosted Auto Claude?](#what-is-cloud-hosted-auto-claude)
+- [What is Cloud-Hosted Auto Code?](#what-is-cloud-hosted-auto-code)
 - [How It Works](#how-it-works)
 - [Architecture](#architecture)
 - [Key Features](#key-features)
@@ -20,11 +20,11 @@
 
 ---
 
-## What is Cloud-Hosted Auto Claude?
+## What is Cloud-Hosted Auto Code?
 
-Cloud-Hosted Auto Claude is a web-based deployment of the Auto Claude autonomous coding framework that runs entirely in the cloud. Users access it through a web browser without installing any software locally.
+Cloud-Hosted Auto Code is a web-based deployment of the Auto Code autonomous coding framework that runs entirely in the cloud. Users access it through a web browser without installing any software locally.
 
-**Key Concept:** Instead of downloading and running Auto Claude on your local machine, you connect to a centrally hosted instance where all the AI agents, code generation, and build processes happen in the cloud.
+**Key Concept:** Instead of downloading and running Auto Code on your local machine, you connect to a centrally hosted instance where all the AI agents, code generation, and build processes happen in the cloud.
 
 ### Why Cloud-Hosted?
 
@@ -53,9 +53,9 @@ Cloud-Hosted Auto Claude is a web-based deployment of the Auto Claude autonomous
    - User receives access to the web dashboard
 
 2. **Connect Git Repository**
-   - User authorizes Auto Claude via OAuth (GitHub or GitLab)
+   - User authorizes Auto Code via OAuth (GitHub or GitLab)
    - OAuth tokens are stored securely (encrypted at rest)
-   - Auto Claude can now read/write to the user's repositories
+   - Auto Code can now read/write to the user's repositories
 
 3. **Create Build Tasks**
    - User describes what they want built (e.g., "Add user authentication")
@@ -134,7 +134,7 @@ Cloud-Hosted Auto Claude is a web-based deployment of the Auto Claude autonomous
 - **GitLab OAuth** - Connect GitLab accounts for repository access
 - **Token Management** - OAuth tokens stored securely with encryption
 - **Repository Linking** - Users can link multiple repositories
-- **Branch Management** - Auto Claude creates branches for each build
+- **Branch Management** - Auto Code creates branches for each build
 
 ### 3. Usage Tracking & Rate Limiting
 
@@ -166,7 +166,7 @@ Cloud-Hosted Auto Claude is a web-based deployment of the Auto Claude autonomous
 
 ### Individual Developers
 
-**Scenario:** Developer wants to try Auto Claude without installing anything locally.
+**Scenario:** Developer wants to try Auto Code without installing anything locally.
 
 - Sign up in 2 minutes
 - Connect GitHub account
@@ -174,7 +174,7 @@ Cloud-Hosted Auto Claude is a web-based deployment of the Auto Claude autonomous
 - No local environment setup required
 
 **Benefits:**
-- Quick evaluation of Auto Claude
+- Quick evaluation of Auto Code
 - No commitment to local installation
 - Works from any device with a browser
 
@@ -190,7 +190,7 @@ Cloud-Hosted Auto Claude is a web-based deployment of the Auto Claude autonomous
 - Centralized OAuth tokens (no individual Claude API keys needed)
 
 **Benefits:**
-- Single place to manage Auto Claude access
+- Single place to manage Auto Code access
 - Usage visibility across the team
 - Simplified billing (one subscription vs. multiple)
 
@@ -198,7 +198,7 @@ Cloud-Hosted Auto Claude is a web-based deployment of the Auto Claude autonomous
 
 ### Enterprise Organizations (10+ developers)
 
-**Scenario:** Large company wants Auto Claude for multiple teams with compliance requirements.
+**Scenario:** Large company wants Auto Code for multiple teams with compliance requirements.
 
 - Deploy to private cloud infrastructure (AWS, GCP, Azure)
 - SSO integration for user authentication
@@ -386,7 +386,7 @@ If your organization has deployed a cloud instance:
 3. **Connect Git Account**
    - Navigate to `<cloud-url>/settings/git`
    - Click "Connect GitHub" or "Connect GitLab"
-   - Authorize Auto Claude to access your repositories
+   - Authorize Auto Code to access your repositories
 
 4. **Start Building**
    - Navigate to task creation page (future)
@@ -397,7 +397,7 @@ If your organization has deployed a cloud instance:
 
 ### For Administrators (Deploying Cloud Instance)
 
-If you want to deploy your own cloud-hosted Auto Claude:
+If you want to deploy your own cloud-hosted Auto Code:
 
 **Quick Start (Docker Compose - Development/Small Teams):**
 
@@ -466,19 +466,19 @@ See [Cloud Deployment Guide](CLOUD_DEPLOYMENT.md) for:
 
 ## FAQ
 
-### Q: Is cloud-hosted Auto Claude available as a SaaS service?
+### Q: Is cloud-hosted Auto Code available as a SaaS service?
 
 **A:** Not yet. Currently, you can deploy your own cloud instance using the provided deployment guides and infrastructure manifests. A fully managed SaaS offering may be available in the future.
 
 ---
 
-### Q: Can I use cloud-hosted Auto Claude without connecting GitHub/GitLab?
+### Q: Can I use cloud-hosted Auto Code without connecting GitHub/GitLab?
 
-**A:** Not for the full functionality. Auto Claude needs access to your Git repositories to read code, create branches, and commit changes. OAuth integration is required.
+**A:** Not for the full functionality. Auto Code needs access to your Git repositories to read code, create branches, and commit changes. OAuth integration is required.
 
 ---
 
-### Q: How much does cloud-hosted Auto Claude cost?
+### Q: How much does cloud-hosted Auto Code cost?
 
 **A:** The software is free (AGPL-3.0 license), but you pay for:
 - Cloud infrastructure (compute, storage, bandwidth) via your cloud provider
@@ -488,7 +488,7 @@ For a dedicated cloud deployment on AWS, expect ~$200-500/month for a small team
 
 ---
 
-### Q: Can I deploy cloud-hosted Auto Claude to my private cloud?
+### Q: Can I deploy cloud-hosted Auto Code to my private cloud?
 
 **A:** Yes! The deployment manifests support any Kubernetes-compatible environment:
 - AWS EKS
@@ -547,7 +547,7 @@ The cloud-hosted feature is open source (AGPL-3.0). Contributions are welcome:
 
 ## License
 
-Cloud-hosted Auto Claude is licensed under **AGPL-3.0** (same as the main Auto Claude project).
+Cloud-hosted Auto Code is licensed under **AGPL-3.0** (same as the main Auto Code project).
 
 **What this means:**
 - ✅ Free to deploy and use for your team/organization

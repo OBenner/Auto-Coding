@@ -1,7 +1,7 @@
 #!/bin/bash
 
 ###############################################################################
-# Auto Claude - Development Environment Verification Script (Unix)
+# Auto Code - Development Environment Verification Script (Unix)
 ###############################################################################
 #
 # PURPOSE:
@@ -63,7 +63,7 @@ done
 # Show help if requested
 if [ $SHOW_HELP -eq 1 ]; then
     echo ""
-    echo "Auto Claude - Development Environment Check"
+    echo "Auto Code - Development Environment Check"
     echo ""
     echo "USAGE:"
     echo "  ./scripts/dev-check.sh           Run all checks"
@@ -112,7 +112,7 @@ check_command() {
 }
 
 echo -e "${BLUE}╔════════════════════════════════════════════════════════════════╗${NC}"
-echo -e "${BLUE}║        Auto Claude - Development Environment Check             ║${NC}"
+echo -e "${BLUE}║        Auto Code - Development Environment Check             ║${NC}"
 echo -e "${BLUE}╚════════════════════════════════════════════════════════════════╝${NC}"
 echo ""
 

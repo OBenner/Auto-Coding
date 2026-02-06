@@ -1,7 +1,7 @@
 /**
  * Signup Page
  *
- * User registration form for cloud-hosted Auto Claude.
+ * User registration form for cloud-hosted Auto Code.
  * Collects email, password, and optional organization details.
  */
 
@@ -74,7 +74,7 @@ export function Signup() {
             Create Account
           </h1>
           <p className="text-gray-600">
-            Start building with Auto Claude in the cloud
+            Start building with Auto Code in the cloud
           </p>
         </div>
 

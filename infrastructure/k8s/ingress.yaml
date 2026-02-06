@@ -1,5 +1,5 @@
 ---
-# Ingress for Auto Claude Web Backend
+# Ingress for Auto Code Web Backend
 #
 # This provides HTTPS access to the backend API with TLS termination.
 # Requires an Ingress Controller (nginx, traefik, etc.) to be installed in the cluster.

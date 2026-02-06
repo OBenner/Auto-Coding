@@ -1,8 +1,8 @@
-# Auto Claude System Architecture
+# Auto Code System Architecture
 
 ## Executive Summary
 
-Auto Claude is a multi-agent autonomous coding framework that builds software through coordinated AI agent sessions. The system uses the Claude Agent SDK to run agents in isolated workspaces with comprehensive security controls.
+Auto Code is a multi-agent autonomous coding framework that builds software through coordinated AI agent sessions. The system uses the Claude Agent SDK to run agents in isolated workspaces with comprehensive security controls.
 
 **Key Facts:**
 
@@ -19,7 +19,7 @@ Auto Claude is a multi-agent autonomous coding framework that builds software th
 
 ### Business Context
 
-Auto Claude enables developers to delegate complex coding tasks to AI agents that work autonomously in isolated environments. The system creates detailed specifications, generates implementation plans, writes code, and validates results through QA cycles.
+Auto Code enables developers to delegate complex coding tasks to AI agents that work autonomously in isolated environments. The system creates detailed specifications, generates implementation plans, writes code, and validates results through QA cycles.
 
 ### System Boundaries
 
@@ -76,7 +76,7 @@ Auto Claude enables developers to delegate complex coding tasks to AI agents tha
 
 ### Pattern: Multi-Agent Pipeline
 
-Auto Claude uses a pipeline pattern where specialized agents handle different phases:
+Auto Code uses a pipeline pattern where specialized agents handle different phases:
 
 1. **Spec Phase**: Create detailed specifications
 2. **Plan Phase**: Generate implementation plan with subtasks
@@ -164,7 +164,7 @@ Auto Claude uses a pipeline pattern where specialized agents handle different ph
 
 ### Scaling Strategy
 
-Auto Claude runs locally on user machines. Scaling is handled by:
+Auto Code runs locally on user machines. Scaling is handled by:
 - Parallel subagent execution for independent tasks
 - Efficient memory caching
 - Worktree isolation for concurrent builds

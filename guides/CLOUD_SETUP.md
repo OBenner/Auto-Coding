@@ -1,6 +1,6 @@
-# Cloud Setup Guide - Auto Claude
+# Cloud Setup Guide - Auto Code
 
-This guide walks you through the initial setup of Auto Claude's cloud-hosted infrastructure. Follow these steps to deploy your first cloud instance.
+This guide walks you through the initial setup of Auto Code's cloud-hosted infrastructure. Follow these steps to deploy your first cloud instance.
 
 ## Table of Contents
 
@@ -20,7 +20,7 @@ This guide walks you through the initial setup of Auto Claude's cloud-hosted inf
 
 ## Architecture Overview
 
-Auto Claude's cloud infrastructure consists of:
+Auto Code's cloud infrastructure consists of:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -235,7 +235,7 @@ You need to register OAuth applications with your Git providers to enable reposi
    - Click "OAuth Apps" → "New OAuth App"
 
 2. **Fill in application details:**
-   - **Application name**: `Auto Claude Cloud`
+   - **Application name**: `Auto Code Cloud`
    - **Homepage URL**: `https://your-domain.com` (or `http://localhost:8000` for testing)
    - **Authorization callback URL**: `https://your-domain.com/api/git/github/callback`
    - Click "Register application"
@@ -252,7 +252,7 @@ You need to register OAuth applications with your Git providers to enable reposi
    - Click "Add new application"
 
 2. **Fill in application details:**
-   - **Name**: `Auto Claude Cloud`
+   - **Name**: `Auto Code Cloud`
    - **Redirect URI**: `https://your-domain.com/api/git/gitlab/callback`
    - **Scopes**: Select `api`, `read_user`, `read_repository`, `write_repository`
    - Click "Save application"

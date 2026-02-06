@@ -1,6 +1,6 @@
 # Cloud Integration Tests
 
-This directory contains end-to-end integration tests for the cloud-hosted Auto Claude infrastructure.
+This directory contains end-to-end integration tests for the cloud-hosted Auto Code infrastructure.
 
 ## Test Files
 

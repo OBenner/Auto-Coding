@@ -1,10 +1,10 @@
 # Hello World Agent Plugin
 
-A simple example agent plugin that demonstrates the Auto Claude plugin system's basic capabilities and lifecycle hooks.
+A simple example agent plugin that demonstrates the Auto Code plugin system's basic capabilities and lifecycle hooks.
 
 ## Overview
 
-This plugin logs messages at each stage of the agent lifecycle, helping developers understand how agent plugins work in Auto Claude. It's a minimal but complete implementation that can serve as a template for building more complex agent plugins.
+This plugin logs messages at each stage of the agent lifecycle, helping developers understand how agent plugins work in Auto Code. It's a minimal but complete implementation that can serve as a template for building more complex agent plugins.
 
 ## What It Does
 
@@ -43,13 +43,13 @@ The plugin demonstrates how to access:
 
 ### From Directory
 
-1. **Copy the plugin directory** to Auto Claude's plugin location:
+1. **Copy the plugin directory** to Auto Code's plugin location:
    ```bash
    cp -r examples/plugins/hello-world-agent ~/.auto-claude/plugins/user/
    ```
 
 2. **Using the Electron UI**:
-   - Open Auto Claude desktop app
+   - Open Auto Code desktop app
    - Navigate to **Plugins** (shortcut: `U`)
    - Click **Install Plugin**
    - Select **Directory** as installation source

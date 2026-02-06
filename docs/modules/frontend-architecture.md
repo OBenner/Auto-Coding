@@ -1,6 +1,6 @@
 # Frontend Architecture
 
-Electron desktop application for Auto Claude autonomous coding framework. Built with React, TypeScript, and modern web technologies.
+Electron desktop application for Auto Code autonomous coding framework. Built with React, TypeScript, and modern web technologies.
 
 ## Architecture
 
@@ -159,7 +159,7 @@ const projects = await window.electronAPI.project.listProjects();
 
 ## IPC Communication Pattern
 
-Auto Claude uses a type-safe IPC architecture:
+Auto Code uses a type-safe IPC architecture:
 
 ```
 ┌─────────────────┐                    ┌──────────────────┐
@@ -206,7 +206,7 @@ preload/
 
 ## Platform Abstraction
 
-**CRITICAL:** Auto Claude supports Windows, macOS, and Linux. Platform-specific bugs are the #1 source of breakage. All platform-specific code MUST be centralized in the platform abstraction layer.
+**CRITICAL:** Auto Code supports Windows, macOS, and Linux. Platform-specific bugs are the #1 source of breakage. All platform-specific code MUST be centralized in the platform abstraction layer.
 
 ### The Problem
 
@@ -469,7 +469,7 @@ See [Cross-Platform Development](../../CLAUDE.md#cross-platform-development) for
 
 ## Internationalization (i18n)
 
-Auto Claude frontend uses `react-i18next` for comprehensive internationalization support. All user-facing text must use translation keys.
+Auto Code frontend uses `react-i18next` for comprehensive internationalization support. All user-facing text must use translation keys.
 
 ### Architecture
 
@@ -713,7 +713,7 @@ Users can change the language preference in the application settings. The select
 
 ## State Management
 
-Auto Claude uses a hybrid state management approach:
+Auto Code uses a hybrid state management approach:
 
 **Local state:**
 - React `useState` for component-local state
@@ -801,7 +801,7 @@ The frontend integrates with Python backend agents via subprocess spawning:
 
 ## Python Environment Management
 
-Auto Claude bundles Python with the app or uses system Python:
+Auto Code bundles Python with the app or uses system Python:
 
 **Python discovery:**
 1. Check bundled Python (for packaged apps)

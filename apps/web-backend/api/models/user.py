@@ -22,7 +22,7 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 class User(Base):
     """
-    User model for cloud-hosted Auto Claude
+    User model for cloud-hosted Auto Code
 
     Stores user authentication credentials and profile information.
     Passwords are hashed using bcrypt before storage.

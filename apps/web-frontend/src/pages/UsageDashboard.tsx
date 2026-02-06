@@ -1,7 +1,7 @@
 /**
  * Usage Dashboard Page
  *
- * Displays API usage statistics and analytics for cloud-hosted Auto Claude.
+ * Displays API usage statistics and analytics for cloud-hosted Auto Code.
  * Shows request counts, usage trends, and quota information.
  */
 

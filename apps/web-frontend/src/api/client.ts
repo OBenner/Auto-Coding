@@ -1,7 +1,7 @@
 /**
  * API Client
  *
- * REST API client for communicating with the Auto Claude web backend.
+ * REST API client for communicating with the Auto Code web backend.
  * Provides methods for task/spec management and agent execution.
  */
 
@@ -29,7 +29,7 @@ const DEFAULT_CONFIG: ApiConfig = {
 };
 
 /**
- * API Client for Auto Claude web backend
+ * API Client for Auto Code web backend
  */
 export class ApiClient {
   private config: ApiConfig;

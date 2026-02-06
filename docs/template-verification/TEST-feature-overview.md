@@ -6,7 +6,7 @@
 
 ## Overview
 
-Dark mode is a theme option that changes the Auto Claude interface from light backgrounds to dark backgrounds. This feature helps reduce eye strain during extended use and provides a better experience in low-light environments.
+Dark mode is a theme option that changes the Auto Code interface from light backgrounds to dark backgrounds. This feature helps reduce eye strain during extended use and provides a better experience in low-light environments.
 
 ## Key Benefits
 
@@ -38,12 +38,12 @@ Dark mode is implemented using CSS custom properties (CSS variables) and a theme
 
 ### Prerequisites
 
-- Auto Claude desktop app version 2.9.0 or later
+- Auto Code desktop app version 2.9.0 or later
 - No additional configuration required
 
 ### Basic Usage
 
-1. Open Auto Claude desktop application
+1. Open Auto Code desktop application
 2. Navigate to Settings (⚙️ icon in sidebar)
 3. Find "Appearance" section
 4. Click the theme toggle switch
@@ -66,7 +66,7 @@ Theme preference is automatically saved and requires no manual configuration.
 
 ### Use Case 2: Presentation Mode
 
-**Scenario**: Demonstrating Auto Claude in a dark conference room
+**Scenario**: Demonstrating Auto Code in a dark conference room
 
 **Steps**:
 1. Switch to dark mode for better visibility
@@ -136,5 +136,5 @@ Currently not implemented, but planned keyboard shortcut: `Ctrl/Cmd + Shift + T`
 ## Support
 
 For issues or questions:
-- GitHub Issues: [Auto Claude Issues](https://github.com/AndyMik90/Auto-Claude/issues)
+- GitHub Issues: [Auto Code Issues](https://github.com/AndyMik90/Auto-Claude/issues)
 - Discussions: [GitHub Discussions](https://github.com/AndyMik90/Auto-Claude/discussions)

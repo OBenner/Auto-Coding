@@ -1,6 +1,6 @@
 # Database Migrations
 
-This directory contains Alembic database migrations for the Auto Claude web backend.
+This directory contains Alembic database migrations for the Auto Code web backend.
 
 ## Setup
 

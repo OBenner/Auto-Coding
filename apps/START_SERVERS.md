@@ -1,6 +1,6 @@
 # Starting Web Backend and Frontend Servers
 
-Quick reference guide for running the Auto Claude web interface.
+Quick reference guide for running the Auto Code web interface.
 
 ## Prerequisites
 

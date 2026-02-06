@@ -1,5 +1,5 @@
 """
-Services module for Auto Claude web backend
+Services module for Auto Code web backend
 
 Provides service layer abstractions for business logic.
 """

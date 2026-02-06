@@ -1,10 +1,10 @@
 # Web Backend API Reference
 
-Complete reference for Auto Claude's FastAPI web backend REST API and WebSocket endpoints.
+Complete reference for Auto Code's FastAPI web backend REST API and WebSocket endpoints.
 
 ## Overview
 
-The web backend is a FastAPI service that provides HTTP REST APIs and WebSocket connections for the Auto Claude web interface. It enables task management, agent execution, and real-time progress updates.
+The web backend is a FastAPI service that provides HTTP REST APIs and WebSocket connections for the Auto Code web interface. It enables task management, agent execution, and real-time progress updates.
 
 **Tech Stack:**
 - Framework: FastAPI
@@ -60,7 +60,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES=30
 # WebSocket configuration
 WS_HEARTBEAT_INTERVAL=30
 
-# Auto Claude backend integration (optional)
+# Auto Code backend integration (optional)
 AUTO_CLAUDE_BACKEND_DIR=/path/to/apps/backend
 ```
 
@@ -113,7 +113,7 @@ curl http://localhost:8000/health
 
 ### Specs API
 
-Endpoints for managing specifications (specs). Specs and tasks are synonymous in Auto Claude.
+Endpoints for managing specifications (specs). Specs and tasks are synonymous in Auto Code.
 
 **Base Path:** `/api/specs`
 
@@ -953,4 +953,4 @@ AUTO_CLAUDE_BACKEND_DIR=/path/to/Auto-Claude/apps/backend
 
 **Version:** 1.0.0
 **Last Updated:** 2026-02-04
-**Maintained By:** Auto Claude Team
+**Maintained By:** Auto Code Team

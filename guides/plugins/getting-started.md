@@ -1,10 +1,10 @@
 # Plugin Development - Getting Started
 
-Welcome to Auto Claude's plugin system! This guide will help you create your first plugin and understand the core concepts of Auto Claude's extensibility framework.
+Welcome to Auto Code's plugin system! This guide will help you create your first plugin and understand the core concepts of Auto Code's extensibility framework.
 
 ## Overview
 
-Auto Claude's plugin system allows you to extend the platform with:
+Auto Code's plugin system allows you to extend the platform with:
 
 - **Agent Plugins** - Custom agents with specialized tools and behaviors
 - **Integration Plugins** - External service integrations using MCP tools
@@ -50,7 +50,7 @@ Edit `my-plugin/plugin.json`:
 ### 3. Install and Test
 
 **Using the UI:**
-1. Open Auto Claude desktop app
+1. Open Auto Code desktop app
 2. Navigate to **Plugins** (shortcut: `U`)
 3. Click **Install Plugin**
 4. Select **Directory** and browse to `my-plugin`
@@ -144,7 +144,7 @@ Agent plugins extend agent behavior by providing custom tools and lifecycle hook
 
 ### Integration Plugins
 
-Integration plugins connect Auto Claude to external services by creating MCP tools that agents can use.
+Integration plugins connect Auto Code to external services by creating MCP tools that agents can use.
 
 **Use cases:**
 - Integrate with issue trackers (Jira, Linear, GitHub)
@@ -277,7 +277,7 @@ Users will be able to install from zip through the UI.
 
 ### From Marketplace (Coming Soon)
 
-The Auto Claude plugin marketplace will allow users to:
+The Auto Code plugin marketplace will allow users to:
 - Browse and search plugins
 - Install with one click
 - Receive automatic updates
@@ -403,7 +403,7 @@ def test_plugin_loads_with_loader():
 
 ### Manual Testing
 
-1. Install plugin in Auto Claude
+1. Install plugin in Auto Code
 2. Enable plugin
 3. Create a test spec
 4. Run build and observe logs
@@ -531,16 +531,16 @@ Choose descriptive, unique plugin names:
 
 ## Plugin Discovery Paths
 
-Auto Claude looks for plugins in these locations (in order):
+Auto Code looks for plugins in these locations (in order):
 
 1. **User plugins:** `~/.auto-claude/plugins/user/`
    - User-installed plugins
    - Overrides system plugins with same name
-   - Persistent across Auto Claude updates
+   - Persistent across Auto Code updates
 
 2. **System plugins:** `~/.auto-claude/plugins/system/`
-   - Auto Claude bundled plugins
-   - Updated with Auto Claude releases
+   - Auto Code bundled plugins
+   - Updated with Auto Code releases
    - Can be overridden by user plugins
 
 **Note:** User plugins take precedence if a plugin with the same name exists in both locations.
@@ -579,7 +579,7 @@ This ensures:
 Once your plugin is ready, consider sharing it:
 
 1. Publish to GitHub
-2. Add to Auto Claude plugin list (coming soon)
+2. Add to Auto Code plugin list (coming soon)
 3. Submit to plugin marketplace (coming soon)
 4. Share in GitHub Discussions
 
