@@ -52,20 +52,15 @@ from core.platform import validate_cli_path
 # Provider abstraction layer imports
 # These enable multi-provider support while preserving Claude as default
 from core.providers import (
-    ProviderError,
-    ProviderNotInstalled,
     create_engine_provider,
-    get_available_provider_names,
 )
-from core.providers.base import AIEngineProvider, AgentSession, SessionConfig
+from core.providers.base import AgentSession, AIEngineProvider, SessionConfig
 from core.providers.config import (
     DEFAULT_PROVIDER,
     ProviderConfig,
-    get_available_providers,
     get_provider_config,
     validate_provider_config,
 )
-
 from phase_config import get_thinking_budget
 
 logger = logging.getLogger(__name__)

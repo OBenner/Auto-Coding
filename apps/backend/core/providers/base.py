@@ -13,11 +13,12 @@ This abstraction enables:
 
 import logging
 from abc import ABC, abstractmethod
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, AsyncIterator, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 if TYPE_CHECKING:
-    from core.providers.config import ProviderConfig
+    pass
 
 logger = logging.getLogger(__name__)
 

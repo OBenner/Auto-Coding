@@ -14,7 +14,7 @@ from typing import Any
 from core.client import create_client
 from phase_config import get_phase_model, get_phase_thinking_budget
 from prompts_pkg.prompt_loader import get_agent_prompt
-from task_logger import get_task_logger, LogEntryType, LogPhase
+from task_logger import LogEntryType, LogPhase, get_task_logger
 from ui import (
     Icons,
     bold,
@@ -59,7 +59,7 @@ def validate_generated_tests(test_files: list[Path], project_dir: Path) -> bool:
 
         # Check Python syntax
         try:
-            with open(file_path, "r", encoding="utf-8") as f:
+            with open(file_path, encoding="utf-8") as f:
                 compile(f.read(), str(file_path), "exec")
             print_status(f"Syntax valid: {test_file.name}", "success")
         except SyntaxError as e:

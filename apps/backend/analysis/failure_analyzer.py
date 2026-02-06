@@ -31,7 +31,7 @@ except ImportError:
     ClaudeAgentOptions = None
     ClaudeSDKClient = None
 
-from core.auth import ensure_claude_code_oauth_token, get_auth_token
+from core.auth import get_auth_token
 
 # Default model for failure analysis (fast and cheap)
 DEFAULT_ANALYSIS_MODEL = "claude-haiku-4-5-20251001"

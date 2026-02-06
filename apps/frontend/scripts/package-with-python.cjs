@@ -232,7 +232,7 @@ function cleanBackendForPackaging(frontendDir) {
         }
         fs.renameSync(fullPath, backupPath);
         movedDirs.push({ original: fullPath, backup: backupPath });
-      } catch (err) {
+      } catch {
         // On Windows, rename may fail on symlinks/junctions - just delete instead
         console.log(`[package] Cannot move ${dir}, removing it instead...`);
         try {

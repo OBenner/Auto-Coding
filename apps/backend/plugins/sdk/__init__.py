@@ -12,7 +12,7 @@ This package provides base classes, utilities, and APIs for creating:
 
 from .agent import AgentContext, AgentPlugin
 from .integration import IntegrationContext, IntegrationPlugin
-from .ui import UIContext, UIPlugin, UIExtensionPoint, UIComponentDefinition
+from .ui import UIComponentDefinition, UIContext, UIExtensionPoint, UIPlugin
 
 __all__ = [
     "AgentContext",

@@ -13,6 +13,10 @@ from pathlib import Path
 from typing import Any
 
 from agents.memory_manager import save_user_correction
+
+# Test generation imports
+from agents.test_generator import run_test_generator_session
+from analysis.code_analyzer import CodeAnalyzer
 from analysis.failure_analyzer import analyze_failure, is_analysis_enabled
 from core.client import create_client
 from debug import debug, debug_error, debug_section, debug_success, debug_warning
@@ -50,10 +54,6 @@ from .report import (
     record_iteration,
 )
 from .reviewer import run_qa_agent_session
-
-# Test generation imports
-from agents.test_generator import run_test_generator_session
-from analysis.code_analyzer import CodeAnalyzer
 
 # Configuration
 MAX_QA_ITERATIONS = 50
@@ -157,7 +157,7 @@ def _move_tests_to_review_directory(
     # Create review directory
     review_dir = spec_dir / "generated_tests_review"
     review_dir.mkdir(exist_ok=True)
-    debug("qa_loop", f"Created test review directory", review_dir=str(review_dir))
+    debug("qa_loop", "Created test review directory", review_dir=str(review_dir))
 
     # Move each generated test file to review directory
     moved_files = []
@@ -170,7 +170,7 @@ def _move_tests_to_review_directory(
             try:
                 shutil.move(str(source), str(dest))
                 moved_files.append(file_path.name)
-                debug("qa_loop", f"Moved test to review", file=file_path.name)
+                debug("qa_loop", "Moved test to review", file=file_path.name)
             except Exception as e:
                 debug_error("qa_loop", f"Failed to move {file_path.name}: {e}")
         else:
@@ -232,7 +232,7 @@ Generated: {time_module.strftime('%Y-%m-%d %H:%M:%S')}
     print("=" * 70)
     print(f"\n✅ {len(moved_files)} test file(s) have been generated and saved for review.")
     print(f"\n📁 Review directory: {review_dir}")
-    print(f"\nGenerated tests:")
+    print("\nGenerated tests:")
     for name in moved_files:
         print(f"   • {name}")
     print(f"\n📖 See {instruction_file.name} for review instructions")
@@ -443,7 +443,7 @@ async def run_qa_validation_loop(
 
         if impl_plan_file.exists():
             import json
-            with open(impl_plan_file, "r", encoding="utf-8") as f:
+            with open(impl_plan_file, encoding="utf-8") as f:
                 impl_plan = json.load(f)
 
             # Collect files from completed subtasks
@@ -498,7 +498,7 @@ async def run_qa_validation_loop(
                 if test_result.get("success"):
                     generated_files = test_result.get("generated_files", [])
                     print(f"   ✅ Generated {len(generated_files)} test file(s)")
-                    debug_success("qa_loop", f"Test generation completed", file_count=len(generated_files))
+                    debug_success("qa_loop", "Test generation completed", file_count=len(generated_files))
 
                     # Move generated tests to review directory for user approval
                     if generated_files:

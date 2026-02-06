@@ -36,9 +36,9 @@ from typing import TYPE_CHECKING
 
 # Import the full Claude adapter implementation (always available)
 from core.providers.adapters.claude import (
+    CLAUDE_MODELS,
     ClaudeAgentProvider,
     ClaudeAgentSession,
-    CLAUDE_MODELS,
 )
 
 
@@ -83,14 +83,14 @@ def _get_openrouter_models():
 # For TYPE_CHECKING, we can import directly since it won't execute
 if TYPE_CHECKING:
     from core.providers.adapters.litellm import (
+        LITELLM_MODELS,
         LiteLLMProvider,
         LiteLLMSession,
-        LITELLM_MODELS,
     )
     from core.providers.adapters.openrouter import (
+        OPENROUTER_MODELS,
         OpenRouterProvider,
         OpenRouterSession,
-        OPENROUTER_MODELS,
     )
 
 

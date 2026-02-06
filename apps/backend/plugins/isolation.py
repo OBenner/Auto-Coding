@@ -97,7 +97,7 @@ class ResourceLimits:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "ResourceLimits":
+    def from_dict(cls, data: dict[str, Any]) -> ResourceLimits:
         """Create from dictionary."""
         return cls(
             max_memory_mb=data.get("max_memory_mb", 512),
@@ -469,7 +469,7 @@ class PluginSandbox:
 
         debug_verbose("Sandbox cleanup complete")
 
-    def __enter__(self) -> "PluginSandbox":
+    def __enter__(self) -> PluginSandbox:
         """Context manager entry."""
         return self
 

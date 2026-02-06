@@ -120,7 +120,7 @@ async def test_pattern_categorization():
         if category and category != "uncategorized":
             print(f"   ✅ Categorized as '{category}'")
         else:
-            print(f"   ⚠️  WARNING: Categorized as 'uncategorized'")
+            print("   ⚠️  WARNING: Categorized as 'uncategorized'")
             all_passed = False
 
     if all_passed:
@@ -291,7 +291,7 @@ async def test_memory_manager_integration(spec_dir, project_dir):
         )
 
         if formatted_patterns:
-            print(f"✅ Memory manager returned formatted patterns:")
+            print("✅ Memory manager returned formatted patterns:")
             print("-" * 80)
             print(formatted_patterns[:500] + "..." if len(formatted_patterns) > 500 else formatted_patterns)
             print("-" * 80)

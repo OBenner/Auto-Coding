@@ -69,7 +69,7 @@ class PluginRegistry:
         ...     print(f"{plugin.name}: {'enabled' if plugin.is_enabled else 'disabled'}")
     """
 
-    _instance: Optional["PluginRegistry"] = None
+    _instance: Optional[PluginRegistry] = None
 
     def __init__(
         self,
@@ -101,7 +101,7 @@ class PluginRegistry:
         user_plugins_dir: Optional[Path] = None,
         system_plugins_dir: Optional[Path] = None,
         project_dir: Optional[Path] = None,
-    ) -> "PluginRegistry":
+    ) -> PluginRegistry:
         """
         Get singleton instance of PluginRegistry.
 

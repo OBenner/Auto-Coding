@@ -46,7 +46,7 @@ class AgentContext:
     project_dir: Path
     spec_dir: Path
     session_id: Optional[str] = None
-    client: Optional["ClaudeSDKClient"] = None
+    client: Optional[ClaudeSDKClient] = None
     phase: Optional[str] = None
     metadata: dict[str, Any] = None
 

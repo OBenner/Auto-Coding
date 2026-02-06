@@ -113,7 +113,7 @@ class PluginLoader:
         self.user_plugins_dir.mkdir(parents=True, exist_ok=True)
         self.system_plugins_dir.mkdir(parents=True, exist_ok=True)
 
-        logger.debug(f"PluginLoader initialized:")
+        logger.debug("PluginLoader initialized:")
         debug_verbose(f"  User plugins: {self.user_plugins_dir}")
         debug_verbose(f"  System plugins: {self.system_plugins_dir}")
         debug_verbose(f"  Default limits: {self.default_limits.to_dict()}")
@@ -279,7 +279,7 @@ class PluginLoader:
             )
 
         try:
-            with open(manifest_path, "r", encoding="utf-8") as f:
+            with open(manifest_path, encoding="utf-8") as f:
                 data = json.load(f)
         except json.JSONDecodeError as e:
             raise PluginValidationError(

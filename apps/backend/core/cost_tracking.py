@@ -133,7 +133,7 @@ class CostTracker:
             return
 
         try:
-            with open(self._report_file, "r", encoding="utf-8") as f:
+            with open(self._report_file, encoding="utf-8") as f:
                 data = json.load(f)
                 self.records = [
                     UsageRecord.from_dict(record)

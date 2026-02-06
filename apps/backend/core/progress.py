@@ -9,11 +9,10 @@ Enhanced with colored output, icons, and better visual formatting.
 """
 
 import json
-import time
 from pathlib import Path
 
 from core.plan_normalization import normalize_subtask_aliases
-from core.timing_history import TimingHistory, get_timing_history
+from core.timing_history import get_timing_history
 from ui import (
     Icons,
     bold,

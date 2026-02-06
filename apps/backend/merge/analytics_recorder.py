@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Any
 
 from .models import MergeReport, MergeStats
-from .types import ConflictSeverity, MergeDecision
+from .types import ConflictSeverity
 
 logger = logging.getLogger(__name__)
 

@@ -115,7 +115,7 @@ class PermissionValidator:
         cls,
         permissions: list[PluginPermission],
         plugin_name: str = "unknown",
-    ) -> "PermissionValidator":
+    ) -> PermissionValidator:
         """
         Create validator from explicit permission list.
 
@@ -295,7 +295,7 @@ class PluginMetadata:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "PluginMetadata":
+    def from_dict(cls, data: dict[str, Any]) -> PluginMetadata:
         """Create metadata from dictionary (loaded from plugin.json)."""
         return cls(
             name=data["name"],

@@ -64,7 +64,7 @@ def load_token_stats(spec_dir: Path) -> TaskTokenStats | None:
         return None
 
     try:
-        with open(stats_file, "r") as f:
+        with open(stats_file) as f:
             data = json.load(f)
 
         # Reconstruct PhaseTokenStats objects

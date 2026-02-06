@@ -1386,7 +1386,7 @@ class GHClient:
                     "error": f"File not found: {file_path}",
                 }
 
-            with open(file_full_path, "r", encoding="utf-8") as f:
+            with open(file_full_path, encoding="utf-8") as f:
                 lines = f.readlines()
 
             # Validate line numbers
@@ -1419,7 +1419,7 @@ class GHClient:
             # Stage and commit the change
             # Use git directly via gh CLI's shell execution
             stage_args = ["api", "--method", "POST", "/graphql", "-f",
-                         f'query=mutation {{ __typename }}']
+                         'query=mutation { __typename }']
 
             # Actually, let's use basic git commands through subprocess
             # First, stage the file

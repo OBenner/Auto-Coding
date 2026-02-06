@@ -27,8 +27,8 @@ Provider-specific keys are also supported:
 
 import logging
 import uuid
-from pathlib import Path
-from typing import TYPE_CHECKING, Any, AsyncIterator, Optional
+from collections.abc import AsyncIterator
+from typing import TYPE_CHECKING, Any, Optional
 
 from core.providers.base import AgentSession, AIEngineProvider, SessionConfig
 from core.providers.exceptions import (

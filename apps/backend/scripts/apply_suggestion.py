@@ -50,7 +50,7 @@ def parse_suggestion_from_comment(comment: dict, project_dir: str) -> dict:
     if not file_path.exists():
         raise FileNotFoundError(f"File not found: {file_path}")
 
-    with open(file_path, 'r', encoding='utf-8') as f:
+    with open(file_path, encoding='utf-8') as f:
         lines = f.readlines()
 
     # Determine line range based on suggestion length

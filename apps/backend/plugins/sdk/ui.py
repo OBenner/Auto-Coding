@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING, Any, Callable, Optional
 from ..base import PluginBase, PluginMetadata, PluginType
 
 if TYPE_CHECKING:
-    from electron import ipcMain  # type: ignore
+    pass  # type: ignore
 
 logger = logging.getLogger(__name__)
 

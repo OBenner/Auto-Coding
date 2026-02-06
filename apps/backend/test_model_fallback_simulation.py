@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 def test_fallback_function():
     """Test retry_with_fallback function directly with simulated failures."""
-    from core.model_fallback import retry_with_fallback, MODEL_FALLBACK_CHAIN
+    from core.model_fallback import MODEL_FALLBACK_CHAIN, retry_with_fallback
 
     logger.info("=" * 60)
     logger.info("TEST 1: Direct retry_with_fallback function test")
@@ -145,7 +145,7 @@ def test_non_retryable_error():
 
 def test_create_client_fallback():
     """Test fallback behavior integrated with create_client."""
-    from unittest.mock import patch, MagicMock
+    from unittest.mock import MagicMock, patch
 
     logger.info("\n" + "=" * 60)
     logger.info("TEST 4: create_client integration test")
@@ -167,7 +167,7 @@ def test_create_client_fallback():
         # First call (opus) fails
         if call_count["calls"] == 1:
             if "opus" in model.lower():
-                logger.warning(f"Simulating opus failure")
+                logger.warning("Simulating opus failure")
                 raise Exception("Rate limit exceeded (simulated)")
 
         # Second call (sonnet fallback) succeeds
@@ -195,7 +195,7 @@ def test_create_client_fallback():
                     agent_type="coder"
                 )
 
-                logger.info(f"✓ create_client succeeded with fallback")
+                logger.info("✓ create_client succeeded with fallback")
                 logger.info(f"✓ Total client creation attempts: {call_count['calls']}")
 
                 # Should have tried opus (failed) then sonnet (succeeded)

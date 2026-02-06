@@ -14,7 +14,7 @@ Fallback Strategy:
 
 import logging
 from collections.abc import Callable
-from typing import Any, TypeVar
+from typing import TypeVar
 
 logger = logging.getLogger(__name__)
 
