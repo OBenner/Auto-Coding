@@ -509,6 +509,133 @@ spec:
         periodSeconds: 60
 ```
 
+### Load Testing
+
+**Why Load Test?**
+- Validate deployment capacity before production
+- Identify performance bottlenecks
+- Establish baseline metrics
+- Test autoscaling behavior
+- Verify high availability configuration
+
+**Load Testing Tools:**
+
+| Tool | Best For | Complexity |
+|------|----------|------------|
+| **Locust** | Python-based, distributed testing | Medium |
+| **k6** | Scriptable, modern, developer-friendly | Low |
+| **Apache JMeter** | Comprehensive, GUI-based | High |
+| **hey** | Quick CLI-based testing | Low |
+
+**Load Testing Scenarios:**
+
+1. **Baseline Test (Single User):**
+```bash
+# Establish baseline performance
+hey -n 100 -c 1 https://autoclaude.example.com/api/health
+# Expected: <200ms response time, 0% errors
+```
+
+2. **Ramp-Up Test (Gradual Load):**
+```bash
+# Gradually increase load from 1 to 50 users over 5 minutes
+locust -f loadtest.py --headless --users 50 --spawn-rate 1 --run-time 5m
+# Monitor: CPU, memory, response times, error rate
+```
+
+3. **Sustained Load Test (Steady State):**
+```bash
+# Test sustained load for 30 minutes
+hey -n 18000 -c 10 https://autoclaude.example.com/api/specs
+# Monitor: Memory leaks, connection pool exhaustion
+```
+
+4. **Peak Load Test (Maximum Capacity):**
+```bash
+# Test with expected peak concurrent users
+hey -n 1000 -c 50 https://autoclaude.example.com/api/specs
+# Target: <1s response time, <1% error rate
+```
+
+5. **Spike Test (Sudden Load Increase):**
+```bash
+# Simulate sudden traffic spike
+hey -n 5000 -c 100 -z 30s https://autoclaude.example.com/api/specs
+# Monitor: Autoscaling response, service degradation
+```
+
+**Example Locust Test Script:**
+```python
+# locustfile.py
+from locust import HttpUser, task, between
+
+class AutoClaudeUser(HttpUser):
+    wait_time = between(1, 3)
+
+    def on_start(self):
+        # Login before running tasks
+        response = self.client.post("/api/auth/login", json={
+            "email": "test@example.com",
+            "password": "password123"
+        })
+        self.token = response.json()["access_token"]
+
+    @task(3)
+    def view_specs(self):
+        self.client.get("/api/specs", headers={
+            "Authorization": f"Bearer {self.token}"
+        })
+
+    @task(2)
+    def create_spec(self):
+        self.client.post("/api/specs", json={
+            "task": "Test task for load testing",
+            "complexity": "simple"
+        }, headers={
+            "Authorization": f"Bearer {self.token}"
+        })
+
+    @task(1)
+    def view_repositories(self):
+        self.client.get("/api/repositories", headers={
+            "Authorization": f"Bearer {self.token}"
+        })
+```
+
+**Load Testing Metrics to Track:**
+
+| Metric | Target | Critical Threshold |
+|--------|--------|-------------------|
+| **Response Time (p50)** | <200ms | >500ms |
+| **Response Time (p95)** | <500ms | >1000ms |
+| **Response Time (p99)** | <1000ms | >2000ms |
+| **Error Rate** | <0.1% | >1% |
+| **Throughput** | >100 req/s | <50 req/s |
+| **CPU Usage** | <70% | >90% |
+| **Memory Usage** | <80% | >95% |
+
+**Load Testing Checklist:**
+- [ ] Test against staging environment first
+- [ ] Use realistic test data (not production data)
+- [ ] Simulate realistic user behavior (think time, navigation patterns)
+- [ ] Monitor all services (backend, database, redis)
+- [ ] Test during off-peak hours if using shared infrastructure
+- [ ] Document baseline metrics for comparison
+- [ ] Test autoscaling behavior (if enabled)
+- [ ] Test failover scenarios (if HA configured)
+- [ ] Review database query performance during load
+- [ ] Verify no memory leaks or resource exhaustion
+
+**Interpreting Results:**
+
+| Symptom | Likely Cause | Solution |
+|---------|--------------|----------|
+| High CPU, low throughput | CPU-bound workload | Scale horizontally, optimize code |
+| High memory, OOM kills | Memory leak or insufficient memory | Increase limits, investigate memory usage |
+| Slow queries (p95 >1s) | Database bottleneck | Optimize queries, add indexes, scale DB |
+| High error rate (5xx) | Service overload or unhandled errors | Scale replicas, check logs for errors |
+| Connection timeouts | Database connection pool exhaustion | Increase pool size, add replicas |
+
 ---
 
 ## Performance Tuning
@@ -579,6 +706,267 @@ save 60 10000
 - AOF (Append Only File): Better durability, more disk usage
 - RDB (Snapshots): Less disk usage, potential data loss
 - Hybrid: RDB for snapshots, AOF for real-time
+
+### Common Bottlenecks
+
+**Identifying Bottlenecks:**
+
+Use monitoring tools to identify the limiting factor in your deployment:
+
+```bash
+# Kubernetes: Check resource usage
+kubectl top pods
+kubectl top nodes
+
+# Docker Compose: Check container stats
+docker stats
+
+# Database: Check slow queries
+docker exec postgres psql -U postgres -d autoclaude -c "SELECT * FROM pg_stat_statements ORDER BY mean_exec_time DESC LIMIT 10;"
+
+# Backend: Check application logs
+kubectl logs -l app=autoclaude,component=backend --tail=100
+```
+
+**1. Database Bottlenecks**
+
+**Symptoms:**
+- High CPU on PostgreSQL container/pod
+- Slow query responses (>500ms p95)
+- Database connection pool exhaustion
+- High disk I/O wait
+
+**Common Causes:**
+| Cause | Detection | Solution |
+|-------|-----------|----------|
+| Missing indexes | `EXPLAIN ANALYZE` shows seq scans | Add indexes on frequently queried columns |
+| N+1 queries | Database query count > HTTP requests | Use eager loading (`joinedload`) |
+| Large result sets | Queries return >1000 rows | Implement pagination, limit fields |
+| Connection exhaustion | "Pool exhausted" errors | Increase pool size, add PgBouncer |
+| Lock contention | High `lock waits` in pg_stat | Reduce transaction duration, optimize queries |
+
+**Solutions:**
+
+```sql
+-- 1. Add indexes for frequently queried columns
+CREATE INDEX CONCURRENTLY idx_users_email ON users(email);
+CREATE INDEX CONCURRENTLY idx_specs_user_id ON specs(user_id);
+CREATE INDEX CONCURRENTLY idx_specs_created_at ON specs(created_at DESC);
+
+-- 2. Analyze slow queries
+SELECT query, calls, mean_exec_time, total_exec_time
+FROM pg_stat_statements
+ORDER BY mean_exec_time DESC
+LIMIT 10;
+
+-- 3. Check for missing indexes
+SELECT schemaname, tablename, attname, n_distinct, correlation
+FROM pg_stats
+WHERE schemaname = 'public'
+ORDER BY n_distinct DESC;
+
+-- 4. Monitor connection pool
+SELECT count(*), state
+FROM pg_stat_activity
+GROUP BY state;
+```
+
+**Scaling PostgreSQL:**
+- Vertical: Increase CPU/memory (up to 8 cores, 16GiB)
+- Horizontal: Add read replicas for reporting/analytics
+- Connection pooling: Deploy PgBouncer (1:100 connection ratio)
+
+**2. Redis Bottlenecks**
+
+**Symptoms:**
+- High memory usage (>90%)
+- Low cache hit ratio (<80%)
+- Slow Redis operations (>10ms)
+- Eviction of active keys
+
+**Common Causes:**
+| Cause | Detection | Solution |
+|-------|-----------|----------|
+| Memory exhaustion | `used_memory > maxmemory` | Increase maxmemory, enable eviction policy |
+| Large keys | `MEMORY USAGE key` shows large values | Compress values, shard data |
+| Too many connections | `connected_clients > 1000` | Use connection pooling, reduce timeout |
+| Expired keys not evicting | Keys accumulate | Set appropriate TTL, enable active expiration |
+
+**Solutions:**
+
+```bash
+# 1. Check memory usage
+redis-cli INFO memory | grep used_memory_human
+
+# 2. Check largest keys
+redis-cli --bigkeys
+
+# 3. Check cache hit ratio
+redis-cli INFO stats | grep keyspace_hits
+# Calculate: hits / (hits + misses) = hit ratio
+# Target: >80%
+
+# 4. Enable memory optimization
+redis-cli CONFIG SET maxmemory-policy allkeys-lru
+redis-cli CONFIG SET maxmemory 256mb
+
+# 5. Check slow operations
+redis-cli SLOWLOG GET 10
+```
+
+**Scaling Redis:**
+- Vertical: Increase memory (up to 8GiB effective)
+- Horizontal: Use Redis Cluster (3+ master nodes)
+- Separate instances: Use different Redis instances for cache, sessions, and pub/sub
+
+**3. Backend Bottlenecks**
+
+**Symptoms:**
+- High CPU usage on backend pods/containers
+- High memory usage with OOM kills
+- Slow API responses (>500ms p95)
+- High request queueing
+
+**Common Causes:**
+| Cause | Detection | Solution |
+|-------|-----------|----------|
+| Insufficient replicas | CPU >80%, memory >85% | Increase replica count |
+| Memory leaks | Memory grows over time | Restart pods, investigate with memory profiler |
+| Synchronous operations | Blocking I/O in request handlers | Use async/await, offload to background tasks |
+| Large request payloads | Requests >10MB | Implement pagination, limit payload size |
+| No connection pooling | New connection per request | Configure connection pooling |
+
+**Solutions:**
+
+```python
+# 1. Enable connection pooling
+from sqlalchemy.pool import QueuePool
+
+engine = create_engine(
+    settings.DATABASE_URL,
+    poolclass=QueuePool,
+    pool_size=20,  # Per worker
+    max_overflow=40,
+    pool_pre_ping=True,
+    pool_recycle=3600
+)
+
+# 2. Use async operations
+@app.get("/api/specs")
+async def get_specs():
+    # Use async database queries
+    specs = await db.execute(select(Spec))
+    return specs
+
+# 3. Implement caching
+from functools import lru_cache
+
+@lru_cache(maxsize=1000)
+def get_expensive_operation(key):
+    # Expensive computation
+    return result
+
+# 4. Use background tasks for long operations
+from fastapi import BackgroundTasks
+
+@app.post("/api/specs")
+async def create_spec(spec: SpecCreate, background_tasks: BackgroundTasks):
+    db_spec = create_spec_in_db(spec)
+    background_tasks.add_task(process_spec_async, db_spec.id)
+    return db_spec
+```
+
+**Scaling Backend:**
+- Vertical: Increase CPU/memory requests/limits
+- Horizontal: Increase replica count (2-10 replicas)
+- Autoscaling: Enable HPA with CPU/memory targets
+
+**4. Network Bottlenecks**
+
+**Symptoms:**
+- High latency between services (>10ms)
+- Packet loss or retransmissions
+- Bandwidth saturation
+- Connection timeouts
+
+**Common Causes:**
+| Cause | Detection | Solution |
+|-------|-----------|----------|
+| Network latency | `ping` shows >10ms between pods | Use same node/zone affinity |
+| Bandwidth limits | Interface at 100% utilization | Upgrade to 10 Gbps network |
+| DNS resolution delays | Slow DNS lookups | Use local DNS cache, CoreDNS |
+| MTU issues | Packet fragmentation | Adjust MTU size (usually 9000 for internal) |
+
+**Solutions:**
+
+```bash
+# 1. Test network latency between pods
+kubectl exec -it backend-pod -- ping postgres-service
+
+# 2. Check bandwidth
+kubectl exec -it backend-pod -- ifstat
+
+# 3. Check DNS resolution time
+kubectl exec -it backend-pod -- time nslookup postgres-service
+
+# 4. Use node affinity for low latency
+# In values.yaml:
+backend:
+  nodeAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: topology.kubernetes.io/zone
+          operator: In
+          values:
+          - us-east-1a
+```
+
+**5. Storage Bottlenecks**
+
+**Symptoms:**
+- High disk I/O wait (>10%)
+- Slow disk reads/writes
+- Disk space running out (>80% used)
+- High iowait in top/htop
+
+**Common Causes:**
+| Cause | Detection | Solution |
+|-------|-----------|----------|
+| Slow storage | fstrim shows <100 MB/s | Use NVMe SSD instead of HDD |
+| Insufficient IOPS | I/O wait >10% | Upgrade to higher IOPS storage class |
+| Full disk | df -h shows >80% used | Expand PVC, implement log rotation |
+- Fragmentation | High seek times | Reclaim space, optimize database |
+
+**Solutions:**
+
+```bash
+# 1. Check disk performance
+kubectl exec -it postgres-pod -- hdparm -Tt /dev/var-lib-postgresql
+
+# 2. Check disk I/O
+kubectl exec -it postgres-pod -- iostat -x 1
+
+# 3. Check disk usage
+kubectl exec -it postgres-pod -- df -h
+
+# 4. Expand PVC (if supported)
+kubectl patch pvc postgres-data -p '{"spec":{"resources":{"requests":{"storage":"100Gi"}}}}'
+
+# 5. Enable storage IOPS optimization
+# In storage class:
+allowVolumeExpansion: true
+parameters:
+  type: pd-ssd  # GKE
+  iops-per-gb: "10"  # AWS EBS io1
+```
+
+**Preventing Storage Bottlenecks:**
+- Use fast SSD/NVMe storage for databases
+- Allocate 2-3x expected storage needs
+- Implement log rotation (prevent unbounded growth)
+- Archive old data regularly
+- Monitor disk usage trends
 
 ---
 
