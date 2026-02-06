@@ -446,6 +446,25 @@ async def run_autonomous_agent(
             if valid:
                 plan_validated = True
                 planning_retry_context = None
+
+                # Persist provider configuration to implementation plan
+                try:
+                    from implementation_plan import ImplementationPlan
+                    from core.providers.config import get_provider_config
+
+                    plan_file = spec_dir / "implementation_plan.json"
+                    if plan_file.exists():
+                        plan = ImplementationPlan.load(plan_file)
+                        provider_config = get_provider_config()
+                        if provider_config and not plan.provider_config:
+                            plan.provider_config = {
+                                "provider": provider_config.provider,
+                                "model": provider_config.get_model_for_provider(),
+                            }
+                            await plan.async_save(plan_file)
+                            logger.debug("Provider config persisted to implementation_plan.json")
+                except Exception as e:
+                    logger.warning(f"Failed to persist provider config to plan: {e}")
             else:
                 planning_validation_failures += 1
                 if planning_validation_failures >= max_planning_validation_retries:

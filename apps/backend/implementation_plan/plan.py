@@ -44,6 +44,9 @@ class ImplementationPlan:
     recoveryNote: str | None = None
     qa_signoff: dict | None = None
 
+    # Provider and model configuration for this task
+    provider_config: dict | None = None
+
     def to_dict(self) -> dict:
         """Convert to dictionary representation."""
         result = {
@@ -65,6 +68,8 @@ class ImplementationPlan:
             result["recoveryNote"] = self.recoveryNote
         if self.qa_signoff:
             result["qa_signoff"] = self.qa_signoff
+        if self.provider_config:
+            result["provider_config"] = self.provider_config
         return result
 
     @classmethod
@@ -100,6 +105,7 @@ class ImplementationPlan:
             planStatus=data.get("planStatus"),
             recoveryNote=data.get("recoveryNote"),
             qa_signoff=data.get("qa_signoff"),
+            provider_config=data.get("provider_config"),
         )
 
     def _update_timestamps_and_status(self) -> None:
