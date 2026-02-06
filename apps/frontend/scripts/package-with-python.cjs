@@ -155,6 +155,10 @@ function buildEnv(frontendDir) {
   // Use --sign flag to enable signing for release builds
   if (!isSigningEnabled()) {
     env.CSC_IDENTITY_AUTO_DISCOVERY = 'false';
+    // Remove CSC_LINK/CSC_KEY_PASSWORD so electron-builder doesn't attempt signing
+    // even when these env vars are set to empty strings (e.g., from unconfigured CI secrets)
+    delete env.CSC_LINK;
+    delete env.CSC_KEY_PASSWORD;
     console.log('[package] Code signing disabled (use --sign to enable)');
   }
 
