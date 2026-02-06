@@ -230,12 +230,8 @@ class IssueLifecycle:
     transitions: list[StateTransition] = field(default_factory=list)
     locked_by: str | None = None  # Component holding lock
     locked_at: str | None = None
-    created_at: str = field(
-        default_factory=lambda: datetime.now(UTC).isoformat()
-    )
-    updated_at: str = field(
-        default_factory=lambda: datetime.now(UTC).isoformat()
-    )
+    created_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
+    updated_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
 
     def can_transition_to(self, new_state: IssueLifecycleState) -> bool:
         """Check if transition is valid."""

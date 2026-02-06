@@ -20,13 +20,13 @@ MODEL_ID_MAP: dict[str, str] = {
 
 # Complexity thresholds for determining task complexity level
 COMPLEXITY_THRESHOLDS: dict[str, int] = {
-    "description_short": 100,    # Short task description (characters)
-    "description_medium": 500,   # Medium task description
-    "description_long": 1500,    # Long/complex task description
-    "files_simple": 3,           # Few files affected
-    "files_medium": 10,          # Moderate number of files
-    "services_simple": 1,        # Single service
-    "services_medium": 3,        # Multiple services
+    "description_short": 100,  # Short task description (characters)
+    "description_medium": 500,  # Medium task description
+    "description_long": 1500,  # Long/complex task description
+    "files_simple": 3,  # Few files affected
+    "files_medium": 10,  # Moderate number of files
+    "services_simple": 1,  # Single service
+    "services_medium": 3,  # Multiple services
 }
 
 # Thinking level to budget tokens mapping (None = no extended thinking)

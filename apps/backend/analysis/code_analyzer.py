@@ -193,7 +193,9 @@ class CodeAnalyzer:
 
         # Extract functions and classes
         for node in ast.walk(tree):
-            if isinstance(node, ast.FunctionDef) or isinstance(node, ast.AsyncFunctionDef):
+            if isinstance(node, ast.FunctionDef) or isinstance(
+                node, ast.AsyncFunctionDef
+            ):
                 # Only add top-level functions (not methods)
                 if self._is_top_level(node, tree):
                     func_info = self._extract_function(node)
@@ -269,7 +271,9 @@ class CodeAnalyzer:
         # Extract methods
         methods = []
         for item in node.body:
-            if isinstance(item, ast.FunctionDef) or isinstance(item, ast.AsyncFunctionDef):
+            if isinstance(item, ast.FunctionDef) or isinstance(
+                item, ast.AsyncFunctionDef
+            ):
                 method_info = self._extract_function(item)
                 methods.append(method_info)
 
@@ -319,9 +323,7 @@ class CodeAnalyzer:
                         return False
         return True
 
-    def _estimate_complexity(
-        self, node: ast.FunctionDef | ast.AsyncFunctionDef
-    ) -> int:
+    def _estimate_complexity(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> int:
         """Estimate cyclomatic complexity by counting decision points."""
         complexity = 1  # Base complexity
 
@@ -363,12 +365,14 @@ class CodeAnalyzer:
                         elif isinstance(handler.type, ast.Attribute):
                             exc_type = ast.unparse(handler.type)
 
-                    edge_cases.append({
-                        "type": "error_handling",
-                        "pattern": f"try/except {exc_type}",
-                        "lineno": node.lineno,
-                        "description": f"Handles {exc_type} exceptions"
-                    })
+                    edge_cases.append(
+                        {
+                            "type": "error_handling",
+                            "pattern": f"try/except {exc_type}",
+                            "lineno": node.lineno,
+                            "description": f"Handles {exc_type} exceptions",
+                        }
+                    )
 
             # Detect boundary checks and None checks
             elif isinstance(node, ast.Compare):
@@ -376,68 +380,88 @@ class CodeAnalyzer:
 
                 # Check for None comparisons
                 if "None" in code:
-                    edge_cases.append({
-                        "type": "boundary_condition",
-                        "pattern": "none_check",
-                        "lineno": node.lineno,
-                        "description": f"None check: {code}"
-                    })
+                    edge_cases.append(
+                        {
+                            "type": "boundary_condition",
+                            "pattern": "none_check",
+                            "lineno": node.lineno,
+                            "description": f"None check: {code}",
+                        }
+                    )
 
                 # Check for numeric boundary conditions
                 elif any(op in code for op in ["< 0", "> 0", "== 0", "<= 0", ">= 0"]):
-                    edge_cases.append({
-                        "type": "boundary_condition",
-                        "pattern": "numeric_boundary",
-                        "lineno": node.lineno,
-                        "description": f"Numeric boundary: {code}"
-                    })
+                    edge_cases.append(
+                        {
+                            "type": "boundary_condition",
+                            "pattern": "numeric_boundary",
+                            "lineno": node.lineno,
+                            "description": f"Numeric boundary: {code}",
+                        }
+                    )
 
                 # Check for empty/length checks
-                elif "len(" in code and any(op in code for op in ["== 0", "> 0", "< 1"]):
-                    edge_cases.append({
-                        "type": "boundary_condition",
-                        "pattern": "empty_check",
-                        "lineno": node.lineno,
-                        "description": f"Empty check: {code}"
-                    })
+                elif "len(" in code and any(
+                    op in code for op in ["== 0", "> 0", "< 1"]
+                ):
+                    edge_cases.append(
+                        {
+                            "type": "boundary_condition",
+                            "pattern": "empty_check",
+                            "lineno": node.lineno,
+                            "description": f"Empty check: {code}",
+                        }
+                    )
 
             # Detect isinstance type checks
             elif isinstance(node, ast.Call):
                 if isinstance(node.func, ast.Name) and node.func.id == "isinstance":
                     if len(node.args) >= 2:
-                        type_check = ast.unparse(node.args[1]) if len(node.args) > 1 else "unknown"
-                        edge_cases.append({
-                            "type": "type_validation",
-                            "pattern": "isinstance_check",
-                            "lineno": node.lineno,
-                            "description": f"Type check: isinstance(..., {type_check})"
-                        })
+                        type_check = (
+                            ast.unparse(node.args[1])
+                            if len(node.args) > 1
+                            else "unknown"
+                        )
+                        edge_cases.append(
+                            {
+                                "type": "type_validation",
+                                "pattern": "isinstance_check",
+                                "lineno": node.lineno,
+                                "description": f"Type check: isinstance(..., {type_check})",
+                            }
+                        )
 
             # Detect raise statements (explicit errors)
             elif isinstance(node, ast.Raise):
                 exc_type = "Exception"
                 if node.exc:
-                    if isinstance(node.exc, ast.Call) and isinstance(node.exc.func, ast.Name):
+                    if isinstance(node.exc, ast.Call) and isinstance(
+                        node.exc.func, ast.Name
+                    ):
                         exc_type = node.exc.func.id
                     elif isinstance(node.exc, ast.Name):
                         exc_type = node.exc.id
 
-                edge_cases.append({
-                    "type": "error_raising",
-                    "pattern": f"raise {exc_type}",
-                    "lineno": node.lineno,
-                    "description": f"Raises {exc_type}"
-                })
+                edge_cases.append(
+                    {
+                        "type": "error_raising",
+                        "pattern": f"raise {exc_type}",
+                        "lineno": node.lineno,
+                        "description": f"Raises {exc_type}",
+                    }
+                )
 
             # Detect assertions
             elif isinstance(node, ast.Assert):
                 test_code = ast.unparse(node.test)
-                edge_cases.append({
-                    "type": "assertion",
-                    "pattern": "assert",
-                    "lineno": node.lineno,
-                    "description": f"Assertion: {test_code}"
-                })
+                edge_cases.append(
+                    {
+                        "type": "assertion",
+                        "pattern": "assert",
+                        "lineno": node.lineno,
+                        "description": f"Assertion: {test_code}",
+                    }
+                )
 
         return edge_cases
 

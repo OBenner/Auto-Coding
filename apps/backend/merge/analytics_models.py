@@ -309,7 +309,11 @@ class ConflictPattern:
     @property
     def resolution_success_rate(self) -> float:
         """Calculate how often this pattern is successfully resolved."""
-        total = self.auto_resolved_count + self.ai_resolved_count + self.manual_required_count
+        total = (
+            self.auto_resolved_count
+            + self.ai_resolved_count
+            + self.manual_required_count
+        )
         if total == 0:
             return 0.0
         resolved = self.auto_resolved_count + self.ai_resolved_count

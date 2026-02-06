@@ -76,7 +76,9 @@ class UIComponentDefinition:
         """Convert to dictionary for serialization."""
         return {
             "id": self.id,
-            "extension_point": self.extension_point.value if isinstance(self.extension_point, UIExtensionPoint) else self.extension_point,
+            "extension_point": self.extension_point.value
+            if isinstance(self.extension_point, UIExtensionPoint)
+            else self.extension_point,
             "title": self.title,
             "icon": self.icon,
             "component_path": self.component_path,

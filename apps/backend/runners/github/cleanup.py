@@ -402,9 +402,7 @@ class DataCleaner:
         for log_file in audit_dir.glob("*.log"):
             try:
                 # Check file modification time
-                mtime = datetime.fromtimestamp(
-                    log_file.stat().st_mtime, tz=UTC
-                )
+                mtime = datetime.fromtimestamp(log_file.stat().st_mtime, tz=UTC)
                 if mtime < cutoff:
                     file_size = log_file.stat().st_size
                     if not dry_run:

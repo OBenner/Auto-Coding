@@ -446,6 +446,5 @@ class LiteLLMProvider(AIEngineProvider):
     def __repr__(self) -> str:
         """Return string representation of provider."""
         return (
-            f"LiteLLMProvider(name={self.name!r}, "
-            f"model={self._config.litellm_model!r})"
+            f"LiteLLMProvider(name={self.name!r}, model={self._config.litellm_model!r})"
         )

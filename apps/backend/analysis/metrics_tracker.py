@@ -372,7 +372,9 @@ def _generate_recommendations(
             "Review failure patterns and update learned patterns in Graphiti"
         )
     elif recurring_trend == "reducing":
-        recommendations.append("✅ Recurring issues are reducing - learning is working!")
+        recommendations.append(
+            "✅ Recurring issues are reducing - learning is working!"
+        )
 
     # Root cause tracking recommendations
     if root_causes_count == 0:

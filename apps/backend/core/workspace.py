@@ -216,7 +216,12 @@ def merge_existing_build(
 
     try:
         return _do_merge(
-            project_dir, spec_name, worktree_path, no_commit, use_smart_merge, base_branch
+            project_dir,
+            spec_name,
+            worktree_path,
+            no_commit,
+            use_smart_merge,
+            base_branch,
         )
     finally:
         # Always restore stashed changes

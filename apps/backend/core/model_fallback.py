@@ -107,7 +107,9 @@ def retry_with_fallback[T](
                         f"[SUCCESS] Request completed with model '{current_model}' after {retry} retries"
                     )
                 else:
-                    logger.debug(f"[SUCCESS] Request completed with initial model '{current_model}'")
+                    logger.debug(
+                        f"[SUCCESS] Request completed with initial model '{current_model}'"
+                    )
 
                 return result
 
@@ -148,7 +150,9 @@ def retry_with_fallback[T](
         raise last_exception
     else:
         # Should never reach here, but just in case
-        raise RuntimeError("retry_with_fallback failed with no exception (unexpected state)")
+        raise RuntimeError(
+            "retry_with_fallback failed with no exception (unexpected state)"
+        )
 
 
 def _extract_model_shorthand(model: str) -> str:
@@ -209,7 +213,10 @@ def _is_retryable_error(exception: Exception) -> bool:
     ]
 
     # Check error type
-    if any(pattern in error_type.lower() for pattern in ["ratelimit", "connection", "timeout"]):
+    if any(
+        pattern in error_type.lower()
+        for pattern in ["ratelimit", "connection", "timeout"]
+    ):
         return True
 
     # Check error message

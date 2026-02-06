@@ -185,7 +185,7 @@ The QA loop has generated {len(moved_files)} test file(s) based on the implement
 These tests are waiting for your review and approval before being committed to the project.
 
 ## Generated Test Files
-{chr(10).join(f'- {name}' for name in moved_files)}
+{chr(10).join(f"- {name}" for name in moved_files)}
 
 ## Review Process
 
@@ -197,7 +197,7 @@ These tests are waiting for your review and approval before being committed to t
 2. **Approve tests** (if they look good):
    ```bash
    # Copy approved tests to your project's tests/ directory
-   cp {review_dir}/*.py {project_dir / 'tests'}/
+   cp {review_dir}/*.py {project_dir / "tests"}/
 
    # Commit them with your changes
    git add tests/
@@ -216,7 +216,7 @@ These tests are waiting for your review and approval before being committed to t
 - You can modify tests before copying them to your project
 
 ---
-Generated: {time_module.strftime('%Y-%m-%d %H:%M:%S')}
+Generated: {time_module.strftime("%Y-%m-%d %H:%M:%S")}
 """
 
     try:
@@ -230,7 +230,9 @@ Generated: {time_module.strftime('%Y-%m-%d %H:%M:%S')}
     print("\n" + "=" * 70)
     print("  📋 GENERATED TESTS - REVIEW REQUIRED")
     print("=" * 70)
-    print(f"\n✅ {len(moved_files)} test file(s) have been generated and saved for review.")
+    print(
+        f"\n✅ {len(moved_files)} test file(s) have been generated and saved for review."
+    )
     print(f"\n📁 Review directory: {review_dir}")
     print("\nGenerated tests:")
     for name in moved_files:
@@ -374,7 +376,9 @@ async def run_qa_validation_loop(
                 "User correction fixes applied",
                 correction_details=correction_details,
             )
-            print("\n✅ Fixes applied based on your corrections. Running QA validation...")
+            print(
+                "\n✅ Fixes applied based on your corrections. Running QA validation..."
+            )
 
             # Store user correction in Graphiti for cross-session learning
             try:
@@ -383,7 +387,9 @@ async def run_qa_validation_loop(
 
                 # Extract meaningful information
                 what_was_wrong = "QA agent generated a fix request, but user manually edited it to provide better guidance"
-                what_was_corrected = fix_content[:1000]  # First 1000 chars of the user's corrections
+                what_was_corrected = fix_content[
+                    :1000
+                ]  # First 1000 chars of the user's corrections
 
                 # Build context dict with available information
                 correction_context = {
@@ -415,7 +421,9 @@ async def run_qa_validation_loop(
                 )
         else:
             debug_success("qa_loop", "Human feedback fixes applied")
-            print("\n✅ Fixes applied based on human feedback. Running QA validation...")
+            print(
+                "\n✅ Fixes applied based on human feedback. Running QA validation..."
+            )
 
         # Remove the fix request file after processing
         try:
@@ -443,6 +451,7 @@ async def run_qa_validation_loop(
 
         if impl_plan_file.exists():
             import json
+
             with open(impl_plan_file, encoding="utf-8") as f:
                 impl_plan = json.load(f)
 
@@ -455,7 +464,11 @@ async def run_qa_validation_loop(
 
             # Remove duplicates and filter Python files
             modified_files = list(set(f for f in modified_files if f.endswith(".py")))
-            debug("qa_loop", f"Found {len(modified_files)} Python files to analyze", files=modified_files[:5])
+            debug(
+                "qa_loop",
+                f"Found {len(modified_files)} Python files to analyze",
+                files=modified_files[:5],
+            )
 
         if modified_files:
             # Analyze code in modified files
@@ -472,18 +485,27 @@ async def run_qa_validation_loop(
                 if full_path.exists() and full_path.suffix == ".py":
                     try:
                         analysis = analyzer.analyze_file(full_path)
-                        combined_analysis["functions"].extend(analysis.get("functions", []))
+                        combined_analysis["functions"].extend(
+                            analysis.get("functions", [])
+                        )
                         combined_analysis["classes"].extend(analysis.get("classes", []))
                         combined_analysis["imports"].extend(analysis.get("imports", []))
-                        combined_analysis["edge_cases"].extend(analysis.get("edge_cases", []))
-                        debug("qa_loop", f"Analyzed {file_path}",
-                              functions=len(analysis.get("functions", [])),
-                              classes=len(analysis.get("classes", [])))
+                        combined_analysis["edge_cases"].extend(
+                            analysis.get("edge_cases", [])
+                        )
+                        debug(
+                            "qa_loop",
+                            f"Analyzed {file_path}",
+                            functions=len(analysis.get("functions", [])),
+                            classes=len(analysis.get("classes", [])),
+                        )
                     except Exception as e:
                         debug_warning("qa_loop", f"Failed to analyze {file_path}: {e}")
 
             if combined_analysis["functions"] or combined_analysis["classes"]:
-                print(f"   Found {len(combined_analysis['functions'])} functions and {len(combined_analysis['classes'])} classes")
+                print(
+                    f"   Found {len(combined_analysis['functions'])} functions and {len(combined_analysis['classes'])} classes"
+                )
                 print("   Generating tests...")
 
                 # Run test generator
@@ -498,7 +520,11 @@ async def run_qa_validation_loop(
                 if test_result.get("success"):
                     generated_files = test_result.get("generated_files", [])
                     print(f"   ✅ Generated {len(generated_files)} test file(s)")
-                    debug_success("qa_loop", "Test generation completed", file_count=len(generated_files))
+                    debug_success(
+                        "qa_loop",
+                        "Test generation completed",
+                        file_count=len(generated_files),
+                    )
 
                     # Move generated tests to review directory for user approval
                     if generated_files:
@@ -684,7 +710,9 @@ async def run_qa_validation_loop(
                         "issues": current_issues,
                         "is_recurring": has_recurring,
                         "qa_iteration": qa_iteration,
-                        "occurrence_count": len(recurring_issues) if has_recurring else 1,
+                        "occurrence_count": len(recurring_issues)
+                        if has_recurring
+                        else 1,
                     }
 
                     # Analyze the failure
@@ -716,9 +744,7 @@ async def run_qa_validation_loop(
 
                 except Exception as e:
                     # Don't fail the build if analysis fails
-                    debug_warning(
-                        "qa_loop", f"Failed to analyze QA rejection: {e}"
-                    )
+                    debug_warning("qa_loop", f"Failed to analyze QA rejection: {e}")
 
             if has_recurring:
                 from .report import RECURRING_ISSUE_THRESHOLD

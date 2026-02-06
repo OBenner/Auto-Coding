@@ -176,9 +176,7 @@ async def get_pattern_suggestions(
 
         # Format the patterns
         sections = ["## Pattern Suggestions\n"]
-        sections.append(
-            "_Relevant code patterns from previous implementations:_\n"
-        )
+        sections.append("_Relevant code patterns from previous implementations:_\n")
 
         # Group patterns by category
         by_category: dict[str, list[dict]] = {}
@@ -662,7 +660,9 @@ async def save_user_correction(
         memory = await get_graphiti_memory(spec_dir, project_dir)
         if memory is None:
             if is_debug_enabled():
-                debug_warning("memory", "GraphitiMemory not available for user correction")
+                debug_warning(
+                    "memory", "GraphitiMemory not available for user correction"
+                )
             return False
 
         # Store as a user correction episode

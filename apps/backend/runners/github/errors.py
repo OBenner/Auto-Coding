@@ -85,9 +85,7 @@ class StructuredError:
     # Context
     code: str | None = None  # Machine-readable error code
     correlation_id: str | None = None
-    timestamp: str = field(
-        default_factory=lambda: datetime.now(UTC).isoformat()
-    )
+    timestamp: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
 
     # Details
     details: dict[str, Any] = field(default_factory=dict)

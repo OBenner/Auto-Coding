@@ -273,21 +273,15 @@ class PluginLoader:
         manifest_path = plugin_dir / "plugin.json"
 
         if not manifest_path.exists():
-            raise PluginValidationError(
-                f"Missing plugin.json in {plugin_dir.name}"
-            )
+            raise PluginValidationError(f"Missing plugin.json in {plugin_dir.name}")
 
         try:
             with open(manifest_path, encoding="utf-8") as f:
                 data = json.load(f)
         except json.JSONDecodeError as e:
-            raise PluginValidationError(
-                f"Invalid JSON in plugin.json: {e}"
-            ) from e
+            raise PluginValidationError(f"Invalid JSON in plugin.json: {e}") from e
         except Exception as e:
-            raise PluginValidationError(
-                f"Failed to read plugin.json: {e}"
-            ) from e
+            raise PluginValidationError(f"Failed to read plugin.json: {e}") from e
 
         # Validate required fields
         required_fields = ["name", "version", "author", "description", "plugin_type"]
@@ -310,9 +304,7 @@ class PluginLoader:
         try:
             metadata = PluginMetadata.from_dict(data)
         except Exception as e:
-            raise PluginValidationError(
-                f"Invalid plugin metadata: {e}"
-            ) from e
+            raise PluginValidationError(f"Invalid plugin metadata: {e}") from e
 
         return metadata
 

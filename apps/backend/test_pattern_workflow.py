@@ -32,8 +32,7 @@ from memory.graphiti_helpers import get_graphiti_memory
 
 # Setup logging
 logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
@@ -46,27 +45,27 @@ SAMPLE_PATTERNS = [
     {
         "pattern": "Use JWT tokens stored in httpOnly cookies for authentication",
         "expected_category": "security",
-        "task_query": "implement user authentication"
+        "task_query": "implement user authentication",
     },
     {
         "pattern": "Implement password hashing with bcrypt (cost factor 12)",
         "expected_category": "security",
-        "task_query": "implement user authentication"
+        "task_query": "implement user authentication",
     },
     {
         "pattern": "Create separate /auth/login and /auth/logout endpoints",
         "expected_category": "api-design",
-        "task_query": "implement user authentication"
+        "task_query": "implement user authentication",
     },
     {
         "pattern": "Use React Context for global authentication state",
         "expected_category": "state-management",
-        "task_query": "authentication frontend"
+        "task_query": "authentication frontend",
     },
     {
         "pattern": "Add authentication middleware to protect routes",
         "expected_category": "architecture",
-        "task_query": "implement user authentication"
+        "task_query": "implement user authentication",
     },
 ]
 
@@ -78,9 +77,9 @@ SAMPLE_PATTERNS = [
 
 async def test_graphiti_enabled():
     """Test that Graphiti is enabled."""
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("TEST 1: Verify Graphiti is Enabled")
-    print("="*80)
+    print("=" * 80)
 
     if not is_graphiti_enabled():
         print("❌ FAILED: Graphiti is not enabled")
@@ -93,9 +92,9 @@ async def test_graphiti_enabled():
 
 async def test_pattern_categorization():
     """Test pattern categorization."""
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("TEST 2: Pattern Categorization")
-    print("="*80)
+    print("=" * 80)
 
     all_passed = True
 
@@ -154,9 +153,9 @@ async def add_pattern_to_memory(memory, pattern: str, category: str, spec_id: st
 
 async def test_add_patterns_to_memory():
     """Test adding patterns to memory."""
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("TEST 3: Add Patterns to Memory")
-    print("="*80)
+    print("=" * 80)
 
     # Create test directories
     test_dir = Path(__file__).parent / ".test-pattern-workflow"
@@ -183,15 +182,14 @@ async def test_add_patterns_to_memory():
             category = sample["expected_category"]
 
             success = await add_pattern_to_memory(
-                memory,
-                pattern,
-                category,
-                spec_id="001-auth-feature"
+                memory, pattern, category, spec_id="001-auth-feature"
             )
             if success:
                 added_count += 1
 
-        print(f"\n✅ PASSED: Added {added_count}/{len(SAMPLE_PATTERNS)} patterns to memory")
+        print(
+            f"\n✅ PASSED: Added {added_count}/{len(SAMPLE_PATTERNS)} patterns to memory"
+        )
 
         return True, memory, spec_dir, project_dir
 
@@ -203,9 +201,9 @@ async def test_add_patterns_to_memory():
 
 async def test_suggest_patterns(memory, spec_dir, project_dir):
     """Test pattern suggestion retrieval."""
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("TEST 4: Pattern Suggestion Retrieval")
-    print("="*80)
+    print("=" * 80)
 
     try:
         # Test 1: Suggest patterns for authentication
@@ -255,8 +253,8 @@ async def test_suggest_patterns(memory, spec_dir, project_dir):
         print(f"   Found {len(security_patterns)} security patterns")
 
         for p in security_patterns:
-            category = p.get('category')
-            if category != 'security':
+            category = p.get("category")
+            if category != "security":
                 print(f"   ❌ FAILED: Found non-security pattern: {category}")
                 return False
 
@@ -273,9 +271,9 @@ async def test_suggest_patterns(memory, spec_dir, project_dir):
 
 async def test_memory_manager_integration(spec_dir, project_dir):
     """Test pattern suggestions through memory_manager."""
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("TEST 5: Memory Manager Integration")
-    print("="*80)
+    print("=" * 80)
 
     try:
         from agents.memory_manager import get_pattern_suggestions
@@ -293,7 +291,11 @@ async def test_memory_manager_integration(spec_dir, project_dir):
         if formatted_patterns:
             print("✅ Memory manager returned formatted patterns:")
             print("-" * 80)
-            print(formatted_patterns[:500] + "..." if len(formatted_patterns) > 500 else formatted_patterns)
+            print(
+                formatted_patterns[:500] + "..."
+                if len(formatted_patterns) > 500
+                else formatted_patterns
+            )
             print("-" * 80)
             print("\n✅ PASSED: Memory manager integration working")
             return True
@@ -309,9 +311,9 @@ async def test_memory_manager_integration(spec_dir, project_dir):
 
 async def cleanup(memory, test_dir):
     """Cleanup test resources."""
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("Cleanup")
-    print("="*80)
+    print("=" * 80)
 
     if memory:
         try:
@@ -331,9 +333,9 @@ async def cleanup(memory, test_dir):
 
 async def run_all_tests():
     """Run all end-to-end tests."""
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("PATTERN SUGGESTION WORKFLOW - END-TO-END TEST")
-    print("="*80)
+    print("=" * 80)
     print("\nThis test verifies:")
     print("  1. Graphiti is enabled")
     print("  2. Patterns can be categorized")
@@ -367,9 +369,9 @@ async def run_all_tests():
         # Test 5: Memory manager integration
         await test_memory_manager_integration(spec_dir, project_dir)
 
-        print("\n" + "="*80)
+        print("\n" + "=" * 80)
         print("✅ OVERALL RESULT: PASSED")
-        print("="*80)
+        print("=" * 80)
         print("\nAll core functionality is working correctly!")
         print("Note: Some warnings about indexing are normal for fresh test data.")
         print(f"\nTest data location: {test_dir}")

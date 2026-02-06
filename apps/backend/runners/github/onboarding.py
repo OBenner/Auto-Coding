@@ -470,10 +470,7 @@ class OnboardingManager:
         state = self.get_state()
 
         if state.phase == OnboardingPhase.TEST_MODE:
-            if (
-                state.test_mode_ends_at
-                and datetime.now(UTC) < state.test_mode_ends_at
-            ):
+            if state.test_mode_ends_at and datetime.now(UTC) < state.test_mode_ends_at:
                 return True
 
         return state.enablement_level == EnablementLevel.COMMENT_ONLY

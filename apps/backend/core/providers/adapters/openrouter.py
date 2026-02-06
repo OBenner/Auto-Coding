@@ -338,7 +338,9 @@ class OpenRouterProvider(AIEngineProvider):
             )
 
         # Get model from session config or provider config
-        model = config.model or self._config.openrouter_model or DEFAULT_OPENROUTER_MODEL
+        model = (
+            config.model or self._config.openrouter_model or DEFAULT_OPENROUTER_MODEL
+        )
 
         # Get base URL from provider config
         base_url = self._config.openrouter_base_url or DEFAULT_OPENROUTER_BASE_URL

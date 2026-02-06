@@ -138,7 +138,10 @@ async def run_test_generator_session(
         max_thinking_tokens = get_phase_thinking_budget("test_generation")
 
     print_key_value("Model", model)
-    print_key_value("Thinking budget", str(max_thinking_tokens) if max_thinking_tokens else "Default")
+    print_key_value(
+        "Thinking budget",
+        str(max_thinking_tokens) if max_thinking_tokens else "Default",
+    )
     print()
 
     # Log session start
@@ -147,7 +150,7 @@ async def run_test_generator_session(
         task_logger.log_entry(
             LogEntryType.INFO,
             f"Analyzing {len(analysis_results.get('functions', []))} functions, "
-            f"{len(analysis_results.get('classes', []))} classes"
+            f"{len(analysis_results.get('classes', []))} classes",
         )
 
     # Load the test generator prompt
@@ -213,8 +216,7 @@ Begin by loading context (Phase 0 in your prompt).
         # Log session completion
         if task_logger:
             task_logger.log_entry(
-                LogEntryType.SUCCESS,
-                "Test Generator Agent session completed"
+                LogEntryType.SUCCESS, "Test Generator Agent session completed"
             )
 
     except Exception as e:
@@ -231,7 +233,11 @@ Begin by loading context (Phase 0 in your prompt).
     tests_dir = project_dir / "tests"
     if not tests_dir.exists():
         logger.warning("tests/ directory not found")
-        return {"generated_files": [], "success": False, "error": "tests/ directory not found"}
+        return {
+            "generated_files": [],
+            "success": False,
+            "error": "tests/ directory not found",
+        }
 
     # Find all test_*.py files (exclude conftest.py)
     test_files = []
@@ -242,7 +248,11 @@ Begin by loading context (Phase 0 in your prompt).
     if not test_files:
         logger.warning("No test files were generated")
         print_status("No test files found in tests/", "warning")
-        return {"generated_files": [], "success": False, "error": "No test files generated"}
+        return {
+            "generated_files": [],
+            "success": False,
+            "error": "No test files generated",
+        }
 
     print_key_value("Generated files", str(len(test_files)))
     for test_file in test_files:
@@ -257,16 +267,16 @@ Begin by loading context (Phase 0 in your prompt).
         if validation_success:
             task_logger.log_entry(
                 LogEntryType.SUCCESS,
-                f"Generated and validated {len(test_files)} test files"
+                f"Generated and validated {len(test_files)} test files",
             )
         else:
             task_logger.log_entry(
                 LogEntryType.WARNING,
-                f"Generated {len(test_files)} test files but validation failed"
+                f"Generated {len(test_files)} test files but validation failed",
             )
 
     return {
         "generated_files": [str(f) for f in test_files],
         "success": validation_success,
-        "error": None if validation_success else "Test validation failed"
+        "error": None if validation_success else "Test validation failed",
     }

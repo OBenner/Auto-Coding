@@ -1332,7 +1332,9 @@ def handle_merge_analytics_summary_command(project_dir: Path) -> None:
     print(f"       Tokens: {analytics.total_tokens_used:,}")
     print()
 
-    print(f"  {icon(Icons.TIME)} Average Duration: {analytics.average_duration_seconds:.1f}s")
+    print(
+        f"  {icon(Icons.TIME)} Average Duration: {analytics.average_duration_seconds:.1f}s"
+    )
     print()
 
     # Show top conflict patterns
@@ -1432,7 +1434,9 @@ def handle_merge_analytics_export_command(
                         ]
                     )
 
-            print(f"  {icon(Icons.SUCCESS)} Exported {len(operations)} operations to: {output_file}")
+            print(
+                f"  {icon(Icons.SUCCESS)} Exported {len(operations)} operations to: {output_file}"
+            )
             print()
         else:
             print(f"  {icon(Icons.ERROR)} Unknown format: {format}")

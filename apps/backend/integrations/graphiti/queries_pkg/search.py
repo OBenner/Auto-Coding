@@ -311,7 +311,10 @@ class GraphitiSearch:
                             }
 
                             # Filter by category if specified
-                            if categories is None or pattern_entry["category"] in categories:
+                            if (
+                                categories is None
+                                or pattern_entry["category"] in categories
+                            ):
                                 patterns.append(pattern_entry)
                     except (json.JSONDecodeError, TypeError, AttributeError):
                         continue
@@ -356,7 +359,9 @@ class GraphitiSearch:
             patterns.sort(key=lambda x: x.get("score", 0), reverse=True)
             gotchas.sort(key=lambda x: x.get("score", 0), reverse=True)
 
-            category_filter_str = f" (filtered by: {', '.join(categories)})" if categories else ""
+            category_filter_str = (
+                f" (filtered by: {', '.join(categories)})" if categories else ""
+            )
             logger.info(
                 f"Found {len(patterns[:num_results])} patterns and {len(gotchas[:num_results])} gotchas for: {query[:50]}...{category_filter_str}"
             )

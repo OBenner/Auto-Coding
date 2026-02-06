@@ -187,7 +187,9 @@ class SpecOrchestrator:
                         else patterns
                     )
                 else:
-                    debug("orchestrator", f"No pattern suggestions found for {phase_name}")
+                    debug(
+                        "orchestrator", f"No pattern suggestions found for {phase_name}"
+                    )
             except Exception as e:
                 # Don't fail the phase if pattern fetching fails
                 debug(

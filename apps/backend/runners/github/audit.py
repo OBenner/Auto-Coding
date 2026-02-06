@@ -263,9 +263,7 @@ class AuditLogger:
         if not self.enabled or not self.log_dir.exists():
             return
 
-        cutoff = datetime.now(UTC).timestamp() - (
-            self.retention_days * 24 * 60 * 60
-        )
+        cutoff = datetime.now(UTC).timestamp() - (self.retention_days * 24 * 60 * 60)
 
         for log_file in self.log_dir.glob("audit_*.jsonl"):
             if log_file.stat().st_mtime < cutoff:

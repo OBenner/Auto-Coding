@@ -299,12 +299,8 @@ class IssueBatch:
     spec_id: str | None = None
     pr_number: int | None = None
     error: str | None = None
-    created_at: str = field(
-        default_factory=lambda: datetime.now(UTC).isoformat()
-    )
-    updated_at: str = field(
-        default_factory=lambda: datetime.now(UTC).isoformat()
-    )
+    created_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
+    updated_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
     # AI validation results
     validated: bool = False
     validation_confidence: float = 0.0

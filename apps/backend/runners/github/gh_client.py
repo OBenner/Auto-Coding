@@ -1277,7 +1277,10 @@ class GHClient:
         return pr_files, []
 
     async def request_rereview(
-        self, pr_number: int, reviewers: list[str], team_reviewers: list[str] | None = None
+        self,
+        pr_number: int,
+        reviewers: list[str],
+        team_reviewers: list[str] | None = None,
     ) -> None:
         """
         Request re-review from specific reviewers on a PR.
@@ -1402,12 +1405,10 @@ class GHClient:
             suggested_lines = suggested_code.splitlines(keepends=True)
 
             # Ensure suggested lines end with newline if original did
-            if suggested_lines and not suggested_lines[-1].endswith('\n'):
-                suggested_lines[-1] += '\n'
+            if suggested_lines and not suggested_lines[-1].endswith("\n"):
+                suggested_lines[-1] += "\n"
 
-            new_lines = (
-                lines[: start_line - 1] + suggested_lines + lines[end_line:]
-            )
+            new_lines = lines[: start_line - 1] + suggested_lines + lines[end_line:]
 
             # Write the updated content
             with open(file_full_path, "w", encoding="utf-8") as f:
@@ -1419,8 +1420,14 @@ class GHClient:
 
             # Stage and commit the change
             # Use git directly via gh CLI's shell execution
-            stage_args = ["api", "--method", "POST", "/graphql", "-f",
-                         'query=mutation { __typename }']
+            stage_args = [
+                "api",
+                "--method",
+                "POST",
+                "/graphql",
+                "-f",
+                "query=mutation { __typename }",
+            ]
 
             # Actually, let's use basic git commands through subprocess
             # First, stage the file
@@ -1464,9 +1471,7 @@ class GHClient:
                     text=True,
                 )
 
-                logger.info(
-                    f"Applied suggestion and committed as {commit_sha[:8]}"
-                )
+                logger.info(f"Applied suggestion and committed as {commit_sha[:8]}")
 
                 return {
                     "success": True,

@@ -258,7 +258,11 @@ Ready for QA Revalidation: {ready_for_revalidation}"""
             if issues:
                 result += f"\n\nIssues Found: {len(issues)}"
                 for i, issue in enumerate(issues, 1):
-                    issue_desc = issue.get("description", str(issue)) if isinstance(issue, dict) else str(issue)
+                    issue_desc = (
+                        issue.get("description", str(issue))
+                        if isinstance(issue, dict)
+                        else str(issue)
+                    )
                     result += f"\n  {i}. {issue_desc}"
             else:
                 result += "\n\nIssues Found: None"
@@ -273,9 +277,7 @@ Ready for QA Revalidation: {ready_for_revalidation}"""
 
         except Exception as e:
             return {
-                "content": [
-                    {"type": "text", "text": f"Error reading QA status: {e}"}
-                ]
+                "content": [{"type": "text", "text": f"Error reading QA status: {e}"}]
             }
 
     tools.append(get_qa_status)

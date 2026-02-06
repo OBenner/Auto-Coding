@@ -442,9 +442,7 @@ def load_claude_md(project_dir: Path) -> str | None:
     return None
 
 
-def load_plugin_mcp_servers(
-    project_dir: Path, spec_dir: Path
-) -> dict[str, Any]:
+def load_plugin_mcp_servers(project_dir: Path, spec_dir: Path) -> dict[str, Any]:
     """
     Load MCP servers from enabled integration plugins.
 
@@ -480,9 +478,7 @@ def load_plugin_mcp_servers(
             enabled_only=True,
         )
 
-        logger.debug(
-            f"Found {len(integration_plugins)} enabled integration plugin(s)"
-        )
+        logger.debug(f"Found {len(integration_plugins)} enabled integration plugin(s)")
 
         # Create MCP server for each enabled plugin
         for plugin in integration_plugins:
@@ -512,9 +508,7 @@ def load_plugin_mcp_servers(
                     plugin_servers[plugin.name] = mcp_server
                     logger.info(f"Loaded MCP server from plugin: {plugin.name}")
                 else:
-                    logger.debug(
-                        f"Plugin {plugin.name} returned no MCP server"
-                    )
+                    logger.debug(f"Plugin {plugin.name} returned no MCP server")
             except Exception as e:
                 logger.error(
                     f"Failed to create MCP server for plugin {plugin.name}: {e}"

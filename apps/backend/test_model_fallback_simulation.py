@@ -13,8 +13,7 @@ from pathlib import Path
 
 # Set up detailed logging to see fallback in action
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 
 logger = logging.getLogger(__name__)
@@ -34,13 +33,21 @@ def test_fallback_function():
     def simulate_api_call(model: str) -> str:
         """Simulates an API call that fails for opus but succeeds for sonnet."""
         # Extract model shorthand
-        model_key = "opus" if "opus" in model.lower() else \
-                    "sonnet" if "sonnet" in model.lower() else \
-                    "haiku" if "haiku" in model.lower() else model
+        model_key = (
+            "opus"
+            if "opus" in model.lower()
+            else "sonnet"
+            if "sonnet" in model.lower()
+            else "haiku"
+            if "haiku" in model.lower()
+            else model
+        )
 
         call_count[model_key] += 1
 
-        logger.info(f"simulate_api_call called with model: {model} (attempt #{call_count[model_key]})")
+        logger.info(
+            f"simulate_api_call called with model: {model} (attempt #{call_count[model_key]})"
+        )
 
         # Fail for opus, succeed for sonnet
         if "opus" in model.lower():
@@ -56,15 +63,19 @@ def test_fallback_function():
         result = retry_with_fallback(
             callable_fn=simulate_api_call,
             model="claude-opus-4-20250514",
-            max_retries_per_model=1
+            max_retries_per_model=1,
         )
         logger.info(f"✓ Fallback succeeded: {result}")
-        logger.info(f"✓ Call counts: opus={call_count['opus']}, sonnet={call_count['sonnet']}, haiku={call_count['haiku']}")
+        logger.info(
+            f"✓ Call counts: opus={call_count['opus']}, sonnet={call_count['sonnet']}, haiku={call_count['haiku']}"
+        )
 
         # Verify opus was tried and failed, sonnet succeeded
-        assert call_count['opus'] >= 1, "Opus should have been tried"
-        assert call_count['sonnet'] >= 1, "Sonnet should have been tried as fallback"
-        assert call_count['haiku'] == 0, "Haiku should not have been tried (sonnet succeeded)"
+        assert call_count["opus"] >= 1, "Opus should have been tried"
+        assert call_count["sonnet"] >= 1, "Sonnet should have been tried as fallback"
+        assert call_count["haiku"] == 0, (
+            "Haiku should not have been tried (sonnet succeeded)"
+        )
 
         logger.info("✓ TEST 1 PASSED: Fallback chain worked correctly")
         return True
@@ -92,7 +103,7 @@ def test_all_models_fail():
         result = retry_with_fallback(
             callable_fn=always_fail,
             model="claude-opus-4-20250514",
-            max_retries_per_model=1
+            max_retries_per_model=1,
         )
         logger.error("✗ TEST 2 FAILED: Should have raised exception")
         return False
@@ -116,7 +127,9 @@ def test_non_retryable_error():
     def raise_non_retryable(model: str) -> str:
         """Simulates a non-retryable error like invalid API key."""
         call_count[0] += 1
-        logger.warning(f"Simulating non-retryable error for {model} (call #{call_count[0]})")
+        logger.warning(
+            f"Simulating non-retryable error for {model} (call #{call_count[0]})"
+        )
         raise ValueError("Invalid API key (simulated)")
 
     logger.info("\n--- Testing non-retryable error raises immediately ---")
@@ -124,14 +137,16 @@ def test_non_retryable_error():
         result = retry_with_fallback(
             callable_fn=raise_non_retryable,
             model="claude-opus-4-20250514",
-            max_retries_per_model=1
+            max_retries_per_model=1,
         )
         logger.error("✗ TEST 3 FAILED: Should have raised exception")
         return False
 
     except ValueError as e:
         logger.info(f"✓ ValueError raised as expected: {e}")
-        logger.info(f"✓ Call count: {call_count[0]} (should be 1 - no fallback attempted)")
+        logger.info(
+            f"✓ Call count: {call_count[0]} (should be 1 - no fallback attempted)"
+        )
 
         # Non-retryable errors should not trigger fallback
         assert call_count[0] == 1, "Should only try once for non-retryable error"
@@ -160,9 +175,11 @@ def test_create_client_fallback():
     def mock_client_init(options):
         """Mock ClaudeSDKClient constructor."""
         call_count["calls"] += 1
-        model = options.model if hasattr(options, 'model') else "unknown"
+        model = options.model if hasattr(options, "model") else "unknown"
 
-        logger.info(f"Mock ClaudeSDKClient created with model: {model} (call #{call_count['calls']})")
+        logger.info(
+            f"Mock ClaudeSDKClient created with model: {model} (call #{call_count['calls']})"
+        )
 
         # First call (opus) fails
         if call_count["calls"] == 1:
@@ -180,7 +197,7 @@ def test_create_client_fallback():
         from core.client import create_client
 
         # Patch ClaudeSDKClient to use our mock
-        with patch('core.client.ClaudeSDKClient') as mock_sdk_client:
+        with patch("core.client.ClaudeSDKClient") as mock_sdk_client:
             mock_sdk_client.side_effect = mock_client_init
 
             spec_dir = Path(".auto-claude/specs/024-multi-model-agent-orchestration")
@@ -192,14 +209,16 @@ def test_create_client_fallback():
                     project_dir=project_dir,
                     spec_dir=spec_dir,
                     model="claude-opus-4-20250514",
-                    agent_type="coder"
+                    agent_type="coder",
                 )
 
                 logger.info("✓ create_client succeeded with fallback")
                 logger.info(f"✓ Total client creation attempts: {call_count['calls']}")
 
                 # Should have tried opus (failed) then sonnet (succeeded)
-                assert call_count["calls"] >= 2, "Should have tried opus then fallen back to sonnet"
+                assert call_count["calls"] >= 2, (
+                    "Should have tried opus then fallen back to sonnet"
+                )
 
                 logger.info("✓ TEST 4 PASSED: create_client fallback integration works")
                 return True

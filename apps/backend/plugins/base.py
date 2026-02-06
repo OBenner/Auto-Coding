@@ -284,7 +284,9 @@ class PluginMetadata:
             "version": self.version,
             "author": self.author,
             "description": self.description,
-            "plugin_type": self.plugin_type.value if isinstance(self.plugin_type, PluginType) else self.plugin_type,
+            "plugin_type": self.plugin_type.value
+            if isinstance(self.plugin_type, PluginType)
+            else self.plugin_type,
             "required_permissions": [
                 p.value if isinstance(p, PluginPermission) else p
                 for p in self.required_permissions

@@ -160,9 +160,7 @@ class PluginRegistry:
                 system_plugin_dir = self.loader.system_plugins_dir / metadata.name
 
                 plugin_dir = (
-                    user_plugin_dir
-                    if user_plugin_dir.exists()
-                    else system_plugin_dir
+                    user_plugin_dir if user_plugin_dir.exists() else system_plugin_dir
                 )
 
                 # Load plugin
@@ -183,9 +181,7 @@ class PluginRegistry:
                 try:
                     self.enable_plugin(plugin.name)
                 except Exception as e:
-                    debug_warning(
-                        f"Failed to auto-enable plugin {plugin.name}: {e}"
-                    )
+                    debug_warning(f"Failed to auto-enable plugin {plugin.name}: {e}")
                     logger.warning(f"Failed to auto-enable plugin {plugin.name}: {e}")
 
             except Exception as e:

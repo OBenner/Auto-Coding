@@ -93,9 +93,7 @@ async def suggest_patterns(
 
         patterns = []
         for result in pattern_results:
-            content = getattr(result, "content", None) or getattr(
-                result, "fact", None
-            )
+            content = getattr(result, "content", None) or getattr(result, "fact", None)
             score = getattr(result, "score", 0.0)
 
             # Filter by minimum score
@@ -105,9 +103,7 @@ async def suggest_patterns(
             # Only process pattern episodes
             if content and EPISODE_TYPE_PATTERN in str(content):
                 try:
-                    data = (
-                        json.loads(content) if isinstance(content, str) else content
-                    )
+                    data = json.loads(content) if isinstance(content, str) else content
 
                     # Ensure data is a dict before processing
                     if not isinstance(data, dict):
@@ -126,7 +122,10 @@ async def suggest_patterns(
                         }
 
                         # Filter by category if specified
-                        if categories is None or pattern_entry["category"] in categories:
+                        if (
+                            categories is None
+                            or pattern_entry["category"] in categories
+                        ):
                             patterns.append(pattern_entry)
 
                 except (json.JSONDecodeError, TypeError, AttributeError):
@@ -138,7 +137,9 @@ async def suggest_patterns(
         # Limit to requested number of results
         patterns = patterns[:num_results]
 
-        category_filter_str = f" (filtered by: {', '.join(categories)})" if categories else ""
+        category_filter_str = (
+            f" (filtered by: {', '.join(categories)})" if categories else ""
+        )
         logger.info(
             f"Found {len(patterns)} pattern suggestions for: {query[:50]}...{category_filter_str}"
         )
@@ -189,9 +190,7 @@ async def get_patterns_by_category(
 
         patterns = []
         for result in results:
-            content = getattr(result, "content", None) or getattr(
-                result, "fact", None
-            )
+            content = getattr(result, "content", None) or getattr(result, "fact", None)
             score = getattr(result, "score", 0.0)
 
             # Filter by minimum score
@@ -201,9 +200,7 @@ async def get_patterns_by_category(
             # Only process pattern episodes
             if content and EPISODE_TYPE_PATTERN in str(content):
                 try:
-                    data = (
-                        json.loads(content) if isinstance(content, str) else content
-                    )
+                    data = json.loads(content) if isinstance(content, str) else content
 
                     # Ensure data is a dict before processing
                     if not isinstance(data, dict):

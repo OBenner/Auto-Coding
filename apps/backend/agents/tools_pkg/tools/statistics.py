@@ -48,7 +48,9 @@ def _format_duration(seconds: float) -> str:
         return f"{days:.1f}d"
 
 
-def _calculate_phase_durations(phases: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+def _calculate_phase_durations(
+    phases: list[dict[str, Any]],
+) -> dict[str, dict[str, Any]]:
     """
     Calculate duration for each phase based on subtask timestamps.
 
@@ -108,7 +110,9 @@ def _calculate_phase_durations(phases: list[dict[str, Any]]) -> dict[str, dict[s
         # Determine phase status
         if completed_count == total_count:
             phase_status = "completed"
-        elif completed_count > 0 or any(s.get("status") == "in_progress" for s in subtasks):
+        elif completed_count > 0 or any(
+            s.get("status") == "in_progress" for s in subtasks
+        ):
             phase_status = "in_progress"
         else:
             phase_status = "not_started"
@@ -320,8 +324,8 @@ def create_statistics_tools(spec_dir: Path, project_dir: Path) -> list:
 Time Tracking:
   Total Build Time: {build_duration}
   Time Since Last Update: {idle_duration}
-  Started: {created_at.strftime('%Y-%m-%d %H:%M UTC') if created_at else 'N/A'}
-  Last Updated: {last_updated.strftime('%Y-%m-%d %H:%M UTC') if last_updated else 'N/A'}
+  Started: {created_at.strftime("%Y-%m-%d %H:%M UTC") if created_at else "N/A"}
+  Last Updated: {last_updated.strftime("%Y-%m-%d %H:%M UTC") if last_updated else "N/A"}
 
 Subtask Progress:
   Completion Rate: {completion_rate:.1f}% ({completed_subtasks}/{total_subtasks})
@@ -329,9 +333,9 @@ Subtask Progress:
   Failed: {failed_subtasks}
 
 Completion Velocity:
-  Subtasks/Hour: {velocity['subtasks_per_hour']}
-  Subtasks/Day: {velocity['subtasks_per_day']}
-  Avg Subtask Duration: {velocity['average_subtask_duration']}
+  Subtasks/Hour: {velocity["subtasks_per_hour"]}
+  Subtasks/Day: {velocity["subtasks_per_day"]}
+  Avg Subtask Duration: {velocity["average_subtask_duration"]}
 
 QA Metrics:
   QA Iterations: {qa_iterations}
@@ -350,9 +354,9 @@ Phase Durations:"""
 
                 result += f"""
   {phase_name}:
-    Duration: {stats['duration_formatted']}
-    Status: {stats['status']}
-    Progress: {stats['subtasks_completed']}/{stats['subtasks_total']} subtasks"""
+    Duration: {stats["duration_formatted"]}
+    Status: {stats["status"]}
+    Progress: {stats["subtasks_completed"]}/{stats["subtasks_total"]} subtasks"""
 
             return {"content": [{"type": "text", "text": result}]}
 

@@ -568,16 +568,18 @@ def cmd_get_graph_data(args):
                 description_val = serialize_value(row[4]) if len(row) > 4 else ""
 
                 if uuid_val:
-                    nodes.append({
-                        "id": uuid_val,
-                        "label": name_val or "Episodic",
-                        "type": "episodic",
-                        "timestamp": created_at_val or datetime.now().isoformat(),
-                        "data": {
-                            "content": content_val or "",
-                            "description": description_val or "",
+                    nodes.append(
+                        {
+                            "id": uuid_val,
+                            "label": name_val or "Episodic",
+                            "type": "episodic",
+                            "timestamp": created_at_val or datetime.now().isoformat(),
+                            "data": {
+                                "content": content_val or "",
+                                "description": description_val or "",
+                            },
                         }
-                    })
+                    )
         except Exception as e:
             # Episodic table might not exist
             if "Episodic" not in str(e) or (
@@ -596,15 +598,17 @@ def cmd_get_graph_data(args):
                 summary_val = serialize_value(row[3]) if len(row) > 3 else ""
 
                 if uuid_val:
-                    nodes.append({
-                        "id": uuid_val,
-                        "label": name_val or "Entity",
-                        "type": "entity",
-                        "timestamp": created_at_val or datetime.now().isoformat(),
-                        "data": {
-                            "summary": summary_val or "",
+                    nodes.append(
+                        {
+                            "id": uuid_val,
+                            "label": name_val or "Entity",
+                            "type": "entity",
+                            "timestamp": created_at_val or datetime.now().isoformat(),
+                            "data": {
+                                "summary": summary_val or "",
+                            },
                         }
-                    })
+                    )
         except Exception as e:
             # Entity table might not exist
             if "Entity" not in str(e) or (
@@ -622,12 +626,14 @@ def cmd_get_graph_data(args):
                 target_val = serialize_value(row[2]) if len(row) > 2 else None
 
                 if id_val and source_val and target_val:
-                    edges.append({
-                        "id": str(id_val),
-                        "source": source_val,
-                        "target": target_val,
-                        "type": "relates_to",
-                    })
+                    edges.append(
+                        {
+                            "id": str(id_val),
+                            "source": source_val,
+                            "target": target_val,
+                            "type": "relates_to",
+                        }
+                    )
         except Exception as e:
             # No edges or relationship tables might not exist
             sys.stderr.write(f"Warning: Failed to query edges: {e}\n")
@@ -639,7 +645,7 @@ def cmd_get_graph_data(args):
                 "edges": edges,
                 "node_count": len(nodes),
                 "edge_count": len(edges),
-            }
+            },
         )
 
     except Exception as e:
@@ -1094,9 +1100,7 @@ def main():
     )
     export_parser.add_argument("db_path", help="Path to database directory")
     export_parser.add_argument("database", help="Database name")
-    export_parser.add_argument(
-        "--output", required=True, help="Output JSON file path"
-    )
+    export_parser.add_argument("--output", required=True, help="Output JSON file path")
 
     args = parser.parse_args()
 

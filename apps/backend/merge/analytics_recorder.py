@@ -421,9 +421,7 @@ class MergeAnalyticsRecorder:
         """
         try:
             patterns = self._load_conflict_patterns()
-            pattern_map = {
-                (p.file_path, p.location): p for p in patterns
-            }
+            pattern_map = {(p.file_path, p.location): p for p in patterns}
 
             # Extract conflicts from file results
             for file_path, result in merge_report.file_results.items():
@@ -440,7 +438,10 @@ class MergeAnalyticsRecorder:
                             if task not in pattern.tasks_involved:
                                 pattern.tasks_involved.append(task)
                         # Update severity if higher
-                        if SEVERITY_RANK[conflict.severity] > SEVERITY_RANK[pattern.severity]:
+                        if (
+                            SEVERITY_RANK[conflict.severity]
+                            > SEVERITY_RANK[pattern.severity]
+                        ):
                             pattern.severity = conflict.severity
                     else:
                         # Create new pattern

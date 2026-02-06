@@ -653,7 +653,11 @@ async def run_agent_session(
             # The Claude SDK client may expose usage metadata after the session completes
             if hasattr(client, "usage_metadata"):
                 metadata = client.usage_metadata
-                if metadata and hasattr(metadata, "input_tokens") and hasattr(metadata, "output_tokens"):
+                if (
+                    metadata
+                    and hasattr(metadata, "input_tokens")
+                    and hasattr(metadata, "output_tokens")
+                ):
                     usage_metadata = {
                         "input_tokens": metadata.input_tokens,
                         "output_tokens": metadata.output_tokens,
@@ -667,7 +671,11 @@ async def run_agent_session(
             elif hasattr(client, "_usage"):
                 # Alternative: some SDKs store usage in a _usage attribute
                 usage = client._usage
-                if isinstance(usage, dict) and "input_tokens" in usage and "output_tokens" in usage:
+                if (
+                    isinstance(usage, dict)
+                    and "input_tokens" in usage
+                    and "output_tokens" in usage
+                ):
                     usage_metadata = {
                         "input_tokens": usage["input_tokens"],
                         "output_tokens": usage["output_tokens"],
@@ -689,7 +697,9 @@ async def run_agent_session(
                 LogPhase.CODING: "coding",
                 LogPhase.VALIDATION: "validation",
             }
-            phase_type = phase_type_map.get(phase, "coding")  # Default to coding if unknown
+            phase_type = phase_type_map.get(
+                phase, "coding"
+            )  # Default to coding if unknown
 
             try:
                 saved = save_token_stats(
@@ -701,7 +711,7 @@ async def run_agent_session(
                 if saved:
                     print_status(
                         f"Token usage recorded: {usage_metadata['input_tokens']} in, {usage_metadata['output_tokens']} out",
-                        "info"
+                        "info",
                     )
             except Exception as e:
                 logger.warning(f"Failed to persist token stats: {e}")
