@@ -18,6 +18,8 @@ if str(_PARENT_DIR) not in sys.path:
 # Heavy imports are lazy-loaded in functions to avoid import errors
 from progress import print_paused_banner
 from review import ReviewState
+
+from cli.exit_codes import ExitCode
 from ui import (
     BuildState,
     Icons,
@@ -120,7 +122,7 @@ def handle_build_command(
 
     # Validate environment
     if not validate_environment(spec_dir):
-        sys.exit(1)
+        sys.exit(ExitCode.SYSTEM_ERROR)
 
     # Check human review approval
     review_state = ReviewState.load(spec_dir)
@@ -160,7 +162,7 @@ def handle_build_command(
             )
             print(box(content, width=70, style="heavy"))
             print()
-            sys.exit(1)
+            sys.exit(ExitCode.BUILD_FAILED)
     else:
         debug_success(
             "run.py", "Review approval validated", approved_by=review_state.approved_by
@@ -321,7 +323,7 @@ def handle_build_command(
             import traceback
 
             traceback.print_exc()
-        sys.exit(1)
+        sys.exit(ExitCode.SYSTEM_ERROR)
 
 
 def _handle_build_interrupt(
@@ -400,7 +402,7 @@ def _handle_build_interrupt(
             print()
             print_status("Exiting...", "info")
             status_manager.set_inactive()
-            sys.exit(0)
+            sys.exit(ExitCode.SUCCESS)
 
         human_input = ""
 
@@ -416,7 +418,7 @@ def _handle_build_interrupt(
                 print()
                 print_status("Exiting without saving instructions...", "warning")
                 status_manager.set_inactive()
-                sys.exit(0)
+                sys.exit(ExitCode.SUCCESS)
 
         if human_input:
             # Save to HUMAN_INPUT.md
@@ -453,7 +455,7 @@ def _handle_build_interrupt(
                 )
             )
             # Build completed or was interrupted again - exit
-            sys.exit(0)
+            sys.exit(ExitCode.SUCCESS)
 
     except KeyboardInterrupt:
         # User pressed Ctrl+C again during input prompt - exit immediately
@@ -461,7 +463,7 @@ def _handle_build_interrupt(
         print_status("Exiting...", "warning")
         status_manager = StatusManager(project_dir)
         status_manager.set_inactive()
-        sys.exit(0)
+        sys.exit(ExitCode.SUCCESS)
     except EOFError:
         # stdin closed
         pass
