@@ -172,7 +172,7 @@ async def run_qa_fixer_session(
             success=False,
             error="Circular fix detected - same fix attempted multiple times",
         )
-        return "error", "Circular fix detected - human intervention recommended"
+        return "circular", "Circular fix detected - same approach attempted multiple times"
 
     # Get total iterations from history
     total_iterations = len(iteration_history)
@@ -457,18 +457,18 @@ async def run_qa_fixer_session(
                 duration_seconds=iteration_duration,
             )
 
-            # If this is the last iteration, return error
+            # If this is the last iteration, return stuck status
             if fixer_iteration == MAX_FIXER_ITERATIONS:
                 debug_error(
                     "qa_fixer",
-                    f"Max fixer iterations ({MAX_FIXER_ITERATIONS}) reached, giving up",
+                    f"Max fixer iterations ({MAX_FIXER_ITERATIONS}) reached, fixer is stuck",
                 )
-                print(f"⚠️  Max recovery attempts ({MAX_FIXER_ITERATIONS}) reached. Giving up.\n")
+                print(f"⚠️  Max recovery attempts ({MAX_FIXER_ITERATIONS}) reached. Fixer stuck.\n")
                 # Record failed outcome
                 recovery_manager.record_outcome(
                     fixer_subtask_id, success=False, error=last_error
                 )
-                return "error", last_error
+                return "stuck", f"Fixer stuck after {MAX_FIXER_ITERATIONS} recovery attempts: {last_error}"
 
             # Otherwise, continue to next iteration
             debug(
@@ -507,4 +507,4 @@ async def run_qa_fixer_session(
         success=False,
         error=final_error,
     )
-    return "error", final_error
+    return "stuck", f"Fixer stuck after exhausting all recovery attempts: {final_error}"
