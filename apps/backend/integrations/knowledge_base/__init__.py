@@ -17,6 +17,7 @@ from integrations.knowledge_base.connectors import (
     GitHubWikiConnector,
     NotionConnector,
 )
+from integrations.knowledge_base.indexer import DocumentationIndexer
 from integrations.knowledge_base.manager import KnowledgeBaseManager
 
 __all__ = [
@@ -27,5 +28,6 @@ __all__ = [
     "GitBookConnector",
     "GitHubWikiConnector",
     "NotionConnector",
+    "DocumentationIndexer",
     "KnowledgeBaseManager",
 ]
