@@ -16,6 +16,7 @@ from agents.memory_manager import get_graphiti_context, save_session_memory
 from claude_agent_sdk import ClaudeSDKClient
 from debug import debug, debug_detailed, debug_error, debug_section, debug_success
 from security.tool_input_validator import get_safe_tool_input
+from services.recovery import RecoveryManager
 from task_logger import (
     LogEntryType,
     LogPhase,
@@ -74,6 +75,11 @@ async def run_qa_fixer_session(
     if project_dir is None:
         # Walk up from spec_dir to find project root
         project_dir = spec_dir.parent.parent.parent
+
+    # Initialize recovery manager for circular fix detection
+    recovery_manager = RecoveryManager(spec_dir=spec_dir, project_dir=project_dir)
+    fixer_subtask_id = f"qa_fixer_{fix_session}"
+
     debug_section("qa_fixer", f"QA Fixer Session {fix_session}")
     debug(
         "qa_fixer",
@@ -124,6 +130,27 @@ async def run_qa_fixer_session(
     prompt += f"\n**IMPORTANT**: All spec files are located in: `{spec_dir}/`\n"
     prompt += f"The fix request file is at: `{spec_dir}/QA_FIX_REQUEST.md`\n"
 
+    # Check for circular fixes (same fix attempted multiple times)
+    fix_request_content = fix_request_file.read_text(encoding="utf-8")
+    if recovery_manager.is_circular_fix(fixer_subtask_id, fix_request_content):
+        attempt_count = recovery_manager.get_attempt_count(fixer_subtask_id)
+        debug_error(
+            "qa_fixer",
+            f"Circular fix detected for {fixer_subtask_id} (attempt #{attempt_count})",
+        )
+        print(f"\n⚠️  WARNING: Circular fix detected!")
+        print(
+            f"This fix has been attempted {attempt_count} times with similar errors."
+        )
+        print("Consider human intervention or a different approach.\n")
+        # Record circular fix outcome
+        recovery_manager.record_outcome(
+            fixer_subtask_id,
+            success=False,
+            error="Circular fix detected - same fix attempted multiple times",
+        )
+        return "error", "Circular fix detected - human intervention recommended"
+
     # Recovery iteration loop - retry if agent gets stuck or fails
     last_error = None
     for fixer_iteration in range(1, MAX_FIXER_ITERATIONS + 1):
@@ -136,6 +163,11 @@ async def run_qa_fixer_session(
                 f"Starting recovery attempt {fixer_iteration}",
                 max_iterations=MAX_FIXER_ITERATIONS,
             )
+
+        # Record this attempt with recovery manager
+        recovery_manager.record_attempt(
+            fixer_subtask_id, approach=f"QA fixer session {fix_session}, iteration {fixer_iteration}"
+        )
 
         try:
             debug("qa_fixer", "Sending query to Claude SDK...")
@@ -297,6 +329,8 @@ async def run_qa_fixer_session(
 
             if status and status.get("ready_for_qa_revalidation"):
                 debug_success("qa_fixer", "Fixes applied, ready for QA revalidation")
+                # Record successful outcome with recovery manager
+                recovery_manager.record_outcome(fixer_subtask_id, success=True)
                 # Save successful fix session to memory
                 await save_session_memory(
                     spec_dir=spec_dir,
@@ -311,6 +345,8 @@ async def run_qa_fixer_session(
             else:
                 # Fixer didn't update the status properly, but we'll trust it worked
                 debug_success("qa_fixer", "Fixes assumed applied (status not updated)")
+                # Record successful outcome with recovery manager
+                recovery_manager.record_outcome(fixer_subtask_id, success=True)
                 # Still save to memory as successful (fixes were attempted)
                 await save_session_memory(
                     spec_dir=spec_dir,
@@ -340,6 +376,10 @@ async def run_qa_fixer_session(
                     "qa_fixer",
                     f"Max fixer iterations ({MAX_FIXER_ITERATIONS}) reached, giving up",
                 )
+                # Record failed outcome
+                recovery_manager.record_outcome(
+                    fixer_subtask_id, success=False, error=last_error
+                )
                 return "error", last_error
 
             # Otherwise, continue to next iteration
@@ -353,5 +393,11 @@ async def run_qa_fixer_session(
     debug_error(
         "qa_fixer",
         f"Exhausted all {MAX_FIXER_ITERATIONS} fixer iterations without success",
+    )
+    # Record failed outcome
+    recovery_manager.record_outcome(
+        fixer_subtask_id,
+        success=False,
+        error=last_error if last_error else "Max fixer iterations reached",
     )
     return "error", last_error if last_error else "Max fixer iterations reached"
