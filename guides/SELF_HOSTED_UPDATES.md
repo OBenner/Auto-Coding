@@ -138,16 +138,29 @@ For major version updates:
 
 The Docker Compose deployment uses image tags to version the application.
 
+**Architecture Overview:**
+
+The docker-compose configuration includes three main services:
+- **postgres** - PostgreSQL 16 database (persisted in `postgres_data` volume)
+- **redis** - Redis 7 cache/store (persisted in `redis_data` volume)
+- **web-backend** - Auto Code backend API
+
+All services use health checks and the `autoclaude-network` for inter-service communication.
+
 #### Standard Update Procedure
 
 **1. Pull Latest Images**
 
 ```bash
 # Navigate to deployment directory
-cd /opt/autoclaude
+cd /path/to/your/deployment
 
-# Pull latest images
+# Pull latest images for all services
 docker-compose -f docker-compose.yml pull
+
+# Or pull specific service images
+docker-compose -f docker-compose.yml pull web-backend
+docker-compose -f docker-compose.yml pull postgres redis
 ```
 
 **2. Stop Services**
@@ -157,19 +170,7 @@ docker-compose -f docker-compose.yml pull
 docker-compose -f docker-compose.yml down
 ```
 
-**3. Update Configuration (If Required)**
-
-Review the release notes for any new environment variables or configuration changes:
-
-```bash
-# Compare your .env with the new .env.example
-diff .env .env.example
-
-# Add any new required variables
-nano .env
-```
-
-**4. Update Docker Compose File (If Required)**
+**3. Update Docker Compose File (If Required)**
 
 For major version updates, download the new docker-compose.yml:
 
@@ -182,26 +183,80 @@ wget https://raw.githubusercontent.com/OBenner/Auto-Coding/v2.9.0/apps/web-backe
   -O docker-compose.yml
 ```
 
-**5. Start Services**
+**4. Update Configuration (If Required)**
+
+Review the release notes for any new environment variables or configuration changes:
 
 ```bash
-# Start services with new images
+# Compare your .env with the new .env.example
+diff .env .env.example
+
+# Add any new required variables
+nano .env
+```
+
+**5. Recreate Containers with New Images**
+
+```bash
+# Recreate containers with the newly pulled images
+# This command:
+# - Stops and removes existing containers
+# - Creates new containers with the updated images
+# - Preserves volume data (postgres_data, redis_data)
+# - Starts all services in detached mode
 docker-compose -f docker-compose.yml up -d
+```
+
+**Understanding Container Recreation:**
+
+When you run `docker-compose up -d` after pulling new images:
+- Existing containers are stopped and removed
+- New containers are created with the latest image versions
+- Named volumes (`postgres_data`, `redis_data`) persist your data
+- Network configuration (`autoclaude-network`) is preserved
+- Environment variables from `.env` are applied to new containers
+
+**Volume Data Preservation:**
+
+During updates, your data is safe because:
+1. **Named volumes persist** - `postgres_data` and `redis_data` are not deleted when containers are recreated
+2. **Volumes are mounted** - New containers mount the same volumes to the same paths
+3. **No data loss** - Database records, Redis cache, and user data remain intact
+
+```bash
+# Verify volumes before update
+docker volume ls | grep autoclaude
+
+# After update, verify volumes still exist
+docker volume ls | grep autoclaude
+# Output should be identical before and after
 ```
 
 **6. Verify Update**
 
 ```bash
-# Check service status
+# Check all service statuses
 docker-compose ps
 
-# Verify service health
+# Verify all services are healthy
 docker-compose ps | grep "healthy"
 
-# Check logs for errors
+# Expected output should show:
+# - autoclaude-postgres (Up, healthy)
+# - autoclaude-redis (Up, healthy)
+# - autoclaude-backend (Up, healthy)
+
+# Check logs for any errors
 docker-compose logs --tail=50 web-backend
 
-# Verify version
+# Verify backend is responding
+docker exec autoclaude-backend curl http://localhost:8000/health
+
+# Verify data volumes are still attached
+docker volume ls | grep autoclaude
+# Should show: autoclaude_postgres_data, autoclaude_redis_data
+
+# Verify application version
 docker exec autoclaude-backend python -c "import autocode; print(autocode.__version__)"
 ```
 
@@ -233,6 +288,18 @@ docker save -o autoclaude-images.tar ghcr.io/obenner/autoclaude:latest
 docker load -i autoclaude-images.tar
 docker-compose -f docker-compose.yml up -d
 ```
+
+#### Backup and Restore
+
+**Before updating**, always create backups. See [Pre-Update Checklist > Backup Data](#2-backup-data) for detailed backup procedures.
+
+**If you need to restore** after a failed update:
+1. Stop services: `docker-compose down`
+2. Restore database: `cat backup-YYYYMMDD.sql | docker exec -i autoclaude-postgres psql -U postgres -d autoclaude`
+3. Restore volumes (if needed): See [Rollback Procedures > Complete Rollback with Data](#complete-rollback-with-data)
+4. Restart services: `docker-compose up -d`
+
+For complete rollback procedures, see [Docker Compose Rollback](#docker-compose-rollback).
 
 ---
 
