@@ -23,7 +23,7 @@ from task_logger import (
     get_task_logger,
 )
 
-from .criteria import get_qa_signoff_status
+from .criteria import get_qa_signoff_status, is_fixes_applied
 
 # Configuration
 QA_PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
@@ -305,8 +305,10 @@ async def run_qa_fixer_session(
 
             print("\n" + "-" * 70 + "\n")
 
-            # Check if fixes were applied
+            # Validate that fixes were properly applied
             status = get_qa_signoff_status(spec_dir)
+            fixes_ready = is_fixes_applied(spec_dir)
+
             debug(
                 "qa_fixer",
                 "Fixer session completed",
@@ -316,6 +318,7 @@ async def run_qa_fixer_session(
                 ready_for_revalidation=status.get("ready_for_qa_revalidation")
                 if status
                 else False,
+                fixes_applied_status=status.get("status") if status else None,
             )
 
             # Save fixer session insights to memory
@@ -327,8 +330,9 @@ async def run_qa_fixer_session(
                 "gotchas_encountered": [],
             }
 
-            if status and status.get("ready_for_qa_revalidation"):
-                debug_success("qa_fixer", "Fixes applied, ready for QA revalidation")
+            # Robust validation: check both status and ready flag
+            if fixes_ready:
+                debug_success("qa_fixer", "Fixes applied and validated, ready for QA revalidation")
                 # Record successful outcome with recovery manager
                 recovery_manager.record_outcome(fixer_subtask_id, success=True)
                 # Save successful fix session to memory
@@ -344,7 +348,7 @@ async def run_qa_fixer_session(
                 return "fixed", response_text
             else:
                 # Fixer didn't update the status properly, but we'll trust it worked
-                debug_success("qa_fixer", "Fixes assumed applied (status not updated)")
+                debug_success("qa_fixer", "Fixes assumed applied (status validation failed)")
                 # Record successful outcome with recovery manager
                 recovery_manager.record_outcome(fixer_subtask_id, success=True)
                 # Still save to memory as successful (fixes were attempted)
