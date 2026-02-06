@@ -2061,60 +2061,169 @@ OAUTH_REDIRECT_URI=https://autoclaude.yourcompany.com/api/git/github/callback
 
 ## Air-Gapped Environments
 
-For complete isolation from the internet, deploy in air-gapped mode.
+For complete isolation from the internet, deploy in air-gapped mode. This ensures maximum security and data sovereignty for sensitive environments.
 
-### Preparing for Air-Gapped Deployment
+### When to Use Air-Gapped Deployment
 
-**1. Export Docker Images:**
+Air-gapped deployment is ideal for:
+- **Government and defense**: Classified networks, SCADA systems
+- **Financial services**: Secure trading platforms, payment processing
+- **Healthcare**: HIPAA-compliant environments with patient data
+- **Industrial control**: Manufacturing, power plants, utilities
+- **Research and development**: Proprietary algorithms, trade secrets
+
+**Key Benefits:**
+- ✅ **Zero external dependencies**: No internet access required
+- ✅ **Complete data control**: Code never leaves your infrastructure
+- ✅ **Compliance ready**: Meets strict regulatory requirements
+- ✅ **No telemetry**: All external communication disabled
+
+### Air-Gapped Deployment Overview
+
+```
+Internet-Connected Machine          Air-Gapped Environment
+┌─────────────────────┐             ┌──────────────────────────┐
+│                     │             │                          │
+│  1. Pull Images     │             │  3. Load Images          │
+│  2. Save to TAR     ├────────────>│  4. Deploy Offline       │
+│  3. Export Charts   │  (Sneakernet)│  5. Run Isolated         │
+│                     │             │                          │
+└─────────────────────┘             └──────────────────────────┘
+```
+
+### Step 1: Offline Installation - Export Images and Charts
+
+**On an internet-connected machine**, prepare the deployment package:
 
 ```bash
-# On internet-connected machine
+# 1. Create working directory
+mkdir autoclaude-airgap && cd autoclaude-airgap
+
+# 2. Pull all required Docker images
 docker pull autoclaude/backend:v1.0.0
 docker pull postgres:16-alpine
 docker pull redis:7-alpine
+docker pull bitnami/postgresql:16
+docker pull bitnami/redis:7
 
-# Save images to tar file
+# 3. Save images to a tar file
 docker save \
   autoclaude/backend:v1.0.0 \
   postgres:16-alpine \
   redis:7-alpine \
+  bitnami/postgresql:16 \
+  bitnami/redis:7 \
   -o autoclaude-images.tar
 
-# Transfer to air-gapped environment (sneakernet, secure file transfer)
-scp autoclaude-images.tar user@air-gapped-server:/tmp/
+# 4. Pull Helm chart (if using Kubernetes)
+helm pull autoclaude/autoclaude --version v1.0.0
+
+# 5. Copy installation scripts and docs
+cp -r /path/to/autoclaude/guides .
+cp /path/to/autoclaude/infrastructure/*.sh .
+
+# 6. Create deployment package
+tar czf autoclaude-airgap-package.tar.gz \
+  autoclaude-images.tar \
+  autoclaude-v1.0.0.tgz \
+  guides/ \
+  *.sh \
+  README.txt
+
+# 7. Transfer to air-gapped environment via secure media
+# (USB drive, secure file transfer, physically secured transport)
 ```
 
-**2. Load Images in Air-Gapped Environment:**
-
-```bash
-# On air-gapped server
-docker load -i /tmp/autoclaude-images.tar
-
-# Verify images loaded
-docker images | grep -E "autoclaude|postgres|redis"
-
-# Push to private registry (if using)
-docker tag autoclaude/backend:v1.0.0 private-registry.local/autoclaude/backend:v1.0.0
-docker push private-registry.local/autoclaude/backend:v1.0.0
+**Package Contents:**
+```
+autoclaude-airgap-package.tar.gz
+├── autoclaude-images.tar          # All Docker images
+├── autoclaude-v1.0.0.tgz          # Helm chart (optional)
+├── guides/                        # Documentation
+│   └── SELF_HOSTED_DEPLOYMENT.md
+├── deploy-docker.sh               # Docker deployment script
+├── deploy-helm.sh                 # Helm deployment script
+└── README.txt                     # Installation instructions
 ```
 
-**3. Set Up Private Registry (Optional):**
+### Step 2: Local Registry Setup
+
+In air-gapped environments, you have two options:
+
+#### Option A: Use Local Registry (Recommended)
+
+**On the air-gapped server**, set up a private Docker registry:
 
 ```bash
-# Run local registry
+# 1. Extract deployment package
+tar xzf autoclaude-airgap-package.tar.gz
+cd autoclaude-airgap
+
+# 2. Load Docker images
+docker load -i autoclaude-images.tar
+
+# 3. Start local registry
 docker run -d \
-  --name registry \
+  --name autoclaude-registry \
   --restart=unless-stopped \
   -p 5000:5000 \
   -v /data/registry:/var/lib/registry \
+  -e REGISTRY_STORAGE_DELETE_ENABLED=true \
   registry:2
 
-# Push images to local registry
+# 4. Verify registry is running
+curl http://localhost:5000/v2/_catalog
+# Expected: {"repositories":[]}
+
+# 5. Tag and push images to local registry
 docker tag autoclaude/backend:v1.0.0 localhost:5000/autoclaude/backend:v1.0.0
+docker tag postgres:16-alpine localhost:5000/postgres:16-alpine
+docker tag redis:7-alpine localhost:5000/redis:7-alpine
+
 docker push localhost:5000/autoclaude/backend:v1.0.0
+docker push localhost:5000/postgres:16-alpine
+docker push localhost:5000/redis:7-alpine
+
+# 6. Verify images in registry
+curl http://localhost:5000/v2/_catalog
+# Expected: {"repositories":["autoclaude/backend","postgres","redis"]}
+
+# 7. Clean up original images (optional, saves space)
+docker rmi autoclaude/backend:v1.0.0 postgres:16-alpine redis:7-alpine
 ```
 
-**4. Configure Air-Gapped Deployment:**
+**Registry Persistence:**
+```bash
+# Registry data is stored in: /data/registry
+# Back up registry data:
+docker run --rm \
+  -v /data/registry:/from \
+  -v $(pwd):/to \
+  alpine tar czf /to/registry-backup.tar.gz -C /from .
+```
+
+#### Option B: Load Images Directly (No Registry)
+
+```bash
+# Load images directly to all nodes
+docker load -i autoclaude-images.tar
+
+# Use image names directly in docker-compose.yml
+# (No registry URL prefix needed)
+```
+
+### Step 3: Configure Air-Gapped Deployment
+
+#### Critical Configuration: Disable Telemetry
+
+**⚠️ IMPORTANT:** In air-gapped environments, you **MUST** disable telemetry to prevent:
+- Connection timeout errors
+- Performance degradation from failed connection attempts
+- Potential security risks from attempted outbound connections
+
+**DISABLE_TELEMETRY=true** is **required** for air-gapped deployments.
+
+#### Docker Compose Air-Gapped Configuration
 
 Create `docker-compose.airgap.yml`:
 
@@ -2122,119 +2231,494 @@ Create `docker-compose.airgap.yml`:
 version: '3.8'
 
 services:
+  # Backend service with air-gapped configuration
   backend:
-    image: localhost:5000/autoclaude/backend:v1.0.0
+    image: localhost:5000/autoclaude/backend:v1.0.0  # Use local registry
+    container_name: autoclaude-backend
     environment:
+      # Database configuration
       - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/autoclaude
+
+      # Redis configuration
       - REDIS_HOST=redis
+      - REDIS_PORT=6379
+
+      # Security
       - SECRET_KEY=${SECRET_KEY}
+
+      # ⚠️ CRITICAL: Disable all telemetry in air-gapped mode
       - DISABLE_TELEMETRY=true
-      - ANTHROPIC_API_KEY=  # Leave empty - no AI in air-gapped mode
+
+      # ⚠️ CRITICAL: No AI provider in air-gapped mode
+      - ANTHROPIC_API_KEY=
+
+      # CORS configuration (adjust for your environment)
+      - CORS_ORIGINS=http://localhost:3000,http://localhost:8000
+
+      # Logging
+      - LOG_LEVEL=INFO
+      - DEBUG=false
+
     volumes:
       - workspace_data:/workspace
       - ./specs:/app/specs
-    depends_on:
-      - postgres
-      - redis
 
+    ports:
+      - "8000:8000"
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+    networks:
+      - autoclaude-network
+
+    restart: unless-stopped
+
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # PostgreSQL database
   postgres:
-    image: localhost:5000/postgres:16-alpine
+    image: localhost:5000/postgres:16-alpine  # Use local registry
+    container_name: autoclaude-postgres
     environment:
+      - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=autoclaude
+      - POSTGRES_INITDB_ARGS="-E UTF8"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - autoclaude-network
+    restart: unless-stopped
 
+  # Redis cache
   redis:
-    image: localhost:5000/redis:7-alpine
+    image: localhost:5000/redis:7-alpine  # Use local registry
+    container_name: autoclaude-redis
     command: redis-server --appendonly yes
     volumes:
       - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - autoclaude-network
+    restart: unless-stopped
+
+networks:
+  autoclaude-network:
+    driver: bridge
 
 volumes:
   postgres_data:
+    driver: local
   redis_data:
+    driver: local
   workspace_data:
+    driver: local
 ```
 
-**5. Deploy:**
+**Key Air-Gapped Configuration Notes:**
 
-```bash
-# Generate secrets
-export SECRET_KEY=$(openssl rand -hex 32)
-export POSTGRES_PASSWORD=$(openssl rand -base64 32)
+| Setting | Value | Reason |
+|---------|-------|--------|
+| `image` | `localhost:5000/...` | Use local registry, not docker.io |
+| `DISABLE_TELEMETRY` | `true` | **Required** - prevents outbound connection attempts |
+| `ANTHROPIC_API_KEY` | (empty) | No AI provider access in air-gapped mode |
+| `DEBUG` | `false` | Reduces log verbosity in production |
+| `LOG_LEVEL` | `INFO` | Standard logging for production |
 
-# Start services
-docker-compose -f docker-compose.airgap.yml up -d
+#### Kubernetes Air-Gapped Configuration
 
-# Initialize database
-docker-compose -f docker-compose.airgap.yml exec backend alembic upgrade head
+Create `airgap-values.yaml` for Helm:
+
+```yaml
+# =============================================================================
+# Air-Gapped Configuration for Kubernetes
+# =============================================================================
+
+# Use local registry instead of public registries
+global:
+  imageRegistry: private-registry.local  # Your private registry
+  imagePullSecrets:
+    - name: registry-credentials
+
+backend:
+  enabled: true
+  replicaCount: 2
+
+  image:
+    repository: autoclaude/backend
+    tag: v1.0.0
+    pullPolicy: IfNotPresent
+
+  # ⚠️ CRITICAL: Disable telemetry in air-gapped environments
+  env:
+    DISABLE_TELEMETRY: "true"  # REQUIRED for air-gapped
+    ANTHROPIC_API_KEY: ""      # No AI provider access
+    LOG_LEVEL: "INFO"
+    DEBUG: "false"
+
+  service:
+    type: ClusterIP
+    port: 80
+    targetPort: 8000
+
+postgresql:
+  enabled: true
+  image:
+    registry: private-registry.local  # Your private registry
+    repository: bitnami/postgresql
+    tag: 16
+
+  auth:
+    password: "your-secure-postgres-password"
+
+  primary:
+    persistence:
+      enabled: true
+      size: 20Gi
+
+redis:
+  enabled: true
+  image:
+    registry: private-registry.local  # Your private registry
+    repository: bitnami/redis
+    tag: 7
+
+  auth:
+    enabled: true
+    password: "your-secure-redis-password"
+
+  master:
+    persistence:
+      enabled: true
+      size: 5Gi
 ```
 
-### Air-Gapped Kubernetes Deployment
-
-**1. Export Helm Chart:**
+**Install with Helm:**
 
 ```bash
-# On internet-connected machine
-helm pull autoclaude/autoclaude --version v1.0.0
-
-# Transfer chart to air-gapped environment
-scp autoclaude-v1.0.0.tgz user@air-gapped-server:/tmp/
-```
-
-**2. Load Images:**
-
-```bash
-# On air-gapped cluster
-# Load images into all nodes (run on each node)
-docker load -i /tmp/autoclaude-images.tar
-
-# Or use private registry
-kubectl create namespace docker-registry
-helm install registry \
-  --set service.type=NodePort \
-  oci://ghcr.io/bitnami-charts/registry
-```
-
-**3. Install Chart:**
-
-```bash
-# Extract chart
+# 1. Extract and load Helm chart
 tar -xzf autoclaude-v1.0.0.tgz
 cd autoclaude
 
-# Create values for air-gapped
-cat > airgap-values.yaml << EOF
-backend:
-  image:
-    repository: private-registry.local/autoclaude/backend
-    tag: v1.0.0
-  env:
-    DISABLE_TELEMETRY: "true"
-    ANTHROPIC_API_KEY: ""  # No AI in air-gapped mode
+# 2. Create image pull secret for private registry
+kubectl create secret docker-registry registry-credentials \
+  --docker-server=private-registry.local \
+  --docker-username=<username> \
+  --docker-password=<password> \
+  --namespace=autoclaude
 
-postgresql:
-  image:
-    registry: private-registry.local
-  redis:
-    image:
-      registry: private-registry.local
-EOF
-
-# Install
+# 3. Install with air-gapped values
 helm install autoclaude . \
   --values airgap-values.yaml \
   --namespace autoclaude \
   --create-namespace
+
+# 4. Verify deployment
+kubectl get pods -n autoclaude
+kubectl logs -n autoclaude -l app.kubernetes.io/component=backend | grep -i telemetry
+# Expected: "Telemetry disabled" or no telemetry-related logs
+```
+
+### Step 4: Deploy in Air-Gapped Mode
+
+#### Deploy with Docker Compose
+
+```bash
+# 1. Generate secure secrets
+export SECRET_KEY=$(openssl rand -hex 32)
+export POSTGRES_PASSWORD=$(openssl rand -base64 32 | tr -d "=+/" | cut -c1-32)
+
+# 2. Create .env.airgap file
+cat > .env.airgap << EOF
+SECRET_KEY=$SECRET_KEY
+POSTGRES_PASSWORD=$POSTGRES_PASSWORD
+EOF
+
+# 3. Start services
+docker-compose -f docker-compose.airgap.yml up -d
+
+# 4. Wait for services to be healthy
+echo "Waiting for services to start..."
+sleep 30
+
+# 5. Check service status
+docker-compose -f docker-compose.airgap.yml ps
+
+# Expected output:
+# NAME                    STATUS              PORTS
+# autoclaude-backend      running (healthy)   0.0.0.0:8000->8000/tcp
+# autoclaude-postgres     running (healthy)   5432/tcp
+# autoclaude-redis        running (healthy)   6379/tcp
+
+# 6. Verify telemetry is disabled
+docker-compose -f docker-compose.airgap.yml logs backend | grep -i telemetry
+# Expected: "Telemetry disabled" or no errors about failed connections
+
+# 7. Test health endpoint
+curl http://localhost:8000/health
+# Expected: {"status":"healthy","database":"connected","redis":"connected"}
+
+# 8. Initialize database (if not auto-initialized)
+docker-compose -f docker-compose.airgap.yml exec backend alembic upgrade head
+```
+
+#### Deploy with Kubernetes
+
+```bash
+# 1. Load images on all cluster nodes (if not using private registry)
+# Repeat on each node:
+for node in $(kubectl get nodes -o name); do
+  kubectl debug $node -it --image=alpine -- sh -c \
+    "docker load -i /autoclaude-images.tar" \
+    < autoclaude-images.tar
+done
+
+# 2. Or use private registry (recommended for production)
+# Images already pushed in Step 2
+
+# 3. Install Helm chart
+helm install autoclaude ./autoclaude-v1.0.0.tgz \
+  --values airgap-values.yaml \
+  --namespace autoclaude \
+  --create-namespace
+
+# 4. Wait for rollout
+kubectl wait --for=condition=ready pod \
+  -l app.kubernetes.io/name=autoclaude \
+  --namespace autoclaude \
+  --timeout=300s
+
+# 5. Verify all pods are running
+kubectl get pods -n autoclaude
+
+# Expected output:
+# NAME                                  READY   STATUS    RESTARTS   AGE
+# autoclaude-postgresql-0               1/1     Running   0          2m
+# autoclaude-redis-master-0             1/1     Running   0          2m
+# autoclaude-backend-xxx                1/1     Running   0          1m
+# autoclaude-backend-yyy                1/1     Running   0          1m
+
+# 6. Verify telemetry disabled
+kubectl logs -n autoclaude -l app.kubernetes.io/component=backend | grep -i telemetry
+# Expected: "Telemetry disabled" or no connection errors
+
+# 7. Test deployment
+kubectl port-forward -n autoclaude svc/autoclaude-backend 8000:80 &
+curl http://localhost:8000/health
+```
+
+### Air-Gapped Verification Checklist
+
+After deployment, verify the following:
+
+- [ ] **All images loaded**: `docker images | grep autoclaude` shows all required images
+- [ ] **Local registry accessible**: `curl http://localhost:5000/v2/_catalog` returns registry catalog
+- [ ] **Telemetry disabled**: Logs show "Telemetry disabled" (not "Failed to connect to telemetry endpoint")
+- [ ] **No outbound connections**: `docker-compose logs backend` shows no errors about failed external connections
+- [ ] **Services healthy**: All services show `running (healthy)` status
+- [ ] **Health check passes**: `curl http://localhost:8000/health` returns `{"status":"healthy",...}`
+- [ ] **Database initialized**: Tables created, migrations applied
+- [ ] **Workspace accessible**: Can read/write to workspace directory
+
+### Troubleshooting Air-Gapped Deployments
+
+**Problem: "Image not found" errors**
+
+```bash
+# Verify images are loaded
+docker images | grep autoclaude
+
+# Verify images in registry
+curl http://localhost:5000/v2/autoclaude/backend/tags/list
+
+# Re-tag and push if needed
+docker tag autoclaude/backend:v1.0.0 localhost:5000/autoclaude/backend:v1.0.0
+docker push localhost:5000/autoclaude/backend:v1.0.0
+```
+
+**Problem: "Failed to pull image" in Kubernetes**
+
+```bash
+# Verify image pull secret
+kubectl get secret registry-credentials -n autoclaude -o yaml
+
+# Verify secret has correct credentials
+kubectl get secret registry-credentials -n autoclaude --template={{.data.\.dockerconfigjson}} | base64 -d
+
+# Test image pull manually
+docker pull private-registry.local/autoclaude/backend:v1.0.0
+```
+
+**Problem: "Connection timeout" errors in logs**
+
+```bash
+# This usually means DISABLE_TELEMETRY is not set correctly
+# Check environment variables:
+docker-compose exec backend env | grep TELEMETRY
+
+# Should show: DISABLE_TELEMETRY=true
+
+# If not set, add to .env file or docker-compose.yml
+echo "DISABLE_TELEMETRY=true" >> .env
+docker-compose restart backend
+```
+
+**Problem: Can't access local registry from other nodes**
+
+```bash
+# Verify registry is accessible from other nodes
+curl http://<registry-host>:5000/v2/_catalog
+
+# If firewall blocks access, open port:
+sudo ufw allow 5000/tcp  # Ubuntu/Debian
+sudo firewall-cmd --add-port=5000/tcp --permanent  # RHEL/CentOS
+
+# Or use insecure registry (for testing only)
+# Add to /etc/docker/daemon.json on all nodes:
+{
+  "insecure-registries": ["private-registry.local:5000"]
+}
+
+# Restart Docker
+sudo systemctl restart docker
+```
+
+### Air-Gapped Network Requirements
+
+**Firewall Rules (if using network isolation):**
+
+```bash
+# Allow internal network communication
+# Docker Compose (bridge network):
+# - No external rules needed (internal bridge network)
+
+# Kubernetes (network policies):
+kubectl apply -f - << EOF
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: autoclaude-airgap
+  namespace: autoclaude
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: autoclaude
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: autoclaude
+    ports:
+    - protocol: TCP
+      port: 8000  # Backend API
+    - protocol: TCP
+      port: 5432  # PostgreSQL
+    - protocol: TCP
+      port: 6379  # Redis
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: autoclaude
+    ports:
+    - protocol: TCP
+      port: 5432
+    - protocol: TCP
+      port: 6379
+  # ⚠️ CRITICAL: Block all external egress (true air-gapped)
+EOF
+```
+
+**DNS Configuration:**
+
+```bash
+# For air-gapped environments, ensure DNS is configured correctly
+# Add local registry to /etc/hosts on all nodes:
+echo "192.168.1.100 private-registry.local" >> /etc/hosts
+
+# Or use internal DNS server
+# Configure DNS to resolve: private-registry.local
+```
+
+### Updating Air-Gapped Deployments
+
+When updating to a new version in air-gapped mode:
+
+```bash
+# 1. On internet-connected machine, prepare new version package
+docker pull autoclaude/backend:v1.1.0
+helm pull autoclaude/autoclaude --version v1.1.0
+
+docker save autoclaude/backend:v1.1.0 -o autoclaude-backend-v1.1.0.tar
+
+tar czf autoclaude-v1.1.0-airgap.tar.gz \
+  autoclaude-backend-v1.1.0.tar \
+  autoclaude-v1.1.0.tgz
+
+# 2. Transfer to air-gapped environment
+
+# 3. On air-gapped server, load and push to registry
+docker load -i autoclaude-backend-v1.1.0.tar
+docker tag autoclaude/backend:v1.1.0 localhost:5000/autoclaude/backend:v1.1.0
+docker push localhost:5000/autoclaude/backend:v1.1.0
+
+# 4. Update deployment
+# Docker Compose:
+# Edit docker-compose.airgap.yml to use v1.1.0
+docker-compose -f docker-compose.airgap.yml up -d
+
+# Kubernetes:
+helm upgrade autoclaude ./autoclaude-v1.1.0.tgz \
+  --values airgap-values.yaml \
+  --namespace autoclaude
+
+# 5. Verify update
+docker-compose -f docker-compose.airgap.yml ps
+# OR
+kubectl rollout status deployment/autoclaude-backend -n autoclaude
 ```
 
 ---
 
 ## Telemetry and Privacy
 
-Auto Code provides full control over telemetry and data collection.
+Auto Code provides full control over telemetry and data collection. In self-hosted deployments, you have complete visibility into what data leaves your infrastructure.
 
 ### Disabling Telemetry
+
+**Why Disable Telemetry?**
+
+Disabling telemetry is recommended for:
+- **Privacy compliance**: Meet GDPR, HIPAA, SOC2 requirements
+- **Air-gapped environments**: Prevent connection timeout errors
+- **Performance**: Eliminate overhead from failed connection attempts
+- **Data sovereignty**: Ensure no data leaves your infrastructure
+- **Security audits**: Simplify compliance verification
 
 **Environment Variable:**
 ```env
@@ -2255,6 +2739,43 @@ services:
 backend:
   env:
     DISABLE_TELEMETRY: "true"
+```
+
+**⚠️ Air-Gapped Environments:**
+
+In air-gapped deployments, `DISABLE_TELEMETRY=true` is **REQUIRED** to prevent:
+- Application startup delays from connection timeouts
+- Error logs filled with "Failed to connect to telemetry endpoint"
+- Potential performance degradation from retry attempts
+
+Without this setting, the application will attempt to contact telemetry servers on every startup, causing delays and errors in environments without internet access.
+
+### How to Verify Telemetry is Disabled
+
+**Check application logs:**
+```bash
+# Docker Compose
+docker-compose logs backend | grep -i telemetry
+
+# Expected output:
+# "Telemetry disabled" or no telemetry-related logs
+
+# Kubernetes
+kubectl logs -n autoclaude -l app.kubernetes.io/component=backend | grep -i telemetry
+
+# Expected output:
+# "Telemetry disabled" or no telemetry-related logs
+```
+
+**Check environment variable:**
+```bash
+# Docker Compose
+docker-compose exec backend env | grep DISABLE_TELEMETRY
+# Expected: DISABLE_TELEMETRY=true
+
+# Kubernetes
+kubectl exec -n autoclaude <backend-pod> -- env | grep DISABLE_TELEMETRY
+# Expected: DISABLE_TELEMETRY=true
 ```
 
 ### What Telemetry Collects (When Enabled)
@@ -2290,10 +2811,21 @@ Auto Code self-hosted deployment supports compliance with:
 - **ITAR**: Defense contractor requirements
 - **FedRAMP**: Government cloud compliance
 
+**Air-Gapped Compliance Benefits:**
+
+For the most stringent compliance requirements, air-gapped deployment provides:
+- ✅ **Zero data egress**: No possibility of data leaving your infrastructure
+- ✅ **Complete audit trail**: All network activity visible in internal logs
+- ✅ **No third-party processing**: All telemetry and analytics disabled
+- ✅ **Regulatory alignment**: Meets strictest data sovereignty requirements
+- ✅ **Independent verification**: No reliance on external infrastructure
+
 For compliance audits:
 - All data stored in your infrastructure
 - Access logs in your systems
 - No third-party data processing
+- Telemetry disabled (verified in logs)
+- Network isolation documented
 
 ---
 
