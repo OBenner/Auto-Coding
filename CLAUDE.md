@@ -19,6 +19,10 @@ autonomous-coding/
 │   │   ├── spec_agents/   # Spec creation agents
 │   │   ├── integrations/  # Graphiti, Linear, GitHub
 │   │   └── prompts/       # Agent system prompts
+│   ├── web-backend/       # Python FastAPI server for web-based access
+│   │   ├── api/           # REST API routes and WebSocket handlers
+│   │   ├── core/          # Configuration and security
+│   │   └── services/      # Business logic and agent runner
 │   └── frontend/          # Electron desktop UI
 ├── docs/                  # Documentation templates and style guide
 │   ├── templates/         # Reusable templates for features, architecture, APIs
@@ -63,6 +67,9 @@ npm run install:all
 # Or install separately:
 # Backend (from apps/backend/)
 cd apps/backend && uv venv && uv pip install -r requirements.txt
+
+# Web Backend (from apps/web-backend/)
+cd apps/web-backend && uv venv && uv pip install -r requirements.txt
 
 # Frontend (from apps/frontend/)
 cd apps/frontend && npm install
