@@ -24,9 +24,6 @@ from task_logger import (
     get_task_logger,
 )
 
-from .criteria import get_qa_signoff_status, is_fixes_applied
-from .report import get_iteration_history, has_recurring_issues, record_iteration
-
 # Configuration
 QA_PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
 MAX_FIXER_ITERATIONS = 10  # Max recovery attempts for a single QA fix session
@@ -72,6 +69,10 @@ async def run_qa_fixer_session(
         - "fixed" if fixes were applied
         - "error" if an error occurred
     """
+    # Lazy imports to avoid circular import via __init__.py
+    from .criteria import get_qa_signoff_status, is_fixes_applied
+    from .report import get_iteration_history, has_recurring_issues, record_iteration
+
     # Derive project_dir from spec_dir if not provided
     # spec_dir is typically: /project/.auto-claude/specs/001-name/
     if project_dir is None:
@@ -120,9 +121,11 @@ async def run_qa_fixer_session(
                 current_issues, iteration_history
             )
             if has_recurring:
-                print(f"\n⚠️  WARNING: Recurring issues detected!")
-                print(f"  {len(recurring_issues)} issue(s) have appeared multiple times.")
-                print(f"  Consider a different approach or human intervention.\n")
+                print("\n⚠️  WARNING: Recurring issues detected!")
+                print(
+                    f"  {len(recurring_issues)} issue(s) have appeared multiple times."
+                )
+                print("  Consider a different approach or human intervention.\n")
                 debug_error(
                     "qa_fixer",
                     f"Recurring issues detected: {len(recurring_issues)} issues",
@@ -161,10 +164,8 @@ async def run_qa_fixer_session(
             "qa_fixer",
             f"Circular fix detected for {fixer_subtask_id} (attempt #{attempt_count})",
         )
-        print(f"\n⚠️  WARNING: Circular fix detected!")
-        print(
-            f"This fix has been attempted {attempt_count} times with similar errors."
-        )
+        print("\n⚠️  WARNING: Circular fix detected!")
+        print(f"This fix has been attempted {attempt_count} times with similar errors.")
         print("Consider human intervention or a different approach.\n")
         # Record circular fix outcome
         recovery_manager.record_outcome(
@@ -172,7 +173,10 @@ async def run_qa_fixer_session(
             success=False,
             error="Circular fix detected - same fix attempted multiple times",
         )
-        return "circular", "Circular fix detected - same approach attempted multiple times"
+        return (
+            "circular",
+            "Circular fix detected - same approach attempted multiple times",
+        )
 
     # Get total iterations from history
     total_iterations = len(iteration_history)
@@ -185,7 +189,9 @@ async def run_qa_fixer_session(
 
         if fixer_iteration > 1:
             print(f"\n{'=' * 70}")
-            print(f"  QA FIXER RECOVERY ATTEMPT {fixer_iteration}/{MAX_FIXER_ITERATIONS}")
+            print(
+                f"  QA FIXER RECOVERY ATTEMPT {fixer_iteration}/{MAX_FIXER_ITERATIONS}"
+            )
             print(f"{'=' * 70}\n")
             debug(
                 "qa_fixer",
@@ -372,10 +378,14 @@ async def run_qa_fixer_session(
                 # Calculate iteration duration
                 iteration_duration = time.time() - iteration_start_time
 
-                debug_success("qa_fixer", "Fixes applied and validated, ready for QA revalidation")
-                print(f"\n✓ Fixes applied successfully!")
+                debug_success(
+                    "qa_fixer", "Fixes applied and validated, ready for QA revalidation"
+                )
+                print("\n✓ Fixes applied successfully!")
                 print(f"  Duration: {iteration_duration:.1f}s")
-                print(f"  Recovery iterations: {fixer_iteration}/{MAX_FIXER_ITERATIONS}\n")
+                print(
+                    f"  Recovery iterations: {fixer_iteration}/{MAX_FIXER_ITERATIONS}\n"
+                )
 
                 # Record successful iteration to history
                 record_iteration(
@@ -403,10 +413,14 @@ async def run_qa_fixer_session(
                 # Fixer didn't update the status properly, but we'll trust it worked
                 iteration_duration = time.time() - iteration_start_time
 
-                debug_success("qa_fixer", "Fixes assumed applied (status validation failed)")
-                print(f"\n✓ Fixes applied (status validation skipped)")
+                debug_success(
+                    "qa_fixer", "Fixes assumed applied (status validation failed)"
+                )
+                print("\n✓ Fixes applied (status validation skipped)")
                 print(f"  Duration: {iteration_duration:.1f}s")
-                print(f"  Recovery iterations: {fixer_iteration}/{MAX_FIXER_ITERATIONS}\n")
+                print(
+                    f"  Recovery iterations: {fixer_iteration}/{MAX_FIXER_ITERATIONS}\n"
+                )
 
                 # Record iteration to history
                 record_iteration(
@@ -466,19 +480,26 @@ async def run_qa_fixer_session(
                     "qa_fixer",
                     f"Max fixer iterations ({MAX_FIXER_ITERATIONS}) reached, fixer is stuck",
                 )
-                print(f"⚠️  Max recovery attempts ({MAX_FIXER_ITERATIONS}) reached. Fixer stuck.\n")
+                print(
+                    f"⚠️  Max recovery attempts ({MAX_FIXER_ITERATIONS}) reached. Fixer stuck.\n"
+                )
                 # Record failed outcome
                 recovery_manager.record_outcome(
                     fixer_subtask_id, success=False, error=last_error
                 )
-                return "stuck", f"Fixer stuck after {MAX_FIXER_ITERATIONS} recovery attempts: {last_error}"
+                return (
+                    "stuck",
+                    f"Fixer stuck after {MAX_FIXER_ITERATIONS} recovery attempts: {last_error}",
+                )
 
             # Otherwise, continue to next iteration
             debug(
                 "qa_fixer",
                 f"Will retry (attempt {fixer_iteration + 1}/{MAX_FIXER_ITERATIONS})",
             )
-            print(f"  Retrying... (attempt {fixer_iteration + 1}/{MAX_FIXER_ITERATIONS})\n")
+            print(
+                f"  Retrying... (attempt {fixer_iteration + 1}/{MAX_FIXER_ITERATIONS})\n"
+            )
             continue
 
     # If we exhausted all iterations without success
@@ -486,7 +507,9 @@ async def run_qa_fixer_session(
         "qa_fixer",
         f"Exhausted all {MAX_FIXER_ITERATIONS} fixer iterations without success",
     )
-    print(f"\n⚠️  Exhausted all {MAX_FIXER_ITERATIONS} recovery attempts without success.\n")
+    print(
+        f"\n⚠️  Exhausted all {MAX_FIXER_ITERATIONS} recovery attempts without success.\n"
+    )
 
     # Record final failure
     final_error = last_error if last_error else "Max fixer iterations reached"
