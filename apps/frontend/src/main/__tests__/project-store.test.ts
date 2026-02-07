@@ -85,7 +85,11 @@ describe('ProjectStore', () => {
     vi.resetModules();
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    // Wait for any in-flight async saves to complete before cleanup.
+    // ProjectStore uses fire-and-forget saveAsync() which can still be
+    // writing to disk when afterEach runs, causing ENOTEMPTY on macOS.
+    await new Promise(r => setTimeout(r, 50));
     cleanupTestDirs();
     vi.clearAllMocks();
   });
@@ -202,9 +206,13 @@ describe('ProjectStore', () => {
       const start = Date.now();
       let content: { projects: unknown[] } = { projects: [1] };
       while (Date.now() - start < 2000) {
-        const raw = readFileSync(storePath, 'utf-8');
-        content = JSON.parse(raw);
-        if (content.projects.length === 0) break;
+        try {
+          const raw = readFileSync(storePath, 'utf-8');
+          content = JSON.parse(raw);
+          if (content.projects.length === 0) break;
+        } catch {
+          // File may be partially written - keep polling
+        }
         await new Promise(r => setTimeout(r, 10));
       }
       expect(content.projects).toHaveLength(0);
@@ -315,9 +323,13 @@ describe('ProjectStore', () => {
       const start = Date.now();
       let content: { projects: Array<{ settings: { model?: string } }> } = { projects: [] };
       while (Date.now() - start < 2000) {
-        const raw = readFileSync(storePath, 'utf-8');
-        content = JSON.parse(raw);
-        if (content.projects[0]?.settings?.model === 'sonnet') break;
+        try {
+          const raw = readFileSync(storePath, 'utf-8');
+          content = JSON.parse(raw);
+          if (content.projects[0]?.settings?.model === 'sonnet') break;
+        } catch {
+          // File may be partially written - keep polling
+        }
         await new Promise(r => setTimeout(r, 10));
       }
       expect(content.projects[0].settings.model).toBe('sonnet');
