@@ -191,6 +191,7 @@ export interface TaskDraft {
   requireReviewBeforeCoding?: boolean;
   agentModels?: Record<string, string>;  // Agent-specific model overrides
   provider?: AIProvider;  // AI provider selection
+  providerModel?: string;  // Provider-specific model ID
   savedAt: Date;
 }
 

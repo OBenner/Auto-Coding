@@ -34,7 +34,7 @@ import { TaskModalLayout } from './task-form/TaskModalLayout';
 import { TaskFormFields } from './task-form/TaskFormFields';
 import { type FileReferenceData } from './task-form/useImageUpload';
 import { persistUpdateTask } from '../stores/task-store';
-import type { Task, ImageAttachment, TaskCategory, TaskPriority, TaskComplexity, TaskImpact, ModelType, ThinkingLevel } from '../../shared/types';
+import type { Task, ImageAttachment, TaskCategory, TaskPriority, TaskComplexity, TaskImpact, ModelType, ThinkingLevel, AIProvider } from '../../shared/types';
 import {
   DEFAULT_AGENT_PROFILES,
   DEFAULT_PHASE_MODELS,
@@ -104,6 +104,12 @@ export function TaskEditDialog({ task, open, onOpenChange, onSaved }: TaskEditDi
     task.metadata?.phaseThinking || selectedProfile.phaseThinking || DEFAULT_PHASE_THINKING
   );
 
+  // Provider settings
+  const [provider, setProvider] = useState<AIProvider>(task.metadata?.provider || 'claude');
+  const [providerModel, setProviderModel] = useState<string>(
+    task.metadata?.providerModel || 'claude-sonnet-4-5-20250929'
+  );
+
   // Image attachments
   const [images, setImages] = useState<ImageAttachment[]>(task.metadata?.attachedImages || []);
 
@@ -152,6 +158,8 @@ export function TaskEditDialog({ task, open, onOpenChange, onSaved }: TaskEditDi
 
       setImages(task.metadata?.attachedImages || []);
       setRequireReviewBeforeCoding(task.metadata?.requireReviewBeforeCoding ?? false);
+      setProvider(task.metadata?.provider || 'claude');
+      setProviderModel(task.metadata?.providerModel || 'claude-sonnet-4-5-20250929');
       setError(null);
 
       // Auto-expand classification if it has content
@@ -287,6 +295,10 @@ export function TaskEditDialog({ task, open, onOpenChange, onSaved }: TaskEditDi
         onThinkingLevelChange={setThinkingLevel}
         onPhaseModelsChange={setPhaseModels}
         onPhaseThinkingChange={setPhaseThinking}
+        provider={provider}
+        onProviderChange={setProvider}
+        providerModel={providerModel}
+        onProviderModelChange={setProviderModel}
         category={category}
         priority={priority}
         complexity={complexity}

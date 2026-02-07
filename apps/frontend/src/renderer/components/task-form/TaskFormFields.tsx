@@ -43,6 +43,39 @@ import type {
 } from '../../../shared/types';
 import type { PhaseModelConfig, PhaseThinkingConfig } from '../../../shared/types/settings';
 
+// Provider-specific model mappings
+const PROVIDER_MODELS: Record<AIProvider, Array<{ value: string; label: string; tier?: string }>> = {
+  claude: [
+    { value: 'claude-opus-4-5-20251101', label: 'Claude Opus 4.5', tier: 'opus' },
+    { value: 'claude-sonnet-4-5-20250929', label: 'Claude Sonnet 4.5', tier: 'sonnet' },
+    { value: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5', tier: 'haiku' }
+  ],
+  litellm: [
+    { value: 'gpt-4o', label: 'GPT-4o', tier: 'opus' },
+    { value: 'gpt-4-turbo', label: 'GPT-4 Turbo', tier: 'sonnet' },
+    { value: 'gpt-4o-mini', label: 'GPT-4o Mini', tier: 'haiku' }
+  ],
+  openrouter: [
+    { value: 'anthropic/claude-opus-4', label: 'Claude Opus 4', tier: 'opus' },
+    { value: 'anthropic/claude-sonnet-4', label: 'Claude Sonnet 4', tier: 'sonnet' },
+    { value: 'anthropic/claude-haiku-4', label: 'Claude Haiku 4', tier: 'haiku' },
+    { value: 'openai/gpt-4o', label: 'GPT-4o', tier: 'opus' },
+    { value: 'openai/gpt-4o-mini', label: 'GPT-4o Mini', tier: 'haiku' }
+  ],
+  zhipuai: [
+    { value: 'glm-4-plus', label: 'GLM-4 Plus', tier: 'opus' },
+    { value: 'glm-4', label: 'GLM-4', tier: 'sonnet' },
+    { value: 'glm-4-flash', label: 'GLM-4 Flash', tier: 'haiku' },
+    { value: 'glm-4-air', label: 'GLM-4 Air', tier: 'haiku' }
+  ]
+};
+
+// Get default model for provider
+const getDefaultModelForProvider = (provider: AIProvider): string => {
+  const models = PROVIDER_MODELS[provider];
+  return models[0]?.value || '';
+};
+
 interface TaskFormFieldsProps {
   // Description field
   description: string;
@@ -72,6 +105,10 @@ interface TaskFormFieldsProps {
   // AI Provider
   provider: AIProvider;
   onProviderChange: (provider: AIProvider) => void;
+
+  // Provider-specific model
+  providerModel: string;
+  onProviderModelChange: (model: string) => void;
 
   // Classification
   category: TaskCategory | '';
@@ -128,6 +165,8 @@ export function TaskFormFields({
   onPhaseThinkingChange,
   provider,
   onProviderChange,
+  providerModel,
+  onProviderModelChange,
   category,
   priority,
   complexity,
@@ -336,6 +375,39 @@ export function TaskFormFields({
           </Select>
           <p className="text-xs text-muted-foreground">
             {t('tasks:form.provider.helpText')}
+          </p>
+        </div>
+
+        {/* Provider-specific Model Selection */}
+        <div className="space-y-2">
+          <Label htmlFor={`${prefix}provider-model`} className="text-sm font-medium text-foreground">
+            {t('tasks:form.model.label')}
+          </Label>
+          <Select
+            value={providerModel}
+            onValueChange={onProviderModelChange}
+            disabled={disabled}
+          >
+            <SelectTrigger id={`${prefix}provider-model`} className="h-10">
+              <SelectValue placeholder={t('tasks:form.model.selectModel')} />
+            </SelectTrigger>
+            <SelectContent>
+              {PROVIDER_MODELS[provider].map((model) => (
+                <SelectItem key={model.value} value={model.value}>
+                  <div className="flex flex-col gap-0.5">
+                    <span className="font-medium">{model.label}</span>
+                    {model.tier && (
+                      <span className="text-xs text-muted-foreground">
+                        {t(`tasks:form.model.${provider}.${model.tier}`)}
+                      </span>
+                    )}
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            {t('tasks:form.model.helpText')}
           </p>
         </div>
 

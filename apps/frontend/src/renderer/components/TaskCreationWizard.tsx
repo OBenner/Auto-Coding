@@ -109,6 +109,7 @@ export function TaskCreationWizard({
 
   // AI Provider selection
   const [provider, setProvider] = useState<AIProvider>('claude');
+  const [providerModel, setProviderModel] = useState<string>('claude-sonnet-4-5-20250929'); // Default to Sonnet
 
   // Model configuration
   const [profileId, setProfileId] = useState<string>(settings.selectedAgentProfile || 'auto');
@@ -172,6 +173,7 @@ export function TaskCreationWizard({
         setRequireReviewBeforeCoding(draft.requireReviewBeforeCoding ?? false);
         setAgentModels(draft.agentModels || {});
         setProvider(draft.provider || 'claude');
+        setProviderModel(draft.providerModel || 'claude-sonnet-4-5-20250929');
         setIsDraftRestored(true);
 
         if (draft.category || draft.priority || draft.complexity || draft.impact) {
@@ -256,6 +258,31 @@ export function TaskCreationWizard({
     };
   }, [open, projectPath, projectId]);
 
+  // Update provider model when provider changes
+  useEffect(() => {
+    const getDefaultModel = (provider: AIProvider): string => {
+      const modelMap: Record<AIProvider, string> = {
+        claude: 'claude-sonnet-4-5-20250929',
+        litellm: 'gpt-4-turbo',
+        openrouter: 'anthropic/claude-sonnet-4',
+        zhipuai: 'glm-4'
+      };
+      return modelMap[provider];
+    };
+
+    // Only update if the current model doesn't match the new provider
+    const currentModelBelongsToProvider = providerModel.startsWith(
+      provider === 'zhipuai' ? 'glm' :
+      provider === 'openrouter' ? provider === 'claude' ? 'anthropic/' : 'openai/' :
+      provider === 'litellm' ? 'gpt' :
+      'claude'
+    );
+
+    if (!currentModelBelongsToProvider) {
+      setProviderModel(getDefaultModel(provider));
+    }
+  }, [provider, providerModel]);
+
   /**
    * Get current form state as a draft
    */
@@ -277,8 +304,9 @@ export function TaskCreationWizard({
     requireReviewBeforeCoding,
     agentModels,
     provider,
+    providerModel,
     savedAt: new Date()
-  }), [projectId, title, description, category, priority, complexity, impact, profileId, model, thinkingLevel, phaseModels, phaseThinking, images, referencedFiles, requireReviewBeforeCoding, agentModels, provider]);
+  }), [projectId, title, description, category, priority, complexity, impact, profileId, model, thinkingLevel, phaseModels, phaseThinking, images, referencedFiles, requireReviewBeforeCoding, agentModels, provider, providerModel]);
 
   /**
    * Detect @ mention being typed and show autocomplete
@@ -664,6 +692,8 @@ export function TaskCreationWizard({
           onPhaseThinkingChange={setPhaseThinking}
           provider={provider}
           onProviderChange={setProvider}
+          providerModel={providerModel}
+          onProviderModelChange={setProviderModel}
           category={category}
           priority={priority}
           complexity={complexity}

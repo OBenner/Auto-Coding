@@ -369,6 +369,32 @@
       "openrouterDescription": "Accès à plusieurs modèles LLM via une seule API",
       "zhipuai": "GLM (Zhipu AI)",
       "zhipuaiDescription": "Modèles linguistiques chinois avec un fort support multilingue"
+    },
+    "model": {
+      "label": "Modèle",
+      "helpText": "Sélectionnez le modèle spécifique à utiliser pour cette tâche. Les modèles disponibles dépendent du fournisseur sélectionné.",
+      "selectModel": "Sélectionner un modèle",
+      "claude": {
+        "opus": "Claude Opus 4.5 (Plus Capable)",
+        "sonnet": "Claude Sonnet 4.5 (Équilibré)",
+        "haiku": "Claude Haiku 4.5 (Rapide)"
+      },
+      "litellm": {
+        "opus": "GPT-4o / Llama 405B (Plus Capable)",
+        "sonnet": "GPT-4 Turbo / Llama 70B (Équilibré)",
+        "haiku": "GPT-4o Mini / Llama 8B (Rapide)"
+      },
+      "openrouter": {
+        "opus": "Claude Opus 4 / GPT-4o / O1 Preview",
+        "sonnet": "Claude Sonnet 4 / GPT-4 Turbo / Gemini 2.0",
+        "haiku": "Claude Haiku 4 / GPT-4o Mini / Mistral Small"
+      },
+      "zhipuai": {
+        "glm-4-plus": "GLM-4 Plus (Plus Capable)",
+        "glm-4": "GLM-4 (Équilibré)",
+        "glm-4-flash": "GLM-4 Flash (Rapide)",
+        "glm-4-air": "GLM-4 Air (Économique)"
+      }
     }
   },
   "subtasks": {
