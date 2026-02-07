@@ -790,13 +790,15 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
       }
     });
 
-    // Sort tasks within each column
+    // Sort tasks within each column based on sortBy filter
     Object.keys(grouped).forEach((status) => {
       const statusKey = status as typeof TASK_STATUS_COLUMNS[number];
       const columnTasks = grouped[statusKey];
       const columnOrder = taskOrder?.[statusKey];
+      const sortBy = filters?.sortBy ?? 'manual';
 
-      if (columnOrder && columnOrder.length > 0) {
+      // Manual sort: use drag-drop order
+      if (sortBy === 'manual' && columnOrder && columnOrder.length > 0) {
         // Custom order exists: sort by order index
         // 1. Create a set of current task IDs for fast lookup (filters stale IDs)
         const currentTaskIds = new Set(columnTasks.map(t => t.id));
@@ -824,11 +826,39 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
         // 5. Prepend new tasks at top, then ordered tasks
         grouped[statusKey] = [...newTasks, ...orderedTasks];
       } else {
-        // No custom order: fallback to createdAt sort (newest first)
+        // Auto-sort mode: sort by selected criteria
         grouped[statusKey].sort((a, b) => {
-          const dateA = new Date(a.createdAt).getTime();
-          const dateB = new Date(b.createdAt).getTime();
-          return dateB - dateA;
+          let comparison = 0;
+
+          switch (sortBy) {
+            case 'priority': {
+              // Priority order: urgent > high > medium > low (no priority treated as lowest)
+              const priorityOrder = { urgent: 4, high: 3, medium: 2, low: 1 };
+              const aPriority = priorityOrder[a.metadata?.priority ?? 'low'] ?? 0;
+              const bPriority = priorityOrder[b.metadata?.priority ?? 'low'] ?? 0;
+              comparison = bPriority - aPriority; // Descending (highest priority first)
+              break;
+            }
+            case 'created': {
+              const dateA = new Date(a.createdAt).getTime();
+              const dateB = new Date(b.createdAt).getTime();
+              comparison = dateB - dateA; // Descending (newest first)
+              break;
+            }
+            case 'updated': {
+              const dateA = new Date(a.updatedAt).getTime();
+              const dateB = new Date(b.updatedAt).getTime();
+              comparison = dateB - dateA; // Descending (most recently updated first)
+              break;
+            }
+            default:
+              // Fallback to createdAt for manual mode without custom order
+              const dateA = new Date(a.createdAt).getTime();
+              const dateB = new Date(b.createdAt).getTime();
+              comparison = dateB - dateA;
+          }
+
+          return comparison;
         });
       }
     });
