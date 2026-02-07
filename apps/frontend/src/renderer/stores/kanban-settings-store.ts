@@ -75,6 +75,12 @@ interface KanbanSettingsState {
   resetPreferences: (projectId: string) => void;
   /** Get preferences for a single column */
   getColumnPreferences: (column: TaskStatusColumn) => ColumnPreferences;
+  /** Set search query filter */
+  setSearchQuery: (searchQuery: string) => void;
+  /** Set sort mode */
+  setSortBy: (sortBy: SortMode) => void;
+  /** Reset filters to defaults */
+  resetFilters: () => void;
 }
 
 // ============================================
@@ -353,6 +359,36 @@ export const useKanbanSettingsStore = create<KanbanSettingsState>((set, get) => 
     }
 
     return state.columnPreferences[column];
+  },
+
+  setSearchQuery: (searchQuery) => {
+    set((state) => {
+      if (!state.filters) return state;
+
+      return {
+        filters: {
+          ...state.filters,
+          searchQuery
+        }
+      };
+    });
+  },
+
+  setSortBy: (sortBy) => {
+    set((state) => {
+      if (!state.filters) return state;
+
+      return {
+        filters: {
+          ...state.filters,
+          sortBy
+        }
+      };
+    });
+  },
+
+  resetFilters: () => {
+    set({ filters: createDefaultFilters() });
   }
 }));
 
