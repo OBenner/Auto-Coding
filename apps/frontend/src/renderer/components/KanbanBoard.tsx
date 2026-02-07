@@ -36,6 +36,7 @@ import { useKanbanSettingsStore, COLLAPSED_COLUMN_WIDTH, DEFAULT_COLUMN_WIDTH, M
 import { useToast } from '../hooks/use-toast';
 import { WorktreeCleanupDialog } from './WorktreeCleanupDialog';
 import { BulkPRDialog } from './BulkPRDialog';
+import { KanbanFilters } from './KanbanFilters';
 import type { Task, TaskStatus, TaskOrderState } from '../../shared/types';
 
 // Type guard for valid drop column targets - preserves literal type from TASK_STATUS_COLUMNS
@@ -1417,6 +1418,9 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
 
   return (
     <div className="flex h-full flex-col">
+      {/* Kanban filters */}
+      <KanbanFilters projectId={projectId} />
+
       {/* Kanban header with refresh button and expand all */}
       {(onRefresh || collapsedColumnCount >= 3) && (
         <div className="flex items-center justify-between px-6 pt-4 pb-2">
