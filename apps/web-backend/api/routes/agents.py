@@ -135,11 +135,14 @@ def _get_project_dir() -> Path:
 
 
 def _ensure_backend_in_path():
-    """Ensure backend directory is in sys.path for imports"""
+    """Ensure backend directory is at the front of sys.path for imports"""
     backend_dir = Path(__file__).parent.parent.parent.parent / "backend"
     backend_path = str(backend_dir)
-    if backend_path not in sys.path:
-        sys.path.insert(0, backend_path)
+    # Remove if present to avoid duplicates
+    if backend_path in sys.path:
+        sys.path.remove(backend_path)
+    # Always insert at front to ensure backend.core takes precedence
+    sys.path.insert(0, backend_path)
 
 
 async def _run_pair_session_task(

@@ -12,15 +12,65 @@ Provides:
 """
 
 import asyncio
+import importlib.util
 import logging
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from core.client import create_client
-from core.sentry import capture_exception
-
 logger = logging.getLogger(__name__)
+
+
+def _import_backend_core():
+    """
+    Import backend.core modules, avoiding web-backend/core namespace collision.
+
+    When imported from web-backend context, there's a naming conflict between
+    apps/backend/core and apps/web-backend/core. This function ensures backend.core
+    is accessible by adding backend to the front of sys.path and clearing conflicts.
+    """
+    # Get the backend directory
+    # __file__ = apps/backend/agents/pair_programming.py
+    # .parent = apps/backend/agents/
+    # .parent.parent = apps/backend/
+    backend_dir = Path(__file__).parent.parent
+    backend_path = str(backend_dir)
+
+    # Remove backend if already in path (to avoid duplicates)
+    if backend_path in sys.path:
+        sys.path.remove(backend_path)
+
+    # Insert backend at the FRONT of sys.path so core.* imports find backend/core
+    sys.path.insert(0, backend_path)
+
+    # Remove any cached core modules from web-backend
+    modules_to_remove = []
+    for name in list(sys.modules.keys()):
+        if name == "core" or name.startswith("core."):
+            module = sys.modules[name]
+            if hasattr(module, "__file__") and module.__file__:
+                try:
+                    module_path = Path(module.__file__).resolve()
+                    # If it's not from backend, mark for removal
+                    if not module_path.is_relative_to(backend_dir.resolve()):
+                        modules_to_remove.append(name)
+                except (OSError, RuntimeError):
+                    # If we can't resolve the path, remove it to be safe
+                    modules_to_remove.append(name)
+
+    for name in modules_to_remove:
+        del sys.modules[name]
+
+    # Import core parent package first
+    import importlib
+    importlib.import_module("core")
+
+    # Now import core.client and core.sentry
+    client_module = importlib.import_module("core.client")
+    sentry_module = importlib.import_module("core.sentry")
+
+    return client_module, sentry_module
 
 
 @dataclass
@@ -112,6 +162,9 @@ class PairProgrammingAgent:
         try:
             # Create Claude SDK client
             if not self._client:
+                client_module, _ = _import_backend_core()
+                create_client = client_module.create_client
+
                 self._client = create_client(
                     project_dir=self.project_dir,
                     spec_dir=self.spec_dir,
@@ -131,6 +184,9 @@ class PairProgrammingAgent:
 
         except Exception as e:
             logger.error(f"Error in pair programming session: {e}")
+            _, sentry_module = _import_backend_core()
+            capture_exception = sentry_module.capture_exception
+
             capture_exception(e)
             return {
                 "status": "error",
@@ -288,6 +344,9 @@ class PairProgrammingAgent:
 
         except Exception as e:
             logger.error(f"Error running session: {e}")
+            _, sentry_module = _import_backend_core()
+            capture_exception = sentry_module.capture_exception
+
             capture_exception(e)
             return {
                 "status": "error",
