@@ -4,6 +4,7 @@
 
 import type { ThinkingLevel, PhaseModelConfig, PhaseThinkingConfig } from './settings';
 import type { ExecutionPhase as ExecutionPhaseType, CompletablePhase } from '../constants/phase-protocol';
+import type { AIProvider } from './common';
 
 export type TaskStatus = 'backlog' | 'queue' | 'in_progress' | 'ai_review' | 'human_review' | 'done' | 'pr_created' | 'error';
 
@@ -189,6 +190,7 @@ export interface TaskDraft {
   referencedFiles: ReferencedFile[];
   requireReviewBeforeCoding?: boolean;
   agentModels?: Record<string, string>;  // Agent-specific model overrides
+  provider?: AIProvider;  // AI provider selection
   savedAt: Date;
 }
 

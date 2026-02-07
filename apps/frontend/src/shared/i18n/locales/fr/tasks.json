@@ -357,6 +357,18 @@
           "critical": "Impact critique"
         }
       }
+    },
+    "provider": {
+      "label": "Fournisseur IA",
+      "helpText": "Sélectionnez le fournisseur IA pour cette tâche. Différents fournisseurs offrent divers modèles et capacités.",
+      "claude": "Claude (Anthropic)",
+      "claudeDescription": "API Anthropic officielle avec modèles Claude",
+      "litellm": "LiteLLM",
+      "litellmDescription": "Interface unifiée pour plusieurs fournisseurs LLM",
+      "openrouter": "OpenRouter",
+      "openrouterDescription": "Accès à plusieurs modèles LLM via une seule API",
+      "zhipuai": "GLM (Zhipu AI)",
+      "zhipuaiDescription": "Modèles linguistiques chinois avec un fort support multilingue"
     }
   },
   "subtasks": {

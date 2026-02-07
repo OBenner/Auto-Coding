@@ -17,6 +17,13 @@ import { Input } from '../ui/input';
 import { Textarea } from '../ui/textarea';
 import { Checkbox } from '../ui/checkbox';
 import { Button } from '../ui/button';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from '../ui/select';
 import { AgentProfileSelector } from '../AgentProfileSelector';
 import { ClassificationFields } from './ClassificationFields';
 import { useImageUpload, type FileReferenceData } from './useImageUpload';
@@ -31,7 +38,8 @@ import type {
   TaskImpact,
   ImageAttachment,
   ModelType,
-  ThinkingLevel
+  ThinkingLevel,
+  AIProvider
 } from '../../../shared/types';
 import type { PhaseModelConfig, PhaseThinkingConfig } from '../../../shared/types/settings';
 
@@ -60,6 +68,10 @@ interface TaskFormFieldsProps {
   onThinkingLevelChange: (level: ThinkingLevel | '') => void;
   onPhaseModelsChange: (config: PhaseModelConfig | undefined) => void;
   onPhaseThinkingChange: (config: PhaseThinkingConfig | undefined) => void;
+
+  // AI Provider
+  provider: AIProvider;
+  onProviderChange: (provider: AIProvider) => void;
 
   // Classification
   category: TaskCategory | '';
@@ -114,6 +126,8 @@ export function TaskFormFields({
   onThinkingLevelChange,
   onPhaseModelsChange,
   onPhaseThinkingChange,
+  provider,
+  onProviderChange,
   category,
   priority,
   complexity,
@@ -277,6 +291,51 @@ export function TaskFormFields({
           />
           <p className="text-xs text-muted-foreground">
             {t('tasks:form.titleHelpText')}
+          </p>
+        </div>
+
+        {/* AI Provider Selection */}
+        <div className="space-y-2">
+          <Label htmlFor={`${prefix}provider`} className="text-sm font-medium text-foreground">
+            {t('tasks:form.provider.label')}
+          </Label>
+          <Select
+            value={provider}
+            onValueChange={(value) => onProviderChange(value as AIProvider)}
+            disabled={disabled}
+          >
+            <SelectTrigger id={`${prefix}provider`} className="h-10">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="claude">
+                <div className="flex flex-col gap-0.5">
+                  <span className="font-medium">{t('tasks:form.provider.claude')}</span>
+                  <span className="text-xs text-muted-foreground">{t('tasks:form.provider.claudeDescription')}</span>
+                </div>
+              </SelectItem>
+              <SelectItem value="litellm">
+                <div className="flex flex-col gap-0.5">
+                  <span className="font-medium">{t('tasks:form.provider.litellm')}</span>
+                  <span className="text-xs text-muted-foreground">{t('tasks:form.provider.litellmDescription')}</span>
+                </div>
+              </SelectItem>
+              <SelectItem value="openrouter">
+                <div className="flex flex-col gap-0.5">
+                  <span className="font-medium">{t('tasks:form.provider.openrouter')}</span>
+                  <span className="text-xs text-muted-foreground">{t('tasks:form.provider.openrouterDescription')}</span>
+                </div>
+              </SelectItem>
+              <SelectItem value="zhipuai">
+                <div className="flex flex-col gap-0.5">
+                  <span className="font-medium">{t('tasks:form.provider.zhipuai')}</span>
+                  <span className="text-xs text-muted-foreground">{t('tasks:form.provider.zhipuaiDescription')}</span>
+                </div>
+              </SelectItem>
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            {t('tasks:form.provider.helpText')}
           </p>
         </div>
 

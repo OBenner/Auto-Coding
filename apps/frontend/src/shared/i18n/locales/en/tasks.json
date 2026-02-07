@@ -357,6 +357,18 @@
           "critical": "Critical Impact"
         }
       }
+    },
+    "provider": {
+      "label": "AI Provider",
+      "helpText": "Select the AI provider for this task. Different providers offer various models and capabilities.",
+      "claude": "Claude (Anthropic)",
+      "claudeDescription": "Official Anthropic API with Claude models",
+      "litellm": "LiteLLM",
+      "litellmDescription": "Unified interface for multiple LLM providers",
+      "openrouter": "OpenRouter",
+      "openrouterDescription": "Access to multiple LLM models through one API",
+      "zhipuai": "GLM (Zhipu AI)",
+      "zhipuaiDescription": "Chinese language models with strong multilingual support"
     }
   },
   "subtasks": {

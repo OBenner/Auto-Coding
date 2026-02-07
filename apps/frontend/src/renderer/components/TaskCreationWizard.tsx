@@ -31,7 +31,7 @@ import { FileAutocomplete } from './FileAutocomplete';
 import { createTask, saveDraft, loadDraft, clearDraft, isDraftEmpty } from '../stores/task-store';
 import { useProjectStore } from '../stores/project-store';
 import { cn } from '../lib/utils';
-import type { TaskCategory, TaskPriority, TaskComplexity, TaskImpact, TaskMetadata, ImageAttachment, TaskDraft, ModelType, ThinkingLevel, ReferencedFile } from '../../shared/types';
+import type { TaskCategory, TaskPriority, TaskComplexity, TaskImpact, TaskMetadata, ImageAttachment, TaskDraft, ModelType, ThinkingLevel, ReferencedFile, AIProvider } from '../../shared/types';
 import type { PhaseModelConfig, PhaseThinkingConfig } from '../../shared/types/settings';
 import {
   DEFAULT_AGENT_PROFILES,
@@ -107,6 +107,9 @@ export function TaskCreationWizard({
   const [complexity, setComplexity] = useState<TaskComplexity | ''>('');
   const [impact, setImpact] = useState<TaskImpact | ''>('');
 
+  // AI Provider selection
+  const [provider, setProvider] = useState<AIProvider>('claude');
+
   // Model configuration
   const [profileId, setProfileId] = useState<string>(settings.selectedAgentProfile || 'auto');
   const [model, setModel] = useState<ModelType | ''>(selectedProfile.model);
@@ -168,6 +171,7 @@ export function TaskCreationWizard({
         setReferencedFiles(draft.referencedFiles ?? []);
         setRequireReviewBeforeCoding(draft.requireReviewBeforeCoding ?? false);
         setAgentModels(draft.agentModels || {});
+        setProvider(draft.provider || 'claude');
         setIsDraftRestored(true);
 
         if (draft.category || draft.priority || draft.complexity || draft.impact) {
@@ -194,6 +198,7 @@ export function TaskCreationWizard({
         setReferencedFiles([]);
         setRequireReviewBeforeCoding(false);
         setAgentModels({});
+        setProvider('claude');
         setBaseBranch(PROJECT_DEFAULT_BRANCH);
         setUseWorktree(true);
         setIsDraftRestored(false);
@@ -271,8 +276,9 @@ export function TaskCreationWizard({
     referencedFiles,
     requireReviewBeforeCoding,
     agentModels,
+    provider,
     savedAt: new Date()
-  }), [projectId, title, description, category, priority, complexity, impact, profileId, model, thinkingLevel, phaseModels, phaseThinking, images, referencedFiles, requireReviewBeforeCoding, agentModels]);
+  }), [projectId, title, description, category, priority, complexity, impact, profileId, model, thinkingLevel, phaseModels, phaseThinking, images, referencedFiles, requireReviewBeforeCoding, agentModels, provider]);
 
   /**
    * Detect @ mention being typed and show autocomplete
@@ -485,6 +491,7 @@ export function TaskCreationWizard({
     setReferencedFiles([]);
     setRequireReviewBeforeCoding(false);
     setAgentModels({});
+    setProvider('claude');
     setBaseBranch(PROJECT_DEFAULT_BRANCH);
     setUseWorktree(true);
     setError(null);
@@ -655,6 +662,8 @@ export function TaskCreationWizard({
           onThinkingLevelChange={setThinkingLevel}
           onPhaseModelsChange={setPhaseModels}
           onPhaseThinkingChange={setPhaseThinking}
+          provider={provider}
+          onProviderChange={setProvider}
           category={category}
           priority={priority}
           complexity={complexity}
