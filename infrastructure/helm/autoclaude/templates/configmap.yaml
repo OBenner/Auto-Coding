@@ -1,0 +1,44 @@
+{{- /*
+ConfigMap for AutoClaude configuration
+*/ -}}
+{{- if .Values.backend.enabled }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "autoclaude.fullname" . }}-config
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "autoclaude.labels" . | nindent 4 }}
+data:
+  # Server configuration
+  HOST: {{ .Values.config.host | quote }}
+  PORT: {{ .Values.config.port | quote }}
+  DEBUG: {{ .Values.config.debug | quote }}
+  LOG_LEVEL: {{ .Values.config.logLevel | quote }}
+
+  # CORS configuration
+  CORS_ORIGINS: {{ .Values.config.corsOrigins | quote }}
+
+  # JWT configuration
+  ACCESS_TOKEN_EXPIRE_MINUTES: {{ .Values.config.accessTokenExpireMinutes | quote }}
+
+  {{- if .Values.postgresql.enabled }}
+  # Database configuration
+  POSTGRES_USER: {{ .Values.config.postgresUser | quote }}
+  POSTGRES_DB: {{ .Values.config.postgresDb | quote }}
+  {{- end }}
+
+  {{- if .Values.redis.enabled }}
+  # Redis configuration
+  REDIS_HOST: {{ include "autoclaude.fullname" . }}-redis
+  REDIS_PORT: {{ .Values.config.redisPort | quote }}
+  REDIS_DB: {{ .Values.config.redisDb | quote }}
+  {{- end }}
+
+  # OAuth configuration (redirect URI - public facing)
+  OAUTH_REDIRECT_URI: {{ .Values.config.oauthRedirectUri | quote }}
+
+  # WebSocket configuration
+  WS_HEARTBEAT_INTERVAL: {{ .Values.config.wsHeartbeatInterval | quote }}
+{{- end }}

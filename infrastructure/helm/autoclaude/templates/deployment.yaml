@@ -1,0 +1,324 @@
+{{- /*
+Deployment manifests for AutoClaude components
+*/ -}}
+{{- if .Values.postgresql.enabled }}
+---
+# PostgreSQL Database Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "autoclaude.fullname" . }}-postgresql
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "autoclaude.labels" . | nindent 4 }}
+    component: database
+spec:
+  replicas: {{ .Values.postgresql.replicaCount }}
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "autoclaude.selectorLabels" . | nindent 6 }}
+      component: database
+  template:
+    metadata:
+      labels:
+        {{- include "autoclaude.selectorLabels" . | nindent 8 }}
+        component: database
+    spec:
+      containers:
+      - name: postgresql
+        image: "{{ .Values.global.imageRegistry | default "" }}{{ .Values.postgresql.image.repository }}:{{ .Values.postgresql.image.tag }}"
+        imagePullPolicy: {{ .Values.postgresql.image.pullPolicy }}
+        ports:
+        - containerPort: {{ .Values.postgresql.service.port }}
+          name: postgresql
+        env:
+        - name: POSTGRES_USER
+          valueFrom:
+            configMapKeyRef:
+              name: {{ include "autoclaude.fullname" . }}-config
+              key: POSTGRES_USER
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "autoclaude.fullname" . }}-secrets
+              key: POSTGRES_PASSWORD
+        - name: POSTGRES_DB
+          valueFrom:
+            configMapKeyRef:
+              name: {{ include "autoclaude.fullname" . }}-config
+              key: POSTGRES_DB
+        - name: POSTGRES_INITDB_ARGS
+          value: "-E UTF8"
+        - name: PGDATA
+          value: /var/lib/postgresql/data/pgdata
+        volumeMounts:
+        - name: postgresql-storage
+          mountPath: /var/lib/postgresql/data
+        resources:
+          {{- toYaml .Values.postgresql.resources | nindent 10 }}
+        {{- with .Values.postgresql.livenessProbe }}
+        livenessProbe:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+        {{- with .Values.postgresql.readinessProbe }}
+        readinessProbe:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+      volumes:
+      - name: postgresql-storage
+        {{- if .Values.postgresql.persistence.enabled }}
+        persistentVolumeClaim:
+          claimName: {{ include "autoclaude.fullname" . }}-postgresql-pvc
+        {{- else }}
+        emptyDir: {}
+        {{- end }}
+{{- end }}
+
+{{- if .Values.redis.enabled }}
+---
+# Redis Cache Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "autoclaude.fullname" . }}-redis
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "autoclaude.labels" . | nindent 4 }}
+    component: cache
+spec:
+  replicas: {{ .Values.redis.replicaCount }}
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "autoclaude.selectorLabels" . | nindent 6 }}
+      component: cache
+  template:
+    metadata:
+      labels:
+        {{- include "autoclaude.selectorLabels" . | nindent 8 }}
+        component: cache
+    spec:
+      containers:
+      - name: redis
+        image: "{{ .Values.global.imageRegistry | default "" }}{{ .Values.redis.image.repository }}:{{ .Values.redis.image.tag }}"
+        imagePullPolicy: {{ .Values.redis.image.pullPolicy }}
+        command:
+        - redis-server
+        - --appendonly
+        - "yes"
+        ports:
+        - containerPort: {{ .Values.redis.service.port }}
+          name: redis
+        {{- if .Values.secrets.redisPassword }}
+        env:
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "autoclaude.fullname" . }}-secrets
+              key: REDIS_PASSWORD
+        {{- end }}
+        volumeMounts:
+        - name: redis-storage
+          mountPath: /data
+        resources:
+          {{- toYaml .Values.redis.resources | nindent 10 }}
+        {{- with .Values.redis.livenessProbe }}
+        livenessProbe:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+        {{- with .Values.redis.readinessProbe }}
+        readinessProbe:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+      volumes:
+      - name: redis-storage
+        {{- if .Values.redis.persistence.enabled }}
+        persistentVolumeClaim:
+          claimName: {{ include "autoclaude.fullname" . }}-redis-pvc
+        {{- else }}
+        emptyDir: {}
+        {{- end }}
+{{- end }}
+
+{{- if .Values.backend.enabled }}
+---
+# AutoClaude Backend Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "autoclaude.fullname" . }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "autoclaude.labels" . | nindent 4 }}
+    component: backend
+spec:
+  replicas: {{ .Values.backend.replicaCount }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      {{- include "autoclaude.selectorLabels" . | nindent 6 }}
+      component: backend
+  template:
+    metadata:
+      labels:
+        {{- include "autoclaude.selectorLabels" . | nindent 8 }}
+        component: backend
+    spec:
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.backend.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.backend.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.backend.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+      - name: backend
+        image: "{{ .Values.global.imageRegistry | default "" }}{{ .Values.backend.image.repository }}:{{ .Values.backend.image.tag }}"
+        imagePullPolicy: {{ .Values.backend.image.pullPolicy }}
+        ports:
+        - containerPort: {{ .Values.backend.service.targetPort }}
+          name: http
+        env:
+        # Server configuration
+        - name: HOST
+          valueFrom:
+            configMapKeyRef:
+              name: {{ include "autoclaude.fullname" . }}-config
+              key: HOST
+        - name: PORT
+          valueFrom:
+            configMapKeyRef:
+              name: {{ include "autoclaude.fullname" . }}-config
+              key: PORT
+        - name: DEBUG
+          valueFrom:
+            configMapKeyRef:
+              name: {{ include "autoclaude.fullname" . }}-config
+              key: DEBUG
+        - name: LOG_LEVEL
+          valueFrom:
+            configMapKeyRef:
+              name: {{ include "autoclaude.fullname" . }}-config
+              key: LOG_LEVEL
+        # CORS configuration
+        - name: CORS_ORIGINS
+          valueFrom:
+            configMapKeyRef:
+              name: {{ include "autoclaude.fullname" . }}-config
+              key: CORS_ORIGINS
+        # Authentication
+        - name: SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "autoclaude.fullname" . }}-secrets
+              key: SECRET_KEY
+        - name: ACCESS_TOKEN_EXPIRE_MINUTES
+          valueFrom:
+            configMapKeyRef:
+              name: {{ include "autoclaude.fullname" . }}-config
+              key: ACCESS_TOKEN_EXPIRE_MINUTES
+        # Database configuration
+        - name: POSTGRES_USER
+          valueFrom:
+            configMapKeyRef:
+              name: {{ include "autoclaude.fullname" . }}-config
+              key: POSTGRES_USER
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "autoclaude.fullname" . }}-secrets
+              key: POSTGRES_PASSWORD
+        - name: POSTGRES_DB
+          valueFrom:
+            configMapKeyRef:
+              name: {{ include "autoclaude.fullname" . }}-config
+              key: POSTGRES_DB
+        - name: DATABASE_URL
+          value: "postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(POSTGRES_HOST):$(POSTGRES_PORT)/$(POSTGRES_DB)"
+        # Database connection settings (using service names)
+        - name: POSTGRES_HOST
+          value: {{ include "autoclaude.fullname" . }}-postgresql
+        - name: POSTGRES_PORT
+          value: "{{ .Values.postgresql.service.port }}"
+        # Redis configuration
+        - name: REDIS_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: {{ include "autoclaude.fullname" . }}-config
+              key: REDIS_HOST
+        - name: REDIS_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: {{ include "autoclaude.fullname" . }}-config
+              key: REDIS_PORT
+        - name: REDIS_DB
+          valueFrom:
+            configMapKeyRef:
+              name: {{ include "autoclaude.fullname" . }}-config
+              key: REDIS_DB
+        {{- if .Values.secrets.redisPassword }}
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "autoclaude.fullname" . }}-secrets
+              key: REDIS_PASSWORD
+        {{- end }}
+        # OAuth configuration
+        - name: GITHUB_CLIENT_ID
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "autoclaude.fullname" . }}-secrets
+              key: GITHUB_CLIENT_ID
+        - name: GITHUB_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "autoclaude.fullname" . }}-secrets
+              key: GITHUB_CLIENT_SECRET
+        - name: GITLAB_CLIENT_ID
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "autoclaude.fullname" . }}-secrets
+              key: GITLAB_CLIENT_ID
+        - name: GITLAB_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "autoclaude.fullname" . }}-secrets
+              key: GITLAB_CLIENT_SECRET
+        - name: OAUTH_REDIRECT_URI
+          valueFrom:
+            configMapKeyRef:
+              name: {{ include "autoclaude.fullname" . }}-config
+              key: OAUTH_REDIRECT_URI
+        # WebSocket configuration
+        - name: WS_HEARTBEAT_INTERVAL
+          valueFrom:
+            configMapKeyRef:
+              name: {{ include "autoclaude.fullname" . }}-config
+              key: WS_HEARTBEAT_INTERVAL
+        resources:
+          {{- toYaml .Values.backend.resources | nindent 10 }}
+        {{- with .Values.backend.livenessProbe }}
+        livenessProbe:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+        {{- with .Values.backend.readinessProbe }}
+        readinessProbe:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+{{- end }}
