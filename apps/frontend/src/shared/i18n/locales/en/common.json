@@ -79,10 +79,15 @@
     "add": "Add",
     "gotIt": "Got it",
     "continue": "Continue",
-    "saving": "Saving..."
+    "saving": "Saving...",
+    "export": "Export",
+    "load": "Load"
   },
   "actions": {
-    "view": "View"
+    "view": "View",
+    "refresh": "Refresh",
+    "export": "Export",
+    "load": "Load"
   },
   "labels": {
     "loading": "Loading...",
@@ -704,5 +709,37 @@
     "graphView": "Graph View",
     "deleteMemory": "Delete Memory",
     "exportMemories": "Export Memories"
+  },
+  "contextViewer": {
+    "title": "Context Viewer",
+    "description": "View and manage AI context window",
+    "tokenStats": "Token Statistics",
+    "sessionStats": "Session Statistics",
+    "tokenBreakdown": "Token Breakdown",
+    "optimization": "Optimization",
+    "totalBudget": "Total Budget",
+    "used": "Used",
+    "remaining": "Remaining",
+    "utilization": "Utilization",
+    "currentTurn": "Current Turn",
+    "totalTokensSent": "Total Tokens Sent",
+    "uniqueFilesSent": "Unique Files Sent",
+    "files": "files",
+    "toModify": "To Modify",
+    "toReference": "To Reference",
+    "patterns": "Patterns",
+    "summaries": "Summaries",
+    "tokensSaved": "Tokens Saved",
+    "optimizationPercent": "Optimization",
+    "targetPercent": "Target",
+    "deduplication": "Deduplication",
+    "filesProcessed": "Files Processed",
+    "duplicatesFound": "Duplicates Found",
+    "savings": "Savings",
+    "noData": "No Context Data",
+    "noDataDescription": "Start an AI agent to see context statistics",
+    "loading": "Loading...",
+    "failedToLoadStats": "Failed to load statistics",
+    "load": "Load Data"
   }
 }
