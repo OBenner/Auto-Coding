@@ -1097,6 +1097,7 @@ class TestSemanticIndexing:
         client = Mock()
         client.graphiti = Mock()
         client.graphiti.add_episode = AsyncMock(return_value=None)
+        client.graphiti.search = AsyncMock(return_value=[])
         return client
 
     @pytest.fixture
@@ -1224,6 +1225,246 @@ class TestSemanticIndexing:
 
         # Should have called add_episode 4 times
         assert mock_client.graphiti.add_episode.call_count == 4
+
+    @pytest.mark.asyncio
+    async def test_search_by_purpose(self, queries, mock_client):
+        """Test searching for code entities by their purpose."""
+        # Mock search results with different entity types
+        mock_result1 = Mock()
+        mock_result1.content = json.dumps(
+            {
+                "type": EPISODE_TYPE_CODE_PURPOSE,
+                "entity_name": "authenticate_user",
+                "entity_type": "function",
+                "purpose": "Validates user credentials and creates a session token",
+                "file_path": "src/auth/login.py",
+                "lineno": 42,
+                "docstring": "Authenticate user with email and password.",
+                "tags": ["authentication", "security", "api"],
+            }
+        )
+        mock_result1.score = 0.95
+
+        mock_result2 = Mock()
+        mock_result2.content = json.dumps(
+            {
+                "type": EPISODE_TYPE_CODE_PURPOSE,
+                "entity_name": "verify_token",
+                "entity_type": "function",
+                "purpose": "Verifies JWT token authenticity and expiration",
+                "file_path": "src/auth/token.py",
+                "lineno": 15,
+                "docstring": "Verify JWT token is valid and not expired.",
+                "tags": ["authentication", "security", "jwt"],
+            }
+        )
+        mock_result2.score = 0.88
+
+        mock_result3 = Mock()
+        mock_result3.content = json.dumps(
+            {
+                "type": EPISODE_TYPE_CODE_PURPOSE,
+                "entity_name": "AuthMiddleware",
+                "entity_type": "class",
+                "purpose": "Middleware for authentication and authorization",
+                "file_path": "src/auth/middleware.py",
+                "lineno": 10,
+                "docstring": "Express middleware for route authentication.",
+                "tags": ["authentication", "middleware"],
+            }
+        )
+        mock_result3.score = 0.82
+
+        # Include a non-CODE_PURPOSE result that should be filtered out
+        mock_result4 = Mock()
+        mock_result4.content = json.dumps(
+            {
+                "type": EPISODE_TYPE_FUNCTION_CALL,
+                "caller": "login",
+                "callee": "authenticate_user",
+                "file_path": "src/login.py",
+                "lineno": 20,
+                "call_type": "function",
+                "module": "auth",
+            }
+        )
+        mock_result4.score = 0.75
+
+        mock_client.graphiti.search.return_value = [
+            mock_result1,
+            mock_result2,
+            mock_result3,
+            mock_result4,
+        ]
+
+        # Search for authentication-related code
+        results = await queries.search_by_purpose("authentication")
+
+        # Should find 3 CODE_PURPOSE entries (function_call is filtered out)
+        assert len(results) == 3
+        assert mock_client.graphiti.search.called
+
+        # Results should be sorted by score (highest first)
+        assert results[0]["score"] == 0.95
+        assert results[1]["score"] == 0.88
+        assert results[2]["score"] == 0.82
+
+        # Verify first result (highest score)
+        assert results[0]["entity_name"] == "authenticate_user"
+        assert results[0]["entity_type"] == "function"
+        assert results[0]["purpose"] == "Validates user credentials and creates a session token"
+        assert results[0]["file_path"] == "src/auth/login.py"
+        assert results[0]["lineno"] == 42
+        assert "authentication" in results[0]["tags"]
+
+        # Verify second result
+        assert results[1]["entity_name"] == "verify_token"
+        assert results[1]["entity_type"] == "function"
+        assert "jwt" in results[1]["tags"]
+
+        # Verify third result
+        assert results[2]["entity_name"] == "AuthMiddleware"
+        assert results[2]["entity_type"] == "class"
+
+    @pytest.mark.asyncio
+    async def test_search_by_purpose_with_entity_type_filter(self, queries, mock_client):
+        """Test searching by purpose with entity type filter."""
+        # Mock results with mixed entity types
+        mock_result1 = Mock()
+        mock_result1.content = json.dumps(
+            {
+                "type": EPISODE_TYPE_CODE_PURPOSE,
+                "entity_name": "validate_email",
+                "entity_type": "function",
+                "purpose": "Validates email address format",
+                "file_path": "src/utils/validation.py",
+                "lineno": 10,
+                "docstring": None,
+                "tags": ["validation"],
+            }
+        )
+        mock_result1.score = 0.9
+
+        mock_result2 = Mock()
+        mock_result2.content = json.dumps(
+            {
+                "type": EPISODE_TYPE_CODE_PURPOSE,
+                "entity_name": "Validator",
+                "entity_type": "class",
+                "purpose": "Email validation utilities",
+                "file_path": "src/utils/validation.py",
+                "lineno": 5,
+                "docstring": None,
+                "tags": ["validation"],
+            }
+        )
+        mock_result2.score = 0.85
+
+        mock_client.graphiti.search.return_value = [mock_result1, mock_result2]
+
+        # Search with entity_type filter for functions only
+        results = await queries.search_by_purpose("validation", entity_type="function")
+
+        # Should only find the function, not the class
+        assert len(results) == 1
+        assert results[0]["entity_name"] == "validate_email"
+        assert results[0]["entity_type"] == "function"
+
+    @pytest.mark.asyncio
+    async def test_search_by_purpose_empty_result(self, queries, mock_client):
+        """Test searching when no results exist."""
+        mock_client.graphiti.search.return_value = []
+
+        results = await queries.search_by_purpose("nonexistent purpose")
+
+        assert len(results) == 0
+        assert mock_client.graphiti.search.called
+
+    @pytest.mark.asyncio
+    async def test_search_by_purpose_error_handling(self, queries, mock_client):
+        """Test that errors are handled gracefully."""
+        mock_client.graphiti.search.side_effect = Exception("Search failed")
+
+        # Should return empty list on error, not raise
+        results = await queries.search_by_purpose("test query")
+
+        assert results == []
+
+    @pytest.mark.asyncio
+    async def test_search_by_purpose_deduplication(self, queries, mock_client):
+        """Test that duplicate results are deduplicated."""
+        # Same entity appearing twice with different scores
+        mock_result1 = Mock()
+        mock_result1.content = json.dumps(
+            {
+                "type": EPISODE_TYPE_CODE_PURPOSE,
+                "entity_name": "process_payment",
+                "entity_type": "function",
+                "purpose": "Processes payment transactions",
+                "file_path": "src/payments.py",
+                "lineno": 10,
+                "docstring": None,
+                "tags": ["payment"],
+            }
+        )
+        mock_result1.score = 0.9
+
+        mock_result2 = Mock()
+        mock_result2.content = json.dumps(
+            {
+                "type": EPISODE_TYPE_CODE_PURPOSE,
+                "entity_name": "process_payment",
+                "entity_type": "function",
+                "purpose": "Processes payment transactions",
+                "file_path": "src/payments.py",
+                "lineno": 10,
+                "docstring": None,
+                "tags": ["payment"],
+            }
+        )
+        mock_result2.score = 0.8
+
+        mock_client.graphiti.search.return_value = [mock_result1, mock_result2]
+
+        results = await queries.search_by_purpose("payment processing")
+
+        # Should only have one entry despite two results
+        assert len(results) == 1
+        assert results[0]["entity_name"] == "process_payment"
+
+    @pytest.mark.asyncio
+    async def test_search_by_purpose_limit(self, queries, mock_client):
+        """Test that limit parameter works correctly."""
+        # Create 10 mock results
+        mock_results = []
+        for i in range(10):
+            mock_result = Mock()
+            mock_result.content = json.dumps(
+                {
+                    "type": EPISODE_TYPE_CODE_PURPOSE,
+                    "entity_name": f"function_{i}",
+                    "entity_type": "function",
+                    "purpose": f"Does something {i}",
+                    "file_path": "src/test.py",
+                    "lineno": i * 10,
+                    "docstring": None,
+                    "tags": [],
+                }
+            )
+            mock_result.score = 0.9 - (i * 0.05)  # Descending scores
+            mock_results.append(mock_result)
+
+        mock_client.graphiti.search.return_value = mock_results
+
+        # Search with limit of 5
+        results = await queries.search_by_purpose("test functions", limit=5)
+
+        # Should only return 5 results
+        assert len(results) == 5
+
+        # Should be sorted by score (highest first)
+        assert results[0]["entity_name"] == "function_0"
+        assert results[4]["entity_name"] == "function_4"
 
 
 if __name__ == "__main__":

@@ -878,3 +878,98 @@ class CodeRelationshipQueries:
                 query_summary=query[:100] if query else "",
             )
             return []
+
+    async def search_by_purpose(
+        self,
+        query: str,
+        limit: int = 20,
+        entity_type: str | None = None,
+    ) -> list[dict]:
+        """
+        Search for code entities by their purpose using natural language.
+
+        This enables semantic search queries like:
+        - "authentication functions"
+        - "payment processing"
+        - "database validation"
+        - "API endpoints for users"
+
+        Args:
+            query: Natural language query describing the purpose to search for
+            limit: Maximum number of results to return
+            entity_type: Optional filter for entity type (function, class, module, method)
+
+        Returns:
+            List of entity information with name, type, purpose, file path, and metadata
+        """
+        try:
+            # Use Graphiti's semantic search to find code by purpose
+            results = await self.client.graphiti.search(
+                query=query,
+                group_ids=[self.group_id],
+                num_results=limit * 2,  # Get more to filter
+            )
+
+            entities = []
+            seen = set()  # Deduplicate results
+
+            for result in results:
+                content = getattr(result, "content", None) or getattr(
+                    result, "fact", None
+                )
+                if not content:
+                    continue
+
+                try:
+                    data = json.loads(content) if isinstance(content, str) else content
+                    if not isinstance(data, dict):
+                        continue
+
+                    # Filter for code purpose entries
+                    if data.get("type") != EPISODE_TYPE_CODE_PURPOSE:
+                        continue
+
+                    # Filter by entity type if specified
+                    if entity_type and data.get("entity_type") != entity_type:
+                        continue
+
+                    # Create unique key for deduplication
+                    key = (
+                        data.get("entity_name"),
+                        data.get("entity_type"),
+                        data.get("file_path"),
+                    )
+
+                    if key not in seen:
+                        seen.add(key)
+                        entities.append(
+                            {
+                                "entity_name": data.get("entity_name"),
+                                "entity_type": data.get("entity_type"),
+                                "purpose": data.get("purpose"),
+                                "file_path": data.get("file_path"),
+                                "lineno": data.get("lineno", 0),
+                                "docstring": data.get("docstring"),
+                                "tags": data.get("tags", []),
+                                "score": getattr(result, "score", 0.0),
+                            }
+                        )
+
+                except (json.JSONDecodeError, TypeError, AttributeError):
+                    continue
+
+            # Sort by relevance score (higher is better)
+            entities.sort(key=lambda x: x.get("score", 0.0), reverse=True)
+
+            logger.info(f"Found {len(entities)} entities for purpose query: {query[:50]}...")
+            return entities[:limit]
+
+        except Exception as e:
+            logger.warning(f"Failed to search by purpose: {e}")
+            capture_exception(
+                e,
+                operation="search_by_purpose",
+                group_id=self.group_id,
+                query_summary=query[:100] if query else "",
+            )
+            return []
