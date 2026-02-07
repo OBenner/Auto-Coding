@@ -23,6 +23,7 @@ from integrations.graphiti.queries_pkg.code_relationships import (
 )
 from integrations.graphiti.queries_pkg.schema import (
     EPISODE_TYPE_CLASS_INHERITANCE,
+    EPISODE_TYPE_CODE_PURPOSE,
     EPISODE_TYPE_CODE_RELATIONSHIP,
     EPISODE_TYPE_FUNCTION_CALL,
     EPISODE_TYPE_IMPORT_DEPENDENCY,
@@ -1085,6 +1086,144 @@ class TestNaturalLanguageQuery:
         # Should be sorted by score (highest first)
         assert results[0]["caller"] == "caller0"
         assert results[4]["caller"] == "caller4"
+
+
+class TestSemanticIndexing:
+    """Test semantic indexing of code purposes."""
+
+    @pytest.fixture
+    def mock_client(self):
+        """Create a mock GraphitiClient."""
+        client = Mock()
+        client.graphiti = Mock()
+        client.graphiti.add_episode = AsyncMock(return_value=None)
+        return client
+
+    @pytest.fixture
+    def queries(self, mock_client):
+        """Create a CodeRelationshipQueries instance with mock client."""
+        return CodeRelationshipQueries(
+            client=mock_client, group_id="test_group", spec_context_id="test_spec"
+        )
+
+    @pytest.mark.asyncio
+    async def test_semantic_indexing(self, queries, mock_client):
+        """Test indexing code purposes for semantic search."""
+        # Test storing a function purpose with docstring and tags
+        result = await queries.add_code_purpose(
+            entity_name="authenticate_user",
+            entity_type="function",
+            purpose="Validates user credentials and creates a session token",
+            file_path="src/auth/login.py",
+            lineno=42,
+            docstring="Authenticate user with email and password.\n\nReturns JWT token on success.",
+            tags=["authentication", "security", "api"],
+        )
+
+        assert result is True
+        assert mock_client.graphiti.add_episode.called
+
+        # Verify episode parameters
+        call_args = mock_client.graphiti.add_episode.call_args[1]
+        assert call_args["group_id"] == "test_group"
+        assert "purpose_authenticate_user" in call_args["name"]
+
+        # Verify source description includes semantic information
+        source_desc = call_args["source_description"]
+        assert "authenticate_user" in source_desc
+        assert "Validates user credentials" in source_desc
+        assert "authentication" in source_desc
+        assert "security" in source_desc
+
+        # Verify episode content
+        episode_body = json.loads(call_args["episode_body"])
+        assert episode_body["type"] == EPISODE_TYPE_CODE_PURPOSE
+        assert episode_body["spec_id"] == "test_spec"
+        assert episode_body["entity_name"] == "authenticate_user"
+        assert episode_body["entity_type"] == "function"
+        assert episode_body["purpose"] == "Validates user credentials and creates a session token"
+        assert episode_body["file_path"] == "src/auth/login.py"
+        assert episode_body["lineno"] == 42
+        assert "JWT token" in episode_body["docstring"]
+        assert episode_body["tags"] == ["authentication", "security", "api"]
+
+    @pytest.mark.asyncio
+    async def test_add_code_purpose_minimal(self, queries, mock_client):
+        """Test indexing code purpose with minimal parameters."""
+        result = await queries.add_code_purpose(
+            entity_name="UserModel",
+            entity_type="class",
+            purpose="Represents a user entity in the database",
+            file_path="src/models/user.py",
+        )
+
+        assert result is True
+        assert mock_client.graphiti.add_episode.called
+
+        # Verify episode content has defaults for optional fields
+        call_args = mock_client.graphiti.add_episode.call_args[1]
+        episode_body = json.loads(call_args["episode_body"])
+        assert episode_body["lineno"] == 0
+        assert episode_body["docstring"] is None
+        assert episode_body["tags"] == []
+
+    @pytest.mark.asyncio
+    async def test_add_code_purpose_error_handling(self, queries, mock_client):
+        """Test that errors are handled gracefully when indexing purposes."""
+        # Make add_episode raise an exception
+        mock_client.graphiti.add_episode.side_effect = Exception("Indexing failed")
+
+        # Should return False on error, not raise
+        result = await queries.add_code_purpose(
+            entity_name="test_func",
+            entity_type="function",
+            purpose="Test purpose",
+            file_path="test.py",
+        )
+
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_add_code_purpose_various_entity_types(self, queries, mock_client):
+        """Test indexing different types of code entities."""
+        # Test function
+        await queries.add_code_purpose(
+            entity_name="process_payment",
+            entity_type="function",
+            purpose="Handles payment processing with Stripe API",
+            file_path="src/payments.py",
+            tags=["payment", "api"],
+        )
+
+        # Test class
+        await queries.add_code_purpose(
+            entity_name="PaymentProcessor",
+            entity_type="class",
+            purpose="Manages payment transactions and refunds",
+            file_path="src/payments.py",
+            tags=["payment", "business_logic"],
+        )
+
+        # Test method
+        await queries.add_code_purpose(
+            entity_name="validate",
+            entity_type="method",
+            purpose="Validates payment card information",
+            file_path="src/payments.py",
+            tags=["validation", "payment"],
+        )
+
+        # Test module
+        await queries.add_code_purpose(
+            entity_name="auth",
+            entity_type="module",
+            purpose="Authentication and authorization utilities",
+            file_path="src/auth/__init__.py",
+            tags=["authentication", "security"],
+        )
+
+        # Should have called add_episode 4 times
+        assert mock_client.graphiti.add_episode.call_count == 4
 
 
 if __name__ == "__main__":

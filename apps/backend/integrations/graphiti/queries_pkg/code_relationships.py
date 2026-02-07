@@ -16,6 +16,7 @@ from core.sentry import capture_exception
 from .schema import (
     EPISODE_TYPE_CLASS_INHERITANCE,
     EPISODE_TYPE_CODE_RELATIONSHIP,
+    EPISODE_TYPE_CODE_PURPOSE,
     EPISODE_TYPE_FUNCTION_CALL,
     EPISODE_TYPE_IMPORT_DEPENDENCY,
 )
@@ -223,6 +224,82 @@ class CodeRelationshipQueries:
                 spec_id=self.spec_context_id,
                 child=child,
                 parent=parent,
+            )
+            return False
+
+    async def add_code_purpose(
+        self,
+        entity_name: str,
+        entity_type: str,
+        purpose: str,
+        file_path: str,
+        lineno: int = 0,
+        docstring: str | None = None,
+        tags: list[str] | None = None,
+    ) -> bool:
+        """
+        Store semantic information about code purpose.
+
+        This indexes what code *does* (its intent/purpose), not just structural
+        relationships. Enables search by purpose rather than just by name.
+
+        Args:
+            entity_name: Name of the code entity (function, class, module)
+            entity_type: Type of entity (function, class, module, method)
+            purpose: Human-readable description of what the code does
+            file_path: Path to file containing the entity
+            lineno: Line number where entity is defined
+            docstring: Optional docstring content
+            tags: Optional semantic tags (e.g., ["authentication", "api", "validation"])
+
+        Returns:
+            True if saved successfully
+        """
+        try:
+            from graphiti_core.nodes import EpisodeType
+
+            episode_content = {
+                "type": EPISODE_TYPE_CODE_PURPOSE,
+                "spec_id": self.spec_context_id,
+                "timestamp": datetime.now(UTC).isoformat(),
+                "entity_name": entity_name,
+                "entity_type": entity_type,
+                "purpose": purpose,
+                "file_path": file_path,
+                "lineno": lineno,
+                "docstring": docstring,
+                "tags": tags or [],
+            }
+
+            # Create a rich source description that includes semantic information
+            # This helps Graphiti's semantic search find code by purpose
+            semantic_description = f"{entity_type.capitalize()} '{entity_name}': {purpose}"
+            if tags:
+                semantic_description += f" [tags: {', '.join(tags)}]"
+
+            await self.client.graphiti.add_episode(
+                name=f"purpose_{entity_name}_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}",
+                episode_body=json.dumps(episode_content),
+                source=EpisodeType.text,
+                source_description=semantic_description,
+                reference_time=datetime.now(UTC),
+                group_id=self.group_id,
+            )
+
+            logger.debug(
+                f"Indexed code purpose: {entity_type} '{entity_name}' - {purpose[:50]}..."
+            )
+            return True
+
+        except Exception as e:
+            logger.warning(f"Failed to index code purpose: {e}")
+            capture_exception(
+                e,
+                operation="add_code_purpose",
+                group_id=self.group_id,
+                spec_id=self.spec_context_id,
+                entity_name=entity_name,
+                entity_type=entity_type,
             )
             return False
 
