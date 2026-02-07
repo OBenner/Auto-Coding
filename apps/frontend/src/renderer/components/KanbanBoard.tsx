@@ -673,6 +673,7 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
 
   // Kanban settings store for column preferences (collapse state, width, lock state)
   const columnPreferences = useKanbanSettingsStore((state) => state.columnPreferences);
+  const filters = useKanbanSettingsStore((state) => state.filters);
   const loadKanbanPreferences = useKanbanSettingsStore((state) => state.loadPreferences);
   const saveKanbanPreferences = useKanbanSettingsStore((state) => state.savePreferences);
   const toggleColumnCollapsed = useKanbanSettingsStore((state) => state.toggleColumnCollapsed);
@@ -760,6 +761,16 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
   const taskOrder = useTaskStore((state) => state.taskOrder);
 
   const tasksByStatus = useMemo(() => {
+    // Apply search filter (case-insensitive)
+    const searchQuery = filters?.searchQuery?.trim().toLowerCase() ?? '';
+    const searchFilteredTasks = searchQuery
+      ? filteredTasks.filter((task) => {
+          const title = task.title.toLowerCase();
+          const description = task.description.toLowerCase();
+          return title.includes(searchQuery) || description.includes(searchQuery);
+        })
+      : filteredTasks;
+
     // Note: pr_created tasks are shown in the 'done' column since they're essentially complete
     // Note: error tasks are shown in the 'human_review' column since they need human attention
     const grouped: Record<typeof TASK_STATUS_COLUMNS[number], Task[]> = {
@@ -771,7 +782,7 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
       done: []
     };
 
-    filteredTasks.forEach((task) => {
+    searchFilteredTasks.forEach((task) => {
       // Map pr_created tasks to the done column, error tasks to human_review
       const targetColumn = getVisualColumn(task.status);
       if (grouped[targetColumn]) {
@@ -823,7 +834,7 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
     });
 
     return grouped;
-  }, [filteredTasks, taskOrder]);
+  }, [filteredTasks, taskOrder, filters]);
 
   // Prune stale IDs when tasks move out of human_review column
   useEffect(() => {
