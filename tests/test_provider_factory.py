@@ -617,6 +617,7 @@ class TestAIEngineProviderEnum:
         assert AIEngineProvider.CLAUDE.value == "claude"
         assert AIEngineProvider.LITELLM.value == "litellm"
         assert AIEngineProvider.OPENROUTER.value == "openrouter"
+        assert AIEngineProvider.ZHIPUAI.value == "zhipuai"
 
     def test_enum_is_str(self):
         """Tests AIEngineProvider values are strings."""
