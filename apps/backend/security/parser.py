@@ -17,6 +17,17 @@ import re
 import shlex
 from pathlib import PurePosixPath, PureWindowsPath
 
+# Compiled regex patterns for performance
+# These patterns are used throughout the module for parsing shell commands
+_SHELL_OPERATORS_PATTERN = re.compile(r"\s*(?:&&|\|\||\|)\s*|;\s*")
+_VARIABLE_ASSIGNMENT_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=\S*\s+")
+_FIRST_TOKEN_PATTERN = re.compile(r'^(?:"([^"]+)"|\'([^\']+)\'|([^\s]+))')
+_WINDOWS_EXTENSION_PATTERN = re.compile(r"\.(exe|cmd|bat|ps1|sh)$", flags=re.IGNORECASE)
+_LEADING_QUOTES_SLASHES_PATTERN = re.compile(r'^["\'\\/]+')
+_COMMAND_CHAINING_PATTERN = re.compile(r"\s*(?:&&|\|\|)\s*")
+_SEMICOLON_SPLIT_PATTERN = re.compile(r'(?<!["\'])\s*;\s*(?!["\'])')
+_WINDOWS_PATH_PATTERN = re.compile(r"[A-Za-z]:\\|\\[A-Za-z][A-Za-z0-9_\\/]")
+
 
 def _cross_platform_basename(path: str) -> str:
     """
@@ -82,7 +93,7 @@ def _fallback_extract_commands(command_string: str) -> list[str]:
     # First, split by common shell operators
     # This regex splits on &&, ||, |, ; while being careful about quotes
     # We're being permissive here since shlex already failed
-    parts = re.split(r"\s*(?:&&|\|\||\|)\s*|;\s*", command_string)
+    parts = _SHELL_OPERATORS_PATTERN.split(command_string)
 
     for part in parts:
         part = part.strip()
@@ -90,8 +101,8 @@ def _fallback_extract_commands(command_string: str) -> list[str]:
             continue
 
         # Skip variable assignments at the start (VAR=value cmd)
-        while re.match(r"^[A-Za-z_][A-Za-z0-9_]*=\S*\s+", part):
-            part = re.sub(r"^[A-Za-z_][A-Za-z0-9_]*=\S*\s+", "", part)
+        while _VARIABLE_ASSIGNMENT_PATTERN.match(part):
+            part = _VARIABLE_ASSIGNMENT_PATTERN.sub("", part)
 
         if not part:
             continue
@@ -104,7 +115,7 @@ def _fallback_extract_commands(command_string: str) -> list[str]:
         # - Quoted with spaces: "C:\Program Files\python.exe"
 
         # Extract first token, handling quoted strings with spaces
-        first_token_match = re.match(r'^(?:"([^"]+)"|\'([^\']+)\'|([^\s]+))', part)
+        first_token_match = _FIRST_TOKEN_PATTERN.match(part)
         if not first_token_match:
             continue
 
@@ -121,10 +132,10 @@ def _fallback_extract_commands(command_string: str) -> list[str]:
         cmd = _cross_platform_basename(first_token)
 
         # Remove Windows extensions
-        cmd = re.sub(r"\.(exe|cmd|bat|ps1|sh)$", "", cmd, flags=re.IGNORECASE)
+        cmd = _WINDOWS_EXTENSION_PATTERN.sub("", cmd)
 
         # Clean up any remaining quotes or special chars at the start
-        cmd = re.sub(r'^["\'\\/]+', "", cmd)
+        cmd = _LEADING_QUOTES_SLASHES_PATTERN.sub("", cmd)
 
         # Skip tokens that look like function calls or code fragments (not shell commands)
         # These appear when splitting on semicolons inside malformed quoted strings
@@ -144,12 +155,12 @@ def split_command_segments(command_string: str) -> list[str]:
     Handles command chaining (&&, ||, ;) but not pipes (those are single commands).
     """
     # Split on && and || while preserving the ability to handle each segment
-    segments = re.split(r"\s*(?:&&|\|\|)\s*", command_string)
+    segments = _COMMAND_CHAINING_PATTERN.split(command_string)
 
     # Further split on semicolons
     result = []
     for segment in segments:
-        sub_segments = re.split(r'(?<!["\'])\s*;\s*(?!["\'])', segment)
+        sub_segments = _SEMICOLON_SPLIT_PATTERN.split(segment)
         for sub in sub_segments:
             sub = sub.strip()
             if sub:
@@ -176,7 +187,7 @@ def _contains_windows_path(command_string: str) -> bool:
     # - Backslash followed by a path component (2+ chars to avoid escape sequences like \n, \t)
     #   The second char must be alphanumeric, underscore, or another path separator
     #   This avoids false positives on escape sequences which are single-char after backslash
-    return bool(re.search(r"[A-Za-z]:\\|\\[A-Za-z][A-Za-z0-9_\\/]", command_string))
+    return bool(_WINDOWS_PATH_PATTERN.search(command_string))
 
 
 def extract_commands(command_string: str) -> list[str]:
@@ -201,7 +212,7 @@ def extract_commands(command_string: str) -> list[str]:
     commands = []
 
     # Split on semicolons that aren't inside quotes
-    segments = re.split(r'(?<!["\'])\s*;\s*(?!["\'])', command_string)
+    segments = _SEMICOLON_SPLIT_PATTERN.split(command_string)
 
     for segment in segments:
         segment = segment.strip()
