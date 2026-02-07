@@ -1,10 +1,10 @@
 # CI/CD Pipeline Integration
 
-This guide covers using Auto Claude in CI/CD pipelines for autonomous AI-powered builds. Learn how to run headless builds with exit codes, JSON output, and artifact generation.
+This guide covers using Auto-Claude in CI/CD pipelines for autonomous AI-powered builds. Learn how to run headless builds with exit codes, JSON output, and artifact generation.
 
 ## Overview
 
-Auto Claude's CI/CD mode enables fully automated builds without interactive prompts. This is ideal for:
+Auto-Claude's CI/CD mode enables fully automated builds without interactive prompts. This is ideal for:
 
 - **Automated PR Reviews** - Run AI agents to validate changes before merge
 - **Continuous Integration** - Trigger builds on push/PR with automated testing
@@ -39,7 +39,7 @@ python run.py --spec 001
 
 ### Exit Codes
 
-Auto Claude uses standard exit codes to indicate build results:
+Auto-Claude uses standard exit codes to indicate build results:
 
 | Exit Code | Status | Description |
 |-----------|--------|-------------|
@@ -50,7 +50,7 @@ Auto Claude uses standard exit codes to indicate build results:
 
 **GitHub Actions Integration:**
 ```yaml
-- name: Run Auto Claude
+- name: Run Auto-Claude
   run: python run.py --spec 001 --ci
   # Exit codes are automatically handled by GitHub Actions
 ```
@@ -99,7 +99,7 @@ on:
 
 ### Environment Configuration
 
-Configure Auto Claude in CI via environment variables:
+Configure Auto-Claude in CI via environment variables:
 
 ```yaml
 env:
@@ -129,7 +129,7 @@ env:
 Run builds from an existing spec:
 
 ```yaml
-- name: Run Auto Claude build
+- name: Run Auto-Claude build
   working-directory: apps/backend
   run: |
     source .venv/bin/activate
@@ -141,7 +141,7 @@ Run builds from an existing spec:
 Run builds from a task description (creates spec first):
 
 ```yaml
-- name: Run Auto Claude with task
+- name: Run Auto-Claude with task
   working-directory: apps/backend
   run: |
     source .venv/bin/activate
@@ -181,7 +181,7 @@ Post build results as PR comments:
       const buildLog = JSON.parse(fs.readFileSync('.auto-claude/specs/001/build-log.json', 'utf8'));
 
       // Build comment
-      let comment = '## 🤖 Auto Claude Build Results\n\n';
+      let comment = '## 🤖 Auto-Claude Build Results\n\n';
       comment += `**Status:** ${buildLog.status}\n`;
       comment += `**Exit Code:** ${buildLog.exit_code}\n`;
       comment += `**Duration:** ${buildLog.duration}\n`;
@@ -199,7 +199,7 @@ Post build results as PR comments:
 
 ## JSON Output Format
 
-When using `--json` flag or `AUTO_CLAUDE_JSON_OUTPUT=true`, Auto Claude outputs machine-readable JSON:
+When using `--json` flag or `AUTO_CLAUDE_JSON_OUTPUT=true`, Auto-Claude outputs machine-readable JSON:
 
 ### Build Result Structure
 
@@ -251,7 +251,7 @@ fi
 import json
 import subprocess
 
-# Run Auto Claude
+# Run Auto-Claude
 result = subprocess.run(
     ['python', 'run.py', '--spec', '001', '--ci', '--json'],
     capture_output=True,
@@ -302,7 +302,7 @@ python run.py --qa  # Skips QA approval prompt
 
 **GitHub Actions Example:**
 ```yaml
-- name: Run Auto Claude
+- name: Run Auto-Claude
   env:
     AUTO_CLAUDE_CI: 'true'
     AUTO_CLAUDE_JSON_OUTPUT: 'true'
@@ -313,7 +313,7 @@ python run.py --qa  # Skips QA approval prompt
 
 ## Artifact Generation
 
-Auto Claude generates artifacts in CI mode for debugging and reporting.
+Auto-Claude generates artifacts in CI mode for debugging and reporting.
 
 ### Artifact Types
 
@@ -422,7 +422,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Auto Claude
+      - name: Setup Auto-Claude
         run: |
           cd apps/backend
           uv venv && uv pip install -r requirements.txt
@@ -493,7 +493,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Run Auto Claude
+      - name: Run Auto-Claude
         env:
           AUTO_CLAUDE_CI: 'true'
           AUTO_CLAUDE_JSON_OUTPUT: 'true'
@@ -528,7 +528,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Run Auto Claude
+      - name: Run Auto-Claude
         env:
           AUTO_CLAUDE_CI: 'true'
         run: |
@@ -711,7 +711,7 @@ concurrency:
 Prevent runaway builds:
 
 ```yaml
-- name: Run Auto Claude
+- name: Run Auto-Claude
   timeout-minutes: 60  # 1 hour max
   run: python run.py --spec 001 --ci
 ```
@@ -786,7 +786,7 @@ exit $EXIT_CODE
 Run steps based on build result:
 
 ```yaml
-- name: Run Auto Claude
+- name: Run Auto-Claude
   id: build
   run: python run.py --spec 001 --ci
   continue-on-error: true
@@ -818,7 +818,7 @@ jobs:
       - run: python run.py --spec 001 --ci
 
   integration-tests:
-    needs: auto-claude-build  # Run after Auto Claude
+    needs: auto-claude-build  # Run after Auto-Claude
     runs-on: ubuntu-latest
     steps:
       - run: npm run integration-test
@@ -836,7 +836,7 @@ jobs:
 
 ## Summary
 
-Auto Claude's CI/CD integration provides:
+Auto-Claude's CI/CD integration provides:
 
 1. **Non-interactive mode** - Fully automated builds with `--ci` flag
 2. **Standard exit codes** - Build status via exit codes (0, 1, 2, 3)

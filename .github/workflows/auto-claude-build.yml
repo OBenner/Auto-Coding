@@ -1,6 +1,6 @@
-# Auto Claude CI/CD Integration
+# Auto-Claude CI/CD Integration
 #
-# Example workflow demonstrating how to run Auto Claude builds in CI/CD pipelines.
+# Example workflow demonstrating how to run Auto-Claude builds in CI/CD pipelines.
 # This workflow runs autonomous AI-powered builds with JSON output, proper exit
 # code handling, and artifact generation.
 #
@@ -10,7 +10,7 @@
 # 3. Adjust the spec number or task description for your use case
 # 4. Customize triggered branches and paths as needed
 
-name: Auto Claude Build
+name: Auto-Claude Build
 
 on:
   pull_request:
@@ -48,7 +48,7 @@ permissions:
   pull-requests: write
 
 env:
-  # Auto Claude Configuration
+  # Auto-Claude Configuration
   AUTO_CLAUDE_CI: 'true'                    # Enable CI mode (non-interactive)
   AUTO_CLAUDE_JSON_OUTPUT: 'true'           # Enable JSON output
   ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -63,10 +63,10 @@ env:
 
 jobs:
   # --------------------------------------------------------------------------
-  # Auto Claude Build Job
+  # Auto-Claude Build Job
   # --------------------------------------------------------------------------
   auto-claude-build:
-    name: Auto Claude Build (${{ matrix.os }})
+    name: Auto-Claude Build (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
 
     strategy:
@@ -104,7 +104,7 @@ jobs:
             echo "target=$SPEC" >> $GITHUB_OUTPUT
           fi
 
-      - name: Run Auto Claude build (Spec mode)
+      - name: Run Auto-Claude build (Spec mode)
         if: steps.spec-config.outputs.mode == 'spec'
         working-directory: apps/backend
         shell: bash
@@ -118,14 +118,14 @@ jobs:
             source .venv/bin/activate
           fi
 
-          # Run Auto Claude in CI mode
-          echo "Running Auto Claude build for spec ${{ steps.spec-config.outputs.target }}"
+          # Run Auto-Claude in CI mode
+          echo "Running Auto-Claude build for spec ${{ steps.spec-config.outputs.target }}"
           python run.py \
             --spec ${{ steps.spec-config.outputs.target }} \
             --ci \
             --json
 
-      - name: Run Auto Claude build (Task mode)
+      - name: Run Auto-Claude build (Task mode)
         if: steps.spec-config.outputs.mode == 'task'
         working-directory: apps/backend
         shell: bash
@@ -139,8 +139,8 @@ jobs:
             source .venv/bin/activate
           fi
 
-          # Run Auto Claude with task description
-          echo "Running Auto Claude for task: ${{ steps.spec-config.outputs.target }}"
+          # Run Auto-Claude with task description
+          echo "Running Auto-Claude for task: ${{ steps.spec-config.outputs.target }}"
           python run.py \
             --task "${{ steps.spec-config.outputs.target }}" \
             --ci \
@@ -229,7 +229,7 @@ jobs:
             }
 
             // Build comment
-            let comment = '## 🤖 Auto Claude Build Results\n\n';
+            let comment = '## 🤖 Auto-Claude Build Results\n\n';
 
             if (buildLog) {
               const status = buildLog.status || 'unknown';
@@ -277,7 +277,7 @@ jobs:
 
             const botComment = comments.find(comment =>
               comment.user.type === 'Bot' &&
-              comment.body.includes('Auto Claude Build Results')
+              comment.body.includes('Auto-Claude Build Results')
             );
 
             if (botComment) {
@@ -307,7 +307,7 @@ jobs:
     steps:
       - name: Check build results
         run: |
-          echo "## Auto Claude Build Results" >> $GITHUB_STEP_SUMMARY
+          echo "## Auto-Claude Build Results" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "Matrix Job Result: ${{ needs.auto-claude-build.result }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
