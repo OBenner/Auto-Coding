@@ -40,13 +40,13 @@ The Auto Code Web Backend provides a web API layer on top of the Auto Code auton
 1. **Create virtual environment:**
    ```bash
    cd apps/web-backend
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   uv venv
+   source .venv/bin/activate  # On Windows: .venv\Scripts\activate
    ```
 
 2. **Install dependencies:**
    ```bash
-   pip install -r requirements.txt
+   uv pip install -r requirements.txt
    ```
 
 3. **Configure environment:**
