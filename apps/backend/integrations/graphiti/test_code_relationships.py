@@ -316,5 +316,214 @@ class TestStoreRelationships:
         assert summary_body["inheritance_count"] == 0
 
 
+class TestQueryRelationships:
+    """Test relationship query methods."""
+
+    @pytest.fixture
+    def mock_client(self):
+        """Create a mock GraphitiClient."""
+        client = Mock()
+        client.graphiti = Mock()
+        client.graphiti.search = AsyncMock(return_value=[])
+        return client
+
+    @pytest.fixture
+    def queries(self, mock_client):
+        """Create a CodeRelationshipQueries instance with mock client."""
+        return CodeRelationshipQueries(
+            client=mock_client, group_id="test_group", spec_context_id="test_spec"
+        )
+
+    @pytest.mark.asyncio
+    async def test_find_callers(self, queries, mock_client):
+        """Test finding all functions that call a specific function."""
+        # Mock search results
+        mock_result1 = Mock()
+        mock_result1.content = json.dumps(
+            {
+                "type": EPISODE_TYPE_FUNCTION_CALL,
+                "caller": "main",
+                "callee": "helper",
+                "file_path": "src/main.py",
+                "lineno": 10,
+                "call_type": "function",
+                "module": None,
+            }
+        )
+
+        mock_result2 = Mock()
+        mock_result2.content = json.dumps(
+            {
+                "type": EPISODE_TYPE_FUNCTION_CALL,
+                "caller": "process",
+                "callee": "helper",
+                "file_path": "src/process.py",
+                "lineno": 25,
+                "call_type": "function",
+                "module": None,
+            }
+        )
+
+        mock_result3 = Mock()
+        mock_result3.content = json.dumps(
+            {
+                "type": EPISODE_TYPE_FUNCTION_CALL,
+                "caller": "helper",
+                "callee": "utils",
+                "file_path": "src/main.py",
+                "lineno": 15,
+                "call_type": "function",
+                "module": None,
+            }
+        )
+
+        mock_client.graphiti.search.return_value = [
+            mock_result1,
+            mock_result2,
+            mock_result3,
+        ]
+
+        # Find callers of "helper"
+        callers = await queries.find_callers("helper")
+
+        # Should find main and process (both call helper), but not utils (helper calls utils)
+        assert len(callers) == 2
+        assert mock_client.graphiti.search.called
+
+        caller_names = [c["caller"] for c in callers]
+        assert "main" in caller_names
+        assert "process" in caller_names
+
+        # Verify details of first caller
+        main_caller = next(c for c in callers if c["caller"] == "main")
+        assert main_caller["file_path"] == "src/main.py"
+        assert main_caller["lineno"] == 10
+        assert main_caller["call_type"] == "function"
+
+    @pytest.mark.asyncio
+    async def test_find_callees(self, queries, mock_client):
+        """Test finding all functions that a specific function calls."""
+        # Mock search results
+        mock_result1 = Mock()
+        mock_result1.content = json.dumps(
+            {
+                "type": EPISODE_TYPE_FUNCTION_CALL,
+                "caller": "main",
+                "callee": "helper",
+                "file_path": "src/main.py",
+                "lineno": 10,
+                "call_type": "function",
+                "module": None,
+            }
+        )
+
+        mock_result2 = Mock()
+        mock_result2.content = json.dumps(
+            {
+                "type": EPISODE_TYPE_FUNCTION_CALL,
+                "caller": "main",
+                "callee": "process",
+                "file_path": "src/main.py",
+                "lineno": 12,
+                "call_type": "function",
+                "module": None,
+            }
+        )
+
+        mock_result3 = Mock()
+        mock_result3.content = json.dumps(
+            {
+                "type": EPISODE_TYPE_FUNCTION_CALL,
+                "caller": "helper",
+                "callee": "utils",
+                "file_path": "src/helper.py",
+                "lineno": 5,
+                "call_type": "function",
+                "module": None,
+            }
+        )
+
+        mock_client.graphiti.search.return_value = [
+            mock_result1,
+            mock_result2,
+            mock_result3,
+        ]
+
+        # Find callees of "main"
+        callees = await queries.find_callees("main")
+
+        # Should find helper and process (main calls both), but not utils (helper calls utils)
+        assert len(callees) == 2
+        assert mock_client.graphiti.search.called
+
+        callee_names = [c["callee"] for c in callees]
+        assert "helper" in callee_names
+        assert "process" in callee_names
+
+        # Verify details of first callee
+        helper_callee = next(c for c in callees if c["callee"] == "helper")
+        assert helper_callee["file_path"] == "src/main.py"
+        assert helper_callee["lineno"] == 10
+        assert helper_callee["call_type"] == "function"
+
+    @pytest.mark.asyncio
+    async def test_find_callers_empty_result(self, queries, mock_client):
+        """Test finding callers when no results exist."""
+        mock_client.graphiti.search.return_value = []
+
+        callers = await queries.find_callers("nonexistent_function")
+
+        assert len(callers) == 0
+        assert mock_client.graphiti.search.called
+
+    @pytest.mark.asyncio
+    async def test_find_callers_error_handling(self, queries, mock_client):
+        """Test that errors are handled gracefully in find_callers."""
+        mock_client.graphiti.search.side_effect = Exception("Search failed")
+
+        # Should return empty list on error, not raise
+        callers = await queries.find_callers("test")
+
+        assert callers == []
+
+    @pytest.mark.asyncio
+    async def test_find_callers_deduplication(self, queries, mock_client):
+        """Test that duplicate caller results are deduplicated."""
+        # Same caller appearing twice
+        mock_result1 = Mock()
+        mock_result1.content = json.dumps(
+            {
+                "type": EPISODE_TYPE_FUNCTION_CALL,
+                "caller": "main",
+                "callee": "helper",
+                "file_path": "src/main.py",
+                "lineno": 10,
+                "call_type": "function",
+                "module": None,
+            }
+        )
+
+        mock_result2 = Mock()
+        mock_result2.content = json.dumps(
+            {
+                "type": EPISODE_TYPE_FUNCTION_CALL,
+                "caller": "main",
+                "callee": "helper",
+                "file_path": "src/main.py",
+                "lineno": 10,
+                "call_type": "function",
+                "module": None,
+            }
+        )
+
+        mock_client.graphiti.search.return_value = [mock_result1, mock_result2]
+
+        callers = await queries.find_callers("helper")
+
+        # Should only have one entry despite two results
+        assert len(callers) == 1
+        assert callers[0]["caller"] == "main"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

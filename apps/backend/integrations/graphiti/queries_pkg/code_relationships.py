@@ -328,3 +328,145 @@ class CodeRelationshipQueries:
                 file_path=file_path,
             )
             return False
+
+    async def find_callers(
+        self,
+        function_name: str,
+        limit: int = 50,
+    ) -> list[dict]:
+        """
+        Find all functions that call the specified function.
+
+        Args:
+            function_name: Name of the function to find callers for
+            limit: Maximum number of results to return
+
+        Returns:
+            List of caller information with caller name, file path, and line number
+        """
+        try:
+            results = await self.client.graphiti.search(
+                query=f"function call {function_name} caller callee",
+                group_ids=[self.group_id],
+                num_results=limit * 2,  # Get more to filter
+            )
+
+            callers = []
+            seen = set()  # Deduplicate results
+
+            for result in results:
+                content = getattr(result, "content", None) or getattr(
+                    result, "fact", None
+                )
+                if content and EPISODE_TYPE_FUNCTION_CALL in str(content):
+                    try:
+                        data = (
+                            json.loads(content) if isinstance(content, str) else content
+                        )
+                        if not isinstance(data, dict):
+                            continue
+                        if data.get("type") == EPISODE_TYPE_FUNCTION_CALL:
+                            # Check if this is a call TO the function we're looking for
+                            if data.get("callee") == function_name:
+                                caller_info = (
+                                    data.get("caller"),
+                                    data.get("file_path"),
+                                    data.get("lineno"),
+                                )
+                                if caller_info not in seen:
+                                    seen.add(caller_info)
+                                    callers.append(
+                                        {
+                                            "caller": data.get("caller"),
+                                            "file_path": data.get("file_path"),
+                                            "lineno": data.get("lineno"),
+                                            "call_type": data.get("call_type", "function"),
+                                            "module": data.get("module"),
+                                        }
+                                    )
+                    except (json.JSONDecodeError, TypeError, AttributeError):
+                        continue
+
+            logger.info(f"Found {len(callers)} callers for function: {function_name}")
+            return callers[:limit]
+
+        except Exception as e:
+            logger.warning(f"Failed to find callers: {e}")
+            capture_exception(
+                e,
+                operation="find_callers",
+                group_id=self.group_id,
+                function_name=function_name,
+            )
+            return []
+
+    async def find_callees(
+        self,
+        function_name: str,
+        limit: int = 50,
+    ) -> list[dict]:
+        """
+        Find all functions that the specified function calls.
+
+        Args:
+            function_name: Name of the function to find callees for
+            limit: Maximum number of results to return
+
+        Returns:
+            List of callee information with callee name, file path, and line number
+        """
+        try:
+            results = await self.client.graphiti.search(
+                query=f"function call {function_name} caller callee",
+                group_ids=[self.group_id],
+                num_results=limit * 2,  # Get more to filter
+            )
+
+            callees = []
+            seen = set()  # Deduplicate results
+
+            for result in results:
+                content = getattr(result, "content", None) or getattr(
+                    result, "fact", None
+                )
+                if content and EPISODE_TYPE_FUNCTION_CALL in str(content):
+                    try:
+                        data = (
+                            json.loads(content) if isinstance(content, str) else content
+                        )
+                        if not isinstance(data, dict):
+                            continue
+                        if data.get("type") == EPISODE_TYPE_FUNCTION_CALL:
+                            # Check if this is a call FROM the function we're looking for
+                            if data.get("caller") == function_name:
+                                callee_info = (
+                                    data.get("callee"),
+                                    data.get("file_path"),
+                                    data.get("lineno"),
+                                )
+                                if callee_info not in seen:
+                                    seen.add(callee_info)
+                                    callees.append(
+                                        {
+                                            "callee": data.get("callee"),
+                                            "file_path": data.get("file_path"),
+                                            "lineno": data.get("lineno"),
+                                            "call_type": data.get("call_type", "function"),
+                                            "module": data.get("module"),
+                                        }
+                                    )
+                    except (json.JSONDecodeError, TypeError, AttributeError):
+                        continue
+
+            logger.info(f"Found {len(callees)} callees for function: {function_name}")
+            return callees[:limit]
+
+        except Exception as e:
+            logger.warning(f"Failed to find callees: {e}")
+            capture_exception(
+                e,
+                operation="find_callees",
+                group_id=self.group_id,
+                function_name=function_name,
+            )
+            return []
