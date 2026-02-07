@@ -399,9 +399,10 @@ class TestExitWithSecretstorageWarning:
 
             # Should NOT include activation instruction since activate script doesn't exist
             assert "Activate your virtual environment" not in message
-            # Verify no line contains "source" (the activation command hint)
-            # Using all() ensures we check every line, not just the message as a whole
-            assert all(line.find("source") == -1 for line in message.splitlines())
+            # Verify the "source /path/to/activate" command is not present
+            # Use indented prefix to avoid matching "source" inside words
+            # like "resources" in sys.executable path
+            assert "   source " not in message
             # Should still have the install instructions
             assert "Install secretstorage" in message
 
