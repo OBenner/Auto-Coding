@@ -280,6 +280,7 @@ describe('ProjectStore', () => {
     it('should update settings and return updated project', async () => {
       const { ProjectStore } = await import('../project-store');
       const store = new ProjectStore();
+      await waitForStoreInit();
 
       const project = store.addProject(TEST_PROJECT_PATH);
       const updated = store.updateProjectSettings(project.id, {
@@ -295,6 +296,7 @@ describe('ProjectStore', () => {
     it('should update updatedAt timestamp', async () => {
       const { ProjectStore } = await import('../project-store');
       const store = new ProjectStore();
+      await waitForStoreInit();
 
       const project = store.addProject(TEST_PROJECT_PATH);
       const originalUpdatedAt = project.updatedAt;
