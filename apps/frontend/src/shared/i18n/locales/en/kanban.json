@@ -1,0 +1,13 @@
+{
+  "filters": {
+    "searchPlaceholder": "Search tasks...",
+    "searchAriaLabel": "Search tasks by title or description",
+    "sortByLabel": "Sort by",
+    "sortModes": {
+      "manual": "Manual",
+      "priority": "Priority",
+      "created": "Created Date",
+      "updated": "Updated Date"
+    }
+  }
+}

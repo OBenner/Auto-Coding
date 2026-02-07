@@ -7,6 +7,7 @@
  *
  * Features:
  * - Search input for filtering tasks by title/description
+ * - Sort mode dropdown (manual, priority, created, updated)
  * - Real-time filter application
  * - Filter state persistence per project
  *
@@ -19,7 +20,15 @@ import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Search } from 'lucide-react';
 import { Input } from './ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from './ui/select';
 import { useKanbanSettingsStore } from '../stores/kanban-settings-store';
+import type { SortMode } from '../stores/kanban-settings-store';
 
 /**
  * Props for the KanbanFilters component
@@ -36,6 +45,7 @@ export function KanbanFilters({ projectId }: KanbanFiltersProps) {
   const filters = useKanbanSettingsStore((state) => state.filters);
   const initializePreferences = useKanbanSettingsStore((state) => state.initializePreferences);
   const setSearchQuery = useKanbanSettingsStore((state) => state.setSearchQuery);
+  const setSortBy = useKanbanSettingsStore((state) => state.setSortBy);
   const loadFilters = useKanbanSettingsStore((state) => state.loadFilters);
   const saveFilters = useKanbanSettingsStore((state) => state.saveFilters);
 
@@ -68,6 +78,16 @@ export function KanbanFilters({ projectId }: KanbanFiltersProps) {
     }
   };
 
+  // Handle sort mode change
+  const handleSortChange = (value: SortMode) => {
+    setSortBy(value);
+
+    // Save filters to localStorage immediately
+    if (projectId) {
+      saveFilters(projectId);
+    }
+  };
+
   return (
     <div className="flex items-center gap-3 px-6 py-3 border-b border-border/50">
       {/* Search input */}
@@ -81,6 +101,35 @@ export function KanbanFilters({ projectId }: KanbanFiltersProps) {
           className="pl-9 h-9"
           aria-label={t('filters.searchAriaLabel')}
         />
+      </div>
+
+      {/* Sort mode dropdown */}
+      <div className="flex items-center gap-2">
+        <span className="text-sm text-muted-foreground whitespace-nowrap">
+          {t('filters.sortByLabel')}:
+        </span>
+        <Select
+          value={filters?.sortBy ?? 'manual'}
+          onValueChange={handleSortChange}
+        >
+          <SelectTrigger className="w-[180px] h-9">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="manual">
+              {t('filters.sortModes.manual')}
+            </SelectItem>
+            <SelectItem value="priority">
+              {t('filters.sortModes.priority')}
+            </SelectItem>
+            <SelectItem value="created">
+              {t('filters.sortModes.created')}
+            </SelectItem>
+            <SelectItem value="updated">
+              {t('filters.sortModes.updated')}
+            </SelectItem>
+          </SelectContent>
+        </Select>
       </div>
     </div>
   );
