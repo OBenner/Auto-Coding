@@ -203,16 +203,7 @@ export function registerAnalyticsHandlers(): void {
       }
 
       try {
-        // Get summary data first
-        const summaryResult = await ipcMain.emit(
-          IPC_CHANNELS.PRODUCTIVITY_ANALYTICS_GET_SUMMARY,
-          null,
-          projectId,
-          options.filter?.start_date,
-          options.filter?.end_date
-        );
-
-        // Call Python backend to export
+        // Build Python command arguments
         const args = ['--export', '--format', options.format];
 
         if (options.output_path) {
@@ -227,13 +218,19 @@ export function registerAnalyticsHandlers(): void {
           args.push('--end-date', options.filter.end_date);
         }
 
+        // Call Python backend to export
         const result = await executePythonAnalytics(
           project.path,
           'productivity_analytics.py',
           args
         );
 
+        // Extract output path from Python result
         const outputPath = result.output_path || options.output_path;
+
+        if (!outputPath) {
+          throw new Error('No output path returned from export operation');
+        }
 
         return { success: true, data: outputPath };
       } catch (error) {

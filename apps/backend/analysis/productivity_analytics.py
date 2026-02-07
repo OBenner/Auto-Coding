@@ -631,3 +631,141 @@ def export_productivity_data(
                 )
     else:
         raise ValueError(f"Unsupported export format: {format}")
+
+
+# =============================================================================
+# CLI INTERFACE
+# =============================================================================
+
+
+def main() -> None:
+    """CLI entry point for productivity analytics."""
+    import argparse
+    import sys
+
+    parser = argparse.ArgumentParser(
+        description="Productivity Analytics Aggregator"
+    )
+    parser.add_argument(
+        "--get-summary",
+        action="store_true",
+        help="Get productivity summary",
+    )
+    parser.add_argument(
+        "--get-trends",
+        action="store_true",
+        help="Get productivity trends over time",
+    )
+    parser.add_argument(
+        "--export",
+        action="store_true",
+        help="Export productivity data to file",
+    )
+    parser.add_argument(
+        "--format",
+        choices=["json", "csv"],
+        default="json",
+        help="Export format (default: json)",
+    )
+    parser.add_argument(
+        "--output",
+        type=str,
+        help="Output file path (default: auto-generated in analytics dir)",
+    )
+    parser.add_argument(
+        "--start-date",
+        type=str,
+        help="Start date filter (ISO format)",
+    )
+    parser.add_argument(
+        "--end-date",
+        type=str,
+        help="End date filter (ISO format)",
+    )
+    parser.add_argument(
+        "--window-days",
+        type=int,
+        default=30,
+        help="Number of days to look back for trends (default: 30)",
+    )
+    parser.add_argument(
+        "--granularity",
+        choices=["daily", "weekly", "monthly"],
+        default="daily",
+        help="Time granularity for trends (default: daily)",
+    )
+
+    args = parser.parse_args()
+
+    # Determine project directory (current working directory)
+    project_dir = Path.cwd()
+
+    # Parse date filters
+    start_date = None
+    end_date = None
+    if args.start_date:
+        try:
+            start_date = datetime.fromisoformat(args.start_date)
+        except ValueError:
+            print(
+                f"Error: Invalid start date format: {args.start_date}",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
+    if args.end_date:
+        try:
+            end_date = datetime.fromisoformat(args.end_date)
+        except ValueError:
+            print(
+                f"Error: Invalid end date format: {args.end_date}",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
+    # Execute requested operation
+    if args.get_summary:
+        summary = aggregate_productivity_metrics(project_dir, start_date, end_date)
+        print(json.dumps(summary.to_dict(), indent=2))
+
+    elif args.get_trends:
+        trends = get_productivity_trends(
+            project_dir, args.window_days, args.granularity
+        )
+        print(json.dumps(trends, indent=2))
+
+    elif args.export:
+        # Get summary data
+        summary = aggregate_productivity_metrics(project_dir, start_date, end_date)
+
+        # Determine output path
+        if args.output:
+            output_path = Path(args.output)
+        else:
+            # Auto-generate path in analytics directory
+            analytics_dir = project_dir / ".auto-claude" / "analytics"
+            analytics_dir.mkdir(parents=True, exist_ok=True)
+
+            timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
+            filename = f"productivity_export_{timestamp}.{args.format}"
+            output_path = analytics_dir / filename
+
+        # Export data
+        export_productivity_data(summary, output_path, args.format)
+
+        # Return result as JSON
+        result = {
+            "success": True,
+            "output_path": str(output_path.resolve()),
+            "format": args.format,
+            "total_specs": summary.total_specs,
+        }
+        print(json.dumps(result, indent=2))
+
+    else:
+        parser.print_help()
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()
