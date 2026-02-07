@@ -12,10 +12,12 @@ from pathlib import Path
 
 from .categorizer import FileCategorizer
 from .deduplicator import ContentDeduplicator
+from .dependency_analyzer import DependencyAnalyzer
 from .graphiti_integration import fetch_graph_hints, is_graphiti_enabled
 from .keyword_extractor import KeywordExtractor
 from .models import FileMatch, TaskContext
 from .pattern_discovery import PatternDiscoverer
+from .prioritizer import FilePrioritizer
 from .search import CodeSearcher
 from .service_matcher import ServiceMatcher
 from .token_counter import TokenCounter
@@ -40,6 +42,10 @@ class ContextBuilder:
         self.keyword_extractor = KeywordExtractor()
         self.categorizer = FileCategorizer()
         self.pattern_discoverer = PatternDiscoverer(self.project_dir)
+
+        # Initialize prioritization components
+        self.prioritizer = FilePrioritizer(self.project_dir)
+        self.dependency_analyzer = DependencyAnalyzer(self.project_dir)
 
         # Initialize token budget manager components
         self.token_counter = TokenCounter()
@@ -110,6 +116,9 @@ class ContextBuilder:
             service_contexts[service_name] = self._get_service_context(
                 service_path, service_name, service_info
             )
+
+        # Prioritize matches using recency and dependency analysis
+        all_matches = self._prioritize_matches(all_matches)
 
         # Categorize matches
         files_to_modify, files_to_reference = self.categorizer.categorize_matches(
@@ -206,6 +215,9 @@ class ContextBuilder:
                 service_path, service_name, service_info
             )
 
+        # Prioritize matches using recency and dependency analysis
+        all_matches = self._prioritize_matches(all_matches)
+
         # Categorize matches
         files_to_modify, files_to_reference = self.categorizer.categorize_matches(
             all_matches, task
@@ -261,6 +273,44 @@ class ContextBuilder:
             "entry_point": service_info.get("entry_point"),
             "key_directories": service_info.get("key_directories", {}),
         }
+
+    def _prioritize_matches(self, matches: list[FileMatch]) -> list[FileMatch]:
+        """
+        Prioritize file matches using recency and dependency analysis.
+
+        Enhances relevance scores by:
+        1. Applying recency scoring (70% relevance, 30% recency)
+        2. Boosting scores for high-impact files (many dependents)
+
+        Args:
+            matches: List of FileMatch objects from search
+
+        Returns:
+            Prioritized list of FileMatch objects
+        """
+        if not matches:
+            return []
+
+        # Apply recency-based prioritization
+        prioritized = self.prioritizer.prioritize_matches(matches)
+
+        # Enhance with dependency impact scores
+        for match in prioritized:
+            try:
+                impact_score = self.dependency_analyzer.calculate_impact_score(
+                    match.path
+                )
+                # Boost relevance by 10% of impact score (0-1 range)
+                if impact_score > 0:
+                    match.relevance_score += impact_score * 0.1
+            except (FileNotFoundError, ValueError):
+                # File might not be Python or not analyzable - skip
+                continue
+
+        # Re-sort after applying dependency boost
+        prioritized.sort(key=lambda m: m.relevance_score, reverse=True)
+
+        return prioritized
 
     # Token Budget Manager Methods
 
