@@ -8,11 +8,16 @@ import pytest
 import fakeredis
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 from fastapi.testclient import TestClient
 from unittest.mock import patch
 
 # Import application components
 from core.database import Base, get_db
+
+# Import all models so Base.metadata knows about all tables
+from api.models.user import User  # noqa: F401
+from api.models.repository import GitRepository  # noqa: F401
 
 
 # Test database configuration (in-memory SQLite)
@@ -25,11 +30,13 @@ def test_db():
     Create a fresh test database for each test.
 
     Uses in-memory SQLite for fast, isolated tests.
+    StaticPool ensures all connections share the same in-memory database.
     """
-    # Create test engine
+    # Create test engine with StaticPool for shared in-memory DB
     engine = create_engine(
         TEST_DATABASE_URL,
-        connect_args={"check_same_thread": False}
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
     )
 
     # Create all tables
