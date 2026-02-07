@@ -29,6 +29,9 @@ export function TaskDetail({ taskId, onBack }: TaskDetailProps) {
   const [error, setError] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [connectionState, setConnectionState] = useState<ConnectionState>("disconnected");
+  const [currentPhase, setCurrentPhase] = useState<string>("idle");
+  const [currentSubtask, setCurrentSubtask] = useState<string>("");
+  const [phaseMessage, setPhaseMessage] = useState<string>("");
 
   // Use ref to track if component is mounted
   const isMountedRef = useRef(true);
@@ -76,6 +79,21 @@ export function TaskDetail({ taskId, onBack }: TaskDetailProps) {
         progress: newProgress,
       };
     });
+
+    // Update phase information
+    if (event.data.phase) {
+      setCurrentPhase(event.data.phase);
+    }
+
+    // Update current subtask
+    if (event.data.current_subtask !== undefined) {
+      setCurrentSubtask(event.data.current_subtask);
+    }
+
+    // Update phase message
+    if (event.data.message !== undefined) {
+      setPhaseMessage(event.data.message);
+    }
   }, [taskId]);
 
   /**
@@ -231,7 +249,43 @@ export function TaskDetail({ taskId, onBack }: TaskDetailProps) {
                     </Badge>
                   </div>
                 )}
+                {currentPhase !== "idle" && (
+                  <div>
+                    <p className="text-sm text-gray-600 mb-1">Phase</p>
+                    <Badge
+                      variant="outline"
+                      className={`text-sm capitalize ${
+                        currentPhase === 'complete'
+                          ? 'bg-green-50 text-green-700 border-green-200'
+                          : currentPhase === 'failed'
+                          ? 'bg-red-50 text-red-700 border-red-200'
+                          : 'bg-blue-50 text-blue-700 border-blue-200'
+                      }`}
+                    >
+                      {currentPhase.replace('_', ' ')}
+                    </Badge>
+                  </div>
+                )}
               </div>
+
+              {/* Current Phase Message and Subtask */}
+              {(phaseMessage || currentSubtask) && (
+                <>
+                  <div className="space-y-2">
+                    {phaseMessage && (
+                      <div className="text-sm text-gray-700">
+                        <span className="font-medium">{phaseMessage}</span>
+                      </div>
+                    )}
+                    {currentSubtask && (
+                      <div className="text-sm text-gray-600">
+                        Working on: <span className="font-medium text-blue-700">{currentSubtask}</span>
+                      </div>
+                    )}
+                  </div>
+                  <Separator />
+                </>
+              )}
 
               <Separator />
 
