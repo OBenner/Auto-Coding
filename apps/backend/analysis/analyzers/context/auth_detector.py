@@ -19,6 +19,10 @@ from typing import Any
 
 from ..base import BaseAnalyzer
 
+# Compiled regex patterns for performance
+_DEPENDENCY_PATTERN = re.compile(r"^([a-zA-Z0-9_-]+)", re.MULTILINE)
+_AUTH_DECORATOR_PATTERN = re.compile(r"@(\w*(?:require|auth|login)\w*)")
+
 
 class AuthDetector(BaseAnalyzer):
     """Detects authentication and authorization patterns."""
@@ -79,7 +83,7 @@ class AuthDetector(BaseAnalyzer):
 
         if self._exists("requirements.txt"):
             content = self._read_file("requirements.txt")
-            all_deps.update(re.findall(r"^([a-zA-Z0-9_-]+)", content, re.MULTILINE))
+            all_deps.update(_DEPENDENCY_PATTERN.findall(content))
 
         pkg = self._read_json("package.json")
         if pkg:
@@ -133,7 +137,7 @@ class AuthDetector(BaseAnalyzer):
                     or "@login_required" in content
                     or "@authenticate" in content
                 ):
-                    decorators = re.findall(r"@(\w*(?:require|auth|login)\w*)", content)
+                    decorators = _AUTH_DECORATOR_PATTERN.findall(content)
                     auth_decorators.update(decorators)
             except (OSError, UnicodeDecodeError):
                 continue

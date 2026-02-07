@@ -21,6 +21,9 @@ from typing import Any
 
 from ..base import BaseAnalyzer
 
+# Compiled regex pattern for performance
+_DEPENDENCY_PATTERN = re.compile(r"^([a-zA-Z0-9_-]+)", re.MULTILINE)
+
 
 class ServicesDetector(BaseAnalyzer):
     """Detects external service integrations."""
@@ -144,7 +147,7 @@ class ServicesDetector(BaseAnalyzer):
         # Python dependencies
         if self._exists("requirements.txt"):
             content = self._read_file("requirements.txt")
-            all_deps.update(re.findall(r"^([a-zA-Z0-9_-]+)", content, re.MULTILINE))
+            all_deps.update(_DEPENDENCY_PATTERN.findall(content))
 
         # Node.js dependencies
         pkg = self._read_json("package.json")

@@ -17,6 +17,11 @@ from typing import Any
 
 from ..base import BaseAnalyzer
 
+# Compiled regex pattern for performance
+_CELERY_TASK_PATTERN = re.compile(
+    r"@(?:celery\.task|shared_task|app\.task)\s*(?:\([^)]*\))?\s*def\s+(\w+)"
+)
+
 
 class JobsDetector(BaseAnalyzer):
     """Detects background job and task queue systems."""
@@ -54,8 +59,7 @@ class JobsDetector(BaseAnalyzer):
             try:
                 content = task_file.read_text(encoding="utf-8")
                 # Find @celery.task or @shared_task decorators
-                task_pattern = r"@(?:celery\.task|shared_task|app\.task)\s*(?:\([^)]*\))?\s*def\s+(\w+)"
-                task_matches = re.findall(task_pattern, content)
+                task_matches = _CELERY_TASK_PATTERN.findall(content)
 
                 for task_name in task_matches:
                     tasks.append(
