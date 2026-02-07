@@ -65,8 +65,7 @@ export function ProductivityDashboard({ projectId }: ProductivityDashboardProps)
       // Load summary analytics
       const summaryResult = await window.electronAPI.getProductivitySummary(
         projectId,
-        dateFilter.start_date,
-        dateFilter.end_date
+        dateFilter
       );
 
       if (summaryResult.success && summaryResult.data) {
@@ -81,11 +80,9 @@ export function ProductivityDashboard({ projectId }: ProductivityDashboardProps)
       }
 
       // Load trends data
-      const windowDays = timeRange === 'all' ? 365 : timeRange === '7d' ? 7 : timeRange === '30d' ? 30 : 90;
       const trendsResult = await window.electronAPI.getProductivityTrends(
         projectId,
-        windowDays,
-        'daily'
+        dateFilter
       );
 
       if (trendsResult.success && trendsResult.data) {

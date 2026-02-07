@@ -56,6 +56,12 @@ import type {
   MergeAnalyticsExportOptions
 } from './merge-analytics';
 import type {
+  ProductivitySummary,
+  ProductivityTrendPoint,
+  ProductivityAnalyticsFilter,
+  ProductivityAnalyticsExportOptions
+} from './productivity-analytics';
+import type {
   TerminalCreateOptions,
   TerminalSession,
   TerminalRestoreResult,
@@ -890,6 +896,11 @@ export interface ElectronAPI {
   disablePlugin: (pluginName: string) => Promise<IPCResult<{ success: boolean }>>;
   installPlugin: (source: { type: string; path?: string; marketplace_id?: string }) => Promise<IPCResult<{ success: boolean; plugin?: { name: string; version: string } }>>;
   uninstallPlugin: (pluginName: string) => Promise<IPCResult<{ success: boolean }>>;
+
+  // Productivity analytics operations
+  getProductivitySummary: (projectId: string, filter?: ProductivityAnalyticsFilter) => Promise<IPCResult<ProductivitySummary>>;
+  getProductivityTrends: (projectId: string, filter?: ProductivityAnalyticsFilter) => Promise<IPCResult<ProductivityTrendPoint[]>>;
+  exportProductivityAnalytics: (projectId: string, options: ProductivityAnalyticsExportOptions) => Promise<IPCResult<{ path: string }>>;
 
   // Queue Routing API (rate limit recovery)
   queue: import('../../preload/api/queue-api').QueueAPI;

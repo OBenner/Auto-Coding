@@ -402,7 +402,32 @@ const browserMockAPI: ElectronAPI = {
   enablePlugin: async () => ({ success: true, data: { success: true } }),
   disablePlugin: async () => ({ success: true, data: { success: true } }),
   installPlugin: async () => ({ success: true, data: { success: true } }),
-  uninstallPlugin: async () => ({ success: true, data: { success: true } })
+  uninstallPlugin: async () => ({ success: true, data: { success: true } }),
+
+  // Productivity analytics operations
+  getProductivitySummary: async () => ({
+    success: true,
+    data: {
+      period_start: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+      period_end: new Date().toISOString(),
+      total_specs: 0,
+      completed_specs: 0,
+      in_progress_specs: 0,
+      failed_specs: 0,
+      total_time_saved_hours: 0,
+      total_build_time_hours: 0,
+      average_success_rate: 0,
+      first_attempt_success_rate: 0,
+      specs_by_type: {},
+      specs_by_complexity: {},
+      average_subtasks_per_spec: 0,
+      average_qa_iterations: 0,
+      total_subtasks_completed: 0,
+      specs: []
+    }
+  }),
+  getProductivityTrends: async () => ({ success: true, data: [] }),
+  exportProductivityAnalytics: async () => ({ success: true, data: { path: '/mock/export/productivity' } })
 };
 
 /**
