@@ -24,11 +24,35 @@ export interface ColumnPreferences {
 export type KanbanColumnPreferences = Record<TaskStatusColumn, ColumnPreferences>;
 
 /**
+ * Sort mode for task ordering
+ */
+export type SortMode = 'manual' | 'priority' | 'created' | 'updated';
+
+/**
+ * Sort order direction
+ */
+export type SortOrder = 'asc' | 'desc';
+
+/**
+ * Filter state for kanban board
+ */
+export interface KanbanFilters {
+  /** Search query to filter tasks by title/description */
+  searchQuery: string;
+  /** Sort mode for task ordering */
+  sortBy: SortMode;
+  /** Sort order direction */
+  sortOrder: SortOrder;
+}
+
+/**
  * Kanban settings store state
  */
 interface KanbanSettingsState {
   /** Column preferences for each status column */
   columnPreferences: KanbanColumnPreferences | null;
+  /** Filter state for kanban board */
+  filters: KanbanFilters | null;
 
   // Actions
   /** Initialize column preferences (call on mount) */
@@ -101,6 +125,17 @@ function createDefaultPreferences(): KanbanColumnPreferences {
 }
 
 /**
+ * Create default filter state
+ */
+function createDefaultFilters(): KanbanFilters {
+  return {
+    searchQuery: '',
+    sortBy: 'manual',
+    sortOrder: 'asc'
+  };
+}
+
+/**
  * Validate column preferences structure
  * Returns true if valid, false if invalid/incomplete
  */
@@ -148,11 +183,22 @@ function clampWidth(width: number): number {
 
 export const useKanbanSettingsStore = create<KanbanSettingsState>((set, get) => ({
   columnPreferences: null,
+  filters: null,
 
   initializePreferences: () => {
     const state = get();
+    const updates: Partial<KanbanSettingsState> = {};
+
     if (!state.columnPreferences) {
-      set({ columnPreferences: createDefaultPreferences() });
+      updates.columnPreferences = createDefaultPreferences();
+    }
+
+    if (!state.filters) {
+      updates.filters = createDefaultFilters();
+    }
+
+    if (Object.keys(updates).length > 0) {
+      set(updates);
     }
   },
 
