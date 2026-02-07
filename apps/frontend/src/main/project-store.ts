@@ -261,7 +261,7 @@ export class ProjectStore {
    *
    * @returns Array of project IDs that were reset due to missing .auto-claude folder
    */
-  validateProjects(): string[] {
+  async validateProjects(): Promise<string[]> {
     const resetProjectIds: string[] = [];
     let hasChanges = false;
 
@@ -272,7 +272,7 @@ export class ProjectStore {
       }
 
       // Check if the project path still exists
-      if (!existsSync(project.path)) {
+      if (!await this.fileExists(project.path)) {
         console.warn(`[ProjectStore] Project path no longer exists: ${project.path}`);
         continue; // Don't reset - let user handle this case
       }
