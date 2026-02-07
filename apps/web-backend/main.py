@@ -77,13 +77,14 @@ app.add_middleware(
 
 # Import and register API routes
 from api.routes import users, auth, git, usage
-from api import websocket
+from api import websocket, test_routes
 
 app.include_router(users.router)
 app.include_router(auth.router)
 app.include_router(git.router)
 app.include_router(usage.router)
 app.include_router(websocket.router)
+app.include_router(test_routes.router)  # Test endpoints for E2E testing
 
 
 @app.get("/")
