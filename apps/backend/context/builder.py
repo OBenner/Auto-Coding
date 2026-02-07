@@ -74,6 +74,7 @@ class ContextBuilder:
         services: list[str] | None = None,
         keywords: list[str] | None = None,
         include_graph_hints: bool = True,
+        semantic_search: bool = False,
     ) -> TaskContext:
         """
         Build context for a specific task.
@@ -83,6 +84,7 @@ class ContextBuilder:
             services: List of service names to search (None = auto-detect)
             keywords: Additional keywords to search for
             include_graph_hints: Whether to include historical hints from Graphiti
+            semantic_search: Whether to use semantic search with embeddings
 
         Returns:
             TaskContext with relevant files and patterns
@@ -108,9 +110,16 @@ class ContextBuilder:
             if not service_path.is_absolute():
                 service_path = self.project_dir / service_path
 
-            # Search this service
+            # Search this service using keyword-based search
             matches = self.searcher.search_service(service_path, service_name, keywords)
             all_matches.extend(matches)
+
+            # If semantic search is enabled, also search using embeddings
+            if semantic_search:
+                semantic_matches = self.searcher.search_semantic(
+                    service_path, service_name, task
+                )
+                all_matches.extend(semantic_matches)
 
             # Load or generate service context
             service_contexts[service_name] = self._get_service_context(
@@ -169,6 +178,7 @@ class ContextBuilder:
         services: list[str] | None = None,
         keywords: list[str] | None = None,
         include_graph_hints: bool = True,
+        semantic_search: bool = False,
     ) -> TaskContext:
         """
         Build context for a specific task (async version).
@@ -181,6 +191,7 @@ class ContextBuilder:
             services: List of service names to search (None = auto-detect)
             keywords: Additional keywords to search for
             include_graph_hints: Whether to include historical hints from Graphiti
+            semantic_search: Whether to use semantic search with embeddings
 
         Returns:
             TaskContext with relevant files and patterns
@@ -206,9 +217,16 @@ class ContextBuilder:
             if not service_path.is_absolute():
                 service_path = self.project_dir / service_path
 
-            # Search this service
+            # Search this service using keyword-based search
             matches = self.searcher.search_service(service_path, service_name, keywords)
             all_matches.extend(matches)
+
+            # If semantic search is enabled, also search using embeddings
+            if semantic_search:
+                semantic_matches = self.searcher.search_semantic(
+                    service_path, service_name, task
+                )
+                all_matches.extend(semantic_matches)
 
             # Load or generate service context
             service_contexts[service_name] = self._get_service_context(
