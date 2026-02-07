@@ -530,6 +530,32 @@ class RecoveryManager:
 
         return hints
 
+    def record_outcome(
+        self, subtask_id: str, success: bool, error: str | None = None
+    ) -> None:
+        """
+        Record the outcome of the most recent attempt for a subtask.
+
+        Updates the last recorded attempt with the success/failure result.
+
+        Args:
+            subtask_id: ID of the subtask
+            success: Whether the attempt succeeded
+            error: Error message if failed
+        """
+        history = self._load_attempt_history()
+        subtask_data = history["subtasks"].get(subtask_id)
+
+        if subtask_data and subtask_data["attempts"]:
+            # Update the last attempt with the outcome
+            subtask_data["attempts"][-1]["success"] = success
+            if error:
+                subtask_data["attempts"][-1]["error"] = error
+
+            # Update subtask status
+            subtask_data["status"] = "completed" if success else "failed"
+            self._save_attempt_history(history)
+
     def clear_stuck_subtasks(self) -> None:
         """Clear all stuck subtasks (for manual resolution)."""
         history = self._load_attempt_history()

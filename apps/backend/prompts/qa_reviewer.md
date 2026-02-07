@@ -581,6 +581,8 @@ Create a fix request file:
 
 ```bash
 cat > QA_FIX_REQUEST.md << 'EOF'
+<!-- AUTO_GENERATED_BY_QA_AGENT -->
+
 # QA Fix Request
 
 **Status**: REJECTED
@@ -604,6 +606,21 @@ Once fixes are complete:
 1. Commit with message: "fix: [description] (qa-requested)"
 2. QA will automatically re-run
 3. Loop continues until approved
+
+---
+## USER INTERVENTION
+
+If you'd like to provide manual guidance to the fixer:
+1. Edit this file directly to modify or add issues
+2. Remove the `<!-- AUTO_GENERATED_BY_QA_AGENT -->` marker at the top
+3. Save your changes - the QA loop will detect your manual intervention
+4. The fixer will use your edited version instead of the original
+
+This allows you to:
+- Correct misidentified issues
+- Add missing context
+- Provide specific guidance for fixes
+- Override automated QA decisions
 
 EOF
 
