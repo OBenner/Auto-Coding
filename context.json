@@ -1,64 +1,50 @@
 {
-  "files_to_modify": {
+  "files_to_modify": {},
+  "files_to_create": {
     "frontend": [
-      "apps/frontend/src/main/project-store.ts",
-      "apps/frontend/src/main/ipc-handlers/agent-events-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/changelog-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/env-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/insights-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/linear-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/project-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/roadmap-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/terminal-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/context/memory-data-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/context/memory-status-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/context/project-context-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/github/import-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/github/investigation-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/github/issue-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/github/release-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/github/repository-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/gitlab/import-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/gitlab/investigation-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/gitlab/issue-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/gitlab/merge-request-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/gitlab/release-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/gitlab/repository-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/ideation/generation-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/ideation/idea-manager.ts",
-      "apps/frontend/src/main/ipc-handlers/ideation/session-manager.ts",
-      "apps/frontend/src/main/ipc-handlers/ideation/task-converter.ts",
-      "apps/frontend/src/main/ipc-handlers/task/archive-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/task/crud-handlers.ts",
-      "apps/frontend/src/main/agent/agent-process.ts"
+      "apps/frontend/src/renderer/components/ui/__tests__/button.test.tsx",
+      "apps/frontend/src/renderer/components/ui/__tests__/input.test.tsx",
+      "apps/frontend/src/renderer/components/ui/__tests__/dialog.test.tsx",
+      "apps/frontend/src/renderer/components/ui/__tests__/badge.test.tsx",
+      "apps/frontend/src/renderer/components/__tests__/TaskCard.test.tsx",
+      "apps/frontend/src/renderer/components/__tests__/AddProjectModal.test.tsx",
+      "apps/frontend/src/renderer/components/__tests__/AgentProfileSelector.test.tsx",
+      "apps/frontend/src/renderer/stores/__tests__/settings-store.test.ts",
+      "apps/frontend/src/renderer/stores/__tests__/auth-failure-store.test.ts",
+      "apps/frontend/src/renderer/hooks/__tests__/useIpc.test.ts",
+      "apps/frontend/src/renderer/hooks/__tests__/useResolvedAgentSettings.test.ts"
     ]
   },
   "files_to_reference": [
-    "apps/frontend/src/main/terminal-session-store.ts",
-    "apps/frontend/src/main/agent/agent-queue.ts",
-    "apps/frontend/src/main/ipc-handlers/gitlab/spec-utils.ts"
+    "apps/frontend/src/renderer/components/AuthStatusIndicator.test.tsx",
+    "apps/frontend/src/renderer/components/github-prs/components/__tests__/PRDetail.test.tsx",
+    "apps/frontend/src/__tests__/setup.ts"
   ],
   "patterns": {
-    "async_fs_pattern": "Use 'import { promises as fsPromises } from 'fs'' and await fsPromises.readFile/writeFile",
-    "ipc_pattern": "IPC handlers already use async/await, just need to add await before projectStore method calls",
-    "error_handling": "Use try-catch blocks around file operations, fallback to empty data on errors"
+    "test_file_pattern": "Use @vitest-environment jsdom directive, Testing Library render/screen, factory functions for test data",
+    "mock_pattern": "Mock Zustand stores with vi.mock(), mock i18n with react-i18next, mock window.electronAPI",
+    "assertion_pattern": "Use @testing-library/jest-dom matchers (toBeInTheDocument, toHaveAttribute, etc.)",
+    "naming_pattern": "Describe blocks for component name, nested describes for features, it() for specific behaviors"
   },
   "existing_implementations": {
-    "description": "TerminalSessionStore already implements async save pattern with write serialization to prevent concurrent writes",
+    "description": "Found 18 existing React test files with established patterns",
+    "test_coverage": "6% (18 tests / 295 components)",
     "relevant_files": [
-      "apps/frontend/src/main/terminal-session-store.ts",
-      "apps/frontend/src/main/agent/agent-queue.ts"
-    ]
+      "apps/frontend/src/renderer/components/AuthStatusIndicator.test.tsx",
+      "apps/frontend/src/renderer/components/ProfileBadge.test.tsx",
+      "apps/frontend/src/renderer/components/github-prs/components/__tests__/PRDetail.test.tsx"
+    ],
+    "test_infrastructure": {
+      "framework": "Vitest",
+      "library": "Testing Library (React)",
+      "setup_file": "apps/frontend/src/__tests__/setup.ts",
+      "mocks": ["electron", "localStorage", "scrollIntoView", "requestAnimationFrame"]
+    }
   },
-  "sync_operations_count": {
-    "readFileSync": 9,
-    "writeFileSync": 3,
-    "existsSync": 15,
-    "mkdirSync": 1,
-    "readdirSync": 2
-  },
-  "affected_handlers": {
-    "count": 28,
-    "pattern": "All handlers already use async/await, just need to add await before projectStore calls"
+  "component_categories": {
+    "ui_components": "20+ reusable UI components (button, input, dialog, etc.)",
+    "feature_components": "100+ feature-specific components (TaskCard, ProfileBadge, etc.)",
+    "stores": "10+ Zustand stores for state management",
+    "hooks": "8+ custom React hooks"
   }
 }
