@@ -90,11 +90,13 @@ app.add_middleware(
 
 # Import and register API routes
 from api.routes import users, auth, git, usage
+from api import websocket
 
 app.include_router(users.router)
 app.include_router(auth.router)
 app.include_router(git.router)
 app.include_router(usage.router)
+app.include_router(websocket.router)
 
 
 @app.get("/")
@@ -116,24 +118,6 @@ async def health_check():
         "service": "web-backend",
         "debug": DEBUG
     }
-
-
-# WebSocket endpoint placeholder
-@app.websocket("/ws")
-async def websocket_endpoint(websocket):
-    """
-    WebSocket endpoint for real-time communication
-    TODO: Implement WebSocket logic with heartbeat
-    """
-    await websocket.accept()
-    try:
-        while True:
-            data = await websocket.receive_text()
-            await websocket.send_text(f"Echo: {data}")
-    except Exception as e:
-        logger.error(f"WebSocket error: {e}")
-    finally:
-        await websocket.close()
 
 
 if __name__ == "__main__":
