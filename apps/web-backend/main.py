@@ -64,29 +64,16 @@ app = FastAPI(
 )
 
 # Configure CORS
+# WebSocket connections need special CORS handling
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=CORS_ORIGINS,
+    allow_origins=["*"],  # Allow all origins for WebSocket
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
-# Configure session middleware for OAuth state management
-app.add_middleware(
-    SessionMiddleware,
-    secret_key=SECRET_KEY or "dev-secret-key-change-in-production"
-)
-
-# Configure usage tracking middleware
-from core.middleware import UsageTrackingMiddleware
-
-app.add_middleware(
-    UsageTrackingMiddleware,
-    rate_limit_enabled=False,  # Disable rate limiting by default (can be enabled in production)
-    rate_limit_requests=1000,
-    rate_limit_period="hourly"
-)
 
 # Import and register API routes
 from api.routes import users, auth, git, usage
