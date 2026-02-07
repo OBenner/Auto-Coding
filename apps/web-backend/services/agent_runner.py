@@ -8,8 +8,17 @@ This service wraps the backend agent execution logic and provides async task man
 import asyncio
 import logging
 import sys
+from datetime import datetime
 from pathlib import Path
 from typing import Dict, Optional
+
+from api.models.agent_event import (
+    ExecutionEvent,
+    ExecutionProgressData,
+    LogEvent,
+    ErrorEvent,
+)
+from api.websocket import manager
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +51,95 @@ def _ensure_backend_in_path():
     backend_path = str(_get_backend_path())
     if backend_path not in sys.path:
         sys.path.insert(0, backend_path)
+
+
+async def _broadcast_execution_event(
+    spec_id: str,
+    phase: str,
+    phase_progress: float = 0.0,
+    overall_progress: float = 0.0,
+    message: Optional[str] = None,
+    current_subtask: Optional[str] = None,
+):
+    """
+    Broadcast an execution event to all subscribed clients.
+
+    Args:
+        spec_id: Spec ID
+        phase: Current execution phase
+        phase_progress: Progress within current phase (0-100)
+        overall_progress: Overall build progress (0-100)
+        message: Human-readable status message
+        current_subtask: Currently executing subtask ID
+    """
+    try:
+        event = ExecutionEvent(
+            timestamp=datetime.now().isoformat(),
+            spec_id=spec_id,
+            data=ExecutionProgressData(
+                phase=phase,
+                phase_progress=phase_progress,
+                overall_progress=overall_progress,
+                message=message,
+                current_subtask=current_subtask,
+            ),
+        )
+        await manager.broadcast_to_spec(spec_id, event)
+    except Exception as e:
+        logger.error(f"Failed to broadcast execution event: {e}")
+
+
+async def _broadcast_log_event(
+    spec_id: str,
+    log_line: str,
+    level: str = "info",
+):
+    """
+    Broadcast a log event to all subscribed clients.
+
+    Args:
+        spec_id: Spec ID
+        log_line: Log message
+        level: Log level (debug, info, warning, error)
+    """
+    try:
+        event = LogEvent(
+            timestamp=datetime.now().isoformat(),
+            spec_id=spec_id,
+            log_line=log_line,
+            level=level,
+        )
+        await manager.broadcast_to_spec(spec_id, event)
+    except Exception as e:
+        logger.error(f"Failed to broadcast log event: {e}")
+
+
+async def _broadcast_error_event(
+    spec_id: str,
+    error_message: str,
+    error_type: Optional[str] = None,
+    traceback: Optional[str] = None,
+):
+    """
+    Broadcast an error event to all subscribed clients.
+
+    Args:
+        spec_id: Spec ID
+        error_message: Error message
+        error_type: Error type/category
+        traceback: Error traceback if available
+    """
+    try:
+        event = ErrorEvent(
+            timestamp=datetime.now().isoformat(),
+            spec_id=spec_id,
+            error_message=error_message,
+            error_type=error_type,
+            traceback=traceback,
+        )
+        await manager.broadcast_to_spec(spec_id, event)
+    except Exception as e:
+        logger.error(f"Failed to broadcast error event: {e}")
 
 
 async def run_agent_async(
@@ -110,16 +208,49 @@ async def run_agent_async(
         f"model={model}"
     )
 
+    # Broadcast execution start event
+    await _broadcast_execution_event(
+        spec_id=spec_dir.name,
+        phase=agent_type,
+        phase_progress=0.0,
+        overall_progress=0.0,
+        message=f"Starting {agent_type} agent",
+    )
+
     try:
         # Execute agent based on type
         if agent_type == "planner":
             # Run planner agent
+            await _broadcast_log_event(
+                spec_id=spec_dir.name,
+                log_line=f"Starting planner agent execution",
+                level="info",
+            )
+
             success = await run_followup_planner(
                 project_dir=project_dir,
                 spec_dir=spec_dir,
                 model=model,
                 verbose=verbose,
             )
+
+            # Broadcast completion
+            if success:
+                await _broadcast_execution_event(
+                    spec_id=spec_dir.name,
+                    phase="planning",
+                    phase_progress=100.0,
+                    overall_progress=50.0,
+                    message="Planner execution completed successfully",
+                )
+            else:
+                await _broadcast_execution_event(
+                    spec_id=spec_dir.name,
+                    phase="failed",
+                    phase_progress=0.0,
+                    overall_progress=0.0,
+                    message="Planner execution failed",
+                )
 
             return {
                 "success": success,
@@ -129,6 +260,19 @@ async def run_agent_async(
             }
 
         elif agent_type in ["coder", "qa_reviewer", "qa_fixer"]:
+            # Broadcast start of execution
+            phase_map = {
+                "coder": "coding",
+                "qa_reviewer": "qa_review",
+                "qa_fixer": "qa_fixing",
+            }
+
+            await _broadcast_log_event(
+                spec_id=spec_dir.name,
+                log_line=f"Starting {agent_type} execution",
+                level="info",
+            )
+
             # Run main autonomous agent (handles coder + QA flow)
             await run_autonomous_agent(
                 project_dir=project_dir,
@@ -137,6 +281,15 @@ async def run_agent_async(
                 max_iterations=None,  # Unlimited iterations
                 verbose=verbose,
                 source_spec_dir=None,  # Not using worktree in web mode
+            )
+
+            # Broadcast completion
+            await _broadcast_execution_event(
+                spec_id=spec_dir.name,
+                phase=phase_map.get(agent_type, agent_type),
+                phase_progress=100.0,
+                overall_progress=100.0,
+                message=f"{agent_type} execution completed",
             )
 
             return {
@@ -151,6 +304,24 @@ async def run_agent_async(
 
     except Exception as e:
         logger.error(f"Agent execution failed: {e}", exc_info=True)
+
+        # Broadcast error event
+        await _broadcast_error_event(
+            spec_id=spec_dir.name,
+            error_message=str(e),
+            error_type=type(e).__name__,
+            traceback=None,  # Could include traceback if needed
+        )
+
+        # Broadcast execution failed state
+        await _broadcast_execution_event(
+            spec_id=spec_dir.name,
+            phase="failed",
+            phase_progress=0.0,
+            overall_progress=0.0,
+            message=f"{agent_type} execution failed: {e}",
+        )
+
         return {
             "success": False,
             "agent_type": agent_type,
