@@ -342,7 +342,7 @@ export class ProjectStore {
     // 1. Scan main project specs directory (source of truth for task existence)
     const mainSpecsDir = path.join(project.path, specsBaseDir);
     const mainSpecIds = new Set<string>();
-    if (existsSync(mainSpecsDir)) {
+    if (await this.fileExists(mainSpecsDir)) {
       const mainTasks = await this.loadTasksFromSpecsDir(mainSpecsDir, project.path, 'main', projectId, specsBaseDir);
       allTasks.push(...mainTasks);
       // Track which specs exist in main project
@@ -353,14 +353,14 @@ export class ProjectStore {
     // NOTE FOR MAINTAINERS: Worktree tasks are only included if the spec also exists in main.
     // This prevents deleted tasks from "coming back" when the worktree isn't cleaned up.
     const worktreesDir = getTaskWorktreeDir(project.path);
-    if (existsSync(worktreesDir)) {
+    if (await this.fileExists(worktreesDir)) {
       try {
         const worktrees = await fsPromises.readdir(worktreesDir, { withFileTypes: true });
         for (const worktree of worktrees) {
           if (!worktree.isDirectory()) continue;
 
           const worktreeSpecsDir = path.join(worktreesDir, worktree.name, specsBaseDir);
-          if (existsSync(worktreeSpecsDir)) {
+          if (await this.fileExists(worktreeSpecsDir)) {
             const worktreeTasks = await this.loadTasksFromSpecsDir(
               worktreeSpecsDir,
               path.join(worktreesDir, worktree.name),
