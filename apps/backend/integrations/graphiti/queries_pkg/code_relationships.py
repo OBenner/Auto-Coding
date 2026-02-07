@@ -663,3 +663,141 @@ class CodeRelationshipQueries:
                 class_name=class_name,
             )
             return [class_name]  # Return at least the original class
+
+    async def query_relationships(
+        self,
+        query: str,
+        limit: int = 20,
+        include_types: list[str] | None = None,
+    ) -> list[dict]:
+        """
+        Query code relationships using natural language.
+
+        This method enables queries like:
+        - "show me all components using UserProfile"
+        - "what calls the login function"
+        - "find inheritance relationships for BaseModel"
+
+        Args:
+            query: Natural language query describing the relationships to find
+            limit: Maximum number of results to return
+            include_types: Optional list of relationship types to include
+                          (e.g., ["function_call", "import", "inheritance"])
+
+        Returns:
+            List of relationship information with type, entities, file path, and metadata
+        """
+        try:
+            # Use Graphiti's semantic search to find relevant relationships
+            results = await self.client.graphiti.search(
+                query=query,
+                group_ids=[self.group_id],
+                num_results=limit * 2,  # Get more to filter
+            )
+
+            relationships = []
+            seen = set()  # Deduplicate results
+
+            for result in results:
+                content = getattr(result, "content", None) or getattr(
+                    result, "fact", None
+                )
+                if not content:
+                    continue
+
+                try:
+                    data = json.loads(content) if isinstance(content, str) else content
+                    if not isinstance(data, dict):
+                        continue
+
+                    relationship_type = data.get("type")
+
+                    # Filter by relationship type if specified
+                    if include_types and relationship_type not in include_types:
+                        continue
+
+                    # Process based on relationship type
+                    if relationship_type == EPISODE_TYPE_FUNCTION_CALL:
+                        key = (
+                            "call",
+                            data.get("caller"),
+                            data.get("callee"),
+                            data.get("file_path"),
+                        )
+                        if key not in seen:
+                            seen.add(key)
+                            relationships.append(
+                                {
+                                    "type": "function_call",
+                                    "caller": data.get("caller"),
+                                    "callee": data.get("callee"),
+                                    "file_path": data.get("file_path"),
+                                    "lineno": data.get("lineno"),
+                                    "call_type": data.get("call_type", "function"),
+                                    "module": data.get("module"),
+                                    "score": getattr(result, "score", 0.0),
+                                }
+                            )
+
+                    elif relationship_type == EPISODE_TYPE_IMPORT_DEPENDENCY:
+                        key = (
+                            "import",
+                            data.get("importing_file"),
+                            data.get("module"),
+                        )
+                        if key not in seen:
+                            seen.add(key)
+                            relationships.append(
+                                {
+                                    "type": "import",
+                                    "importing_file": data.get("importing_file"),
+                                    "module": data.get("module"),
+                                    "names": data.get("names", []),
+                                    "alias": data.get("alias"),
+                                    "lineno": data.get("lineno"),
+                                    "is_from_import": data.get("is_from_import", False),
+                                    "score": getattr(result, "score", 0.0),
+                                }
+                            )
+
+                    elif relationship_type == EPISODE_TYPE_CLASS_INHERITANCE:
+                        key = (
+                            "inheritance",
+                            data.get("child"),
+                            data.get("parent"),
+                            data.get("file_path"),
+                        )
+                        if key not in seen:
+                            seen.add(key)
+                            relationships.append(
+                                {
+                                    "type": "inheritance",
+                                    "child": data.get("child"),
+                                    "parent": data.get("parent"),
+                                    "file_path": data.get("file_path"),
+                                    "lineno": data.get("lineno"),
+                                    "parent_module": data.get("parent_module"),
+                                    "score": getattr(result, "score", 0.0),
+                                }
+                            )
+
+                except (json.JSONDecodeError, TypeError, AttributeError):
+                    continue
+
+            # Sort by relevance score (higher is better)
+            relationships.sort(key=lambda x: x.get("score", 0.0), reverse=True)
+
+            logger.info(
+                f"Found {len(relationships)} relationships for query: {query[:50]}..."
+            )
+            return relationships[:limit]
+
+        except Exception as e:
+            logger.warning(f"Failed to query relationships: {e}")
+            capture_exception(
+                e,
+                operation="query_relationships",
+                group_id=self.group_id,
+                query_summary=query[:100] if query else "",
+            )
+            return []

@@ -847,5 +847,245 @@ class TestInheritanceChains:
         assert children[0]["child"] == "ChildClass"
 
 
+class TestNaturalLanguageQuery:
+    """Test natural language query interface."""
+
+    @pytest.fixture
+    def mock_client(self):
+        """Create a mock GraphitiClient."""
+        client = Mock()
+        client.graphiti = Mock()
+        client.graphiti.search = AsyncMock(return_value=[])
+        return client
+
+    @pytest.fixture
+    def queries(self, mock_client):
+        """Create a CodeRelationshipQueries instance with mock client."""
+        return CodeRelationshipQueries(
+            client=mock_client, group_id="test_group", spec_context_id="test_spec"
+        )
+
+    @pytest.mark.asyncio
+    async def test_natural_language_query(self, queries, mock_client):
+        """Test querying relationships with natural language."""
+        # Mock search results with mixed relationship types
+        mock_result1 = Mock()
+        mock_result1.content = json.dumps(
+            {
+                "type": EPISODE_TYPE_FUNCTION_CALL,
+                "caller": "LoginComponent",
+                "callee": "authenticate",
+                "file_path": "src/login.py",
+                "lineno": 15,
+                "call_type": "function",
+                "module": "auth",
+            }
+        )
+        mock_result1.score = 0.9
+
+        mock_result2 = Mock()
+        mock_result2.content = json.dumps(
+            {
+                "type": EPISODE_TYPE_IMPORT_DEPENDENCY,
+                "importing_file": "src/login.py",
+                "module": "auth",
+                "names": ["authenticate"],
+                "alias": None,
+                "lineno": 1,
+                "is_from_import": True,
+            }
+        )
+        mock_result2.score = 0.85
+
+        mock_result3 = Mock()
+        mock_result3.content = json.dumps(
+            {
+                "type": EPISODE_TYPE_CLASS_INHERITANCE,
+                "child": "UserProfile",
+                "parent": "BaseModel",
+                "file_path": "src/models.py",
+                "lineno": 10,
+                "parent_module": "base",
+            }
+        )
+        mock_result3.score = 0.75
+
+        mock_client.graphiti.search.return_value = [
+            mock_result1,
+            mock_result2,
+            mock_result3,
+        ]
+
+        # Query with natural language
+        results = await queries.query_relationships(
+            "show me all components using authenticate"
+        )
+
+        # Should find all three relationship types
+        assert len(results) == 3
+        assert mock_client.graphiti.search.called
+
+        # Results should be sorted by score (highest first)
+        assert results[0]["score"] == 0.9
+        assert results[1]["score"] == 0.85
+        assert results[2]["score"] == 0.75
+
+        # Verify function call result
+        function_call = next(r for r in results if r["type"] == "function_call")
+        assert function_call["caller"] == "LoginComponent"
+        assert function_call["callee"] == "authenticate"
+        assert function_call["file_path"] == "src/login.py"
+        assert function_call["lineno"] == 15
+
+        # Verify import result
+        import_result = next(r for r in results if r["type"] == "import")
+        assert import_result["importing_file"] == "src/login.py"
+        assert import_result["module"] == "auth"
+        assert import_result["names"] == ["authenticate"]
+
+        # Verify inheritance result
+        inheritance = next(r for r in results if r["type"] == "inheritance")
+        assert inheritance["child"] == "UserProfile"
+        assert inheritance["parent"] == "BaseModel"
+        assert inheritance["parent_module"] == "base"
+
+    @pytest.mark.asyncio
+    async def test_natural_language_query_with_filter(self, queries, mock_client):
+        """Test querying relationships with type filter."""
+        # Mock search results with mixed types
+        mock_result1 = Mock()
+        mock_result1.content = json.dumps(
+            {
+                "type": EPISODE_TYPE_FUNCTION_CALL,
+                "caller": "main",
+                "callee": "helper",
+                "file_path": "test.py",
+                "lineno": 10,
+                "call_type": "function",
+                "module": None,
+            }
+        )
+        mock_result1.score = 0.9
+
+        mock_result2 = Mock()
+        mock_result2.content = json.dumps(
+            {
+                "type": EPISODE_TYPE_IMPORT_DEPENDENCY,
+                "importing_file": "test.py",
+                "module": "os",
+                "names": [],
+                "alias": None,
+                "lineno": 1,
+                "is_from_import": False,
+            }
+        )
+        mock_result2.score = 0.8
+
+        mock_client.graphiti.search.return_value = [mock_result1, mock_result2]
+
+        # Query with type filter for function calls only
+        results = await queries.query_relationships(
+            "what uses helper", include_types=[EPISODE_TYPE_FUNCTION_CALL]
+        )
+
+        # Should only include function calls
+        assert len(results) == 1
+        assert results[0]["type"] == "function_call"
+        assert results[0]["callee"] == "helper"
+
+    @pytest.mark.asyncio
+    async def test_natural_language_query_deduplication(self, queries, mock_client):
+        """Test that duplicate results are deduplicated."""
+        # Same relationship appearing twice with different scores
+        mock_result1 = Mock()
+        mock_result1.content = json.dumps(
+            {
+                "type": EPISODE_TYPE_FUNCTION_CALL,
+                "caller": "main",
+                "callee": "helper",
+                "file_path": "test.py",
+                "lineno": 10,
+                "call_type": "function",
+                "module": None,
+            }
+        )
+        mock_result1.score = 0.9
+
+        mock_result2 = Mock()
+        mock_result2.content = json.dumps(
+            {
+                "type": EPISODE_TYPE_FUNCTION_CALL,
+                "caller": "main",
+                "callee": "helper",
+                "file_path": "test.py",
+                "lineno": 10,
+                "call_type": "function",
+                "module": None,
+            }
+        )
+        mock_result2.score = 0.8
+
+        mock_client.graphiti.search.return_value = [mock_result1, mock_result2]
+
+        results = await queries.query_relationships("find calls to helper")
+
+        # Should only have one entry despite two results
+        assert len(results) == 1
+        assert results[0]["caller"] == "main"
+
+    @pytest.mark.asyncio
+    async def test_natural_language_query_empty_result(self, queries, mock_client):
+        """Test querying when no results exist."""
+        mock_client.graphiti.search.return_value = []
+
+        results = await queries.query_relationships("find nonexistent function")
+
+        assert len(results) == 0
+        assert mock_client.graphiti.search.called
+
+    @pytest.mark.asyncio
+    async def test_natural_language_query_error_handling(self, queries, mock_client):
+        """Test that errors are handled gracefully."""
+        mock_client.graphiti.search.side_effect = Exception("Search failed")
+
+        # Should return empty list on error, not raise
+        results = await queries.query_relationships("test query")
+
+        assert results == []
+
+    @pytest.mark.asyncio
+    async def test_natural_language_query_limit(self, queries, mock_client):
+        """Test that limit parameter works correctly."""
+        # Create 10 mock results
+        mock_results = []
+        for i in range(10):
+            mock_result = Mock()
+            mock_result.content = json.dumps(
+                {
+                    "type": EPISODE_TYPE_FUNCTION_CALL,
+                    "caller": f"caller{i}",
+                    "callee": "target",
+                    "file_path": "test.py",
+                    "lineno": i,
+                    "call_type": "function",
+                    "module": None,
+                }
+            )
+            mock_result.score = 0.9 - (i * 0.05)  # Descending scores
+            mock_results.append(mock_result)
+
+        mock_client.graphiti.search.return_value = mock_results
+
+        # Query with limit of 5
+        results = await queries.query_relationships("find calls to target", limit=5)
+
+        # Should only return 5 results
+        assert len(results) == 5
+
+        # Should be sorted by score (highest first)
+        assert results[0]["caller"] == "caller0"
+        assert results[4]["caller"] == "caller4"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
