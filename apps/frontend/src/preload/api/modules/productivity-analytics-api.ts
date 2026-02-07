@@ -34,15 +34,6 @@ export const createProductivityAnalyticsAPI = (): ProductivityAnalyticsAPI => ({
   },
 
   exportProductivityAnalytics: (projectId: string, options: ProductivityAnalyticsExportOptions): Promise<IPCResult<{ path: string }>> => {
-    return invokeIpc(IPC_CHANNELS.PRODUCTIVITY_ANALYTICS_EXPORT, projectId, options).then(result => {
-      // Transform the result to match the expected return type
-      if (result.success && result.data) {
-        return {
-          success: true,
-          data: { path: result.data as string }
-        };
-      }
-      return result as IPCResult<{ path: string }>;
-    });
+    return invokeIpc<IPCResult<{ path: string }>>(IPC_CHANNELS.PRODUCTIVITY_ANALYTICS_EXPORT, projectId, options);
   }
 });

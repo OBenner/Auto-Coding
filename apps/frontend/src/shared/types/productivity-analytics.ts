@@ -91,6 +91,8 @@ export interface ProductivityAnalyticsFilter {
   end_date?: string;  // ISO 8601 datetime string
   workflow_type?: string;
   complexity?: string;
+  window_days?: number;  // Number of days for trend analysis
+  granularity?: 'daily' | 'weekly' | 'monthly';  // Trend granularity
 }
 
 export interface ProductivityAnalyticsExportOptions {
