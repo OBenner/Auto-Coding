@@ -12,8 +12,7 @@ ZhipuAI supports models:
 - glm-4-plus: Enhanced model
 
 Environment Variables:
-    ZHIPUAI_API_KEY: ZhipuAI API key (primary)
-    ZAI_API_KEY: ZhipuAI API key (alternative)
+    ZHIPUAI_API_KEY: ZhipuAI API key
     ZHIPUAI_MODEL: Model identifier (default: glm-4.7)
 
 Provider Capabilities:
@@ -277,11 +276,11 @@ class ZhipuAIProvider(AIEngineProvider):
             ProviderNotInstalled: If zai-sdk package is not installed
         """
         # Get API key from config
-        api_key = self._config.zhipuai_api_key or self._config.zai_api_key
+        api_key = self._config.zhipuai_api_key
         if not api_key:
             raise ProviderConfigError(
                 "ZhipuAI provider requires an API key. "
-                "Set ZHIPUAI_API_KEY or ZAI_API_KEY environment variable."
+                "Set ZHIPUAI_API_KEY environment variable."
             )
 
         # Get model from session config or provider config
@@ -362,11 +361,11 @@ class ZhipuAIProvider(AIEngineProvider):
         """
         self._validation_errors = []
 
-        # Check for API key (support both env var names)
-        api_key = self._config.zhipuai_api_key or self._config.zai_api_key
+        # Check for API key
+        api_key = self._config.zhipuai_api_key
         if not api_key:
             self._validation_errors.append(
-                "ZhipuAI provider requires ZHIPUAI_API_KEY or ZAI_API_KEY environment variable"
+                "ZhipuAI provider requires ZHIPUAI_API_KEY environment variable"
             )
 
         # Check for model
