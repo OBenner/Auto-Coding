@@ -97,6 +97,8 @@ interface DroppableColumnProps {
   onToggleLocked?: () => void;
   // Loading state
   isLoading?: boolean;
+  // Drag disabled when auto-sort is active
+  isDragDisabled?: boolean;
 }
 
 /**
@@ -140,7 +142,8 @@ function droppableColumnPropsAreEqual(
     isCollapsed: prevProps.isCollapsed,
     columnWidth: prevProps.columnWidth,
     isResizing: prevProps.isResizing,
-    isLocked: prevProps.isLocked
+    isLocked: prevProps.isLocked,
+    isDragDisabled: prevProps.isDragDisabled
   };
 
   const nextSimpleProps = {
@@ -152,7 +155,8 @@ function droppableColumnPropsAreEqual(
     isCollapsed: nextProps.isCollapsed,
     columnWidth: nextProps.columnWidth,
     isResizing: nextProps.isResizing,
-    isLocked: nextProps.isLocked
+    isLocked: nextProps.isLocked,
+    isDragDisabled: nextProps.isDragDisabled
   };
 
   if (!shallowEqual(simpleProps, nextSimpleProps)) return false;
@@ -243,7 +247,7 @@ const getEmptyStateContent = (status: TaskStatus, t: (key: string) => string): {
   }
 };
 
-const DroppableColumn = memo(function DroppableColumn({ status, tasks, onTaskClick, onStatusChange, isOver, onAddClick, onArchiveAll, onQueueSettings, onQueueAll, maxParallelTasks, archivedCount, showArchived, onToggleArchived, selectedTaskIds, onSelectAll, onDeselectAll, onToggleSelect, isCollapsed, onToggleCollapsed, columnWidth, isResizing, onResizeStart, onResizeEnd, isLocked, onToggleLocked, isLoading }: DroppableColumnProps) {
+const DroppableColumn = memo(function DroppableColumn({ status, tasks, onTaskClick, onStatusChange, isOver, onAddClick, onArchiveAll, onQueueSettings, onQueueAll, maxParallelTasks, archivedCount, showArchived, onToggleArchived, selectedTaskIds, onSelectAll, onDeselectAll, onToggleSelect, isCollapsed, onToggleCollapsed, columnWidth, isResizing, onResizeStart, onResizeEnd, isLocked, onToggleLocked, isLoading, isDragDisabled }: DroppableColumnProps) {
   const { t } = useTranslation(['tasks', 'common']);
   const { setNodeRef } = useDroppable({
     id: status
@@ -323,9 +327,10 @@ const DroppableColumn = memo(function DroppableColumn({ status, tasks, onTaskCli
         isSelectable={isSelectable}
         isSelected={isSelectable ? selectedTaskIds?.has(task.id) : undefined}
         onToggleSelect={onToggleSelectHandlers.current?.get(task.id)}
+        isDragDisabled={isDragDisabled}
       />
     ));
-  }, [tasks, selectedTaskIds]);
+  }, [tasks, selectedTaskIds, isDragDisabled]);
 
   const getColumnBorderColor = (): string => {
     switch (status) {
@@ -759,6 +764,12 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
 
   // Get task order from store for custom ordering
   const taskOrder = useTaskStore((state) => state.taskOrder);
+
+  // Check if auto-sort is active (drag-and-drop should be disabled)
+  const isAutoSortActive = useMemo(() => {
+    const sortBy = filters?.sortBy ?? 'manual';
+    return sortBy !== 'manual';
+  }, [filters?.sortBy]);
 
   const tasksByStatus = useMemo(() => {
     // Apply search filter (case-insensitive)
@@ -1538,6 +1549,7 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
               isLocked={columnPreferences?.[status]?.isLocked}
               onToggleLocked={() => handleToggleColumnLocked(status)}
               isLoading={isRefreshing}
+              isDragDisabled={isAutoSortActive}
             />
           ))}
         </div>
