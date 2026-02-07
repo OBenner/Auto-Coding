@@ -1135,6 +1135,13 @@ body {
   outline-offset: 2px;
 }
 
+/* Kanban ScrollArea fix: Radix UI wraps content in display:table which
+   prevents cards from shrinking to column width during auto-resize */
+.kanban-column-scroll [data-radix-scroll-area-viewport] > div {
+  display: block !important;
+  min-width: 0 !important;
+}
+
 /* Column status colors for Kanban */
 .column-backlog {
   border-top-color: var(--muted-foreground);

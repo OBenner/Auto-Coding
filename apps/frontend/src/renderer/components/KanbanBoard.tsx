@@ -401,13 +401,12 @@ const DroppableColumn = memo(function DroppableColumn({ status, tasks, onTaskCli
   return (
     <div
       className="relative flex"
-      style={columnWidth ? { width: columnWidth, minWidth: MIN_COLUMN_WIDTH, maxWidth: MAX_COLUMN_WIDTH, flexShrink: 0 } : undefined}
+      style={{ flex: '1 1 0%', minWidth: MIN_COLUMN_WIDTH, maxWidth: MAX_COLUMN_WIDTH }}
     >
       <div
         ref={setNodeRef}
         className={cn(
-          'flex flex-1 flex-col rounded-xl border border-white/5 bg-linear-to-b from-secondary/30 to-transparent backdrop-blur-sm transition-all duration-200',
-          !columnWidth && 'min-w-80 max-w-[30rem]',
+          'flex flex-1 flex-col min-w-0 rounded-xl border border-white/5 bg-linear-to-b from-secondary/30 to-transparent backdrop-blur-sm transition-all duration-200',
           getColumnBorderColor(),
           'border-t-2',
           isOver && 'drop-zone-highlight'
@@ -577,8 +576,8 @@ const DroppableColumn = memo(function DroppableColumn({ status, tasks, onTaskCli
       </div>
 
       {/* Task list */}
-      <div className="flex-1 min-h-0">
-        <ScrollArea className="h-full px-3 pb-3 pt-2">
+      <div className="flex-1 min-h-0 min-w-0 overflow-hidden">
+        <ScrollArea className="h-full px-3 pb-3 pt-2 kanban-column-scroll">
           <SortableContext
             items={taskIds}
             strategy={verticalListSortingStrategy}
