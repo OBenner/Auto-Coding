@@ -77,6 +77,7 @@ async def run_autonomous_agent(
     max_iterations: int | None = None,
     verbose: bool = False,
     source_spec_dir: Path | None = None,
+    restart_from: str | None = None,
 ) -> None:
     """
     Run the autonomous agent loop with automatic memory management.
@@ -91,6 +92,7 @@ async def run_autonomous_agent(
         max_iterations: Maximum number of iterations (None for unlimited)
         verbose: Whether to show detailed output
         source_spec_dir: Original spec directory in main project (for syncing from worktree)
+        restart_from: Subtask ID to restart from (None for normal execution)
     """
     # Set environment variable for security hooks to find the correct project directory
     # This is needed because os.getcwd() may return the wrong directory in worktree mode
@@ -132,6 +134,31 @@ async def run_autonomous_agent(
 
     # Check if this is a fresh start or continuation
     first_run = is_first_run(spec_dir)
+
+    # Restore provider config if restarting
+    if restart_from:
+        try:
+            from implementation_plan import ImplementationPlan
+            from core.providers.config import get_provider_config
+
+            plan_file = spec_dir / "implementation_plan.json"
+            if plan_file.exists():
+                plan = ImplementationPlan.load(plan_file)
+                if plan.provider_config:
+                    # Restore provider and model from saved config
+                    provider_config = get_provider_config()
+                    saved_provider = plan.provider_config.get("provider")
+                    saved_model = plan.provider_config.get("model")
+
+                    if saved_provider:
+                        os.environ["AI_ENGINE_PROVIDER"] = saved_provider
+                        logger.info(f"Restored provider from config: {saved_provider}")
+                    if saved_model and provider_config:
+                        # Use the saved model
+                        provider_config.model = saved_model
+                        logger.info(f"Restored model from config: {saved_model}")
+        except Exception as e:
+            logger.warning(f"Failed to restore provider config: {e}")
 
     # Track which phase we're in for logging
     current_log_phase = LogPhase.CODING
@@ -219,6 +246,10 @@ async def run_autonomous_agent(
     while True:
         iteration += 1
 
+        # Clear restart_from after first iteration to continue normally
+        if iteration > 1 and restart_from:
+            restart_from = None
+
         # Check for human intervention (PAUSE file)
         pause_file = spec_dir / HUMAN_INTERVENTION_FILE
         if pause_file.exists():
@@ -243,7 +274,7 @@ async def run_autonomous_agent(
             break
 
         # Get the next subtask to work on (planner sessions shouldn't bind to a subtask)
-        next_subtask = None if first_run else get_next_subtask(spec_dir)
+        next_subtask = None if first_run else get_next_subtask(spec_dir, restart_from)
         subtask_id = next_subtask.get("id") if next_subtask else None
         phase_name = next_subtask.get("phase_name") if next_subtask else None
 
@@ -351,7 +382,7 @@ async def run_autonomous_agent(
                     for retry_attempt in range(3):
                         delay = (retry_attempt + 1) * 2  # 2s, 4s, 6s
                         await asyncio.sleep(delay)
-                        next_subtask = get_next_subtask(spec_dir)
+                        next_subtask = get_next_subtask(spec_dir, restart_from)
                         if next_subtask:
                             # Update subtask_id and phase_name after successful retry
                             subtask_id = next_subtask.get("id")
@@ -575,7 +606,7 @@ async def run_autonomous_agent(
             )
 
             # Show next subtask info
-            next_subtask = get_next_subtask(spec_dir)
+            next_subtask = get_next_subtask(spec_dir, restart_from)
             if next_subtask:
                 subtask_id = next_subtask.get("id")
                 print(

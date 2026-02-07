@@ -259,6 +259,7 @@ def handle_build_command(
                 max_iterations=max_iterations,
                 verbose=verbose,
                 source_spec_dir=source_spec_dir,  # For syncing progress back to main project
+                restart_from=restart_from,  # Restart from specific subtask if specified
             )
         )
         debug_success("run.py", "Agent execution completed")
