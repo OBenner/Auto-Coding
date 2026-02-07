@@ -8,6 +8,8 @@
       "priority": "Priorité",
       "created": "Date de création",
       "updated": "Date de modification"
-    }
+    },
+    "clearFilters": "Effacer les filtres",
+    "clearFiltersAriaLabel": "Effacer tous les filtres actifs"
   }
 }

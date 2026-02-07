@@ -16,10 +16,11 @@
  * <KanbanFilters projectId={projectId} />
  * ```
  */
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Search } from 'lucide-react';
+import { Search, X } from 'lucide-react';
 import { Input } from './ui/input';
+import { Button } from './ui/button';
 import {
   Select,
   SelectContent,
@@ -48,6 +49,7 @@ export function KanbanFilters({ projectId }: KanbanFiltersProps) {
   const setSortBy = useKanbanSettingsStore((state) => state.setSortBy);
   const loadFilters = useKanbanSettingsStore((state) => state.loadFilters);
   const saveFilters = useKanbanSettingsStore((state) => state.saveFilters);
+  const resetFilters = useKanbanSettingsStore((state) => state.resetFilters);
 
   // Initialize filters on mount
   useEffect(() => {
@@ -86,6 +88,29 @@ export function KanbanFilters({ projectId }: KanbanFiltersProps) {
     if (projectId) {
       saveFilters(projectId);
     }
+  };
+
+  // Calculate active filter count
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    if (filters?.searchQuery && filters.searchQuery.trim() !== '') {
+      count++;
+    }
+    if (filters?.sortBy && filters.sortBy !== 'manual') {
+      count++;
+    }
+    return count;
+  }, [filters?.searchQuery, filters?.sortBy]);
+
+  // Handle clear filters
+  const handleClearFilters = () => {
+    if (!projectId) return;
+
+    // Reset filters to defaults
+    resetFilters(projectId);
+
+    // Save the cleared state to localStorage
+    saveFilters(projectId);
   };
 
   return (
@@ -131,6 +156,23 @@ export function KanbanFilters({ projectId }: KanbanFiltersProps) {
           </SelectContent>
         </Select>
       </div>
+
+      {/* Clear Filters button with active filter count badge */}
+      {activeFilterCount > 0 && (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={handleClearFilters}
+          className="h-9 gap-2"
+          aria-label={t('filters.clearFiltersAriaLabel')}
+        >
+          <X className="h-4 w-4" />
+          <span>{t('filters.clearFilters')}</span>
+          <span className="inline-flex items-center justify-center h-5 min-w-5 px-1.5 text-xs font-medium rounded-full bg-primary/10 text-primary">
+            {activeFilterCount}
+          </span>
+        </Button>
+      )}
     </div>
   );
 }
