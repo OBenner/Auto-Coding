@@ -268,3 +268,222 @@ class ImpactAnalyzer:
         normalized_score = min(total_score * 10, 100.0)
 
         return round(normalized_score, 2)
+
+    async def calculate_coupling_score(
+        self,
+        entity_name: str,
+        entity_type: str = "function",
+    ) -> dict:
+        """
+        Calculate relationship strength score to identify tight vs loose coupling.
+
+        Analyzes various coupling indicators:
+        - Same-file relationships (tight coupling)
+        - Number of references/calls (frequency)
+        - Bidirectional dependencies (circular coupling)
+        - Cross-module boundaries (loose coupling)
+
+        Args:
+            entity_name: Name of the entity to analyze
+            entity_type: Type of entity (function, class)
+
+        Returns:
+            Dictionary with:
+                - coupling_score: Numeric score (0-100, higher = tighter coupling)
+                - relationship_strength: Classification (tight, moderate, loose)
+                - tight_coupling_indicators: Dict of specific coupling patterns
+                - relationships: List of all relationships analyzed
+        """
+        try:
+            relationships = []
+            indicators = {
+                "same_file_callers": 0,
+                "cross_file_callers": 0,
+                "bidirectional_dependencies": 0,
+                "total_references": 0,
+            }
+
+            # Get the entity's file path from first caller/callee
+            entity_file_path = None
+
+            # Find all entities that call this one
+            if entity_type == "function":
+                callers = await self.client.code_relationships.find_callers(
+                    function_name=entity_name
+                )
+
+                # Also find what this entity calls
+                callees = await self.client.code_relationships.find_callees(
+                    function_name=entity_name
+                )
+
+                # Extract entity's own file from callees
+                # (callees have caller=entity_name, so file_path is where entity lives)
+                for callee in callees:
+                    if callee.get("caller") == entity_name:
+                        entity_file_path = callee.get("file_path")
+                        break
+
+                # Build relationships list from callers
+                for caller in callers:
+                    caller_name = caller.get("caller")
+                    file_path = caller.get("file_path", "")
+
+                    relationships.append(
+                        {
+                            "type": "incoming_call",
+                            "entity": caller_name,
+                            "file_path": file_path,
+                            "lineno": caller.get("lineno", 0),
+                        }
+                    )
+
+                    indicators["total_references"] += 1
+
+                # Analyze coupling indicators
+                for rel in relationships:
+                    rel_file = rel.get("file_path", "")
+
+                    # Check for same-file relationships
+                    if entity_file_path and rel_file:
+                        if rel_file == entity_file_path:
+                            indicators["same_file_callers"] += 1
+                        else:
+                            indicators["cross_file_callers"] += 1
+                    elif rel_file:
+                        indicators["cross_file_callers"] += 1
+
+                # If no entity_file_path was found, use heuristic from relationships
+                if not entity_file_path and relationships:
+                    # Count relationships by file to detect same-file clustering
+                    file_counts = {}
+                    for rel in relationships:
+                        f = rel.get("file_path", "unknown")
+                        file_counts[f] = file_counts.get(f, 0) + 1
+
+                    # If multiple callers are in the same file, that indicates same-file coupling
+                    for file_path, count in file_counts.items():
+                        if count >= 2:
+                            indicators["same_file_callers"] += count
+
+                # Detect bidirectional dependencies
+                # Check if any callers are also callees
+                caller_names = {caller.get("caller") for caller in callers}
+                callee_names = {callee.get("callee") for callee in callees}
+                bidirectional = caller_names.intersection(callee_names)
+                indicators["bidirectional_dependencies"] = len(bidirectional)
+
+            elif entity_type == "class":
+                # For classes, check parent/child relationships
+                parents = await self.client.code_relationships.find_parent_classes(
+                    class_name=entity_name
+                )
+                children = await self.client.code_relationships.find_child_classes(
+                    class_name=entity_name
+                )
+
+                for parent in parents:
+                    relationships.append(
+                        {
+                            "type": "inherits_from",
+                            "entity": parent.get("parent"),
+                            "file_path": parent.get("file_path", ""),
+                        }
+                    )
+
+                for child in children:
+                    relationships.append(
+                        {
+                            "type": "inherited_by",
+                            "entity": child.get("child"),
+                            "file_path": child.get("file_path", ""),
+                        }
+                    )
+
+                indicators["total_references"] = len(parents) + len(children)
+
+            # Calculate coupling score based on indicators
+            coupling_score = self._calculate_coupling_score_from_indicators(
+                indicators
+            )
+
+            # Classify relationship strength
+            if coupling_score >= 60:
+                strength = "tight"
+            elif coupling_score >= 30:
+                strength = "moderate"
+            else:
+                strength = "loose"
+
+            logger.debug(
+                f"Coupling analysis for {entity_name}: "
+                f"score={coupling_score}, strength={strength}, "
+                f"indicators={indicators}"
+            )
+
+            return {
+                "coupling_score": coupling_score,
+                "relationship_strength": strength,
+                "tight_coupling_indicators": indicators,
+                "relationships": relationships,
+            }
+
+        except Exception as e:
+            logger.warning(
+                f"Failed to calculate coupling score for {entity_name}: {e}"
+            )
+            capture_exception(
+                e,
+                operation="calculate_coupling_score",
+                group_id=self.group_id,
+                spec_id=self.spec_context_id,
+                entity_name=entity_name,
+            )
+            return {
+                "coupling_score": 0,
+                "relationship_strength": "unknown",
+                "tight_coupling_indicators": {},
+                "relationships": [],
+            }
+
+    def _calculate_coupling_score_from_indicators(
+        self,
+        indicators: dict,
+    ) -> float:
+        """
+        Calculate coupling score from relationship indicators.
+
+        Args:
+            indicators: Dict with coupling indicators
+
+        Returns:
+            Coupling score (0-100, higher = tighter coupling)
+        """
+        score = 0.0
+
+        # Same-file relationships indicate tight coupling
+        # Weight: 20 points per same-file caller (capped at 60)
+        same_file = indicators.get("same_file_callers", 0)
+        score += min(same_file * 20, 60)
+
+        # Bidirectional dependencies are a strong indicator of tight coupling
+        # Weight: 35 points per bidirectional dependency (capped at 70)
+        bidirectional = indicators.get("bidirectional_dependencies", 0)
+        score += min(bidirectional * 35, 70)
+
+        # Combination bonus: same-file + bidirectional = very tight coupling
+        # Add extra 20 points if both indicators present
+        if same_file > 0 and bidirectional > 0:
+            score += 20
+
+        # Total number of references (frequency of use)
+        # Weight: 5 points per reference (capped at 25)
+        total_refs = indicators.get("total_references", 0)
+        score += min(total_refs * 5, 25)
+
+        # Cross-file callers reduce coupling (loose coupling)
+        # But we don't subtract, we just don't add as much
+        # Already handled by not counting them heavily
+
+        # Cap at 100
+        return min(score, 100.0)

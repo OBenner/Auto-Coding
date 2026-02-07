@@ -196,3 +196,230 @@ async def test_calculate_impact_error_handling(mock_client):
         assert impact is not None
         assert len(impact["affected_entities"]) == 0
         assert impact["impact_score"] == 0
+
+
+@pytest.mark.asyncio
+async def test_coupling_scores(mock_client):
+    """Test calculating relationship strength scores for coupling analysis."""
+    mock_code_relationships = AsyncMock()
+
+    # Mock function call data with various coupling patterns
+    async def mock_find_callers(function_name):
+        if function_name == "utils_function":
+            # Multiple callers in same file - tight coupling
+            return [
+                {
+                    "caller": "helper_a",
+                    "callee": "utils_function",
+                    "file_path": "utils.py",
+                    "lineno": 10,
+                    "call_type": "function",
+                },
+                {
+                    "caller": "helper_b",
+                    "callee": "utils_function",
+                    "file_path": "utils.py",
+                    "lineno": 20,
+                    "call_type": "function",
+                },
+                # Cross-file caller - looser coupling
+                {
+                    "caller": "external_func",
+                    "callee": "utils_function",
+                    "file_path": "external.py",
+                    "lineno": 5,
+                    "call_type": "function",
+                },
+            ]
+        return []
+
+    async def mock_find_callees(function_name):
+        # Check for bidirectional dependencies
+        if function_name == "helper_a":
+            return [
+                {
+                    "caller": "helper_a",
+                    "callee": "helper_b",
+                    "file_path": "utils.py",
+                    "lineno": 12,
+                    "call_type": "function",
+                }
+            ]
+        elif function_name == "helper_b":
+            return [
+                {
+                    "caller": "helper_b",
+                    "callee": "helper_a",
+                    "file_path": "utils.py",
+                    "lineno": 22,
+                    "call_type": "function",
+                }
+            ]
+        return []
+
+    mock_code_relationships.find_callers = mock_find_callers
+    mock_code_relationships.find_callees = mock_find_callees
+    mock_client.code_relationships = mock_code_relationships
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        impact_analyzer = ImpactAnalyzer(
+            client=mock_client,
+            group_id="test-group",
+            spec_context_id="test-spec",
+            project_dir=Path(tmpdir),
+        )
+
+        # Calculate coupling score for utils_function
+        coupling_result = await impact_analyzer.calculate_coupling_score(
+            entity_name="utils_function",
+            entity_type="function",
+        )
+
+        # Verify result structure
+        assert coupling_result is not None
+        assert "coupling_score" in coupling_result
+        assert "relationship_strength" in coupling_result
+        assert "tight_coupling_indicators" in coupling_result
+        assert "relationships" in coupling_result
+
+        # Verify coupling score is calculated (0-100 scale)
+        assert isinstance(coupling_result["coupling_score"], (int, float))
+        assert 0 <= coupling_result["coupling_score"] <= 100
+
+        # Verify relationship strength classification
+        assert coupling_result["relationship_strength"] in [
+            "tight",
+            "moderate",
+            "loose",
+        ]
+
+        # Verify tight coupling indicators are detected
+        indicators = coupling_result["tight_coupling_indicators"]
+        assert isinstance(indicators, dict)
+
+        # Should detect same-file relationships
+        assert "same_file_callers" in indicators
+        assert indicators["same_file_callers"] >= 2  # helper_a and helper_b
+
+        # Verify relationships list
+        assert isinstance(coupling_result["relationships"], list)
+        assert len(coupling_result["relationships"]) >= 3
+
+
+@pytest.mark.asyncio
+async def test_coupling_scores_bidirectional(mock_client):
+    """Test detection of bidirectional dependencies (circular coupling)."""
+    mock_code_relationships = AsyncMock()
+
+    async def mock_find_callers(function_name):
+        if function_name == "func_a":
+            return [
+                {
+                    "caller": "func_b",
+                    "callee": "func_a",
+                    "file_path": "module.py",
+                    "lineno": 20,
+                    "call_type": "function",
+                }
+            ]
+        elif function_name == "func_b":
+            return [
+                {
+                    "caller": "func_a",
+                    "callee": "func_b",
+                    "file_path": "module.py",
+                    "lineno": 10,
+                    "call_type": "function",
+                }
+            ]
+        return []
+
+    async def mock_find_callees(function_name):
+        if function_name == "func_a":
+            return [
+                {
+                    "caller": "func_a",
+                    "callee": "func_b",
+                    "file_path": "module.py",
+                    "lineno": 10,
+                    "call_type": "function",
+                }
+            ]
+        elif function_name == "func_b":
+            return [
+                {
+                    "caller": "func_b",
+                    "callee": "func_a",
+                    "file_path": "module.py",
+                    "lineno": 20,
+                    "call_type": "function",
+                }
+            ]
+        return []
+
+    mock_code_relationships.find_callers = mock_find_callers
+    mock_code_relationships.find_callees = mock_find_callees
+    mock_client.code_relationships = mock_code_relationships
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        impact_analyzer = ImpactAnalyzer(
+            client=mock_client,
+            group_id="test-group",
+            spec_context_id="test-spec",
+            project_dir=Path(tmpdir),
+        )
+
+        coupling_result = await impact_analyzer.calculate_coupling_score(
+            entity_name="func_a",
+            entity_type="function",
+        )
+
+        # Should detect bidirectional dependency
+        indicators = coupling_result["tight_coupling_indicators"]
+        assert "bidirectional_dependencies" in indicators
+        assert indicators["bidirectional_dependencies"] > 0
+
+        # Bidirectional + same file = very tight coupling
+        assert coupling_result["relationship_strength"] == "tight"
+
+
+@pytest.mark.asyncio
+async def test_coupling_scores_loose_coupling(mock_client):
+    """Test detection of loose coupling (cross-module, single references)."""
+    mock_code_relationships = AsyncMock()
+
+    # Single caller from different module
+    async def mock_find_callers(function_name):
+        if function_name == "api_endpoint":
+            return [
+                {
+                    "caller": "route_handler",
+                    "callee": "api_endpoint",
+                    "file_path": "routes/handlers.py",
+                    "lineno": 50,
+                    "call_type": "function",
+                }
+            ]
+        return []
+
+    # No bidirectional dependency
+    mock_code_relationships.find_callers = mock_find_callers
+    mock_code_relationships.find_callees = AsyncMock(return_value=[])
+    mock_client.code_relationships = mock_code_relationships
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        impact_analyzer = ImpactAnalyzer(
+            client=mock_client,
+            group_id="test-group",
+            spec_context_id="test-spec",
+            project_dir=Path(tmpdir),
+        )
+
+        coupling_result = await impact_analyzer.calculate_coupling_score(
+            entity_name="api_endpoint",
+            entity_type="function",
+        )
+
+        # Single cross-file reference = loose coupling
+        assert coupling_result["relationship_strength"] == "loose"
+        assert coupling_result["coupling_score"] < 40  # Low score
