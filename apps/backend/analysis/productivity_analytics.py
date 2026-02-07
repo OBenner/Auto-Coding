@@ -353,7 +353,7 @@ def _extract_spec_metrics(spec_dir: Path) -> SpecMetrics | None:
                 duration_seconds = (datetime.now(UTC) - created_at).total_seconds()
 
         # QA metrics
-        qa_signoff = plan.get("qa_signoff", {})
+        qa_signoff = plan.get("qa_signoff") or {}
         qa_iterations = qa_signoff.get("qa_session", 0)
         qa_status = qa_signoff.get("status", "pending")
 
