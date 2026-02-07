@@ -79,7 +79,7 @@ export class ProjectStore {
    * Load store from disk (async version)
    */
   private async loadAsync(): Promise<StoreData> {
-    if (existsSync(this.storePath)) {
+    if (await this.fileExists(this.storePath)) {
       try {
         const content = await fsPromises.readFile(this.storePath, 'utf-8');
         const data = JSON.parse(content);
