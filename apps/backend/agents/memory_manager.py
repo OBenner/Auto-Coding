@@ -83,6 +83,87 @@ def debug_memory_system_status() -> None:
         )
 
 
+async def learn_patterns(
+    spec_dir: Path,
+    project_dir: Path,
+    modified_files: list[Path],
+    pattern_types: list[str] | None = None,
+) -> int:
+    """
+    Learn patterns from modified files during an agent session.
+
+    This monitors code changes during agent sessions, extracts patterns
+    (API usage, error handling, state management, etc.), and stores them
+    in Graphiti for future reference.
+
+    Args:
+        spec_dir: Spec directory
+        project_dir: Project root directory
+        modified_files: List of files modified during the session
+        pattern_types: Optional list of pattern types to extract
+                      Defaults to ["api", "error", "state", "import"]
+
+    Returns:
+        Number of patterns learned and stored
+    """
+    if is_debug_enabled():
+        debug(
+            "memory",
+            "Learning patterns from agent session",
+            modified_files_count=len(modified_files),
+            pattern_types=pattern_types,
+        )
+
+    if not is_graphiti_enabled():
+        if is_debug_enabled():
+            debug("memory", "Graphiti not enabled, skipping pattern learning")
+        return 0
+
+    if not modified_files:
+        if is_debug_enabled():
+            debug("memory", "No modified files to learn from")
+        return 0
+
+    try:
+        # Import here to avoid circular dependency
+        from integrations.graphiti.pattern_learner import PatternLearner
+
+        # Create pattern learner instance
+        learner = PatternLearner(spec_dir, project_dir)
+
+        # Learn patterns from session
+        pattern_count = await learner.learn_from_session(
+            modified_files=modified_files,
+            pattern_types=pattern_types,
+        )
+
+        if is_debug_enabled():
+            debug_success(
+                "memory",
+                "Pattern learning complete",
+                patterns_learned=pattern_count,
+                files_analyzed=len(modified_files),
+            )
+
+        return pattern_count
+
+    except Exception as e:
+        logger.warning(f"Failed to learn patterns: {e}")
+        if is_debug_enabled():
+            debug_error(
+                "memory",
+                "Pattern learning failed",
+                error=str(e),
+                files=len(modified_files),
+            )
+        capture_exception(
+            e,
+            operation="learn_patterns",
+            modified_files_count=len(modified_files),
+        )
+        return 0
+
+
 async def get_pattern_suggestions(
     spec_dir: Path,
     project_dir: Path,
