@@ -5,16 +5,17 @@
  * Shows spec content, progress, and subtasks.
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ArrowLeft, RefreshCw, AlertCircle, CheckCircle2, Circle, Loader2 } from 'lucide-react';
+import { ArrowLeft, RefreshCw, AlertCircle, CheckCircle2, Circle, Loader2, Wifi, WifiOff } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Card, CardContent } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { ScrollArea } from '../components/ui/scroll-area';
 import { Separator } from '../components/ui/separator';
 import { apiClient } from '../api/client';
-import type { TaskDetail as TaskDetailType } from '../api/types';
+import { wsClient, type ConnectionState } from '../api/websocket';
+import type { TaskDetail as TaskDetailType, ExecutionEvent } from '../api/types';
 
 interface TaskDetailProps {
   taskId: string;
@@ -27,6 +28,10 @@ export function TaskDetail({ taskId, onBack }: TaskDetailProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [connectionState, setConnectionState] = useState<ConnectionState>("disconnected");
+
+  // Use ref to track if component is mounted
+  const isMountedRef = useRef(true);
 
   /**
    * Fetch task details from the API
@@ -51,10 +56,69 @@ export function TaskDetail({ taskId, onBack }: TaskDetailProps) {
     }
   }, [taskId]);
 
+  /**
+   * Handle WebSocket execution events for real-time updates
+   */
+  const handleExecutionEvent = useCallback((event: ExecutionEvent) => {
+    if (!isMountedRef.current) return;
+
+    // Update task progress when execution events are received
+    setTask((prevTask) => {
+      if (!prevTask || event.spec_id !== taskId) return prevTask;
+
+      const newProgress = { ...prevTask.progress };
+      if (event.data.overall_progress !== undefined) {
+        newProgress.percentage = Math.round(event.data.overall_progress);
+      }
+
+      return {
+        ...prevTask,
+        progress: newProgress,
+      };
+    });
+  }, [taskId]);
+
+  /**
+   * Handle state changes from WebSocket connection
+   */
+  const handleStateChange = useCallback((state: ConnectionState) => {
+    if (!isMountedRef.current) return;
+    setConnectionState(state);
+  }, []);
+
   // Initial load
   useEffect(() => {
     fetchTaskDetail();
   }, [fetchTaskDetail]);
+
+  // WebSocket connection management
+  useEffect(() => {
+    isMountedRef.current = true;
+
+    // Connect to WebSocket
+    wsClient.connect();
+
+    // Register state change handler
+    wsClient.onStateChange(handleStateChange);
+
+    // Register execution event handler
+    wsClient.on("execution", handleExecutionEvent);
+
+    // Subscribe to spec events
+    wsClient.subscribe(taskId);
+
+    // Cleanup on unmount
+    return () => {
+      isMountedRef.current = false;
+
+      // Unsubscribe from spec events
+      wsClient.unsubscribe(taskId);
+
+      // Unregister handlers
+      wsClient.offStateChange(handleStateChange);
+      wsClient.off("execution", handleExecutionEvent);
+    };
+  }, [taskId, handleExecutionEvent, handleStateChange]);
 
   // Handle refresh button click
   const handleRefresh = useCallback(() => {
@@ -115,14 +179,36 @@ export function TaskDetail({ taskId, onBack }: TaskDetailProps) {
               </p>
             </div>
           </div>
-          <Button
-            onClick={handleRefresh}
-            disabled={isRefreshing}
-            variant="outline"
-          >
-            <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
-            Refresh
-          </Button>
+          <div className="flex items-center gap-2">
+            {/* Connection Status Indicator */}
+            <Badge
+              variant="outline"
+              className={`text-sm ${
+                connectionState === 'connected'
+                  ? 'bg-green-50 text-green-700 border-green-200'
+                  : connectionState === 'connecting'
+                  ? 'bg-yellow-50 text-yellow-700 border-yellow-200'
+                  : connectionState === 'error'
+                  ? 'bg-red-50 text-red-700 border-red-200'
+                  : 'bg-gray-50 text-gray-700 border-gray-200'
+              }`}
+            >
+              {connectionState === 'connected' ? (
+                <Wifi className="h-3 w-3 mr-1" />
+              ) : (
+                <WifiOff className="h-3 w-3 mr-1" />
+              )}
+              {connectionState}
+            </Badge>
+            <Button
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              variant="outline"
+            >
+              <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
+          </div>
         </div>
 
         <div className="grid gap-6">
