@@ -4,6 +4,7 @@ Main GraphitiMemory class - facade for the modular memory system.
 Provides a high-level interface that delegates to specialized modules:
 - client.py: Database connection and lifecycle
 - queries.py: Episode storage operations
+- code_relationships.py: Code relationship storage operations
 - search.py: Semantic search and retrieval
 - schema.py: Data structures and constants
 """
@@ -17,6 +18,7 @@ from core.sentry import capture_exception
 from graphiti_config import GraphitiConfig, GraphitiState
 
 from .client import GraphitiClient
+from .code_relationships import CodeRelationshipQueries
 from .queries import GraphitiQueries
 from .schema import MAX_CONTEXT_RESULTS, GroupIdMode
 from .search import GraphitiSearch
@@ -31,6 +33,7 @@ class GraphitiMemory:
     This class provides a high-level interface for:
     - Storing session insights as episodes
     - Recording codebase discoveries (file purposes, patterns, gotchas)
+    - Storing code relationships (function calls, imports, inheritance)
     - Retrieving relevant context for new sessions
     - Searching across all stored knowledge
 
@@ -67,6 +70,7 @@ class GraphitiMemory:
         self._client: GraphitiClient | None = None
         self._queries: GraphitiQueries | None = None
         self._search: GraphitiSearch | None = None
+        self._code_relationships: CodeRelationshipQueries | None = None
 
         self._available = False
 
@@ -188,6 +192,12 @@ class GraphitiMemory:
                 self.project_dir,
             )
 
+            self._code_relationships = CodeRelationshipQueries(
+                self._client,
+                self.group_id,
+                self.spec_context_id,
+            )
+
             logger.info(
                 f"Graphiti initialized for group: {self.group_id} "
                 f"(mode: {self.group_id_mode}, providers: {self.config.get_provider_summary()})"
@@ -216,6 +226,17 @@ class GraphitiMemory:
             self._client = None
             self._queries = None
             self._search = None
+            self._code_relationships = None
+
+    @property
+    def code_relationships(self) -> CodeRelationshipQueries | None:
+        """
+        Get the code relationship queries module.
+
+        Returns:
+            CodeRelationshipQueries instance if initialized, None otherwise
+        """
+        return self._code_relationships
 
     # Delegate methods to query module
 
