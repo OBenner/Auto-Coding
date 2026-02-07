@@ -117,6 +117,10 @@ class PatternExtractor:
             if "api" in pattern_types:
                 patterns.extend(self._extract_python_api_patterns(tree, source_code))
 
+            # Extract state management patterns
+            if "state" in pattern_types:
+                patterns.extend(self._extract_python_state_patterns(tree, source_code))
+
             # Extract class patterns
             if "class" in pattern_types:
                 patterns.extend(self._extract_python_class_patterns(tree, source_code))
@@ -182,6 +186,9 @@ class PatternExtractor:
             if isinstance(node, ast.Try):
                 # Extract exception types
                 exception_types = []
+                has_logging = False
+                has_reraise = False
+
                 for handler in node.handlers:
                     if handler.type:
                         if isinstance(handler.type, ast.Name):
@@ -191,6 +198,18 @@ class PatternExtractor:
                                 if isinstance(elt, ast.Name):
                                     exception_types.append(elt.id)
 
+                    # Check for logging in handler
+                    for stmt in ast.walk(handler):
+                        if isinstance(stmt, ast.Call) and isinstance(stmt.func, ast.Attribute):
+                            if isinstance(stmt.func.value, ast.Name):
+                                if "log" in stmt.func.value.id.lower():
+                                    has_logging = True
+
+                    # Check for re-raising
+                    for stmt in handler.body:
+                        if isinstance(stmt, ast.Raise) and stmt.exc is None:
+                            has_reraise = True
+
                 # Get code snippet
                 end_line = node.lineno + 5  # Get a few lines of context
                 snippet = self._get_code_snippet(lines, node.lineno, end_line - node.lineno)
@@ -198,10 +217,20 @@ class PatternExtractor:
                 pattern_desc = "Try-except"
                 if exception_types:
                     pattern_desc += f" catching {', '.join(exception_types)}"
+                if has_logging:
+                    pattern_desc += " with logging"
+                if has_reraise:
+                    pattern_desc += " with re-raise"
                 if node.orelse:
                     pattern_desc += " with else clause"
                 if node.finalbody:
                     pattern_desc += " with finally clause"
+
+                context_parts = [f"Exception types: {', '.join(exception_types) or 'generic'}"]
+                if has_logging:
+                    context_parts.append("includes logging")
+                if has_reraise:
+                    context_parts.append("re-raises exception")
 
                 patterns.append(
                     {
@@ -209,9 +238,24 @@ class PatternExtractor:
                         "pattern": pattern_desc,
                         "code_snippet": snippet,
                         "line_number": node.lineno,
-                        "context": f"Exception types: {', '.join(exception_types) or 'generic'}",
+                        "context": ", ".join(context_parts),
                     }
                 )
+
+            # Look for custom exception classes
+            elif isinstance(node, ast.ClassDef):
+                for base in node.bases:
+                    if isinstance(base, ast.Name) and "Exception" in base.id:
+                        snippet = self._get_code_snippet(lines, node.lineno, 3)
+                        patterns.append(
+                            {
+                                "type": "error-handling",
+                                "pattern": f"Custom exception class: {node.name}",
+                                "code_snippet": snippet,
+                                "line_number": node.lineno,
+                                "context": f"Inherits from {base.id}",
+                            }
+                        )
 
         return patterns
 
@@ -226,24 +270,187 @@ class PatternExtractor:
             # Look for common API call patterns
             if isinstance(node, ast.Call):
                 if isinstance(node.func, ast.Attribute):
-                    # Method calls like client.get(), requests.post()
+                    method_name = node.func.attr
+                    obj_name = None
+
+                    # Handle simple calls like client.get()
                     if isinstance(node.func.value, ast.Name):
                         obj_name = node.func.value.id
-                        method_name = node.func.attr
 
-                        # Identify common API patterns
-                        api_keywords = ["client", "api", "request", "http", "fetch"]
-                        if any(keyword in obj_name.lower() for keyword in api_keywords):
+                    # Handle chained calls like self.client.get()
+                    elif isinstance(node.func.value, ast.Attribute):
+                        # Get the rightmost object name before the method
+                        obj_name = node.func.value.attr
+
+                    # Identify common API patterns
+                    api_keywords = ["client", "api", "request", "http", "fetch", "session"]
+                    http_methods = ["get", "post", "put", "delete", "patch", "head", "options"]
+
+                    if obj_name and any(keyword in obj_name.lower() for keyword in api_keywords):
+                        snippet = self._get_code_snippet(lines, node.lineno, 3)
+
+                        # Identify HTTP method usage
+                        if method_name.lower() in http_methods:
+                            pattern_type = f"HTTP {method_name.upper()} request"
+                        else:
+                            pattern_type = f"API call: {obj_name}.{method_name}()"
+
+                        patterns.append(
+                            {
+                                "type": "api-design",
+                                "pattern": pattern_type,
+                                "code_snippet": snippet,
+                                "line_number": node.lineno,
+                                "context": f"Object: {obj_name}, Method: {method_name}",
+                            }
+                        )
+
+            # Look for API route decorators
+            elif isinstance(node, ast.FunctionDef):
+                for decorator in node.decorator_list:
+                    decorator_name = None
+                    if isinstance(decorator, ast.Name):
+                        decorator_name = decorator.id
+                    elif isinstance(decorator, ast.Call) and isinstance(decorator.func, ast.Attribute):
+                        # Decorators like @app.route(), @api.get()
+                        if isinstance(decorator.func.value, ast.Name):
+                            obj = decorator.func.value.id
+                            method = decorator.func.attr
+                            decorator_name = f"{obj}.{method}"
+
+                    if decorator_name and any(kw in decorator_name.lower() for kw in ["route", "api", "endpoint"]):
+                        snippet = self._get_code_snippet(lines, node.lineno, 3)
+                        patterns.append(
+                            {
+                                "type": "api-design",
+                                "pattern": f"API endpoint with @{decorator_name}",
+                                "code_snippet": snippet,
+                                "line_number": node.lineno,
+                                "context": f"Function: {node.name}, Decorator: {decorator_name}",
+                            }
+                        )
+
+        return patterns
+
+    def _extract_python_state_patterns(
+        self, tree: ast.AST, source_code: str
+    ) -> list[dict[str, Any]]:
+        """Extract state management patterns from Python AST."""
+        patterns = []
+        lines = source_code.split("\n")
+
+        for node in ast.walk(tree):
+            # Look for @property decorators (state getters)
+            if isinstance(node, ast.FunctionDef):
+                has_property = False
+                has_setter = False
+
+                for decorator in node.decorator_list:
+                    if isinstance(decorator, ast.Name):
+                        if decorator.id == "property":
+                            has_property = True
+                        elif decorator.id.endswith(".setter"):
+                            has_setter = True
+                    elif isinstance(decorator, ast.Attribute):
+                        if decorator.attr == "setter":
+                            has_setter = True
+
+                if has_property or has_setter:
+                    snippet = self._get_code_snippet(lines, node.lineno, 3)
+                    pattern_type = "Property getter" if has_property else "Property setter"
+                    patterns.append(
+                        {
+                            "type": "state-management",
+                            "pattern": f"{pattern_type}: @property {node.name}",
+                            "code_snippet": snippet,
+                            "line_number": node.lineno,
+                            "context": f"Property: {node.name}",
+                        }
+                    )
+
+            # Look for @dataclass decorator (state containers)
+            elif isinstance(node, ast.ClassDef):
+                has_dataclass = False
+                for decorator in node.decorator_list:
+                    if isinstance(decorator, ast.Name) and decorator.id == "dataclass":
+                        has_dataclass = True
+                    elif isinstance(decorator, ast.Call):
+                        if isinstance(decorator.func, ast.Name) and decorator.func.id == "dataclass":
+                            has_dataclass = True
+
+                if has_dataclass:
+                    snippet = self._get_code_snippet(lines, node.lineno, 5)
+                    patterns.append(
+                        {
+                            "type": "state-management",
+                            "pattern": f"Dataclass for state: {node.name}",
+                            "code_snippet": snippet,
+                            "line_number": node.lineno,
+                            "context": f"Dataclass: {node.name}",
+                        }
+                    )
+
+                # Look for __init__ with state attributes
+                for item in node.body:
+                    if isinstance(item, ast.FunctionDef) and item.name == "__init__":
+                        # Count self.attribute assignments
+                        state_attrs = []
+                        for stmt in ast.walk(item):
+                            if isinstance(stmt, ast.Assign):
+                                for target in stmt.targets:
+                                    if isinstance(target, ast.Attribute):
+                                        if isinstance(target.value, ast.Name) and target.value.id == "self":
+                                            state_attrs.append(target.attr)
+
+                        if state_attrs:
+                            snippet = self._get_code_snippet(lines, item.lineno, 5)
+                            patterns.append(
+                                {
+                                    "type": "state-management",
+                                    "pattern": f"State initialization in __init__: {len(state_attrs)} attributes",
+                                    "code_snippet": snippet,
+                                    "line_number": item.lineno,
+                                    "context": f"Class: {node.name}, Attributes: {', '.join(state_attrs[:3])}{'...' if len(state_attrs) > 3 else ''}",
+                                }
+                            )
+
+            # Look for global state variables
+            elif isinstance(node, ast.Assign):
+                # Check if this is a module-level assignment (global state)
+                # This is approximate - we'd need more context to be certain
+                for target in node.targets:
+                    if isinstance(target, ast.Name):
+                        # Check if the variable name suggests state (all caps, or specific naming)
+                        var_name = target.id
+                        if var_name.isupper() or any(
+                            kw in var_name.lower() for kw in ["state", "cache", "store", "config"]
+                        ):
                             snippet = self._get_code_snippet(lines, node.lineno, 1)
                             patterns.append(
                                 {
-                                    "type": "api-design",
-                                    "pattern": f"API call: {obj_name}.{method_name}()",
+                                    "type": "state-management",
+                                    "pattern": f"Global state variable: {var_name}",
                                     "code_snippet": snippet,
                                     "line_number": node.lineno,
-                                    "context": f"Object: {obj_name}, Method: {method_name}",
+                                    "context": f"Variable: {var_name}",
                                 }
                             )
+
+            # Look for context managers (state management via 'with' statement)
+            elif isinstance(node, ast.With):
+                for item in node.items:
+                    if item.optional_vars:
+                        snippet = self._get_code_snippet(lines, node.lineno, 3)
+                        patterns.append(
+                            {
+                                "type": "state-management",
+                                "pattern": "Context manager for state",
+                                "code_snippet": snippet,
+                                "line_number": node.lineno,
+                                "context": "Using 'with' statement for state management",
+                            }
+                        )
+                        break
 
         return patterns
 
@@ -442,3 +649,47 @@ class PatternExtractor:
         end_idx = min(len(lines), start_idx + num_lines)
         snippet = "\n".join(lines[start_idx:end_idx])
         return snippet[:300]  # Limit to 300 chars like pattern_discovery.py
+
+
+def extract_patterns(
+    file_path: Path | str,
+    project_dir: Path | str | None = None,
+    pattern_types: list[str] | None = None,
+) -> list[dict[str, Any]]:
+    """
+    Standalone function to extract code patterns from a file.
+
+    Args:
+        file_path: Path to source file to analyze
+        project_dir: Project root directory (defaults to current directory)
+        pattern_types: Optional list of pattern types to extract
+                      (e.g., ["api", "error", "state"])
+                      If None, extracts all pattern types
+
+    Returns:
+        List of extracted patterns:
+        [
+            {
+                "type": "error-handling",
+                "pattern": "Try-catch with specific error types",
+                "code_snippet": "try:...",
+                "line_number": 42,
+                "context": "Function: handle_request"
+            },
+            ...
+        ]
+
+    Example:
+        >>> patterns = extract_patterns("myfile.py", pattern_types=["api", "error"])
+        >>> for p in patterns:
+        ...     print(f"{p['type']}: {p['pattern']}")
+    """
+    if project_dir is None:
+        project_dir = Path.cwd()
+    else:
+        project_dir = Path(project_dir)
+
+    file_path = Path(file_path)
+
+    extractor = PatternExtractor(project_dir)
+    return extractor.extract_patterns(file_path, pattern_types)
