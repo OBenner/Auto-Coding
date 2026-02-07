@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Code, RefreshCw, AlertCircle } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { Button } from '../components/ui/button';
 import { PatternReview } from '../components/PatternReview';
 import { debugLog } from '../../shared/utils/debug-logger';
@@ -17,6 +18,7 @@ interface PatternsPageProps {
  * Allows users to review, approve, and deprecate patterns.
  */
 export function PatternsPage({ projectId }: PatternsPageProps) {
+  const { t } = useTranslation(['patterns', 'common']);
   const [patterns, setPatterns] = useState<PatternSuggestion[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -127,9 +129,9 @@ export function PatternsPage({ projectId }: PatternsPageProps) {
           <div className="flex items-center gap-3">
             <Code className="h-6 w-6" />
             <div>
-              <h1 className="text-2xl font-semibold">Learned Patterns</h1>
+              <h1 className="text-2xl font-semibold">{t('patterns:page.title')}</h1>
               <p className="text-sm text-muted-foreground">
-                Review and manage code patterns learned from agent sessions
+                {t('patterns:page.description')}
               </p>
             </div>
           </div>
@@ -141,7 +143,7 @@ export function PatternsPage({ projectId }: PatternsPageProps) {
             className="gap-2"
           >
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-            Refresh
+            {t('patterns:page.refresh')}
           </Button>
         </div>
       </div>
@@ -152,7 +154,7 @@ export function PatternsPage({ projectId }: PatternsPageProps) {
           <div className="flex items-center gap-3 rounded-md border border-destructive/50 bg-destructive/10 p-4">
             <AlertCircle className="h-5 w-5 text-destructive" />
             <div className="flex-1">
-              <p className="text-sm font-semibold text-destructive">Error loading patterns</p>
+              <p className="text-sm font-semibold text-destructive">{t('patterns:page.errorTitle')}</p>
               <p className="text-xs text-destructive/80">{error}</p>
             </div>
             <Button
@@ -162,7 +164,7 @@ export function PatternsPage({ projectId }: PatternsPageProps) {
               className="gap-2"
             >
               <RefreshCw className="h-4 w-4" />
-              Retry
+              {t('patterns:page.retry')}
             </Button>
           </div>
         </div>

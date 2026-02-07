@@ -9,6 +9,7 @@ import {
   Filter,
   AlertCircle
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
@@ -71,6 +72,7 @@ export function PatternReview({
   onApprove,
   onDeprecate
 }: PatternReviewProps) {
+  const { t } = useTranslation(['patterns', 'common']);
   const [activeFilter, setActiveFilter] = useState<CategoryFilter>('all');
   const [processingPatterns, setProcessingPatterns] = useState<Set<string>>(new Set());
 
@@ -143,10 +145,10 @@ export function PatternReview({
         <div className="space-y-2">
           <h2 className="text-2xl font-semibold flex items-center gap-2">
             <Code className="h-6 w-6" />
-            Pattern Review
+            {t('patterns:component.title')}
           </h2>
           <p className="text-sm text-muted-foreground">
-            Review learned code patterns and mark them as team standards or deprecated.
+            {t('patterns:component.description')}
           </p>
         </div>
 
@@ -155,7 +157,7 @@ export function PatternReview({
           <div className="flex items-center gap-2">
             <Filter className="h-4 w-4 text-muted-foreground" />
             <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
-              Categories
+              {t('patterns:component.categories')}
             </h3>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -198,10 +200,10 @@ export function PatternReview({
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
-              Patterns
+              {t('patterns:component.patterns')}
             </h3>
             <span className="text-xs text-muted-foreground">
-              {sortedPatterns.length} {sortedPatterns.length === 1 ? 'pattern' : 'patterns'}
+              {sortedPatterns.length} {sortedPatterns.length === 1 ? t('patterns:metadata.pattern') : t('patterns:metadata.patterns')}
             </span>
           </div>
 
@@ -210,7 +212,7 @@ export function PatternReview({
             <div className="flex items-center justify-center py-12">
               <div className="flex flex-col items-center gap-3">
                 <Code className="h-8 w-8 animate-pulse text-muted-foreground" />
-                <p className="text-sm text-muted-foreground">Loading patterns...</p>
+                <p className="text-sm text-muted-foreground">{t('patterns:component.loading')}</p>
               </div>
             </div>
           )}
@@ -220,10 +222,10 @@ export function PatternReview({
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <Code className="h-12 w-12 text-muted-foreground mb-4" />
               <p className="text-sm text-muted-foreground mb-2">
-                No patterns learned yet
+                {t('patterns:component.empty')}
               </p>
               <p className="text-xs text-muted-foreground max-w-md">
-                Patterns are extracted during agent code generation sessions and stored in Graphiti memory.
+                {t('patterns:component.emptyDescription')}
               </p>
             </div>
           )}
@@ -233,7 +235,7 @@ export function PatternReview({
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <AlertCircle className="h-12 w-12 text-muted-foreground mb-4" />
               <p className="text-sm text-muted-foreground mb-2">
-                No patterns in this category
+                {t('patterns:component.emptyFilter')}
               </p>
               <Button
                 variant="link"
@@ -241,7 +243,7 @@ export function PatternReview({
                 onClick={() => setActiveFilter('all')}
                 className="mt-2"
               >
-                Show all patterns
+                {t('patterns:component.showAll')}
               </Button>
             </div>
           )}
@@ -300,7 +302,7 @@ export function PatternReview({
                         {pattern.spec_id && (
                           <span className="flex items-center gap-1">
                             <Code className="h-3 w-3" />
-                            Spec: {pattern.spec_id}
+                            {t('patterns:metadata.spec')}: {pattern.spec_id}
                           </span>
                         )}
                         {pattern.timestamp && (
@@ -324,7 +326,7 @@ export function PatternReview({
                           ) : (
                             <>
                               <ThumbsUp className="h-4 w-4" />
-                              Approve as Team Standard
+                              {t('patterns:actions.approve')}
                             </>
                           )}
                         </Button>
@@ -340,7 +342,7 @@ export function PatternReview({
                           ) : (
                             <>
                               <ThumbsDown className="h-4 w-4" />
-                              Mark as Deprecated
+                              {t('patterns:actions.deprecate')}
                             </>
                           )}
                         </Button>
@@ -360,19 +362,19 @@ export function PatternReview({
               <div className="flex items-start gap-3">
                 <AlertCircle className="h-4 w-4 text-muted-foreground mt-0.5" />
                 <div className="space-y-2 text-xs text-muted-foreground">
-                  <p className="font-semibold">About Pattern Confidence:</p>
+                  <p className="font-semibold">{t('patterns:legend.title')}</p>
                   <ul className="space-y-1 list-disc list-inside">
-                    <li><span className="text-green-400">High confidence (90%+):</span> Pattern used frequently and consistently</li>
-                    <li><span className="text-amber-400">Medium confidence (70-90%):</span> Pattern used moderately, may need review</li>
-                    <li><span className="text-red-400">Low confidence (&lt;70%):</span> Pattern used infrequently, verify before approving</li>
+                    <li>{t('patterns:legend.high')}</li>
+                    <li>{t('patterns:legend.medium')}</li>
+                    <li>{t('patterns:legend.low')}</li>
                   </ul>
                   <p className="pt-2">
                     <CheckCircle className="h-3 w-3 inline mr-1 text-green-400" />
-                    <span className="font-semibold">Approved patterns</span> are marked as team standards (confidence: 100%)
+                    {t('patterns:legend.approved')}
                   </p>
                   <p>
                     <XCircle className="h-3 w-3 inline mr-1 text-red-400" />
-                    <span className="font-semibold">Deprecated patterns</span> are marked to avoid (confidence: 0%)
+                    {t('patterns:legend.deprecated')}
                   </p>
                 </div>
               </div>
