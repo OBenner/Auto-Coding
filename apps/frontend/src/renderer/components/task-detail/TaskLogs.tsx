@@ -600,11 +600,11 @@ function LogEntry({ entry, isExpanded, onToggleExpand }: LogEntryProps) {
     const { icon: Icon, label, color } = getToolInfo(entry.tool_name);
     return (
       <div className="flex flex-col min-w-0">
-        <div className={cn('inline-flex items-center gap-2 rounded-md px-2 py-1 text-xs min-w-0', color)}>
+        <div className={cn('flex items-center gap-2 rounded-md px-2 py-1 text-xs min-w-0 overflow-hidden', color)}>
           <Icon className="h-3 w-3 animate-pulse shrink-0" />
           <span className="font-medium shrink-0">{label}</span>
           {entry.tool_input && (
-            <span className="text-muted-foreground truncate min-w-0" title={entry.tool_input}>
+            <span className="text-muted-foreground break-words min-w-0 flex-1" title={entry.tool_input}>
               {entry.tool_input}
             </span>
           )}
@@ -619,7 +619,7 @@ function LogEntry({ entry, isExpanded, onToggleExpand }: LogEntryProps) {
     return (
       <div className="flex flex-col min-w-0">
         <div className="flex items-center gap-2 min-w-0">
-          <div className={cn('inline-flex items-center gap-2 rounded-md px-2 py-1 text-xs shrink-0', color, 'opacity-60')}>
+          <div className={cn('flex items-center gap-2 rounded-md px-2 py-1 text-xs shrink-0 overflow-hidden', color, 'opacity-60')}>
             <Icon className="h-3 w-3" />
             <CheckCircle2 className="h-3 w-3 text-success" />
             <span className="text-muted-foreground">Done</span>
