@@ -167,7 +167,7 @@ class PairProgrammingAgent:
 
                 self._client = create_client(
                     project_dir=self.project_dir,
-                    spec_dir=self.spec_dir,
+                    spec_dir=self.session_state.spec_dir,  # Use session state (has default fallback)
                     model=self.model,
                     agent_type="coder",  # Use coder tools for pair programming
                     max_thinking_tokens=self.max_thinking_tokens,
