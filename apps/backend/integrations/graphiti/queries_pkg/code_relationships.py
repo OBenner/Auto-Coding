@@ -470,3 +470,196 @@ class CodeRelationshipQueries:
                 function_name=function_name,
             )
             return []
+
+    async def find_parent_classes(
+        self,
+        class_name: str,
+        limit: int = 50,
+    ) -> list[dict]:
+        """
+        Find all parent classes of the specified class.
+
+        Args:
+            class_name: Name of the class to find parents for
+            limit: Maximum number of results to return
+
+        Returns:
+            List of parent class information with parent name, file path, and line number
+        """
+        try:
+            results = await self.client.graphiti.search(
+                query=f"class inheritance {class_name} parent child extends",
+                group_ids=[self.group_id],
+                num_results=limit * 2,  # Get more to filter
+            )
+
+            parents = []
+            seen = set()  # Deduplicate results
+
+            for result in results:
+                content = getattr(result, "content", None) or getattr(
+                    result, "fact", None
+                )
+                if content and EPISODE_TYPE_CLASS_INHERITANCE in str(content):
+                    try:
+                        data = (
+                            json.loads(content) if isinstance(content, str) else content
+                        )
+                        if not isinstance(data, dict):
+                            continue
+                        if data.get("type") == EPISODE_TYPE_CLASS_INHERITANCE:
+                            # Check if this is inheritance FROM the class we're looking for
+                            if data.get("child") == class_name:
+                                parent_info = (
+                                    data.get("parent"),
+                                    data.get("file_path"),
+                                    data.get("lineno"),
+                                )
+                                if parent_info not in seen:
+                                    seen.add(parent_info)
+                                    parents.append(
+                                        {
+                                            "parent": data.get("parent"),
+                                            "file_path": data.get("file_path"),
+                                            "lineno": data.get("lineno"),
+                                            "parent_module": data.get("parent_module"),
+                                        }
+                                    )
+                    except (json.JSONDecodeError, TypeError, AttributeError):
+                        continue
+
+            logger.info(f"Found {len(parents)} parent classes for: {class_name}")
+            return parents[:limit]
+
+        except Exception as e:
+            logger.warning(f"Failed to find parent classes: {e}")
+            capture_exception(
+                e,
+                operation="find_parent_classes",
+                group_id=self.group_id,
+                class_name=class_name,
+            )
+            return []
+
+    async def find_child_classes(
+        self,
+        class_name: str,
+        limit: int = 50,
+    ) -> list[dict]:
+        """
+        Find all child classes that inherit from the specified class.
+
+        Args:
+            class_name: Name of the class to find children for
+            limit: Maximum number of results to return
+
+        Returns:
+            List of child class information with child name, file path, and line number
+        """
+        try:
+            results = await self.client.graphiti.search(
+                query=f"class inheritance {class_name} parent child extends",
+                group_ids=[self.group_id],
+                num_results=limit * 2,  # Get more to filter
+            )
+
+            children = []
+            seen = set()  # Deduplicate results
+
+            for result in results:
+                content = getattr(result, "content", None) or getattr(
+                    result, "fact", None
+                )
+                if content and EPISODE_TYPE_CLASS_INHERITANCE in str(content):
+                    try:
+                        data = (
+                            json.loads(content) if isinstance(content, str) else content
+                        )
+                        if not isinstance(data, dict):
+                            continue
+                        if data.get("type") == EPISODE_TYPE_CLASS_INHERITANCE:
+                            # Check if this is inheritance TO the class we're looking for
+                            if data.get("parent") == class_name:
+                                child_info = (
+                                    data.get("child"),
+                                    data.get("file_path"),
+                                    data.get("lineno"),
+                                )
+                                if child_info not in seen:
+                                    seen.add(child_info)
+                                    children.append(
+                                        {
+                                            "child": data.get("child"),
+                                            "file_path": data.get("file_path"),
+                                            "lineno": data.get("lineno"),
+                                            "parent_module": data.get("parent_module"),
+                                        }
+                                    )
+                    except (json.JSONDecodeError, TypeError, AttributeError):
+                        continue
+
+            logger.info(f"Found {len(children)} child classes for: {class_name}")
+            return children[:limit]
+
+        except Exception as e:
+            logger.warning(f"Failed to find child classes: {e}")
+            capture_exception(
+                e,
+                operation="find_child_classes",
+                group_id=self.group_id,
+                class_name=class_name,
+            )
+            return []
+
+    async def get_inheritance_chain(
+        self,
+        class_name: str,
+        max_depth: int = 10,
+    ) -> list[str]:
+        """
+        Get the full inheritance chain from a class to its root ancestors.
+
+        Args:
+            class_name: Name of the class to get inheritance chain for
+            max_depth: Maximum depth to traverse (prevents infinite loops)
+
+        Returns:
+            List of class names in inheritance order [ChildClass, Parent, GrandParent, ...]
+        """
+        try:
+            chain = [class_name]
+            current = class_name
+            depth = 0
+
+            while depth < max_depth:
+                parents = await self.find_parent_classes(current, limit=1)
+                if not parents:
+                    # No more parents found
+                    break
+
+                parent_name = parents[0]["parent"]
+                if parent_name in chain:
+                    # Circular inheritance detected
+                    logger.warning(
+                        f"Circular inheritance detected for {class_name}: {parent_name} already in chain"
+                    )
+                    break
+
+                chain.append(parent_name)
+                current = parent_name
+                depth += 1
+
+            logger.info(
+                f"Got inheritance chain for {class_name}: {' -> '.join(chain)}"
+            )
+            return chain
+
+        except Exception as e:
+            logger.warning(f"Failed to get inheritance chain: {e}")
+            capture_exception(
+                e,
+                operation="get_inheritance_chain",
+                group_id=self.group_id,
+                class_name=class_name,
+            )
+            return [class_name]  # Return at least the original class

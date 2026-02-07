@@ -525,5 +525,327 @@ class TestQueryRelationships:
         assert callers[0]["caller"] == "main"
 
 
+class TestInheritanceChains:
+    """Test inheritance chain query methods."""
+
+    @pytest.fixture
+    def mock_client(self):
+        """Create a mock GraphitiClient."""
+        client = Mock()
+        client.graphiti = Mock()
+        client.graphiti.search = AsyncMock(return_value=[])
+        return client
+
+    @pytest.fixture
+    def queries(self, mock_client):
+        """Create a CodeRelationshipQueries instance with mock client."""
+        return CodeRelationshipQueries(
+            client=mock_client, group_id="test_group", spec_context_id="test_spec"
+        )
+
+    @pytest.mark.asyncio
+    async def test_find_parent_classes(self, queries, mock_client):
+        """Test finding parent classes of a class."""
+        # Mock search results
+        mock_result1 = Mock()
+        mock_result1.content = json.dumps(
+            {
+                "type": EPISODE_TYPE_CLASS_INHERITANCE,
+                "child": "ChildClass",
+                "parent": "ParentClass",
+                "file_path": "src/models.py",
+                "lineno": 10,
+                "parent_module": None,
+            }
+        )
+
+        mock_result2 = Mock()
+        mock_result2.content = json.dumps(
+            {
+                "type": EPISODE_TYPE_CLASS_INHERITANCE,
+                "child": "ChildClass",
+                "parent": "AnotherParent",
+                "file_path": "src/models.py",
+                "lineno": 10,
+                "parent_module": "mixins",
+            }
+        )
+
+        # Result where ChildClass is the parent (should be ignored)
+        mock_result3 = Mock()
+        mock_result3.content = json.dumps(
+            {
+                "type": EPISODE_TYPE_CLASS_INHERITANCE,
+                "child": "GrandChild",
+                "parent": "ChildClass",
+                "file_path": "src/models.py",
+                "lineno": 20,
+                "parent_module": None,
+            }
+        )
+
+        mock_client.graphiti.search.return_value = [
+            mock_result1,
+            mock_result2,
+            mock_result3,
+        ]
+
+        # Find parents of "ChildClass"
+        parents = await queries.find_parent_classes("ChildClass")
+
+        # Should find ParentClass and AnotherParent (ChildClass inherits from them)
+        # but not GrandChild (GrandChild inherits from ChildClass)
+        assert len(parents) == 2
+        assert mock_client.graphiti.search.called
+
+        parent_names = [p["parent"] for p in parents]
+        assert "ParentClass" in parent_names
+        assert "AnotherParent" in parent_names
+
+        # Verify details of first parent
+        parent_class = next(p for p in parents if p["parent"] == "ParentClass")
+        assert parent_class["file_path"] == "src/models.py"
+        assert parent_class["lineno"] == 10
+        assert parent_class["parent_module"] is None
+
+        # Verify parent with module
+        another_parent = next(p for p in parents if p["parent"] == "AnotherParent")
+        assert another_parent["parent_module"] == "mixins"
+
+    @pytest.mark.asyncio
+    async def test_find_child_classes(self, queries, mock_client):
+        """Test finding child classes that inherit from a class."""
+        # Mock search results
+        mock_result1 = Mock()
+        mock_result1.content = json.dumps(
+            {
+                "type": EPISODE_TYPE_CLASS_INHERITANCE,
+                "child": "ChildClass1",
+                "parent": "BaseClass",
+                "file_path": "src/child1.py",
+                "lineno": 5,
+                "parent_module": None,
+            }
+        )
+
+        mock_result2 = Mock()
+        mock_result2.content = json.dumps(
+            {
+                "type": EPISODE_TYPE_CLASS_INHERITANCE,
+                "child": "ChildClass2",
+                "parent": "BaseClass",
+                "file_path": "src/child2.py",
+                "lineno": 8,
+                "parent_module": None,
+            }
+        )
+
+        # Result where BaseClass is the child (should be ignored)
+        mock_result3 = Mock()
+        mock_result3.content = json.dumps(
+            {
+                "type": EPISODE_TYPE_CLASS_INHERITANCE,
+                "child": "BaseClass",
+                "parent": "GrandParent",
+                "file_path": "src/base.py",
+                "lineno": 3,
+                "parent_module": None,
+            }
+        )
+
+        mock_client.graphiti.search.return_value = [
+            mock_result1,
+            mock_result2,
+            mock_result3,
+        ]
+
+        # Find children of "BaseClass"
+        children = await queries.find_child_classes("BaseClass")
+
+        # Should find ChildClass1 and ChildClass2 (they inherit from BaseClass)
+        # but not GrandParent (BaseClass inherits from GrandParent)
+        assert len(children) == 2
+        assert mock_client.graphiti.search.called
+
+        child_names = [c["child"] for c in children]
+        assert "ChildClass1" in child_names
+        assert "ChildClass2" in child_names
+
+        # Verify details
+        child1 = next(c for c in children if c["child"] == "ChildClass1")
+        assert child1["file_path"] == "src/child1.py"
+        assert child1["lineno"] == 5
+
+    @pytest.mark.asyncio
+    async def test_get_inheritance_chain(self, queries, mock_client):
+        """Test getting full inheritance chain from child to root."""
+
+        async def mock_search(query, group_ids, num_results):
+            """Mock search that returns different results based on query context."""
+            # Simulate inheritance: GrandChild -> Child -> Parent -> BaseClass
+            if "GrandChild" in query:
+                result = Mock()
+                result.content = json.dumps(
+                    {
+                        "type": EPISODE_TYPE_CLASS_INHERITANCE,
+                        "child": "GrandChild",
+                        "parent": "Child",
+                        "file_path": "test.py",
+                        "lineno": 1,
+                        "parent_module": None,
+                    }
+                )
+                return [result]
+            elif "Child" in query:
+                result = Mock()
+                result.content = json.dumps(
+                    {
+                        "type": EPISODE_TYPE_CLASS_INHERITANCE,
+                        "child": "Child",
+                        "parent": "Parent",
+                        "file_path": "test.py",
+                        "lineno": 2,
+                        "parent_module": None,
+                    }
+                )
+                return [result]
+            elif "Parent" in query:
+                result = Mock()
+                result.content = json.dumps(
+                    {
+                        "type": EPISODE_TYPE_CLASS_INHERITANCE,
+                        "child": "Parent",
+                        "parent": "BaseClass",
+                        "file_path": "test.py",
+                        "lineno": 3,
+                        "parent_module": None,
+                    }
+                )
+                return [result]
+            else:
+                # BaseClass has no parent
+                return []
+
+        mock_client.graphiti.search.side_effect = mock_search
+
+        # Get inheritance chain for GrandChild
+        chain = await queries.get_inheritance_chain("GrandChild")
+
+        # Should get full chain: GrandChild -> Child -> Parent -> BaseClass
+        assert len(chain) == 4
+        assert chain == ["GrandChild", "Child", "Parent", "BaseClass"]
+
+    @pytest.mark.asyncio
+    async def test_get_inheritance_chain_no_parents(self, queries, mock_client):
+        """Test inheritance chain for a class with no parents."""
+        mock_client.graphiti.search.return_value = []
+
+        # Get inheritance chain for a class with no parents
+        chain = await queries.get_inheritance_chain("StandaloneClass")
+
+        # Should only contain the class itself
+        assert len(chain) == 1
+        assert chain == ["StandaloneClass"]
+
+    @pytest.mark.asyncio
+    async def test_get_inheritance_chain_circular(self, queries, mock_client):
+        """Test that circular inheritance is detected and stopped."""
+
+        async def mock_search_circular(query, group_ids, num_results):
+            """Mock search that simulates circular inheritance."""
+            if "ClassA" in query:
+                result = Mock()
+                result.content = json.dumps(
+                    {
+                        "type": EPISODE_TYPE_CLASS_INHERITANCE,
+                        "child": "ClassA",
+                        "parent": "ClassB",
+                        "file_path": "test.py",
+                        "lineno": 1,
+                        "parent_module": None,
+                    }
+                )
+                return [result]
+            elif "ClassB" in query:
+                result = Mock()
+                result.content = json.dumps(
+                    {
+                        "type": EPISODE_TYPE_CLASS_INHERITANCE,
+                        "child": "ClassB",
+                        "parent": "ClassA",
+                        "file_path": "test.py",
+                        "lineno": 2,
+                        "parent_module": None,
+                    }
+                )
+                return [result]
+            return []
+
+        mock_client.graphiti.search.side_effect = mock_search_circular
+
+        # Get inheritance chain - should detect cycle
+        chain = await queries.get_inheritance_chain("ClassA")
+
+        # Should stop at ClassB and not continue infinitely
+        assert len(chain) == 2
+        assert chain == ["ClassA", "ClassB"]
+
+    @pytest.mark.asyncio
+    async def test_find_parent_classes_empty_result(self, queries, mock_client):
+        """Test finding parents when no results exist."""
+        mock_client.graphiti.search.return_value = []
+
+        parents = await queries.find_parent_classes("NoParentClass")
+
+        assert len(parents) == 0
+        assert mock_client.graphiti.search.called
+
+    @pytest.mark.asyncio
+    async def test_find_parent_classes_error_handling(self, queries, mock_client):
+        """Test that errors are handled gracefully in find_parent_classes."""
+        mock_client.graphiti.search.side_effect = Exception("Search failed")
+
+        # Should return empty list on error, not raise
+        parents = await queries.find_parent_classes("test")
+
+        assert parents == []
+
+    @pytest.mark.asyncio
+    async def test_find_child_classes_deduplication(self, queries, mock_client):
+        """Test that duplicate child results are deduplicated."""
+        # Same child appearing twice
+        mock_result1 = Mock()
+        mock_result1.content = json.dumps(
+            {
+                "type": EPISODE_TYPE_CLASS_INHERITANCE,
+                "child": "ChildClass",
+                "parent": "BaseClass",
+                "file_path": "src/models.py",
+                "lineno": 10,
+                "parent_module": None,
+            }
+        )
+
+        mock_result2 = Mock()
+        mock_result2.content = json.dumps(
+            {
+                "type": EPISODE_TYPE_CLASS_INHERITANCE,
+                "child": "ChildClass",
+                "parent": "BaseClass",
+                "file_path": "src/models.py",
+                "lineno": 10,
+                "parent_module": None,
+            }
+        )
+
+        mock_client.graphiti.search.return_value = [mock_result1, mock_result2]
+
+        children = await queries.find_child_classes("BaseClass")
+
+        # Should only have one entry despite two results
+        assert len(children) == 1
+        assert children[0]["child"] == "ChildClass"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
