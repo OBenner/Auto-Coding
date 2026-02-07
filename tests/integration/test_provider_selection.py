@@ -36,46 +36,82 @@ class TestCLIProviderArgumentParsing:
     def test_parse_args_with_provider_zhipuai(self):
         """Tests CLI parsing accepts --provider zhipuai."""
         from cli.main import parse_args
+        import sys
 
-        args = parse_args(["--spec", "001", "--provider", "zhipuai"])
-        assert args.provider == "zhipuai"
+        # Mock sys.argv for argparse
+        original_argv = sys.argv
+        sys.argv = ["run.py", "--spec", "001", "--provider", "zhipuai"]
+        try:
+            args = parse_args()
+            assert args.provider == "zhipuai"
+        finally:
+            sys.argv = original_argv
 
     def test_parse_args_with_provider_claude(self):
         """Tests CLI parsing accepts --provider claude."""
         from cli.main import parse_args
+        import sys
 
-        args = parse_args(["--spec", "001", "--provider", "claude"])
-        assert args.provider == "claude"
+        original_argv = sys.argv
+        sys.argv = ["run.py", "--spec", "001", "--provider", "claude"]
+        try:
+            args = parse_args()
+            assert args.provider == "claude"
+        finally:
+            sys.argv = original_argv
 
     def test_parse_args_with_provider_litellm(self):
         """Tests CLI parsing accepts --provider litellm."""
         from cli.main import parse_args
+        import sys
 
-        args = parse_args(["--spec", "001", "--provider", "litellm"])
-        assert args.provider == "litellm"
+        original_argv = sys.argv
+        sys.argv = ["run.py", "--spec", "001", "--provider", "litellm"]
+        try:
+            args = parse_args()
+            assert args.provider == "litellm"
+        finally:
+            sys.argv = original_argv
 
     def test_parse_args_with_provider_openrouter(self):
         """Tests CLI parsing accepts --provider openrouter."""
         from cli.main import parse_args
+        import sys
 
-        args = parse_args(["--spec", "001", "--provider", "openrouter"])
-        assert args.provider == "openrouter"
+        original_argv = sys.argv
+        sys.argv = ["run.py", "--spec", "001", "--provider", "openrouter"]
+        try:
+            args = parse_args()
+            assert args.provider == "openrouter"
+        finally:
+            sys.argv = original_argv
 
     def test_parse_args_provider_defaults_to_none(self):
         """Tests provider argument defaults to None when not specified."""
         from cli.main import parse_args
+        import sys
 
-        args = parse_args(["--spec", "001"])
-        assert args.provider is None
+        original_argv = sys.argv
+        sys.argv = ["run.py", "--spec", "001"]
+        try:
+            args = parse_args()
+            assert args.provider is None
+        finally:
+            sys.argv = original_argv
 
     def test_parse_args_with_invalid_provider_rejected(self):
         """Tests CLI rejects invalid provider names."""
         from cli.main import parse_args
-        import argparse
+        import sys
 
-        with pytest.raises(SystemExit):
-            # argparse exits on invalid choice
-            parse_args(["--spec", "001", "--provider", "invalid_provider"])
+        original_argv = sys.argv
+        sys.argv = ["run.py", "--spec", "001", "--provider", "invalid_provider"]
+        try:
+            with pytest.raises(SystemExit):
+                # argparse exits on invalid choice
+                parse_args()
+        finally:
+            sys.argv = original_argv
 
 
 class TestCLIModelArgumentParsing:
@@ -84,42 +120,68 @@ class TestCLIModelArgumentParsing:
     def test_parse_args_with_model(self):
         """Tests CLI parsing accepts --model flag."""
         from cli.main import parse_args
+        import sys
 
-        args = parse_args(["--spec", "001", "--model", "glm-4-flash-250414"])
-        assert args.model == "glm-4-flash-250414"
+        original_argv = sys.argv
+        sys.argv = ["run.py", "--spec", "001", "--model", "glm-4-flash-250414"]
+        try:
+            args = parse_args()
+            assert args.model == "glm-4-flash-250414"
+        finally:
+            sys.argv = original_argv
 
     def test_parse_args_with_claude_model(self):
         """Tests CLI parsing accepts Claude model."""
         from cli.main import parse_args
+        import sys
 
-        args = parse_args(["--spec", "001", "--model", "claude-sonnet-4-5-20250929"])
-        assert args.model == "claude-sonnet-4-5-20250929"
+        original_argv = sys.argv
+        sys.argv = ["run.py", "--spec", "001", "--model", "claude-sonnet-4-5-20250929"]
+        try:
+            args = parse_args()
+            assert args.model == "claude-sonnet-4-5-20250929"
+        finally:
+            sys.argv = original_argv
 
     def test_parse_args_with_gpt_model(self):
         """Tests CLI parsing accepts GPT model."""
         from cli.main import parse_args
+        import sys
 
-        args = parse_args(["--spec", "001", "--model", "gpt-4o"])
-        assert args.model == "gpt-4o"
+        original_argv = sys.argv
+        sys.argv = ["run.py", "--spec", "001", "--model", "gpt-4o"]
+        try:
+            args = parse_args()
+            assert args.model == "gpt-4o"
+        finally:
+            sys.argv = original_argv
 
     def test_parse_args_model_defaults_to_none(self):
         """Tests model argument defaults to None when not specified."""
         from cli.main import parse_args
+        import sys
 
-        args = parse_args(["--spec", "001"])
-        assert args.model is None
+        original_argv = sys.argv
+        sys.argv = ["run.py", "--spec", "001"]
+        try:
+            args = parse_args()
+            assert args.model is None
+        finally:
+            sys.argv = original_argv
 
     def test_parse_args_with_provider_and_model(self):
         """Tests CLI parsing accepts both --provider and --model flags."""
         from cli.main import parse_args
+        import sys
 
-        args = parse_args([
-            "--spec", "001",
-            "--provider", "zhipuai",
-            "--model", "glm-4-flash-250414"
-        ])
-        assert args.provider == "zhipuai"
-        assert args.model == "glm-4-flash-250414"
+        original_argv = sys.argv
+        sys.argv = ["run.py", "--spec", "001", "--provider", "zhipuai", "--model", "glm-4-flash-250414"]
+        try:
+            args = parse_args()
+            assert args.provider == "zhipuai"
+            assert args.model == "glm-4-flash-250414"
+        finally:
+            sys.argv = original_argv
 
 
 # =============================================================================
@@ -141,8 +203,9 @@ class TestProviderSelectionBehavior:
         spec_dir.mkdir(parents=True)
 
         # Mock the run_autonomous_agent to avoid actual execution
-        with patch("cli.build_commands.run_autonomous_agent"):
-            with patch("cli.build_commands.validate_environment", return_value=True):
+        # Note: Must patch at the module level since it's imported lazily
+        with patch("agent.run_autonomous_agent"):
+            with patch("cli.utils.validate_environment", return_value=True):
                 with patch("cli.build_commands.ReviewState") as mock_review_state:
                     mock_review_state.return_value.is_approval_valid.return_value = True
                     with patch("cli.build_commands.check_existing_build", return_value=False):
@@ -151,7 +214,7 @@ class TestProviderSelectionBehavior:
                             from workspace import WorkspaceMode
                             mock_workspace.return_value = WorkspaceMode.DIRECT
 
-                            with patch("cli.build_commands.sync_spec_to_source"):
+                            with patch("agent.sync_spec_to_source"):
                                 handle_build_command(
                                     project_dir=project_dir,
                                     spec_dir=spec_dir,
@@ -185,8 +248,8 @@ class TestProviderSelectionBehavior:
         os.environ["AI_ENGINE_PROVIDER"] = "claude"
 
         try:
-            with patch("cli.build_commands.run_autonomous_agent"):
-                with patch("cli.build_commands.validate_environment", return_value=True):
+            with patch("agent.run_autonomous_agent"):
+                with patch("cli.utils.validate_environment", return_value=True):
                     with patch("cli.build_commands.ReviewState") as mock_review_state:
                         mock_review_state.return_value.is_approval_valid.return_value = True
                         with patch("cli.build_commands.check_existing_build", return_value=False):
@@ -194,7 +257,7 @@ class TestProviderSelectionBehavior:
                                 from workspace import WorkspaceMode
                                 mock_workspace.return_value = WorkspaceMode.DIRECT
 
-                                with patch("cli.build_commands.sync_spec_to_source"):
+                                with patch("agent.sync_spec_to_source"):
                                     # Call with provider=None (should use existing env var)
                                     handle_build_command(
                                         project_dir=project_dir,
@@ -315,17 +378,22 @@ class TestProviderOverride:
     def test_cli_provider_overrides_environment(self, temp_dir):
         """Tests CLI --provider flag overrides environment variable."""
         from cli.main import parse_args
+        import sys
 
         # Set environment variable
         os.environ["AI_ENGINE_PROVIDER"] = "claude"
 
+        original_argv = sys.argv
+        sys.argv = ["run.py", "--spec", "001", "--provider", "zhipuai"]
+
         try:
             # Parse with different provider
-            args = parse_args(["--spec", "001", "--provider", "zhipuai"])
+            args = parse_args()
 
             # CLI arg should take precedence
             assert args.provider == "zhipuai"
         finally:
+            sys.argv = original_argv
             os.environ.pop("AI_ENGINE_PROVIDER", None)
 
     def test_session_config_provider_override(self):
@@ -341,6 +409,7 @@ class TestProviderOverride:
 
         # Create session config with zhipuai override
         session_config = SessionConfig(
+            name="test-session",
             provider="zhipuai",
             model="glm-4-flash"
         )
@@ -363,6 +432,7 @@ class TestProviderOverride:
 
         # Create session config with model override
         session_config = SessionConfig(
+            name="test-session",
             provider=None,  # Use provider default
             model="glm-4-flash-250414"  # Override model
         )
@@ -410,8 +480,8 @@ class TestProviderModelValidation:
         assert "glm-4.7" in models
 
     def test_claude_provider_supported_models(self):
-        """Tests ClaudeProvider returns supported models."""
-        from core.providers.adapters.claude import ClaudeProvider
+        """Tests ClaudeAgentProvider returns supported models."""
+        from core.providers.adapters.claude import ClaudeAgentProvider
         from core.providers.config import ProviderConfig
 
         config = ProviderConfig(
@@ -419,7 +489,7 @@ class TestProviderModelValidation:
             anthropic_api_key="test-key"
         )
 
-        provider = ClaudeProvider(config)
+        provider = ClaudeAgentProvider(config)
         models = provider.get_supported_models()
 
         assert isinstance(models, list)
@@ -437,16 +507,20 @@ class TestProviderSelectionIntegration:
     def test_full_provider_selection_workflow(self, temp_dir, temp_git_repo):
         """Tests complete workflow: CLI args -> environment -> execution."""
         from cli.main import parse_args
+        import sys
 
-        # Parse CLI arguments
-        args = parse_args([
-            "--spec", "001",
-            "--provider", "zhipuai",
-            "--model", "glm-4-flash-250414"
-        ])
+        original_argv = sys.argv
+        sys.argv = ["run.py", "--spec", "001", "--provider", "zhipuai", "--model", "glm-4-flash-250414"]
 
-        # Verify parsed values
-        assert args.provider == "zhipuai"
+        try:
+            # Parse CLI arguments
+            args = parse_args()
+
+            # Verify parsed values
+            assert args.provider == "zhipuai"
+            assert args.model == "glm-4-flash-250414"
+        finally:
+            sys.argv = original_argv
         assert args.model == "glm-4-flash-250414"
 
         # Create spec directory with plan
