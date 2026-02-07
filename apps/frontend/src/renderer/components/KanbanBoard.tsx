@@ -838,6 +838,9 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
         grouped[statusKey] = [...newTasks, ...orderedTasks];
       } else {
         // Auto-sort mode: sort by selected criteria
+        const sortOrder = filters?.sortOrder ?? 'desc';
+        const multiplier = sortOrder === 'asc' ? -1 : 1;
+
         grouped[statusKey].sort((a, b) => {
           let comparison = 0;
 
@@ -847,19 +850,19 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
               const priorityOrder = { urgent: 4, high: 3, medium: 2, low: 1 };
               const aPriority = priorityOrder[a.metadata?.priority ?? 'low'] ?? 0;
               const bPriority = priorityOrder[b.metadata?.priority ?? 'low'] ?? 0;
-              comparison = bPriority - aPriority; // Descending (highest priority first)
+              comparison = (bPriority - aPriority) * multiplier; // Apply multiplier
               break;
             }
             case 'created': {
               const dateA = new Date(a.createdAt).getTime();
               const dateB = new Date(b.createdAt).getTime();
-              comparison = dateB - dateA; // Descending (newest first)
+              comparison = (dateB - dateA) * multiplier; // Apply multiplier
               break;
             }
             case 'updated': {
               const dateA = new Date(a.updatedAt).getTime();
               const dateB = new Date(b.updatedAt).getTime();
-              comparison = dateB - dateA; // Descending (most recently updated first)
+              comparison = (dateB - dateA) * multiplier; // Apply multiplier
               break;
             }
             default:

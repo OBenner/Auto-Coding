@@ -79,6 +79,8 @@ interface KanbanSettingsState {
   setSearchQuery: (searchQuery: string) => void;
   /** Set sort mode */
   setSortBy: (sortBy: SortMode) => void;
+  /** Set sort order */
+  setSortOrder: (sortOrder: SortOrder) => void;
   /** Load filters from localStorage */
   loadFilters: (projectId: string) => void;
   /** Save filters to localStorage */
@@ -427,6 +429,19 @@ export const useKanbanSettingsStore = create<KanbanSettingsState>((set, get) => 
         filters: {
           ...state.filters,
           sortBy
+        }
+      };
+    });
+  },
+
+  setSortOrder: (sortOrder) => {
+    set((state) => {
+      if (!state.filters) return state;
+
+      return {
+        filters: {
+          ...state.filters,
+          sortOrder
         }
       };
     });

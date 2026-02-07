@@ -18,7 +18,7 @@
  */
 import { useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Search, X } from 'lucide-react';
+import { Search, X, ArrowUpIcon, ArrowDownIcon } from 'lucide-react';
 import { Input } from './ui/input';
 import { Button } from './ui/button';
 import {
@@ -28,6 +28,11 @@ import {
   SelectTrigger,
   SelectValue
 } from './ui/select';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger
+} from './ui/tooltip';
 import { useKanbanSettingsStore } from '../stores/kanban-settings-store';
 import type { SortMode } from '../stores/kanban-settings-store';
 
@@ -47,6 +52,7 @@ export function KanbanFilters({ projectId }: KanbanFiltersProps) {
   const initializePreferences = useKanbanSettingsStore((state) => state.initializePreferences);
   const setSearchQuery = useKanbanSettingsStore((state) => state.setSearchQuery);
   const setSortBy = useKanbanSettingsStore((state) => state.setSortBy);
+  const setSortOrder = useKanbanSettingsStore((state) => state.setSortOrder);
   const loadFilters = useKanbanSettingsStore((state) => state.loadFilters);
   const saveFilters = useKanbanSettingsStore((state) => state.saveFilters);
   const resetFilters = useKanbanSettingsStore((state) => state.resetFilters);
@@ -155,6 +161,39 @@ export function KanbanFilters({ projectId }: KanbanFiltersProps) {
             </SelectItem>
           </SelectContent>
         </Select>
+
+        {/* Sort order toggle (only show when not manual) */}
+        {filters?.sortBy !== 'manual' && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  const newOrder = filters?.sortOrder === 'asc' ? 'desc' : 'asc';
+                  setSortOrder(newOrder);
+                  if (projectId) {
+                    saveFilters(projectId);
+                  }
+                }}
+                className="h-9 w-9 p-0"
+                aria-label={t('filters.sortOrderToggle')}
+              >
+                {filters?.sortOrder === 'asc' ? (
+                  <ArrowUpIcon className="h-4 w-4" />
+                ) : (
+                  <ArrowDownIcon className="h-4 w-4" />
+                )}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              {filters?.sortOrder === 'asc'
+                ? t('filters.sortOrder.ascending')
+                : t('filters.sortOrder.descending')
+              }
+            </TooltipContent>
+          </Tooltip>
+        )}
       </div>
 
       {/* Clear Filters button with active filter count badge */}
