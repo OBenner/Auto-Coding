@@ -11,20 +11,28 @@ from dataclasses import asdict
 from pathlib import Path
 
 from .categorizer import FileCategorizer
+from .deduplicator import ContentDeduplicator
 from .graphiti_integration import fetch_graph_hints, is_graphiti_enabled
 from .keyword_extractor import KeywordExtractor
 from .models import FileMatch, TaskContext
 from .pattern_discovery import PatternDiscoverer
 from .search import CodeSearcher
 from .service_matcher import ServiceMatcher
+from .token_counter import TokenCounter
 
 
 class ContextBuilder:
     """Builds task-specific context by searching the codebase."""
 
-    def __init__(self, project_dir: Path, project_index: dict | None = None):
+    def __init__(
+        self,
+        project_dir: Path,
+        project_index: dict | None = None,
+        token_budget: int | None = None,
+    ):
         self.project_dir = project_dir.resolve()
         self.project_index = project_index or self._load_project_index()
+        self.token_budget = token_budget
 
         # Initialize components
         self.searcher = CodeSearcher(self.project_dir)
@@ -32,6 +40,11 @@ class ContextBuilder:
         self.keyword_extractor = KeywordExtractor()
         self.categorizer = FileCategorizer()
         self.pattern_discoverer = PatternDiscoverer(self.project_dir)
+
+        # Initialize token budget manager components
+        self.token_counter = TokenCounter()
+        self.deduplicator = ContentDeduplicator()
+        self._token_usage = 0
 
     def _load_project_index(self) -> dict:
         """Load project index from file or create new one (.auto-claude is the installed instance)."""
@@ -248,3 +261,101 @@ class ContextBuilder:
             "entry_point": service_info.get("entry_point"),
             "key_directories": service_info.get("key_directories", {}),
         }
+
+    # Token Budget Manager Methods
+
+    def reset_token_usage(self) -> None:
+        """Reset the token usage counter."""
+        self._token_usage = 0
+
+    def get_token_usage(self) -> int:
+        """Get the current token usage."""
+        return self._token_usage
+
+    def get_remaining_budget(self) -> int | None:
+        """
+        Get the remaining token budget.
+
+        Returns:
+            Remaining tokens, or None if no budget is set
+        """
+        if self.token_budget is None:
+            return None
+        return max(0, self.token_budget - self._token_usage)
+
+    def is_within_budget(self, additional_tokens: int = 0) -> bool:
+        """
+        Check if we're within the token budget.
+
+        Args:
+            additional_tokens: Additional tokens to account for
+
+        Returns:
+            True if within budget or no budget is set, False otherwise
+        """
+        if self.token_budget is None:
+            return True
+        return (self._token_usage + additional_tokens) <= self.token_budget
+
+    def count_tokens(self, text: str) -> int:
+        """
+        Count tokens in a text string.
+
+        Args:
+            text: Input text to tokenize
+
+        Returns:
+            Number of tokens in the text
+        """
+        return self.token_counter.count_tokens(text)
+
+    def count_and_track_tokens(self, text: str) -> int:
+        """
+        Count tokens and add to usage tracking.
+
+        Args:
+            text: Input text to tokenize
+
+        Returns:
+            Number of tokens counted
+        """
+        tokens = self.token_counter.count_tokens(text)
+        self._token_usage += tokens
+        return tokens
+
+    def deduplicate_files(self, files: list[dict]) -> list[dict]:
+        """
+        Remove duplicate files from a list.
+
+        Args:
+            files: List of file dictionaries with content
+
+        Returns:
+            List with duplicate files removed
+        """
+        return self.deduplicator.deduplicate_files(files)
+
+    def get_budget_stats(self) -> dict:
+        """
+        Get token budget statistics.
+
+        Returns:
+            Dictionary with budget usage statistics
+        """
+        stats = {
+            "total_usage": self._token_usage,
+            "budget": self.token_budget,
+            "remaining": self.get_remaining_budget(),
+            "within_budget": self.is_within_budget(),
+        }
+
+        if self.token_budget is not None:
+            stats["usage_percent"] = (
+                (self._token_usage / self.token_budget * 100)
+                if self.token_budget > 0
+                else 0.0
+            )
+        else:
+            stats["usage_percent"] = None
+
+        return stats
