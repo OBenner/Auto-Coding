@@ -7,6 +7,7 @@ intelligent auto-recovery loop in QA Fixer.
 """
 
 import json
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -86,15 +87,19 @@ class RecoveryMetrics:
 
     def _save_metrics(self) -> bool:
         """
-        Save metrics to recovery_metrics.json.
+        Save metrics to recovery_metrics.json atomically.
+
+        Uses a temp file + os.replace to prevent corruption on crash.
 
         Returns:
             True if saved successfully
         """
         try:
             self._metrics["last_updated"] = datetime.now(timezone.utc).isoformat()
-            with open(self._metrics_file, "w", encoding="utf-8") as f:
+            tmp_file = self._metrics_file.with_suffix(".json.tmp")
+            with open(tmp_file, "w", encoding="utf-8") as f:
                 json.dump(self._metrics, f, indent=2, ensure_ascii=False)
+            os.replace(tmp_file, self._metrics_file)
             return True
         except (OSError, TypeError, UnicodeDecodeError):
             return False
@@ -163,8 +168,11 @@ class RecoveryMetrics:
         Returns:
             True if recorded successfully
         """
+        # Increment first, consistent with record_attempt
+        self._metrics["total_attempts"] += 1
+
         record = {
-            "attempt_number": self._metrics["total_attempts"] + 1,
+            "attempt_number": self._metrics["total_attempts"],
             "outcome": "user_intervention",
             "iterations": iteration,
             "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -172,7 +180,6 @@ class RecoveryMetrics:
         }
 
         self._metrics["recovery_history"].append(record)
-        self._metrics["total_attempts"] += 1
 
         return self._save_metrics()
 

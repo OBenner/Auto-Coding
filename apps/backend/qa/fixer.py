@@ -200,7 +200,10 @@ async def run_qa_fixer_session(
 
         # Record this attempt with recovery manager
         recovery_manager.record_attempt(
-            fixer_subtask_id, approach=f"QA fixer session {fix_session}, iteration {fixer_iteration}"
+            fixer_subtask_id,
+            session=fix_session,
+            success=False,  # Will be updated by record_outcome
+            approach=f"QA fixer session {fix_session}, iteration {fixer_iteration}",
         )
 
         try:
