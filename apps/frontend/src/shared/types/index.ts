@@ -18,6 +18,7 @@ export * from './integrations';
 export * from './app-update';
 export * from './cli';
 export * from './merge-analytics';
+export * from './productivity-analytics';
 
 // IPC types (must be last to use types from other modules)
 export * from './ipc';

@@ -35,6 +35,7 @@ import { registerProfileHandlers } from './profile-handlers';
 import { registerScreenshotHandlers } from './screenshot-handlers';
 import { registerTerminalWorktreeIpcHandlers } from './terminal';
 import { registerMergeAnalyticsHandlers } from './merge-analytics-handlers';
+import { registerAnalyticsHandlers } from './analytics-handlers';
 import { registerTokenStatsHandlers } from './token-stats-handler';
 import { notificationService } from '../notification-service';
 
@@ -127,6 +128,9 @@ export function setupIpcHandlers(
   // Merge analytics handlers
   registerMergeAnalyticsHandlers();
 
+  // Productivity analytics handlers
+  registerAnalyticsHandlers();
+
   // Token statistics handlers
   registerTokenStatsHandlers();
 
@@ -159,5 +163,6 @@ export {
   registerProfileHandlers,
   registerScreenshotHandlers,
   registerMergeAnalyticsHandlers,
+  registerAnalyticsHandlers,
   registerTokenStatsHandlers
 };
