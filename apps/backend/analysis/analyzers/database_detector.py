@@ -15,6 +15,40 @@ from pathlib import Path
 from .base import BaseAnalyzer
 
 
+# Compiled regex patterns for database model detection
+# SQLAlchemy patterns
+PATTERN_SQLALCHEMY_CLASS = re.compile(
+    r"class\s+(\w+)\([^)]*(?:Base|db\.Model|DeclarativeBase)[^)]*\):"
+)
+PATTERN_SQLALCHEMY_TABLENAME = re.compile(r'__tablename__\s*=\s*["\'](\w+)["\']')
+PATTERN_SQLALCHEMY_COLUMN = re.compile(r"(\w+)\s*=\s*Column\((.*?)\)")
+PATTERN_SQLALCHEMY_COLUMN_TYPE = re.compile(
+    r"(Integer|String|Text|Boolean|DateTime|Float|JSON)"
+)
+
+# Django patterns
+PATTERN_DJANGO_MODEL = re.compile(r"class\s+(\w+)\(models\.Model\):")
+PATTERN_DJANGO_FIELD = re.compile(r"(\w+)\s*=\s*models\.(\w+Field)\((.*?)\)")
+
+# Prisma patterns
+PATTERN_PRISMA_MODEL = re.compile(r"model\s+(\w+)\s*\{([^}]+)\}", re.MULTILINE)
+PATTERN_PRISMA_FIELD = re.compile(r"(\w+)\s+(\w+)([^/\n]*)")
+
+# TypeORM patterns
+PATTERN_TYPEORM_ENTITY = re.compile(r"@Entity\([^)]*\)\s*(?:export\s+)?class\s+(\w+)")
+PATTERN_TYPEORM_COLUMN = re.compile(
+    r"@(PrimaryGeneratedColumn|Column)\(([^)]*)\)\s+(\w+):\s*(\w+)"
+)
+
+# Drizzle patterns
+PATTERN_DRIZZLE_TABLE = re.compile(
+    r'export\s+const\s+(\w+)\s*=\s*(?:pg|mysql|sqlite)Table\(["\'](\w+)["\']'
+)
+
+# Mongoose patterns
+PATTERN_MONGOOSE_MODEL = re.compile(r'mongoose\.model\(["\'](\w+)["\']')
+
+
 class DatabaseDetector(BaseAnalyzer):
     """Detects database models across multiple ORMs."""
 
@@ -57,25 +91,21 @@ class DatabaseDetector(BaseAnalyzer):
                 continue
 
             # Find class definitions that inherit from Base or db.Model
-            class_pattern = (
-                r"class\s+(\w+)\([^)]*(?:Base|db\.Model|DeclarativeBase)[^)]*\):"
-            )
-            matches = re.finditer(class_pattern, content)
+            matches = PATTERN_SQLALCHEMY_CLASS.finditer(content)
 
             for match in matches:
                 model_name = match.group(1)
 
                 # Extract table name if defined
-                table_match = re.search(r'__tablename__\s*=\s*["\'](\w+)["\']', content)
+                table_match = PATTERN_SQLALCHEMY_TABLENAME.search(content)
                 table_name = (
                     table_match.group(1) if table_match else model_name.lower() + "s"
                 )
 
                 # Extract columns
                 fields = {}
-                column_pattern = r"(\w+)\s*=\s*Column\((.*?)\)"
-                column_matches = re.finditer(
-                    column_pattern, content[match.end() : match.end() + 2000]
+                column_matches = PATTERN_SQLALCHEMY_COLUMN.finditer(
+                    content[match.end() : match.end() + 2000]
                 )
 
                 for col_match in column_matches:
@@ -88,9 +118,7 @@ class DatabaseDetector(BaseAnalyzer):
                     is_nullable = "nullable=False" not in field_def
 
                     # Extract type
-                    type_match = re.search(
-                        r"(Integer|String|Text|Boolean|DateTime|Float|JSON)", field_def
-                    )
+                    type_match = PATTERN_SQLALCHEMY_COLUMN_TYPE.search(field_def)
                     field_type = type_match.group(1) if type_match else "Unknown"
 
                     fields[field_name] = {
@@ -124,8 +152,7 @@ class DatabaseDetector(BaseAnalyzer):
                 continue
 
             # Find class definitions that inherit from models.Model
-            class_pattern = r"class\s+(\w+)\(models\.Model\):"
-            matches = re.finditer(class_pattern, content)
+            matches = PATTERN_DJANGO_MODEL.finditer(content)
 
             for match in matches:
                 model_name = match.group(1)
@@ -133,9 +160,8 @@ class DatabaseDetector(BaseAnalyzer):
 
                 # Extract fields
                 fields = {}
-                field_pattern = r"(\w+)\s*=\s*models\.(\w+Field)\((.*?)\)"
-                field_matches = re.finditer(
-                    field_pattern, content[match.end() : match.end() + 2000]
+                field_matches = PATTERN_DJANGO_FIELD.finditer(
+                    content[match.end() : match.end() + 2000]
                 )
 
                 for field_match in field_matches:
@@ -173,8 +199,7 @@ class DatabaseDetector(BaseAnalyzer):
             return models
 
         # Find model definitions
-        model_pattern = r"model\s+(\w+)\s*\{([^}]+)\}"
-        matches = re.finditer(model_pattern, content, re.MULTILINE)
+        matches = PATTERN_PRISMA_MODEL.finditer(content)
 
         for match in matches:
             model_name = match.group(1)
@@ -182,8 +207,7 @@ class DatabaseDetector(BaseAnalyzer):
 
             fields = {}
             # Parse fields: id Int @id @default(autoincrement())
-            field_pattern = r"(\w+)\s+(\w+)([^/\n]*)"
-            field_matches = re.finditer(field_pattern, model_body)
+            field_matches = PATTERN_PRISMA_FIELD.finditer(model_body)
 
             for field_match in field_matches:
                 field_name = field_match.group(1)
@@ -221,18 +245,14 @@ class DatabaseDetector(BaseAnalyzer):
                 continue
 
             # Find @Entity() class declarations
-            entity_pattern = r"@Entity\([^)]*\)\s*(?:export\s+)?class\s+(\w+)"
-            matches = re.finditer(entity_pattern, content)
+            matches = PATTERN_TYPEORM_ENTITY.finditer(content)
 
             for match in matches:
                 model_name = match.group(1)
 
                 # Extract columns
                 fields = {}
-                column_pattern = (
-                    r"@(PrimaryGeneratedColumn|Column)\(([^)]*)\)\s+(\w+):\s*(\w+)"
-                )
-                column_matches = re.finditer(column_pattern, content)
+                column_matches = PATTERN_TYPEORM_COLUMN.finditer(content)
 
                 for col_match in column_matches:
                     decorator = col_match.group(1)
@@ -270,8 +290,7 @@ class DatabaseDetector(BaseAnalyzer):
                 continue
 
             # Find table definitions: export const users = pgTable('users', {...})
-            table_pattern = r'export\s+const\s+(\w+)\s*=\s*(?:pg|mysql|sqlite)Table\(["\'](\w+)["\']'
-            matches = re.finditer(table_pattern, content)
+            matches = PATTERN_DRIZZLE_TABLE.finditer(content)
 
             for match in matches:
                 const_name = match.group(1)
@@ -300,8 +319,7 @@ class DatabaseDetector(BaseAnalyzer):
                 continue
 
             # Find mongoose.model() or new Schema()
-            model_pattern = r'mongoose\.model\(["\'](\w+)["\']'
-            matches = re.finditer(model_pattern, content)
+            matches = PATTERN_MONGOOSE_MODEL.finditer(content)
 
             for match in matches:
                 model_name = match.group(1)

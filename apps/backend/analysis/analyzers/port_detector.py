@@ -15,6 +15,41 @@ from typing import Any
 from .base import BaseAnalyzer
 
 
+# Compiled regex patterns for port detection
+# Entry point patterns
+PATTERN_UVICORN_RUN = re.compile(r"uvicorn\.run\([^)]*port\s*=\s*(\d+)")
+PATTERN_APP_RUN = re.compile(r"\.run\([^)]*port\s*=\s*(\d+)")
+PATTERN_PORT_ASSIGNMENT = re.compile(r"^\s*[Pp][Oo][Rr][Tt]\s*=\s*(\d+)", re.MULTILINE)
+PATTERN_GETENV_PORT = re.compile(r'getenv\(\s*["\']PORT["\']\s*,\s*(\d+)')
+PATTERN_ENVIRON_GET_PORT = re.compile(r'environ\.get\(\s*["\']PORT["\']\s*,\s*(\d+)')
+PATTERN_APP_LISTEN = re.compile(r"\.listen\(\s*(\d+)")
+PATTERN_JS_PORT_ASSIGNMENT = re.compile(r"(?:const|let|var)\s+[Pp][Oo][Rr][Tt]\s*=\s*(\d+)")
+PATTERN_PROCESS_ENV_PORT = re.compile(r"process\.env\.PORT\s*\|\|\s*(\d+)")
+PATTERN_PROCESS_ENV_PORT_NUMBER = re.compile(r"Number\(process\.env\.PORT\)\s*\|\|\s*(\d+)")
+PATTERN_GO_PORT = re.compile(r':\s*(\d+)(?:["\s]|$)')
+PATTERN_RUST_BIND = re.compile(r'\.bind\(["\'][\d.]+:(\d+)')
+
+# Environment file patterns
+PATTERN_ENV_PORT = re.compile(r"^\s*PORT\s*=\s*(\d+)", re.MULTILINE)
+PATTERN_ENV_API_PORT = re.compile(r"^\s*API_PORT\s*=\s*(\d+)", re.MULTILINE)
+PATTERN_ENV_SERVER_PORT = re.compile(r"^\s*SERVER_PORT\s*=\s*(\d+)", re.MULTILINE)
+PATTERN_ENV_APP_PORT = re.compile(r"^\s*APP_PORT\s*=\s*(\d+)", re.MULTILINE)
+
+# Docker compose patterns
+PATTERN_DOCKER_PORT_MAPPING = re.compile(r'^\s*-\s*["\']?(\d+):\d+["\']?')
+PATTERN_DOCKER_SERVICE = re.compile(r"^\s*\w+\s*:")
+PATTERN_DOCKER_PORTS = re.compile(r"ports:")
+
+# Config file patterns
+PATTERN_CONFIG_PORT_ASSIGNMENT = re.compile(r"[Pp][Oo][Rr][Tt]\s*=\s*(\d+)")
+PATTERN_CONFIG_JSON_PORT = re.compile(r'["\']port["\']\s*:\s*(\d+)')
+
+# Package.json script patterns
+PATTERN_SCRIPT_P_FLAG = re.compile(r"-p\s+(\d+)")
+PATTERN_SCRIPT_PORT_FLAG = re.compile(r"--port\s+(\d+)")
+PATTERN_SCRIPT_PORT_ENV = re.compile(r"PORT=(\d+)")
+
+
 class PortDetector(BaseAnalyzer):
     """Detects application ports from various configuration sources."""
 
@@ -102,29 +137,19 @@ class PortDetector(BaseAnalyzer):
             "src/main.rs",
         ]
 
-        # Patterns to search for ports
+        # Compiled patterns to search for ports
         patterns = [
-            # Python: uvicorn.run(app, host="0.0.0.0", port=8050)
-            r"uvicorn\.run\([^)]*port\s*=\s*(\d+)",
-            # Python: app.run(port=8050, host="0.0.0.0")
-            r"\.run\([^)]*port\s*=\s*(\d+)",
-            # Python: port = 8050 or PORT = 8050
-            r"^\s*[Pp][Oo][Rr][Tt]\s*=\s*(\d+)",
-            # Python: os.getenv("PORT", 8050) or os.environ.get("PORT", 8050)
-            r'getenv\(\s*["\']PORT["\']\s*,\s*(\d+)',
-            r'environ\.get\(\s*["\']PORT["\']\s*,\s*(\d+)',
-            # JavaScript/TypeScript: app.listen(8050)
-            r"\.listen\(\s*(\d+)",
-            # JavaScript/TypeScript: const PORT = 8050 or let port = 8050
-            r"(?:const|let|var)\s+[Pp][Oo][Rr][Tt]\s*=\s*(\d+)",
-            # JavaScript/TypeScript: process.env.PORT || 8050
-            r"process\.env\.PORT\s*\|\|\s*(\d+)",
-            # JavaScript/TypeScript: Number(process.env.PORT) || 8050
-            r"Number\(process\.env\.PORT\)\s*\|\|\s*(\d+)",
-            # Go: :8050 or ":8050"
-            r':\s*(\d+)(?:["\s]|$)',
-            # Rust: .bind("127.0.0.1:8050")
-            r'\.bind\(["\'][\d.]+:(\d+)',
+            PATTERN_UVICORN_RUN,
+            PATTERN_APP_RUN,
+            PATTERN_PORT_ASSIGNMENT,
+            PATTERN_GETENV_PORT,
+            PATTERN_ENVIRON_GET_PORT,
+            PATTERN_APP_LISTEN,
+            PATTERN_JS_PORT_ASSIGNMENT,
+            PATTERN_PROCESS_ENV_PORT,
+            PATTERN_PROCESS_ENV_PORT_NUMBER,
+            PATTERN_GO_PORT,
+            PATTERN_RUST_BIND,
         ]
 
         for entry_file in entry_files:
@@ -133,7 +158,7 @@ class PortDetector(BaseAnalyzer):
                 continue
 
             for pattern in patterns:
-                matches = re.findall(pattern, content, re.MULTILINE)
+                matches = pattern.findall(content)
                 if matches:
                     # Return the first valid port found
                     for match in matches:
@@ -159,10 +184,10 @@ class PortDetector(BaseAnalyzer):
         ]
 
         patterns = [
-            r"^\s*PORT\s*=\s*(\d+)",
-            r"^\s*API_PORT\s*=\s*(\d+)",
-            r"^\s*SERVER_PORT\s*=\s*(\d+)",
-            r"^\s*APP_PORT\s*=\s*(\d+)",
+            PATTERN_ENV_PORT,
+            PATTERN_ENV_API_PORT,
+            PATTERN_ENV_SERVER_PORT,
+            PATTERN_ENV_APP_PORT,
         ]
 
         for env_file in env_files:
@@ -171,7 +196,7 @@ class PortDetector(BaseAnalyzer):
                 continue
 
             for pattern in patterns:
-                matches = re.findall(pattern, content, re.MULTILINE)
+                matches = pattern.findall(content)
                 if matches:
                     try:
                         port = int(matches[0])
@@ -200,21 +225,21 @@ class PortDetector(BaseAnalyzer):
 
             # Look for port mappings like "8050:8000" or "8050:8050"
             # Match the service name if possible
-            pattern = r'^\s*-\s*["\']?(\d+):\d+["\']?'
+            service_pattern = re.compile(rf"^\s*{re.escape(service_name)}\s*:")
 
             in_service = False
             in_ports = False
 
             for line in content.split("\n"):
                 # Check if we're in the right service block
-                if re.match(rf"^\s*{re.escape(service_name)}\s*:", line):
+                if service_pattern.match(line):
                     in_service = True
                     continue
 
                 # Check if we hit another service
                 if (
                     in_service
-                    and re.match(r"^\s*\w+\s*:", line)
+                    and PATTERN_DOCKER_SERVICE.match(line)
                     and "ports:" not in line
                 ):
                     in_service = False
@@ -228,7 +253,7 @@ class PortDetector(BaseAnalyzer):
 
                 # Extract port mapping
                 if in_ports:
-                    match = re.match(pattern, line)
+                    match = PATTERN_DOCKER_PORT_MAPPING.match(line)
                     if match:
                         try:
                             port = int(match.group(1))
@@ -260,12 +285,12 @@ class PortDetector(BaseAnalyzer):
 
             # Python config patterns
             patterns = [
-                r"[Pp][Oo][Rr][Tt]\s*=\s*(\d+)",
-                r'["\']port["\']\s*:\s*(\d+)',
+                PATTERN_CONFIG_PORT_ASSIGNMENT,
+                PATTERN_CONFIG_JSON_PORT,
             ]
 
             for pattern in patterns:
-                matches = re.findall(pattern, content)
+                matches = pattern.findall(content)
                 if matches:
                     try:
                         port = int(matches[0])
@@ -288,9 +313,9 @@ class PortDetector(BaseAnalyzer):
         # e.g., "dev": "next dev -p 3001"
         # e.g., "start": "node server.js --port 8050"
         patterns = [
-            r"-p\s+(\d+)",
-            r"--port\s+(\d+)",
-            r"PORT=(\d+)",
+            PATTERN_SCRIPT_P_FLAG,
+            PATTERN_SCRIPT_PORT_FLAG,
+            PATTERN_SCRIPT_PORT_ENV,
         ]
 
         for script in scripts.values():
@@ -298,7 +323,7 @@ class PortDetector(BaseAnalyzer):
                 continue
 
             for pattern in patterns:
-                matches = re.findall(pattern, script)
+                matches = pattern.findall(script)
                 if matches:
                     try:
                         port = int(matches[0])
@@ -314,9 +339,9 @@ class PortDetector(BaseAnalyzer):
         script_files = ["Makefile", "start.sh", "run.sh", "dev.sh"]
 
         patterns = [
-            r"PORT=(\d+)",
-            r"--port\s+(\d+)",
-            r"-p\s+(\d+)",
+            PATTERN_SCRIPT_PORT_ENV,
+            PATTERN_SCRIPT_PORT_FLAG,
+            PATTERN_SCRIPT_P_FLAG,
         ]
 
         for script_file in script_files:
@@ -325,7 +350,7 @@ class PortDetector(BaseAnalyzer):
                 continue
 
             for pattern in patterns:
-                matches = re.findall(pattern, content)
+                matches = pattern.findall(content)
                 if matches:
                     try:
                         port = int(matches[0])
