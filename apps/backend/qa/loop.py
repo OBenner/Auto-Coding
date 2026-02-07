@@ -13,8 +13,6 @@ from pathlib import Path
 from typing import Any
 
 from agents.memory_manager import save_user_correction
-
-# Test generation imports
 from agents.test_generator import run_test_generator_session
 from analysis.code_analyzer import CodeAnalyzer
 from analysis.failure_analyzer import analyze_failure, is_analysis_enabled
@@ -855,7 +853,9 @@ async def run_qa_validation_loop(
                     "Fixer stuck after multiple recovery attempts - escalating to human",
                 )
                 print("\n⚠️  QA Fixer Stuck")
-                print("   The fixer attempted multiple recovery approaches but could not resolve the issues.")
+                print(
+                    "   The fixer attempted multiple recovery approaches but could not resolve the issues."
+                )
                 print("   Escalating to human review...")
                 record_iteration(
                     spec_dir,
