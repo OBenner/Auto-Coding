@@ -1,0 +1,21 @@
+{
+  "priority": {
+    "critical": "Critical",
+    "criticalDescription": "Highest priority - executes first",
+    "high": "High",
+    "highDescription": "Important task - executes before normal priority",
+    "normal": "Normal",
+    "normalDescription": "Standard priority - default execution order",
+    "low": "Low",
+    "lowDescription": "Lower priority - executes when no higher priority tasks",
+    "background": "Background",
+    "backgroundDescription": "Lowest priority - only executes when system is idle"
+  },
+  "time": {
+    "now": "Now",
+    "tonight": "Tonight 10pm",
+    "tomorrowMorning": "Tomorrow 9am",
+    "tomorrowEvening": "Tomorrow 6pm",
+    "mondayMorning": "Monday 9am"
+  }
+}
