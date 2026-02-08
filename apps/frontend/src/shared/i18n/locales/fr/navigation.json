@@ -11,6 +11,7 @@
     "ideation": "Idéation",
     "changelog": "Journal des modifications",
     "context": "Contexte",
+    "sessionContext": "Contexte de session",
     "githubIssues": "Issues GitHub",
     "githubPRs": "PRs GitHub",
     "gitlabIssues": "Issues GitLab",

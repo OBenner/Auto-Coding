@@ -704,5 +704,15 @@
     "graphView": "Vue graphique",
     "deleteMemory": "Supprimer la mémoire",
     "exportMemories": "Exporter les mémoires"
+  },
+  "sessionContext": {
+    "description": "Voir et gérer le contexte de session de l'agent et l'historique de conversation",
+    "conversationRounds": "Tours de conversation",
+    "codeReferences": "Références de code",
+    "sessionDuration": "Durée de la session",
+    "timeline": "Chronologie de la session",
+    "timelineDescription": "Historique complet de conversation et références de code",
+    "noSessionData": "Aucune donnée de session disponible",
+    "startAgentSession": "Démarrer une session d'agent pour commencer le suivi du contexte"
   }
 }
