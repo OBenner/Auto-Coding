@@ -8,6 +8,7 @@ Handles follow-up planner sessions for adding new subtasks to completed specs.
 import logging
 from pathlib import Path
 
+from analysis.prevention_scanner import PreventionScanner
 from core.client import create_client
 from phase_config import get_phase_model, get_phase_thinking_budget
 from phase_event import ExecutionPhase, emit_phase
@@ -105,6 +106,47 @@ async def run_followup_planner(
     # Generate follow-up planner prompt
     prompt = get_followup_planner_prompt(spec_dir)
 
+    # Run prevention scanner before planning
+    print_status("Running prevention scanner...", "progress")
+    try:
+        scanner = PreventionScanner()
+        scan_result = scanner.scan(
+            project_dir=project_dir,
+            spec_dir=spec_dir,
+            run_security=True,
+            run_performance=True,
+            run_breaking_changes=False,  # No old version available for followup
+            run_architecture=True,
+        )
+
+        # Log scan summary
+        if task_logger:
+            summary = scanner.format_summary(scan_result)
+            task_logger.log_message(summary, LogPhase.PLANNING)
+
+        if scan_result.should_block:
+            logger.warning("Prevention scanner found blocking issues")
+            print_status(
+                f"⚠️  Critical issues found: {scan_result.summary.get('critical', 0)} critical, "
+                f"{scan_result.summary.get('high', 0)} high",
+                "warning"
+            )
+        elif scan_result.should_warn:
+            logger.info("Prevention scanner found warnings")
+            print_status(
+                f"Note: {scan_result.summary.get('total_issues', 0)} issues detected "
+                f"(see prevention_scan.json)",
+                "info"
+            )
+        else:
+            logger.info("Prevention scanner found no critical issues")
+            print_status("✅ No critical issues detected", "success")
+    except Exception as e:
+        logger.warning(f"Prevention scanner failed: {e}")
+        print_status(f"Prevention scanner warning: {e}", "warning")
+        # Continue with planning even if scanner fails
+
+    print()
     print_status("Running follow-up planner...", "progress")
     print()
 
