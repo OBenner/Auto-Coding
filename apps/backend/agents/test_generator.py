@@ -11,9 +11,16 @@ import logging
 from pathlib import Path
 from typing import Any
 
+from analysis.coverage_analyzer import (
+    CoverageAnalyzer,
+    parse_coverage_json,
+    CoverageResult,
+    FileCoverage,
+)
 from core.client import create_client
 from phase_config import get_phase_model, get_phase_thinking_budget
 from prompts_pkg.prompt_loader import get_agent_prompt
+from spec.coverage_config import load_coverage_config, CoverageConfig
 from task_logger import LogEntryType, LogPhase, get_task_logger
 from ui import (
     Icons,
@@ -27,6 +34,200 @@ from ui import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def analyze_coverage_gaps(
+    project_dir: Path,
+    source_dir: str | None = None,
+    config: CoverageConfig | None = None,
+) -> tuple[CoverageResult | None, dict[str, Any]]:
+    """
+    Run coverage analysis and identify gaps in test coverage.
+
+    Args:
+        project_dir: Root directory of the project
+        source_dir: Directory to measure coverage for (e.g., "apps/backend")
+        config: Coverage configuration with thresholds (optional)
+
+    Returns:
+        Tuple of (coverage_result, gaps_summary)
+        - coverage_result: CoverageResult with analysis data or None if failed
+        - gaps_summary: Dictionary with gap statistics and files needing attention
+    """
+    analyzer = CoverageAnalyzer(project_dir)
+
+    print_status("Running coverage analysis to identify gaps...", "progress")
+
+    # Check if pytest-cov is available
+    installed, message = analyzer.check_pytest_cov_installed()
+    if not installed:
+        logger.warning(f"pytest-cov not available: {message}")
+        return None, {"error": message, "coverage_gaps": []}
+
+    # Determine source directory if not specified
+    if source_dir is None:
+        # Default to apps/backend for backend projects
+        if (project_dir / "apps" / "backend").exists():
+            source_dir = "apps/backend"
+        else:
+            # Use current directory
+            source_dir = "."
+
+    # Run coverage with JSON output
+    coverage_output = project_dir / ".coverage.test_generator.json"
+    result = analyzer.run_coverage(
+        source_dir=source_dir,
+        output_format="json",
+        output_file=coverage_output,
+    )
+
+    if not result.success:
+        logger.warning(f"Coverage analysis failed: {result.error_message}")
+        return None, {"error": result.error_message, "coverage_gaps": []}
+
+    # Parse the JSON coverage report
+    try:
+        coverage_result = parse_coverage_json(coverage_output)
+    except Exception as e:
+        logger.error(f"Failed to parse coverage JSON: {e}")
+        return None, {"error": str(e), "coverage_gaps": []}
+
+    # Identify coverage gaps
+    gaps_summary = {
+        "total_coverage": coverage_result.total_coverage,
+        "files_with_gaps": [],
+        "critical_gaps": [],
+        "missing_lines_by_file": {},
+    }
+
+    # Get minimum coverage threshold
+    min_coverage = config.minimum_coverage if config else 80.0
+
+    # Analyze each file for gaps
+    for file_path, file_coverage in coverage_result.files.items():
+        # Check if file is below threshold
+        if file_coverage.coverage_percent < min_coverage:
+            gap_info = {
+                "file_path": file_path,
+                "coverage_percent": file_coverage.coverage_percent,
+                "required_coverage": min_coverage,
+                "gap_percent": min_coverage - file_coverage.coverage_percent,
+                "missing_lines": file_coverage.lines_missing,
+                "lines_total": file_coverage.lines_total,
+                "lines_covered": file_coverage.lines_covered,
+            }
+            gaps_summary["files_with_gaps"].append(file_path)
+            gaps_summary["missing_lines_by_file"][file_path] = file_coverage.lines_missing
+
+            # Mark as critical gap if significantly below threshold
+            if file_coverage.coverage_percent < min_coverage * 0.5:
+                gaps_summary["critical_gaps"].append(file_path)
+
+    # Log results
+    files_with_gaps_count = len(gaps_summary["files_with_gaps"])
+    if files_with_gaps_count > 0:
+        print_status(
+            f"Found {files_with_gaps_count} file(s) with coverage gaps",
+            "warning",
+        )
+        print_key_value("Total coverage", f"{coverage_result.total_coverage:.1f}%")
+        print_key_value("Files with gaps", str(files_with_gaps_count))
+        if gaps_summary["critical_gaps"]:
+            print_key_value("Critical gaps", str(len(gaps_summary["critical_gaps"])))
+    else:
+        print_status(
+            f"Coverage meets threshold: {coverage_result.total_coverage:.1f}%",
+            "success",
+        )
+
+    return coverage_result, gaps_summary
+
+
+def format_coverage_gaps_prompt(gaps_summary: dict[str, Any]) -> str:
+    """
+    Format coverage gaps as a prompt for the AI agent.
+
+    Args:
+        gaps_summary: Summary from analyze_coverage_gaps
+
+    Returns:
+        Formatted string describing coverage gaps
+    """
+    if "error" in gaps_summary:
+        return f"Coverage analysis failed: {gaps_summary['error']}"
+
+    if not gaps_summary.get("files_with_gaps"):
+        return "Coverage meets all thresholds. No gaps detected."
+
+    lines = []
+    lines.append("## Coverage Gaps Detected")
+    lines.append("")
+    lines.append(f"**Total Coverage:** {gaps_summary['total_coverage']:.1f}%")
+    lines.append(f"**Files with Gaps:** {len(gaps_summary['files_with_gaps'])}")
+    lines.append("")
+
+    if gaps_summary.get("critical_gaps"):
+        lines.append("### Critical Gaps (Significantly Below Threshold)")
+        for file_path in gaps_summary["critical_gaps"][:5]:
+            lines.append(f"- {file_path}")
+        lines.append("")
+
+    lines.append("### Files Requiring Additional Tests")
+    for file_path in gaps_summary["files_with_gaps"][:10]:
+        missing_lines = gaps_summary["missing_lines_by_file"].get(file_path, [])
+        if missing_lines:
+            line_ranges = _format_line_ranges(missing_lines[:20])
+            lines.append(f"- **{file_path}**")
+            lines.append(f"  - Missing lines: {line_ranges}")
+        else:
+            lines.append(f"- **{file_path}**")
+
+    if len(gaps_summary["files_with_gaps"]) > 10:
+        lines.append(f"- ... and {len(gaps_summary['files_with_gaps']) - 10} more files")
+
+    lines.append("")
+    lines.append("**Action Required:** Generate additional tests to cover the missing lines above.")
+    lines.append("Focus on the specific line numbers that are not covered.")
+
+    return "\n".join(lines)
+
+
+def _format_line_ranges(line_numbers: list[int]) -> str:
+    """
+    Format a list of line numbers into compact ranges.
+
+    Args:
+        line_numbers: List of line numbers
+
+    Returns:
+        Formatted string like "1-5, 10, 15-20"
+    """
+    if not line_numbers:
+        return ""
+
+    sorted_lines = sorted(set(line_numbers))
+    ranges = []
+    start = sorted_lines[0]
+    end = sorted_lines[0]
+
+    for line in sorted_lines[1:]:
+        if line == end + 1:
+            end = line
+        else:
+            if start == end:
+                ranges.append(str(start))
+            else:
+                ranges.append(f"{start}-{end}")
+            start = line
+            end = line
+
+    # Add final range
+    if start == end:
+        ranges.append(str(start))
+    else:
+        ranges.append(f"{start}-{end}")
+
+    return ", ".join(ranges)
 
 
 def validate_generated_tests(test_files: list[Path], project_dir: Path) -> bool:
@@ -153,6 +354,14 @@ async def run_test_generator_session(
             f"{len(analysis_results.get('classes', []))} classes",
         )
 
+    # Load coverage configuration
+    coverage_config: CoverageConfig | None = None
+    try:
+        coverage_config = load_coverage_config(project_dir, spec_dir)
+        print_key_value("Min coverage", f"{coverage_config.minimum_coverage:.0f}%")
+    except Exception as e:
+        logger.warning(f"Failed to load coverage config: {e}")
+
     # Load the test generator prompt
     try:
         prompt = get_agent_prompt("test_generator")
@@ -178,7 +387,7 @@ async def run_test_generator_session(
 4. Generate pytest test files for the functions and classes above
 5. Ensure tests cover edge cases detected in the analysis
 6. Follow the project's testing conventions
-7. Aim for 80%+ code coverage
+7. Aim for {coverage_config.minimum_coverage if coverage_config else 80.0:.0f}%+ code coverage
 
 Generate test files in the tests/ directory following the naming convention test_*.py.
 
@@ -262,21 +471,147 @@ Begin by loading context (Phase 0 in your prompt).
     # Validate generated tests
     validation_success = validate_generated_tests(test_files, project_dir)
 
-    # Log results
-    if task_logger:
-        if validation_success:
-            task_logger.log_entry(
-                LogEntryType.SUCCESS,
-                f"Generated and validated {len(test_files)} test files",
-            )
-        else:
+    if not validation_success:
+        if task_logger:
             task_logger.log_entry(
                 LogEntryType.WARNING,
                 f"Generated {len(test_files)} test files but validation failed",
+            )
+        return {
+            "generated_files": [str(f) for f in test_files],
+            "success": False,
+            "error": "Test validation failed",
+            "coverage_analyzed": False,
+        }
+
+    print()
+
+    # Run coverage analysis to identify gaps
+    print()
+    print_status("Analyzing coverage gaps...", "progress")
+    coverage_result, gaps_summary = analyze_coverage_gaps(
+        project_dir=project_dir,
+        config=coverage_config,
+    )
+
+    # Check if there are significant coverage gaps
+    needs_improvement = False
+    if coverage_result and coverage_result.success:
+        gap_count = len(gaps_summary.get("files_with_gaps", []))
+        # If coverage is below threshold or there are critical gaps, improve tests
+        min_threshold = coverage_config.minimum_coverage if coverage_config else 80.0
+        if (
+            coverage_result.total_coverage < min_threshold
+            or len(gaps_summary.get("critical_gaps", [])) > 0
+        ):
+            needs_improvement = True
+
+            print()
+            print_status("Coverage gaps detected - running improvement iteration...", "warning")
+            print()
+
+            # Format coverage gaps for AI agent
+            gaps_prompt = format_coverage_gaps_prompt(gaps_summary)
+
+            # Create improvement message
+            improvement_message = f"""{gaps_prompt}
+
+## Your Task
+
+Review the coverage gaps above and generate additional test cases to cover the missing lines.
+
+**Important:**
+- Focus on the specific line numbers that are NOT covered
+- Add tests that exercise the missing code paths
+- Pay special attention to critical gaps (files significantly below threshold)
+- Do NOT modify existing tests - only add new test cases
+- Use the same test files you created earlier (append new test functions)
+
+Generate additional test cases to improve coverage to at least {min_threshold:.0f}%.
+"""
+
+            # Run improvement iteration
+            try:
+                print_status("Running Test Generator Agent improvement iteration...", "progress")
+                response = await client.create_agent_session(
+                    name="test-generator-improvement",
+                    starting_message=improvement_message,
+                    system_prompt=prompt,
+                )
+
+                if verbose:
+                    logger.info(f"Test Generator improvement response: {response}")
+
+                # Log improvement session
+                if task_logger:
+                    task_logger.log_entry(
+                        LogEntryType.INFO,
+                        f"Test improvement iteration completed",
+                    )
+
+                # Re-scan for new/updated test files
+                print()
+                print_status("Re-scanning for updated test files...", "progress")
+                updated_test_files = []
+                for test_file in tests_dir.glob("test_*.py"):
+                    relative_path = test_file.relative_to(project_dir)
+                    if relative_path not in [str(f) for f in test_files]:
+                        updated_test_files.append(relative_path)
+
+                if updated_test_files:
+                    print_key_value("New/updated files", str(len(updated_test_files)))
+                    for test_file in updated_test_files:
+                        print(f"  {muted('•')} {test_file}")
+                    print()
+
+                # Re-validate after improvement
+                if updated_test_files:
+                    print_status("Re-validating tests after improvement...", "progress")
+                    validation_success = validate_generated_tests(
+                        updated_test_files, project_dir
+                    )
+
+                    # Re-run coverage analysis
+                    print()
+                    print_status("Re-analyzing coverage after improvement...", "progress")
+                    coverage_result, gaps_summary = analyze_coverage_gaps(
+                        project_dir=project_dir,
+                        config=coverage_config,
+                    )
+
+                    if coverage_result and coverage_result.success:
+                        print_key_value(
+                            "Updated coverage", f"{coverage_result.total_coverage:.1f}%"
+                        )
+
+            except Exception as e:
+                error_msg = f"Test improvement iteration failed: {e}"
+                logger.error(error_msg)
+                if task_logger:
+                    task_logger.log_entry(LogEntryType.ERROR, error_msg)
+                # Don't fail completely - return original tests
+                print_status(f"Improvement iteration failed: {e}", "warning")
+
+    # Log results
+    if task_logger:
+        if coverage_result and coverage_result.success:
+            task_logger.log_entry(
+                LogEntryType.SUCCESS,
+                f"Generated {len(test_files)} test files, "
+                f"coverage: {coverage_result.total_coverage:.1f}%, "
+                f"gaps improved: {needs_improvement}",
+            )
+        else:
+            task_logger.log_entry(
+                LogEntryType.SUCCESS,
+                f"Generated and validated {len(test_files)} test files",
             )
 
     return {
         "generated_files": [str(f) for f in test_files],
         "success": validation_success,
         "error": None if validation_success else "Test validation failed",
+        "coverage_analyzed": coverage_result is not None and coverage_result.success,
+        "coverage_percent": coverage_result.total_coverage if coverage_result else None,
+        "coverage_gaps": len(gaps_summary.get("files_with_gaps", [])) if gaps_summary else 0,
     }
