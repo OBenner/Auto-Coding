@@ -39,7 +39,7 @@ from .coverage_validator import (
     format_validation_summary,
     validate_coverage,
 )
-from .criteria import get_qa_signoff_status
+from .criteria import get_qa_signoff_status, load_implementation_plan, save_implementation_plan
 
 logger = logging.getLogger(__name__)
 
@@ -192,6 +192,73 @@ def run_coverage_validation(
     except Exception as e:
         debug_error("coverage_validator", f"Exception during coverage validation: {e}")
         return False, f"❌ Coverage validation exception: {str(e)}", None
+
+
+def update_qa_signoff_with_coverage(
+    spec_dir: Path,
+    coverage_data: dict | None,
+) -> bool:
+    """
+    Update qa_signoff in implementation_plan.json with coverage results.
+
+    Automatically adds coverage_results field to qa_signoff if it exists,
+    ensuring coverage data is always tracked.
+
+    Args:
+        spec_dir: Spec directory
+        coverage_data: Coverage data from run_coverage_validation
+
+    Returns:
+        True if updated successfully, False otherwise
+    """
+    if coverage_data is None:
+        debug(
+            "coverage_validator",
+            "No coverage data to add to qa_signoff",
+        )
+        return False
+
+    # Load implementation plan
+    plan = load_implementation_plan(spec_dir)
+    if not plan:
+        debug_error(
+            "coverage_validator",
+            "Failed to load implementation plan for coverage signoff update",
+        )
+        return False
+
+    # Get existing qa_signoff
+    qa_signoff = plan.get("qa_signoff")
+    if not qa_signoff:
+        debug(
+            "coverage_validator",
+            "No qa_signoff found in implementation plan",
+        )
+        return False
+
+    # Add coverage_results to qa_signoff
+    qa_signoff["coverage_results"] = coverage_data
+    debug_success(
+        "coverage_validator",
+        "Added coverage_results to qa_signoff",
+        passed=coverage_data.get("passed"),
+        total_coverage=coverage_data.get("total_coverage"),
+    )
+
+    # Save updated plan
+    saved = save_implementation_plan(spec_dir, plan)
+    if saved:
+        debug_success(
+            "coverage_validator",
+            "Saved qa_signoff with coverage_results to implementation_plan.json",
+        )
+    else:
+        debug_error(
+            "coverage_validator",
+            "Failed to save implementation plan with coverage results",
+        )
+
+    return saved
 
 
 # =============================================================================
@@ -620,6 +687,18 @@ This is attempt {previous_error.get("consecutive_errors", 1) + 1}. If you fail t
             response_length=len(response_text),
             qa_status=status.get("status") if status else "unknown",
         )
+
+        # Automatically add coverage results to qa_signoff
+        if status and coverage_data is not None:
+            update_qa_signoff_with_coverage(spec_dir, coverage_data)
+            # Reload status to get the updated qa_signoff with coverage_results
+            status = get_qa_signoff_status(spec_dir)
+            debug_success(
+                "qa_reviewer",
+                "Coverage results added to qa_signoff",
+                coverage_passed=coverage_data.get("passed"),
+                total_coverage=coverage_data.get("total_coverage"),
+            )
 
         # Save QA session insights to memory
         qa_discoveries = {
