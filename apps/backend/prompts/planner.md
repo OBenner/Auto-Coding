@@ -201,6 +201,130 @@ Minimal overhead - just subtasks, no phases.
 
 ---
 
+## PHASE 2.5: RUN PREVENTION SCANNER (PROACTIVE ISSUE DETECTION)
+
+**CRITICAL**: Before creating the implementation plan, run the prevention scanner to detect potential issues early.
+
+### 2.5.1: Import and Initialize Scanner
+
+```python
+from apps.backend.analysis.prevention_scanner import PreventionScanner
+
+scanner = PreventionScanner()
+```
+
+### 2.5.2: Scan Planned Changes
+
+Based on your Phase 0 investigation and Phase 1 context files, identify:
+- Files that will be modified
+- Files that will be created
+- The directory containing the planned changes
+
+Run the scanner:
+
+```python
+# Scan a specific directory
+result = scanner.scan(directory="apps/backend/services/")
+
+# Or scan specific files
+result = scanner.scan(
+    file_paths=["apps/backend/api/routes.py", "apps/backend/models/user.py"]
+)
+```
+
+### 2.5.3: Analyze Results
+
+The scanner checks for:
+- **Security vulnerabilities**: SQL injection, XSS, insecure credentials
+- **Performance issues**: N+1 queries, missing indexes, inefficient loops
+- **Breaking changes**: API contract violations, removed endpoints, signature changes
+- **Architecture violations**: Pattern inconsistencies, naming violations, import issues
+
+Review the scan results:
+
+```python
+# Check if implementation should be blocked
+if result.should_block():
+    print(f"BLOCKING ISSUES FOUND:")
+    for issue in result.get_critical_issues():
+        print(f"  - {issue['type']}: {issue['message']}")
+
+# Check for warnings
+if result.should_warn():
+    print(f"WARNINGS:")
+    for warning in result.get_warnings():
+        print(f"  - {warning['type']}: {warning['message']}")
+
+# Get formatted report
+print(result.format_report())
+```
+
+### 2.5.4: Adjust Plan Based on Results
+
+**If BLOCKING issues found** (should_block() returns True):
+1. Document the issues in `context.json` under a new `prevention_scan_results` section
+2. Add subtasks to the implementation plan to address these issues FIRST
+3. Consider changing the workflow type if major refactoring is needed
+
+**If WARNINGS found** (should_warn() returns True):
+1. Add comments or notes to relevant subtasks with mitigation strategies
+2. Include verification steps that specifically check for these issues
+3. Add architectural guidance in subtask descriptions
+
+**Example context.json update**:
+
+```json
+{
+  "prevention_scan_results": {
+    "blocking_issues": [
+      {
+        "type": "security",
+        "severity": "high",
+        "message": "SQL injection risk in user query endpoint",
+        "file": "apps/backend/api/users.py",
+        "mitigation": "Use parameterized queries or ORM"
+      }
+    ],
+    "warnings": [
+      {
+        "type": "performance",
+        "severity": "medium",
+        "message": "Potential N+1 query in user.posts relationship",
+        "suggestion": "Add eager loading with joinedload()"
+      }
+    ]
+  }
+}
+```
+
+**Example subtask adjustment**:
+
+```json
+{
+  "id": "subtask-1-1",
+  "description": "Fix SQL injection vulnerability in user query endpoint",
+  "service": "backend",
+  "files_to_modify": ["apps/backend/api/users.py"],
+  "notes": "Prevention scanner detected SQL injection risk - use parameterized queries",
+  "verification": {
+    "type": "command",
+    "command": "python -c \"from apps.backend.analysis.security_scanner import SecurityScanner; s = SecurityScanner(); result = s.scan(file_paths=['apps/backend/api/users.py']); print('OK' if not result.vulnerabilities else 'FAIL')\"",
+    "expected": "OK"
+  }
+}
+```
+
+### 2.5.5: Skip Conditions
+
+You may skip the prevention scanner if:
+- Workflow type is **SIMPLE** and changes are trivial (typo fixes, documentation)
+- No Python code is being modified (pure documentation or config changes)
+- The scan was already run in a previous iteration of this spec
+
+**Default behavior**: Run the prevention scanner for all non-trivial code changes.
+
+---
+
 ## PHASE 3: CREATE implementation_plan.json
 
 **🚨 CRITICAL: YOU MUST USE THE WRITE TOOL TO CREATE THIS FILE 🚨**
