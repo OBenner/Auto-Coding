@@ -17,5 +17,31 @@
     "tomorrowMorning": "Tomorrow 9am",
     "tomorrowEvening": "Tomorrow 6pm",
     "mondayMorning": "Monday 9am"
+  },
+  "calendar": {
+    "title": "Scheduled Builds",
+    "noBuilds": "No Scheduled Builds",
+    "noBuildsDescription": "You haven't scheduled any builds yet. Click 'Schedule Build' to create one.",
+    "loading": "Loading scheduled builds...",
+    "today": "Today",
+    "tomorrow": "Tomorrow",
+    "thisWeek": "This Week",
+    "later": "Later",
+    "status": {
+      "pending": "Pending",
+      "queued": "Queued",
+      "running": "Running",
+      "completed": "Completed",
+      "failed": "Failed",
+      "cancelled": "Cancelled",
+      "retrying": "Retrying"
+    },
+    "scheduledFor": "Scheduled for {{date}}",
+    "priority": "Priority",
+    "dependencies": "Dependencies",
+    "noDependencies": "None",
+    "viewDetails": "View Details",
+    "cancelBuild": "Cancel Build",
+    "retryBuild": "Retry Build"
   }
 }
