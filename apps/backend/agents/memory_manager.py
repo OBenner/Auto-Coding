@@ -689,6 +689,180 @@ async def save_session_memory(
         return False, "none"
 
 
+async def save_feedback(
+    spec_dir: Path,
+    project_dir: Path,
+    feedback_type: str,
+    task_description: str,
+    agent_type: str,
+    context: dict | None = None,
+) -> bool:
+    """
+    Save user feedback (accept/reject/modify) to memory and update preferences.
+
+    This is the primary feedback collection function that tracks all user
+    interactions with agent outputs and updates the preference profile to
+    enable adaptive behavior.
+
+    Args:
+        spec_dir: Spec directory
+        project_dir: Project root directory
+        feedback_type: Type of feedback ("accepted", "rejected", "modified")
+        task_description: Description of the task that was evaluated
+        agent_type: Type of agent that produced the output (planner, coder, qa_reviewer, etc.)
+        context: Optional additional context about the feedback
+                 For "modified": should include what was changed
+                 For "rejected": should include why it was rejected
+
+    Returns:
+        True if saved successfully, False otherwise
+    """
+    if not is_graphiti_enabled():
+        if is_debug_enabled():
+            debug("memory", "Graphiti not enabled, skipping feedback save")
+        return False
+
+    memory = None
+    try:
+        memory = await get_graphiti_memory(spec_dir, project_dir)
+        if memory is None:
+            if is_debug_enabled():
+                debug_warning("memory", "GraphitiMemory not available for feedback")
+            return False
+
+        if is_debug_enabled():
+            debug(
+                "memory",
+                "Saving user feedback",
+                feedback_type=feedback_type,
+                agent_type=agent_type,
+                task=task_description[:100],
+            )
+
+        # Save feedback to preference profile via Graphiti
+        from agents.preferences import FeedbackType
+
+        # Validate feedback type
+        try:
+            feedback_enum = FeedbackType(feedback_type)
+        except ValueError:
+            logger.warning(f"Invalid feedback type: {feedback_type}")
+            if is_debug_enabled():
+                debug_error(
+                    "memory", "Invalid feedback type", feedback_type=feedback_type
+                )
+            return False
+
+        # Store feedback in Graphiti as an episode
+        episode_data = {
+            "episode_type": "user_feedback",
+            "feedback_type": feedback_type,
+            "task_description": task_description,
+            "agent_type": agent_type,
+            "context": context or {},
+        }
+
+        # Build insights based on feedback type
+        insights = {
+            "what_failed": [],
+            "what_worked": [],
+            "discoveries": {},
+            "recommendations_for_next_session": [],
+            "subtasks_completed": [],
+            "_user_feedback": episode_data,
+        }
+
+        if feedback_enum == FeedbackType.ACCEPTED:
+            insights["what_worked"].append(
+                f"{agent_type} output accepted for: {task_description[:200]}"
+            )
+            insights["recommendations_for_next_session"].append(
+                f"Continue current approach for {agent_type} tasks"
+            )
+        elif feedback_enum == FeedbackType.REJECTED:
+            reason = context.get("reason", "No reason provided") if context else "No reason provided"
+            insights["what_failed"].append(
+                f"{agent_type} output rejected: {task_description[:200]}"
+            )
+            insights["discoveries"]["gotchas_encountered"] = [
+                {
+                    "gotcha": f"User rejected {agent_type} approach",
+                    "solution": reason[:500],
+                    "source": "user_feedback",
+                }
+            ]
+            insights["recommendations_for_next_session"].append(
+                f"Adjust {agent_type} approach: {reason[:300]}"
+            )
+        elif feedback_enum == FeedbackType.MODIFIED:
+            modifications = context.get("modifications", "User made changes") if context else "User made changes"
+            reason = context.get("reason", "") if context else ""
+            insights["what_worked"].append(
+                f"{agent_type} output partially accepted (with modifications)"
+            )
+            insights["what_failed"].append(
+                f"Required modification: {modifications[:200]}"
+            )
+            if reason:
+                insights["discoveries"]["patterns"] = [
+                    {
+                        "pattern": f"User prefers different approach for {task_description[:100]}",
+                        "reason": reason[:300],
+                        "source": "user_feedback",
+                    }
+                ]
+            insights["recommendations_for_next_session"].append(
+                f"Apply learned modifications: {modifications[:300]}"
+            )
+
+        # Save to Graphiti
+        result = await memory.save_session_insights(
+            session_num=0,  # Feedback is session-independent
+            insights=insights,
+        )
+
+        # Also update preference profile directly
+        profile_result = await memory.add_feedback_to_profile(
+            feedback_type=feedback_enum,
+            task_description=task_description,
+            agent_type=agent_type,
+            context=context or {},
+        )
+
+        if result and profile_result:
+            logger.info(
+                f"User feedback saved: {feedback_type} for {agent_type} task"
+            )
+            if is_debug_enabled():
+                debug_success(
+                    "memory",
+                    "Feedback saved successfully",
+                    feedback_type=feedback_type,
+                    profile_updated=profile_result,
+                )
+        return bool(result and profile_result)
+
+    except Exception as e:
+        logger.warning(f"Failed to save user feedback: {e}")
+        if is_debug_enabled():
+            debug_error("memory", "Feedback save failed", error=str(e))
+        capture_exception(
+            e,
+            operation="save_feedback",
+            feedback_type=feedback_type,
+            agent_type=agent_type,
+            spec_dir=str(spec_dir),
+            project_dir=str(project_dir),
+        )
+        return False
+    finally:
+        if memory is not None:
+            try:
+                await memory.close()
+            except Exception:
+                pass
+
+
 async def save_user_correction(
     spec_dir: Path,
     project_dir: Path,
@@ -698,6 +872,9 @@ async def save_user_correction(
 ) -> bool:
     """
     Save a user correction to Graphiti memory.
+
+    DEPRECATED: Use save_feedback() instead for new code.
+    This is kept for backward compatibility with QA_FIX_REQUEST.md workflow.
 
     Called when the user manually edits QA_FIX_REQUEST.md to provide
     better guidance than the QA agent generated.

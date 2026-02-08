@@ -524,6 +524,64 @@ class GraphitiMemory:
             )
             return None
 
+    async def add_feedback_to_profile(
+        self,
+        feedback_type: "FeedbackType",
+        task_description: str,
+        agent_type: str,
+        context: dict,
+    ) -> bool:
+        """
+        Add user feedback to the preference profile and save it.
+
+        This is a convenience method that:
+        1. Retrieves the current profile (or creates a new one)
+        2. Adds the feedback record
+        3. Saves the updated profile back to storage
+
+        Args:
+            feedback_type: Type of feedback (FeedbackType enum or string)
+            task_description: Description of the task that was evaluated
+            agent_type: Agent that produced the output
+            context: Additional context about the feedback
+
+        Returns:
+            True if feedback was added and saved successfully
+        """
+        if not await self._ensure_initialized():
+            return False
+
+        try:
+            from agents.preferences import PreferenceProfile
+
+            # Get existing profile or create new one
+            profile_dict = await self.get_preference_profile()
+            if profile_dict:
+                profile = PreferenceProfile.from_dict(profile_dict)
+            else:
+                profile = PreferenceProfile()
+
+            # Add the feedback (this also updates learned adjustments)
+            profile.add_feedback(
+                feedback_type=feedback_type,
+                task_description=task_description,
+                agent_type=agent_type,
+                context=context,
+            )
+
+            # Save updated profile
+            return await self.save_preference_profile(profile.to_dict())
+
+        except Exception as e:
+            logger.warning(f"Failed to add feedback to profile: {e}")
+            self._record_error(f"add_feedback_to_profile failed: {e}")
+            capture_exception(
+                e,
+                component="graphiti",
+                operation="add_feedback_to_profile",
+            )
+            return False
+
     # Delegate methods to search module
 
     async def get_relevant_context(
