@@ -22,6 +22,13 @@ from .batch_commands import (
     handle_batch_status_command,
 )
 from .build_commands import handle_build_command
+from .scheduler_commands import (
+    handle_schedule_cancel_command,
+    handle_schedule_command,
+    handle_schedule_start_command,
+    handle_schedule_status_command,
+    handle_schedule_stop_command,
+)
 from .followup_commands import handle_followup_command
 from .qa_commands import (
     handle_qa_command,
@@ -283,6 +290,58 @@ Environment Variables:
         help="Actually delete files in cleanup (not just preview)",
     )
 
+    # Scheduler commands
+    parser.add_argument(
+        "--schedule",
+        type=str,
+        default=None,
+        metavar="SPEC",
+        help="Schedule a build for a specific spec",
+    )
+    parser.add_argument(
+        "--schedule-at",
+        type=str,
+        default=None,
+        metavar="TIME",
+        help="With --schedule: when to run (ISO format or 'tonight 10pm')",
+    )
+    parser.add_argument(
+        "--schedule-priority",
+        type=str,
+        default="normal",
+        choices=["low", "normal", "high", "urgent"],
+        help="With --schedule: build priority (default: normal)",
+    )
+    parser.add_argument(
+        "--schedule-deps",
+        type=str,
+        default=None,
+        metavar="SPECS",
+        help="With --schedule: comma-separated spec IDs this build depends on",
+    )
+    parser.add_argument(
+        "--schedule-status",
+        action="store_true",
+        help="Show status of scheduled builds",
+    )
+    parser.add_argument(
+        "--schedule-cancel",
+        type=str,
+        default=None,
+        metavar="BUILD_ID",
+        help="Cancel a scheduled build",
+    )
+    parser.add_argument(
+        "--schedule-start",
+        action="store_true",
+        help="Start the scheduler service",
+    )
+    parser.add_argument(
+        "--schedule-stop",
+        action="store_true",
+        help="Stop the scheduler service",
+    )
+
     # Merge analytics commands
     parser.add_argument(
         "--merge-analytics-list",
@@ -401,6 +460,34 @@ def _run_cli() -> None:
 
     if args.batch_cleanup:
         handle_batch_cleanup_command(str(project_dir), dry_run=not args.no_dry_run)
+        return
+
+    # Handle scheduler commands
+    if args.schedule:
+        deps = args.schedule_deps.split(",") if args.schedule_deps else None
+        handle_schedule_command(
+            args.schedule,
+            str(project_dir),
+            scheduled_time=args.schedule_at,
+            priority=args.schedule_priority,
+            dependencies=deps,
+        )
+        return
+
+    if args.schedule_status:
+        handle_schedule_status_command(str(project_dir))
+        return
+
+    if args.schedule_cancel:
+        handle_schedule_cancel_command(args.schedule_cancel, str(project_dir))
+        return
+
+    if args.schedule_start:
+        handle_schedule_start_command(str(project_dir))
+        return
+
+    if args.schedule_stop:
+        handle_schedule_stop_command(str(project_dir))
         return
 
     # Handle merge analytics commands
