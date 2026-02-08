@@ -569,6 +569,65 @@ def parse_coverage_xml(xml_path: str | Path) -> CoverageResult:
     )
 
 
+def calculate_coverage_stats(
+    lines_covered: int,
+    lines_total: int,
+    branches_covered: int = 0,
+    branches_total: int = 0,
+) -> dict[str, float]:
+    """
+    Calculate coverage statistics from raw line and branch data.
+
+    This is a utility function for calculating coverage percentages when you
+    have raw coverage counts but not a full CoverageResult object. It handles
+    edge cases like zero lines or zero branches.
+
+    Args:
+        lines_covered: Number of lines covered by tests
+        lines_total: Total number of executable lines
+        branches_covered: Number of branches covered by tests (optional)
+        branches_total: Total number of branches (optional)
+
+    Returns:
+        Dictionary with coverage statistics:
+        - line_coverage: Line coverage percentage (0-100)
+        - branch_coverage: Branch coverage percentage (0-100)
+        - total_coverage: Combined coverage percentage (0-100)
+
+    Example:
+        stats = calculate_coverage_stats(
+            lines_covered=80,
+            lines_total=100,
+            branches_covered=15,
+            branches_total=20
+        )
+        print(f"Line coverage: {stats['line_coverage']:.1f}%")
+        print(f"Branch coverage: {stats['branch_coverage']:.1f}%")
+        print(f"Total coverage: {stats['total_coverage']:.1f}%")
+    """
+    # Calculate line coverage
+    line_coverage = (lines_covered / lines_total * 100) if lines_total > 0 else 0.0
+
+    # Calculate branch coverage
+    branch_coverage = (
+        (branches_covered / branches_total * 100) if branches_total > 0 else 0.0
+    )
+
+    # Calculate combined coverage
+    # If we have both lines and branches, weight them equally
+    # If we only have lines, use line coverage as total
+    if branches_total > 0:
+        total_coverage = (line_coverage + branch_coverage) / 2
+    else:
+        total_coverage = line_coverage
+
+    return {
+        "line_coverage": round(line_coverage, 2),
+        "branch_coverage": round(branch_coverage, 2),
+        "total_coverage": round(total_coverage, 2),
+    }
+
+
 def validate_coverage_threshold(
     result: CoverageResult, min_threshold: float
 ) -> tuple[bool, str]:
