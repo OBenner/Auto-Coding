@@ -199,6 +199,12 @@ export const IPC_CHANNELS = {
   CONTEXT_GET_PATTERN_SUGGESTIONS: 'context:getPatternSuggestions',
   CONTEXT_CONFIRM_PATTERN: 'context:confirmPattern',
 
+  // Session context operations (conversation history tracking)
+  SESSION_CONTEXT_GET_HISTORY: 'sessionContext:getHistory',
+  SESSION_CONTEXT_GET_SUMMARIES: 'sessionContext:getSummaries',
+  SESSION_CONTEXT_GET_CODE_REFS: 'sessionContext:getCodeRefs',
+  SESSION_CONTEXT_GET_ALL_SESSIONS: 'sessionContext:getAllSessions',
+
   // Environment configuration
   ENV_GET: 'env:get',
   ENV_UPDATE: 'env:update',

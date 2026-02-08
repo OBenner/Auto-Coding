@@ -27,6 +27,7 @@ import { registerIdeationHandlers } from './ideation-handlers';
 import { registerChangelogHandlers } from './changelog-handlers';
 import { registerInsightsHandlers } from './insights-handlers';
 import { registerMemoryHandlers } from './memory-handlers';
+import { registerSessionContextHandlers } from './session-context-handlers';
 import { registerAppUpdateHandlers } from './app-update-handlers';
 import { registerDebugHandlers } from './debug-handlers';
 import { registerClaudeCodeHandlers } from './claude-code-handlers';
@@ -106,6 +107,9 @@ export function setupIpcHandlers(
   // Memory & infrastructure handlers (for Graphiti/LadybugDB)
   registerMemoryHandlers();
 
+  // Session context handlers (conversation history tracking)
+  registerSessionContextHandlers(getMainWindow);
+
   // App auto-update handlers
   registerAppUpdateHandlers();
 
@@ -152,6 +156,7 @@ export {
   registerChangelogHandlers,
   registerInsightsHandlers,
   registerMemoryHandlers,
+  registerSessionContextHandlers,
   registerAppUpdateHandlers,
   registerDebugHandlers,
   registerClaudeCodeHandlers,
