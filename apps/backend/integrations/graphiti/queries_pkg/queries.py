@@ -14,6 +14,7 @@ from .schema import (
     EPISODE_TYPE_CODEBASE_DISCOVERY,
     EPISODE_TYPE_GOTCHA,
     EPISODE_TYPE_PATTERN,
+    EPISODE_TYPE_PREFERENCE_PROFILE,
     EPISODE_TYPE_SESSION_INSIGHT,
     EPISODE_TYPE_TASK_OUTCOME,
 )
@@ -537,3 +538,93 @@ class GraphitiQueries:
                 content_summary=", ".join(insight_types) if insight_types else "empty",
             )
             return False
+
+    async def save_preference_profile(
+        self,
+        profile_data: dict,
+    ) -> bool:
+        """
+        Save or update a preference profile to the knowledge graph.
+
+        Args:
+            profile_data: PreferenceProfile dictionary from PreferenceProfile.to_dict()
+
+        Returns:
+            True if saved successfully
+        """
+        try:
+            from graphiti_core.nodes import EpisodeType
+
+            episode_content = {
+                "type": EPISODE_TYPE_PREFERENCE_PROFILE,
+                "spec_id": self.spec_context_id,
+                "timestamp": datetime.now(UTC).isoformat(),
+                "profile": profile_data,
+            }
+
+            await self.client.graphiti.add_episode(
+                name=f"preference_profile_{self.group_id}",
+                episode_body=json.dumps(episode_content),
+                source=EpisodeType.text,
+                source_description=f"User preference profile for {self.group_id}",
+                reference_time=datetime.now(UTC),
+                group_id=self.group_id,
+            )
+
+            logger.info(f"Saved preference profile to Graphiti (group: {self.group_id})")
+            return True
+
+        except Exception as e:
+            logger.warning(f"Failed to save preference profile: {e}")
+            capture_exception(
+                e,
+                operation="save_preference_profile",
+                group_id=self.group_id,
+                spec_id=self.spec_context_id,
+            )
+            return False
+
+    async def get_preference_profile(self) -> dict | None:
+        """
+        Get the most recent preference profile from the knowledge graph.
+
+        Returns:
+            PreferenceProfile dictionary or None if not found
+        """
+        try:
+            # Search for preference profile episodes
+            episodes = await self.client.graphiti.search(
+                query="user preference profile settings verbosity risk tolerance",
+                group_ids=[self.group_id],
+                num_results=5,
+            )
+
+            if not episodes:
+                return None
+
+            # Find the most recent preference profile episode
+            for episode in episodes:
+                try:
+                    episode_data = json.loads(episode.content)
+                    if episode_data.get("type") == EPISODE_TYPE_PREFERENCE_PROFILE:
+                        profile_data = episode_data.get("profile")
+                        if profile_data:
+                            logger.info(
+                                f"Retrieved preference profile from Graphiti (group: {self.group_id})"
+                            )
+                            return profile_data
+                except (json.JSONDecodeError, KeyError) as e:
+                    logger.debug(f"Failed to parse episode as preference profile: {e}")
+                    continue
+
+            return None
+
+        except Exception as e:
+            logger.warning(f"Failed to get preference profile: {e}")
+            capture_exception(
+                e,
+                operation="get_preference_profile",
+                group_id=self.group_id,
+                spec_id=self.spec_context_id,
+            )
+            return None

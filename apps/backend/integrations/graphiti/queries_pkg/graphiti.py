@@ -471,6 +471,59 @@ class GraphitiMemory:
             )
             return False
 
+    async def save_preference_profile(self, profile_data: dict) -> bool:
+        """
+        Save or update a preference profile to the knowledge graph.
+
+        Args:
+            profile_data: PreferenceProfile dictionary from PreferenceProfile.to_dict()
+
+        Returns:
+            True if saved successfully
+        """
+        if not await self._ensure_initialized():
+            return False
+
+        try:
+            result = await self._queries.save_preference_profile(profile_data)
+
+            if result and self.state:
+                self.state.episode_count += 1
+                self.state.save(self.spec_dir)
+
+            return result
+        except Exception as e:
+            logger.warning(f"Failed to save preference profile: {e}")
+            self._record_error(f"save_preference_profile failed: {e}")
+            capture_exception(
+                e,
+                component="graphiti",
+                operation="save_preference_profile",
+            )
+            return False
+
+    async def get_preference_profile(self) -> dict | None:
+        """
+        Get the most recent preference profile from the knowledge graph.
+
+        Returns:
+            PreferenceProfile dictionary or None if not found
+        """
+        if not await self._ensure_initialized():
+            return None
+
+        try:
+            return await self._queries.get_preference_profile()
+        except Exception as e:
+            logger.warning(f"Failed to get preference profile: {e}")
+            self._record_error(f"get_preference_profile failed: {e}")
+            capture_exception(
+                e,
+                component="graphiti",
+                operation="get_preference_profile",
+            )
+            return None
+
     # Delegate methods to search module
 
     async def get_relevant_context(
