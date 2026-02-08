@@ -585,5 +585,14 @@ export const IPC_CHANNELS = {
   PLUGIN_ENABLE: 'plugin:enable',
   PLUGIN_DISABLE: 'plugin:disable',
   PLUGIN_INSTALL: 'plugin:install',
-  PLUGIN_UNINSTALL: 'plugin:uninstall'
+  PLUGIN_UNINSTALL: 'plugin:uninstall',
+
+  // Template operations
+  TEMPLATE_LIST: 'template:list',
+  TEMPLATE_GET: 'template:get',
+  TEMPLATE_GET_CATEGORIES: 'template:getCategories',
+  TEMPLATE_SEARCH: 'template:search',
+  TEMPLATE_PREVIEW: 'template:preview',
+  TEMPLATE_CREATE_SPEC: 'template:createSpec',
+  TEMPLATE_SUGGEST: 'template:suggest'
 } as const;
