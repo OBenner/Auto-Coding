@@ -14,7 +14,14 @@ from typing import Any
 
 from claude_agent_sdk import ClaudeSDKClient
 from core.token_stats import PhaseTokenStats, PhaseType, TaskTokenStats
-from debug import debug, debug_detailed, debug_error, debug_section, debug_success
+from debug import (
+    debug,
+    debug_detailed,
+    debug_error,
+    debug_section,
+    debug_success,
+    debug_warning,
+)
 from insight_extractor import extract_session_insights
 from linear_updater import (
     linear_subtask_completed,
@@ -676,15 +683,139 @@ async def post_session_processing(
         return False
 
 
+def format_context_for_resume(history: ConversationHistory) -> str:
+    """
+    Format conversation history into a context summary for session resumption.
+
+    Args:
+        history: ConversationHistory object to format
+
+    Returns:
+        Formatted context string for resuming the session
+    """
+    if not history or not history.rounds:
+        return ""
+
+    context_parts = [
+        "# Session Resume Context",
+        "",
+        f"Session ID: {history.session_id}",
+        f"Total rounds: {len(history.rounds)}",
+        f"Session started: {history.session_start.isoformat()}",
+        "",
+        "## Previous Conversation Summary",
+        "",
+    ]
+
+    # Include last 5 rounds for immediate context
+    recent_rounds = history.rounds[-5:] if len(history.rounds) > 5 else history.rounds
+
+    for round_obj in recent_rounds:
+        context_parts.append(f"### Round {round_obj.round_number}")
+        context_parts.append(f"**User:** {round_obj.user_message[:200]}...")
+        if round_obj.assistant_response:
+            response_preview = round_obj.assistant_response[:300]
+            context_parts.append(f"**Assistant:** {response_preview}...")
+        if round_obj.tool_calls:
+            tools_used = [tc["name"] for tc in round_obj.tool_calls[:3]]
+            context_parts.append(f"**Tools used:** {', '.join(tools_used)}")
+        context_parts.append("")
+
+    # Include code references
+    code_refs = history.get_all_code_references()
+    if code_refs:
+        context_parts.append("## Code References from Session")
+        for ref in sorted(code_refs)[:10]:  # Limit to 10 most recent
+            context_parts.append(f"- {ref}")
+        context_parts.append("")
+
+    # Token usage summary
+    total_input, total_output = history.get_total_tokens()
+    if total_input > 0 or total_output > 0:
+        context_parts.append("## Token Usage")
+        context_parts.append(f"- Input tokens: {total_input:,}")
+        context_parts.append(f"- Output tokens: {total_output:,}")
+        context_parts.append("")
+
+    return "\n".join(context_parts)
+
+
+async def resume_session(
+    spec_dir: Path,
+    subtask_id: str,
+    new_message: str,
+) -> tuple[str, ConversationHistory | None]:
+    """
+    Resume a previous session with full context restore.
+
+    Loads the most recent conversation history for the given subtask
+    and formats it for continuing the session.
+
+    Args:
+        spec_dir: Spec directory path
+        subtask_id: ID of the subtask to resume
+        new_message: New message to send after resuming
+
+    Returns:
+        Tuple of (formatted_message, conversation_history) where:
+        - formatted_message: Message with resume context prepended
+        - conversation_history: Loaded ConversationHistory or None if not found
+    """
+    debug_section("session", f"Resuming session for subtask: {subtask_id}")
+
+    # Load latest conversation history for this subtask
+    history = ConversationHistory.load_latest(spec_dir, subtask_id)
+
+    if not history:
+        debug_warning(
+            "session",
+            f"No previous session history found for subtask {subtask_id}",
+        )
+        # Return as-is if no history exists
+        return new_message, None
+
+    debug_success(
+        "session",
+        f"Loaded session history: {len(history.rounds)} rounds",
+        session_id=history.session_id,
+        total_rounds=len(history.rounds),
+    )
+
+    # Format context for resume
+    context_summary = format_context_for_resume(history)
+
+    # Prepend context to new message
+    resume_message = (
+        f"{context_summary}\n\n"
+        f"---\n\n"
+        f"## Resuming Session\n\n"
+        f"You are resuming the above session. Continue from where you left off.\n\n"
+        f"{new_message}"
+    )
+
+    debug(
+        "session",
+        "Formatted resume message",
+        context_length=len(context_summary),
+        total_length=len(resume_message),
+    )
+
+    return resume_message, history
+
+
 async def run_agent_session(
     client: ClaudeSDKClient,
     message: str,
     spec_dir: Path,
     verbose: bool = False,
     phase: LogPhase = LogPhase.CODING,
+    conversation_history: ConversationHistory | None = None,
+    subtask_id: str | None = None,
 ) -> tuple[str, str, dict[str, int] | None]:
     """
     Run a single agent session using Claude Agent SDK.
+
+    Supports session resumption by passing an existing conversation_history.
 
     Args:
         client: Claude SDK client
@@ -692,6 +823,8 @@ async def run_agent_session(
         spec_dir: Spec directory path
         verbose: Whether to show detailed output
         phase: Current execution phase for logging
+        conversation_history: Optional existing history for resuming sessions
+        subtask_id: Optional subtask ID for session tracking
 
     Returns:
         (status, response_text, usage_metadata) where:
@@ -716,8 +849,18 @@ async def run_agent_session(
     message_count = 0
     tool_count = 0
 
-    # Initialize conversation history tracking
-    conversation_history = ConversationHistory(spec_dir=spec_dir, subtask_id=None)
+    # Initialize or reuse conversation history tracking
+    if conversation_history is None:
+        conversation_history = ConversationHistory(spec_dir=spec_dir, subtask_id=subtask_id)
+        debug("session", "Created new conversation history", subtask_id=subtask_id)
+    else:
+        debug(
+            "session",
+            "Resuming with existing conversation history",
+            session_id=conversation_history.session_id,
+            previous_rounds=len(conversation_history.rounds),
+        )
+
     current_round = conversation_history.add_round(
         user_message=message, phase=phase.value
     )
