@@ -40,6 +40,7 @@ import { registerMergeAnalyticsHandlers } from './merge-analytics-handlers';
 import { registerAnalyticsHandlers } from './analytics-handlers';
 import { registerTokenStatsHandlers } from './token-stats-handler';
 import { registerTemplateHandlers } from './template-handlers';
+import { registerFeedbackHandlers } from './feedback-handlers';
 import { notificationService } from '../notification-service';
 
 /**
@@ -143,6 +144,9 @@ export function setupIpcHandlers(
   // Template library handlers
   registerTemplateHandlers();
 
+  // Feedback handlers (adaptive agent learning)
+  registerFeedbackHandlers(getMainWindow);
+
   // Scheduler handlers (build scheduling and queue management)
   registerSchedulerHandlers(getMainWindow);
 
@@ -179,5 +183,6 @@ export {
   registerAnalyticsHandlers,
   registerTokenStatsHandlers,
   registerTemplateHandlers,
+  registerFeedbackHandlers,
   registerSchedulerHandlers
 };
