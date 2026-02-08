@@ -1,0 +1,21 @@
+{
+  "priority": {
+    "critical": "Critique",
+    "criticalDescription": "Priorité la plus élevée - s'exécute en premier",
+    "high": "Élevée",
+    "highDescription": "Tâche importante - s'exécute avant la priorité normale",
+    "normal": "Normale",
+    "normalDescription": "Priorité standard - ordre d'exécution par défaut",
+    "low": "Faible",
+    "lowDescription": "Priorité plus faible - s'exécute lorsqu'il n'y a pas de tâches plus prioritaires",
+    "background": "Arrière-plan",
+    "backgroundDescription": "Priorité la plus faible - s'exécute uniquement lorsque le système est inactif"
+  },
+  "time": {
+    "now": "Maintenant",
+    "tonight": "Ce soir 22h",
+    "tomorrowMorning": "Demain 9h",
+    "tomorrowEvening": "Demain 18h",
+    "mondayMorning": "Lundi 9h"
+  }
+}
