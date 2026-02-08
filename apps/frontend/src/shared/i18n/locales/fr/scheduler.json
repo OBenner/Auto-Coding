@@ -17,5 +17,31 @@
     "tomorrowMorning": "Demain 9h",
     "tomorrowEvening": "Demain 18h",
     "mondayMorning": "Lundi 9h"
+  },
+  "calendar": {
+    "title": "Builds Planifiés",
+    "noBuilds": "Aucun Build Planifié",
+    "noBuildsDescription": "Vous n'avez pas encore planifié de builds. Cliquez sur 'Planifier un Build' pour en créer un.",
+    "loading": "Chargement des builds planifiés...",
+    "today": "Aujourd'hui",
+    "tomorrow": "Demain",
+    "thisWeek": "Cette Semaine",
+    "later": "Plus Tard",
+    "status": {
+      "pending": "En Attente",
+      "queued": "En File",
+      "running": "En Cours",
+      "completed": "Terminé",
+      "failed": "Échoué",
+      "cancelled": "Annulé",
+      "retrying": "Nouvelle Tentative"
+    },
+    "scheduledFor": "Planifié pour {{date}}",
+    "priority": "Priorité",
+    "dependencies": "Dépendances",
+    "noDependencies": "Aucune",
+    "viewDetails": "Voir Détails",
+    "cancelBuild": "Annuler le Build",
+    "retryBuild": "Réessayer"
   }
 }
