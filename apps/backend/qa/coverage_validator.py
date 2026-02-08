@@ -393,3 +393,132 @@ def has_critical_path_failures(result: ValidationResult) -> bool:
             print("Critical paths require 100% coverage!")
     """
     return result.critical_path_failures > 0
+
+
+def format_coverage_report(
+    result: ValidationResult,
+    coverage_result: CoverageResult,
+    show_all_files: bool = False,
+    max_missing_lines: int = 20,
+) -> str:
+    """
+    Format a detailed coverage report with missing lines for each file.
+
+    This provides a comprehensive, file-by-file breakdown of coverage issues,
+    showing exactly which lines are not covered by tests. Useful for QA
+    reporting and helping developers understand where tests are needed.
+
+    Args:
+        result: Validation result with issues
+        coverage_result: Full coverage analysis result
+        show_all_files: If True, show all files (not just those with issues)
+        max_missing_lines: Maximum number of missing lines to show per file
+
+    Returns:
+        Formatted detailed coverage report
+
+    Example:
+        report = format_coverage_report(validation_result, coverage_result)
+        with open("coverage_report.txt", "w") as f:
+            f.write(report)
+    """
+    lines = []
+
+    # Header
+    lines.append("=" * 80)
+    lines.append("DETAILED COVERAGE REPORT")
+    lines.append("=" * 80)
+    lines.append("")
+
+    # Overall statistics
+    status = "✓ PASSED" if result.passed else "✗ FAILED"
+    lines.append(f"Status: {status}")
+    lines.append(f"Overall Coverage: {result.overall_coverage:.1f}% (required: {result.required_coverage:.1f}%)")
+    lines.append(f"Files Checked: {result.files_checked}")
+    lines.append(f"Issues Found: {len(result.issues)}")
+    if result.critical_path_failures > 0:
+        lines.append(f"Critical Path Failures: {result.critical_path_failures}")
+    lines.append("")
+
+    # Overall coverage issues (not file-specific)
+    overall_issues = [i for i in result.issues if i.issue_type in ("overall", "line", "branch", "error")]
+    if overall_issues:
+        lines.append("-" * 80)
+        lines.append("OVERALL ISSUES")
+        lines.append("-" * 80)
+        for issue in overall_issues:
+            lines.append(f"  ✗ {issue.message}")
+        lines.append("")
+
+    # File-specific issues
+    file_issues = [i for i in result.issues if i.file_path not in ("Overall", "N/A")]
+    if file_issues:
+        lines.append("-" * 80)
+        lines.append("FILE-SPECIFIC COVERAGE ISSUES")
+        lines.append("-" * 80)
+        lines.append("")
+
+        # Sort by file path for consistent output
+        file_issues.sort(key=lambda x: x.file_path)
+
+        for issue in file_issues:
+            # File header
+            issue_type_label = issue.issue_type.replace("_", " ").title()
+            lines.append(f"File: {issue.file_path}")
+            lines.append(f"  Type: {issue_type_label}")
+            lines.append(f"  Coverage: {issue.actual_coverage:.1f}% (required: {issue.required_coverage:.1f}%)")
+
+            # Missing lines
+            if issue.missing_lines:
+                total_missing = len(issue.missing_lines)
+                lines_to_show = issue.missing_lines[:max_missing_lines]
+                formatted_lines = _format_line_ranges(lines_to_show)
+                lines.append(f"  Missing Lines ({total_missing} total): {formatted_lines}")
+
+                if total_missing > max_missing_lines:
+                    lines.append(f"    ... and {total_missing - max_missing_lines} more")
+            else:
+                lines.append(f"  Missing Lines: (line information not available)")
+
+            lines.append("")
+
+    # Show all files if requested
+    if show_all_files and coverage_result.files:
+        lines.append("-" * 80)
+        lines.append("ALL FILES")
+        lines.append("-" * 80)
+        lines.append("")
+
+        # Get files that don't have issues
+        issue_file_paths = {i.file_path for i in file_issues}
+        other_files = [
+            (path, cov)
+            for path, cov in coverage_result.files.items()
+            if path not in issue_file_paths
+        ]
+        other_files.sort(key=lambda x: x[0])
+
+        for file_path, file_cov in other_files:
+            lines.append(f"File: {file_path}")
+            lines.append(f"  Coverage: {file_cov.coverage_percent:.1f}%")
+            lines.append(f"  Lines: {file_cov.lines_covered}/{file_cov.lines_total}")
+            if file_cov.branches_total > 0:
+                lines.append(f"  Branches: {file_cov.branches_covered}/{file_cov.branches_total}")
+            if file_cov.lines_missing:
+                missing_count = len(file_cov.lines_missing)
+                lines_to_show = file_cov.lines_missing[:max_missing_lines]
+                formatted_lines = _format_line_ranges(lines_to_show)
+                lines.append(f"  Missing Lines ({missing_count} total): {formatted_lines}")
+                if missing_count > max_missing_lines:
+                    lines.append(f"    ... and {missing_count - max_missing_lines} more")
+            lines.append("")
+
+    # Summary footer
+    lines.append("-" * 80)
+    if result.passed:
+        lines.append("✓ All coverage thresholds met!")
+    else:
+        lines.append("✗ Coverage validation failed. Please add tests to address the issues above.")
+    lines.append("-" * 80)
+
+    return "\n".join(lines)
