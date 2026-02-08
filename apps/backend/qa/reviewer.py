@@ -8,6 +8,11 @@ acceptance criteria.
 Memory Integration:
 - Retrieves past patterns, gotchas, and insights before QA session
 - Saves QA findings (bugs, patterns, validation outcomes) after session
+
+Coverage Integration:
+- Runs coverage validation before QA session
+- Includes coverage results in QA prompt
+- Coverage results included in qa_signoff
 """
 
 import logging
@@ -16,10 +21,12 @@ from pathlib import Path
 # Memory integration for cross-session learning
 from agents.memory_manager import get_graphiti_context, save_session_memory
 from agents.session import save_token_stats
+from analysis.coverage_analyzer import CoverageAnalyzer, parse_coverage_json
 from claude_agent_sdk import ClaudeSDKClient
 from debug import debug, debug_detailed, debug_error, debug_section, debug_success
 from prompts_pkg import get_qa_reviewer_prompt
 from security.tool_input_validator import get_safe_tool_input
+from spec.coverage_config import load_coverage_config
 from task_logger import (
     LogEntryType,
     LogPhase,
@@ -27,9 +34,153 @@ from task_logger import (
 )
 from ui import print_status
 
+from .coverage_validator import (
+    format_coverage_report,
+    format_validation_summary,
+    validate_coverage,
+)
 from .criteria import get_qa_signoff_status
 
 logger = logging.getLogger(__name__)
+
+# =============================================================================
+# COVERAGE VALIDATION
+# =============================================================================
+
+
+def run_coverage_validation(
+    project_dir: Path,
+    spec_dir: Path,
+) -> tuple[bool, str]:
+    """
+    Run coverage analysis and validation.
+
+    Args:
+        project_dir: Project root directory
+        spec_dir: Spec directory
+
+    Returns:
+        (success, summary_text) tuple where:
+        - success: True if coverage validation passed or was skipped
+        - summary_text: Human-readable summary of coverage results
+    """
+    debug_section("coverage_validator", "Running coverage validation")
+
+    # Load coverage configuration
+    try:
+        config = load_coverage_config(project_dir, spec_dir)
+        debug(
+            "coverage_validator",
+            "Loaded coverage configuration",
+            minimum_coverage=config.minimum_coverage,
+            config_source=config.config_source,
+            critical_paths=len(config.critical_paths),
+        )
+    except Exception as e:
+        debug_error("coverage_validator", f"Failed to load coverage config: {e}")
+        return True, f"⚠️  Coverage validation skipped (config load failed: {e})"
+
+    # Check if pytest-cov is available
+    analyzer = CoverageAnalyzer(project_dir)
+    installed, version_or_error = analyzer.check_pytest_cov_installed()
+
+    if not installed:
+        debug(
+            "coverage_validator",
+            "pytest-cov not available, skipping coverage validation",
+            reason=version_or_error,
+        )
+        return True, f"⚠️  Coverage validation skipped (pytest-cov not available: {version_or_error})"
+
+    debug_success("coverage_validator", f"pytest-cov is available: {version_or_error}")
+
+    # Run coverage analysis
+    print("\n📊 Running test coverage analysis...")
+
+    try:
+        coverage_result = analyzer.run_coverage(
+            source_dir="apps/backend",
+            test_dir="tests",
+            output_format="json",
+            min_coverage=None,  # Don't fail pytest run on coverage threshold
+        )
+
+        if not coverage_result.success:
+            debug_error(
+                "coverage_validator",
+                "Coverage analysis failed",
+                error=coverage_result.error_message,
+            )
+            return False, f"❌ Coverage analysis failed: {coverage_result.error_message}"
+
+        debug_success(
+            "coverage_validator",
+            "Coverage analysis completed",
+            total_coverage=coverage_result.total_coverage,
+            files_covered=len(coverage_result.files),
+        )
+
+    except Exception as e:
+        debug_error("coverage_validator", f"Exception during coverage analysis: {e}")
+        return False, f"❌ Coverage analysis exception: {str(e)}"
+
+    # Parse coverage report if it was generated
+    if coverage_result.report_path:
+        try:
+            coverage_result = parse_coverage_json(coverage_result.report_path)
+            debug_success(
+                "coverage_validator",
+                "Parsed coverage report",
+                report_path=coverage_result.report_path,
+            )
+        except Exception as e:
+            debug_error(
+                "coverage_validator",
+                f"Failed to parse coverage report: {e}",
+                report_path=coverage_result.report_path,
+            )
+            # Continue with existing result data
+
+    # Validate coverage against thresholds
+    try:
+        validation_result = validate_coverage(coverage_result, config, project_dir)
+
+        # Format results
+        summary = format_validation_summary(validation_result)
+        detailed_report = format_coverage_report(
+            validation_result,
+            coverage_result,
+            show_all_files=False,
+        )
+
+        # Save detailed report to file
+        report_file = spec_dir / "coverage_report.txt"
+        report_file.write_text(detailed_report, encoding="utf-8")
+        debug_success(
+            "coverage_validator",
+            "Coverage report saved",
+            report_file=str(report_file),
+        )
+
+        # Print summary
+        print(f"\n{summary}\n")
+
+        if validation_result.passed:
+            debug_success("coverage_validator", "Coverage validation PASSED")
+            return True, summary
+        else:
+            debug_error(
+                "coverage_validator",
+                "Coverage validation FAILED",
+                issues=len(validation_result.issues),
+                critical_failures=validation_result.critical_path_failures,
+            )
+            return False, summary
+
+    except Exception as e:
+        debug_error("coverage_validator", f"Exception during coverage validation: {e}")
+        return False, f"❌ Coverage validation exception: {str(e)}"
+
 
 # =============================================================================
 # QA REVIEWER SESSION
@@ -83,6 +234,15 @@ async def run_qa_agent_session(
     message_count = 0
     tool_count = 0
 
+    # Run coverage validation before QA session
+    coverage_passed, coverage_summary = run_coverage_validation(project_dir, spec_dir)
+    debug(
+        "qa_reviewer",
+        "Coverage validation completed",
+        passed=coverage_passed,
+        summary_length=len(coverage_summary),
+    )
+
     # Load QA prompt with dynamically-injected project-specific MCP tools
     # This includes Electron validation for Electron apps, Puppeteer for web, etc.
     prompt = get_qa_reviewer_prompt(spec_dir, project_dir)
@@ -106,6 +266,24 @@ async def run_qa_agent_session(
         prompt += "\n\n" + qa_memory_context
         print("✓ Memory context loaded for QA reviewer")
         debug_success("qa_reviewer", "Graphiti memory context loaded for QA")
+
+    # Add coverage validation results to prompt
+    prompt += "\n\n---\n\n## Test Coverage Validation\n\n"
+    prompt += coverage_summary
+    prompt += "\n\n"
+
+    if not coverage_passed:
+        prompt += """
+**⚠️ IMPORTANT**: Coverage validation failed. You MUST address coverage issues in your QA review.
+- Include coverage failures in your qa_signoff
+- Set status to "rejected" if critical paths lack coverage
+- Reference the detailed coverage report at `coverage_report.txt` for specific missing lines
+
+"""
+        debug("qa_reviewer", "Coverage failed - added warning to prompt")
+    else:
+        prompt += "✓ Coverage validation passed. Include coverage_passed: true in your qa_signoff.\n\n"
+        debug_success("qa_reviewer", "Coverage passed - added success note to prompt")
 
     # Add session context
     prompt += f"\n\n---\n\n**QA Session**: {qa_session}\n"
