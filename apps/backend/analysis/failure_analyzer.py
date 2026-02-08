@@ -342,12 +342,220 @@ def _analyze_failure_with_llm(failure_data: dict[str, Any]) -> dict[str, Any] | 
     Returns:
         Enhanced root cause dict or None if analysis fails
     """
-    # TODO: Implement LLM-based analysis using Claude SDK
-    # This would build a prompt similar to insight_extractor.py
-    # and use ClaudeSDKClient to analyze the failure deeply
-    #
-    # For now, return None to use heuristics only
-    return None
+    if not SDK_AVAILABLE:
+        logger.warning("Claude SDK not available, skipping LLM analysis")
+        return None
+
+    if not get_auth_token():
+        logger.warning("No authentication token found, skipping LLM analysis")
+        return None
+
+    # Run async analysis synchronously
+    import asyncio
+
+    try:
+        return asyncio.run(_run_llm_analysis(failure_data))
+    except Exception as e:
+        logger.warning(f"LLM analysis failed: {e}")
+        return None
+
+
+async def _run_llm_analysis(failure_data: dict[str, Any]) -> dict[str, Any] | None:
+    """
+    Run the LLM analysis asynchronously.
+
+    Args:
+        failure_data: Failure information
+
+    Returns:
+        Parsed root cause dict or None if analysis fails
+    """
+    from pathlib import Path
+
+    from core.auth import ensure_claude_code_oauth_token
+    from core.simple_client import create_simple_client
+
+    # Ensure SDK can find the token
+    ensure_claude_code_oauth_token()
+
+    model = get_analysis_model()
+    prompt = _build_analysis_prompt(failure_data)
+
+    try:
+        client = create_simple_client(
+            agent_type="failure_analyzer",
+            model=model,
+            system_prompt=(
+                "You are a failure analysis expert. You analyze build failures, QA rejections, and errors "
+                "to identify root causes and provide specific, actionable recommendations. "
+                "Always respond with valid JSON only, no markdown formatting or explanations."
+            ),
+            cwd=None,  # No specific directory needed for analysis
+        )
+
+        # Use async context manager
+        async with client:
+            await client.query(prompt)
+
+            # Collect the response
+            response_text = ""
+            message_count = 0
+            text_blocks_found = 0
+
+            async for msg in client.receive_response():
+                msg_type = type(msg).__name__
+                message_count += 1
+
+                if msg_type == "AssistantMessage" and hasattr(msg, "content"):
+                    for block in msg.content:
+                        block_type = type(block).__name__
+                        if block_type == "TextBlock" and hasattr(block, "text"):
+                            text_blocks_found += 1
+                            if block.text:
+                                response_text += block.text
+
+            logger.debug(
+                f"Failure analysis response: {message_count} messages, "
+                f"{text_blocks_found} text blocks, {len(response_text)} chars collected"
+            )
+
+            if not response_text.strip():
+                logger.warning(
+                    f"Failure analysis returned empty response. "
+                    f"Messages received: {message_count}, TextBlocks found: {text_blocks_found}"
+                )
+                return None
+
+        # Parse JSON from response
+        return _parse_analysis_response(response_text)
+
+    except Exception as e:
+        logger.warning(f"LLM analysis execution failed: {e}")
+        return None
+
+
+def _build_analysis_prompt(failure_data: dict[str, Any]) -> str:
+    """
+    Build the prompt for failure analysis.
+
+    Args:
+        failure_data: Failure information
+
+    Returns:
+        Full prompt text
+    """
+    prompt_file = Path(__file__).parent / "prompts" / "failure_analysis.md"
+
+    if prompt_file.exists():
+        base_prompt = prompt_file.read_text(encoding="utf-8")
+    else:
+        # Fallback if prompt file missing
+        base_prompt = """Analyze this failure and provide root cause analysis.
+Output ONLY valid JSON with: category, description, affected_files, confidence, recommendations"""
+
+    # Truncate errors if too long
+    errors = failure_data.get("errors", [])
+    errors_text = "\n".join(str(e) for e in errors)
+    if len(errors_text) > MAX_ERROR_CHARS:
+        errors_text = (
+            errors_text[:MAX_ERROR_CHARS]
+            + f"\n\n... (truncated, {len(errors_text)} chars total)"
+        )
+
+    # Format issues
+    issues = failure_data.get("issues", [])
+    issues_text = "\n".join(
+        f"- {issue.get('file', 'unknown')}:{issue.get('line', '?')} - {issue.get('description', 'No description')}"
+        for issue in issues
+    )
+
+    # Format subtask info
+    subtask = failure_data.get("subtask", {})
+    subtask_text = ""
+    if subtask:
+        subtask_text = f"""
+### Subtask Information
+- **ID**: {subtask.get('id', 'unknown')}
+- **Description**: {subtask.get('description', 'No description')}
+- **Files to Modify**: {', '.join(subtask.get('files_to_modify', []))}
+"""
+
+    # Build failure context
+    failure_context = f"""
+---
+
+## FAILURE DATA TO ANALYZE
+
+### Failure Type
+{failure_data.get("failure_type", "unknown")}
+
+### Errors
+{errors_text if errors_text else "(No errors)"}
+
+### Issues
+{issues_text if issues_text else "(No issues)"}
+
+### Recurring Issue
+{failure_data.get("is_recurring", False)}
+{subtask_text}
+---
+
+Now analyze this failure and output ONLY the JSON object with your analysis.
+"""
+
+    return base_prompt + failure_context
+
+
+def _parse_analysis_response(response_text: str) -> dict[str, Any] | None:
+    """
+    Parse the LLM response into structured root cause dict.
+
+    Args:
+        response_text: Raw LLM response
+
+    Returns:
+        Parsed root cause dict or None if parsing failed
+    """
+    text = response_text.strip()
+
+    if not text:
+        logger.warning("Cannot parse analysis: response text is empty")
+        return None
+
+    # Handle markdown code blocks
+    if text.startswith("```"):
+        lines = text.split("\n")
+        if lines[0].startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].strip() == "```":
+            lines = lines[:-1]
+        text = "\n".join(lines).strip()
+
+        if not text:
+            logger.warning("Cannot parse analysis: response contained only markdown markers")
+            return None
+
+    try:
+        analysis = json.loads(text)
+
+        if not isinstance(analysis, dict):
+            logger.warning(f"Analysis is not a dict, got type: {type(analysis).__name__}")
+            return None
+
+        # Validate required fields
+        required_fields = ["category", "description", "affected_files", "confidence", "recommendations"]
+        for field in required_fields:
+            if field not in analysis:
+                logger.warning(f"Missing required field in analysis: {field}")
+                return None
+
+        return analysis
+
+    except json.JSONDecodeError as e:
+        logger.warning(f"Failed to parse analysis JSON: {e}")
+        preview_length = min(500, len(text))
+        logger.warning(f"Response text preview (first {preview_length} chars): {text[:preview_length]}")
+        return None
 
 
 def analyze_failure(
