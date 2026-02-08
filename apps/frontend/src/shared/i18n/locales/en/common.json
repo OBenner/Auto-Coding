@@ -713,6 +713,25 @@
     "timeline": "Session Timeline",
     "timelineDescription": "Full conversation history and code references",
     "noSessionData": "No session data available",
-    "startAgentSession": "Start an agent session to begin tracking context"
+    "startAgentSession": "Start an agent session to begin tracking context",
+    "label": "Session Context",
+    "title": "Session Persistence Status",
+    "status": {
+      "loading": "Loading session context...",
+      "persisting": "Session context is being persisted",
+      "error": "Failed to load session context",
+      "noData": "No session data available"
+    },
+    "error": {
+      "loadFailed": "Failed to load session context data"
+    },
+    "noSessions": "No agent sessions found. Context tracking will begin when you run an agent.",
+    "stats": {
+      "rounds": "rounds",
+      "tokens": "tokens"
+    },
+    "recentSessions": "Recent Sessions",
+    "lastChecked": "Last checked: {{time}}",
+    "summary": "{{sessions}} sessions, {{rounds}} rounds, {{codeRefs}} code references"
   }
 }

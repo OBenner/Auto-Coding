@@ -54,6 +54,7 @@ import { GitSetupModal } from './GitSetupModal';
 import { RateLimitIndicator } from './RateLimitIndicator';
 import { ClaudeCodeStatusBadge } from './ClaudeCodeStatusBadge';
 import { UpdateBanner } from './UpdateBanner';
+import { SessionContextIndicator } from './SessionContextIndicator';
 import type { Project, AutoBuildVersionInfo, GitStatus, ProjectEnvConfig } from '../../shared/types';
 
 export type SidebarView = 'kanban' | 'terminals' | 'roadmap' | 'context' | 'ideation' | 'github-issues' | 'gitlab-issues' | 'github-prs' | 'gitlab-merge-requests' | 'changelog' | 'insights' | 'worktrees' | 'agent-tools' | 'plugins' | 'merge-analytics';
@@ -403,6 +404,9 @@ export function Sidebar({
         <div className={cn("space-y-3 transition-all duration-300", isCollapsed ? "p-2" : "p-4")}>
           {/* Claude Code Status Badge */}
           {!isCollapsed && <ClaudeCodeStatusBadge />}
+
+          {/* Session Context Indicator */}
+          {!isCollapsed && <SessionContextIndicator projectId={selectedProjectId ?? undefined} taskId={selectedProject?.autoBuildPath ?? undefined} />}
 
           {/* Settings and Help row */}
           <div className={cn(

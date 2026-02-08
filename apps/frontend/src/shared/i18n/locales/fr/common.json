@@ -713,6 +713,25 @@
     "timeline": "Chronologie de la session",
     "timelineDescription": "Historique complet de conversation et références de code",
     "noSessionData": "Aucune donnée de session disponible",
-    "startAgentSession": "Démarrer une session d'agent pour commencer le suivi du contexte"
+    "startAgentSession": "Démarrer une session d'agent pour commencer le suivi du contexte",
+    "label": "Contexte de Session",
+    "title": "Statut de Persistance de Session",
+    "status": {
+      "loading": "Chargement du contexte de session...",
+      "persisting": "Le contexte de session est en cours de persistance",
+      "error": "Échec du chargement du contexte de session",
+      "noData": "Aucune donnée de session disponible"
+    },
+    "error": {
+      "loadFailed": "Échec du chargement des données de contexte de session"
+    },
+    "noSessions": "Aucune session d'agent trouvée. Le suivi du contexte commencera lorsque vous exécuterez un agent.",
+    "stats": {
+      "rounds": "tours",
+      "tokens": "jetons"
+    },
+    "recentSessions": "Sessions Récentes",
+    "lastChecked": "Dernière vérification : {{time}}",
+    "summary": "{{sessions}} sessions, {{rounds}} tours, {{codeRefs}} références de code"
   }
 }
