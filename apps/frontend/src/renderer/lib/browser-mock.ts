@@ -243,6 +243,52 @@ const browserMockAPI: ElectronAPI = {
     onPRUpdated: () => () => {}
   },
 
+  // Template Library Operations
+  listTemplates: async (_projectId: string, _options?: { category?: string | 'all'; tags?: string[] }) => ({
+    success: true,
+    data: []
+  }),
+  getTemplate: async (_projectId: string, _templateName: string) => ({
+    success: true,
+    data: {
+      name: 'mock-template',
+      description: 'Mock template',
+      category: 'api' as const,
+      parameters: {},
+      tags: []
+    }
+  }),
+  getTemplateCategories: async (_projectId: string) => ({
+    success: true,
+    data: ['api', 'authentication', 'database', 'ui', 'file', 'search', 'pagination', 'caching', 'notification', 'data_processing', 'user_management', 'settings', 'dashboard', 'admin', 'logging', 'testing', 'documentation', 'cicd', 'security', 'performance', 'other']
+  }),
+  searchTemplates: async (_projectId: string, _query: string) => ({
+    success: true,
+    data: []
+  }),
+  previewTemplate: async (_projectId: string, _templateName: string, _parameters: Record<string, unknown>) => ({
+    success: true,
+    data: {
+      title: 'Mock Template',
+      description: 'Template preview',
+      rationale: 'Mock rationale',
+      user_stories: [],
+      acceptance_criteria: [],
+      technical_details: 'Mock technical details'
+    }
+  }),
+  createSpecFromTemplate: async (_projectId: string, _templateName: string, _parameters: Record<string, unknown>, _specId?: string) => ({
+    success: true,
+    data: {
+      specId: '001-mock',
+      specPath: '/mock/path'
+    }
+  }),
+  suggestTemplates: async (_projectId: string, _taskDescription: string) => ({
+    success: true,
+    data: []
+  }),
+
   // Queue Routing API (rate limit recovery)
   queue: {
     getRunningTasksByProfile: async () => ({ success: true, data: { byProfile: {}, totalRunning: 0 } }),
