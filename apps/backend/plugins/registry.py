@@ -121,7 +121,7 @@ class PluginRegistry:
                 system_plugins_dir=system_plugins_dir,
                 project_dir=project_dir,
             )
-            debug("Created new PluginRegistry instance")
+            debug("registry", "Created new PluginRegistry instance")
         return cls._instance
 
     @classmethod
@@ -134,7 +134,7 @@ class PluginRegistry:
         if cls._instance is not None:
             cls._instance.unload_all_plugins()
             cls._instance = None
-            debug("Reset PluginRegistry instance")
+            debug("registry", "Reset PluginRegistry instance")
 
     def load_all_plugins(self) -> None:
         """
@@ -146,11 +146,11 @@ class PluginRegistry:
         Raises:
             Exception: If critical plugin loading fails
         """
-        debug("Loading all plugins...")
+        debug("registry", "Loading all plugins...")
 
         # Discover available plugins
         discovered = self.loader.discover_plugins()
-        debug_verbose(f"Discovered {len(discovered)} plugin(s)")
+        debug_verbose("registry", f"Discovered {len(discovered)} plugin(s)")
 
         # Load each plugin
         for metadata in discovered:
@@ -175,21 +175,21 @@ class PluginRegistry:
 
                 # Register plugin
                 self._plugins[plugin.name] = plugin
-                debug_success(f"Loaded plugin: {plugin.name} v{plugin.version}")
+                debug_success("registry", f"Loaded plugin: {plugin.name} v{plugin.version}")
 
                 # Auto-enable plugin (can be made configurable later)
                 try:
                     self.enable_plugin(plugin.name)
                 except Exception as e:
-                    debug_warning(f"Failed to auto-enable plugin {plugin.name}: {e}")
+                    debug_warning("registry", f"Failed to auto-enable plugin {plugin.name}: {e}")
                     logger.warning(f"Failed to auto-enable plugin {plugin.name}: {e}")
 
             except Exception as e:
-                debug_error(f"Failed to load plugin {metadata.name}: {e}")
+                debug_error("registry", f"Failed to load plugin {metadata.name}: {e}")
                 logger.error(f"Failed to load plugin {metadata.name}: {e}")
                 continue
 
-        debug_success(f"Loaded {len(self._plugins)} plugin(s) successfully")
+        debug_success("registry", f"Loaded {len(self._plugins)} plugin(s) successfully")
 
     def unload_all_plugins(self) -> None:
         """
@@ -197,17 +197,17 @@ class PluginRegistry:
 
         Disables and unloads all plugins, calling their lifecycle hooks.
         """
-        debug("Unloading all plugins...")
+        debug("registry", "Unloading all plugins...")
 
         for plugin_name in list(self._plugins.keys()):
             try:
                 self.unload_plugin(plugin_name)
             except Exception as e:
-                debug_error(f"Failed to unload plugin {plugin_name}: {e}")
+                debug_error("registry", f"Failed to unload plugin {plugin_name}: {e}")
                 logger.error(f"Failed to unload plugin {plugin_name}: {e}")
 
         self._plugins.clear()
-        debug_success("Unloaded all plugins")
+        debug_success("registry", "Unloaded all plugins")
 
     def get_plugin(self, name: str) -> PluginBase | None:
         """
@@ -221,9 +221,9 @@ class PluginRegistry:
         """
         plugin = self._plugins.get(name)
         if plugin:
-            debug_verbose(f"Found plugin: {name}")
+            debug_verbose("registry", f"Found plugin: {name}")
         else:
-            debug_verbose(f"Plugin not found: {name}")
+            debug_verbose("registry", f"Plugin not found: {name}")
         return plugin
 
     def list_plugins(
@@ -250,6 +250,7 @@ class PluginRegistry:
             plugins = [p for p in plugins if p.is_enabled]
 
         debug_verbose(
+            "registry",
             f"Listed {len(plugins)} plugin(s) "
             f"(type={plugin_type}, enabled_only={enabled_only})"
         )
@@ -273,13 +274,13 @@ class PluginRegistry:
             raise KeyError(f"Plugin not found: {name}")
 
         if plugin.is_enabled:
-            debug_verbose(f"Plugin already enabled: {name}")
+            debug_verbose("registry", f"Plugin already enabled: {name}")
             return
 
-        debug(f"Enabling plugin: {name}")
+        debug("registry", f"Enabling plugin: {name}")
         plugin.on_enable()
         plugin._mark_enabled()
-        debug_success(f"Enabled plugin: {name}")
+        debug_success("registry", f"Enabled plugin: {name}")
 
     def disable_plugin(self, name: str) -> None:
         """
@@ -299,13 +300,13 @@ class PluginRegistry:
             raise KeyError(f"Plugin not found: {name}")
 
         if not plugin.is_enabled:
-            debug_verbose(f"Plugin already disabled: {name}")
+            debug_verbose("registry", f"Plugin already disabled: {name}")
             return
 
-        debug(f"Disabling plugin: {name}")
+        debug("registry", f"Disabling plugin: {name}")
         plugin.on_disable()
         plugin._mark_disabled()
-        debug_success(f"Disabled plugin: {name}")
+        debug_success("registry", f"Disabled plugin: {name}")
 
     def unload_plugin(self, name: str) -> None:
         """
@@ -323,14 +324,14 @@ class PluginRegistry:
         if plugin is None:
             raise KeyError(f"Plugin not found: {name}")
 
-        debug(f"Unloading plugin: {name}")
+        debug("registry", f"Unloading plugin: {name}")
 
         # Disable first if enabled
         if plugin.is_enabled:
             try:
                 self.disable_plugin(name)
             except Exception as e:
-                debug_warning(f"Error disabling plugin {name} before unload: {e}")
+                debug_warning("registry", f"Error disabling plugin {name} before unload: {e}")
                 logger.warning(f"Error disabling plugin {name} before unload: {e}")
 
         # Call unload hook
@@ -338,12 +339,12 @@ class PluginRegistry:
             plugin.on_unload()
             plugin._mark_unloaded()
         except Exception as e:
-            debug_warning(f"Error in on_unload for plugin {name}: {e}")
+            debug_warning("registry", f"Error in on_unload for plugin {name}: {e}")
             logger.warning(f"Error in on_unload for plugin {name}: {e}")
 
         # Remove from registry
         del self._plugins[name]
-        debug_success(f"Unloaded plugin: {name}")
+        debug_success("registry", f"Unloaded plugin: {name}")
 
     def is_plugin_loaded(self, name: str) -> bool:
         """

@@ -22,7 +22,24 @@ Usage:
 """
 
 import argparse
+import logging
 import sys
+from pathlib import Path
+
+# Handle both direct execution and module import
+try:
+    from .base import PluginType
+    from .registry import PluginRegistry
+except ImportError:
+    from base import PluginType
+    from registry import PluginRegistry
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(levelname)s: %(message)s",
+)
+logger = logging.getLogger(__name__)
 
 
 def create_parser() -> argparse.ArgumentParser:
@@ -142,9 +159,78 @@ Examples:
 
 
 def cmd_list(args: argparse.Namespace) -> int:
-    """List installed plugins (placeholder)."""
-    print("List command - to be implemented in subtask-1-2")
-    return 0
+    """
+    List installed plugins with optional filtering.
+
+    Args:
+        args: Parsed command-line arguments
+
+    Returns:
+        0 on success, 1 on error
+    """
+    try:
+        # Get plugin registry instance
+        registry = PluginRegistry.get_instance()
+
+        # Ensure plugins are loaded
+        if not registry.list_plugins():
+            logger.info("Loading plugins...")
+            registry.load_all_plugins()
+
+        # Parse type filter
+        plugin_type = None
+        if args.type != "all":
+            type_map = {
+                "agent": PluginType.AGENT,
+                "integration": PluginType.INTEGRATION,
+                "ui": PluginType.UI,
+            }
+            plugin_type = type_map.get(args.type)
+
+        # Get filtered plugins
+        plugins = registry.list_plugins(
+            plugin_type=plugin_type,
+            enabled_only=args.enabled_only,
+        )
+
+        # Display results
+        if not plugins:
+            print("No plugins found.")
+            return 0
+
+        # Calculate column widths
+        max_name_len = max(len(p.name) for p in plugins)
+        max_type_len = max(len(p.plugin_type.value) for p in plugins)
+        name_width = max(max_name_len, 20)  # Minimum width for header
+        type_width = max(max_type_len, 12)  # Minimum width for header
+
+        # Print header
+        print(f"{'Name':<{name_width}}  {'Type':<{type_width}}  {'Version':<10}  {'Status':<10}  {'Description'}")
+        print("-" * (name_width + type_width + 10 + 10 + 40))
+
+        # Print plugins
+        for plugin in plugins:
+            status = "enabled" if plugin.is_enabled else "disabled"
+            print(
+                f"{plugin.name:<{name_width}}  "
+                f"{plugin.plugin_type.value:<{type_width}}  "
+                f"{plugin.version:<10}  "
+                f"{status:<10}  "
+                f"{plugin.metadata.description}"
+            )
+
+        # Print summary
+        print(f"\nTotal: {len(plugins)} plugin(s)")
+        if args.enabled_only:
+            print("Showing enabled plugins only")
+        elif args.type != "all":
+            print(f"Showing {args.type} plugins only")
+
+        return 0
+
+    except Exception as e:
+        logger.error(f"Failed to list plugins: {e}")
+        return 1
 
 
 def cmd_enable(args: argparse.Namespace) -> int:

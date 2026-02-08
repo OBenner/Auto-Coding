@@ -113,9 +113,9 @@ class PluginLoader:
         self.system_plugins_dir.mkdir(parents=True, exist_ok=True)
 
         logger.debug("PluginLoader initialized:")
-        debug_verbose(f"  User plugins: {self.user_plugins_dir}")
-        debug_verbose(f"  System plugins: {self.system_plugins_dir}")
-        debug_verbose(f"  Default limits: {self.default_limits.to_dict()}")
+        debug_verbose("loader", f"  User plugins: {self.user_plugins_dir}")
+        debug_verbose("loader", f"  System plugins: {self.system_plugins_dir}")
+        debug_verbose("loader", f"  Default limits: {self.default_limits.to_dict()}")
 
     def discover_plugins(self) -> list[PluginMetadata]:
         """
@@ -132,11 +132,11 @@ class PluginLoader:
         """
         discovered = []
 
-        debug("Discovering plugins...")
+        debug("loader", "Discovering plugins...")
 
         # Scan system plugins first (can be overridden by user plugins)
         if self.system_plugins_dir.exists():
-            debug_verbose(f"Scanning system plugins: {self.system_plugins_dir}")
+            debug_verbose("loader", f"Scanning system plugins: {self.system_plugins_dir}")
             for plugin_dir in self.system_plugins_dir.iterdir():
                 if plugin_dir.is_dir():
                     try:
@@ -145,6 +145,7 @@ class PluginLoader:
                         debug_verbose(f"  Found: {metadata.name} v{metadata.version}")
                     except Exception as e:
                         debug_warning(
+                            "loader",
                             f"  Skipping invalid system plugin {plugin_dir.name}: {e}"
                         )
                         logger.warning(
@@ -153,7 +154,7 @@ class PluginLoader:
 
         # Scan user plugins (can override system plugins)
         if self.user_plugins_dir.exists():
-            debug_verbose(f"Scanning user plugins: {self.user_plugins_dir}")
+            debug_verbose("loader", f"Scanning user plugins: {self.user_plugins_dir}")
             for plugin_dir in self.user_plugins_dir.iterdir():
                 if plugin_dir.is_dir():
                     try:
@@ -164,20 +165,22 @@ class PluginLoader:
                         )
                         if existing:
                             debug_warning(
+                                "loader",
                                 f"  User plugin '{metadata.name}' overrides system plugin"
                             )
                             discovered.remove(existing)
                         discovered.append(metadata)
-                        debug_verbose(f"  Found: {metadata.name} v{metadata.version}")
+                        debug_verbose("loader", f"  Found: {metadata.name} v{metadata.version}")
                     except Exception as e:
                         debug_warning(
+                            "loader",
                             f"  Skipping invalid user plugin {plugin_dir.name}: {e}"
                         )
                         logger.warning(
                             f"Failed to load user plugin {plugin_dir.name}: {e}"
                         )
 
-        debug_success(f"Discovered {len(discovered)} plugins")
+        debug_success("loader", f"Discovered {len(discovered)} plugins")
         return discovered
 
     def load_plugin(
@@ -209,12 +212,12 @@ class PluginLoader:
         if not plugin_dir.exists():
             raise PluginLoadError(f"Plugin directory not found: {plugin_dir}")
 
-        debug(f"Loading plugin from: {plugin_dir}")
+        debug("loader", f"Loading plugin from: {plugin_dir}")
 
         # Load and validate manifest
         try:
             metadata = self._load_metadata(plugin_dir)
-            debug_verbose(f"  Loaded metadata: {metadata.name} v{metadata.version}")
+            debug_verbose("loader", f"  Loaded metadata: {metadata.name} v{metadata.version}")
         except Exception as e:
             raise PluginValidationError(f"Invalid plugin manifest: {e}") from e
 
@@ -225,7 +228,7 @@ class PluginLoader:
                 f"Plugin module not found: Expected {plugin_dir}/plugin.py or {plugin_dir}/__init__.py"
             )
 
-        debug_verbose(f"  Loading module: {module_path}")
+        debug_verbose("loader", f"  Loading module: {module_path}")
 
         # Dynamically import plugin module
         try:
@@ -238,7 +241,7 @@ class PluginLoader:
         # Instantiate plugin
         try:
             plugin = plugin_class(metadata)
-            debug_verbose(f"  Instantiated plugin class: {plugin_class.__name__}")
+            debug_verbose("loader", f"  Instantiated plugin class: {plugin_class.__name__}")
         except Exception as e:
             raise PluginLoadError(f"Failed to instantiate plugin: {e}") from e
 
@@ -252,9 +255,9 @@ class PluginLoader:
             allowed_dirs=allowed_dirs,
             limits=limits or self.default_limits,
         )
-        debug_verbose(f"  Configured sandbox with {len(allowed_dirs)} allowed dirs")
+        debug_verbose("loader", f"  Configured sandbox with {len(allowed_dirs)} allowed dirs")
 
-        debug_success(f"Loaded plugin: {metadata.name} v{metadata.version}")
+        debug_success("loader", f"Loaded plugin: {metadata.name} v{metadata.version}")
         return plugin
 
     def _load_metadata(self, plugin_dir: Path) -> PluginMetadata:
