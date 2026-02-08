@@ -29,6 +29,16 @@ from ui import (
 
 from .session import run_agent_session, save_token_stats
 
+# Import plugin system for agent lifecycle hooks
+try:
+    from plugins.registry import PluginRegistry
+    from plugins.sdk.agent import AgentContext
+    from plugins.base import PluginType
+
+    PLUGINS_AVAILABLE = True
+except ImportError:
+    PLUGINS_AVAILABLE = False
+
 logger = logging.getLogger(__name__)
 
 
@@ -114,6 +124,38 @@ async def run_followup_planner(
             status, response, usage_metadata = await run_agent_session(
                 client, prompt, spec_dir, verbose, phase=LogPhase.PLANNING
             )
+
+        # Call after_session hook for enabled agent plugins
+        if PLUGINS_AVAILABLE:
+            try:
+                registry = PluginRegistry.get_instance()
+                agent_plugins = registry.list_plugins(
+                    plugin_type=PluginType.AGENT, enabled_only=True
+                )
+
+                if agent_plugins:
+                    # Create agent context for plugins
+                    agent_context = AgentContext(
+                        project_dir=project_dir,
+                        spec_dir=spec_dir,
+                        session_id=f"followup-planner-{spec_dir.name}",
+                        client=client,
+                        phase="planning",
+                        metadata={"status": status},
+                    )
+
+                    # Call after_session for each enabled agent plugin
+                    session_success = status != "error"
+                    for plugin in agent_plugins:
+                        try:
+                            plugin.after_session(agent_context, success=session_success)
+                            logger.debug(f"Called after_session for plugin: {plugin.name}")
+                        except Exception as e:
+                            logger.warning(
+                                f"Plugin {plugin.name} after_session hook failed: {e}"
+                            )
+            except Exception as e:
+                logger.warning(f"Failed to call after_session hooks: {e}")
 
         # Save token statistics for planning phase
         if usage_metadata:

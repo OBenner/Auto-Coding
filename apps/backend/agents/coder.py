@@ -470,6 +470,42 @@ async def run_autonomous_agent(
                 client, prompt, spec_dir, verbose, phase=current_log_phase
             )
 
+        # Call after_session hook for enabled agent plugins
+        if PLUGINS_AVAILABLE:
+            try:
+                registry = PluginRegistry.get_instance()
+                agent_plugins = registry.list_plugins(
+                    plugin_type=PluginType.AGENT, enabled_only=True
+                )
+
+                if agent_plugins:
+                    # Create agent context for plugins
+                    agent_context = AgentContext(
+                        project_dir=project_dir,
+                        spec_dir=spec_dir,
+                        session_id=f"session-{iteration}",
+                        client=client,
+                        phase="planning" if is_planning_phase else "coding",
+                        metadata={
+                            "subtask_id": subtask_id,
+                            "session": iteration,
+                            "status": status,
+                        },
+                    )
+
+                    # Call after_session for each enabled agent plugin
+                    session_success = status != "error"
+                    for plugin in agent_plugins:
+                        try:
+                            plugin.after_session(agent_context, success=session_success)
+                            logger.debug(f"Called after_session for plugin: {plugin.name}")
+                        except Exception as e:
+                            logger.warning(
+                                f"Plugin {plugin.name} after_session hook failed: {e}"
+                            )
+            except Exception as e:
+                logger.warning(f"Failed to call after_session hooks: {e}")
+
         # Save token statistics for coding phase
         if usage_metadata and current_log_phase == LogPhase.CODING:
             try:
