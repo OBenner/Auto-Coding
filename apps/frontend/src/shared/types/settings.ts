@@ -224,6 +224,25 @@ export interface FeatureThinkingConfig {
   utility: ThinkingLevel;
 }
 
+// Agent verbosity level for explanations and responses
+export type AgentVerbosityLevel = 'minimal' | 'concise' | 'normal' | 'detailed' | 'verbose';
+
+// Agent risk tolerance for decision-making
+export type AgentRiskTolerance = 'cautious' | 'balanced' | 'aggressive';
+
+// Project maturity level affecting risk decisions
+export type AgentProjectType = 'greenfield' | 'established' | 'legacy';
+
+// Coding style preferences learned from project conventions
+export interface AgentCodingStylePreferences {
+  indentation?: 'spaces' | 'tabs' | 'auto';
+  quoteStyle?: 'single' | 'double' | 'auto';
+  lineLength?: number | null;
+  namingConvention?: 'snake_case' | 'camelCase' | 'PascalCase' | 'auto';
+  commentDensity?: 'minimal' | 'normal' | 'verbose';
+  typeHints?: boolean;
+}
+
 // Agent profile for preset model/thinking configurations
 // All profiles have per-phase configuration (phaseModels/phaseThinking)
 export interface AgentProfile {
@@ -304,6 +323,12 @@ export interface AppSettings {
   customIDEPath?: string;      // For 'custom' IDE
   preferredTerminal?: SupportedTerminal;
   customTerminalPath?: string; // For 'custom' terminal
+  // Agent behavior preferences (adaptive personality system)
+  agentVerbosity?: AgentVerbosityLevel;
+  agentRiskTolerance?: AgentRiskTolerance;
+  agentProjectType?: AgentProjectType;
+  agentCodingStyle?: AgentCodingStylePreferences;
+  agentUserInstructions?: string[]; // Explicit user preferences (e.g., "be more cautious")
   // YOLO mode: invoke Claude with --dangerously-skip-permissions flag
   dangerouslySkipPermissions?: boolean;
   // Anonymous error reporting (Sentry) - enabled by default to help improve the app
