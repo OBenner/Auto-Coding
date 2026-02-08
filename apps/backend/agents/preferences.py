@@ -324,3 +324,167 @@ class PreferenceProfile:
             created_at=data.get("created_at", datetime.utcnow().isoformat()),
             updated_at=data.get("updated_at", datetime.utcnow().isoformat()),
         )
+
+
+def modify_prompt_for_preferences(prompt: str, profile: PreferenceProfile) -> str:
+    """
+    Modify an agent prompt to include adaptive behavior instructions based on user preferences.
+
+    This function injects preference-based instructions into the agent's system prompt to
+    adapt its behavior according to learned patterns and explicit user settings. The modifications
+    guide the agent's verbosity level, risk tolerance, coding style, and other behavioral aspects.
+
+    Args:
+        prompt: The original agent system prompt
+        profile: User preference profile containing behavior settings and learned adjustments
+
+    Returns:
+        Modified prompt with adaptive behavior instructions injected
+
+    Example:
+        >>> from agents.preferences import PreferenceProfile, modify_prompt_for_preferences
+        >>> profile = PreferenceProfile(verbosity_level=VerbosityLevel.CONCISE)
+        >>> original_prompt = "You are a helpful coding assistant."
+        >>> modified = modify_prompt_for_preferences(original_prompt, profile)
+        >>> "concise" in modified.lower()
+        True
+    """
+    # Build adaptive instructions based on preferences
+    instructions = []
+
+    # 1. Verbosity level adaptations
+    effective_verbosity = profile.get_effective_verbosity()
+    verbosity_guidance = {
+        VerbosityLevel.MINIMAL: (
+            "- Keep responses brief and code-focused. Minimize explanations unless explicitly requested.\n"
+            "- Skip background context and reasoning unless critical to understanding.\n"
+            "- Prefer showing over telling - let the code speak for itself."
+        ),
+        VerbosityLevel.CONCISE: (
+            "- Provide concise explanations for simple tasks.\n"
+            "- Focus on the 'what' and 'why' without excessive detail.\n"
+            "- Use brief inline comments rather than long docstrings for obvious code."
+        ),
+        VerbosityLevel.NORMAL: (
+            "- Provide clear explanations at a standard level of detail.\n"
+            "- Balance brevity with thoroughness - explain key decisions without over-explaining."
+        ),
+        VerbosityLevel.DETAILED: (
+            "- Provide thorough explanations for non-trivial changes.\n"
+            "- Explain the reasoning behind architectural decisions.\n"
+            "- Include helpful context about trade-offs and alternatives considered."
+        ),
+        VerbosityLevel.VERBOSE: (
+            "- Provide extensive detail and comprehensive explanations.\n"
+            "- Include background context, reasoning, and alternative approaches.\n"
+            "- Document complex logic thoroughly with detailed comments and docstrings."
+        ),
+    }
+    if effective_verbosity in verbosity_guidance:
+        instructions.append(
+            f"## Verbosity Guidance\n{verbosity_guidance[effective_verbosity]}"
+        )
+
+    # 2. Risk tolerance adaptations
+    effective_risk = profile.get_effective_risk_tolerance()
+    risk_guidance = {
+        RiskTolerance.CAUTIOUS: (
+            "- Prioritize safety and stability over speed.\n"
+            "- Ask for confirmation before making significant changes to existing code.\n"
+            "- Prefer conservative, well-tested approaches over experimental solutions.\n"
+            "- Add extra validation and error handling to prevent regressions."
+        ),
+        RiskTolerance.BALANCED: (
+            "- Balance safety with pragmatism.\n"
+            "- Make reasonable assumptions for straightforward changes.\n"
+            "- Ask for clarification when the approach has meaningful trade-offs."
+        ),
+        RiskTolerance.AGGRESSIVE: (
+            "- Optimize for speed and iteration velocity.\n"
+            "- Make reasonable assumptions to move quickly.\n"
+            "- Refactor aggressively when it improves code quality.\n"
+            "- Focus on getting working code first, then refine."
+        ),
+    }
+    if effective_risk in risk_guidance:
+        instructions.append(f"## Risk Tolerance Guidance\n{risk_guidance[effective_risk]}")
+
+    # 3. Project type context
+    project_guidance = {
+        ProjectType.GREENFIELD: (
+            "- This is a new project with flexibility for experimentation.\n"
+            "- Feel free to suggest modern patterns and best practices.\n"
+            "- Prioritize clean architecture over backward compatibility."
+        ),
+        ProjectType.ESTABLISHED: (
+            "- This is an established codebase with existing patterns.\n"
+            "- Follow existing conventions and architectural patterns.\n"
+            "- Balance innovation with consistency."
+        ),
+        ProjectType.LEGACY: (
+            "- This is a legacy codebase requiring extra caution.\n"
+            "- Preserve existing behavior unless explicitly asked to change it.\n"
+            "- Make minimal, surgical changes to reduce risk of regressions.\n"
+            "- Test thoroughly before and after changes."
+        ),
+    }
+    if profile.project_type in project_guidance:
+        instructions.append(f"## Project Context\n{project_guidance[profile.project_type]}")
+
+    # 4. Coding style preferences
+    style_instructions = []
+    style = profile.coding_style
+
+    if style.indentation != "auto":
+        style_instructions.append(f"- Use {style.indentation} for indentation (not auto-detected)")
+    if style.quote_style != "auto":
+        style_instructions.append(f"- Use {style.quote_style} quotes for strings (not auto-detected)")
+    if style.line_length:
+        style_instructions.append(f"- Limit lines to {style.line_length} characters")
+    if style.naming_convention != "auto":
+        style_instructions.append(f"- Follow {style.naming_convention} naming convention")
+    if style.comment_density == "minimal":
+        style_instructions.append("- Keep comments minimal - only for non-obvious logic")
+    elif style.comment_density == "verbose":
+        style_instructions.append(
+            "- Add comprehensive comments and docstrings for all non-trivial code"
+        )
+    if not style.type_hints:
+        style_instructions.append("- Do not add type hints (user preference)")
+
+    if style_instructions:
+        instructions.append("## Coding Style Preferences\n" + "\n".join(style_instructions))
+
+    # 5. Explicit user instructions
+    if profile.user_instructions:
+        user_prefs = "\n".join(f"- {instr}" for instr in profile.user_instructions)
+        instructions.append(f"## User Preferences\n{user_prefs}")
+
+    # 6. Inject instructions into prompt
+    if not instructions:
+        # No preferences to inject, return original prompt
+        return prompt
+
+    adaptive_section = (
+        "\n\n# Adaptive Behavior Instructions\n\n"
+        "The following instructions reflect learned user preferences and feedback patterns. "
+        "Apply these guidelines to adapt your behavior to this user's coding style and expectations.\n\n"
+        + "\n\n".join(instructions)
+    )
+
+    # Insert before the final section or at the end
+    # Look for common final sections to insert before them
+    final_markers = [
+        "\n## Quality Checklist",
+        "\n## Important",
+        "\n# Important",
+        "\n## Examples",
+        "\n# Examples",
+    ]
+
+    for marker in final_markers:
+        if marker in prompt:
+            return prompt.replace(marker, adaptive_section + "\n" + marker)
+
+    # No final section found, append at the end
+    return prompt + adaptive_section
