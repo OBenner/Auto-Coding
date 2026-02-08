@@ -30,6 +30,63 @@ from memory.graphiti_helpers import get_graphiti_memory
 logger = logging.getLogger(__name__)
 
 
+async def get_session_context(
+    spec_dir: Path,
+    project_dir: Path,
+) -> "SessionContext | None":
+    """
+    Get SessionContext instance for managing conversation history in Graphiti.
+
+    This provides access to session context storage and retrieval for:
+    - Persisting conversation history across restarts
+    - Tracking code references
+    - Optimizing context window
+
+    Args:
+        spec_dir: Spec directory
+        project_dir: Project root directory
+
+    Returns:
+        SessionContext instance or None if initialization fails
+    """
+    try:
+        from agents.session_context import SessionContext
+
+        # Create SessionContext instance
+        session_context = SessionContext(
+            spec_dir=spec_dir,
+            project_dir=project_dir,
+        )
+
+        # Initialize Graphiti connection
+        if await session_context.initialize():
+            debug_success(
+                "memory",
+                "SessionContext initialized",
+                spec_dir=str(spec_dir),
+            )
+            return session_context
+        else:
+            debug_warning(
+                "memory",
+                "SessionContext initialization failed - Graphiti not available",
+            )
+            return None
+
+    except Exception as e:
+        debug_error(
+            "memory",
+            f"Failed to create SessionContext: {e}",
+        )
+        logger.warning(f"Failed to create SessionContext: {e}")
+        capture_exception(
+            e,
+            operation="get_session_context",
+            spec_dir=str(spec_dir),
+        )
+        return None
+
+
 def debug_memory_system_status() -> None:
     """
     Print memory system status for debugging.
