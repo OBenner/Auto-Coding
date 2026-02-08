@@ -43,6 +43,9 @@ from analysis.performance_analyzer import (
 )
 from analysis.security_scanner import SecurityScanner, SecurityScanResult
 
+# Import configuration
+from analysis.prevention_config import PreventionConfig, load_prevention_config
+
 
 # =============================================================================
 # DATA CLASSES
@@ -93,8 +96,14 @@ class PreventionScanner:
     - ArchitectureValidator for pattern consistency
     """
 
-    def __init__(self) -> None:
-        """Initialize the prevention scanner with all sub-scanners."""
+    def __init__(self, config: PreventionConfig | None = None) -> None:
+        """
+        Initialize the prevention scanner with all sub-scanners.
+
+        Args:
+            config: Optional PreventionConfig (defaults to loading from environment)
+        """
+        self.config = config or load_prevention_config()
         self.security_scanner = SecurityScanner()
         self.performance_analyzer = PerformanceAnalyzer()
         self.breaking_change_detector = BreakingChangeDetector()
@@ -106,23 +115,15 @@ class PreventionScanner:
         spec_dir: Path | None = None,
         changed_files: list[str] | None = None,
         old_dir: Path | None = None,
-        run_security: bool = True,
-        run_performance: bool = True,
-        run_breaking_changes: bool = False,
-        run_architecture: bool = True,
     ) -> PreventionScanResult:
         """
-        Run all applicable prevention scans.
+        Run all applicable prevention scans based on configuration.
 
         Args:
             project_dir: Path to the project root
             spec_dir: Path to the spec directory (for storing results)
             changed_files: Optional list of files to scan (if None, scans all)
             old_dir: Path to old version for breaking change detection
-            run_security: Whether to run security scanning
-            run_performance: Whether to run performance analysis
-            run_breaking_changes: Whether to run breaking change detection
-            run_architecture: Whether to run architecture validation
 
         Returns:
             PreventionScanResult with all findings
@@ -131,48 +132,60 @@ class PreventionScanner:
         result = PreventionScanResult()
 
         # Run security scan
-        if run_security:
+        if self.config.security_enabled:
             try:
                 result.security = self.security_scanner.scan(
                     project_dir=project_dir,
-                    spec_dir=spec_dir,
+                    spec_dir=spec_dir if self.config.save_reports else None,
                     changed_files=changed_files,
                 )
             except Exception as e:
-                result.scan_errors.append(f"Security scan failed: {e}")
+                error_msg = f"Security scan failed: {e}"
+                result.scan_errors.append(error_msg)
+                if self.config.fail_on_scan_error:
+                    raise RuntimeError(error_msg) from e
 
         # Run performance analysis
-        if run_performance:
+        if self.config.performance_enabled:
             try:
                 result.performance = self.performance_analyzer.analyze(
                     project_dir=project_dir,
-                    spec_dir=spec_dir,
+                    spec_dir=spec_dir if self.config.save_reports else None,
                     changed_files=changed_files,
                 )
             except Exception as e:
-                result.scan_errors.append(f"Performance analysis failed: {e}")
+                error_msg = f"Performance analysis failed: {e}"
+                result.scan_errors.append(error_msg)
+                if self.config.fail_on_scan_error:
+                    raise RuntimeError(error_msg) from e
 
         # Run breaking change detection (requires old version for comparison)
-        if run_breaking_changes and old_dir:
+        if self.config.breaking_changes_enabled and old_dir:
             try:
                 result.breaking_changes = self.breaking_change_detector.analyze(
                     old_dir=old_dir,
                     new_dir=project_dir,
-                    spec_dir=spec_dir,
+                    spec_dir=spec_dir if self.config.save_reports else None,
                 )
             except Exception as e:
-                result.scan_errors.append(f"Breaking change detection failed: {e}")
+                error_msg = f"Breaking change detection failed: {e}"
+                result.scan_errors.append(error_msg)
+                if self.config.fail_on_scan_error:
+                    raise RuntimeError(error_msg) from e
 
         # Run architecture validation
-        if run_architecture:
+        if self.config.architecture_enabled:
             try:
                 result.architecture = self.architecture_validator.analyze(
                     project_dir=project_dir,
-                    spec_dir=spec_dir,
+                    spec_dir=spec_dir if self.config.save_reports else None,
                     changed_files=changed_files,
                 )
             except Exception as e:
-                result.scan_errors.append(f"Architecture validation failed: {e}")
+                error_msg = f"Architecture validation failed: {e}"
+                result.scan_errors.append(error_msg)
+                if self.config.fail_on_scan_error:
+                    raise RuntimeError(error_msg) from e
 
         # Aggregate results
         self._aggregate_results(result)
@@ -280,10 +293,10 @@ class PreventionScanner:
             )
             total_issues += len(result.architecture.issues)
 
-        # Determine overall status
+        # Determine overall status using config
         result.has_critical_issues = critical_count > 0 or high_count > 0
-        result.should_block = critical_count > 0
-        result.should_warn = high_count > 0 or medium_count > 0
+        result.should_block = self.config.should_block(critical_count, high_count)
+        result.should_warn = self.config.should_warn(high_count, medium_count)
 
         # Build summary
         result.summary = {
