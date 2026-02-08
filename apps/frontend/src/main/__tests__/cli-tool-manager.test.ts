@@ -160,14 +160,17 @@ vi.mock('../utils/homebrew-python', () => ({
 }));
 
 // Mock platform/paths utility (where cli-tool-manager imports windows-specific functions from)
-vi.mock('../platform/paths', () => ({
-  findWindowsExecutableViaWhere: vi.fn(() => null),
-  findWindowsExecutableViaWhereAsync: vi.fn(() => Promise.resolve(null)),
-  isSecurePath: vi.fn(() => true),
-  getWindowsExecutablePaths: vi.fn(() => []),
-  getWindowsExecutablePathsAsync: vi.fn(() => Promise.resolve([])),
-  WINDOWS_GIT_PATHS: {}
-}));
+vi.mock('../platform/paths', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../platform/paths')>();
+  return {
+    ...actual,
+    findWindowsExecutableViaWhere: vi.fn(() => null),
+    findWindowsExecutableViaWhereAsync: vi.fn(() => Promise.resolve(null)),
+    isSecurePath: vi.fn(() => true),
+    getWindowsExecutablePaths: vi.fn(() => []),
+    getWindowsExecutablePathsAsync: vi.fn(() => Promise.resolve([])),
+  };
+});
 
 describe('cli-tool-manager - Claude CLI NVM detection', () => {
   beforeEach(() => {

@@ -53,6 +53,9 @@ import {
   type ClaudeDetectionPaths,
 } from './platform/paths';
 
+// Re-export platform utilities for backward compatibility
+export { getClaudeDetectionPaths, sortNvmVersionDirs };
+
 /**
  * Supported CLI tools managed by this system
  */
