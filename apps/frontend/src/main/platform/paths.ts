@@ -122,6 +122,100 @@ export function getClaudeExecutablePath(): string[] {
 }
 
 /**
+ * Configuration for Claude CLI detection paths
+ */
+export interface ClaudeDetectionPaths {
+  /** Homebrew paths for macOS (Apple Silicon and Intel) */
+  homebrewPaths: string[];
+  /** Platform-specific standard installation paths */
+  platformPaths: string[];
+  /** Path to NVM versions directory for Node.js-installed Claude */
+  nvmVersionsDir: string;
+}
+
+/**
+ * Get all candidate paths for Claude CLI detection.
+ *
+ * Returns platform-specific paths where Claude CLI might be installed.
+ * This pure function consolidates path configuration used by both sync
+ * and async detection methods.
+ *
+ * Note: This is the single source of truth for CLI detection paths.
+ * The Python backend relies on the Claude Agent SDK's bundled CLI,
+ * so it no longer needs its own path detection logic.
+ *
+ * @param homeDir - User's home directory (from os.homedir())
+ * @returns Object containing homebrew, platform, and NVM paths
+ *
+ * @example
+ * const paths = getClaudeDetectionPaths('/Users/john');
+ * // On macOS: { homebrewPaths: ['/opt/homebrew/bin/claude', ...], ... }
+ */
+export function getClaudeDetectionPaths(homeDir: string): ClaudeDetectionPaths {
+  const homebrewPaths = [
+    '/opt/homebrew/bin/claude', // Apple Silicon
+    '/usr/local/bin/claude',    // Intel Mac
+  ];
+
+  const platformPaths = isWindows()
+    ? [
+        joinPaths(homeDir, 'AppData', 'Local', 'Programs', 'claude', `claude${getExecutableExtension()}`),
+        joinPaths(homeDir, 'AppData', 'Roaming', 'npm', 'claude.cmd'),
+        joinPaths(homeDir, '.local', 'bin', `claude${getExecutableExtension()}`),
+        'C:\\Program Files\\Claude\\claude.exe',
+        'C:\\Program Files (x86)\\Claude\\claude.exe',
+      ]
+    : [
+        joinPaths(homeDir, '.local', 'bin', 'claude'),
+        joinPaths(homeDir, 'bin', 'claude'),
+      ];
+
+  const nvmVersionsDir = joinPaths(homeDir, '.nvm', 'versions', 'node');
+
+  return { homebrewPaths, platformPaths, nvmVersionsDir };
+}
+
+/**
+ * Sort NVM version directories by semantic version (newest first).
+ *
+ * Filters entries to only include directories starting with 'v' (version directories)
+ * and sorts them in descending order so the newest Node.js version is checked first.
+ *
+ * @param entries - Directory entries from readdir with { name, isDirectory() }
+ * @returns Array of version directory names sorted newest first
+ *
+ * @example
+ * const entries = [
+ *   { name: 'v18.0.0', isDirectory: () => true },
+ *   { name: 'v20.0.0', isDirectory: () => true },
+ *   { name: '.DS_Store', isDirectory: () => false },
+ * ];
+ * sortNvmVersionDirs(entries); // ['v20.0.0', 'v18.0.0']
+ */
+export function sortNvmVersionDirs(
+  entries: Array<{ name: string; isDirectory(): boolean }>
+): string[] {
+  // Regex to match valid semver directories: v20.0.0, v18.17.1, etc.
+  // This prevents NaN from malformed versions (e.g., v20.abc.1) breaking sort
+  const semverRegex = /^v\d+\.\d+\.\d+$/;
+
+  return entries
+    .filter((entry) => entry.isDirectory() && semverRegex.test(entry.name))
+    .sort((a, b) => {
+      // Parse version numbers: v20.0.0 -> [20, 0, 0]
+      const vA = a.name.slice(1).split('.').map(Number);
+      const vB = b.name.slice(1).split('.').map(Number);
+      // Compare major, minor, patch in order (descending)
+      for (let i = 0; i < 3; i++) {
+        const diff = (vB[i] ?? 0) - (vA[i] ?? 0);
+        if (diff !== 0) return diff;
+      }
+      return 0;
+    })
+    .map((entry) => entry.name);
+}
+
+/**
  * Resolve Python executable path
  *
  * Returns command arguments as sequences so callers can pass each entry
