@@ -51,7 +51,7 @@ logger = logging.getLogger(__name__)
 def run_coverage_validation(
     project_dir: Path,
     spec_dir: Path,
-) -> tuple[bool, str]:
+) -> tuple[bool, str, dict | None]:
     """
     Run coverage analysis and validation.
 
@@ -60,9 +60,10 @@ def run_coverage_validation(
         spec_dir: Spec directory
 
     Returns:
-        (success, summary_text) tuple where:
+        (success, summary_text, coverage_data) tuple where:
         - success: True if coverage validation passed or was skipped
         - summary_text: Human-readable summary of coverage results
+        - coverage_data: Structured coverage data for qa_signoff (or None if skipped)
     """
     debug_section("coverage_validator", "Running coverage validation")
 
@@ -78,7 +79,7 @@ def run_coverage_validation(
         )
     except Exception as e:
         debug_error("coverage_validator", f"Failed to load coverage config: {e}")
-        return True, f"⚠️  Coverage validation skipped (config load failed: {e})"
+        return True, f"⚠️  Coverage validation skipped (config load failed: {e})", None
 
     # Check if pytest-cov is available
     analyzer = CoverageAnalyzer(project_dir)
@@ -90,7 +91,7 @@ def run_coverage_validation(
             "pytest-cov not available, skipping coverage validation",
             reason=version_or_error,
         )
-        return True, f"⚠️  Coverage validation skipped (pytest-cov not available: {version_or_error})"
+        return True, f"⚠️  Coverage validation skipped (pytest-cov not available: {version_or_error})", None
 
     debug_success("coverage_validator", f"pytest-cov is available: {version_or_error}")
 
@@ -111,7 +112,7 @@ def run_coverage_validation(
                 "Coverage analysis failed",
                 error=coverage_result.error_message,
             )
-            return False, f"❌ Coverage analysis failed: {coverage_result.error_message}"
+            return False, f"❌ Coverage analysis failed: {coverage_result.error_message}", None
 
         debug_success(
             "coverage_validator",
@@ -122,7 +123,7 @@ def run_coverage_validation(
 
     except Exception as e:
         debug_error("coverage_validator", f"Exception during coverage analysis: {e}")
-        return False, f"❌ Coverage analysis exception: {str(e)}"
+        return False, f"❌ Coverage analysis exception: {str(e)}", None
 
     # Parse coverage report if it was generated
     if coverage_result.report_path:
@@ -165,9 +166,20 @@ def run_coverage_validation(
         # Print summary
         print(f"\n{summary}\n")
 
+        # Build structured coverage data for qa_signoff
+        coverage_data = {
+            "passed": validation_result.passed,
+            "total_coverage": coverage_result.total_coverage,
+            "files_analyzed": len(coverage_result.files),
+            "issues_count": len(validation_result.issues),
+            "critical_path_failures": validation_result.critical_path_failures,
+            "minimum_required": config.minimum_coverage,
+            "report_file": "coverage_report.txt",
+        }
+
         if validation_result.passed:
             debug_success("coverage_validator", "Coverage validation PASSED")
-            return True, summary
+            return True, summary, coverage_data
         else:
             debug_error(
                 "coverage_validator",
@@ -175,11 +187,11 @@ def run_coverage_validation(
                 issues=len(validation_result.issues),
                 critical_failures=validation_result.critical_path_failures,
             )
-            return False, summary
+            return False, summary, coverage_data
 
     except Exception as e:
         debug_error("coverage_validator", f"Exception during coverage validation: {e}")
-        return False, f"❌ Coverage validation exception: {str(e)}"
+        return False, f"❌ Coverage validation exception: {str(e)}", None
 
 
 # =============================================================================
@@ -235,12 +247,13 @@ async def run_qa_agent_session(
     tool_count = 0
 
     # Run coverage validation before QA session
-    coverage_passed, coverage_summary = run_coverage_validation(project_dir, spec_dir)
+    coverage_passed, coverage_summary, coverage_data = run_coverage_validation(project_dir, spec_dir)
     debug(
         "qa_reviewer",
         "Coverage validation completed",
         passed=coverage_passed,
         summary_length=len(coverage_summary),
+        has_data=coverage_data is not None,
     )
 
     # Load QA prompt with dynamically-injected project-specific MCP tools
@@ -272,17 +285,30 @@ async def run_qa_agent_session(
     prompt += coverage_summary
     prompt += "\n\n"
 
+    # Add coverage data to prompt instructions
+    if coverage_data:
+        import json
+        coverage_json = json.dumps(coverage_data, indent=2)
+        prompt += f"""
+### Coverage Results (Include in qa_signoff)
+
+```json
+{coverage_json}
+```
+
+"""
+
     if not coverage_passed:
         prompt += """
 **⚠️ IMPORTANT**: Coverage validation failed. You MUST address coverage issues in your QA review.
-- Include coverage failures in your qa_signoff
+- Include coverage_results in your qa_signoff (use the data above)
 - Set status to "rejected" if critical paths lack coverage
 - Reference the detailed coverage report at `coverage_report.txt` for specific missing lines
 
 """
         debug("qa_reviewer", "Coverage failed - added warning to prompt")
     else:
-        prompt += "✓ Coverage validation passed. Include coverage_passed: true in your qa_signoff.\n\n"
+        prompt += "✓ Coverage validation passed. Include coverage_results in your qa_signoff (use the data above).\n\n"
         debug_success("qa_reviewer", "Coverage passed - added success note to prompt")
 
     # Add session context
@@ -332,6 +358,15 @@ After completing your QA review, you MUST:
        "qa_session": {qa_session},
        "report_file": "qa_report.md",
        "tests_passed": {{"unit": "X/Y", "integration": "X/Y", "e2e": "X/Y"}},
+       "coverage_results": {{
+         "passed": true,
+         "total_coverage": XX.X,
+         "files_analyzed": N,
+         "issues_count": 0,
+         "critical_path_failures": 0,
+         "minimum_required": YY.Y,
+         "report_file": "coverage_report.txt"
+       }},
        "verified_by": "qa_agent"
      }}
    }}
@@ -347,6 +382,15 @@ After completing your QA review, you MUST:
        "issues_found": [
          {{"type": "critical", "title": "[issue]", "location": "[file:line]", "fix_required": "[description]"}}
        ],
+       "coverage_results": {{
+         "passed": false,
+         "total_coverage": XX.X,
+         "files_analyzed": N,
+         "issues_count": M,
+         "critical_path_failures": K,
+         "minimum_required": YY.Y,
+         "report_file": "coverage_report.txt"
+       }},
        "fix_request_file": "QA_FIX_REQUEST.md"
      }}
    }}
