@@ -25,6 +25,13 @@ class TemplateLibrary:
         """
         self.registry = TemplateRegistry()
         self.custom_templates_dir = custom_templates_dir
+
+        # Register built-in templates
+        from .builtin import register_builtin_templates
+
+        register_builtin_templates(self.registry)
+
+        # Load custom templates if directory provided
         if custom_templates_dir:
             self._load_custom_templates()
 
