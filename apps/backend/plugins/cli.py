@@ -234,15 +234,83 @@ def cmd_list(args: argparse.Namespace) -> int:
 
 
 def cmd_enable(args: argparse.Namespace) -> int:
-    """Enable a plugin (placeholder)."""
-    print(f"Enable command for '{args.plugin_name}' - to be implemented in subtask-1-3")
-    return 0
+    """
+    Enable a plugin.
+
+    Args:
+        args: Parsed command-line arguments
+
+    Returns:
+        0 on success, 1 on error
+    """
+    try:
+        # Get plugin registry instance
+        registry = PluginRegistry.get_instance()
+
+        # Ensure plugins are loaded
+        if not registry.list_plugins():
+            logger.info("Loading plugins...")
+            registry.load_all_plugins()
+
+        # Check if plugin exists
+        plugin = registry.get_plugin(args.plugin_name)
+        if plugin is None:
+            logger.error(f"Plugin not found: {args.plugin_name}")
+            return 1
+
+        # Enable plugin
+        registry.enable_plugin(args.plugin_name)
+
+        # Confirm success
+        print(f"Plugin '{args.plugin_name}' enabled successfully")
+        return 0
+
+    except KeyError as e:
+        logger.error(f"Plugin not found: {e}")
+        return 1
+    except Exception as e:
+        logger.error(f"Failed to enable plugin '{args.plugin_name}': {e}")
+        return 1
 
 
 def cmd_disable(args: argparse.Namespace) -> int:
-    """Disable a plugin (placeholder)."""
-    print(f"Disable command for '{args.plugin_name}' - to be implemented in subtask-1-3")
-    return 0
+    """
+    Disable a plugin.
+
+    Args:
+        args: Parsed command-line arguments
+
+    Returns:
+        0 on success, 1 on error
+    """
+    try:
+        # Get plugin registry instance
+        registry = PluginRegistry.get_instance()
+
+        # Ensure plugins are loaded
+        if not registry.list_plugins():
+            logger.info("Loading plugins...")
+            registry.load_all_plugins()
+
+        # Check if plugin exists
+        plugin = registry.get_plugin(args.plugin_name)
+        if plugin is None:
+            logger.error(f"Plugin not found: {args.plugin_name}")
+            return 1
+
+        # Disable plugin
+        registry.disable_plugin(args.plugin_name)
+
+        # Confirm success
+        print(f"Plugin '{args.plugin_name}' disabled successfully")
+        return 0
+
+    except KeyError as e:
+        logger.error(f"Plugin not found: {e}")
+        return 1
+    except Exception as e:
+        logger.error(f"Failed to disable plugin '{args.plugin_name}': {e}")
+        return 1
 
 
 def cmd_install(args: argparse.Namespace) -> int:
