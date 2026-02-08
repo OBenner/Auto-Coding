@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Switch } from '../ui/switch';
 import { SettingsSection } from './SettingsSection';
 import { AgentProfileSettings } from './AgentProfileSettings';
+import { AgentPreferences } from './AgentPreferences';
 import {
   AVAILABLE_MODELS,
   THINKING_LEVELS,
@@ -125,6 +126,9 @@ export function GeneralSettings({ settings, onSettingsChange, section }: General
       <div className="space-y-8">
         {/* Agent Profile Selection */}
         <AgentProfileSettings />
+
+        {/* Agent Behavior Preferences */}
+        <AgentPreferences settings={settings} onSettingsChange={onSettingsChange} />
 
         {/* Other Agent Settings */}
         <SettingsSection

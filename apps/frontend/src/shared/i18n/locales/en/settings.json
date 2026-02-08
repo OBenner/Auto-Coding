@@ -818,5 +818,55 @@
       "saveFailedTitle": "Save Failed",
       "saveFailedDescription": "Failed to save keyboard shortcuts. Please try again."
     }
+  },
+  "agentPreferences": {
+    "title": "Agent Behavior Preferences",
+    "description": "Configure how agents adapt their behavior to match your preferences",
+    "verbosity": {
+      "label": "Response Verbosity",
+      "description": "Control how detailed agent explanations should be",
+      "minimal": "Very brief",
+      "concise": "Short",
+      "normal": "Standard",
+      "detailed": "Thorough",
+      "verbose": "Very detailed"
+    },
+    "riskTolerance": {
+      "label": "Risk Tolerance",
+      "description": "How cautious agents should be when making changes",
+      "cautious": "Safe first",
+      "balanced": "Moderate",
+      "aggressive": "Move fast"
+    },
+    "projectType": {
+      "label": "Project Type",
+      "description": "Project maturity level affecting risk decisions",
+      "greenfield": "New project",
+      "established": "Stable",
+      "legacy": "Old codebase"
+    },
+    "codingStyle": {
+      "label": "Coding Style Preferences",
+      "description": "Learn and match project conventions automatically",
+      "indentation": "Indentation",
+      "quoteStyle": "Quote Style",
+      "namingConvention": "Naming Convention",
+      "commentDensity": "Comment Density",
+      "typeHints": "Use Type Hints",
+      "typeHintsDescription": "Add type annotations to code",
+      "auto": "Auto-detect",
+      "spaces": "Spaces",
+      "tabs": "Tabs",
+      "single": "Single quotes",
+      "double": "Double quotes",
+      "minimal": "Minimal",
+      "normalComments": "Normal",
+      "verbose": "Verbose"
+    },
+    "userInstructions": {
+      "label": "Custom Instructions",
+      "description": "Add explicit preferences like 'be more cautious' or 'use TypeScript'",
+      "placeholder": "e.g., 'be more cautious' or 'prefer functional style'"
+    }
   }
 }

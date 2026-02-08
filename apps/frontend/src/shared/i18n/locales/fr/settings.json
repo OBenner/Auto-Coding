@@ -822,5 +822,55 @@
       "saveFailedTitle": "Échec de l'enregistrement",
       "saveFailedDescription": "Échec de l'enregistrement des raccourcis clavier. Veuillez réessayer."
     }
+  },
+  "agentPreferences": {
+    "title": "Préférences de comportement de l'agent",
+    "description": "Configurez comment les agents adaptent leur comportement à vos préférences",
+    "verbosity": {
+      "label": "Verbosité des réponses",
+      "description": "Contrôlez le niveau de détail des explications de l'agent",
+      "minimal": "Très bref",
+      "concise": "Court",
+      "normal": "Standard",
+      "detailed": "Détaillé",
+      "verbose": "Très détaillé"
+    },
+    "riskTolerance": {
+      "label": "Tolérance au risque",
+      "description": "À quel point les agents doivent être prudents lors de modifications",
+      "cautious": "Sécurité d'abord",
+      "balanced": "Modéré",
+      "aggressive": "Agir vite"
+    },
+    "projectType": {
+      "label": "Type de projet",
+      "description": "Niveau de maturité du projet affectant les décisions de risque",
+      "greenfield": "Nouveau projet",
+      "established": "Stable",
+      "legacy": "Ancienne base de code"
+    },
+    "codingStyle": {
+      "label": "Préférences de style de code",
+      "description": "Apprendre et correspondre automatiquement aux conventions du projet",
+      "indentation": "Indentation",
+      "quoteStyle": "Style de guillemets",
+      "namingConvention": "Convention de nommage",
+      "commentDensity": "Densité des commentaires",
+      "typeHints": "Utiliser les annotations de type",
+      "typeHintsDescription": "Ajouter des annotations de type au code",
+      "auto": "Détection auto",
+      "spaces": "Espaces",
+      "tabs": "Tabulations",
+      "single": "Guillemets simples",
+      "double": "Guillemets doubles",
+      "minimal": "Minimal",
+      "normalComments": "Normal",
+      "verbose": "Verbeux"
+    },
+    "userInstructions": {
+      "label": "Instructions personnalisées",
+      "description": "Ajoutez des préférences explicites comme 'être plus prudent' ou 'utiliser TypeScript'",
+      "placeholder": "ex : 'être plus prudent' ou 'préférer le style fonctionnel'"
+    }
   }
 }
