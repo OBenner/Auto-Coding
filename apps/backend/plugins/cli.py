@@ -23,15 +23,18 @@ Usage:
 
 import argparse
 import logging
+import shutil
 import sys
 from pathlib import Path
 
 # Handle both direct execution and module import
 try:
     from .base import PluginType
+    from .loader import PluginLoader, PluginLoadError, PluginValidationError
     from .registry import PluginRegistry
 except ImportError:
     from base import PluginType
+    from loader import PluginLoader, PluginLoadError, PluginValidationError
     from registry import PluginRegistry
 
 # Configure logging
@@ -314,12 +317,117 @@ def cmd_disable(args: argparse.Namespace) -> int:
 
 
 def cmd_install(args: argparse.Namespace) -> int:
-    """Install a plugin (placeholder)."""
+    """
+    Install a plugin from local path or remote URL.
+
+    Args:
+        args: Parsed command-line arguments
+
+    Returns:
+        0 on success, 1 on error
+    """
+    # Handle local path installation
     if args.path:
-        print(f"Install from path '{args.path}' - to be implemented in subtask-1-4")
-    else:
-        print(f"Install from URL '{args.url}' - to be implemented in phase-3")
-    return 0
+        return _install_from_path(args.path, args.force)
+
+    # Handle remote URL installation (placeholder for phase-3)
+    if args.url:
+        logger.info(f"Install from URL '{args.url}' - to be implemented in phase-3")
+        return 0
+
+    logger.error("Either --path or --url must be specified")
+    return 1
+
+
+def _install_from_path(source_path: str, force: bool) -> int:
+    """
+    Install a plugin from a local directory path.
+
+    Validates the plugin, copies it to the user plugins directory,
+    and confirms successful installation.
+
+    Args:
+        source_path: Path to plugin directory
+        force: If True, overwrite existing plugin
+
+    Returns:
+        0 on success, 1 on error
+    """
+    try:
+        # Resolve source path
+        source_dir = Path(source_path).resolve()
+
+        # Verify source directory exists
+        if not source_dir.exists():
+            logger.error(f"Source path not found: {source_path}")
+            return 1
+
+        if not source_dir.is_dir():
+            logger.error(f"Source path is not a directory: {source_path}")
+            return 1
+
+        logger.info(f"Installing plugin from: {source_dir}")
+
+        # Create loader to validate plugin and get user plugins directory
+        loader = PluginLoader()
+
+        # Validate plugin by loading metadata
+        try:
+            metadata = loader._load_metadata(source_dir)
+            logger.info(f"Found plugin: {metadata.name} v{metadata.version}")
+        except PluginValidationError as e:
+            logger.error(f"Invalid plugin: {e}")
+            return 1
+
+        # Determine target directory
+        target_dir = loader.user_plugins_dir / metadata.name
+
+        # Check if plugin already exists
+        if target_dir.exists():
+            if not force:
+                logger.error(
+                    f"Plugin '{metadata.name}' already installed at {target_dir}. "
+                    "Use --force to overwrite."
+                )
+                return 1
+            logger.warning(f"Removing existing plugin: {target_dir}")
+            shutil.rmtree(target_dir)
+
+        # Copy plugin to user plugins directory
+        logger.info(f"Installing to: {target_dir}")
+        try:
+            shutil.copytree(source_dir, target_dir)
+            logger.info(f"Copied plugin files to: {target_dir}")
+        except Exception as e:
+            logger.error(f"Failed to copy plugin: {e}")
+            return 1
+
+        # Validate the installed plugin
+        try:
+            installed_metadata = loader._load_metadata(target_dir)
+            if installed_metadata.name != metadata.name:
+                logger.error("Plugin name mismatch after installation")
+                shutil.rmtree(target_dir)
+                return 1
+        except PluginValidationError as e:
+            logger.error(f"Validation failed after installation: {e}")
+            shutil.rmtree(target_dir)
+            return 1
+
+        # Success
+        print(f"✓ Plugin '{metadata.name}' v{metadata.version} installed successfully")
+        print(f"  Location: {target_dir}")
+        print(f"  Description: {metadata.description}")
+        print(f"\nEnable the plugin with: python plugins/cli.py enable {metadata.name}")
+
+        return 0
+
+    except PluginLoadError as e:
+        logger.error(f"Failed to load plugin: {e}")
+        return 1
+    except Exception as e:
+        logger.error(f"Installation failed: {e}")
+        return 1
 
 
 def cmd_info(args: argparse.Namespace) -> int:
