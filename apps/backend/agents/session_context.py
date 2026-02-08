@@ -126,6 +126,9 @@ class SessionContext:
         """
         Save a single conversation round to Graphiti.
 
+        Also extracts and saves code references as a separate episode for
+        efficient querying.
+
         Args:
             session_id: Unique session identifier
             round_data: Conversation round dictionary (from ConversationRound.to_dict())
@@ -165,10 +168,20 @@ class SessionContext:
                 group_id=self._graphiti_memory.group_id,
             )
 
+            # Extract and save code references as separate episode for efficient querying
+            code_refs = round_data.get("code_references", [])
+            if code_refs:
+                await self.save_code_reference_episode(
+                    session_id=session_id,
+                    round_number=round_num,
+                    code_references=set(code_refs),
+                )
+
             debug(
                 "session_context",
                 f"Saved conversation round {round_num} to Graphiti",
                 session_id=session_id,
+                code_refs=len(code_refs),
             )
             return True
 
@@ -446,6 +459,255 @@ class SessionContext:
                 query=query[:100],
             )
             return None
+
+    async def get_code_references(
+        self,
+        session_id: str | None = None,
+        file_path: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """
+        Get code references from Graphiti.
+
+        Args:
+            session_id: Optional session ID to filter by
+            file_path: Optional file path to filter by
+
+        Returns:
+            List of code reference dictionaries
+        """
+        if not await self.initialize():
+            return []
+
+        try:
+            from integrations.graphiti.queries_pkg.search import GraphitiSearch
+
+            search = GraphitiSearch(
+                self._graphiti_memory.client,
+                self._graphiti_memory.group_id,
+                self._graphiti_memory.spec_context_id,
+                self._graphiti_memory.group_id_mode,
+                self.project_dir,
+            )
+
+            # Build query based on filters
+            query_parts = ["code references"]
+            if session_id:
+                query_parts.append(f"session {session_id}")
+            if file_path:
+                query_parts.append(f"file {file_path}")
+
+            query = " ".join(query_parts)
+
+            # Search for code reference episodes
+            results = await search.search_episodes(
+                query=query,
+                episode_type=EPISODE_TYPE_CODE_REFERENCE,
+                num_results=100,
+            )
+
+            debug(
+                "session_context",
+                f"Retrieved {len(results)} code references from Graphiti",
+                session_id=session_id,
+                file_path=file_path,
+            )
+
+            return results
+
+        except Exception as e:
+            debug_error(
+                "session_context",
+                f"Failed to get code references: {e}",
+            )
+            logger.warning(f"Failed to get code references: {e}")
+            return []
+
+    async def get_sessions_for_file(
+        self,
+        file_path: str,
+    ) -> list[dict[str, Any]]:
+        """
+        Get all sessions that referenced a specific file.
+
+        Args:
+            file_path: File path to search for
+
+        Returns:
+            List of session context summaries that reference this file
+        """
+        if not await self.initialize():
+            return []
+
+        try:
+            from integrations.graphiti.queries_pkg.search import GraphitiSearch
+
+            search = GraphitiSearch(
+                self._graphiti_memory.client,
+                self._graphiti_memory.group_id,
+                self._graphiti_memory.spec_context_id,
+                self._graphiti_memory.group_id_mode,
+                self.project_dir,
+            )
+
+            # Search for session contexts that mention this file
+            query = f"sessions that modified or referenced {file_path}"
+
+            results = await search.search_episodes(
+                query=query,
+                episode_type=EPISODE_TYPE_SESSION_CONTEXT,
+                num_results=50,
+            )
+
+            # Filter results to only those that actually reference this file
+            filtered_results = []
+            for result in results:
+                try:
+                    episode_data = json.loads(result.get("episode_body", "{}"))
+                    code_refs = episode_data.get("code_references", [])
+                    if file_path in code_refs:
+                        filtered_results.append(result)
+                except (json.JSONDecodeError, KeyError):
+                    continue
+
+            debug(
+                "session_context",
+                f"Found {len(filtered_results)} sessions referencing {file_path}",
+            )
+
+            return filtered_results
+
+        except Exception as e:
+            debug_error(
+                "session_context",
+                f"Failed to get sessions for file: {e}",
+            )
+            logger.warning(f"Failed to get sessions for file: {e}")
+            return []
+
+    async def get_all_code_references_for_session(
+        self,
+        session_id: str,
+    ) -> set[str]:
+        """
+        Get all unique code references for a session from conversation rounds.
+
+        Args:
+            session_id: Session identifier
+
+        Returns:
+            Set of unique file paths referenced in this session
+        """
+        if not await self.initialize():
+            return set()
+
+        try:
+            from integrations.graphiti.queries_pkg.search import GraphitiSearch
+
+            search = GraphitiSearch(
+                self._graphiti_memory.client,
+                self._graphiti_memory.group_id,
+                self._graphiti_memory.spec_context_id,
+                self._graphiti_memory.group_id_mode,
+                self.project_dir,
+            )
+
+            # Search for all conversation rounds in this session
+            query = f"conversation rounds for session {session_id}"
+
+            results = await search.search_episodes(
+                query=query,
+                episode_type=EPISODE_TYPE_CONVERSATION_ROUND,
+                num_results=1000,  # Get all rounds
+            )
+
+            # Extract code references from all rounds
+            all_code_refs = set()
+            for result in results:
+                try:
+                    episode_data = json.loads(result.get("episode_body", "{}"))
+                    round_data = episode_data.get("round_data", {})
+                    code_refs = round_data.get("code_references", [])
+                    all_code_refs.update(code_refs)
+                except (json.JSONDecodeError, KeyError):
+                    continue
+
+            debug(
+                "session_context",
+                f"Retrieved {len(all_code_refs)} unique code references for session {session_id}",
+            )
+
+            return all_code_refs
+
+        except Exception as e:
+            debug_error(
+                "session_context",
+                f"Failed to get code references for session: {e}",
+            )
+            logger.warning(f"Failed to get code references for session: {e}")
+            return set()
+
+    async def save_code_reference_episode(
+        self,
+        session_id: str,
+        round_number: int,
+        code_references: set[str],
+    ) -> bool:
+        """
+        Save code references from a specific round as a dedicated episode.
+
+        This enables efficient querying of code references without loading full rounds.
+
+        Args:
+            session_id: Session identifier
+            round_number: Round number
+            code_references: Set of file paths referenced
+
+        Returns:
+            True if saved successfully
+        """
+        if not await self.initialize():
+            return False
+
+        if not code_references:
+            return True  # Nothing to save
+
+        try:
+            from graphiti_core.nodes import EpisodeType
+
+            episode_content = {
+                "type": EPISODE_TYPE_CODE_REFERENCE,
+                "session_id": session_id,
+                "round_number": round_number,
+                "spec_id": self._graphiti_memory.spec_context_id,
+                "timestamp": datetime.now(UTC).isoformat(),
+                "references": list(code_references),
+            }
+
+            episode_name = f"code_refs_{session_id}_round_{round_number:03d}"
+
+            await self._graphiti_memory.client.graphiti.add_episode(
+                name=episode_name,
+                episode_body=json.dumps(episode_content),
+                source=EpisodeType.text,
+                source_description=f"Code references from round {round_number} of session {session_id}",
+                reference_time=datetime.now(UTC),
+                group_id=self._graphiti_memory.group_id,
+            )
+
+            debug(
+                "session_context",
+                f"Saved {len(code_references)} code references from round {round_number}",
+                session_id=session_id,
+            )
+            return True
+
+        except Exception as e:
+            debug_error(
+                "session_context",
+                f"Failed to save code reference episode: {e}",
+            )
+            logger.warning(f"Failed to save code reference episode: {e}")
+            return False
 
     async def close(self) -> None:
         """Close Graphiti connection."""
