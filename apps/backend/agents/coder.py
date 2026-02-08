@@ -67,6 +67,16 @@ from .utils import (
     sync_spec_to_source,
 )
 
+# Import plugin system for agent lifecycle hooks
+try:
+    from plugins.registry import PluginRegistry
+    from plugins.sdk.agent import AgentContext
+    from plugins.base import PluginType
+
+    PLUGINS_AVAILABLE = True
+except ImportError:
+    PLUGINS_AVAILABLE = False
+
 logger = logging.getLogger(__name__)
 
 
@@ -416,6 +426,43 @@ async def run_autonomous_agent(
         if task_logger and subtask_id:
             task_logger.set_subtask(subtask_id)
             task_logger.set_session(iteration)
+
+        # Call before_session hook for enabled agent plugins
+        if PLUGINS_AVAILABLE:
+            try:
+                registry = PluginRegistry.get_instance()
+                agent_plugins = registry.list_plugins(
+                    plugin_type=PluginType.AGENT, enabled_only=True
+                )
+
+                if agent_plugins:
+                    # Create agent context for plugins
+                    agent_context = AgentContext(
+                        project_dir=project_dir,
+                        spec_dir=spec_dir,
+                        session_id=f"session-{iteration}",
+                        client=client,
+                        phase="planning" if is_planning_phase else "coding",
+                        metadata={
+                            "subtask_id": subtask_id,
+                            "iteration": iteration,
+                            "attempt": recovery_manager.get_attempt_count(subtask_id) + 1
+                            if subtask_id
+                            else 1,
+                        },
+                    )
+
+                    # Call before_session for each enabled agent plugin
+                    for plugin in agent_plugins:
+                        try:
+                            plugin.before_session(agent_context)
+                            logger.debug(f"Called before_session for plugin: {plugin.name}")
+                        except Exception as e:
+                            logger.warning(
+                                f"Plugin {plugin.name} before_session hook failed: {e}"
+                            )
+            except Exception as e:
+                logger.warning(f"Failed to call before_session hooks: {e}")
 
         # Run session with async context manager
         async with client:
