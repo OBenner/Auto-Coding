@@ -585,5 +585,21 @@ export const IPC_CHANNELS = {
   PLUGIN_ENABLE: 'plugin:enable',
   PLUGIN_DISABLE: 'plugin:disable',
   PLUGIN_INSTALL: 'plugin:install',
-  PLUGIN_UNINSTALL: 'plugin:uninstall'
+  PLUGIN_UNINSTALL: 'plugin:uninstall',
+
+  // Scheduler operations
+  SCHEDULER_SCHEDULE_BUILD: 'scheduler:scheduleBuild',
+  SCHEDULER_GET_STATUS: 'scheduler:getStatus',
+  SCHEDULER_CANCEL_BUILD: 'scheduler:cancelBuild',
+  SCHEDULER_START: 'scheduler:start',
+  SCHEDULER_STOP: 'scheduler:stop',
+  SCHEDULER_GET_BUILDS: 'scheduler:getBuilds',
+
+  // Scheduler events (main -> renderer)
+  SCHEDULER_BUILD_SCHEDULED: 'scheduler:buildScheduled',
+  SCHEDULER_BUILD_CANCELLED: 'scheduler:buildCancelled',
+  SCHEDULER_STATUS_CHANGED: 'scheduler:statusChanged',
+  SCHEDULER_BUILD_PROGRESS: 'scheduler:buildProgress',
+  SCHEDULER_BUILD_COMPLETE: 'scheduler:buildComplete',
+  SCHEDULER_BUILD_FAILED: 'scheduler:buildFailed'
 } as const;
