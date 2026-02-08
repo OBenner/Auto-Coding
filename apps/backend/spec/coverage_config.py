@@ -184,25 +184,179 @@ def _load_from_implementation_plan(spec_dir: Path) -> CoverageConfig | None:
     )
 
     # Extract critical paths from acceptance criteria if available
+    critical_paths = _extract_critical_paths_from_criteria(plan)
+    config.critical_paths.extend(critical_paths)
+
+    return config
+
+
+def _extract_critical_paths_from_criteria(plan: dict) -> list[CriticalPath]:
+    """
+    Extract critical path definitions from acceptance criteria.
+
+    Looks for patterns like:
+    - "Critical paths require 100% coverage (authentication, payment processing)"
+    - "Authentication code needs 100% coverage"
+    - "Payment processing must be fully tested"
+
+    Args:
+        plan: Implementation plan dictionary
+
+    Returns:
+        List of CriticalPath objects extracted from criteria
+    """
+    critical_paths = []
+
+    # Get acceptance criteria from verification_strategy
     verification = plan.get("verification_strategy", {})
     acceptance_criteria = verification.get("acceptance_criteria", [])
 
     for criterion in acceptance_criteria:
-        if isinstance(criterion, str):
-            # Look for critical path indicators
-            if "critical" in criterion.lower() and "100%" in criterion:
-                # Extract critical path from criterion
-                # Example: "Critical paths require 100% coverage"
-                config.critical_paths.append(
-                    CriticalPath(
-                        name="Critical paths from spec",
-                        pattern="*",  # Will be refined in subtask-2-2
-                        reason=criterion,
-                        required_coverage=100.0,
-                    )
-                )
+        if not isinstance(criterion, str):
+            continue
 
-    return config
+        criterion_lower = criterion.lower()
+
+        # Look for critical path indicators
+        if "critical" not in criterion_lower:
+            continue
+
+        # Check if it mentions 100% coverage requirement
+        requires_full_coverage = (
+            "100%" in criterion or "full" in criterion_lower or "complete" in criterion_lower
+        )
+
+        if not requires_full_coverage:
+            continue
+
+        # Extract path examples from parentheses
+        # Example: "Critical paths require 100% coverage (authentication, payment processing)"
+        examples = _extract_path_examples(criterion)
+
+        if examples:
+            # Create specific critical paths for each example
+            for example in examples:
+                # Convert example to file pattern
+                # "authentication" -> "*/auth/*" or "*/authentication/*"
+                # "payment processing" -> "*/payment*/*"
+                patterns = _convert_to_file_patterns(example)
+
+                for pattern in patterns:
+                    critical_paths.append(
+                        CriticalPath(
+                            name=example.title(),
+                            pattern=pattern,
+                            reason=criterion,
+                            required_coverage=100.0,
+                        )
+                    )
+        else:
+            # No specific examples - create generic critical path
+            critical_paths.append(
+                CriticalPath(
+                    name="Critical paths from spec",
+                    pattern="**/critical/**",
+                    reason=criterion,
+                    required_coverage=100.0,
+                )
+            )
+
+    return critical_paths
+
+
+def _extract_path_examples(criterion: str) -> list[str]:
+    """
+    Extract path examples from criterion text.
+
+    Looks for:
+    - Parenthetical examples: "(authentication, payment processing)"
+    - Colon-separated lists: "critical: authentication, payment"
+
+    Args:
+        criterion: Acceptance criterion text
+
+    Returns:
+        List of path example strings
+    """
+    examples = []
+
+    # Extract from parentheses
+    paren_pattern = r'\(([^)]+)\)'
+    paren_matches = re.findall(paren_pattern, criterion)
+
+    for match in paren_matches:
+        # Split on commas and clean up
+        parts = [p.strip() for p in match.split(",")]
+        # Filter out non-path-like items (like "etc.", numbers, etc.)
+        for part in parts:
+            if part and not part.lower() in ("etc", "etc.", "e.g.", "i.e.") and len(part) > 2:
+                examples.append(part)
+
+    # Extract from colon-separated lists if no parenthetical examples
+    if not examples:
+        colon_pattern = r'critical[^:]*:\s*([^.]+)'
+        colon_matches = re.findall(colon_pattern, criterion, re.IGNORECASE)
+
+        for match in colon_matches:
+            parts = [p.strip() for p in match.split(",")]
+            for part in parts:
+                if part and len(part) > 2:
+                    examples.append(part)
+
+    return examples
+
+
+def _convert_to_file_patterns(example: str) -> list[str]:
+    """
+    Convert an example name to file patterns.
+
+    Args:
+        example: Example name (e.g., "authentication", "payment processing")
+
+    Returns:
+        List of file patterns that might match this example
+
+    Examples:
+        "authentication" -> ["**/auth/**", "**/authentication/**"]
+        "payment processing" -> ["**/payment*/**", "**/payments/**"]
+    """
+    patterns = []
+    example_lower = example.lower().strip()
+
+    # Remove common words
+    example_lower = example_lower.replace(" processing", "")
+    example_lower = example_lower.replace(" handling", "")
+    example_lower = example_lower.replace(" code", "")
+
+    # Handle multi-word examples
+    words = example_lower.split()
+
+    for word in words:
+        if len(word) < 3:  # Skip short words like "of", "to"
+            continue
+
+        # Add patterns for common abbreviations and variations
+        if word == "authentication" or word == "auth":
+            patterns.extend(["**/auth/**", "**/authentication/**"])
+        elif word == "payment" or word == "payments":
+            patterns.extend(["**/payment/**", "**/payments/**", "**/payment*/**"])
+        elif word == "security":
+            patterns.extend(["**/security/**", "**/secure/**"])
+        elif word == "authorization":
+            patterns.extend(["**/authorization/**", "**/authz/**"])
+        else:
+            # Generic pattern: exact match and plural
+            patterns.append(f"**/{word}/**")
+            if not word.endswith("s"):
+                patterns.append(f"**/{word}s/**")
+            # Also add wildcard pattern for variations
+            patterns.append(f"**/{word}*/**")
+
+    # If no patterns generated, use the full example
+    if not patterns:
+        patterns.append(f"**/{example_lower.replace(' ', '_')}/**")
+
+    return patterns
 
 
 def _load_from_pytest_config(project_dir: Path) -> CoverageConfig | None:
@@ -425,6 +579,38 @@ def validate_coverage_config(config: CoverageConfig) -> tuple[bool, list[str]]:
 # =============================================================================
 # UTILITY FUNCTIONS
 # =============================================================================
+
+
+def get_critical_paths(
+    spec_dir: str | Path,
+) -> list[CriticalPath]:
+    """
+    Get list of critical paths from spec acceptance criteria.
+
+    Args:
+        spec_dir: Path to spec directory
+
+    Returns:
+        List of CriticalPath objects requiring high coverage
+
+    Example:
+        critical_paths = get_critical_paths(".auto-claude/specs/001-feature")
+        for path in critical_paths:
+            print(f"{path.name}: {path.pattern} - {path.reason}")
+    """
+    spec_dir_path = Path(spec_dir).resolve()
+
+    plan_file = spec_dir_path / "implementation_plan.json"
+    if not plan_file.exists():
+        return []
+
+    try:
+        with open(plan_file, encoding="utf-8") as f:
+            plan = json.load(f)
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+        return []
+
+    return _extract_critical_paths_from_criteria(plan)
 
 
 def get_minimum_coverage_for_file(
