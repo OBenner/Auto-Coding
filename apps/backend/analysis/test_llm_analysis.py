@@ -164,9 +164,9 @@ def test_scenario(name: str, scenario: dict, test_llm: bool = True) -> bool:
     Returns:
         True if test passed, False otherwise
     """
-    print(f"\n{'='*80}")
+    print(f"\n{'=' * 80}")
     print(f"SCENARIO: {name}")
-    print(f"{'='*80}\n")
+    print(f"{'=' * 80}\n")
 
     print("Failure Data:")
     print(json.dumps(scenario, indent=2))
@@ -185,7 +185,7 @@ def test_scenario(name: str, scenario: dict, test_llm: bool = True) -> bool:
 
     # Test with LLM if enabled
     if test_llm:
-        print("\n" + "-"*80)
+        print("\n" + "-" * 80)
         print("Running LLM Analysis (enhanced)...")
         try:
             llm_result = _analyze_failure_with_llm(scenario)
@@ -219,7 +219,9 @@ def test_scenario(name: str, scenario: dict, test_llm: bool = True) -> bool:
                     rec_lower = rec.lower()
                     for phrase in generic_phrases:
                         if phrase in rec_lower:
-                            print(f"\n⚠️  WARNING: Generic recommendation detected: '{rec}'")
+                            print(
+                                f"\n⚠️  WARNING: Generic recommendation detected: '{rec}'"
+                            )
                             has_generic = True
 
                 if has_generic:
@@ -229,20 +231,31 @@ def test_scenario(name: str, scenario: dict, test_llm: bool = True) -> bool:
                 # Check for specific elements (file paths, line numbers, code snippets)
                 has_specific = False
                 for rec in recommendations:
-                    if any(indicator in rec for indicator in [".py", ".js", ".ts", "line ", ":"]):
+                    if any(
+                        indicator in rec
+                        for indicator in [".py", ".js", ".ts", "line ", ":"]
+                    ):
                         has_specific = True
                         break
 
                 if has_specific:
-                    print("\n✅ PASS: Recommendations contain specific file/line references")
+                    print(
+                        "\n✅ PASS: Recommendations contain specific file/line references"
+                    )
                 else:
-                    print("\n⚠️  WARNING: Recommendations lack specific file/line references")
+                    print(
+                        "\n⚠️  WARNING: Recommendations lack specific file/line references"
+                    )
 
                 # Compare with heuristic
-                print(f"\n📊 Comparison:")
-                print(f"  Heuristic confidence: {heuristic_result.get('confidence', 0):.2f}")
+                print("\n📊 Comparison:")
+                print(
+                    f"  Heuristic confidence: {heuristic_result.get('confidence', 0):.2f}"
+                )
                 print(f"  LLM confidence: {llm_result.get('confidence', 0):.2f}")
-                print(f"  Heuristic recommendations: {len(heuristic_result.get('recommendations', []))}")
+                print(
+                    f"  Heuristic recommendations: {len(heuristic_result.get('recommendations', []))}"
+                )
                 print(f"  LLM recommendations: {len(recommendations)}")
 
                 return True
@@ -262,16 +275,18 @@ def test_scenario(name: str, scenario: dict, test_llm: bool = True) -> bool:
 
 def run_all_tests():
     """Run all test scenarios."""
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("LLM-BASED FAILURE ANALYSIS TEST SUITE")
-    print("="*80)
+    print("=" * 80)
 
     # Check if analysis is enabled
     if not is_analysis_enabled():
         print("\n⚠️  WARNING: LLM analysis is not enabled!")
         print("\nPossible reasons:")
         print("  1. Claude SDK not installed (run: pip install claude-agent-sdk)")
-        print("  2. No authentication token (run: python apps/backend/run.py and use /login)")
+        print(
+            "  2. No authentication token (run: python apps/backend/run.py and use /login)"
+        )
         print("  3. FAILURE_ANALYSIS_ENABLED=false in environment")
         print("\nFalling back to heuristic-only testing...\n")
     else:
@@ -295,9 +310,9 @@ def run_all_tests():
         results[name] = test_scenario(name, scenario, test_llm=test_llm)
 
     # Summary
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("TEST SUMMARY")
-    print("="*80 + "\n")
+    print("=" * 80 + "\n")
 
     passed = sum(1 for result in results.values() if result)
     total = len(results)

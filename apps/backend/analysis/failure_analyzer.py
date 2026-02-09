@@ -370,8 +370,6 @@ async def _run_llm_analysis(failure_data: dict[str, Any]) -> dict[str, Any] | No
     Returns:
         Parsed root cause dict or None if analysis fails
     """
-    from pathlib import Path
-
     from core.auth import ensure_claude_code_oauth_token
     from core.simple_client import create_simple_client
 
@@ -475,9 +473,9 @@ Output ONLY valid JSON with: category, description, affected_files, confidence, 
     if subtask:
         subtask_text = f"""
 ### Subtask Information
-- **ID**: {subtask.get('id', 'unknown')}
-- **Description**: {subtask.get('description', 'No description')}
-- **Files to Modify**: {', '.join(subtask.get('files_to_modify', []))}
+- **ID**: {subtask.get("id", "unknown")}
+- **Description**: {subtask.get("description", "No description")}
+- **Files to Modify**: {", ".join(subtask.get("files_to_modify", []))}
 """
 
     # Build failure context
@@ -532,18 +530,28 @@ def _parse_analysis_response(response_text: str) -> dict[str, Any] | None:
         text = "\n".join(lines).strip()
 
         if not text:
-            logger.warning("Cannot parse analysis: response contained only markdown markers")
+            logger.warning(
+                "Cannot parse analysis: response contained only markdown markers"
+            )
             return None
 
     try:
         analysis = json.loads(text)
 
         if not isinstance(analysis, dict):
-            logger.warning(f"Analysis is not a dict, got type: {type(analysis).__name__}")
+            logger.warning(
+                f"Analysis is not a dict, got type: {type(analysis).__name__}"
+            )
             return None
 
         # Validate required fields
-        required_fields = ["category", "description", "affected_files", "confidence", "recommendations"]
+        required_fields = [
+            "category",
+            "description",
+            "affected_files",
+            "confidence",
+            "recommendations",
+        ]
         for field in required_fields:
             if field not in analysis:
                 logger.warning(f"Missing required field in analysis: {field}")
@@ -554,7 +562,9 @@ def _parse_analysis_response(response_text: str) -> dict[str, Any] | None:
     except json.JSONDecodeError as e:
         logger.warning(f"Failed to parse analysis JSON: {e}")
         preview_length = min(500, len(text))
-        logger.warning(f"Response text preview (first {preview_length} chars): {text[:preview_length]}")
+        logger.warning(
+            f"Response text preview (first {preview_length} chars): {text[:preview_length]}"
+        )
         return None
 
 
