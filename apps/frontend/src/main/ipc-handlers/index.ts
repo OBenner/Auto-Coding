@@ -36,6 +36,7 @@ import { registerScreenshotHandlers } from './screenshot-handlers';
 import { registerTerminalWorktreeIpcHandlers } from './terminal';
 import { registerMergeAnalyticsHandlers } from './merge-analytics-handlers';
 import { registerTokenStatsHandlers } from './token-stats-handler';
+import { registerHealthHandlers } from './health-handlers';
 import { notificationService } from '../notification-service';
 
 /**
@@ -130,6 +131,9 @@ export function setupIpcHandlers(
   // Token statistics handlers
   registerTokenStatsHandlers();
 
+  // Health dashboard handlers
+  registerHealthHandlers();
+
   console.warn('[IPC] All handler modules registered successfully');
 }
 
@@ -159,5 +163,6 @@ export {
   registerProfileHandlers,
   registerScreenshotHandlers,
   registerMergeAnalyticsHandlers,
-  registerTokenStatsHandlers
+  registerTokenStatsHandlers,
+  registerHealthHandlers
 };
