@@ -33,5 +33,19 @@
     },
     "loading": "Loading template...",
     "noParameters": "This template requires no parameters"
+  },
+  "preview": {
+    "sections": {
+      "rationale": "Rationale",
+      "userStories": "User Stories",
+      "acceptanceCriteria": "Acceptance Criteria",
+      "technicalDetails": "Technical Details",
+      "testCoverage": "Test Coverage",
+      "dependencies": "Dependencies"
+    },
+    "empty": {
+      "title": "No spec content",
+      "description": "Generate a spec to see preview content"
+    }
   }
 }

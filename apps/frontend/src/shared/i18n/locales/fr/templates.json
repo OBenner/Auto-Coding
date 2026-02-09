@@ -33,5 +33,19 @@
     },
     "loading": "Chargement du modèle...",
     "noParameters": "Ce modèle ne nécessite aucun paramètre"
+  },
+  "preview": {
+    "sections": {
+      "rationale": "Justification",
+      "userStories": "User Stories",
+      "acceptanceCriteria": "Critères d'acceptation",
+      "technicalDetails": "Détails techniques",
+      "testCoverage": "Couverture de tests",
+      "dependencies": "Dépendances"
+    },
+    "empty": {
+      "title": "Aucun contenu de spécification",
+      "description": "Générez une spécification pour voir l'aperçu"
+    }
   }
 }
