@@ -353,4 +353,94 @@ def create_memory_tools(spec_dir: Path, project_dir: Path) -> list:
 
     tools.append(get_session_context)
 
+    # -------------------------------------------------------------------------
+    # Tool: list_discoveries
+    # -------------------------------------------------------------------------
+    @tool(
+        "list_discoveries",
+        "List all codebase discoveries from session memory. Optionally filter by category.",
+        {"category": str},
+    )
+    async def list_discoveries(args: dict[str, Any]) -> dict[str, Any]:
+        """List all discoveries, optionally filtered by category."""
+        category_filter = args.get("category")
+
+        memory_dir = spec_dir / "memory"
+        codebase_map_file = memory_dir / "codebase_map.json"
+
+        if not codebase_map_file.exists():
+            return {
+                "content": [
+                    {
+                        "type": "text",
+                        "text": "No discoveries found. Use record_discovery to add codebase discoveries.",
+                    }
+                ]
+            }
+
+        try:
+            with open(codebase_map_file, encoding="utf-8") as f:
+                codebase_map = json.load(f)
+
+            discoveries = codebase_map.get("discovered_files", {})
+
+            if not discoveries:
+                return {
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": "No discoveries recorded yet.",
+                        }
+                    ]
+                }
+
+            # Filter by category if specified
+            if category_filter:
+                filtered_discoveries = {
+                    path: info
+                    for path, info in discoveries.items()
+                    if info.get("category") == category_filter
+                }
+                if not filtered_discoveries:
+                    return {
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": f"No discoveries found in category '{category_filter}'.",
+                            }
+                        ]
+                    }
+                discoveries = filtered_discoveries
+
+            # Build formatted output
+            result_parts = []
+            if category_filter:
+                result_parts.append(f"## Discoveries (category: {category_filter})\n")
+            else:
+                result_parts.append(f"## All Discoveries ({len(discoveries)} total)\n")
+
+            # Group by category
+            by_category: dict[str, list] = {}
+            for path, info in discoveries.items():
+                cat = info.get("category", "general")
+                if cat not in by_category:
+                    by_category[cat] = []
+                by_category[cat].append((path, info))
+
+            # Output grouped by category
+            for cat in sorted(by_category.keys()):
+                result_parts.append(f"\n### {cat.title()}")
+                for path, info in by_category[cat]:
+                    desc = info.get("description", "No description")
+                    result_parts.append(f"- `{path}`: {desc}")
+
+            return {"content": [{"type": "text", "text": "\n".join(result_parts)}]}
+
+        except Exception as e:
+            return {
+                "content": [{"type": "text", "text": f"Error listing discoveries: {e}"}]
+            }
+
+    tools.append(list_discoveries)
+
     return tools
