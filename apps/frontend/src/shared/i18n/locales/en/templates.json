@@ -1,0 +1,37 @@
+{
+  "wizard": {
+    "title": "Template Parameters",
+    "description": "Fill in the parameters to generate your spec",
+    "parameter": {
+      "required": "Required",
+      "optional": "Optional"
+    },
+    "actions": {
+      "preview": "Preview Spec",
+      "cancel": "Cancel",
+      "back": "Back",
+      "next": "Next",
+      "create": "Create Spec"
+    },
+    "validation": {
+      "required": "This field is required",
+      "invalidNumber": "Please enter a valid number",
+      "invalidInteger": "Please enter a valid integer",
+      "minValue": "Value must be at least {{min}}",
+      "maxValue": "Value must be at most {{max}}",
+      "patternMismatch": "Invalid format"
+    },
+    "placeholder": {
+      "string": "Enter {{name}}...",
+      "number": "Enter a number...",
+      "list": "Enter comma-separated values...",
+      "boolean": "Select true or false"
+    },
+    "examples": {
+      "title": "Examples",
+      "use": "Use this example"
+    },
+    "loading": "Loading template...",
+    "noParameters": "This template requires no parameters"
+  }
+}
