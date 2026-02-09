@@ -25,6 +25,7 @@ Usage:
 from __future__ import annotations
 
 import json
+import xml.etree.ElementTree as ET
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -119,9 +120,169 @@ def _load_requirements_txt(project_dir: Path) -> list[str]:
 # =============================================================================
 
 
-def _calculate_test_coverage(project_dir: Path) -> dict[str, Any]:
+def _count_test_files(project_dir: Path) -> int:
     """
-    Calculate test coverage metrics.
+    Count test files in the project.
+
+    Args:
+        project_dir: Project directory path
+
+    Returns:
+        Number of test files found
+    """
+    test_file_patterns = [
+        "**/test_*.py",
+        "**/*_test.py",
+        "**/*.test.js",
+        "**/*.test.ts",
+        "**/*.test.tsx",
+        "**/*.spec.js",
+        "**/*.spec.ts",
+        "**/*.spec.tsx",
+        "**/test_*.go",
+        "**/*_test.go",
+        "**/*_test.rs",
+        "**/*_spec.rb",
+    ]
+
+    test_files = set()
+    for pattern in test_file_patterns:
+        for file_path in project_dir.glob(pattern):
+            if file_path.is_file():
+                test_files.add(file_path)
+
+    return len(test_files)
+
+
+def _parse_jest_coverage(coverage_file: Path) -> dict[str, Any] | None:
+    """
+    Parse Jest/Vitest coverage JSON format.
+
+    Args:
+        coverage_file: Path to coverage.json or coverage-final.json
+
+    Returns:
+        Coverage metrics dict or None if parsing fails
+    """
+    try:
+        with open(coverage_file, encoding="utf-8") as f:
+            data = json.load(f)
+
+        total_lines = 0
+        covered_lines = 0
+
+        # Jest coverage format has file-level coverage data
+        for file_data in data.values():
+            if isinstance(file_data, dict) and "lines" in file_data:
+                lines = file_data["lines"]
+                if "total" in lines and "covered" in lines:
+                    total_lines += lines["total"]
+                    covered_lines += lines["covered"]
+
+        if total_lines == 0:
+            return None
+
+        percentage = (covered_lines / total_lines) * 100.0
+
+        return {
+            "percentage": round(percentage, 2),
+            "covered_lines": covered_lines,
+            "total_lines": total_lines,
+        }
+
+    except (OSError, json.JSONDecodeError, KeyError, ValueError, UnicodeDecodeError):
+        return None
+
+
+def _parse_cobertura_coverage(coverage_file: Path) -> dict[str, Any] | None:
+    """
+    Parse Cobertura XML coverage format.
+
+    Args:
+        coverage_file: Path to coverage.xml
+
+    Returns:
+        Coverage metrics dict or None if parsing fails
+    """
+    try:
+        tree = ET.parse(coverage_file)
+        root = tree.getroot()
+
+        # Cobertura format has line-rate attribute at root
+        line_rate = root.get("line-rate")
+        if line_rate:
+            percentage = float(line_rate) * 100.0
+
+            # Try to get line counts from metrics
+            total_lines = 0
+            covered_lines = 0
+
+            for package in root.findall(".//package"):
+                for class_elem in package.findall(".//class"):
+                    lines = class_elem.findall(".//line")
+                    for line in lines:
+                        total_lines += 1
+                        hits = int(line.get("hits", 0))
+                        if hits > 0:
+                            covered_lines += 1
+
+            return {
+                "percentage": round(percentage, 2),
+                "covered_lines": covered_lines,
+                "total_lines": total_lines,
+            }
+
+    except (OSError, ET.ParseError, ValueError, AttributeError):
+        return None
+
+    return None
+
+
+def _parse_python_coverage_json(coverage_file: Path) -> dict[str, Any] | None:
+    """
+    Parse Python coverage.py JSON format.
+
+    Args:
+        coverage_file: Path to coverage.json
+
+    Returns:
+        Coverage metrics dict or None if parsing fails
+    """
+    try:
+        with open(coverage_file, encoding="utf-8") as f:
+            data = json.load(f)
+
+        # Python coverage.json has totals section
+        totals = data.get("totals", {})
+        if totals:
+            covered_lines = totals.get("covered_lines", 0)
+            num_statements = totals.get("num_statements", 0)
+
+            if num_statements == 0:
+                return None
+
+            percentage = totals.get("percent_covered", 0.0)
+
+            return {
+                "percentage": round(percentage, 2),
+                "covered_lines": covered_lines,
+                "total_lines": num_statements,
+            }
+
+    except (OSError, json.JSONDecodeError, KeyError, ValueError, UnicodeDecodeError):
+        return None
+
+    return None
+
+
+def calculate_test_coverage(project_dir: Path) -> dict[str, Any]:
+    """
+    Calculate test coverage metrics from available coverage reports.
+
+    Supports multiple coverage formats:
+    - Jest/Vitest: coverage.json, coverage/coverage-final.json
+    - Python: coverage.json (coverage.py JSON format)
+    - Cobertura: coverage.xml
 
     Args:
         project_dir: Project directory path
@@ -133,33 +294,62 @@ def _calculate_test_coverage(project_dir: Path) -> dict[str, Any]:
             "covered_lines": int,
             "total_lines": int,
             "test_count": int,
-            "trend": str,  # "improving", "stable", "declining"
+            "trend": str,  # "improving", "stable", "declining", "unknown"
         }
     """
-    # Check for coverage reports
-    coverage_file = project_dir / "coverage.json"
-    if not coverage_file.exists():
-        coverage_file = project_dir / ".coverage"
+    # Check for various coverage file formats
+    coverage_files = [
+        project_dir / "coverage.json",
+        project_dir / "coverage" / "coverage-final.json",
+        project_dir / "coverage.xml",
+        project_dir / ".coverage",  # Python coverage.py SQLite (not parsed yet)
+    ]
 
-    if not coverage_file.exists():
+    coverage_data = None
+
+    for coverage_file in coverage_files:
+        if not coverage_file.exists():
+            continue
+
+        # Try different parsers based on file extension
+        if coverage_file.name.endswith(".json"):
+            # Try Jest/Vitest format first
+            coverage_data = _parse_jest_coverage(coverage_file)
+            if not coverage_data:
+                # Try Python coverage.py JSON format
+                coverage_data = _parse_python_coverage_json(coverage_file)
+        elif coverage_file.name.endswith(".xml"):
+            coverage_data = _parse_cobertura_coverage(coverage_file)
+
+        if coverage_data:
+            break
+
+    # Count test files
+    test_count = _count_test_files(project_dir)
+
+    if not coverage_data:
         # No coverage data available
         return {
             "percentage": 0.0,
             "covered_lines": 0,
             "total_lines": 0,
-            "test_count": 0,
+            "test_count": test_count,
             "trend": "unknown",
         }
 
-    # For now, return placeholder data
-    # This will be implemented in subtask-1-2
-    return {
-        "percentage": 0.0,
-        "covered_lines": 0,
-        "total_lines": 0,
-        "test_count": 0,
-        "trend": "unknown",
-    }
+    # Add test count to coverage data
+    coverage_data["test_count"] = test_count
+
+    # Calculate trend (requires historical data - for now return "unknown")
+    # This could be enhanced by storing previous coverage percentages
+    # and comparing to determine if improving/declining
+    coverage_data["trend"] = "unknown"
+
+    return coverage_data
+
+
+# Backwards compatibility - keep old function name as alias
+_calculate_test_coverage = calculate_test_coverage
 
 
 # =============================================================================
