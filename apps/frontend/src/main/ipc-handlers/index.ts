@@ -27,6 +27,7 @@ import { registerIdeationHandlers } from './ideation-handlers';
 import { registerChangelogHandlers } from './changelog-handlers';
 import { registerInsightsHandlers } from './insights-handlers';
 import { registerMemoryHandlers } from './memory-handlers';
+import { registerSchedulerHandlers } from './scheduler-handlers';
 import { registerAppUpdateHandlers } from './app-update-handlers';
 import { registerDebugHandlers } from './debug-handlers';
 import { registerClaudeCodeHandlers } from './claude-code-handlers';
@@ -130,6 +131,9 @@ export function setupIpcHandlers(
   // Token statistics handlers
   registerTokenStatsHandlers();
 
+  // Scheduler handlers (build scheduling and queue management)
+  registerSchedulerHandlers();
+
   console.warn('[IPC] All handler modules registered successfully');
 }
 
@@ -159,5 +163,6 @@ export {
   registerProfileHandlers,
   registerScreenshotHandlers,
   registerMergeAnalyticsHandlers,
-  registerTokenStatsHandlers
+  registerTokenStatsHandlers,
+  registerSchedulerHandlers
 };
