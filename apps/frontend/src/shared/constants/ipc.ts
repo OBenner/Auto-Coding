@@ -19,6 +19,7 @@ export const IPC_CHANNELS = {
   // Task operations
   TASK_LIST: 'task:list',
   TASK_CREATE: 'task:create',
+  TASK_CREATE_FROM_TEMPLATE: 'task:createFromTemplate',
   TASK_DELETE: 'task:delete',
   TASK_UPDATE: 'task:update',
   TASK_START: 'task:start',
