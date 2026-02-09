@@ -169,9 +169,9 @@ async def run_migration_assistant(
     if task_logger:
         task_logger.start_phase(LogPhase.CODING, "Starting migration session...")
         if migration_context:
-            task_logger.log_entry(
-                LogEntryType.INFO,
+            task_logger.log(
                 f"Migration context: {json.dumps(migration_context, indent=2)}",
+                LogEntryType.INFO,
             )
 
     # Load the migration assistant prompt
@@ -181,7 +181,7 @@ async def run_migration_assistant(
         error_msg = f"Failed to load migration_assistant prompt: {e}"
         logger.error(error_msg)
         if task_logger:
-            task_logger.log_entry(LogEntryType.ERROR, error_msg)
+            task_logger.log(error_msg, LogEntryType.ERROR)
         return {
             "checkpoints_created": 0,
             "success": False,
@@ -241,7 +241,7 @@ Begin by loading context (Phase 0 in your prompt).
         error_msg = f"Failed to create Claude SDK client: {e}"
         logger.error(error_msg)
         if task_logger:
-            task_logger.log_entry(LogEntryType.ERROR, error_msg)
+            task_logger.log(error_msg, LogEntryType.ERROR)
         return {
             "checkpoints_created": 0,
             "success": False,
@@ -283,9 +283,9 @@ Begin by loading context (Phase 0 in your prompt).
                     f"Checkpoint validation issues: {validation['issues']}"
                 )
                 if task_logger:
-                    task_logger.log_entry(
-                        LogEntryType.WARNING,
+                    task_logger.log(
                         f"Checkpoint validation issues: {', '.join(validation['issues'])}",
+                        LogEntryType.INFO,
                     )
 
         print()
@@ -307,7 +307,7 @@ Begin by loading context (Phase 0 in your prompt).
         error_msg = f"Migration session failed: {e}"
         logger.error(error_msg, exc_info=True)
         if task_logger:
-            task_logger.log_entry(LogEntryType.ERROR, error_msg)
+            task_logger.log(error_msg, LogEntryType.ERROR)
             task_logger.end_phase(
                 LogPhase.CODING,
                 success=False,
