@@ -18,7 +18,8 @@
     "plugins": "Plugins",
     "worktrees": "Worktrees",
     "agentTools": "Aperçu MCP",
-    "mergeAnalytics": "Analyse des fusions"
+    "mergeAnalytics": "Analyse des fusions",
+    "projectHealth": "Santé du Projet"
   },
   "actions": {
     "settings": "Paramètres",
