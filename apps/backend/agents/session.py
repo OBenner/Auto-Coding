@@ -552,6 +552,17 @@ async def run_agent_session(
                 msg_type=msg_type,
             )
 
+            # Call on_message hook for agent plugins (for monitoring/analytics)
+            for plugin in enabled_agent_plugins:
+                try:
+                    if hasattr(plugin, "on_message"):
+                        plugin.on_message(agent_context, msg)
+                except Exception as e:
+                    # Don't let plugin errors break the session
+                    logger.debug(
+                        f"on_message hook failed for plugin {plugin.name}: {e}"
+                    )
+
             # Handle AssistantMessage (text and tool use)
             if msg_type == "AssistantMessage" and hasattr(msg, "content"):
                 for block in msg.content:
