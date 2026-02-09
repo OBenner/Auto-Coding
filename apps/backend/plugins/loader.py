@@ -19,6 +19,9 @@ import re
 import sys
 from pathlib import Path
 
+from packaging.specifiers import SpecifierSet
+from packaging.version import Version, InvalidVersion
+
 from .base import PluginBase, PluginMetadata, PluginType
 from .isolation import PluginSandbox, ResourceLimits
 
@@ -119,6 +122,137 @@ class PluginLoader:
         debug_verbose("loader", f"  System plugins: {self.system_plugins_dir}")
         debug_verbose("loader", f"  Default limits: {self.default_limits.to_dict()}")
 
+    @staticmethod
+    def _get_auto_claude_version() -> str:
+        """
+        Get the current Auto Claude version from package.json.
+
+        Returns:
+            Version string (e.g., "3.0.0")
+
+        Raises:
+            FileNotFoundError: If package.json not found
+            ValueError: If version cannot be parsed
+        """
+        # Navigate from plugins/loader.py -> backend/ -> root/
+        root_dir = Path(__file__).parent.parent.parent.parent
+        package_json = root_dir / "package.json"
+
+        if not package_json.exists():
+            raise FileNotFoundError(
+                f"package.json not found at {package_json}. Cannot determine Auto Claude version."
+            )
+
+        try:
+            with open(package_json, encoding="utf-8") as f:
+                data = json.load(f)
+            version = data.get("version")
+            if not version:
+                raise ValueError("No 'version' field in package.json")
+            return version
+        except Exception as e:
+            raise ValueError(f"Failed to read version from package.json: {e}") from e
+
+    def _check_version_compatibility(
+        self,
+        plugin_name: str,
+        required_version: str | None,
+    ) -> tuple[bool, str | None]:
+        """
+        Check if plugin's version requirement is compatible with current Auto Claude version.
+
+        Supports various version specifier formats:
+        - Exact: "3.0.0"
+        - Comparison: ">=2.8.0", ">3.0.0", "<=3.5.0"
+        - Range: ">=2.8.0,<4.0.0"
+        - Caret: "^3.0.0" (compatible with 3.x.x, not 4.0.0)
+        - Tilde: "~3.0.0" (compatible with 3.0.x, not 3.1.0)
+
+        Args:
+            plugin_name: Name of the plugin being checked
+            required_version: Version requirement string from plugin.json
+
+        Returns:
+            Tuple of (is_compatible, error_message)
+            - is_compatible: True if compatible or no requirement specified
+            - error_message: None if compatible, error string if incompatible
+
+        Example:
+            >>> loader = PluginLoader()
+            >>> loader._check_version_compatibility("my-plugin", ">=2.8.0")
+            (True, None)
+            >>> loader._check_version_compatibility("my-plugin", ">=4.0.0")
+            (False, "Plugin 'my-plugin' requires Auto Claude >=4.0.0, but current version is 3.0.0")
+        """
+        # No requirement specified - always compatible
+        if not required_version:
+            debug_verbose(
+                "loader",
+                f"Plugin '{plugin_name}' has no version requirement - compatible"
+            )
+            return True, None
+
+        try:
+            # Get current Auto Claude version
+            current_version = self._get_auto_claude_version()
+            current = Version(current_version)
+
+            # Parse version requirement
+            # Handle caret (^) and tilde (~) syntax by converting to specifier format
+            version_spec = required_version.strip()
+
+            if version_spec.startswith("^"):
+                # Caret: ^3.0.0 means >=3.0.0,<4.0.0
+                base_version = version_spec[1:]
+                parts = Version(base_version).release
+                if len(parts) >= 2:
+                    major = parts[0]
+                    version_spec = f">={base_version},<{major + 1}.0.0"
+                else:
+                    version_spec = f">={base_version}"
+
+            elif version_spec.startswith("~"):
+                # Tilde: ~3.0.0 means >=3.0.0,<3.1.0
+                base_version = version_spec[1:]
+                parts = Version(base_version).release
+                if len(parts) >= 2:
+                    major, minor = parts[0], parts[1]
+                    version_spec = f">={base_version},<{major}.{minor + 1}.0"
+                else:
+                    version_spec = f">={base_version}"
+
+            # Use SpecifierSet for comparison
+            specifier = SpecifierSet(version_spec)
+
+            if current in specifier:
+                debug_verbose(
+                    "loader",
+                    f"Plugin '{plugin_name}' version requirement '{required_version}' "
+                    f"is compatible with Auto Claude {current_version}"
+                )
+                return True, None
+            else:
+                error_msg = (
+                    f"Plugin '{plugin_name}' requires Auto Claude {required_version}, "
+                    f"but current version is {current_version}"
+                )
+                debug_warning("loader", error_msg)
+                return False, error_msg
+
+        except InvalidVersion as e:
+            error_msg = (
+                f"Plugin '{plugin_name}' has invalid version requirement '{required_version}': {e}"
+            )
+            logger.warning(error_msg)
+            return False, error_msg
+
+        except Exception as e:
+            error_msg = (
+                f"Failed to check version compatibility for plugin '{plugin_name}': {e}"
+            )
+            logger.warning(error_msg)
+            return False, error_msg
+
     def discover_plugins(self) -> list[PluginMetadata]:
         """
         Discover all plugins in configured directories.
@@ -143,6 +277,21 @@ class PluginLoader:
                 if plugin_dir.is_dir():
                     try:
                         metadata = self._load_metadata(plugin_dir)
+
+                        # Check version compatibility (non-blocking for discovery)
+                        is_compatible, error_msg = self._check_version_compatibility(
+                            metadata.name,
+                            metadata.auto_claude_version
+                        )
+                        if not is_compatible:
+                            debug_warning(
+                                "loader",
+                                f"  Found incompatible system plugin {plugin_dir.name}: {error_msg}"
+                            )
+                            logger.warning(
+                                f"System plugin {plugin_dir.name} is incompatible: {error_msg}"
+                            )
+
                         discovered.append(metadata)
                         debug_verbose("loader", f"  Found: {metadata.name} v{metadata.version}")
                     except Exception as e:
@@ -161,6 +310,21 @@ class PluginLoader:
                 if plugin_dir.is_dir():
                     try:
                         metadata = self._load_metadata(plugin_dir)
+
+                        # Check version compatibility (non-blocking for discovery)
+                        is_compatible, error_msg = self._check_version_compatibility(
+                            metadata.name,
+                            metadata.auto_claude_version
+                        )
+                        if not is_compatible:
+                            debug_warning(
+                                "loader",
+                                f"  Found incompatible user plugin {plugin_dir.name}: {error_msg}"
+                            )
+                            logger.warning(
+                                f"User plugin {plugin_dir.name} is incompatible: {error_msg}"
+                            )
+
                         # Check for duplicates (user plugin overrides system)
                         existing = next(
                             (p for p in discovered if p.name == metadata.name), None
@@ -222,6 +386,14 @@ class PluginLoader:
             debug_verbose("loader", f"  Loaded metadata: {metadata.name} v{metadata.version}")
         except Exception as e:
             raise PluginValidationError(f"Invalid plugin manifest: {e}") from e
+
+        # Check version compatibility
+        is_compatible, error_msg = self._check_version_compatibility(
+            metadata.name,
+            metadata.auto_claude_version
+        )
+        if not is_compatible:
+            raise PluginValidationError(error_msg)
 
         # Find plugin module (plugin.py or __init__.py)
         module_path = self._find_plugin_module(plugin_dir)
