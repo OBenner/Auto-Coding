@@ -45,6 +45,7 @@ import { GitLabMergeRequests } from './components/gitlab-merge-requests';
 import { Changelog } from './components/Changelog';
 import { Worktrees } from './components/Worktrees';
 import { AgentTools } from './components/AgentTools';
+import { ProjectHealth } from './components/ProjectHealth';
 import { WelcomeScreen } from './components/WelcomeScreen';
 import { RateLimitModal } from './components/RateLimitModal';
 import { SDKRateLimitModal } from './components/SDKRateLimitModal';
@@ -932,6 +933,9 @@ export function App() {
                   <Worktrees projectId={activeProjectId || selectedProjectId!} />
                 )}
                 {activeView === 'agent-tools' && <AgentTools />}
+                {activeView === 'projectHealth' && (activeProjectId || selectedProjectId) && (
+                  <ProjectHealth projectId={activeProjectId || selectedProjectId!} />
+                )}
               </>
             ) : (
               <WelcomeScreen
