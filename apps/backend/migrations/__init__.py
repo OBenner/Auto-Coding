@@ -10,6 +10,20 @@ Provides tools for planning and managing code migrations:
 
 from __future__ import annotations
 
-__all__ = ["MigrationPlanner"]
+__all__ = [
+    "MigrationPlanner",
+    "CheckpointManager",
+    "Checkpoint",
+    "CheckpointStatus",
+    "create_migration_checkpoint",
+    "rollback_migration",
+]
 
+from .checkpoints import (
+    Checkpoint,
+    CheckpointManager,
+    CheckpointStatus,
+    create_migration_checkpoint,
+    rollback_migration,
+)
 from .planner import MigrationPlanner
