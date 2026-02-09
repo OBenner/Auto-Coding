@@ -457,7 +457,9 @@ def _run_cli() -> None:
 
     # Handle productivity analytics command
     if args.analytics:
-        export_path = Path(args.analytics_export_path) if args.analytics_export_path else None
+        export_path = (
+            Path(args.analytics_export_path) if args.analytics_export_path else None
+        )
         handle_analytics_command(
             project_dir=project_dir,
             trends=args.analytics_trends,

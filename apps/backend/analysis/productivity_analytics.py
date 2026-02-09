@@ -422,7 +422,11 @@ def aggregate_productivity_metrics(
             continue
 
         # Apply date filters
-        if start_date and spec_metrics.created_at and spec_metrics.created_at < start_date:
+        if (
+            start_date
+            and spec_metrics.created_at
+            and spec_metrics.created_at < start_date
+        ):
             continue
         if end_date and spec_metrics.created_at and spec_metrics.created_at > end_date:
             continue
@@ -456,9 +460,7 @@ def aggregate_productivity_metrics(
     if completed_specs > 0:
         # First attempt success: QA approved on first iteration
         first_attempt_success = sum(
-            1
-            for s in all_specs
-            if s.is_completed and s.qa_iterations <= 1
+            1 for s in all_specs if s.is_completed and s.qa_iterations <= 1
         )
         first_attempt_success_rate = first_attempt_success / completed_specs
     else:
@@ -547,8 +549,7 @@ def get_productivity_trends(
         period_specs = [
             s
             for s in summary.specs
-            if s.created_at
-            and current_date <= s.created_at < period_end
+            if s.created_at and current_date <= s.created_at < period_end
         ]
 
         if period_specs:
@@ -643,9 +644,7 @@ def main() -> None:
     import argparse
     import sys
 
-    parser = argparse.ArgumentParser(
-        description="Productivity Analytics Aggregator"
-    )
+    parser = argparse.ArgumentParser(description="Productivity Analytics Aggregator")
     parser.add_argument(
         "--get-summary",
         action="store_true",

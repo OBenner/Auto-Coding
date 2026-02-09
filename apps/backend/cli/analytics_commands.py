@@ -85,9 +85,7 @@ def show_productivity_analytics(project_dir: Path) -> None:
         "Total Time Saved",
         success(f"{summary.total_time_saved_hours:.1f} hours"),
     )
-    print_key_value(
-        "AI Build Time", f"{summary.total_build_time_hours:.1f} hours"
-    )
+    print_key_value("AI Build Time", f"{summary.total_build_time_hours:.1f} hours")
 
     if summary.total_build_time_hours > 0:
         efficiency = (
@@ -165,9 +163,7 @@ def show_productivity_analytics(project_dir: Path) -> None:
 
     if summary.first_attempt_success_rate > 0.7:
         print(
-            success(
-                f"• Strong first-attempt success rate ({first_attempt_pct:.1f}%)"
-            )
+            success(f"• Strong first-attempt success rate ({first_attempt_pct:.1f}%)")
         )
     elif summary.first_attempt_success_rate < 0.3 and summary.completed_specs > 5:
         print(
@@ -199,7 +195,9 @@ def show_productivity_trends(project_dir: Path, days: int, granularity: str) -> 
     print(f"\n{icon(Icons.CHART)} Productivity Trends ({granularity.title()})\n")
 
     # Get trends
-    trends = get_productivity_trends(project_dir, window_days=days, granularity=granularity)
+    trends = get_productivity_trends(
+        project_dir, window_days=days, granularity=granularity
+    )
 
     if not trends:
         print(info(f"{icon(Icons.INFO)} No data for the specified time period"))
@@ -219,7 +217,9 @@ def show_productivity_trends(project_dir: Path, days: int, granularity: str) -> 
         success_rate = trend["success_rate"] * 100
 
         print(f"{muted(date_str)}:")
-        print(f"  Specs: {specs} | Completed: {completed} | Success: {success_rate:.1f}%")
+        print(
+            f"  Specs: {specs} | Completed: {completed} | Success: {success_rate:.1f}%"
+        )
         print(f"  Time Saved: {time_saved:.1f}h")
         print()
 
