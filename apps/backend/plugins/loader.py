@@ -144,7 +144,7 @@ class PluginLoader:
                     try:
                         metadata = self._load_metadata(plugin_dir)
                         discovered.append(metadata)
-                        debug_verbose(f"  Found: {metadata.name} v{metadata.version}")
+                        debug_verbose("loader", f"  Found: {metadata.name} v{metadata.version}")
                     except Exception as e:
                         debug_warning(
                             "loader",

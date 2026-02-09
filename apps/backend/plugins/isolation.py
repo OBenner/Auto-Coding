@@ -213,8 +213,8 @@ class PluginSandbox:
         self._start_time: float = 0.0
 
         logger.debug(f"Initialized sandbox for plugin at: {self.plugin_dir}")
-        debug_verbose(f"Allowed directories: {[str(d) for d in self.allowed_dirs]}")
-        debug_verbose(f"Resource limits: {self.limits.to_dict()}")
+        debug_verbose("sandbox", f"Allowed directories: {[str(d) for d in self.allowed_dirs]}")
+        debug_verbose("sandbox", f"Resource limits: {self.limits.to_dict()}")
 
     def _validate_path(self, path: Path) -> None:
         """
@@ -315,8 +315,8 @@ class PluginSandbox:
             cmd.extend(args)
 
         debug(f"Executing plugin script: {script}")
-        debug_verbose(f"Command: {' '.join(cmd)}")
-        debug_verbose(f"Working dir: {working_dir}")
+        debug_verbose("sandbox", f"Command: {' '.join(cmd)}")
+        debug_verbose("sandbox", f"Working dir: {working_dir}")
 
         return self._execute_subprocess(cmd, working_dir)
 
@@ -467,7 +467,7 @@ class PluginSandbox:
             finally:
                 self._process = None
 
-        debug_verbose("Sandbox cleanup complete")
+        debug_verbose("sandbox", "Sandbox cleanup complete")
 
     def __enter__(self) -> PluginSandbox:
         """Context manager entry."""

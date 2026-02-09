@@ -1,0 +1,14 @@
+{
+  "name": "custom-llm-provider",
+  "version": "1.0.0",
+  "author": "Auto-Coding Team",
+  "description": "Example integration plugin demonstrating custom LLM provider with completion and chat tools",
+  "plugin_type": "integration",
+  "required_permissions": [
+    "network_access",
+    "create_mcp_tools"
+  ],
+  "dependencies": [],
+  "homepage": "https://github.com/OBenner/Auto-Coding/tree/main/examples/plugins/custom-llm-provider",
+  "license": "MIT"
+}
