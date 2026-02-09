@@ -11,9 +11,11 @@ and initializing plugin instances with proper sandboxing.
 
 from __future__ import annotations
 
+import ast
 import importlib.util
 import json
 import logging
+import re
 import sys
 from pathlib import Path
 
@@ -259,6 +261,184 @@ class PluginLoader:
 
         debug_success("loader", f"Loaded plugin: {metadata.name} v{metadata.version}")
         return plugin
+
+    def validate_plugin_security(self, plugin_dir: Path) -> tuple[bool, list[str]]:
+        """
+        Perform security validation on plugin files.
+
+        Checks for:
+        - Python syntax errors
+        - Suspicious imports (subprocess, os.system, eval, exec)
+        - Potential secrets in code
+        - Malicious code patterns
+
+        Args:
+            plugin_dir: Directory containing the plugin
+
+        Returns:
+            Tuple of (is_safe, warnings) where is_safe is True if plugin passes
+            all security checks, and warnings is a list of security concerns found
+        """
+        warnings = []
+        is_safe = True
+
+        debug_verbose("security", f"Validating security for plugin in: {plugin_dir}")
+
+        # Find all Python files in plugin directory
+        python_files = list(plugin_dir.rglob("*.py"))
+
+        if not python_files:
+            warnings.append("No Python files found in plugin directory")
+            is_safe = False
+            return is_safe, warnings
+
+        # Check each Python file
+        for py_file in python_files:
+            # Skip __pycache__ and hidden files
+            if "__pycache__" in str(py_file) or py_file.name.startswith("."):
+                continue
+
+            try:
+                content = py_file.read_text(encoding="utf-8")
+            except Exception as e:
+                warnings.append(f"Failed to read {py_file.name}: {e}")
+                is_safe = False
+                continue
+
+            # 1. Validate Python syntax
+            try:
+                ast.parse(content)
+            except SyntaxError as e:
+                warnings.append(f"Syntax error in {py_file.name} (line {e.lineno}): {e.msg}")
+                is_safe = False
+                continue
+
+            # 2. Check for suspicious imports
+            suspicious_imports = self._check_suspicious_imports(content, py_file.name)
+            if suspicious_imports:
+                warnings.extend(suspicious_imports)
+                # Note: Suspicious imports are warnings, not blockers
+
+            # 3. Check for dangerous function calls
+            dangerous_calls = self._check_dangerous_calls(content, py_file.name)
+            if dangerous_calls:
+                warnings.extend(dangerous_calls)
+                is_safe = False  # Block plugins with dangerous calls
+
+            # 4. Check for hardcoded secrets (using patterns from scan_secrets)
+            secret_warnings = self._check_for_secrets(content, py_file.name)
+            if secret_warnings:
+                warnings.extend(secret_warnings)
+                is_safe = False  # Block plugins with hardcoded secrets
+
+        if not warnings:
+            debug_success("security", "Plugin passed all security checks")
+        else:
+            debug_warning("security", f"Found {len(warnings)} security concerns")
+            for warning in warnings:
+                debug_warning("security", f"  - {warning}")
+
+        return is_safe, warnings
+
+    def _check_suspicious_imports(self, content: str, filename: str) -> list[str]:
+        """Check for suspicious imports that may indicate malicious behavior."""
+        warnings = []
+
+        # Patterns for suspicious imports
+        suspicious_patterns = [
+            (r"import\s+subprocess", "Imports subprocess module (shell command execution)"),
+            (r"from\s+subprocess\s+import", "Imports from subprocess module"),
+            (r"import\s+os\b", "Imports os module (filesystem access)"),
+            (r"from\s+os\s+import", "Imports from os module"),
+            (r"import\s+socket", "Imports socket module (network access)"),
+            (r"from\s+socket\s+import", "Imports from socket module"),
+            (r"import\s+requests", "Imports requests module (HTTP requests)"),
+            (r"import\s+urllib", "Imports urllib module (HTTP requests)"),
+        ]
+
+        for pattern, description in suspicious_patterns:
+            if re.search(pattern, content):
+                warnings.append(f"{filename}: {description}")
+
+        return warnings
+
+    def _check_dangerous_calls(self, content: str, filename: str) -> list[str]:
+        """Check for dangerous function calls that should block plugin installation."""
+        warnings = []
+
+        # Patterns for dangerous function calls (these block installation)
+        dangerous_patterns = [
+            (r"\beval\s*\(", "Uses eval() - arbitrary code execution risk"),
+            (r"\bexec\s*\(", "Uses exec() - arbitrary code execution risk"),
+            (r"\bcompile\s*\(", "Uses compile() - code compilation risk"),
+            (r"\b__import__\s*\(", "Uses __import__() - dynamic import risk"),
+            (r"os\.system\s*\(", "Uses os.system() - shell command execution"),
+            (r"os\.popen\s*\(", "Uses os.popen() - shell command execution"),
+            (r"subprocess\.call\s*\(", "Uses subprocess.call() - command execution"),
+            (r"subprocess\.run\s*\(", "Uses subprocess.run() - command execution"),
+            (r"subprocess\.Popen\s*\(", "Uses subprocess.Popen() - command execution"),
+        ]
+
+        for pattern, description in dangerous_patterns:
+            if re.search(pattern, content):
+                warnings.append(f"{filename}: {description}")
+
+        return warnings
+
+    def _check_for_secrets(self, content: str, filename: str) -> list[str]:
+        """Check for hardcoded secrets using patterns from scan_secrets module."""
+        warnings = []
+
+        # Service-specific patterns (subset of most common ones)
+        secret_patterns = [
+            (r"sk-[a-zA-Z0-9]{20,}", "Anthropic/OpenAI-style API key"),
+            (r"sk-ant-[a-zA-Z0-9-]{20,}", "Anthropic API key"),
+            (r"ghp_[a-zA-Z0-9]{36}", "GitHub Personal Access Token"),
+            (r"AKIA[0-9A-Z]{16}", "AWS Access Key ID"),
+            (r"AIza[0-9A-Za-z_-]{35}", "Google API Key"),
+            # Generic patterns
+            (r'(?:api[_-]?key|apikey|api_secret)\s*[:=]\s*["\']([a-zA-Z0-9_-]{32,})["\']',
+             "API key assignment"),
+            (r'(?:access[_-]?token|auth[_-]?token)\s*[:=]\s*["\']([a-zA-Z0-9_-]{32,})["\']',
+             "Token assignment"),
+            (r"-----BEGIN\s+(RSA\s+)?PRIVATE\s+KEY-----", "Private key"),
+        ]
+
+        # False positive patterns (don't flag these)
+        false_positive_patterns = [
+            r"process\.env\.",
+            r"os\.environ",
+            r"os\.getenv",
+            r"your[-_]?api[-_]?key",
+            r"xxx+",
+            r"placeholder",
+            r"example",
+            r"<[A-Z_]+>",
+        ]
+
+        lines = content.splitlines()
+        for line_num, line in enumerate(lines, 1):
+            # Skip comments
+            stripped = line.strip()
+            if stripped.startswith("#"):
+                continue
+
+            # Check for secrets
+            for pattern, description in secret_patterns:
+                if re.search(pattern, line, re.IGNORECASE):
+                    # Check if it's a false positive
+                    is_false_positive = False
+                    for fp_pattern in false_positive_patterns:
+                        if re.search(fp_pattern, line, re.IGNORECASE):
+                            is_false_positive = True
+                            break
+
+                    if not is_false_positive:
+                        warnings.append(
+                            f"{filename} (line {line_num}): Potential {description}"
+                        )
+
+        return warnings
 
     def _load_metadata(self, plugin_dir: Path) -> PluginMetadata:
         """

@@ -404,6 +404,33 @@ def _install_from_path(source_path: str, force: bool, dry_run: bool = False) -> 
             logger.error(f"Invalid plugin: {e}")
             return 1
 
+        # Perform security validation
+        logger.info("Performing security validation...")
+        is_safe, warnings = loader.validate_plugin_security(source_dir)
+
+        # Display security warnings
+        if warnings:
+            print("\n⚠️  Security warnings detected:")
+            print("=" * 60)
+            for warning in warnings:
+                print(f"  • {warning}")
+            print("=" * 60)
+
+        # Block installation if plugin is not safe
+        if not is_safe:
+            logger.error(
+                "\n❌ Plugin failed security validation and cannot be installed.\n"
+                "Security issues detected:\n" +
+                "\n".join(f"  - {w}" for w in warnings)
+            )
+            return 1
+
+        # If there are warnings but plugin is safe (e.g., suspicious imports)
+        # show them but allow installation
+        if warnings:
+            print("\nNote: Plugin has security warnings but is not blocked.")
+            print("Review the warnings above before enabling this plugin.\n")
+
         # Determine target directory
         target_dir = loader.user_plugins_dir / metadata.name
 
