@@ -43,5 +43,32 @@
     "viewDetails": "View Details",
     "cancelBuild": "Cancel Build",
     "retryBuild": "Retry Build"
+  },
+  "queue": {
+    "title": "Build Queue",
+    "noBuilds": "Queue is Empty",
+    "noBuildsDescription": "No builds are currently queued or running. Schedule a build to get started.",
+    "loading": "Loading queue...",
+    "active": "Active",
+    "waiting": "Waiting",
+    "status": {
+      "pending": "Pending",
+      "queued": "Queued",
+      "running": "Running",
+      "completed": "Completed",
+      "failed": "Failed",
+      "cancelled": "Cancelled",
+      "retrying": "Retrying"
+    },
+    "position": "Position {{position}}",
+    "priority": "Priority",
+    "dependencies": "Dependencies",
+    "noDependencies": "None",
+    "blockingTasks": "Blocking {{count}} builds",
+    "blockedBy": "Blocked by {{count}} builds",
+    "estimatedWait": "Est. wait: {{minutes}}m",
+    "duration": "Duration: {{minutes}}m {{seconds}}s",
+    "cancelBuild": "Cancel Build",
+    "viewLogs": "View Logs"
   }
 }
