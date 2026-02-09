@@ -25,17 +25,38 @@ import argparse
 import logging
 import shutil
 import sys
+import tempfile
 from pathlib import Path
 
+# Add parent directories to path for direct execution (must be before imports)
+_cli_file_path = Path(__file__).resolve()
+_plugins_dir = _cli_file_path.parent
+_backend_dir = _plugins_dir.parent
+
+if str(_backend_dir) not in sys.path:
+    sys.path.insert(0, str(_backend_dir))
+if str(_plugins_dir) not in sys.path:
+    sys.path.insert(0, str(_plugins_dir))
+
 # Handle both direct execution and module import
-try:
-    from .base import PluginType
-    from .loader import PluginLoader, PluginLoadError, PluginValidationError
-    from .registry import PluginRegistry
-except ImportError:
-    from base import PluginType
-    from loader import PluginLoader, PluginLoadError, PluginValidationError
-    from registry import PluginRegistry
+if __name__ == "__main__":
+    # Direct execution - use absolute imports
+    from plugins.base import PluginType
+    from plugins.loader import PluginLoader, PluginLoadError, PluginValidationError
+    from plugins.registry import PluginRegistry
+else:
+    # Module import - use relative imports
+    try:
+        from .base import PluginType
+        from .loader import PluginLoader, PluginLoadError, PluginValidationError
+        from .registry import PluginRegistry
+    except ImportError:
+        from plugins.base import PluginType
+        from plugins.loader import PluginLoader, PluginLoadError, PluginValidationError
+        from plugins.registry import PluginRegistry
+
+# Import git utilities
+from core.git_executable import run_git
 
 # Configure logging
 logging.basicConfig(
@@ -129,6 +150,11 @@ Examples:
         "--force",
         action="store_true",
         help="Overwrite existing plugin if it exists",
+    )
+    install_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Validate plugin without installing",
     )
 
     # Info command
@@ -328,18 +354,17 @@ def cmd_install(args: argparse.Namespace) -> int:
     """
     # Handle local path installation
     if args.path:
-        return _install_from_path(args.path, args.force)
+        return _install_from_path(args.path, args.force, args.dry_run)
 
-    # Handle remote URL installation (placeholder for phase-3)
+    # Handle remote URL installation
     if args.url:
-        logger.info(f"Install from URL '{args.url}' - to be implemented in phase-3")
-        return 0
+        return _install_from_url(args.url, args.force, args.dry_run)
 
     logger.error("Either --path or --url must be specified")
     return 1
 
 
-def _install_from_path(source_path: str, force: bool) -> int:
+def _install_from_path(source_path: str, force: bool, dry_run: bool = False) -> int:
     """
     Install a plugin from a local directory path.
 
@@ -381,6 +406,14 @@ def _install_from_path(source_path: str, force: bool) -> int:
 
         # Determine target directory
         target_dir = loader.user_plugins_dir / metadata.name
+
+        # Dry run mode - stop here
+        if dry_run:
+            print(f"[DRY RUN] Would install plugin: {metadata.name} v{metadata.version}")
+            print(f"  Source: {source_dir}")
+            print(f"  Target: {target_dir}")
+            print(f"  Description: {metadata.description}")
+            return 0
 
         # Check if plugin already exists
         if target_dir.exists():
@@ -428,6 +461,55 @@ def _install_from_path(source_path: str, force: bool) -> int:
     except Exception as e:
         logger.error(f"Installation failed: {e}")
         return 1
+
+
+def _install_from_url(git_url: str, force: bool, dry_run: bool = False) -> int:
+    """
+    Install a plugin from a remote git repository.
+
+    Clones the repository to a temporary directory, validates it,
+    and installs it to the user plugins directory.
+
+    Args:
+        git_url: Git URL to clone from
+        force: If True, overwrite existing plugin
+        dry_run: If True, validate without installing
+
+    Returns:
+        0 on success, 1 on error
+    """
+    temp_dir = None
+    try:
+        # Create temporary directory for cloning
+        temp_dir = Path(tempfile.mkdtemp(prefix="plugin_install_"))
+        logger.info(f"Cloning plugin from: {git_url}")
+
+        # Clone the repository
+        result = run_git(
+            ["clone", git_url, str(temp_dir)],
+            timeout=120,  # 2 minutes for clone operation
+        )
+
+        if result.returncode != 0:
+            logger.error(f"Failed to clone repository: {result.stderr}")
+            return 1
+
+        logger.info("Repository cloned successfully")
+
+        # Install from the cloned directory
+        return _install_from_path(str(temp_dir), force, dry_run)
+
+    except Exception as e:
+        logger.error(f"Installation from URL failed: {e}")
+        return 1
+    finally:
+        # Clean up temporary directory
+        if temp_dir and temp_dir.exists():
+            try:
+                shutil.rmtree(temp_dir)
+                logger.debug(f"Cleaned up temporary directory: {temp_dir}")
+            except Exception as e:
+                logger.warning(f"Failed to clean up temporary directory: {e}")
 
 
 def cmd_info(args: argparse.Namespace) -> int:
