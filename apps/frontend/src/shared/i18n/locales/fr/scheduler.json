@@ -43,5 +43,32 @@
     "viewDetails": "Voir Détails",
     "cancelBuild": "Annuler le Build",
     "retryBuild": "Réessayer"
+  },
+  "queue": {
+    "title": "File d'Attente des Builds",
+    "noBuilds": "File d'Attente Vide",
+    "noBuildsDescription": "Aucun build n'est actuellement en file ou en cours d'exécution. Planifiez un build pour commencer.",
+    "loading": "Chargement de la file d'attente...",
+    "active": "Actif",
+    "waiting": "En Attente",
+    "status": {
+      "pending": "En Attente",
+      "queued": "En File",
+      "running": "En Cours",
+      "completed": "Terminé",
+      "failed": "Échoué",
+      "cancelled": "Annulé",
+      "retrying": "Nouvelle Tentative"
+    },
+    "position": "Position {{position}}",
+    "priority": "Priorité",
+    "dependencies": "Dépendances",
+    "noDependencies": "Aucune",
+    "blockingTasks": "Bloque {{count}} builds",
+    "blockedBy": "Bloqué par {{count}} builds",
+    "estimatedWait": "Attente estimée: {{minutes}}m",
+    "duration": "Durée: {{minutes}}m {{seconds}}s",
+    "cancelBuild": "Annuler le Build",
+    "viewLogs": "Voir les Logs"
   }
 }
