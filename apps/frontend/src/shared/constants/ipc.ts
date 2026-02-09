@@ -443,6 +443,10 @@ export const IPC_CHANNELS = {
   MERGE_ANALYTICS_GET_PATTERNS: 'mergeAnalytics:getPatterns',
   MERGE_ANALYTICS_EXPORT: 'mergeAnalytics:export',
 
+  // Project Health operations
+  HEALTH_GET_PROJECT_HEALTH: 'health:getProjectHealth',
+  HEALTH_GET_SUMMARY: 'health:getSummary',
+
   // Memory Infrastructure status (LadybugDB - no Docker required)
   MEMORY_STATUS: 'memory:status',
   MEMORY_LIST_DATABASES: 'memory:listDatabases',
