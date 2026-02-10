@@ -40,7 +40,8 @@ from .auth import (
     verify_bearer_token,
     verify_webhook_signature,
 )
-from .models import WebhookConfig, WebhookLog, WebhookType
+from .handlers.outgoing import OutgoingWebhookSender
+from .models import WebhookConfig, WebhookEvent, WebhookLog, WebhookType
 from .storage import WebhookStorage
 
 logger = logging.getLogger(__name__)
@@ -73,6 +74,21 @@ class ErrorResponse(BaseModel):
     error: str = Field(description="Error type")
     message: str = Field(description="Human-readable error message")
     detail: str | None = Field(default=None, description="Detailed error info")
+
+
+class TestConnectionRequest(BaseModel):
+    """Request to test a webhook connection."""
+
+    webhook_id: str = Field(description="ID of webhook to test")
+    project_dir: str = Field(description="Project directory containing webhook config")
+
+
+class TestConnectionResponse(BaseModel):
+    """Response from webhook connection test."""
+
+    success: bool = Field(description="Whether test webhook was sent successfully")
+    message: str = Field(description="Human-readable result message")
+    log_entry: dict | None = Field(default=None, description="Webhook log entry if sent")
 
 
 # =============================================================================
@@ -333,6 +349,82 @@ def create_webhook_server(
                     "log_id": log_id,
                     "message": "Webhook received but processing failed",
                 },
+            )
+
+    # =============================================================================
+    # Test Webhook Connection Endpoint
+    # =============================================================================
+
+    @app.post("/api/webhooks/test", tags=["webhooks"])
+    async def test_webhook_connection(
+        request: TestConnectionRequest,
+    ) -> JSONResponse:
+        """
+        Test a webhook connection by sending a test event.
+
+        This endpoint is used by the frontend UI to test webhook configurations
+        before enabling them. It loads the webhook config, creates a test event,
+        and attempts to send it to the configured URL.
+
+        Args:
+            request: TestConnectionRequest with webhook_id and project_dir
+
+        Returns:
+            JSONResponse with test result
+
+        Raises:
+            HTTPException: If webhook not found or send fails
+        """
+        try:
+            # Load webhook config from project directory
+            project_dir = Path(request.project_dir)
+            storage = WebhookStorage(spec_dir=project_dir)
+
+            config = storage.load_config(request.webhook_id)
+            if not config:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Webhook {request.webhook_id} not found",
+                )
+
+            # Create test event
+            test_event = WebhookEvent.build_started(
+                spec_id="test-connection",
+                spec_name="Test Webhook Connection",
+                message="This is a test webhook notification from Auto Claude",
+            )
+
+            # Send test webhook
+            sender = OutgoingWebhookSender()
+            result = await sender.send(config, test_event)
+
+            if result.success:
+                return JSONResponse(
+                    status_code=status.HTTP_200_OK,
+                    content={
+                        "success": True,
+                        "message": "Test notification sent successfully",
+                        "log_entry": result.log_entry.to_dict() if result.log_entry else None,
+                    },
+                )
+            else:
+                # Return success=true for IPC but webhook failed
+                return JSONResponse(
+                    status_code=status.HTTP_200_OK,
+                    content={
+                        "success": False,
+                        "message": result.log_entry.error_message if result.log_entry else "Webhook test failed",
+                        "log_entry": result.log_entry.to_dict() if result.log_entry else None,
+                    },
+                )
+
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Error testing webhook {request.webhook_id}: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=str(e),
             )
 
     # =============================================================================

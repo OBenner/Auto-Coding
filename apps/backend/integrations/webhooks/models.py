@@ -124,13 +124,12 @@ class AuthenticationConfig(BaseModel):
         description="Header containing the signature",
     )
 
-    @field_validator("api_key")
-    @classmethod
-    def validate_api_key(cls, v: str | None, info) -> str | None:
+    @model_validator(mode="after")
+    def validate_api_key(self) -> "AuthenticationConfig":
         """Validate API key is present when auth_type requires it."""
-        if info.data.get("auth_type") in ["api_key", "bearer_token"] and not v:
+        if self.auth_type in ["api_key", "bearer_token"] and not self.api_key:
             raise ValueError("API key is required for api_key and bearer_token auth")
-        return v
+        return self
 
     @model_validator(mode="after")
     def validate_basic_auth(self) -> "AuthenticationConfig":
@@ -206,23 +205,21 @@ class WebhookConfig(BaseModel):
         description="Last update timestamp",
     )
 
-    @field_validator("url")
-    @classmethod
-    def validate_outgoing_url(cls, v: str | None, info) -> str | None:
+    @model_validator(mode="after")
+    def validate_outgoing_url(self) -> "WebhookConfig":
         """Validate URL is present for outgoing webhooks."""
-        if info.data.get("type") == WebhookType.OUTGOING and not v:
+        if self.type == WebhookType.OUTGOING and not self.url:
             raise ValueError("URL is required for outgoing webhooks")
-        return v
+        return self
 
-    @field_validator("path")
-    @classmethod
-    def validate_incoming_path(cls, v: str | None, info) -> str | None:
+    @model_validator(mode="after")
+    def validate_incoming_path(self) -> "WebhookConfig":
         """Validate path is present for incoming webhooks."""
-        if info.data.get("type") == WebhookType.INCOMING and not v:
+        if self.type == WebhookType.INCOMING and not self.path:
             raise ValueError("Path is required for incoming webhooks")
-        if v and not v.startswith("/"):
+        if self.path and not self.path.startswith("/"):
             raise ValueError("Path must start with /")
-        return v
+        return self
 
     @model_validator(mode="after")
     def validate_events_for_outgoing(self) -> "WebhookConfig":

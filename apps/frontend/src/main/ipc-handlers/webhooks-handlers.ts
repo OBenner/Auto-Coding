@@ -369,59 +369,52 @@ export function registerWebhookHandlers(
           };
         }
 
-        // Import here to avoid loading at startup
-        const { OutgoingWebhookSender } = await import(
-          '../../../backend/integrations/webhooks/handlers/outgoing.js'
+        // Import axios dynamically to avoid startup overhead
+        const axios = (await import('axios')).default;
+
+        // Get webhook server port from environment (default to 8080)
+        const webhookPort = process.env.WEBHOOK_PORT || '8080';
+        const webhookUrl = `http://127.0.0.1:${webhookPort}/api/webhooks/test`;
+
+        // Call backend webhook test endpoint
+        const response = await axios.post(
+          webhookUrl,
+          {
+            webhook_id: config.id,
+            project_dir: project.path
+          },
+          {
+            timeout: 10000, // 10 second timeout
+            headers: {
+              'Content-Type': 'application/json'
+            }
+          }
         );
 
-        // Create a test event
-        const testEvent = {
-          type: 'build_started' as const,
+        // Return result from backend
+        return {
+          success: true,
           data: {
-            spec_id: 'test-spec',
-            spec_name: 'Test Webhook Connection',
-            message: 'This is a test webhook notification from Auto Claude'
-          },
-          timestamp: new Date().toISOString(),
-          metadata: {
-            test: true
+            success: response.data.success,
+            integration: config.integration,
+            message: response.data.message || 'Test completed',
+            timestamp: new Date().toISOString()
           }
         };
+      } catch (error: any) {
+        // Handle errors (axios errors, connection refused, etc.)
+        const errorMsg = error.response?.data?.detail ||
+                         error.message ||
+                         'Failed to test webhook';
 
-        // Create sender and send test
-        const sender = new OutgoingWebhookSender();
-        const result = await sender.send(config, testEvent);
-
-        if (result.success) {
-          return {
-            success: true,
-            data: {
-              success: true,
-              integration: config.integration,
-              message: 'Webhook test successful',
-              response_status_code: result.status_code
-            }
-          };
-        } else {
-          return {
-            success: true, // IPC succeeded, but webhook failed
-            data: {
-              success: false,
-              integration: config.integration,
-              message: result.error || 'Webhook test failed',
-              error: result.error
-            }
-          };
-        }
-      } catch (error) {
-        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
         return {
           success: true, // IPC succeeded
           data: {
             success: false,
             integration: config.integration,
-            message: 'Failed to test webhook',
-            error: errorMsg
+            message: errorMsg,
+            error: errorMsg,
+            timestamp: new Date().toISOString()
           }
         };
       }
