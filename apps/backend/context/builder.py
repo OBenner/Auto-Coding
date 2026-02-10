@@ -7,6 +7,7 @@ Main builder class that orchestrates context building for tasks.
 
 import asyncio
 import json
+import logging
 from dataclasses import asdict
 from pathlib import Path
 
@@ -16,7 +17,10 @@ from .keyword_extractor import KeywordExtractor
 from .models import FileMatch, TaskContext
 from .pattern_discovery import PatternDiscoverer
 from .search import CodeSearcher
+from .semantic_scorer import SemanticScorer
 from .service_matcher import ServiceMatcher
+
+logger = logging.getLogger(__name__)
 
 
 class ContextBuilder:
@@ -26,8 +30,11 @@ class ContextBuilder:
         self.project_dir = project_dir.resolve()
         self.project_index = project_index or self._load_project_index()
 
+        # Initialize semantic scorer if Graphiti is enabled
+        self.semantic_scorer = self._init_semantic_scorer()
+
         # Initialize components
-        self.searcher = CodeSearcher(self.project_dir)
+        self.searcher = CodeSearcher(self.project_dir, semantic_scorer=self.semantic_scorer)
         self.service_matcher = ServiceMatcher(self.project_index)
         self.keyword_extractor = KeywordExtractor()
         self.categorizer = FileCategorizer()
@@ -48,6 +55,39 @@ class ContextBuilder:
         from analyzer import analyze_project
 
         return analyze_project(self.project_dir)
+
+    def _init_semantic_scorer(self) -> SemanticScorer | None:
+        """
+        Initialize semantic scorer if Graphiti is enabled.
+
+        Returns:
+            SemanticScorer instance or None if Graphiti is not available
+        """
+        if not is_graphiti_enabled():
+            logger.debug("Graphiti not enabled, semantic scoring unavailable")
+            return None
+
+        try:
+            from graphiti_config import GraphitiConfig
+            from graphiti_providers import create_embedder
+
+            config = GraphitiConfig.from_env()
+            embedder = create_embedder(config)
+
+            if embedder is None:
+                logger.warning("Failed to create embedder for semantic scoring")
+                return None
+
+            scorer = SemanticScorer(embedder)
+            logger.info("Semantic scorer initialized successfully")
+            return scorer
+
+        except ImportError as e:
+            logger.debug(f"Graphiti dependencies not available: {e}")
+            return None
+        except Exception as e:
+            logger.warning(f"Failed to initialize semantic scorer: {e}")
+            return None
 
     def build_context(
         self,
@@ -90,7 +130,28 @@ class ContextBuilder:
                 service_path = self.project_dir / service_path
 
             # Search this service
-            matches = self.searcher.search_service(service_path, service_name, keywords)
+            # Use semantic search if available, otherwise fall back to keyword search
+            if self.semantic_scorer:
+                try:
+                    # Try to use semantic search (async)
+                    try:
+                        loop = asyncio.get_running_loop()
+                        # We're already in an async context - shouldn't happen in CLI
+                        # but handle it gracefully by falling back to sync search
+                        matches = self.searcher.search_service(service_path, service_name, keywords)
+                    except RuntimeError:
+                        # No event loop running - create one for async semantic search
+                        matches = asyncio.run(
+                            self.searcher.search_with_semantics(
+                                service_path, service_name, keywords, task
+                            )
+                        )
+                except Exception as e:
+                    logger.warning(f"Semantic search failed for {service_name}, falling back: {e}")
+                    matches = self.searcher.search_service(service_path, service_name, keywords)
+            else:
+                matches = self.searcher.search_service(service_path, service_name, keywords)
+
             all_matches.extend(matches)
 
             # Load or generate service context
@@ -152,7 +213,7 @@ class ContextBuilder:
         Build context for a specific task (async version).
 
         This version is preferred when called from async code as it can
-        properly await the graph hints retrieval.
+        properly await the graph hints retrieval and semantic search.
 
         Args:
             task: Description of the task
@@ -185,7 +246,18 @@ class ContextBuilder:
                 service_path = self.project_dir / service_path
 
             # Search this service
-            matches = self.searcher.search_service(service_path, service_name, keywords)
+            # Use semantic search if available, otherwise fall back to keyword search
+            if self.semantic_scorer:
+                try:
+                    matches = await self.searcher.search_with_semantics(
+                        service_path, service_name, keywords, task
+                    )
+                except Exception as e:
+                    logger.warning(f"Semantic search failed for {service_name}, falling back: {e}")
+                    matches = self.searcher.search_service(service_path, service_name, keywords)
+            else:
+                matches = self.searcher.search_service(service_path, service_name, keywords)
+
             all_matches.extend(matches)
 
             # Load or generate service context
