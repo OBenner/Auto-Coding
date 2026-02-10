@@ -18,7 +18,8 @@ import {
   Info,
   Brain,
   Cpu,
-  X
+  X,
+  ArrowDown
 } from 'lucide-react';
 import { Badge } from '../ui/badge';
 import { cn } from '../../lib/utils';
@@ -139,10 +140,11 @@ export function TaskLogs({
   const parentRef = useRef<HTMLDivElement>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<LogFilterType>('all');
+  const [showNewLogsIndicator, setShowNewLogsIndicator] = useState(false);
+  const previousLogCountRef = useRef(0);
 
   // Performance measurement
   const renderStartTime = useMemo(() => performance.now(), []);
-  const previousLogCountRef = useRef(0);
   const performanceMetricsRef = useRef({
     initialRender: 0,
     filterChanges: [] as Array<{ filter: LogFilterType; time: number; itemCount: number }>,
@@ -291,6 +293,23 @@ export function TaskLogs({
     [toggleDetail]
   );
 
+  // Track if user is scrolled away from bottom (within threshold)
+  const [isScrolledUp, setIsScrolledUp] = useState(false);
+
+  // Handle scroll to detect if user is scrolled away from bottom
+  const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+    const target = e.currentTarget;
+    const { scrollTop, scrollHeight, clientHeight } = target;
+    const threshold = 100; // pixels from bottom to consider "at bottom"
+
+    // User is scrolled up if they're more than threshold pixels from bottom
+    const scrolledUp = scrollHeight - scrollTop - clientHeight > threshold;
+    setIsScrolledUp(scrolledUp);
+
+    // Call parent's scroll handler if provided
+    onLogsScroll(e);
+  }, [onLogsScroll]);
+
   // Calculate total log count across all phases
   const totalLogCount = useMemo(() => {
     if (!phaseLogs) return 0;
@@ -299,6 +318,35 @@ export function TaskLogs({
       0
     );
   }, [phaseLogs]);
+
+  // Detect new logs arriving while scrolled up
+  useEffect(() => {
+    const currentLogCount = totalLogCount;
+
+    // Check if new logs arrived and user is scrolled up
+    if (currentLogCount > previousLogCountRef.current && isScrolledUp) {
+      setShowNewLogsIndicator(true);
+    }
+
+    // Update previous count
+    previousLogCountRef.current = currentLogCount;
+
+    // Hide indicator if user scrolls back to bottom
+    if (!isScrolledUp) {
+      setShowNewLogsIndicator(false);
+    }
+  }, [totalLogCount, isScrolledUp]);
+
+  // Scroll to bottom handler for the indicator button
+  const scrollToBottom = useCallback(() => {
+    if (filteredItems.length > 0) {
+      rowVirtualizer.scrollToIndex(filteredItems.length - 1, {
+        align: 'end',
+        behavior: 'smooth',
+      });
+      setShowNewLogsIndicator(false);
+    }
+  }, [filteredItems.length, rowVirtualizer]);
 
   // Performance: Measure initial render when logs load
   useEffect(() => {
@@ -410,7 +458,7 @@ export function TaskLogs({
   }
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full flex flex-col relative">
       {/* Search and Filter Controls */}
       <div className="flex-shrink-0 p-3 border-b border-border bg-background/50">
         <div className="flex items-center gap-2">
@@ -473,11 +521,29 @@ export function TaskLogs({
         )}
       </div>
 
+      {/* New Logs Indicator */}
+      {showNewLogsIndicator && (
+        <div className="absolute bottom-6 right-6 z-10">
+          <button
+            onClick={scrollToBottom}
+            className={cn(
+              'flex items-center gap-2 px-4 py-2 rounded-lg shadow-lg',
+              'bg-primary text-primary-foreground',
+              'hover:bg-primary/90 transition-colors',
+              'animate-in fade-in slide-in-from-bottom-2 duration-300'
+            )}
+          >
+            <ArrowDown className="h-4 w-4" />
+            <span className="text-sm font-medium">New logs</span>
+          </button>
+        </div>
+      )}
+
       {/* Logs List */}
       <div
         ref={parentRef}
         className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent"
-        onScroll={onLogsScroll}
+        onScroll={handleScroll}
       >
         <div className="p-4">
           {filteredItems.length === 0 ? (
