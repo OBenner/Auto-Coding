@@ -58,6 +58,7 @@ import { RateLimitIndicator } from './RateLimitIndicator';
 import { ClaudeCodeStatusBadge } from './ClaudeCodeStatusBadge';
 import { UpdateBanner } from './UpdateBanner';
 import { SessionContextIndicator } from './SessionContextIndicator';
+import { NavIndicator } from './NavIndicator';
 import type { Project, AutoBuildVersionInfo, GitStatus, ProjectEnvConfig } from '../../shared/types';
 
 export type SidebarView = 'kanban' | 'terminals' | 'roadmap' | 'context' | 'ideation' | 'github-issues' | 'gitlab-issues' | 'github-prs' | 'gitlab-merge-requests' | 'changelog' | 'insights' | 'worktrees' | 'agent-tools' | 'plugins' | 'analytics' | 'merge-analytics' | 'scheduler';
@@ -131,12 +132,7 @@ export function Sidebar({
 
   // Refs for position tracking (used for animated indicator)
   const navContainerRef = useRef<HTMLDivElement>(null);
-  const navItemRefs = useRef<Map<SidebarView, HTMLButtonElement>>(new Map());
-  const [indicatorPosition, setIndicatorPosition] = useState<{
-    top: number;
-    height: number;
-    opacity: number;
-  } | null>(null);
+  const navItemRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
 
   const toggleSidebar = () => {
     saveSettings({ sidebarCollapsed: !isCollapsed });
@@ -297,6 +293,13 @@ export function Sidebar({
     const button = (
       <button
         key={item.id}
+        ref={(el) => {
+          if (el) {
+            navItemRefs.current.set(item.id, el);
+          } else {
+            navItemRefs.current.delete(item.id);
+          }
+        }}
         onClick={() => handleNavClick(item.id)}
         disabled={!selectedProjectId}
         aria-keyshortcuts={item.shortcut}
@@ -393,13 +396,21 @@ export function Sidebar({
         <ScrollArea className="flex-1">
           <div className={cn("py-4 transition-all duration-300", isCollapsed ? "px-2" : "px-3")}>
             {/* Project Section */}
-            <div>
+            <div className="relative">
               {!isCollapsed && (
                 <h3 className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   {t('sections.project')}
                 </h3>
               )}
-              <nav className="space-y-1">
+              {/* Animated indicator for active nav item */}
+              {selectedProjectId && (
+                <NavIndicator
+                  activeView={activeView}
+                  containerRef={navContainerRef}
+                  itemRefs={navItemRefs}
+                />
+              )}
+              <nav ref={navContainerRef} className="space-y-1">
                 {visibleNavItems.map(renderNavItem)}
               </nav>
             </div>
