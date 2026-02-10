@@ -94,6 +94,7 @@ class AnalysisResult:
         has_main: Whether file has if __name__ == '__main__'
         total_lines: Total lines in file
         edge_cases: List of detected edge case patterns
+        naming_conventions: Detected naming conventions (variable, function, class styles)
     """
 
     file_path: str
@@ -103,6 +104,7 @@ class AnalysisResult:
     has_main: bool = False
     total_lines: int = 0
     edge_cases: list[dict[str, Any]] = field(default_factory=list)
+    naming_conventions: dict[str, Any] = field(default_factory=dict)
 
 
 # =============================================================================
@@ -207,6 +209,9 @@ class CodeAnalyzer:
 
         # Detect edge cases for test generation
         result.edge_cases = self._detect_edge_cases(tree)
+
+        # Detect naming conventions in this file
+        result.naming_conventions = self._detect_naming_conventions(result)
 
         return result
 
@@ -465,6 +470,97 @@ class CodeAnalyzer:
 
         return edge_cases
 
+    def _detect_naming_conventions(self, result: AnalysisResult) -> dict[str, Any]:
+        """
+        Detect naming conventions used in the analyzed file.
+
+        Analyzes function, class, and variable names to determine the
+        predominant naming style (snake_case, camelCase, PascalCase, etc.).
+
+        Args:
+            result: AnalysisResult containing extracted functions and classes
+
+        Returns:
+            Dictionary with detected naming conventions:
+            - function_style: Detected function naming style
+            - class_style: Detected class naming style
+            - variable_style: Detected variable naming style
+            - constant_style: Detected constant naming style
+            - private_prefix: How private members are indicated
+            - examples: Sample identifiers
+        """
+        conventions = {
+            "function_style": None,
+            "class_style": None,
+            "variable_style": None,
+            "constant_style": None,
+            "private_prefix": "_",  # Python convention
+            "examples": {},
+        }
+
+        # Collect function names
+        function_names = [f.name for f in result.functions if not f.name.startswith("_")]
+        if function_names:
+            conventions["function_style"] = self._detect_case_style(function_names)
+            conventions["examples"]["functions"] = function_names[:5]
+
+        # Collect class names
+        class_names = [c.name for c in result.classes if not c.name.startswith("_")]
+        if class_names:
+            conventions["class_style"] = self._detect_case_style(class_names)
+            conventions["examples"]["classes"] = class_names[:5]
+
+        # Analyze variable naming from imports and assignments
+        # This is a simplified approach - full AST traversal would be more complete
+        if result.functions or result.classes:
+            # Default to Python PEP 8 conventions if we have code
+            if not conventions["function_style"]:
+                conventions["function_style"] = "snake_case"
+            if not conventions["class_style"]:
+                conventions["class_style"] = "PascalCase"
+            conventions["variable_style"] = "snake_case"
+            conventions["constant_style"] = "UPPER_SNAKE_CASE"
+
+        return conventions
+
+    def _detect_case_style(self, identifiers: list[str]) -> str | None:
+        """
+        Detect the predominant case style from a list of identifiers.
+
+        Args:
+            identifiers: List of identifier names to analyze
+
+        Returns:
+            One of: snake_case, camelCase, PascalCase, UPPER_SNAKE_CASE, or None
+        """
+        if not identifiers:
+            return None
+
+        styles = {
+            "snake_case": 0,
+            "camelCase": 0,
+            "PascalCase": 0,
+            "UPPER_SNAKE_CASE": 0,
+        }
+
+        for name in identifiers:
+            if "_" in name:
+                if name.isupper():
+                    styles["UPPER_SNAKE_CASE"] += 1
+                else:
+                    styles["snake_case"] += 1
+            elif name[0].isupper():
+                styles["PascalCase"] += 1
+            elif any(c.isupper() for c in name):
+                styles["camelCase"] += 1
+
+        # Return the most common style
+        max_style = max(styles, key=styles.get)
+        if styles[max_style] > 0:
+            return max_style
+
+        return None
+
     def _result_to_dict(self, result: AnalysisResult) -> dict[str, Any]:
         """Convert AnalysisResult to dictionary."""
         return {
@@ -509,4 +605,5 @@ class CodeAnalyzer:
             "has_main": result.has_main,
             "total_lines": result.total_lines,
             "edge_cases": result.edge_cases,
+            "naming_conventions": result.naming_conventions,
         }
