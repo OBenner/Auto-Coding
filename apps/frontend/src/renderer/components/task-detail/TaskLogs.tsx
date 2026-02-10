@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import {
   Terminal,
@@ -624,7 +624,7 @@ interface PhaseLogSectionProps {
   phaseConfig?: { model: string; thinking: string } | null;
 }
 
-function PhaseLogSection({ phase, phaseLog, isExpanded, onToggle, isTaskStuck, phaseConfig }: PhaseLogSectionProps) {
+const PhaseLogSection = React.memo(function PhaseLogSection({ phase, phaseLog, isExpanded, onToggle, isTaskStuck, phaseConfig }: PhaseLogSectionProps) {
   const Icon = PHASE_ICONS[phase];
   const status = phaseLog?.status || 'pending';
   const hasEntries = (phaseLog?.entries.length || 0) > 0;
@@ -717,7 +717,7 @@ function PhaseLogSection({ phase, phaseLog, isExpanded, onToggle, isTaskStuck, p
       </div>
     </button>
   );
-}
+});
 
 // Log Entry Component
 interface LogEntryProps {
@@ -726,7 +726,7 @@ interface LogEntryProps {
   onToggleExpand: () => void;
 }
 
-function LogEntry({ entry, isExpanded, onToggleExpand }: LogEntryProps) {
+const LogEntry = React.memo(function LogEntry({ entry, isExpanded, onToggleExpand }: LogEntryProps) {
   const hasDetail = Boolean(entry.detail);
 
   const getToolInfo = (toolName: string) => {
@@ -924,4 +924,4 @@ function LogEntry({ entry, isExpanded, onToggleExpand }: LogEntryProps) {
       )}
     </div>
   );
-}
+});
