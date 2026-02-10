@@ -483,7 +483,7 @@ def create_background_task_tools(spec_dir: Path, project_dir: Path) -> list:
     tools.append(start_background_command)
 
     # -------------------------------------------------------------------------
-    # Tool: get_task_status (will be fully implemented in subtask-2-2)
+    # Tool: get_task_status
     # -------------------------------------------------------------------------
     @tool(
         "get_task_status",
@@ -515,7 +515,7 @@ def create_background_task_tools(spec_dir: Path, project_dir: Path) -> list:
     tools.append(get_task_status)
 
     # -------------------------------------------------------------------------
-    # Tool: get_task_output (will be fully implemented in subtask-2-2)
+    # Tool: get_task_output
     # -------------------------------------------------------------------------
     @tool(
         "get_task_output",
