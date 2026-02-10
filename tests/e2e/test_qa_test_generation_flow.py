@@ -250,7 +250,7 @@ def mock_test_generators():
 @pytest.fixture
 def mock_coverage_reporter():
     """Mock coverage report collection."""
-    from dataclasses import dataclass
+    from dataclasses import dataclass, field
 
     @dataclass
     class FileCoverage:
@@ -259,6 +259,9 @@ def mock_coverage_reporter():
         lines_total: int
         lines_covered: int
         lines_missed: int
+        branches_total: int = 0
+        branches_covered: int = 0
+        missing_lines: list = field(default_factory=list)
 
     @dataclass
     class CoverageReport:
@@ -266,15 +269,20 @@ def mock_coverage_reporter():
         lines_total: int
         lines_covered: int
         lines_missed: int
-        framework: str
-        files: list
-        uncovered_files: list
+        branches_total: int = 0
+        branches_covered: int = 0
+        framework: str = ""
+        files: list = field(default_factory=list)
+        uncovered_files: list = field(default_factory=list)
+        report_path: str = None
 
     mock_report = CoverageReport(
         overall_coverage=85.5,
         lines_total=1000,
         lines_covered=855,
         lines_missed=145,
+        branches_total=200,
+        branches_covered=170,
         framework="pytest + vitest",
         files=[
             FileCoverage(
@@ -283,6 +291,8 @@ def mock_coverage_reporter():
                 100,
                 90,
                 10,
+                20,
+                18,
             ),
             FileCoverage(
                 "apps/backend/services/auth.py",
@@ -290,13 +300,15 @@ def mock_coverage_reporter():
                 50,
                 40,
                 10,
+                15,
+                12,
             ),
         ],
         uncovered_files=["apps/backend/legacy/old.py"],
     )
 
     with patch(
-        "apps.backend.analysis.coverage_reporter.collect_coverage",
+        "analysis.coverage_reporter.collect_coverage",
         return_value=mock_report,
     ):
         yield mock_report
@@ -346,43 +358,51 @@ async def test_e2e_test_generation_flow(
     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
     mock_client.__aexit__ = AsyncMock(return_value=None)
 
+    # Mock create_agent_session to return a valid response
+    async def mock_agent_session(*args, **kwargs):
+        return {"test_files": ["test_utils.py", "test_auth.py"]}
+
+    mock_client.create_agent_session = mock_agent_session
+
     with patch("apps.backend.qa.loop.create_client", return_value=mock_client):
-        with patch(
-            "apps.backend.qa.loop.run_qa_agent_session",
-            return_value=("approved", "All tests passed"),
-        ):
-            with patch("apps.backend.qa.loop.emit_phase"):
-                with patch("apps.backend.qa.loop.get_task_logger", return_value=None):
-                    with patch(
-                        "apps.backend.qa.loop.is_linear_enabled", return_value=False
-                    ):
-                        # Create mock test files that generators would create
-                        test_utils = project_dir / "tests/test_utils.py"
-                        test_utils.parent.mkdir(parents=True, exist_ok=True)
-                        test_utils.write_text("def test_validate_email(): pass")
+        # Patch create_client for test_generator module too
+        with patch("agents.test_generator.create_client", return_value=mock_client):
+            with patch(
+                "apps.backend.qa.loop.run_qa_agent_session",
+                return_value=("approved", "All tests passed"),
+            ):
+                with patch("apps.backend.qa.loop.emit_phase"):
+                    with patch("apps.backend.qa.loop.get_task_logger", return_value=None):
+                        with patch(
+                            "apps.backend.qa.loop.is_linear_enabled", return_value=False
+                        ):
+                            # Create mock test files that generators would create
+                            test_utils = project_dir / "tests/test_utils.py"
+                            test_utils.parent.mkdir(parents=True, exist_ok=True)
+                            test_utils.write_text("def test_validate_email(): pass")
 
-                        test_auth = project_dir / "tests/test_auth.py"
-                        test_auth.write_text("def test_authenticate_user(): pass")
+                            test_auth = project_dir / "tests/test_auth.py"
+                            test_auth.write_text("def test_authenticate_user(): pass")
 
-                        login_form_test = project_dir / "apps/frontend/src/components/LoginForm.test.tsx"
-                        login_form_test.parent.mkdir(parents=True, exist_ok=True)
-                        login_form_test.write_text("test('renders', () => {})")
+                            login_form_test = project_dir / "apps/frontend/src/components/LoginForm.test.tsx"
+                            login_form_test.parent.mkdir(parents=True, exist_ok=True)
+                            login_form_test.write_text("test('renders', () => {})")
 
-                        use_auth_test = project_dir / "apps/frontend/src/hooks/useAuth.test.ts"
-                        use_auth_test.parent.mkdir(parents=True, exist_ok=True)
-                        use_auth_test.write_text("test('login', () => {})")
+                            use_auth_test = project_dir / "apps/frontend/src/hooks/useAuth.test.ts"
+                            use_auth_test.parent.mkdir(parents=True, exist_ok=True)
+                            use_auth_test.write_text("test('login', () => {})")
 
-                        e2e_test = project_dir / "tests/e2e/test_login_flow.py"
-                        e2e_test.parent.mkdir(parents=True, exist_ok=True)
-                        e2e_test.write_text("def test_login_flow(): pass")
+                            e2e_test = project_dir / "tests/e2e/test_login_flow.py"
+                            e2e_test.parent.mkdir(parents=True, exist_ok=True)
+                            e2e_test.write_text("def test_login_flow(): pass")
 
-                        # Run the QA validation loop (test generation happens inside)
-                        result = await run_qa_validation_loop(
-                            project_dir=project_dir,
-                            spec_dir=spec_dir,
-                            model="claude-sonnet-4",
-                            verbose=True,
-                        )
+                            # Run the QA validation loop (test generation happens inside)
+                            result = await run_qa_validation_loop(
+                                project_dir=project_dir,
+                                spec_dir=spec_dir,
+                                model="claude-sonnet-4",
+                                verbose=True,
+                            )
 
     # Verify the flow completed successfully
     assert result is True, "QA validation loop should complete successfully"
