@@ -14,7 +14,9 @@ from typing import Any
 
 from agents.memory_manager import save_user_correction
 from agents.test_generator import run_test_generator_session
+from agents.e2e_generator import generate_e2e_tests
 from analysis.code_analyzer import CodeAnalyzer
+from analysis.coverage_reporter import collect_coverage, format_coverage_summary
 from analysis.failure_analyzer import analyze_failure, is_analysis_enabled
 from analysis.ts_analyzer import TypeScriptAnalyzer
 from core.client import create_client
@@ -553,11 +555,13 @@ async def run_qa_validation_loop(
 
                 if test_result.get("success"):
                     generated_files = test_result.get("generated_files", [])
-                    print(f"   ✅ Generated {len(generated_files)} test file(s)")
+                    framework = test_result.get("framework", "pytest")
+                    print(f"   ✅ Generated {len(generated_files)} {framework} test file(s)")
                     debug_success(
                         "qa_loop",
                         "Test generation completed",
                         file_count=len(generated_files),
+                        framework=framework,
                     )
 
                     # Move generated tests to review directory for user approval
@@ -569,12 +573,97 @@ async def run_qa_validation_loop(
                     error = test_result.get("error", "Unknown error")
                     print(f"   ⚠️  Test generation had issues: {error}")
                     debug_warning("qa_loop", f"Test generation incomplete: {error}")
+
+                # Generate E2E tests for user-facing features
+                if combined_analysis.get("components"):
+                    print("\n🎭 Generating E2E tests for user-facing features...")
+                    debug("qa_loop", "Starting E2E test generation")
+
+                    try:
+                        e2e_result = await generate_e2e_tests(
+                            project_dir,
+                            spec_dir,
+                            combined_analysis,
+                            model=model,
+                            verbose=verbose,
+                        )
+
+                        if e2e_result.get("success"):
+                            e2e_files = e2e_result.get("generated_files", [])
+                            print(f"   ✅ Generated {len(e2e_files)} E2E test file(s)")
+                            debug_success(
+                                "qa_loop",
+                                "E2E test generation completed",
+                                file_count=len(e2e_files),
+                            )
+
+                            # Move E2E tests to review directory
+                            if e2e_files:
+                                _move_tests_to_review_directory(
+                                    project_dir, spec_dir, e2e_files
+                                )
+                        else:
+                            error = e2e_result.get("error", "Unknown error")
+                            print(f"   ⚠️  E2E test generation had issues: {error}")
+                            debug_warning("qa_loop", f"E2E test generation incomplete: {error}")
+                    except Exception as e:
+                        debug_error("qa_loop", f"E2E test generation failed: {e}")
+                        print(f"   ⚠️  E2E test generation failed: {e}")
             else:
                 print("   No testable functions or classes found")
                 debug("qa_loop", "No testable code found in modified files")
         else:
             print("   No modified Python files to analyze")
             debug("qa_loop", "No modified files found in implementation plan")
+
+        # Collect and report test coverage
+        print("\n📊 Collecting test coverage reports...")
+        debug("qa_loop", "Starting coverage collection")
+
+        try:
+            coverage_report = collect_coverage(project_dir, framework=None)
+
+            if coverage_report:
+                coverage_summary = format_coverage_summary(coverage_report)
+                print("\n" + coverage_summary)
+                debug_success(
+                    "qa_loop",
+                    "Coverage collection completed",
+                    overall_coverage=coverage_report.overall_coverage,
+                    framework=coverage_report.framework,
+                )
+
+                # Save coverage report to spec directory
+                coverage_file = spec_dir / "coverage_report.json"
+                import json
+                coverage_data = {
+                    "overall_coverage": coverage_report.overall_coverage,
+                    "lines_total": coverage_report.lines_total,
+                    "lines_covered": coverage_report.lines_covered,
+                    "lines_missed": coverage_report.lines_missed,
+                    "framework": coverage_report.framework,
+                    "files": [
+                        {
+                            "file_path": f.file_path,
+                            "coverage_percentage": f.coverage_percentage,
+                            "lines_total": f.lines_total,
+                            "lines_covered": f.lines_covered,
+                            "lines_missed": f.lines_missed,
+                        }
+                        for f in coverage_report.files[:20]  # Top 20 files
+                    ],
+                    "uncovered_files": coverage_report.uncovered_files[:10],  # Top 10 uncovered
+                }
+                with open(coverage_file, "w", encoding="utf-8") as f:
+                    json.dump(coverage_data, f, indent=2)
+                debug("qa_loop", f"Saved coverage report to {coverage_file}")
+            else:
+                print("   ⚠️  No coverage reports found")
+                print("   Run tests with coverage enabled to generate reports")
+                debug("qa_loop", "No coverage reports available")
+        except Exception as e:
+            debug_error("qa_loop", f"Coverage collection failed: {e}")
+            print(f"   ⚠️  Coverage collection failed: {e}")
 
     except Exception as e:
         debug_error("qa_loop", f"Test generation failed: {e}")
