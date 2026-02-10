@@ -1,0 +1,130 @@
+{
+  "title": "Changelog Generator",
+  "noProjectSelected": "No Project Selected",
+  "noProjectSelectedDescription": "Select a project from the sidebar to generate changelogs.",
+  "refresh": "Refresh",
+  "steps": {
+    "1": {
+      "title": "Step 1: Select completed tasks to include",
+      "label": "Select"
+    },
+    "2": {
+      "title": "Step 2: Configure and generate changelog",
+      "label": "Generate"
+    },
+    "3": {
+      "title": "Step 3: Release and archive tasks",
+      "label": "Release"
+    }
+  },
+  "filters": {
+    "changelogSource": "Changelog Source",
+    "gitHistoryOptions": "Git History Options",
+    "historyType": "History Type",
+    "historyTypes": {
+      "sinceVersion": "Since Version",
+      "recent": "Recent Commits",
+      "sinceDate": "Since Date",
+      "tagRange": "Tag Range"
+    },
+    "numberOfCommits": "Number of Commits",
+    "sinceDate": "Since Date",
+    "fromTag": "From Tag",
+    "selectTag": "Select tag...",
+    "toTag": "To Tag (optional)",
+    "headLatest": "HEAD (latest)",
+    "lastVersion": "Last Version",
+    "selectVersion": "Select version...",
+    "allCommitsSinceVersion": "All commits since this version will be included",
+    "includeMergeCommits": "Include merge commits",
+    "loading": "Loading...",
+    "loadCommits": "Load Commits",
+    "branchComparison": "Branch Comparison",
+    "baseBranch": "Base Branch",
+    "selectBaseBranch": "Select base branch...",
+    "baseBranchDescription": "The branch you're merging into",
+    "compareBranch": "Compare Branch",
+    "selectCompareBranch": "Select compare branch...",
+    "compareBranchDescription": "The branch with your changes",
+    "defaultBranch": "default",
+    "currentBranch": "current",
+    "branchesMustBeDifferent": "Branches must be different"
+  },
+  "entry": {
+    "hasSpecs": "Has Specs",
+    "files": "{{count}} file",
+    "files_plural": "{{count}} files"
+  },
+  "list": {
+    "tasksSelected": "{{count}} of {{total}} tasks selected",
+    "selectAll": "Select All",
+    "clear": "Clear",
+    "commitsFound": "{{count}} commit found",
+    "commitsFound_plural": "{{count}} commits found",
+    "noCompletedTasks": "No Completed Tasks",
+    "noCompletedTasksDescription": "Complete tasks in the Kanban board and mark them as \"Done\" to include them in your changelog.",
+    "noCommitsFound": "No Commits Found",
+    "noCommitsFoundGitHistory": "Configure the history options and click \"Load Commits\" to preview.",
+    "noCommitsFoundBranchDiff": "Select both branches and click \"Load Commits\" to see the changes.",
+    "continue": "Continue",
+    "task": "task",
+    "commit": "commit"
+  },
+  "configuration": {
+    "backToSelection": "Back to Selection",
+    "including": "Including {{count}} {{label}}",
+    "including_plural": "Including {{count}} {{label}}s",
+    "releaseInfo": "Release Info",
+    "version": "Version",
+    "date": "Date",
+    "previous": "Previous: {{version}}",
+    "outputStyle": "Output Style",
+    "format": "Format",
+    "audience": "Audience",
+    "emojis": "Emojis",
+    "advancedOptions": "Advanced Options",
+    "customInstructions": "Custom Instructions",
+    "customInstructionsPlaceholder": "Add specific instructions for the AI...",
+    "customInstructionsDescription": "Guide the AI to focus on specific aspects or use a particular tone",
+    "generateChangelog": "Generate Changelog",
+    "generating": "Generating..."
+  },
+  "preview": {
+    "title": "Preview",
+    "markdown": "Markdown",
+    "preview": "Preview",
+    "copyToClipboard": "Copy to clipboard",
+    "save": "Save",
+    "saved": "Saved!",
+    "copied": "Copied!",
+    "dragDropImage": "Drag and drop an image here, or paste to insert",
+    "markdownView": "Markdown View",
+    "previewView": "Preview View"
+  },
+  "archive": {
+    "title": "Archive Completed Tasks",
+    "archive": "Archive",
+    "archiving": "Archiving...",
+    "archiveTasks": "Archive {{count}} Task",
+    "archiveTasks_plural": "Archive {{count}} Tasks",
+    "archiveSuccess": "{{count}} task archived!",
+    "archiveSuccess_plural": "{{count}} tasks archived!",
+    "archiveDescription": "Archive {{count}} task to clean up your Kanban board. Archived tasks can be viewed using the \"Show Archived\" toggle.",
+    "archiveDescription_plural": "Archive {{count}} tasks to clean up your Kanban board. Archived tasks can be viewed using the \"Show Archived\" toggle.",
+    "failedToArchive": "Failed to archive tasks"
+  },
+  "githubRelease": {
+    "title": "Create GitHub Release",
+    "createRelease": "Create Release {{tag}}",
+    "creatingRelease": "Creating Release...",
+    "createReleaseDescription": "Create a new release {{tag}} on GitHub with the changelog as release notes.",
+    "releaseCreated": "Release created successfully!",
+    "viewRelease": "View Release on GitHub",
+    "failedToCreateRelease": "Failed to create release"
+  },
+  "success": {
+    "title": "Changelog Saved!",
+    "description": "Version {{tag}} has been added to CHANGELOG.md",
+    "done": "Done"
+  }
+}

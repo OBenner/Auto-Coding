@@ -1,0 +1,130 @@
+{
+  "title": "Générateur de Changelog",
+  "noProjectSelected": "Aucun projet sélectionné",
+  "noProjectSelectedDescription": "Sélectionnez un projet dans la barre latérale pour générer des changelogs.",
+  "refresh": "Actualiser",
+  "steps": {
+    "1": {
+      "title": "Étape 1 : Sélectionner les tâches terminées à inclure",
+      "label": "Sélectionner"
+    },
+    "2": {
+      "title": "Étape 2 : Configurer et générer le changelog",
+      "label": "Générer"
+    },
+    "3": {
+      "title": "Étape 3 : Publier et archiver les tâches",
+      "label": "Publier"
+    }
+  },
+  "filters": {
+    "changelogSource": "Source du Changelog",
+    "gitHistoryOptions": "Options de l'historique Git",
+    "historyType": "Type d'historique",
+    "historyTypes": {
+      "sinceVersion": "Depuis la version",
+      "recent": "Commits récents",
+      "sinceDate": "Depuis la date",
+      "tagRange": "Plage de tags"
+    },
+    "numberOfCommits": "Nombre de commits",
+    "sinceDate": "Depuis la date",
+    "fromTag": "Depuis le tag",
+    "selectTag": "Sélectionner un tag...",
+    "toTag": "Jusqu'au tag (optionnel)",
+    "headLatest": "HEAD (dernière)",
+    "lastVersion": "Dernière version",
+    "selectVersion": "Sélectionner une version...",
+    "allCommitsSinceVersion": "Tous les commits depuis cette version seront inclus",
+    "includeMergeCommits": "Inclure les commits de fusion",
+    "loading": "Chargement...",
+    "loadCommits": "Charger les commits",
+    "branchComparison": "Comparaison de branches",
+    "baseBranch": "Branche de base",
+    "selectBaseBranch": "Sélectionner la branche de base...",
+    "baseBranchDescription": "La branche dans laquelle vous fusionnez",
+    "compareBranch": "Branche de comparaison",
+    "selectCompareBranch": "Sélectionner la branche de comparaison...",
+    "compareBranchDescription": "La branche avec vos modifications",
+    "defaultBranch": "par défaut",
+    "currentBranch": "actuelle",
+    "branchesMustBeDifferent": "Les branches doivent être différentes"
+  },
+  "entry": {
+    "hasSpecs": "A des specs",
+    "files": "{{count}} fichier",
+    "files_plural": "{{count}} fichiers"
+  },
+  "list": {
+    "tasksSelected": "{{count}} sur {{total}} tâches sélectionnées",
+    "selectAll": "Tout sélectionner",
+    "clear": "Effacer",
+    "commitsFound": "{{count}} commit trouvé",
+    "commitsFound_plural": "{{count}} commits trouvés",
+    "noCompletedTasks": "Aucune tâche terminée",
+    "noCompletedTasksDescription": "Complétez des tâches dans le tableau Kanban et marquez-les comme \"Terminé\" pour les inclure dans votre changelog.",
+    "noCommitsFound": "Aucun commit trouvé",
+    "noCommitsFoundGitHistory": "Configurez les options d'historique et cliquez sur \"Charger les commits\" pour prévisualiser.",
+    "noCommitsFoundBranchDiff": "Sélectionnez les deux branches et cliquez sur \"Charger les commits\" pour voir les modifications.",
+    "continue": "Continuer",
+    "task": "tâche",
+    "commit": "commit"
+  },
+  "configuration": {
+    "backToSelection": "Retour à la sélection",
+    "including": "Inclusion de {{count}} {{label}}",
+    "including_plural": "Inclusion de {{count}} {{label}}s",
+    "releaseInfo": "Informations de publication",
+    "version": "Version",
+    "date": "Date",
+    "previous": "Précédent : {{version}}",
+    "outputStyle": "Style de sortie",
+    "format": "Format",
+    "audience": "Public",
+    "emojis": "Emojis",
+    "advancedOptions": "Options avancées",
+    "customInstructions": "Instructions personnalisées",
+    "customInstructionsPlaceholder": "Ajouter des instructions spécifiques pour l'IA...",
+    "customInstructionsDescription": "Guides l'IA pour se concentrer sur des aspects spécifiques ou utiliser un ton particulier",
+    "generateChangelog": "Générer le changelog",
+    "generating": "Génération..."
+  },
+  "preview": {
+    "title": "Aperçu",
+    "markdown": "Markdown",
+    "preview": "Aperçu",
+    "copyToClipboard": "Copier dans le presse-papiers",
+    "save": "Enregistrer",
+    "saved": "Enregistré !",
+    "copied": "Copié !",
+    "dragDropImage": "Glissez-déposez une image ici, ou collez pour insérer",
+    "markdownView": "Vue Markdown",
+    "previewView": "Vue aperçu"
+  },
+  "archive": {
+    "title": "Archiver les tâches terminées",
+    "archive": "Archiver",
+    "archiving": "Archivage...",
+    "archiveTasks": "Archiver {{count}} tâche",
+    "archiveTasks_plural": "Archiver {{count}} tâches",
+    "archiveSuccess": "{{count}} tâche archivée !",
+    "archiveSuccess_plural": "{{count}} tâches archivées !",
+    "archiveDescription": "Archivez {{count}} tâche pour nettoyer votre tableau Kanban. Les tâches archivées peuvent être consultées en utilisant le bouton \"Afficher archivées\".",
+    "archiveDescription_plural": "Archivez {{count}} tâches pour nettoyer votre tableau Kanban. Les tâches archivées peuvent être consultées en utilisant le bouton \"Afficher archivées\".",
+    "failedToArchive": "Échec de l'archivage des tâches"
+  },
+  "githubRelease": {
+    "title": "Créer une version GitHub",
+    "createRelease": "Créer la version {{tag}}",
+    "creatingRelease": "Création de la version...",
+    "createReleaseDescription": "Créer une nouvelle version {{tag}} sur GitHub avec le changelog comme notes de version.",
+    "releaseCreated": "Version créée avec succès !",
+    "viewRelease": "Voir la version sur GitHub",
+    "failedToCreateRelease": "Échec de la création de la version"
+  },
+  "success": {
+    "title": "Changelog enregistré !",
+    "description": "La version {{tag}} a été ajoutée à CHANGELOG.md",
+    "done": "Terminé"
+  }
+}

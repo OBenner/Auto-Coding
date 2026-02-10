@@ -1,4 +1,5 @@
 import { GitCommit } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { Checkbox } from '../ui/checkbox';
 import { Badge } from '../ui/badge';
 import { cn } from '../../lib/utils';
@@ -11,6 +12,7 @@ interface TaskCardProps {
 }
 
 export function TaskCard({ task, isSelected, onToggle }: TaskCardProps) {
+  const { t } = useTranslation('changelog');
   const completedDate = new Date(task.completedAt).toLocaleDateString();
 
   return (
@@ -39,7 +41,7 @@ export function TaskCard({ task, isSelected, onToggle }: TaskCardProps) {
           <div className="flex items-center gap-2 mt-3">
             {task.hasSpecs && (
               <Badge variant="secondary" className="text-xs">
-                Has Specs
+                {t('entry.hasSpecs')}
               </Badge>
             )}
             <span className="text-xs text-muted-foreground">
@@ -57,6 +59,7 @@ interface CommitCardProps {
 }
 
 export function CommitCard({ commit }: CommitCardProps) {
+  const { t } = useTranslation('changelog');
   const commitDate = new Date(commit.date).toLocaleDateString();
 
   return (
@@ -74,7 +77,7 @@ export function CommitCard({ commit }: CommitCardProps) {
           <span>{commitDate}</span>
           {commit.filesChanged !== undefined && (
             <span>
-              {commit.filesChanged} file{commit.filesChanged !== 1 ? 's' : ''}
+              {t('entry.files', { count: commit.filesChanged })}
             </span>
           )}
         </div>

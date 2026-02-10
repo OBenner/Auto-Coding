@@ -1,4 +1,5 @@
 import { FileText, History, GitBranch, Tag, Calendar, RefreshCw, Loader2, AlertCircle } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { Button } from '../ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Input } from '../ui/input';
@@ -79,6 +80,7 @@ export function ChangelogFilters({
   onCompareBranchChange,
   onLoadCommitsPreview
 }: ChangelogFiltersProps) {
+  const { t } = useTranslation('changelog');
   const localBranches = branches.filter((b) => !b.isRemote);
 
   return (
@@ -86,7 +88,7 @@ export function ChangelogFilters({
       <div className="p-6 space-y-6">
         {/* Source Mode Selection */}
         <div className="space-y-3">
-          <Label className="text-sm font-medium">Changelog Source</Label>
+          <Label className="text-sm font-medium">{t('filters.changelogSource')}</Label>
           <RadioGroup
             value={sourceMode}
             onValueChange={(value) => onSourceModeChange(value as ChangelogSourceMode)}
@@ -170,12 +172,12 @@ export function ChangelogFilters({
         {sourceMode === 'git-history' && (
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm">Git History Options</CardTitle>
+              <CardTitle className="text-sm">{t('filters.gitHistoryOptions')}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               {/* History Type */}
               <div className="space-y-2">
-                <Label className="text-xs">History Type</Label>
+                <Label className="text-xs">{t('filters.historyType')}</Label>
                 <Select
                   value={gitHistoryType}
                   onValueChange={(v) => onGitHistoryTypeChange(v as 'recent' | 'since-date' | 'tag-range' | 'since-version')}
@@ -187,25 +189,25 @@ export function ChangelogFilters({
                     <SelectItem value="since-version">
                       <div className="flex items-center gap-2">
                         <Tag className="h-3 w-3" />
-                        Since Version
+                        {t('filters.historyTypes.sinceVersion')}
                       </div>
                     </SelectItem>
                     <SelectItem value="recent">
                       <div className="flex items-center gap-2">
                         <History className="h-3 w-3" />
-                        Recent Commits
+                        {t('filters.historyTypes.recent')}
                       </div>
                     </SelectItem>
                     <SelectItem value="since-date">
                       <div className="flex items-center gap-2">
                         <Calendar className="h-3 w-3" />
-                        Since Date
+                        {t('filters.historyTypes.sinceDate')}
                       </div>
                     </SelectItem>
                     <SelectItem value="tag-range">
                       <div className="flex items-center gap-2">
                         <Tag className="h-3 w-3" />
-                        Tag Range
+                        {t('filters.historyTypes.tagRange')}
                       </div>
                     </SelectItem>
                   </SelectContent>
@@ -215,7 +217,7 @@ export function ChangelogFilters({
               {/* Type-specific options */}
               {gitHistoryType === 'recent' && (
                 <div className="space-y-2">
-                  <Label className="text-xs">Number of Commits</Label>
+                  <Label className="text-xs">{t('filters.numberOfCommits')}</Label>
                   <Input
                     type="number"
                     min={1}
@@ -228,7 +230,7 @@ export function ChangelogFilters({
 
               {gitHistoryType === 'since-date' && (
                 <div className="space-y-2">
-                  <Label className="text-xs">Since Date</Label>
+                  <Label className="text-xs">{t('filters.sinceDate')}</Label>
                   <Input
                     type="date"
                     value={gitHistorySinceDate}
@@ -240,10 +242,10 @@ export function ChangelogFilters({
               {gitHistoryType === 'tag-range' && (
                 <>
                   <div className="space-y-2">
-                    <Label className="text-xs">From Tag</Label>
+                    <Label className="text-xs">{t('filters.fromTag')}</Label>
                     <Select value={gitHistoryFromTag} onValueChange={onGitHistoryFromTagChange}>
                       <SelectTrigger>
-                        <SelectValue placeholder="Select tag..." />
+                        <SelectValue placeholder={t('filters.selectTag')} />
                       </SelectTrigger>
                       <SelectContent>
                         {tags.map((tag) => (
@@ -255,13 +257,13 @@ export function ChangelogFilters({
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-xs">To Tag (optional)</Label>
+                    <Label className="text-xs">{t('filters.toTag')}</Label>
                     <Select value={gitHistoryToTag || 'HEAD'} onValueChange={(v) => onGitHistoryToTagChange(v === 'HEAD' ? '' : v)}>
                       <SelectTrigger>
-                        <SelectValue placeholder="HEAD (latest)" />
+                        <SelectValue placeholder={t('filters.headLatest')} />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="HEAD">HEAD (latest)</SelectItem>
+                        <SelectItem value="HEAD">{t('filters.headLatest')}</SelectItem>
                         {tags.map((tag) => (
                           <SelectItem key={tag.name} value={tag.name}>
                             {tag.name}
@@ -275,10 +277,10 @@ export function ChangelogFilters({
 
               {gitHistoryType === 'since-version' && (
                 <div className="space-y-2">
-                  <Label className="text-xs">Last Version</Label>
+                  <Label className="text-xs">{t('filters.lastVersion')}</Label>
                   <Select value={gitHistorySinceVersion} onValueChange={onGitHistorySinceVersionChange}>
                     <SelectTrigger>
-                      <SelectValue placeholder="Select version..." />
+                      <SelectValue placeholder={t('filters.selectVersion')} />
                     </SelectTrigger>
                     <SelectContent>
                       {tags.map((tag) => (
@@ -289,7 +291,7 @@ export function ChangelogFilters({
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-muted-foreground">
-                    All commits since this version will be included
+                    {t('filters.allCommitsSinceVersion')}
                   </p>
                 </div>
               )}
@@ -302,7 +304,7 @@ export function ChangelogFilters({
                   onCheckedChange={(checked) => onIncludeMergeCommitsChange(checked as boolean)}
                 />
                 <Label htmlFor="merge-commits" className="text-xs cursor-pointer">
-                  Include merge commits
+                  {t('filters.includeMergeCommits')}
                 </Label>
               </div>
 
@@ -316,12 +318,12 @@ export function ChangelogFilters({
                 {isLoadingCommits ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Loading...
+                    {t('filters.loading')}
                   </>
                 ) : (
                   <>
                     <RefreshCw className="mr-2 h-4 w-4" />
-                    Load Commits
+                    {t('filters.loadCommits')}
                   </>
                 )}
               </Button>
@@ -333,14 +335,14 @@ export function ChangelogFilters({
         {sourceMode === 'branch-diff' && (
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm">Branch Comparison</CardTitle>
+              <CardTitle className="text-sm">{t('filters.branchComparison')}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label className="text-xs">Base Branch</Label>
+                <Label className="text-xs">{t('filters.baseBranch')}</Label>
                 <Select value={baseBranch} onValueChange={onBaseBranchChange}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Select base branch..." />
+                    <SelectValue placeholder={t('filters.selectBaseBranch')} />
                   </SelectTrigger>
                   <SelectContent>
                     {localBranches.map((branch) => (
@@ -348,7 +350,7 @@ export function ChangelogFilters({
                         <div className="flex items-center gap-2">
                           {branch.name}
                           {branch.name === defaultBranch && (
-                            <Badge variant="outline" className="text-xs">default</Badge>
+                            <Badge variant="outline" className="text-xs">{t('filters.defaultBranch')}</Badge>
                           )}
                         </div>
                       </SelectItem>
@@ -356,15 +358,15 @@ export function ChangelogFilters({
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">
-                  The branch you're merging into
+                  {t('filters.baseBranchDescription')}
                 </p>
               </div>
 
               <div className="space-y-2">
-                <Label className="text-xs">Compare Branch</Label>
+                <Label className="text-xs">{t('filters.compareBranch')}</Label>
                 <Select value={compareBranch} onValueChange={onCompareBranchChange}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Select compare branch..." />
+                    <SelectValue placeholder={t('filters.selectCompareBranch')} />
                   </SelectTrigger>
                   <SelectContent>
                     {localBranches.map((branch) => (
@@ -372,7 +374,7 @@ export function ChangelogFilters({
                         <div className="flex items-center gap-2">
                           {branch.name}
                           {branch.isCurrent && (
-                            <Badge variant="secondary" className="text-xs">current</Badge>
+                            <Badge variant="secondary" className="text-xs">{t('filters.currentBranch')}</Badge>
                           )}
                         </div>
                       </SelectItem>
@@ -380,14 +382,14 @@ export function ChangelogFilters({
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">
-                  The branch with your changes
+                  {t('filters.compareBranchDescription')}
                 </p>
               </div>
 
               {baseBranch && compareBranch && baseBranch === compareBranch && (
                 <div className="flex items-center gap-2 text-destructive text-xs">
                   <AlertCircle className="h-3 w-3" />
-                  Branches must be different
+                  {t('filters.branchesMustBeDifferent')}
                 </div>
               )}
 
@@ -401,12 +403,12 @@ export function ChangelogFilters({
                 {isLoadingCommits ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Loading...
+                    {t('filters.loading')}
                   </>
                 ) : (
                   <>
                     <RefreshCw className="mr-2 h-4 w-4" />
-                    Load Commits
+                    {t('filters.loadCommits')}
                   </>
                 )}
               </Button>

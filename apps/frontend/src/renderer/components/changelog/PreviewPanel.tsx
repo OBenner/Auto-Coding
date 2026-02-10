@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { FileText, Copy, Save, CheckCircle, Image as ImageIcon, Loader2 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Textarea } from '../ui/textarea';
@@ -112,6 +113,7 @@ export function PreviewPanel({
   onDragLeave,
   onDrop
 }: PreviewPanelProps) {
+  const { t } = useTranslation('changelog');
   const [viewMode, setViewMode] = useState<'markdown' | 'preview'>('markdown');
 
   // Custom components for ReactMarkdown to handle local image paths
@@ -126,7 +128,7 @@ export function PreviewPanel({
       {/* Preview Header */}
       <div className="flex items-center justify-between border-b border-border px-6 py-3">
         <div className="flex items-center gap-3">
-          <h2 className="font-medium">Preview</h2>
+          <h2 className="font-medium">{t('preview.title')}</h2>
           <div className="flex items-center gap-1 rounded-md border border-border p-1">
             <Button
               variant={viewMode === 'markdown' ? 'default' : 'ghost'}
@@ -134,7 +136,7 @@ export function PreviewPanel({
               onClick={() => setViewMode('markdown')}
               className="h-7 px-3 text-xs"
             >
-              Markdown
+              {t('preview.markdown')}
             </Button>
             <Button
               variant={viewMode === 'preview' ? 'default' : 'ghost'}
@@ -142,7 +144,7 @@ export function PreviewPanel({
               onClick={() => setViewMode('preview')}
               className="h-7 px-3 text-xs"
             >
-              Preview
+              {t('preview.preview')}
             </Button>
           </div>
         </div>
@@ -160,10 +162,10 @@ export function PreviewPanel({
                 ) : (
                   <Copy className="mr-2 h-4 w-4" />
                 )}
-                {copySuccess ? 'Copied!' : 'Copy'}
+                {copySuccess ? t('preview.copied') : t('preview.copyToClipboard').split(' ')[0]}
               </Button>
             </TooltipTrigger>
-            <TooltipContent>Copy to clipboard</TooltipContent>
+            <TooltipContent>{t('preview.copyToClipboard')}</TooltipContent>
           </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -178,7 +180,7 @@ export function PreviewPanel({
                 ) : (
                   <Save className="mr-2 h-4 w-4" />
                 )}
-                {saveSuccess ? 'Saved!' : 'Save to CHANGELOG.md'}
+                {saveSuccess ? t('preview.saved') : t('preview.save')}
               </Button>
             </TooltipTrigger>
             <TooltipContent>
