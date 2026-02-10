@@ -37,5 +37,8 @@ openai>=1.0.0
 # Pydantic for structured output schemas
 pydantic>=2.0.0
 
+# Process and system monitoring
+psutil>=5.9.0
+
 # Error tracking (optional - requires SENTRY_DSN environment variable)
 sentry-sdk>=2.0.0

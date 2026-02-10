@@ -21,6 +21,14 @@ except ImportError:
     SDK_TOOLS_AVAILABLE = False
     tool = None
 
+try:
+    import psutil
+
+    PSUTIL_AVAILABLE = True
+except ImportError:
+    PSUTIL_AVAILABLE = False
+    psutil = None
+
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +55,11 @@ class BackgroundTaskManager:
 
     # Default timeout: 4 hours (14400 seconds)
     DEFAULT_TIMEOUT = 14400
+
+    # Memory monitoring thresholds (percentage)
+    MEMORY_WARNING_THRESHOLD = 80.0  # Warn at 80% memory usage
+    MEMORY_CRITICAL_THRESHOLD = 90.0  # Critical at 90% memory usage
+    MEMORY_CHECK_INTERVAL = 5  # Check memory every 5 lines of output
 
     # Task states
     STATE_PENDING = "pending"
@@ -136,6 +149,63 @@ class BackgroundTaskManager:
             logger.error(f"Failed to load task state for {task_id}: {e}")
             return False
 
+    def _get_memory_stats(self) -> dict[str, Any] | None:
+        """
+        Get current memory statistics.
+
+        Returns:
+            Dict with memory stats or None if psutil not available
+        """
+        if not PSUTIL_AVAILABLE:
+            return None
+
+        try:
+            mem = psutil.virtual_memory()
+            return {
+                "percent": round(mem.percent, 2),
+                "available_mb": round(mem.available / (1024 * 1024), 2),
+                "total_mb": round(mem.total / (1024 * 1024), 2),
+                "used_mb": round(mem.used / (1024 * 1024), 2),
+            }
+        except Exception as e:
+            logger.warning(f"Failed to get memory stats: {e}")
+            return None
+
+    def _check_memory_threshold(self, task_id: str) -> bool:
+        """
+        Check if memory usage exceeds thresholds and log warnings.
+
+        Args:
+            task_id: Task identifier
+
+        Returns:
+            True if memory is within safe limits, False if critical
+        """
+        if not PSUTIL_AVAILABLE:
+            return True
+
+        try:
+            mem_stats = self._get_memory_stats()
+            if not mem_stats:
+                return True
+
+            mem_percent = mem_stats["percent"]
+
+            if mem_percent >= self.MEMORY_CRITICAL_THRESHOLD:
+                logger.error(
+                    f"Task {task_id}: Critical memory usage at {mem_percent}%"
+                )
+                return False
+            elif mem_percent >= self.MEMORY_WARNING_THRESHOLD:
+                logger.warning(
+                    f"Task {task_id}: High memory usage at {mem_percent}%"
+                )
+
+            return True
+        except Exception as e:
+            logger.warning(f"Error checking memory threshold: {e}")
+            return True
+
     async def _run_command(self, task_id: str) -> None:
         """
         Run a command asynchronously and stream output.
@@ -181,6 +251,20 @@ class BackgroundTaskManager:
                         # Update task output periodically (every 10 lines)
                         if len(output_lines) % 10 == 0:
                             task["output"] = "".join(output_lines)
+
+                            # Check memory usage periodically
+                            if len(output_lines) % (10 * self.MEMORY_CHECK_INTERVAL) == 0:
+                                mem_stats = self._get_memory_stats()
+                                if mem_stats:
+                                    task["memory_stats"] = mem_stats
+
+                                    # Check if memory exceeds critical threshold
+                                    if not self._check_memory_threshold(task_id):
+                                        logger.warning(
+                                            f"Task {task_id}: Memory usage critical, "
+                                            f"consider throttling or cancellation"
+                                        )
+
                             self._save_task_state(task_id)
 
                 # Wait for process to complete
@@ -195,6 +279,11 @@ class BackgroundTaskManager:
                 task["output"] = "".join(output_lines)
                 task["exit_code"] = process.returncode
                 task["completed_at"] = datetime.now(UTC).isoformat()
+
+                # Capture final memory stats
+                final_mem = self._get_memory_stats()
+                if final_mem:
+                    task["memory_stats"] = final_mem
 
                 # Determine final status based on exit code
                 if process.returncode == 0:
@@ -279,6 +368,7 @@ class BackgroundTaskManager:
             "error": None,
             "exit_code": None,
             "pid": None,
+            "memory_stats": self._get_memory_stats(),
         }
 
         # Save initial state
