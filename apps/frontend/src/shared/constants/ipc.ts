@@ -19,6 +19,7 @@ export const IPC_CHANNELS = {
   // Task operations
   TASK_LIST: 'task:list',
   TASK_CREATE: 'task:create',
+  TASK_CREATE_FROM_TEMPLATE: 'task:createFromTemplate',
   TASK_DELETE: 'task:delete',
   TASK_UPDATE: 'task:update',
   TASK_START: 'task:start',
@@ -590,5 +591,14 @@ export const IPC_CHANNELS = {
   PLUGIN_ENABLE: 'plugin:enable',
   PLUGIN_DISABLE: 'plugin:disable',
   PLUGIN_INSTALL: 'plugin:install',
-  PLUGIN_UNINSTALL: 'plugin:uninstall'
+  PLUGIN_UNINSTALL: 'plugin:uninstall',
+
+  // Template operations
+  TEMPLATE_LIST: 'template:list',
+  TEMPLATE_GET: 'template:get',
+  TEMPLATE_GET_CATEGORIES: 'template:getCategories',
+  TEMPLATE_SEARCH: 'template:search',
+  TEMPLATE_PREVIEW: 'template:preview',
+  TEMPLATE_CREATE_SPEC: 'template:createSpec',
+  TEMPLATE_SUGGEST: 'template:suggest'
 } as const;
