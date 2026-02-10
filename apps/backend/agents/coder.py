@@ -67,7 +67,124 @@ from .utils import (
     sync_spec_to_source,
 )
 
+# Import for context window usage display
+try:
+    from context.token_estimator import TokenEstimator
+    TOKEN_ESTIMATOR_AVAILABLE = True
+except ImportError:
+    TOKEN_ESTIMATOR_AVAILABLE = False
+
 logger = logging.getLogger(__name__)
+
+
+def _display_context_window_usage(
+    context: dict,
+    spec_dir: Path,
+    subtask_id: str | None = None,
+) -> None:
+    """
+    Display context window usage information to the user.
+
+    This provides transparency about what files are included in the context
+    and the estimated token usage, helping users understand the scope of
+    information being provided to the AI agent.
+
+    Args:
+        context: Context dict from load_subtask_context
+        spec_dir: Directory containing the spec
+        subtask_id: Optional subtask ID for more detailed display
+    """
+    if not TOKEN_ESTIMATOR_AVAILABLE:
+        # TokenEstimator not available, skip display
+        return
+
+    # Count files and calculate token usage
+    pattern_files = list(context.get("patterns", {}).keys())
+    files_to_modify = list(context.get("files_to_modify", {}).keys())
+    total_files = len(pattern_files) + len(files_to_modify)
+
+    if total_files == 0:
+        # No context loaded, nothing to display
+        return
+
+    # Initialize token estimator
+    token_estimator = TokenEstimator()
+
+    # Estimate tokens for each file
+    pattern_tokens = 0
+    modify_tokens = 0
+
+    for file_path in pattern_files:
+        content = context["patterns"][file_path]
+        pattern_tokens += token_estimator.estimate_tokens(content)
+
+    for file_path in files_to_modify:
+        content = context["files_to_modify"][file_path]
+        modify_tokens += token_estimator.estimate_tokens(content)
+
+    total_tokens = pattern_tokens + modify_tokens
+
+    # Context window limits (Claude models)
+    # Conservative estimates to leave room for prompts and responses
+    CONTEXT_LIMITS = {
+        "warning": 100000,    # Show warning above 100K tokens
+        "critical": 150000,   # Show critical message above 150K tokens
+        "max": 200000,        # Maximum safe context window
+    }
+
+    # Determine status level
+    status_level = "success"
+    if total_tokens > CONTEXT_LIMITS["critical"]:
+        status_level = "error"
+    elif total_tokens > CONTEXT_LIMITS["warning"]:
+        status_level = "warning"
+
+    # Display context window usage
+    print()
+    print_status("Context Window Usage", status_level)
+    print_key_value("Total Files", str(total_files))
+    print_key_value("Estimated Tokens", f"{total_tokens:,}")
+    print_key_value("Pattern Files", f"{len(pattern_files)} ({pattern_tokens:,} tokens)")
+    print_key_value("Files to Modify", f"{len(files_to_modify)} ({modify_tokens:,} tokens)")
+
+    # Show warnings if approaching limits
+    if total_tokens > CONTEXT_LIMITS["critical"]:
+        print()
+        print_status(
+            f"⚠️ Context window is critically large ({total_tokens:,} tokens). "
+            f"This may impact performance or exceed model limits.",
+            "error"
+        )
+    elif total_tokens > CONTEXT_LIMITS["warning"]:
+        print()
+        print_status(
+            f"⚠️ Context window is large ({total_tokens:,} tokens). "
+            f"Consider reducing file count or using summaries.",
+            "warning"
+        )
+
+    # Show percentage of context window used
+    percentage = (total_tokens / CONTEXT_LIMITS["max"]) * 100
+    print_key_value("Context Usage", f"{percentage:.1f}%")
+
+    # List files if verbose or subtask specified
+    if subtask_id:
+        print()
+        print(muted("Files included in context:"))
+        if pattern_files:
+            print(muted("  Pattern files:"))
+            for f in pattern_files[:5]:  # Show first 5
+                print(muted(f"    - {f}"))
+            if len(pattern_files) > 5:
+                print(muted(f"    ... and {len(pattern_files) - 5} more"))
+        if files_to_modify:
+            print(muted("  Files to modify:"))
+            for f in files_to_modify[:5]:  # Show first 5
+                print(muted(f"    - {f}"))
+            if len(files_to_modify) > 5:
+                print(muted(f"    ... and {len(files_to_modify) - 5} more"))
+
+    print()
 
 
 async def run_autonomous_agent(
@@ -396,6 +513,9 @@ async def run_autonomous_agent(
             context = load_subtask_context(spec_dir, project_dir, next_subtask)
             if context.get("patterns") or context.get("files_to_modify"):
                 prompt += "\n\n" + format_context_for_prompt(context)
+
+                # Display context window usage for transparency
+                _display_context_window_usage(context, spec_dir, subtask_id)
 
             # Retrieve and append Graphiti memory context (if enabled)
             graphiti_context = await get_graphiti_context(
