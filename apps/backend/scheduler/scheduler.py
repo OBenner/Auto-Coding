@@ -26,11 +26,12 @@ from __future__ import annotations
 
 import logging
 import subprocess
+import sys
 import threading
 import time
-from datetime import datetime
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from .dependency_resolver import (
     CircularDependencyError,
@@ -440,7 +441,7 @@ class Scheduler:
         """
         try:
             # Execute run.py for the spec
-            cmd = ["python", "run.py", "--spec", build.spec_id]
+            cmd = [sys.executable, "run.py", "--spec", build.spec_id]
 
             logger.info(f"Running command: {' '.join(cmd)}")
 
@@ -472,9 +473,7 @@ class Scheduler:
                         f"(attempt {build.retry_count + 1}/{build.max_retries})"
                     )
                     build.increment_retry()
-                    self.queue_manager.update_build_status(
-                        build.id, BuildStatus.QUEUED
-                    )
+                    self.queue_manager.update_build_status(build.id, BuildStatus.QUEUED)
                     self.queue_manager.storage.update_build(build)
                     self._emit_event(
                         SchedulerEvent.BUILD_RETRY,
@@ -506,7 +505,9 @@ class Scheduler:
             )
             self._emit_event(SchedulerEvent.BUILD_FAILURE, build, error=str(e))
 
-    def _on_build_completed(self, event_type: str, build: ScheduledBuild, **kwargs: Any) -> None:
+    def _on_build_completed(
+        self, event_type: str, build: ScheduledBuild, **kwargs: Any
+    ) -> None:
         """
         Callback when build completes.
 
@@ -518,7 +519,9 @@ class Scheduler:
         logger.info(f"Build completed: {build.spec_id}")
         self._completed_specs.add(build.spec_id)
 
-    def _on_build_failed(self, event_type: str, build: ScheduledBuild, **kwargs: Any) -> None:
+    def _on_build_failed(
+        self, event_type: str, build: ScheduledBuild, **kwargs: Any
+    ) -> None:
         """
         Callback when build fails.
 

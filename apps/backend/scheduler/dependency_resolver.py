@@ -47,9 +47,7 @@ class MissingDependencyError(Exception):
         self.spec_id = spec_id
         self.missing_deps = missing_deps
         deps_str = ", ".join(missing_deps)
-        super().__init__(
-            f"Spec '{spec_id}' has missing dependencies: {deps_str}"
-        )
+        super().__init__(f"Spec '{spec_id}' has missing dependencies: {deps_str}")
 
 
 @dataclass
@@ -88,11 +86,12 @@ class DependencyGraph:
             CircularDependencyError: If cycles detected
         """
         # Calculate in-degrees for all nodes
-        in_degree = {node: 0 for node in self.nodes}
+        # edges[node] = [deps] means node depends on deps, so node has incoming edges
+        in_degree = dict.fromkeys(self.nodes, 0)
         for node in self.nodes:
             for dep in self.edges.get(node, []):
                 if dep in in_degree:
-                    in_degree[dep] += 1
+                    in_degree[node] += 1
 
         # Start with nodes that have no dependencies
         queue = deque([node for node in self.nodes if in_degree[node] == 0])
@@ -180,7 +179,7 @@ class DependencyGraph:
         sorted_specs = self._topological_sort()
 
         # Calculate depth for each node
-        depth = {node: 0 for node in self.nodes}
+        depth = dict.fromkeys(self.nodes, 0)
         for node in sorted_specs:
             for dep in self.edges.get(node, []):
                 if dep in depth:
@@ -239,7 +238,9 @@ class DependencyResolver:
 
         logger.info(f"Validated dependencies for {len(builds)} builds")
 
-    def resolve_execution_order(self, builds: list[ScheduledBuild]) -> list[ScheduledBuild]:
+    def resolve_execution_order(
+        self, builds: list[ScheduledBuild]
+    ) -> list[ScheduledBuild]:
         """
         Resolve execution order for builds based on dependencies.
 
@@ -375,7 +376,9 @@ class DependencyResolver:
         logger.debug(f"Found {len(ready)} ready builds")
         return ready
 
-    def get_dependency_chain(self, build: ScheduledBuild, builds: list[ScheduledBuild]) -> list[str]:
+    def get_dependency_chain(
+        self, build: ScheduledBuild, builds: list[ScheduledBuild]
+    ) -> list[str]:
         """
         Get the full dependency chain for a build.
 

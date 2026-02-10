@@ -2,8 +2,6 @@
  * Scheduler-related types
  */
 
-import type { TaskStatus } from './task';
-
 /**
  * Priority levels for scheduled builds
  */
@@ -41,13 +39,15 @@ export interface ScheduledBuild {
 
 /**
  * Scheduler status summary
+ * Note: Uses camelCase since this is constructed by the frontend handler,
+ * unlike ScheduledBuild which uses snake_case to match Python backend JSON.
  */
 export interface SchedulerStatus {
-  scheduler_running: boolean;
-  total_builds: number;
-  by_status: Record<BuildStatus, number>;
+  schedulerRunning: boolean;
+  totalBuilds: number;
+  byStatus: Record<BuildStatus, number>;
   builds: ScheduledBuild[];
-  next_build: ScheduledBuild | null;
+  nextBuild: ScheduledBuild | null;
 }
 
 /**

@@ -132,7 +132,7 @@ export function setupIpcHandlers(
   registerTokenStatsHandlers();
 
   // Scheduler handlers (build scheduling and queue management)
-  registerSchedulerHandlers();
+  registerSchedulerHandlers(getMainWindow);
 
   console.warn('[IPC] All handler modules registered successfully');
 }

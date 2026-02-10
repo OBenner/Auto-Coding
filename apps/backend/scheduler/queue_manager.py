@@ -16,10 +16,10 @@ from __future__ import annotations
 
 import logging
 import threading
-from collections import deque
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from .models import BuildStatus, ScheduledBuild, SchedulePriority
 from .storage import SchedulerStorage
@@ -67,7 +67,9 @@ class QueueManager:
     3. Creation time (older builds first)
     """
 
-    def __init__(self, project_dir: Path | str, storage: SchedulerStorage | None = None):
+    def __init__(
+        self, project_dir: Path | str, storage: SchedulerStorage | None = None
+    ):
         """
         Initialize queue manager.
 
@@ -101,7 +103,9 @@ class QueueManager:
         builds = list(self._builds.values())
         return self.storage.save_builds(builds)
 
-    def _emit_event(self, event_type: str, build: ScheduledBuild | None = None, **kwargs: Any) -> None:
+    def _emit_event(
+        self, event_type: str, build: ScheduledBuild | None = None, **kwargs: Any
+    ) -> None:
         """
         Emit event to registered callbacks.
 
@@ -175,7 +179,9 @@ class QueueManager:
                 del self._builds[build.id]
                 return False
 
-            logger.info(f"Added build to queue: {build.id} (priority: {build.priority.name})")
+            logger.info(
+                f"Added build to queue: {build.id} (priority: {build.priority.name})"
+            )
             self._emit_event(QueueEvent.BUILD_ADDED, build)
 
             return True
@@ -223,7 +229,9 @@ class QueueManager:
         with self._lock:
             return self._builds.get(build_id)
 
-    def update_build_status(self, build_id: str, status: BuildStatus, error_message: str | None = None) -> bool:
+    def update_build_status(
+        self, build_id: str, status: BuildStatus, error_message: str | None = None
+    ) -> bool:
         """
         Update build status.
 
@@ -261,8 +269,15 @@ class QueueManager:
             # Persist to storage
             self.storage.update_build(build)
 
-            logger.info(f"Build {build_id} status: {old_status.value} -> {status.value}")
-            self._emit_event(QueueEvent.BUILD_STATUS_CHANGED, build, old_status=old_status, new_status=status)
+            logger.info(
+                f"Build {build_id} status: {old_status.value} -> {status.value}"
+            )
+            self._emit_event(
+                QueueEvent.BUILD_STATUS_CHANGED,
+                build,
+                old_status=old_status,
+                new_status=status,
+            )
 
             # Emit specific events for important status changes
             if status == BuildStatus.RUNNING:
@@ -284,7 +299,9 @@ class QueueManager:
         with self._lock:
             return list(self._builds.values())
 
-    def get_builds_by_status(self, status: BuildStatus | list[BuildStatus]) -> list[ScheduledBuild]:
+    def get_builds_by_status(
+        self, status: BuildStatus | list[BuildStatus]
+    ) -> list[ScheduledBuild]:
         """
         Get builds filtered by status.
 
@@ -316,11 +333,13 @@ class QueueManager:
             ready = [b for b in self._builds.values() if b.is_ready_to_run]
 
             # Sort by priority, scheduled time, then creation time
-            ready.sort(key=lambda b: (
-                b.priority.value,  # Lower number = higher priority
-                b.scheduled_time or datetime.min,  # Earlier time first
-                b.created_at  # Older builds first
-            ))
+            ready.sort(
+                key=lambda b: (
+                    b.priority.value,  # Lower number = higher priority
+                    b.scheduled_time or datetime.min,  # Earlier time first
+                    b.created_at,  # Older builds first
+                )
+            )
 
             return ready
 
@@ -354,7 +373,9 @@ class QueueManager:
                 self.update_build_status(next_build.id, BuildStatus.RUNNING)
             return next_build
 
-    def get_builds_by_priority(self, priority: SchedulePriority) -> list[ScheduledBuild]:
+    def get_builds_by_priority(
+        self, priority: SchedulePriority
+    ) -> list[ScheduledBuild]:
         """
         Get builds with specific priority level.
 
@@ -379,7 +400,8 @@ class QueueManager:
         """
         with self._lock:
             return [
-                b for b in self._builds.values()
+                b
+                for b in self._builds.values()
                 if b.scheduled_time and b.scheduled_time <= time and b.is_ready_to_run
             ]
 
@@ -457,9 +479,14 @@ class QueueManager:
             Number of builds removed
         """
         with self._lock:
-            terminal_states = {BuildStatus.COMPLETED, BuildStatus.FAILED, BuildStatus.CANCELLED}
+            terminal_states = {
+                BuildStatus.COMPLETED,
+                BuildStatus.FAILED,
+                BuildStatus.CANCELLED,
+            }
             to_remove = [
-                build_id for build_id, build in self._builds.items()
+                build_id
+                for build_id, build in self._builds.items()
                 if build.status in terminal_states
             ]
 

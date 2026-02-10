@@ -22,18 +22,18 @@ from .batch_commands import (
     handle_batch_status_command,
 )
 from .build_commands import handle_build_command
+from .followup_commands import handle_followup_command
+from .qa_commands import (
+    handle_qa_command,
+    handle_qa_status_command,
+    handle_review_status_command,
+)
 from .scheduler_commands import (
     handle_schedule_cancel_command,
     handle_schedule_command,
     handle_schedule_start_command,
     handle_schedule_status_command,
     handle_schedule_stop_command,
-)
-from .followup_commands import handle_followup_command
-from .qa_commands import (
-    handle_qa_command,
-    handle_qa_status_command,
-    handle_review_status_command,
 )
 from .spec_commands import print_specs_list
 from .utils import (
@@ -464,7 +464,11 @@ def _run_cli() -> None:
 
     # Handle scheduler commands
     if args.schedule:
-        deps = args.schedule_deps.split(",") if args.schedule_deps else None
+        deps = (
+            [d.strip() for d in args.schedule_deps.split(",") if d.strip()]
+            if args.schedule_deps
+            else None
+        )
         handle_schedule_command(
             args.schedule,
             str(project_dir),

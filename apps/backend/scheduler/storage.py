@@ -93,8 +93,11 @@ class SchedulerStorage:
                 "last_updated": datetime.now().isoformat(),
             }
 
-            with open(self.schedule_file, "w", encoding="utf-8") as f:
+            # Atomic write: write to temp file first, then rename
+            tmp_file = self.schedule_file.with_suffix(".tmp")
+            with open(tmp_file, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2)
+            tmp_file.replace(self.schedule_file)
 
             logger.debug(f"Saved {len(builds)} scheduled builds")
             return True
@@ -276,7 +279,11 @@ class SchedulerStorage:
         cutoff_time = datetime.now().timestamp() - (days_old * 86400)
 
         # Keep builds that are not terminal states or are recent
-        terminal_states = (BuildStatus.COMPLETED, BuildStatus.FAILED, BuildStatus.CANCELLED)
+        terminal_states = (
+            BuildStatus.COMPLETED,
+            BuildStatus.FAILED,
+            BuildStatus.CANCELLED,
+        )
 
         initial_count = len(builds)
         builds = [

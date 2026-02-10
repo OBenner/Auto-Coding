@@ -17,15 +17,12 @@ Notification Types:
 """
 
 import asyncio
-import json
 import os
 from dataclasses import dataclass
 from enum import Enum
-from pathlib import Path
 from typing import Any
 
 import httpx
-
 from core.platform import is_linux, is_macos, is_windows
 
 
@@ -207,6 +204,14 @@ class NotificationService:
         return self.config.webhook_enabled
 
 
+def _sanitize_notification_text(text: str) -> str:
+    """Strip control characters and limit length for safe notification display."""
+    # Remove characters that could be used for injection
+    sanitized = "".join(c for c in text if c.isprintable() or c == " ")
+    # Limit length to prevent abuse
+    return sanitized[:200]
+
+
 def is_desktop_available() -> bool:
     """Check if desktop notifications are available on this platform."""
     if is_windows():
@@ -257,20 +262,29 @@ async def send_desktop_notification(
         return False
 
     try:
+        # Sanitize inputs to prevent command injection
+        safe_title = _sanitize_notification_text(title)
+        safe_message = _sanitize_notification_text(message)
+
         if is_windows():
             # Windows: Use PowerShell to show toast notification
             # Using Windows.Forms which is built into .NET on Windows
-            ps_command = f"""
-            Add-Type -AssemblyName System.Windows.Forms;
-            $balloon = New-Object System.Windows.Forms.NotifyIcon;
-            $balloon.BalloonTipIcon = [System.Windows.Forms.ToolTipIcon]::Info;
-            $balloon.BalloonTipText = '{message}';
-            $balloon.BalloonTipTitle = '{title}';
-            $balloon.Visible = $true;
-            $balloon.ShowBalloonTip(10000);
-            """
-            proc = await asyncio.create_subprocess_shell(
-                f"powershell.exe -Command \"{ps_command}\"",
+            # Escape single quotes for PowerShell string literals
+            ps_title = safe_title.replace("'", "''")
+            ps_message = safe_message.replace("'", "''")
+            ps_command = (
+                "Add-Type -AssemblyName System.Windows.Forms;"
+                "$balloon = New-Object System.Windows.Forms.NotifyIcon;"
+                "$balloon.BalloonTipIcon = [System.Windows.Forms.ToolTipIcon]::Info;"
+                f"$balloon.BalloonTipText = '{ps_message}';"
+                f"$balloon.BalloonTipTitle = '{ps_title}';"
+                "$balloon.Visible = $true;"
+                "$balloon.ShowBalloonTip(10000);"
+            )
+            proc = await asyncio.create_subprocess_exec(
+                "powershell.exe",
+                "-Command",
+                ps_command,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
@@ -278,8 +292,12 @@ async def send_desktop_notification(
             return proc.returncode == 0
 
         elif is_macos():
-            # macOS: Use osascript
-            script = f'display notification "{message}" with title "{title}"'
+            # macOS: Use osascript with properly quoted arguments
+            escaped_message = safe_message.replace("\\", "\\\\").replace('"', '\\"')
+            escaped_title = safe_title.replace("\\", "\\\\").replace('"', '\\"')
+            script = (
+                f'display notification "{escaped_message}" with title "{escaped_title}"'
+            )
             proc = await asyncio.create_subprocess_exec(
                 "osascript",
                 "-e",
@@ -291,11 +309,11 @@ async def send_desktop_notification(
             return proc.returncode == 0
 
         elif is_linux():
-            # Linux: Use notify-send
+            # Linux: Use notify-send (exec, not shell - safe from injection)
             proc = await asyncio.create_subprocess_exec(
                 "notify-send",
-                title,
-                message,
+                safe_title,
+                safe_message,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
@@ -496,26 +514,36 @@ def _format_notification_message(
 # === Convenience functions for specific build events ===
 
 
-async def notify_build_started(build: Any, config: NotificationConfig | None = None) -> bool:
+async def notify_build_started(
+    build: Any, config: NotificationConfig | None = None
+) -> bool:
     """Send notification when build starts."""
     return await send_build_notification(BuildEvent.BUILD_STARTED, build, config)
 
 
-async def notify_build_completed(build: Any, config: NotificationConfig | None = None) -> bool:
+async def notify_build_completed(
+    build: Any, config: NotificationConfig | None = None
+) -> bool:
     """Send notification when build completes successfully."""
     return await send_build_notification(BuildEvent.BUILD_COMPLETED, build, config)
 
 
-async def notify_build_failed(build: Any, config: NotificationConfig | None = None) -> bool:
+async def notify_build_failed(
+    build: Any, config: NotificationConfig | None = None
+) -> bool:
     """Send notification when build fails."""
     return await send_build_notification(BuildEvent.BUILD_FAILED, build, config)
 
 
-async def notify_build_retrying(build: Any, config: NotificationConfig | None = None) -> bool:
+async def notify_build_retrying(
+    build: Any, config: NotificationConfig | None = None
+) -> bool:
     """Send notification when build is being retried."""
     return await send_build_notification(BuildEvent.BUILD_RETRYING, build, config)
 
 
-async def notify_build_cancelled(build: Any, config: NotificationConfig | None = None) -> bool:
+async def notify_build_cancelled(
+    build: Any, config: NotificationConfig | None = None
+) -> bool:
     """Send notification when build is cancelled."""
     return await send_build_notification(BuildEvent.BUILD_CANCELLED, build, config)

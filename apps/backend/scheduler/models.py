@@ -158,9 +158,7 @@ class ScheduledBuild:
     @property
     def can_retry(self) -> bool:
         """Check if build can be retried."""
-        return (
-            self.status == BuildStatus.FAILED and self.retry_count < self.max_retries
-        )
+        return self.status == BuildStatus.FAILED and self.retry_count < self.max_retries
 
     @property
     def duration_seconds(self) -> float | None:
