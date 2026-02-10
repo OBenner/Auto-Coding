@@ -37,6 +37,7 @@
 | **Troubleshooting Guide** | Comprehensive FAQ for common issues |
 | **Web Interface** | Browser-based access option |
 | **Research Improvements** | Enhanced web search guidance in spec creation |
+| **Migration Assistant Agent** | Specialized agent for framework, library, and language migrations with rollback capability |
 
 ### Roadmap
 
@@ -82,6 +83,7 @@
 | **Isolated Workspaces** | All changes happen in git worktrees - your main branch stays safe |
 | **Self-Validating QA** | Built-in quality assurance loop catches issues before you review |
 | **AI-Powered Merge** | Automatic conflict resolution when integrating back to main |
+| **Migration Assistant** | Safely migrate frameworks, libraries, and languages with incremental validation and rollback - [See docs](docs/migration-assistant.md) |
 | **Memory Layer** | Agents retain insights across sessions for smarter builds |
 | **GitHub/GitLab Integration** | Import issues, investigate with AI, create merge requests |
 | **Linear Integration** | Sync tasks with Linear for team progress tracking |
@@ -139,6 +141,10 @@ python spec_runner.py --interactive
 
 # Run autonomous build
 python run.py --spec 001
+
+# Run migration assistant
+python run.py --spec 001 --migrate
+python run.py --spec 001 --migration-status
 
 # Review and merge
 python run.py --spec 001 --review
