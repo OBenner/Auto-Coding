@@ -49,6 +49,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "adm-zip": "^0.5.16",
     "@anthropic-ai/sdk": "^0.71.2",
     "@codemirror/lang-css": "^6.3.1",
     "@codemirror/lang-html": "^6.4.11",
