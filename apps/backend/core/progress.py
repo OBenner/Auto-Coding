@@ -8,8 +8,11 @@ Uses subtask-based implementation plans (implementation_plan.json).
 Enhanced with colored output, icons, and better visual formatting.
 """
 
+import asyncio
 import json
+import logging
 from pathlib import Path
+from typing import Any
 
 from core.plan_normalization import normalize_subtask_aliases
 from core.timing_history import get_timing_history
@@ -26,6 +29,8 @@ from ui import (
     success,
     warning,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def count_subtasks(spec_dir: Path) -> tuple[int, int]:
@@ -238,8 +243,29 @@ def print_progress_summary(spec_dir: Path, show_next: bool = True) -> None:
         print_status("No implementation subtasks yet - planner needs to run", "pending")
 
 
-def print_build_complete_banner(spec_dir: Path) -> None:
-    """Print a completion banner."""
+def print_build_complete_banner(
+    spec_dir: Path,
+    duration_seconds: float | None = None,
+) -> None:
+    """
+    Print a completion banner and send build completed webhooks.
+
+    Args:
+        spec_dir: Spec directory
+        duration_seconds: Optional build duration in seconds
+    """
+    # Get spec info for webhooks
+    spec_id = spec_dir.name.split("-")[-1] if "-" in spec_dir.name else spec_dir.name
+    spec_name = spec_id  # Could be enhanced to read from spec.md
+
+    # Send build completed webhook
+    try:
+        duration = duration_seconds or 0.0
+        _notify_build_completed_impl(spec_dir, spec_id, spec_name, True, duration)
+    except Exception as e:
+        logger.error(f"Failed to send build_completed webhook: {e}", exc_info=True)
+
+    # Print banner
     content = [
         success(f"{icon(Icons.SUCCESS)} BUILD COMPLETE!"),
         "",
@@ -276,6 +302,54 @@ def print_paused_banner(
 
     print()
     print(box(content, width=70, style="heavy"))
+
+
+def notify_build_start(spec_dir: Path) -> None:
+    """
+    Notify that a build has started.
+
+    Sends webhooks for build start event. This should be called when
+    the build process first begins.
+
+    Args:
+        spec_dir: Spec directory
+    """
+    try:
+        completed, total = count_subtasks(spec_dir)
+        if total == 0:
+            return  # No subtasks yet, don't send webhook
+
+        spec_id = spec_dir.name.split("-")[-1] if "-" in spec_dir.name else spec_dir.name
+        spec_name = spec_id  # Could be enhanced to read from spec.md
+
+        _notify_build_started_impl(spec_dir, spec_id, spec_name, total)
+    except Exception as e:
+        logger.error(f"Failed to send build_started webhook: {e}", exc_info=True)
+
+
+def notify_build_error(
+    spec_dir: Path,
+    error_message: str,
+    failed_subtask: str | None = None,
+) -> None:
+    """
+    Notify that a build has failed.
+
+    Sends webhooks for build failure event. This should be called when
+    a critical error occurs that prevents build completion.
+
+    Args:
+        spec_dir: Spec directory
+        error_message: Error message describing the failure
+        failed_subtask: Optional subtask that failed
+    """
+    try:
+        spec_id = spec_dir.name.split("-")[-1] if "-" in spec_dir.name else spec_dir.name
+        spec_name = spec_id  # Could be enhanced to read from spec.md
+
+        _notify_build_failed_impl(spec_dir, spec_id, spec_name, error_message, failed_subtask)
+    except Exception as e:
+        logger.error(f"Failed to send build_failed webhook: {e}", exc_info=True)
 
 
 def get_plan_summary(spec_dir: Path) -> dict:
@@ -641,3 +715,187 @@ def get_remaining_time_estimate(spec_dir: Path) -> dict:
             "confidence": "low",
             "pending_count": 0,
         }
+
+
+# =============================================================================
+# Webhook Integration Functions
+# =============================================================================
+
+
+def _send_webhooks_async(
+    spec_dir: Path,
+    event_type: str,
+    event_data: dict[str, Any],
+) -> None:
+    """
+    Fire-and-forget webhook sending in a new event loop.
+
+    Sends webhooks asynchronously without blocking the main thread.
+    Errors are logged but don't propagate to avoid interrupting builds.
+
+    Args:
+        spec_dir: Spec directory containing webhook configuration
+        event_type: Type of event (build_started, build_completed, build_failed)
+        event_data: Event data to send
+    """
+    async def _send_all() -> None:
+        try:
+            from integrations.webhooks.models import (
+                WebhookConfig,
+                WebhookEvent,
+                WebhookEventType,
+                WebhookType,
+            )
+            from integrations.webhooks.storage import WebhookStorage
+            from integrations.webhooks.handlers.outgoing import send_webhook_event
+
+            # Load webhook configs
+            storage = WebhookStorage(spec_dir=spec_dir)
+            configs = storage.list_webhooks()
+
+            # Filter for outgoing webhooks enabled for this event
+            matching_configs = [
+                cfg for cfg in configs
+                if cfg.type == WebhookType.OUTGOING
+                and cfg.enabled
+                and WebhookEventType(event_type) in cfg.events
+            ]
+
+            if not matching_configs:
+                return
+
+            # Create webhook event
+            webhook_event = WebhookEvent(
+                type=WebhookEventType(event_type),
+                data=event_data,
+            )
+
+            # Send to all matching webhooks
+            for config in matching_configs:
+                try:
+                    result = await send_webhook_event(config, webhook_event, spec_dir)
+                    if result.success:
+                        logger.info(
+                            f"Webhook {config.id} sent successfully for event {event_type}"
+                        )
+                    else:
+                        logger.warning(
+                            f"Webhook {config.id} failed for event {event_type}: "
+                            f"{result.log_entry.error_message}"
+                        )
+                except Exception as e:
+                    logger.error(
+                        f"Error sending webhook {config.id} for event {event_type}: {e}",
+                        exc_info=True,
+                    )
+
+        except ImportError:
+            # Webhook module not available - silently skip
+            # (This is expected in environments without webhook dependencies)
+            pass
+        except Exception as e:
+            # Log but don't raise - webhook failures shouldn't break builds
+            logger.error(f"Error in webhook integration for event {event_type}: {e}", exc_info=True)
+
+    # Run in new event loop to avoid conflicts
+    try:
+        asyncio.run(_send_all())
+    except Exception as e:
+        # Log but don't raise - webhook failures shouldn't break builds
+        logger.error(f"Failed to send webhooks for event {event_type}: {e}", exc_info=True)
+
+
+def _notify_build_started_impl(
+    spec_dir: Path,
+    spec_id: str,
+    spec_name: str,
+    total_subtasks: int,
+) -> None:
+    """
+    Internal implementation: Send webhooks for build start event.
+
+    This is a fire-and-forget operation - webhooks are sent asynchronously
+    and errors don't propagate to avoid interrupting the build.
+
+    Args:
+        spec_dir: Spec directory
+        spec_id: Spec identifier (e.g., "001")
+        spec_name: Spec name/title
+        total_subtasks: Total number of subtasks in the build
+    """
+    try:
+        event_data = {
+            "spec_id": spec_id,
+            "spec_name": spec_name,
+            "total_subtasks": total_subtasks,
+        }
+        _send_webhooks_async(spec_dir, "build_started", event_data)
+    except Exception as e:
+        # Log but don't raise - webhook failures shouldn't break builds
+        logger.error(f"Failed to trigger build_started webhooks: {e}", exc_info=True)
+
+
+def _notify_build_completed_impl(
+    spec_dir: Path,
+    spec_id: str,
+    spec_name: str,
+    success: bool,
+    duration_seconds: float,
+) -> None:
+    """
+    Internal implementation: Send webhooks for build completion event.
+
+    This is a fire-and-forget operation - webhooks are sent asynchronously
+    and errors don't propagate to avoid interrupting the build.
+
+    Args:
+        spec_dir: Spec directory
+        spec_id: Spec identifier (e.g., "001")
+        spec_name: Spec name/title
+        success: Whether the build completed successfully
+        duration_seconds: Total build duration in seconds
+    """
+    try:
+        event_data = {
+            "spec_id": spec_id,
+            "spec_name": spec_name,
+            "success": success,
+            "duration_seconds": duration_seconds,
+        }
+        _send_webhooks_async(spec_dir, "build_completed", event_data)
+    except Exception as e:
+        # Log but don't raise - webhook failures shouldn't break builds
+        logger.error(f"Failed to trigger build_completed webhooks: {e}", exc_info=True)
+
+
+def _notify_build_failed_impl(
+    spec_dir: Path,
+    spec_id: str,
+    spec_name: str,
+    error_message: str,
+    failed_subtask: str | None = None,
+) -> None:
+    """
+    Internal implementation: Send webhooks for build failure event.
+
+    This is a fire-and-forget operation - webhooks are sent asynchronously
+    and errors don't propagate to avoid interrupting the build.
+
+    Args:
+        spec_dir: Spec directory
+        spec_id: Spec identifier (e.g., "001")
+        spec_name: Spec name/title
+        error_message: Error message describing the failure
+        failed_subtask: Optional subtask that failed
+    """
+    try:
+        event_data = {
+            "spec_id": spec_id,
+            "spec_name": spec_name,
+            "error_message": error_message,
+            "failed_subtask": failed_subtask,
+        }
+        _send_webhooks_async(spec_dir, "build_failed", event_data)
+    except Exception as e:
+        # Log but don't raise - webhook failures shouldn't break builds
+        logger.error(f"Failed to trigger build_failed webhooks: {e}", exc_info=True)
