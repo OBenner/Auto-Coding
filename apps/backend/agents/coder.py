@@ -77,6 +77,7 @@ async def run_autonomous_agent(
     max_iterations: int | None = None,
     verbose: bool = False,
     source_spec_dir: Path | None = None,
+    pair_mode: bool = False,
 ) -> None:
     """
     Run the autonomous agent loop with automatic memory management.
@@ -91,6 +92,7 @@ async def run_autonomous_agent(
         max_iterations: Maximum number of iterations (None for unlimited)
         verbose: Whether to show detailed output
         source_spec_dir: Original spec directory in main project (for syncing from worktree)
+        pair_mode: If True, run in interactive pair programming mode (no auto-continue)
     """
     # Set environment variable for security hooks to find the correct project directory
     # This is needed because os.getcwd() may return the wrong directory in worktree mode
@@ -132,6 +134,12 @@ async def run_autonomous_agent(
 
     # Check if this is a fresh start or continuation
     first_run = is_first_run(spec_dir)
+
+    # Display pair mode status if enabled
+    if pair_mode:
+        print_status("Pair Programming Mode: ENABLED", "info")
+        print_key_value("Mode", "Interactive - Manual continuation required")
+        print()
 
     # Track which phase we're in for logging
     current_log_phase = LogPhase.CODING
@@ -543,33 +551,57 @@ async def run_autonomous_agent(
             break
 
         elif status == "continue":
-            print(
-                muted(
-                    f"\nAgent will auto-continue in {AUTO_CONTINUE_DELAY_SECONDS}s..."
-                )
-            )
-            print_progress_summary(spec_dir)
+            # In pair mode, don't auto-continue - require manual intervention
+            if pair_mode:
+                print_status("\nPair mode: Waiting for manual continuation", "info")
+                print_progress_summary(spec_dir)
 
-            # Update state back to building
-            status_manager.update(
-                state=BuildState.PLANNING if is_planning_phase else BuildState.BUILDING
-            )
-
-            # Show next subtask info
-            next_subtask = get_next_subtask(spec_dir)
-            if next_subtask:
-                subtask_id = next_subtask.get("id")
-                print(
-                    f"\nNext: {highlight(subtask_id)} - {next_subtask.get('description')}"
-                )
-
-                attempt_count = recovery_manager.get_attempt_count(subtask_id)
-                if attempt_count > 0:
-                    print_status(
-                        f"WARNING: {attempt_count} previous attempt(s)", "warning"
+                # Show next subtask info
+                next_subtask = get_next_subtask(spec_dir)
+                if next_subtask:
+                    subtask_id = next_subtask.get("id")
+                    print(
+                        f"\nNext: {highlight(subtask_id)} - {next_subtask.get('description')}"
                     )
 
-            await asyncio.sleep(AUTO_CONTINUE_DELAY_SECONDS)
+                    attempt_count = recovery_manager.get_attempt_count(subtask_id)
+                    if attempt_count > 0:
+                        print_status(
+                            f"WARNING: {attempt_count} previous attempt(s)", "warning"
+                        )
+
+                print("\nTo continue:")
+                print(f"  python auto-claude/run.py --spec {spec_dir.name} --pair-mode")
+                status_manager.update(state=BuildState.PAUSED)
+                break  # Exit the loop to require manual restart
+            else:
+                print(
+                    muted(
+                        f"\nAgent will auto-continue in {AUTO_CONTINUE_DELAY_SECONDS}s..."
+                    )
+                )
+                print_progress_summary(spec_dir)
+
+                # Update state back to building
+                status_manager.update(
+                    state=BuildState.PLANNING if is_planning_phase else BuildState.BUILDING
+                )
+
+                # Show next subtask info
+                next_subtask = get_next_subtask(spec_dir)
+                if next_subtask:
+                    subtask_id = next_subtask.get("id")
+                    print(
+                        f"\nNext: {highlight(subtask_id)} - {next_subtask.get('description')}"
+                    )
+
+                    attempt_count = recovery_manager.get_attempt_count(subtask_id)
+                    if attempt_count > 0:
+                        print_status(
+                            f"WARNING: {attempt_count} previous attempt(s)", "warning"
+                        )
+
+                await asyncio.sleep(AUTO_CONTINUE_DELAY_SECONDS)
 
         elif status == "error":
             emit_phase(ExecutionPhase.FAILED, "Session encountered an error")

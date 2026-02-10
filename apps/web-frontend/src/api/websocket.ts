@@ -12,6 +12,7 @@ import type {
   IdeationEvent,
   LogEvent,
   RoadmapEvent,
+  SuggestionEvent,
   WebSocketAction,
   WebSocketMessage,
 } from "./types";
@@ -304,6 +305,7 @@ export class WebSocketClient {
   on(eventType: "roadmap", handler: EventHandler<RoadmapEvent>): void;
   on(eventType: "log", handler: EventHandler<LogEvent>): void;
   on(eventType: "error", handler: EventHandler<ErrorEvent>): void;
+  on(eventType: "pair_suggestion", handler: EventHandler<SuggestionEvent>): void;
   on(eventType: "*", handler: EventHandler<AgentEvent>): void;
   // biome-ignore lint/suspicious/noExplicitAny: Implementation signature needs to accept all overloads
   on(eventType: string, handler: EventHandler<any>): void {
