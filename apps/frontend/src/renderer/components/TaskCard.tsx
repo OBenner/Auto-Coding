@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Play, Square, Clock, Zap, Target, Shield, Gauge, Palette, FileCode, Bug, Wrench, Loader2, AlertTriangle, RotateCcw, Archive, GitPullRequest, MoreVertical } from 'lucide-react';
+import { Play, Square, Clock, Zap, Target, Shield, Gauge, Palette, FileCode, Bug, Wrench, Loader2, AlertTriangle, RotateCcw, Archive, GitPullRequest, MoreVertical, Info } from 'lucide-react';
 import { Card, CardContent } from './ui/card';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
@@ -13,6 +13,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from './ui/dropdown-menu';
+import { Popover, PopoverTrigger, PopoverContent } from './ui/popover';
 import { cn, formatRelativeTime, sanitizeMarkdownForDisplay } from '../lib/utils';
 import { PhaseProgressIndicator } from './PhaseProgressIndicator';
 import {
@@ -537,22 +538,6 @@ export const TaskCard = memo(function TaskCard({
                 {reviewReasonInfo.label}
               </Badge>
             )}
-            {/* Category badge with icon */}
-            {task.metadata?.category && (
-              <Badge
-                variant="outline"
-                className={cn('text-[10px] px-1.5 py-0', TASK_CATEGORY_COLORS[task.metadata.category])}
-              >
-                {CategoryIcon[task.metadata.category] && (
-                  (() => {
-                    const category = task.metadata.category as keyof typeof CategoryIcon;
-                    const Icon = CategoryIcon[category];
-                    return <Icon className="h-2.5 w-2.5 mr-0.5" />;
-                  })()
-                )}
-                {TASK_CATEGORY_LABELS[task.metadata.category]}
-              </Badge>
-            )}
             {/* Impact badge - high visibility for important tasks */}
             {task.metadata?.impact && (task.metadata.impact === 'high' || task.metadata.impact === 'critical') && (
               <Badge
@@ -560,15 +545,6 @@ export const TaskCard = memo(function TaskCard({
                 className={cn('text-[10px] px-1.5 py-0', TASK_IMPACT_COLORS[task.metadata.impact])}
               >
                 {TASK_IMPACT_LABELS[task.metadata.impact]}
-              </Badge>
-            )}
-            {/* Complexity badge */}
-            {task.metadata?.complexity && (
-              <Badge
-                variant="outline"
-                className={cn('text-[10px] px-1.5 py-0', TASK_COMPLEXITY_COLORS[task.metadata.complexity])}
-              >
-                {TASK_COMPLEXITY_LABELS[task.metadata.complexity]}
               </Badge>
             )}
             {/* Priority badge - only show urgent/high */}
@@ -588,6 +564,59 @@ export const TaskCard = memo(function TaskCard({
               >
                 {task.metadata.securitySeverity} {t('metadata.severity')}
               </Badge>
+            )}
+            {/* Expandable metadata section - shows secondary badges (category, complexity) */}
+            {(task.metadata?.category || task.metadata?.complexity) && (
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Badge
+                    variant="outline"
+                    className="text-[10px] px-1.5 py-0.5 flex items-center gap-1 cursor-pointer hover:bg-accent transition-colors"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <Info className="h-2.5 w-2.5" />
+                    {t('tasks:labels.moreInfo')}
+                  </Badge>
+                </PopoverTrigger>
+                <PopoverContent
+                  className="w-auto p-3"
+                  onClick={(e) => e.stopPropagation()}
+                  align="start"
+                >
+                  <div className="space-y-2">
+                    <div className="text-xs font-medium text-foreground">
+                      {t('tasks:metadata.additionalInfo')}
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {/* Category badge with icon */}
+                      {task.metadata?.category && (
+                        <Badge
+                          variant="outline"
+                          className={cn('text-[10px] px-1.5 py-0', TASK_CATEGORY_COLORS[task.metadata.category])}
+                        >
+                          {CategoryIcon[task.metadata.category] && (
+                            (() => {
+                              const category = task.metadata.category as keyof typeof CategoryIcon;
+                              const Icon = CategoryIcon[category];
+                              return <Icon className="h-2.5 w-2.5 mr-0.5" />;
+                            })()
+                          )}
+                          {TASK_CATEGORY_LABELS[task.metadata.category]}
+                        </Badge>
+                      )}
+                      {/* Complexity badge */}
+                      {task.metadata?.complexity && (
+                        <Badge
+                          variant="outline"
+                          className={cn('text-[10px] px-1.5 py-0', TASK_COMPLEXITY_COLORS[task.metadata.complexity])}
+                        >
+                          {TASK_COMPLEXITY_LABELS[task.metadata.complexity]}
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                </PopoverContent>
+              </Popover>
             )}
           </div>
         )}
