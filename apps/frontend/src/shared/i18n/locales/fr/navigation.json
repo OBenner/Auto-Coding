@@ -19,6 +19,7 @@
     "plugins": "Plugins",
     "worktrees": "Worktrees",
     "agentTools": "Aperçu MCP",
+    "analytics": "Analytique",
     "mergeAnalytics": "Analyse des fusions"
   },
   "actions": {
