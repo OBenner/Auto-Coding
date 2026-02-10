@@ -132,6 +132,10 @@ jobs:
         working-directory: apps/frontend
         run: npm run typecheck
 
+      - name: Validate translations
+        working-directory: apps/frontend
+        run: npm run validate:translations
+
       - name: Run unit tests
         working-directory: apps/frontend
         run: npm run test
