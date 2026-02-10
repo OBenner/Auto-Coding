@@ -934,6 +934,7 @@ describe('ProjectStore', () => {
 
       const { ProjectStore } = await import('../project-store');
       const store = new ProjectStore();
+      await waitForStoreInit();
 
       const project = store.addProject(TEST_PROJECT_PATH);
 
@@ -968,6 +969,7 @@ describe('ProjectStore', () => {
 
       const { ProjectStore } = await import('../project-store');
       const store = new ProjectStore();
+      await waitForStoreInit();
 
       const project = store.addProject(TEST_PROJECT_PATH);
 
@@ -1033,6 +1035,7 @@ describe('ProjectStore', () => {
 
       const { ProjectStore } = await import('../project-store');
       const store = new ProjectStore();
+      await waitForStoreInit();
 
       const project = store.addProject(TEST_PROJECT_PATH);
       const tasks = await store.getTasks(project.id);
