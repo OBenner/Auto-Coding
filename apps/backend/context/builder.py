@@ -16,9 +16,11 @@ from .graphiti_integration import fetch_graph_hints, is_graphiti_enabled
 from .keyword_extractor import KeywordExtractor
 from .models import FileMatch, TaskContext
 from .pattern_discovery import PatternDiscoverer
+from .redundancy_detector import RedundancyDetector
 from .search import CodeSearcher
 from .semantic_scorer import SemanticScorer
 from .service_matcher import ServiceMatcher
+from .token_estimator import TokenEstimator
 
 logger = logging.getLogger(__name__)
 
@@ -33,12 +35,18 @@ class ContextBuilder:
         # Initialize semantic scorer if Graphiti is enabled
         self.semantic_scorer = self._init_semantic_scorer()
 
+        # Initialize token estimator
+        self.token_estimator = TokenEstimator()
+
         # Initialize components
         self.searcher = CodeSearcher(self.project_dir, semantic_scorer=self.semantic_scorer)
         self.service_matcher = ServiceMatcher(self.project_index)
         self.keyword_extractor = KeywordExtractor()
         self.categorizer = FileCategorizer()
         self.pattern_discoverer = PatternDiscoverer(self.project_dir)
+        self.redundancy_detector = RedundancyDetector(
+            self.project_dir, token_estimator=self.token_estimator
+        )
 
     def _load_project_index(self) -> dict:
         """Load project index from file or create new one (.auto-claude is the installed instance)."""
@@ -164,6 +172,23 @@ class ContextBuilder:
             all_matches, task
         )
 
+        # Detect and remove redundant files
+        all_matches, redundancy_report = self.redundancy_detector.detect_redundancies(
+            all_matches, keep_highest_relevance=True
+        )
+
+        # Log redundancy report
+        if redundancy_report:
+            logger.info(
+                f"Removed {len(redundancy_report)} redundant files from context: "
+                f"{sum(r.get('tokens_saved', 0) for r in redundancy_report)} tokens saved"
+            )
+
+        # Categorize matches
+        files_to_modify, files_to_reference = self.categorizer.categorize_matches(
+            all_matches, task
+        )
+
         # Discover patterns from reference files
         patterns = self.pattern_discoverer.discover_patterns(
             files_to_reference, keywords
@@ -263,6 +288,23 @@ class ContextBuilder:
             # Load or generate service context
             service_contexts[service_name] = self._get_service_context(
                 service_path, service_name, service_info
+            )
+
+        # Categorize matches
+        files_to_modify, files_to_reference = self.categorizer.categorize_matches(
+            all_matches, task
+        )
+
+        # Detect and remove redundant files
+        all_matches, redundancy_report = self.redundancy_detector.detect_redundancies(
+            all_matches, keep_highest_relevance=True
+        )
+
+        # Log redundancy report
+        if redundancy_report:
+            logger.info(
+                f"Removed {len(redundancy_report)} redundant files from context: "
+                f"{sum(r.get('tokens_saved', 0) for r in redundancy_report)} tokens saved"
             )
 
         # Categorize matches
