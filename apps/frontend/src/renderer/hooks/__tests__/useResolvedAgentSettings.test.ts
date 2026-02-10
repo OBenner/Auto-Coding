@@ -32,17 +32,11 @@ describe('useResolvedAgentSettings', () => {
     baseSettings = {
       theme: 'system',
       defaultModel: 'claude-sonnet-4-5-20250929',
-      defaultThinkingLevel: 'medium',
-      showLineNumbers: true,
-      showMinimap: true,
-      fontSize: 14,
-      fontFamily: 'monospace',
-      tabSize: 2,
-      wordWrap: 'off',
-      autoSave: false,
-      idePreference: 'vscode',
-      terminalPreference: 'system',
-    } as AppSettings;
+      agentFramework: 'claude-sdk',
+      autoUpdateAutoBuild: false,
+      autoNameTerminals: false,
+      notifications: {} as AppSettings['notifications'],
+    } as unknown as AppSettings;
   });
 
   describe('default profile resolution', () => {

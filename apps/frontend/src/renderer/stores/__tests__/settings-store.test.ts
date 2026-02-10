@@ -60,13 +60,11 @@ const testProfileFormData: ProfileFormData = {
 const testModelInfo: ModelInfo[] = [
   {
     id: 'claude-sonnet-4-5-20250929',
-    name: 'Claude 4.5 Sonnet',
-    maxTokens: 200000
+    display_name: 'Claude 4.5 Sonnet'
   },
   {
     id: 'claude-opus-4-20250514',
-    name: 'Claude 4 Opus',
-    maxTokens: 200000
+    display_name: 'Claude 4 Opus'
   }
 ];
 

@@ -15,13 +15,15 @@ const testAuthFailureInfo: AuthFailureInfo = {
   profileName: 'Production API',
   failureType: 'invalid',
   message: 'API key is invalid or expired',
-  originalError: 'Authentication failed: 401 Unauthorized'
+  originalError: 'Authentication failed: 401 Unauthorized',
+  detectedAt: new Date('2024-01-01T12:00:00Z')
 };
 
 const testAuthFailureMinimal: AuthFailureInfo = {
   profileId: 'profile-456',
   failureType: 'missing',
-  message: 'API key not found'
+  message: 'API key not found',
+  detectedAt: new Date('2024-01-01T12:00:00Z')
 };
 
 describe('auth-failure-store', () => {
@@ -91,7 +93,8 @@ describe('auth-failure-store', () => {
         const failureInfo: AuthFailureInfo = {
           profileId: `profile-${failureType}`,
           failureType,
-          message: `Test ${failureType} failure`
+          message: `Test ${failureType} failure`,
+          detectedAt: new Date('2024-01-01T12:00:00Z')
         };
 
         showAuthFailureModal(failureInfo);

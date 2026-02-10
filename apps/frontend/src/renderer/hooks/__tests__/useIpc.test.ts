@@ -99,7 +99,7 @@ describe('useIpcListeners', () => {
         setError: mockSetError,
         tasks: []
       };
-      return typeof selector === 'function' ? selector(state) : state;
+      return typeof selector === 'function' ? selector(state as any) : state;
     });
 
     vi.mocked(useRoadmapStore).mockImplementation((selector) => {
@@ -108,7 +108,7 @@ describe('useIpcListeners', () => {
         setRoadmap: mockSetRoadmap,
         currentProjectId: null
       };
-      return typeof selector === 'function' ? selector(state) : state;
+      return typeof selector === 'function' ? selector(state as any) : state;
     });
 
     (useRoadmapStore as unknown as { getState: () => unknown }).getState = vi.fn().mockReturnValue({
@@ -122,7 +122,7 @@ describe('useIpcListeners', () => {
         showRateLimitModal: mockShowRateLimitModal,
         showSDKRateLimitModal: mockShowSDKRateLimitModal
       };
-      return typeof selector === 'function' ? selector(state) : state;
+      return typeof selector === 'function' ? selector(state as any) : state;
     });
 
     (useRateLimitStore as unknown as { getState: () => unknown }).getState = vi.fn().mockReturnValue({
@@ -134,7 +134,7 @@ describe('useIpcListeners', () => {
       const state = {
         showAuthFailureModal: mockShowAuthFailureModal
       };
-      return typeof selector === 'function' ? selector(state) : state;
+      return typeof selector === 'function' ? selector(state as any) : state;
     });
 
     (useAuthFailureStore as unknown as { getState: () => unknown }).getState = vi.fn().mockReturnValue({
@@ -145,7 +145,7 @@ describe('useIpcListeners', () => {
       const state = {
         selectedProjectId: null
       };
-      return typeof selector === 'function' ? selector(state) : state;
+      return typeof selector === 'function' ? selector(state as any) : state;
     });
 
     (useProjectStore as unknown as { getState: () => unknown }).getState = vi.fn().mockReturnValue({
@@ -232,10 +232,12 @@ describe('useIpcListeners', () => {
       renderHook(() => useIpcListeners());
 
       const plan: ImplementationPlan = {
-        taskId: 'task-1',
-        subtasks: [],
-        estimatedComplexity: 'medium',
-        requiresReasoning: false
+        workflow_type: 'standard',
+        phases: [],
+        final_acceptance: ['All tests pass'],
+        created_at: '2024-01-01T00:00:00Z',
+        updated_at: '2024-01-01T00:00:00Z',
+        spec_file: 'spec.md'
       };
 
       act(() => {
@@ -309,11 +311,12 @@ describe('useIpcListeners', () => {
 
       renderHook(() => useIpcListeners());
 
-      const status: TaskStatus = 'running';
+      const status: TaskStatus = 'in_progress';
       const progress: ExecutionProgress = {
         phase: 'coding', // Same phase to avoid immediate application
-        currentSubtask: 'subtask-2',
-        subtaskProgress: 50
+        phaseProgress: 50,
+        overallProgress: 50,
+        currentSubtask: 'subtask-2'
       };
 
       act(() => {
@@ -348,8 +351,9 @@ describe('useIpcListeners', () => {
 
       const progress: ExecutionProgress = {
         phase: 'coding',
-        currentSubtask: 'subtask-1',
-        subtaskProgress: 50
+        phaseProgress: 50,
+        overallProgress: 50,
+        currentSubtask: 'subtask-1'
       };
 
       act(() => {
@@ -385,8 +389,9 @@ describe('useIpcListeners', () => {
       // Trigger phase change - should flush logs first
       const progress: ExecutionProgress = {
         phase: 'planning',
-        currentSubtask: null,
-        subtaskProgress: 0
+        phaseProgress: 0,
+        overallProgress: 0,
+        currentSubtask: undefined
       };
 
       act(() => {
@@ -411,10 +416,12 @@ describe('useIpcListeners', () => {
       renderHook(() => useIpcListeners());
 
       const plan: ImplementationPlan = {
-        taskId: 'task-1',
-        subtasks: [],
-        estimatedComplexity: 'medium',
-        requiresReasoning: false
+        workflow_type: 'standard',
+        phases: [],
+        final_acceptance: ['All tests pass'],
+        created_at: '2024-01-01T00:00:00Z',
+        updated_at: '2024-01-01T00:00:00Z',
+        spec_file: 'spec.md'
       };
 
       act(() => {
@@ -438,10 +445,12 @@ describe('useIpcListeners', () => {
       renderHook(() => useIpcListeners());
 
       const plan: ImplementationPlan = {
-        taskId: 'task-1',
-        subtasks: [],
-        estimatedComplexity: 'medium',
-        requiresReasoning: false
+        workflow_type: 'standard',
+        phases: [],
+        final_acceptance: ['All tests pass'],
+        created_at: '2024-01-01T00:00:00Z',
+        updated_at: '2024-01-01T00:00:00Z',
+        spec_file: 'spec.md'
       };
 
       act(() => {
@@ -469,10 +478,12 @@ describe('useIpcListeners', () => {
       renderHook(() => useIpcListeners());
 
       const plan: ImplementationPlan = {
-        taskId: 'task-1',
-        subtasks: [],
-        estimatedComplexity: 'medium',
-        requiresReasoning: false
+        workflow_type: 'standard',
+        phases: [],
+        final_acceptance: ['All tests pass'],
+        created_at: '2024-01-01T00:00:00Z',
+        updated_at: '2024-01-01T00:00:00Z',
+        spec_file: 'spec.md'
       };
 
       act(() => {
@@ -500,10 +511,12 @@ describe('useIpcListeners', () => {
       renderHook(() => useIpcListeners());
 
       const plan: ImplementationPlan = {
-        taskId: 'task-1',
-        subtasks: [],
-        estimatedComplexity: 'medium',
-        requiresReasoning: false
+        workflow_type: 'standard',
+        phases: [],
+        final_acceptance: ['All tests pass'],
+        created_at: '2024-01-01T00:00:00Z',
+        updated_at: '2024-01-01T00:00:00Z',
+        spec_file: 'spec.md'
       };
 
       act(() => {
@@ -611,9 +624,17 @@ describe('useIpcListeners', () => {
       renderHook(() => useIpcListeners());
 
       const roadmap: Roadmap = {
+        id: 'roadmap-1',
         projectId: 'project-1',
+        projectName: 'Test Project',
+        version: '1.0',
+        vision: 'Test vision',
+        targetAudience: { primary: 'developers', secondary: [] },
+        phases: [],
         features: [],
-        phases: []
+        status: 'draft',
+        createdAt: new Date(),
+        updatedAt: new Date()
       };
 
       act(() => {
@@ -692,11 +713,12 @@ describe('useIpcListeners', () => {
 
       renderHook(() => useIpcListeners());
 
-      const info: RateLimitInfo = {
-        taskId: 'task-1',
-        detectedAt: new Date().toISOString(),
-        message: 'Rate limit exceeded'
-      };
+      // IPC serializes Date as string; test verifies string→Date conversion
+      const info = {
+        terminalId: 'terminal-1',
+        resetTime: 'Jan 1 at 12pm',
+        detectedAt: new Date().toISOString()
+      } as unknown as RateLimitInfo;
 
       act(() => {
         rateLimitCallback?.(info);
@@ -704,8 +726,7 @@ describe('useIpcListeners', () => {
 
       expect(mockShowRateLimitModal).toHaveBeenCalledWith(
         expect.objectContaining({
-          taskId: 'task-1',
-          message: 'Rate limit exceeded',
+          terminalId: 'terminal-1',
           detectedAt: expect.any(Date)
         })
       );
@@ -720,11 +741,12 @@ describe('useIpcListeners', () => {
 
       renderHook(() => useIpcListeners());
 
-      const info: SDKRateLimitInfo = {
-        operation: 'changelog',
-        detectedAt: new Date().toISOString(),
-        message: 'SDK rate limit exceeded'
-      };
+      // IPC serializes Date as string; test verifies string→Date conversion
+      const info = {
+        source: 'changelog',
+        profileId: 'profile-1',
+        detectedAt: new Date().toISOString()
+      } as unknown as SDKRateLimitInfo;
 
       act(() => {
         sdkRateLimitCallback?.(info);
@@ -732,8 +754,8 @@ describe('useIpcListeners', () => {
 
       expect(mockShowSDKRateLimitModal).toHaveBeenCalledWith(
         expect.objectContaining({
-          operation: 'changelog',
-          message: 'SDK rate limit exceeded',
+          source: 'changelog',
+          profileId: 'profile-1',
           detectedAt: expect.any(Date)
         })
       );
@@ -749,11 +771,12 @@ describe('useIpcListeners', () => {
       renderHook(() => useIpcListeners());
 
       const dateString = '2024-01-01T12:00:00Z';
-      const info: RateLimitInfo = {
-        taskId: 'task-1',
-        detectedAt: dateString,
-        message: 'Rate limit exceeded'
-      };
+      // IPC serializes Date as string; test verifies string→Date conversion
+      const info = {
+        terminalId: 'terminal-1',
+        resetTime: 'Jan 1 at 12pm',
+        detectedAt: dateString
+      } as unknown as RateLimitInfo;
 
       act(() => {
         rateLimitCallback?.(info);
@@ -777,11 +800,13 @@ describe('useIpcListeners', () => {
 
       renderHook(() => useIpcListeners());
 
-      const info: AuthFailureInfo = {
-        operation: 'task-execution',
-        detectedAt: new Date().toISOString(),
-        message: 'Authentication failed'
-      };
+      // IPC serializes Date as string; test verifies string→Date conversion
+      const info = {
+        profileId: 'profile-1',
+        failureType: 'invalid',
+        message: 'Authentication failed',
+        detectedAt: new Date().toISOString()
+      } as unknown as AuthFailureInfo;
 
       act(() => {
         authFailureCallback?.(info);
@@ -789,7 +814,7 @@ describe('useIpcListeners', () => {
 
       expect(mockShowAuthFailureModal).toHaveBeenCalledWith(
         expect.objectContaining({
-          operation: 'task-execution',
+          profileId: 'profile-1',
           message: 'Authentication failed',
           detectedAt: expect.any(Date)
         })
@@ -806,11 +831,13 @@ describe('useIpcListeners', () => {
       renderHook(() => useIpcListeners());
 
       const dateString = '2024-01-01T12:00:00Z';
-      const info: AuthFailureInfo = {
-        operation: 'task-execution',
-        detectedAt: dateString,
-        message: 'Authentication failed'
-      };
+      // IPC serializes Date as string; test verifies string→Date conversion
+      const info = {
+        profileId: 'profile-1',
+        failureType: 'invalid',
+        message: 'Authentication failed',
+        detectedAt: dateString
+      } as unknown as AuthFailureInfo;
 
       act(() => {
         authFailureCallback?.(info);
@@ -919,8 +946,8 @@ describe('useAppSettings', () => {
 
       const { result } = renderHook(() => useAppSettings());
       const settingsToSave = {
-        theme: 'light',
-        language: 'fr'
+        theme: 'light' as const,
+        language: 'fr' as const
       };
 
       const success = await result.current.saveSettings(settingsToSave);
@@ -936,8 +963,8 @@ describe('useAppSettings', () => {
 
       const { result } = renderHook(() => useAppSettings());
       const settingsToSave = {
-        theme: 'light',
-        language: 'fr'
+        theme: 'light' as const,
+        language: 'fr' as const
       };
 
       const success = await result.current.saveSettings(settingsToSave);
