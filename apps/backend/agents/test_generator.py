@@ -232,10 +232,9 @@ async def run_test_generator_session(
     # Log session start
     if task_logger:
         task_logger.start_phase(LogPhase.CODING, "Starting test generation...")
-        task_logger.log_entry(
-            LogEntryType.INFO,
+        task_logger.log_info(
             f"Analyzing {len(analysis_results.get('functions', []))} functions, "
-            f"{len(analysis_results.get('classes', []))} classes",
+            f"{len(analysis_results.get('classes', []))} classes"
         )
 
     # Load the test generator prompt
@@ -245,7 +244,7 @@ async def run_test_generator_session(
         error_msg = f"Failed to load test_generator prompt: {e}"
         logger.error(error_msg)
         if task_logger:
-            task_logger.log_entry(LogEntryType.ERROR, error_msg)
+            task_logger.log_error(error_msg)
         return {"generated_files": [], "success": False, "error": error_msg}
 
     # Create the starting message with analysis results
@@ -283,7 +282,7 @@ Begin by loading context (Phase 0 in your prompt).
         error_msg = f"Failed to create Claude SDK client: {e}"
         logger.error(error_msg)
         if task_logger:
-            task_logger.log_entry(LogEntryType.ERROR, error_msg)
+            task_logger.log_error(error_msg)
         return {"generated_files": [], "success": False, "error": error_msg}
 
     # Run the agent session
@@ -300,15 +299,13 @@ Begin by loading context (Phase 0 in your prompt).
 
         # Log session completion
         if task_logger:
-            task_logger.log_entry(
-                LogEntryType.SUCCESS, "Test Generator Agent session completed"
-            )
+            task_logger.log_success("Test Generator Agent session completed")
 
     except Exception as e:
         error_msg = f"Test Generator Agent session failed: {e}"
         logger.error(error_msg)
         if task_logger:
-            task_logger.log_entry(LogEntryType.ERROR, error_msg)
+            task_logger.log_error(error_msg)
         return {"generated_files": [], "success": False, "error": error_msg}
 
     # Scan tests/ directory for newly created test files
@@ -350,13 +347,11 @@ Begin by loading context (Phase 0 in your prompt).
     # Log results
     if task_logger:
         if validation_success:
-            task_logger.log_entry(
-                LogEntryType.SUCCESS,
-                f"Generated and validated {len(test_files)} test files",
+            task_logger.log_success(
+                f"Generated and validated {len(test_files)} test files"
             )
         else:
-            task_logger.log_entry(
-                LogEntryType.WARNING,
+            task_logger.log_warning(
                 f"Generated {len(test_files)} test files but validation failed",
             )
 

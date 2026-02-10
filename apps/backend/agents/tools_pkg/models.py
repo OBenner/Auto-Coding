@@ -242,6 +242,29 @@ AGENT_CONFIGS = {
         "thinking_default": "medium",
     },
     # ═══════════════════════════════════════════════════════════════════════
+    # TEST GENERATION PHASES (Read + Write for generating test files)
+    # ═══════════════════════════════════════════════════════════════════════
+    "test_generator": {
+        "tools": BASE_READ_TOOLS + BASE_WRITE_TOOLS + WEB_TOOLS,
+        "mcp_servers": ["context7", "graphiti", "auto-claude"],
+        "mcp_servers_optional": [],
+        "auto_claude_tools": [
+            TOOL_GET_BUILD_PROGRESS,
+            TOOL_GET_SESSION_CONTEXT,
+        ],
+        "thinking_default": "high",
+    },
+    "e2e_generator": {
+        "tools": BASE_READ_TOOLS + BASE_WRITE_TOOLS + WEB_TOOLS,
+        "mcp_servers": ["context7", "graphiti", "auto-claude", "browser"],
+        "mcp_servers_optional": [],
+        "auto_claude_tools": [
+            TOOL_GET_BUILD_PROGRESS,
+            TOOL_GET_SESSION_CONTEXT,
+        ],
+        "thinking_default": "high",
+    },
+    # ═══════════════════════════════════════════════════════════════════════
     # UTILITY PHASES (Minimal, no MCP)
     # ═══════════════════════════════════════════════════════════════════════
     "insights": {

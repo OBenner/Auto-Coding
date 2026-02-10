@@ -606,10 +606,10 @@ class TestRunTestGeneratorSession:
 
         monkeypatch.setattr("agents.test_generator.create_client", mock_create_client)
         monkeypatch.setattr("agents.test_generator.get_agent_prompt", lambda x: "test prompt")
-        monkeypatch.setattr("agents.test_generator.get_task_logger", lambda x: None)
-        monkeypatch.setattr("agents.test_generator.get_phase_model", lambda x: "claude-sonnet-4")
-        monkeypatch.setattr("agents.test_generator.get_phase_thinking_budget", lambda x: None)
-        monkeypatch.setattr("agents.test_generator.validate_generated_tests", lambda x, y: True)
+        monkeypatch.setattr("agents.test_generator.get_task_logger", lambda x: MagicMock())
+        monkeypatch.setattr("agents.test_generator.get_phase_model", lambda x, y: "claude-sonnet-4")
+        monkeypatch.setattr("agents.test_generator.get_phase_thinking_budget", lambda x, y: None)
+        monkeypatch.setattr("agents.test_generator.validate_generated_tests", lambda x, y, z: True)
 
         # Mock UI functions to suppress output
         monkeypatch.setattr("agents.test_generator.print_status", lambda *args, **kwargs: None)
@@ -649,9 +649,9 @@ class TestRunTestGeneratorSession:
 
         monkeypatch.setattr("agents.test_generator.create_client", lambda **kwargs: mock_client)
         monkeypatch.setattr("agents.test_generator.get_agent_prompt", lambda x: "test prompt")
-        monkeypatch.setattr("agents.test_generator.get_task_logger", lambda x: None)
-        monkeypatch.setattr("agents.test_generator.get_phase_model", lambda x: "claude-sonnet-4")
-        monkeypatch.setattr("agents.test_generator.get_phase_thinking_budget", lambda x: None)
+        monkeypatch.setattr("agents.test_generator.get_task_logger", lambda x: MagicMock())
+        monkeypatch.setattr("agents.test_generator.get_phase_model", lambda x, y: "claude-sonnet-4")
+        monkeypatch.setattr("agents.test_generator.get_phase_thinking_budget", lambda x, y: None)
 
         # Mock UI functions
         monkeypatch.setattr("agents.test_generator.print_status", lambda *args, **kwargs: None)
@@ -684,9 +684,9 @@ class TestRunTestGeneratorSession:
 
         monkeypatch.setattr("agents.test_generator.create_client", lambda **kwargs: mock_client)
         monkeypatch.setattr("agents.test_generator.get_agent_prompt", lambda x: "test prompt")
-        monkeypatch.setattr("agents.test_generator.get_task_logger", lambda x: None)
-        monkeypatch.setattr("agents.test_generator.get_phase_model", lambda x: "claude-sonnet-4")
-        monkeypatch.setattr("agents.test_generator.get_phase_thinking_budget", lambda x: None)
+        monkeypatch.setattr("agents.test_generator.get_task_logger", lambda x: MagicMock())
+        monkeypatch.setattr("agents.test_generator.get_phase_model", lambda x, y: "claude-sonnet-4")
+        monkeypatch.setattr("agents.test_generator.get_phase_thinking_budget", lambda x, y: None)
 
         # Mock UI functions
         monkeypatch.setattr("agents.test_generator.print_status", lambda *args, **kwargs: None)
@@ -722,10 +722,10 @@ class TestRunTestGeneratorSession:
 
         monkeypatch.setattr("agents.test_generator.create_client", lambda **kwargs: mock_client)
         monkeypatch.setattr("agents.test_generator.get_agent_prompt", lambda x: "test prompt")
-        monkeypatch.setattr("agents.test_generator.get_task_logger", lambda x: None)
-        monkeypatch.setattr("agents.test_generator.get_phase_model", lambda x: "claude-sonnet-4")
-        monkeypatch.setattr("agents.test_generator.get_phase_thinking_budget", lambda x: None)
-        monkeypatch.setattr("agents.test_generator.validate_generated_tests", lambda x, y: False)  # Force failure
+        monkeypatch.setattr("agents.test_generator.get_task_logger", lambda x: MagicMock())
+        monkeypatch.setattr("agents.test_generator.get_phase_model", lambda x, y: "claude-sonnet-4")
+        monkeypatch.setattr("agents.test_generator.get_phase_thinking_budget", lambda x, y: None)
+        monkeypatch.setattr("agents.test_generator.validate_generated_tests", lambda x, y, z: False)  # Force failure
 
         # Mock UI functions
         monkeypatch.setattr("agents.test_generator.print_status", lambda *args, **kwargs: None)
@@ -755,9 +755,9 @@ class TestRunTestGeneratorSession:
 
         monkeypatch.setattr("agents.test_generator.create_client", mock_create_client_error)
         monkeypatch.setattr("agents.test_generator.get_agent_prompt", lambda x: "test prompt")
-        monkeypatch.setattr("agents.test_generator.get_task_logger", lambda x: None)
-        monkeypatch.setattr("agents.test_generator.get_phase_model", lambda x: "claude-sonnet-4")
-        monkeypatch.setattr("agents.test_generator.get_phase_thinking_budget", lambda x: None)
+        monkeypatch.setattr("agents.test_generator.get_task_logger", lambda x: MagicMock())
+        monkeypatch.setattr("agents.test_generator.get_phase_model", lambda x, y: "claude-sonnet-4")
+        monkeypatch.setattr("agents.test_generator.get_phase_thinking_budget", lambda x, y: None)
 
         # Mock UI functions
         monkeypatch.setattr("agents.test_generator.print_status", lambda *args, **kwargs: None)
@@ -786,9 +786,9 @@ class TestRunTestGeneratorSession:
             raise FileNotFoundError("Prompt file not found")
 
         monkeypatch.setattr("agents.test_generator.get_agent_prompt", mock_get_agent_prompt_error)
-        monkeypatch.setattr("agents.test_generator.get_task_logger", lambda x: None)
-        monkeypatch.setattr("agents.test_generator.get_phase_model", lambda x: "claude-sonnet-4")
-        monkeypatch.setattr("agents.test_generator.get_phase_thinking_budget", lambda x: None)
+        monkeypatch.setattr("agents.test_generator.get_task_logger", lambda x: MagicMock())
+        monkeypatch.setattr("agents.test_generator.get_phase_model", lambda x, y: "claude-sonnet-4")
+        monkeypatch.setattr("agents.test_generator.get_phase_thinking_budget", lambda x, y: None)
 
         # Mock UI functions
         monkeypatch.setattr("agents.test_generator.print_status", lambda *args, **kwargs: None)
@@ -818,9 +818,9 @@ class TestRunTestGeneratorSession:
 
         monkeypatch.setattr("agents.test_generator.create_client", lambda **kwargs: mock_client)
         monkeypatch.setattr("agents.test_generator.get_agent_prompt", lambda x: "test prompt")
-        monkeypatch.setattr("agents.test_generator.get_task_logger", lambda x: None)
-        monkeypatch.setattr("agents.test_generator.get_phase_model", lambda x: "claude-sonnet-4")
-        monkeypatch.setattr("agents.test_generator.get_phase_thinking_budget", lambda x: None)
+        monkeypatch.setattr("agents.test_generator.get_task_logger", lambda x: MagicMock())
+        monkeypatch.setattr("agents.test_generator.get_phase_model", lambda x, y: "claude-sonnet-4")
+        monkeypatch.setattr("agents.test_generator.get_phase_thinking_budget", lambda x, y: None)
 
         # Mock UI functions
         monkeypatch.setattr("agents.test_generator.print_status", lambda *args, **kwargs: None)
@@ -857,10 +857,10 @@ class TestRunTestGeneratorSession:
 
         monkeypatch.setattr("agents.test_generator.create_client", lambda **kwargs: mock_client)
         monkeypatch.setattr("agents.test_generator.get_agent_prompt", lambda x: "test prompt")
-        monkeypatch.setattr("agents.test_generator.get_task_logger", lambda x: None)
-        monkeypatch.setattr("agents.test_generator.get_phase_model", lambda x: "claude-sonnet-4")
-        monkeypatch.setattr("agents.test_generator.get_phase_thinking_budget", lambda x: None)
-        monkeypatch.setattr("agents.test_generator.validate_generated_tests", lambda x, y: True)
+        monkeypatch.setattr("agents.test_generator.get_task_logger", lambda x: MagicMock())
+        monkeypatch.setattr("agents.test_generator.get_phase_model", lambda x, y: "claude-sonnet-4")
+        monkeypatch.setattr("agents.test_generator.get_phase_thinking_budget", lambda x, y: None)
+        monkeypatch.setattr("agents.test_generator.validate_generated_tests", lambda x, y, z: True)
 
         # Mock UI functions
         monkeypatch.setattr("agents.test_generator.print_status", lambda *args, **kwargs: None)
@@ -904,8 +904,8 @@ class TestRunTestGeneratorSession:
 
         monkeypatch.setattr("agents.test_generator.create_client", mock_create_client)
         monkeypatch.setattr("agents.test_generator.get_agent_prompt", lambda x: "test prompt")
-        monkeypatch.setattr("agents.test_generator.get_task_logger", lambda x: None)
-        monkeypatch.setattr("agents.test_generator.validate_generated_tests", lambda x, y: True)
+        monkeypatch.setattr("agents.test_generator.get_task_logger", lambda x: MagicMock())
+        monkeypatch.setattr("agents.test_generator.validate_generated_tests", lambda x, y, z: True)
 
         # Mock UI functions
         monkeypatch.setattr("agents.test_generator.print_status", lambda *args, **kwargs: None)

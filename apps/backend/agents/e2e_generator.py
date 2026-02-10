@@ -156,10 +156,9 @@ async def generate_e2e_tests(
         task_logger.start_phase(LogPhase.CODING, "Starting E2E test generation...")
         components_count = len(analysis_results.get("components", []))
         features_count = len(analysis_results.get("features", []))
-        task_logger.log_entry(
-            LogEntryType.INFO,
+        task_logger.log_info(
             f"Analyzing {components_count} components, "
-            f"{features_count} features for E2E tests",
+            f"{features_count} features for E2E tests"
         )
 
     # Load the e2e_generator prompt
@@ -169,7 +168,7 @@ async def generate_e2e_tests(
         error_msg = f"Failed to load e2e_generator prompt: {e}"
         logger.error(error_msg)
         if task_logger:
-            task_logger.log_entry(LogEntryType.ERROR, error_msg)
+            task_logger.log_error(error_msg)
         return {
             "generated_files": [],
             "success": False,
@@ -222,7 +221,7 @@ Begin by loading context (Phase 0 in your prompt).
         error_msg = f"Failed to create Claude SDK client: {e}"
         logger.error(error_msg)
         if task_logger:
-            task_logger.log_entry(LogEntryType.ERROR, error_msg)
+            task_logger.log_error(error_msg)
         return {
             "generated_files": [],
             "success": False,
@@ -244,15 +243,13 @@ Begin by loading context (Phase 0 in your prompt).
 
         # Log session completion
         if task_logger:
-            task_logger.log_entry(
-                LogEntryType.SUCCESS, "E2E Generator Agent session completed"
-            )
+            task_logger.log_success("E2E Generator Agent session completed")
 
     except Exception as e:
         error_msg = f"E2E Generator Agent session failed: {e}"
         logger.error(error_msg)
         if task_logger:
-            task_logger.log_entry(LogEntryType.ERROR, error_msg)
+            task_logger.log_error(error_msg)
         return {
             "generated_files": [],
             "success": False,
@@ -313,14 +310,12 @@ Begin by loading context (Phase 0 in your prompt).
     # Log results
     if task_logger:
         if validation_success:
-            task_logger.log_entry(
-                LogEntryType.SUCCESS,
-                f"Generated and validated {len(test_files)} E2E test files",
+            task_logger.log_success(
+                f"Generated and validated {len(test_files)} E2E test files"
             )
         else:
-            task_logger.log_entry(
-                LogEntryType.WARNING,
-                f"Generated {len(test_files)} test files but validation failed",
+            task_logger.log_warning(
+                f"Generated {len(test_files)} test files but validation failed"
             )
 
     return {

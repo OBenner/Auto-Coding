@@ -167,10 +167,9 @@ async def generate_vitest_tests(
     # Log session start
     if task_logger:
         task_logger.start_phase(LogPhase.CODING, "Starting Vitest test generation...")
-        task_logger.log_entry(
-            LogEntryType.INFO,
+        task_logger.log_info(
             f"Analyzing {len(analysis_results.get('components', []))} components, "
-            f"{len(analysis_results.get('functions', []))} functions",
+            f"{len(analysis_results.get('functions', []))} functions"
         )
 
     # Load the test generator prompt
@@ -180,7 +179,7 @@ async def generate_vitest_tests(
         error_msg = f"Failed to load test_generator prompt: {e}"
         logger.error(error_msg)
         if task_logger:
-            task_logger.log_entry(LogEntryType.ERROR, error_msg)
+            task_logger.log_error(error_msg)
         return {"generated_files": [], "success": False, "error": error_msg}
 
     # Create the starting message with analysis results
@@ -231,7 +230,7 @@ Begin by loading context (Phase 0 in your prompt).
         error_msg = f"Failed to create Claude SDK client: {e}"
         logger.error(error_msg)
         if task_logger:
-            task_logger.log_entry(LogEntryType.ERROR, error_msg)
+            task_logger.log_error(error_msg)
         return {"generated_files": [], "success": False, "error": error_msg}
 
     # Run the agent session
@@ -248,15 +247,13 @@ Begin by loading context (Phase 0 in your prompt).
 
         # Log session completion
         if task_logger:
-            task_logger.log_entry(
-                LogEntryType.SUCCESS, "Vitest Generator Agent session completed"
-            )
+            task_logger.log_success("Vitest Generator Agent session completed")
 
     except Exception as e:
         error_msg = f"Vitest Generator Agent session failed: {e}"
         logger.error(error_msg)
         if task_logger:
-            task_logger.log_entry(LogEntryType.ERROR, error_msg)
+            task_logger.log_error(error_msg)
         return {"generated_files": [], "success": False, "error": error_msg}
 
     # Scan for newly created test files
@@ -299,14 +296,12 @@ Begin by loading context (Phase 0 in your prompt).
     # Log results
     if task_logger:
         if validation_success:
-            task_logger.log_entry(
-                LogEntryType.SUCCESS,
-                f"Generated and validated {len(test_files)} Vitest test files",
+            task_logger.log_success(
+                f"Generated and validated {len(test_files)} Vitest test files"
             )
         else:
-            task_logger.log_entry(
-                LogEntryType.WARNING,
-                f"Generated {len(test_files)} test files but validation failed",
+            task_logger.log_warning(
+                f"Generated {len(test_files)} test files but validation failed"
             )
 
     return {
