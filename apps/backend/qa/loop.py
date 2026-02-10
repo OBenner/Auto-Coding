@@ -36,6 +36,9 @@ from task_logger import (
     get_task_logger,
 )
 
+# Webhook integration
+from integrations.webhooks.dispatcher import dispatch_qa_result
+
 from .criteria import (
     get_qa_iteration_count,
     get_qa_signoff_status,
@@ -642,6 +645,20 @@ async def run_qa_validation_loop(
             print("  1. Review the auto-claude/* branch")
             print("  2. Create a PR and merge to main")
 
+            # Dispatch webhook for QA passed
+            try:
+                dispatch_qa_result(
+                    spec_dir,
+                    spec_id=spec_dir.name,
+                    passed=True,
+                    qa_iteration=qa_iteration,
+                    duration_seconds=iteration_duration,
+                )
+                debug("qa_loop", "Dispatched qa_passed webhook event")
+            except Exception as e:
+                # Don't fail QA if webhook dispatch fails
+                debug_warning("qa_loop", f"Failed to dispatch qa_passed webhook: {e}")
+
             # End validation phase successfully
             if task_logger:
                 task_logger.end_phase(
@@ -691,6 +708,22 @@ async def run_qa_validation_loop(
             record_iteration(
                 spec_dir, qa_iteration, "rejected", current_issues, iteration_duration
             )
+
+            # Dispatch webhook for QA failed
+            try:
+                dispatch_qa_result(
+                    spec_dir,
+                    spec_id=spec_dir.name,
+                    passed=False,
+                    qa_iteration=qa_iteration,
+                    duration_seconds=iteration_duration,
+                    issues_count=len(current_issues),
+                    issues=current_issues,
+                )
+                debug("qa_loop", "Dispatched qa_failed webhook event")
+            except Exception as e:
+                # Don't fail QA if webhook dispatch fails
+                debug_warning("qa_loop", f"Failed to dispatch qa_failed webhook: {e}")
 
             # Analyze failure and store root causes in Graphiti (if enabled)
             if is_analysis_enabled() and is_graphiti_enabled():
@@ -757,6 +790,23 @@ async def run_qa_validation_loop(
                     f"\n⚠️  Recurring issues detected ({len(recurring_issues)} issue(s) appeared {RECURRING_ISSUE_THRESHOLD}+ times)"
                 )
                 print("Escalating to human review due to recurring issues...")
+
+                # Dispatch webhook for QA failed (recurring issues)
+                try:
+                    dispatch_qa_result(
+                        spec_dir,
+                        spec_id=spec_dir.name,
+                        passed=False,
+                        qa_iteration=qa_iteration,
+                        reason="recurring_issues",
+                        issues_count=len(recurring_issues),
+                        recurring_issues_count=len(recurring_issues),
+                        recurring_threshold=RECURRING_ISSUE_THRESHOLD,
+                    )
+                    debug("qa_loop", "Dispatched qa_failed webhook event (recurring issues)")
+                except Exception as e:
+                    # Don't fail QA if webhook dispatch fails
+                    debug_warning("qa_loop", f"Failed to dispatch qa_failed webhook: {e}")
 
                 # Create escalation file
                 await escalate_to_human(spec_dir, recurring_issues, qa_iteration)
@@ -864,6 +914,20 @@ async def run_qa_validation_loop(
                     [{"title": "Fixer stuck", "description": fix_response}],
                 )
 
+                # Dispatch webhook for QA failed (fixer stuck)
+                try:
+                    dispatch_qa_result(
+                        spec_dir,
+                        spec_id=spec_dir.name,
+                        passed=False,
+                        qa_iteration=qa_iteration,
+                        reason="fixer_stuck",
+                    )
+                    debug("qa_loop", "Dispatched qa_failed webhook event (fixer stuck)")
+                except Exception as e:
+                    # Don't fail QA if webhook dispatch fails
+                    debug_warning("qa_loop", f"Failed to dispatch qa_failed webhook: {e}")
+
                 # End validation phase as failed
                 if task_logger:
                     task_logger.end_phase(
@@ -948,6 +1012,24 @@ async def run_qa_validation_loop(
     print("=" * 70)
     print(f"\nReached maximum iterations ({MAX_QA_ITERATIONS}) without approval.")
     print("\nRemaining issues require human review:")
+
+    # Dispatch webhook for QA failed (max iterations)
+    try:
+        qa_status = get_qa_signoff_status(spec_dir)
+        current_issues = qa_status.get("issues_found", []) if qa_status else []
+        dispatch_qa_result(
+            spec_dir,
+            spec_id=spec_dir.name,
+            passed=False,
+            qa_iteration=qa_iteration,
+            reason="max_iterations_reached",
+            issues_count=len(current_issues),
+            max_iterations=MAX_QA_ITERATIONS,
+        )
+        debug("qa_loop", "Dispatched qa_failed webhook event (max iterations)")
+    except Exception as e:
+        # Don't fail QA if webhook dispatch fails
+        debug_warning("qa_loop", f"Failed to dispatch qa_failed webhook: {e}")
 
     # Show iteration summary
     history = get_iteration_history(spec_dir)
