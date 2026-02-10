@@ -344,7 +344,7 @@ export function Sidebar({
     const Icon = item.icon;
 
     const button = (
-      <button
+      <motion.button
         key={item.id}
         ref={(el) => {
           if (el) {
@@ -356,6 +356,10 @@ export function Sidebar({
         onClick={() => handleNavClick(item.id)}
         disabled={!selectedProjectId}
         aria-keyshortcuts={item.shortcut}
+        initial={{ opacity: 0, x: -10 }}
+        animate={{ opacity: 1, x: 0 }}
+        exit={{ opacity: 0, x: -10 }}
+        transition={{ duration: 0.2, ease: 'easeInOut' }}
         className={cn(
           'flex w-full items-center rounded-lg text-sm transition-all duration-200',
           'hover:bg-accent hover:text-accent-foreground',
@@ -375,7 +379,7 @@ export function Sidebar({
             )}
           </>
         )}
-      </button>
+      </motion.button>
     );
 
     // Wrap in tooltip when collapsed
@@ -456,16 +460,20 @@ export function Sidebar({
                 </h3>
               )}
               {/* Animated indicator for active nav item */}
-              {selectedProjectId && (
-                <NavIndicator
-                  activeView={activeView}
-                  containerRef={navContainerRef}
-                  itemRefs={navItemRefs}
-                  position={indicatorPosition}
-                />
-              )}
+              <AnimatePresence>
+                {selectedProjectId && (
+                  <NavIndicator
+                    activeView={activeView}
+                    containerRef={navContainerRef}
+                    itemRefs={navItemRefs}
+                    position={indicatorPosition}
+                  />
+                )}
+              </AnimatePresence>
               <nav ref={navContainerRef} className="space-y-1">
-                {visibleNavItems.map(renderNavItem)}
+                <AnimatePresence mode="popLayout">
+                  {visibleNavItems.map((item) => renderNavItem(item))}
+                </AnimatePresence>
               </nav>
             </div>
           </div>
