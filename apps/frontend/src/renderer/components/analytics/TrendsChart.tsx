@@ -49,13 +49,10 @@ export function TrendsChart({ trends, isLoading = false }: TrendsChartProps) {
     const chartHeight = height - padding.top - padding.bottom;
 
     // Process data for each metric
+    // Values are kept in their original scale (e.g. success_rate as 0..1);
+    // conversion to display units happens only in formatValue.
     const processedMetrics = CHART_METRICS.map((metric) => {
-      const values = trends.map((point) => {
-        if (metric.key === 'success_rate') {
-          return point.success_rate * 100; // Convert to percentage
-        }
-        return point[metric.key] as number;
-      });
+      const values = trends.map((point) => point[metric.key] as number);
 
       const maxValue = Math.max(...values);
       const minValue = Math.min(...values);
@@ -64,7 +61,7 @@ export function TrendsChart({ trends, isLoading = false }: TrendsChartProps) {
       // Generate SVG path
       const points = trends.map((point, index) => {
         const x = padding.left + (index / (trends.length - 1 || 1)) * chartWidth;
-        const value = metric.key === 'success_rate' ? point.success_rate * 100 : (point[metric.key] as number);
+        const value = point[metric.key] as number;
         const y = padding.top + chartHeight - ((value - minValue) / range) * chartHeight;
         return { x, y, value };
       });
@@ -284,13 +281,12 @@ export function TrendsChart({ trends, isLoading = false }: TrendsChartProps) {
           if (!metricData) return null;
 
           const latestValue = trends[trends.length - 1][metric.key] as number;
-          const displayValue = metric.key === 'success_rate' ? latestValue * 100 : latestValue;
 
           return (
             <div key={metric.key} className="text-center">
               <p className="text-xs text-muted-foreground mb-1">{metric.label}</p>
               <p className="text-xl font-bold" style={{ color: metric.color }}>
-                {metric.formatValue(displayValue)}
+                {metric.formatValue(latestValue)}
               </p>
               <p className="text-xs text-muted-foreground">
                 Range: {metric.formatValue(metricData.minValue)} - {metric.formatValue(metricData.maxValue)}

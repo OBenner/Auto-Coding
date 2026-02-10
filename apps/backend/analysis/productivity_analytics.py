@@ -208,16 +208,35 @@ class ProductivitySummary:
 
 
 def _parse_timestamp(ts: str | None) -> datetime | None:
-    """Parse ISO timestamp string to datetime object."""
+    """Parse ISO timestamp string to timezone-aware UTC datetime.
+
+    Returns None for invalid or missing timestamps.
+    """
     if not ts:
         return None
     try:
-        # Handle both with and without timezone info
         if ts.endswith("Z"):
-            return datetime.fromisoformat(ts.replace("Z", "+00:00"))
-        return datetime.fromisoformat(ts)
+            dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+        else:
+            dt = datetime.fromisoformat(ts)
+
+        # Ensure timezone-aware in UTC
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=UTC)
+        else:
+            dt = dt.astimezone(UTC)
+        return dt
     except (ValueError, AttributeError):
         return None
+
+
+def _normalize_boundary(dt: datetime | None) -> datetime | None:
+    """Normalize start/end boundary datetimes to timezone-aware UTC."""
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=UTC)
+    return dt.astimezone(UTC)
 
 
 def _count_unique_sessions(plan: dict[str, Any]) -> int:
@@ -402,6 +421,10 @@ def aggregate_productivity_metrics(
     Returns:
         ProductivitySummary with aggregated metrics
     """
+    # Normalize boundaries to UTC-aware datetimes to avoid naive/aware comparison
+    start_date = _normalize_boundary(start_date)
+    end_date = _normalize_boundary(end_date)
+
     # Locate specs directory
     specs_dir = project_dir / ".auto-claude" / "specs"
     if not specs_dir.exists():

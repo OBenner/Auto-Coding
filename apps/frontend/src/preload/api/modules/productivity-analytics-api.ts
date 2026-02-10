@@ -14,7 +14,7 @@ import { invokeIpc } from './ipc-utils';
 export interface ProductivityAnalyticsAPI {
   getProductivitySummary: (projectId: string, filter?: ProductivityAnalyticsFilter) => Promise<IPCResult<ProductivitySummary>>;
   getProductivityTrends: (projectId: string, filter?: ProductivityAnalyticsFilter) => Promise<IPCResult<ProductivityTrendPoint[]>>;
-  exportProductivityAnalytics: (projectId: string, options: ProductivityAnalyticsExportOptions) => Promise<IPCResult<{ path: string }>>;
+  exportProductivityAnalytics: (projectId: string, options: ProductivityAnalyticsExportOptions) => Promise<IPCResult<string>>;
 }
 
 /**
@@ -33,7 +33,7 @@ export const createProductivityAnalyticsAPI = (): ProductivityAnalyticsAPI => ({
     return invokeIpc(IPC_CHANNELS.PRODUCTIVITY_ANALYTICS_GET_TRENDS, projectId, windowDays, granularity);
   },
 
-  exportProductivityAnalytics: (projectId: string, options: ProductivityAnalyticsExportOptions): Promise<IPCResult<{ path: string }>> => {
-    return invokeIpc<IPCResult<{ path: string }>>(IPC_CHANNELS.PRODUCTIVITY_ANALYTICS_EXPORT, projectId, options);
+  exportProductivityAnalytics: (projectId: string, options: ProductivityAnalyticsExportOptions): Promise<IPCResult<string>> => {
+    return invokeIpc<IPCResult<string>>(IPC_CHANNELS.PRODUCTIVITY_ANALYTICS_EXPORT, projectId, options);
   }
 });

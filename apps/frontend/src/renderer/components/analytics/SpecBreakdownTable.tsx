@@ -24,26 +24,28 @@ export function SpecBreakdownTable({ specs, isLoading = false }: SpecBreakdownTa
 
   // Filter specs based on all criteria
   const filteredSpecs = specs.filter((spec) => {
+    const q = searchQuery.toLowerCase();
+
     // Apply search filter
     const matchesSearch =
-      spec.spec_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      spec.spec_id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      spec.workflow_type.toLowerCase().includes(searchQuery.toLowerCase());
+      spec.spec_name.toLowerCase().includes(q) ||
+      spec.spec_id.toLowerCase().includes(q) ||
+      spec.workflow_type.toLowerCase().includes(q);
 
     // Apply status filter
     const matchesStatus =
       statusFilter === 'all' ||
-      spec.status.toLowerCase() === statusFilter.toLowerCase();
+      spec.status.toLowerCase() === statusFilter;
 
     // Apply complexity filter
     const matchesComplexity =
       complexityFilter === 'all' ||
-      spec.complexity.toLowerCase() === complexityFilter.toLowerCase();
+      spec.complexity.toLowerCase() === complexityFilter;
 
     // Apply type filter
     const matchesType =
       typeFilter === 'all' ||
-      spec.workflow_type.toLowerCase() === typeFilter.toLowerCase();
+      spec.workflow_type.toLowerCase() === typeFilter;
 
     return matchesSearch && matchesStatus && matchesComplexity && matchesType;
   });

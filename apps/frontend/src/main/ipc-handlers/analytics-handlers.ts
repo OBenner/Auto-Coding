@@ -110,7 +110,12 @@ export function registerAnalyticsHandlers(): void {
       try {
         // Try to use cached aggregated data first
         const analyticsDir = path.join(project.path, '.auto-claude', 'analytics');
-        const summaryFile = path.join(analyticsDir, 'productivity_summary.json');
+
+        // Include date filters in cache key to avoid returning stale results
+        const cacheKeyParts = ['productivity_summary'];
+        if (startDate) cacheKeyParts.push(`from_${startDate}`);
+        if (endDate) cacheKeyParts.push(`to_${endDate}`);
+        const summaryFile = path.join(analyticsDir, `${cacheKeyParts.join('__')}.json`);
 
         // Check if cached file exists and is recent (< 5 minutes old)
         let useCached = false;
@@ -229,8 +234,15 @@ export function registerAnalyticsHandlers(): void {
           args
         );
 
-        // Extract output path from Python result
-        const outputPath = result.output_path || options.output_path;
+        // Extract output path - handle both string and object shapes from Python
+        let outputPath: string | undefined;
+        if (typeof result === 'string') {
+          outputPath = result;
+        } else if (result && typeof result.output_path === 'string') {
+          outputPath = result.output_path;
+        } else {
+          outputPath = options.output_path;
+        }
 
         if (!outputPath) {
           throw new Error('No output path returned from export operation');

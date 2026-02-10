@@ -271,20 +271,22 @@ export function ProductivityDashboard({ projectId }: ProductivityDashboardProps)
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div>
                   <p className="text-sm text-muted-foreground">Total Specs</p>
-                  <p className="text-2xl font-bold">{summary.total_specs}</p>
+                  <p className="text-2xl font-bold">{summary.total_specs ?? 0}</p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Completed</p>
-                  <p className="text-2xl font-bold text-green-600">{summary.completed_specs}</p>
+                  <p className="text-2xl font-bold text-green-600">{summary.completed_specs ?? 0}</p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Time Saved</p>
-                  <p className="text-2xl font-bold">{summary.total_time_saved_hours.toFixed(1)}h</p>
+                  <p className="text-2xl font-bold">
+                    {Number(summary.total_time_saved_hours ?? 0).toFixed(1)}h
+                  </p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Success Rate</p>
                   <p className="text-2xl font-bold">
-                    {(summary.average_success_rate * 100).toFixed(1)}%
+                    {(Number(summary.average_success_rate ?? 0) * 100).toFixed(1)}%
                   </p>
                 </div>
               </div>
