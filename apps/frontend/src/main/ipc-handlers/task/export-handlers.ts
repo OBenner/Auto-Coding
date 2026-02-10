@@ -27,7 +27,8 @@ export function registerTaskExportHandlers(): void {
         }
 
         // Find task to get spec directory
-        const task = await projectStore.getTask(projectId, taskId);
+        const tasks = await projectStore.getTasks(projectId);
+        const task = tasks.find(t => t.id === taskId || t.specId === taskId);
         if (!task) {
           console.error('[IPC] TASK_EXPORT failed: Task not found');
           return { success: false, error: 'Task not found' };
