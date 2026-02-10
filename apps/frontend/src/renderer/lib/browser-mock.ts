@@ -289,6 +289,115 @@ const browserMockAPI: ElectronAPI = {
     data: []
   }),
 
+  // Webhook Operations
+  listWebhooks: async (_specId: string) => ({
+    success: true,
+    data: []
+  }),
+  getWebhook: async (_specId: string, _webhookId: string) => ({
+    success: true,
+    data: {
+      webhook_id: 'wh_mock',
+      name: 'Mock Webhook',
+      url: 'https://example.com/webhook',
+      secret: '',
+      events: ['build_completed'],
+      template: 'generic' as const,
+      enabled: true,
+      headers: {},
+      retry_config: {
+        max_retries: 3,
+        initial_delay: 1.0,
+        max_delay: 60.0,
+        backoff_multiplier: 2.0
+      },
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    }
+  }),
+  createWebhook: async (_specId: string, _webhook: any) => ({
+    success: true,
+    data: {
+      webhook_id: 'wh_mock_new',
+      name: _webhook.name,
+      url: _webhook.url,
+      secret: _webhook.secret || '',
+      events: _webhook.events,
+      template: _webhook.template,
+      enabled: _webhook.enabled,
+      headers: _webhook.headers,
+      retry_config: _webhook.retry_config,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    }
+  }),
+  updateWebhook: async (_specId: string, _webhookId: string, _updates: any) => ({
+    success: true,
+    data: {
+      webhook_id: _webhookId,
+      name: 'Updated Webhook',
+      url: 'https://example.com/webhook',
+      secret: '',
+      events: ['build_completed'],
+      template: 'generic' as const,
+      enabled: true,
+      headers: {},
+      retry_config: {
+        max_retries: 3,
+        initial_delay: 1.0,
+        max_delay: 60.0,
+        backoff_multiplier: 2.0
+      },
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    }
+  }),
+  deleteWebhook: async (_specId: string, _webhookId: string) => ({
+    success: true,
+    data: { success: true }
+  }),
+  testWebhook: async (_specId: string, _webhookId: string) => ({
+    success: true,
+    data: {
+      success: true,
+      message: 'Test webhook sent',
+      webhook_id: _webhookId
+    }
+  }),
+  getWebhookDeliveryHistory: async (_specId: string, _options?: any) => ({
+    success: true,
+    data: []
+  }),
+  getWebhookDeliveryStats: async (_specId: string, _webhookId?: string) => ({
+    success: true,
+    data: {
+      total: 0,
+      success: 0,
+      failed: 0,
+      pending: 0,
+      success_rate: 0,
+      avg_duration_ms: 0
+    }
+  }),
+  getWebhookEventTypes: async () => ({
+    success: true,
+    data: [
+      { value: 'spec_created', label: 'Spec Created', description: 'When a new spec is created', category: 'spec' as const },
+      { value: 'build_started', label: 'Build Started', description: 'When a build starts', category: 'build' as const },
+      { value: 'build_completed', label: 'Build Completed', description: 'When a build completes', category: 'build' as const },
+      { value: 'qa_passed', label: 'QA Passed', description: 'When QA validation passes', category: 'qa' as const },
+      { value: 'qa_failed', label: 'QA Failed', description: 'When QA validation fails', category: 'qa' as const }
+    ]
+  }),
+  getWebhookTemplates: async () => ({
+    success: true,
+    data: [
+      { value: 'generic' as const, label: 'Generic JSON', description: 'Standard JSON payload format' },
+      { value: 'slack' as const, label: 'Slack', description: 'Slack incoming webhook format' },
+      { value: 'discord' as const, label: 'Discord', description: 'Discord webhook format' }
+    ]
+  }),
+
   // Queue Routing API (rate limit recovery)
   queue: {
     getRunningTasksByProfile: async () => ({ success: true, data: { byProfile: {}, totalRunning: 0 } }),

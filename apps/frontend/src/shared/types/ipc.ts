@@ -146,6 +146,14 @@ import type {
 } from './integrations';
 import type { APIProfile, ProfilesFile, TestConnectionResult, DiscoverModelsResult } from './profile';
 import type { TemplateInfo, TemplateCategory, GeneratedSpec } from './template';
+import type {
+  WebhookConfig,
+  WebhookDelivery,
+  WebhookDeliveryStats,
+  WebhookTestResult,
+  WebhookEventTypeMeta,
+  WebhookTemplateMeta
+} from './webhook';
 
 // Electron API exposed via contextBridge
 // Tab state interface (persisted in main process)
@@ -906,6 +914,28 @@ export interface ElectronAPI {
     specId?: string
   ) => Promise<IPCResult<{ specId: string; specPath: string }>>;
   suggestTemplates: (projectId: string, taskDescription: string) => Promise<IPCResult<string[]>>;
+
+  // Webhook operations
+  /** List all webhook configurations for a spec */
+  listWebhooks: (specId: string) => Promise<IPCResult<WebhookConfig[]>>;
+  /** Get a single webhook configuration */
+  getWebhook: (specId: string, webhookId: string) => Promise<IPCResult<WebhookConfig>>;
+  /** Create a new webhook configuration */
+  createWebhook: (specId: string, webhook: Omit<WebhookConfig, 'webhook_id' | 'created_at' | 'updated_at'>) => Promise<IPCResult<WebhookConfig>>;
+  /** Update an existing webhook configuration */
+  updateWebhook: (specId: string, webhookId: string, updates: Partial<WebhookConfig>) => Promise<IPCResult<WebhookConfig>>;
+  /** Delete a webhook configuration */
+  deleteWebhook: (specId: string, webhookId: string) => Promise<IPCResult<{ success: boolean }>>;
+  /** Test a webhook by sending a test event */
+  testWebhook: (specId: string, webhookId: string) => Promise<IPCResult<WebhookTestResult>>;
+  /** Get webhook delivery history */
+  getWebhookDeliveryHistory: (specId: string, options?: { webhookId?: string; event?: string; limit?: number }) => Promise<IPCResult<WebhookDelivery[]>>;
+  /** Get webhook delivery statistics */
+  getWebhookDeliveryStats: (specId: string, webhookId?: string) => Promise<IPCResult<WebhookDeliveryStats>>;
+  /** Get all available webhook event types */
+  getWebhookEventTypes: () => Promise<IPCResult<WebhookEventTypeMeta[]>>;
+  /** Get all available webhook templates */
+  getWebhookTemplates: () => Promise<IPCResult<WebhookTemplateMeta[]>>;
 
   // Queue Routing API (rate limit recovery)
   queue: import('../../preload/api/queue-api').QueueAPI;

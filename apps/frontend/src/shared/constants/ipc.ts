@@ -595,5 +595,17 @@ export const IPC_CHANNELS = {
   TEMPLATE_SEARCH: 'template:search',
   TEMPLATE_PREVIEW: 'template:preview',
   TEMPLATE_CREATE_SPEC: 'template:createSpec',
-  TEMPLATE_SUGGEST: 'template:suggest'
+  TEMPLATE_SUGGEST: 'template:suggest',
+
+  // Webhook operations
+  WEBHOOK_LIST: 'webhook:list',
+  WEBHOOK_GET: 'webhook:get',
+  WEBHOOK_CREATE: 'webhook:create',
+  WEBHOOK_UPDATE: 'webhook:update',
+  WEBHOOK_DELETE: 'webhook:delete',
+  WEBHOOK_TEST: 'webhook:test',
+  WEBHOOK_GET_DELIVERY_HISTORY: 'webhook:getDeliveryHistory',
+  WEBHOOK_GET_DELIVERY_STATS: 'webhook:getDeliveryStats',
+  WEBHOOK_GET_EVENT_TYPES: 'webhook:getEventTypes',
+  WEBHOOK_GET_TEMPLATES: 'webhook:getTemplates'
 } as const;
