@@ -387,5 +387,20 @@
   "referenceImages": {
     "title": "Images de référence (facultatif)",
     "description": "Ajoutez des références visuelles comme des captures d'écran ou des conceptions pour aider l'IA à comprendre vos exigences."
+  },
+  "overview": {
+    "implementationPlan": "Plan d'implémentation",
+    "phaseNumber": "Phase {{number}}",
+    "subtasksCompleted": "sous-tâches terminées",
+    "verification": "Vérification",
+    "qaReport": "Rapport QA",
+    "qaEscalation": "Escalade QA",
+    "totalIterations": "Itérations totales",
+    "totalIssues": "Problèmes totaux",
+    "uniqueIssues": "Problèmes uniques",
+    "fixSuccessRate": "Taux de réussite des corrections",
+    "recurringIssues": "Problèmes récurrents",
+    "commonIssues": "Problèmes courants",
+    "noDataAvailable": "Aucune donnée de vue d'ensemble disponible"
   }
 }

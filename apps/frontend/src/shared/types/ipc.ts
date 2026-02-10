@@ -886,6 +886,11 @@ export interface ElectronAPI {
   // Token statistics
   getTokenStats: (projectPath: string, specId: string) => Promise<IPCResult<import('./task').TaskTokenStats | null>>;
 
+  // Task spec file reading (for task overview display)
+  getImplementationPlan: (taskId: string) => Promise<IPCResult<ImplementationPlan | null>>;
+  getQAReport: (taskId: string) => Promise<IPCResult<string | null>>;
+  getQAEscalation: (taskId: string) => Promise<IPCResult<import('./task').QAEscalation | null>>;
+
   // Plugin management
   listPlugins: (options?: { pluginType?: string; enabledOnly?: boolean }) => Promise<IPCResult<import('../../main/plugins/types').PluginInfo[]>>;
   enablePlugin: (pluginName: string) => Promise<IPCResult<{ success: boolean }>>;

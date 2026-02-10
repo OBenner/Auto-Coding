@@ -704,5 +704,11 @@
     "graphView": "Vue graphique",
     "deleteMemory": "Supprimer la mémoire",
     "exportMemories": "Exporter les mémoires"
+  },
+  "status": {
+    "completed": "Terminé",
+    "inProgress": "En cours",
+    "failed": "Échoué",
+    "pending": "En attente"
   }
 }
