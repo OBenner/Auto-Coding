@@ -55,9 +55,7 @@ class FilePrioritizer:
             match.relevance_score = combined_score
 
         # Sort by combined score
-        sorted_matches = sorted(
-            matches, key=lambda m: m.relevance_score, reverse=True
-        )
+        sorted_matches = sorted(matches, key=lambda m: m.relevance_score, reverse=True)
 
         if max_results:
             return sorted_matches[:max_results]
@@ -172,7 +170,7 @@ class FilePrioritizer:
                 return datetime.fromtimestamp(timestamp, tz=timezone.utc)
 
         except (subprocess.TimeoutExpired, subprocess.SubprocessError, ValueError):
-            pass
+            pass  # Fall through to return None when git log fails
 
         return None
 
@@ -189,9 +187,7 @@ class FilePrioritizer:
         Returns:
             List of (file_path, recency_score) tuples, sorted by recency
         """
-        scored_files = [
-            (path, self._get_recency_score(path)) for path in file_paths
-        ]
+        scored_files = [(path, self._get_recency_score(path)) for path in file_paths]
         scored_files.sort(key=lambda x: x[1], reverse=True)
         return scored_files[:max_results]
 

@@ -67,7 +67,9 @@ class ContextEntry:
     content_hash: str
     token_count: int
     turn_number: int
-    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    timestamp: str = field(
+        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+    )
     sent_count: int = 1
     last_modified: str | None = None
     summary: str | None = None
@@ -185,7 +187,7 @@ class HistoryTracker:
 
         # Trim old turns if needed
         if len(self.turn_history) > self.max_turns_cache:
-            self.turn_history = self.turn_history[-self.max_turns_cache:]
+            self.turn_history = self.turn_history[-self.max_turns_cache :]
 
         logger.debug(f"Started turn {self.current_turn}")
         return self.current_turn

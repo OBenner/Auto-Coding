@@ -17,8 +17,6 @@ These tests verify the 30% token reduction goal and overall effectiveness.
 
 import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, patch
-
 import pytest
 
 # Ensure parent directory is in path for imports
@@ -621,15 +619,12 @@ class TestE2EOptimizationPipeline:
         )
 
         # Build with optimizations
-        context = builder.build_context(
+        builder.build_context(
             task="Implement authentication system",
             services=["backend"],
             semantic_search=True,
             include_graph_hints=False,
         )
-
-        # Count tokens in context
-        counter = TokenCounter()
 
         # Simulate full content vs prioritized content
         # In real scenario, would compare against naive approach

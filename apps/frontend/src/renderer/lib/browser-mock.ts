@@ -402,7 +402,14 @@ const browserMockAPI: ElectronAPI = {
   enablePlugin: async () => ({ success: true, data: { success: true } }),
   disablePlugin: async () => ({ success: true, data: { success: true } }),
   installPlugin: async () => ({ success: true, data: { success: true } }),
-  uninstallPlugin: async () => ({ success: true, data: { success: true } })
+  uninstallPlugin: async () => ({ success: true, data: { success: true } }),
+
+  // Context Viewer API
+  getContextStats: async () => ({ success: true, data: null }),
+  getTokenBreakdown: async () => ({ success: true, data: null }),
+  getPrioritizationScores: async () => ({ success: true, data: null }),
+  getOptimizationReport: async () => ({ success: true, data: null }),
+  exportContextSnapshot: async () => ({ success: true, data: null }),
 };
 
 /**

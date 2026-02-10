@@ -159,7 +159,7 @@ class TestPrioritizationIntegration:
             mock_impact.side_effect = impact_side_effect
 
             # Run prioritization
-            result = builder._prioritize_matches(sample_matches.copy())
+            builder._prioritize_matches(sample_matches.copy())
 
             # Verify dependency analyzer was called for each file
             assert mock_impact.call_count == len(sample_matches)
@@ -257,9 +257,6 @@ class TestPrioritizationIntegration:
             project_dir=temp_project,
             project_index=mock_project_index,
         )
-
-        # Store original scores
-        original_scores = {m.path: m.relevance_score for m in sample_matches}
 
         # Mock to return high impact for one file
         with patch.object(

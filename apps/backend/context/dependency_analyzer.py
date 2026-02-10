@@ -25,7 +25,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-
 # =============================================================================
 # DATA CLASSES
 # =============================================================================
@@ -333,9 +332,7 @@ class DependencyAnalyzer:
 
         return imports
 
-    def _resolve_import(
-        self, import_info: ImportInfo, current_file: str
-    ) -> str | None:
+    def _resolve_import(self, import_info: ImportInfo, current_file: str) -> str | None:
         """
         Resolve an import to a file path.
 

@@ -103,8 +103,6 @@ def get_context_stats(spec_dir: Path | None = None) -> dict[str, Any]:
 
     except Exception as e:
         logger.error(f"Error getting context stats: {e}", exc_info=True)
-        # Return empty stats on error
-        pass
 
     return stats
 
@@ -180,7 +178,7 @@ def get_prioritization_scores(
     }
 
     try:
-        prioritizer = FilePrioritizer(project_dir)
+        FilePrioritizer(project_dir)
 
         # For now, return algorithm info
         # Actual file scoring would require a full context build
@@ -232,14 +230,6 @@ def get_optimization_report(spec_dir: Path) -> dict[str, Any]:
         },
     }
 
-    try:
-        # This would be populated from actual optimization runs
-        # For now, return structure for frontend
-        pass
-
-    except Exception as e:
-        logger.error(f"Error generating optimization report: {e}", exc_info=True)
-
     return report
 
 
@@ -288,6 +278,7 @@ def export_context_snapshot(spec_dir: Path) -> dict[str, Any]:
 
         # Add timestamp
         from datetime import datetime, timezone
+
         snapshot["timestamp"] = datetime.now(timezone.utc).isoformat()
 
     except Exception as e:

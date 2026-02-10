@@ -891,6 +891,13 @@ export interface ElectronAPI {
   installPlugin: (source: { type: string; path?: string; marketplace_id?: string }) => Promise<IPCResult<{ success: boolean; plugin?: { name: string; version: string } }>>;
   uninstallPlugin: (pluginName: string) => Promise<IPCResult<{ success: boolean }>>;
 
+  // Context Viewer API
+  getContextStats: (projectId: string, specId?: string) => Promise<IPCResult<any>>;
+  getTokenBreakdown: (projectId: string, specId?: string) => Promise<IPCResult<any>>;
+  getPrioritizationScores: (projectId: string, task?: string) => Promise<IPCResult<any>>;
+  getOptimizationReport: (projectId: string, specId: string) => Promise<IPCResult<any>>;
+  exportContextSnapshot: (projectId: string, specId: string) => Promise<IPCResult<any>>;
+
   // Queue Routing API (rate limit recovery)
   queue: import('../../preload/api/queue-api').QueueAPI;
 }

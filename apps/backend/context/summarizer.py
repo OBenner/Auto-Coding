@@ -144,9 +144,7 @@ class ContextSummarizer:
 
         # Build prompt
         preserve_note = (
-            "\n- Preserve all import statements at the top"
-            if preserve_imports
-            else ""
+            "\n- Preserve all import statements at the top" if preserve_imports else ""
         )
 
         prompt = f"""Summarize the following code file in {target_words} words or less.

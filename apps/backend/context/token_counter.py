@@ -89,9 +89,7 @@ class TokenCounter:
         if encoding_name:
             self._encoding_name = encoding_name
         elif model:
-            self._encoding_name = MODEL_ENCODINGS.get(
-                model, MODEL_ENCODINGS["default"]
-            )
+            self._encoding_name = MODEL_ENCODINGS.get(model, MODEL_ENCODINGS["default"])
         else:
             self._encoding_name = MODEL_ENCODINGS["default"]
 

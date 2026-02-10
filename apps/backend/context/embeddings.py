@@ -35,7 +35,6 @@ import logging
 import math
 import os
 import re
-from typing import Any
 
 from core.sentry import capture_exception
 
@@ -263,15 +262,15 @@ class EmbeddingGenerator:
     def _tokenize(self, text: str) -> list[str]:
         """Extract tokens from text."""
         # Split on whitespace and common delimiters
-        return re.findall(r'\w+', text)
+        return re.findall(r"\w+", text)
 
     def _extract_bigrams(self, text: str) -> list[str]:
         """Extract character bigrams."""
-        return [text[i:i+2] for i in range(len(text) - 1)]
+        return [text[i : i + 2] for i in range(len(text) - 1)]
 
     def _extract_trigrams(self, text: str) -> list[str]:
         """Extract character trigrams."""
-        return [text[i:i+3] for i in range(len(text) - 2)]
+        return [text[i : i + 3] for i in range(len(text) - 2)]
 
     def _extract_code_features(self, text: str) -> list[str]:
         """Extract code-specific structural features."""
@@ -279,27 +278,43 @@ class EmbeddingGenerator:
 
         # Language keywords (common across Python, JS, etc.)
         keywords = [
-            'def', 'class', 'function', 'import', 'from', 'return',
-            'if', 'else', 'for', 'while', 'try', 'catch', 'async',
-            'await', 'const', 'let', 'var', 'export', 'default'
+            "def",
+            "class",
+            "function",
+            "import",
+            "from",
+            "return",
+            "if",
+            "else",
+            "for",
+            "while",
+            "try",
+            "catch",
+            "async",
+            "await",
+            "const",
+            "let",
+            "var",
+            "export",
+            "default",
         ]
 
         text_lower = text.lower()
         for keyword in keywords:
             if keyword in text_lower:
-                features.append(f'keyword_{keyword}')
+                features.append(f"keyword_{keyword}")
 
         # Structural patterns
-        if '(' in text and ')' in text:
-            features.append('has_function_call')
-        if '{' in text and '}' in text:
-            features.append('has_braces')
-        if '[' in text and ']' in text:
-            features.append('has_brackets')
-        if '.' in text:
-            features.append('has_dot_notation')
-        if '->' in text or '=>' in text:
-            features.append('has_arrow')
+        if "(" in text and ")" in text:
+            features.append("has_function_call")
+        if "{" in text and "}" in text:
+            features.append("has_braces")
+        if "[" in text and "]" in text:
+            features.append("has_brackets")
+        if "." in text:
+            features.append("has_dot_notation")
+        if "->" in text or "=>" in text:
+            features.append("has_arrow")
 
         return features
 
@@ -307,7 +322,7 @@ class EmbeddingGenerator:
         """Hash a feature string to an index."""
         # Use MD5 hash for deterministic mapping
         hash_bytes = hashlib.md5(feature.encode(), usedforsecurity=False).digest()
-        hash_int = int.from_bytes(hash_bytes[:4], byteorder='little')
+        hash_int = int.from_bytes(hash_bytes[:4], byteorder="little")
         return hash_int % dim
 
     def _normalize_vector(self, vector: list[float]) -> list[float]:

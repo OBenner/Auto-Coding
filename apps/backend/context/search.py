@@ -166,7 +166,9 @@ class CodeSearcher:
                     )
 
                     # Calculate cosine similarity
-                    similarity = self._cosine_similarity(query_embedding, file_embedding)
+                    similarity = self._cosine_similarity(
+                        query_embedding, file_embedding
+                    )
 
                     # Filter by minimum score
                     if similarity >= min_score:

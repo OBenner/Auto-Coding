@@ -543,7 +543,9 @@ async def generate_file_summary(
         logger.warning(f"Failed to summarize {file_path}: {e}")
         # Fallback: return truncated content
         if len(content) > 2000:
-            return content[:2000] + f"\n\n[Summarization failed: {e}]\n[... truncated ...]"
+            return (
+                content[:2000] + f"\n\n[Summarization failed: {e}]\n[... truncated ...]"
+            )
         return content
 
 
@@ -624,7 +626,9 @@ async def load_subtask_context_with_summaries(
 
     # Load pattern files
     for pattern_path in subtask.get("patterns_from", []):
-        context["patterns"][pattern_path] = await load_file(pattern_path, is_pattern=True)
+        context["patterns"][pattern_path] = await load_file(
+            pattern_path, is_pattern=True
+        )
 
     # Load files to modify
     for file_path in subtask.get("files_to_modify", []):
@@ -691,6 +695,11 @@ def generate_subtask_prompt_with_context(
             # Insert session summary after environment context
             parts = base_prompt.split("# Subtask Implementation Task", 1)
             if len(parts) == 2:
-                return parts[0] + session_summary + "\n# Subtask Implementation Task" + parts[1]
+                return (
+                    parts[0]
+                    + session_summary
+                    + "\n# Subtask Implementation Task"
+                    + parts[1]
+                )
 
     return base_prompt

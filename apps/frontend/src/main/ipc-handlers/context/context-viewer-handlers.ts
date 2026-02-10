@@ -1,11 +1,50 @@
 import { ipcMain } from 'electron';
 import type { BrowserWindow } from 'electron';
-import path from 'path';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
 import { IPC_CHANNELS, getSpecsDir } from '../../../shared/constants';
 import type { IPCResult } from '../../../shared/types';
 import { projectStore } from '../../project-store';
-import { runPythonSubprocess } from '../github/utils/subprocess-runner';
-import { parsePythonCommand } from '../../python-detector';
+import { findPythonCommand, parsePythonCommand } from '../../python-detector';
+
+const execFileAsync = promisify(execFile);
+
+/**
+ * Escape a string for safe embedding in Python string literals
+ */
+function escapePythonString(str: string): string {
+  return str.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+}
+
+/**
+ * Run an inline Python script and return stdout
+ */
+async function runPythonScript(cwd: string, script: string): Promise<string> {
+  const pythonCmd = findPythonCommand() || 'python';
+  const [command, baseArgs] = parsePythonCommand(pythonCmd);
+
+  const { stdout } = await execFileAsync(command, [...baseArgs, '-c', script], {
+    cwd,
+    timeout: 30000,
+  });
+
+  return stdout.trim();
+}
+
+/**
+ * Build the sys.path setup preamble for inline Python scripts
+ */
+function buildPythonPreamble(backendPath: string): string {
+  return `
+import sys
+import json
+from pathlib import Path
+
+backend_path = Path('${escapePythonString(backendPath)}')
+if str(backend_path) not in sys.path:
+    sys.path.insert(0, str(backend_path))
+`.trim();
+}
 
 /**
  * Get context window statistics
@@ -19,39 +58,21 @@ async function getContextStats(
     throw new Error('Project not found');
   }
 
-  const pythonCmd = await parsePythonCommand(project.path);
-  const args = [
-    '-c',
-    `
-import sys
-import json
-from pathlib import Path
+  const preamble = buildPythonPreamble(project.autoBuildPath);
+  const specDirExpr = specId ? `Path('${escapePythonString(getSpecsDir(project.autoBuildPath))}') / '${escapePythonString(specId)}'` : 'None';
 
-# Add backend to path
-backend_path = Path('${project.autoBuildPath.replace(/\\/g, '\\\\')}')
-if str(backend_path) not in sys.path:
-    sys.path.insert(0, str(backend_path))
+  const script = `
+${preamble}
 
 from api.context_viewer import get_context_stats
 
-spec_dir = ${specId ? `Path('${getSpecsDir()}') / '${specId}'` : 'None'}
+spec_dir = ${specDirExpr}
 stats = get_context_stats(spec_dir)
 print(json.dumps(stats))
-`.trim()
-  ];
+`.trim();
 
-  const result = await runPythonSubprocess({
-    pythonCmd,
-    args,
-    cwd: project.path,
-    timeout: 30000
-  });
-
-  if (result.code !== 0) {
-    throw new Error(`Failed to get context stats: ${result.stderr}`);
-  }
-
-  return JSON.parse(result.stdout.trim());
+  const output = await runPythonScript(project.path, script);
+  return JSON.parse(output);
 }
 
 /**
@@ -66,39 +87,21 @@ async function getTokenBreakdown(
     throw new Error('Project not found');
   }
 
-  const pythonCmd = await parsePythonCommand(project.path);
-  const args = [
-    '-c',
-    `
-import sys
-import json
-from pathlib import Path
+  const preamble = buildPythonPreamble(project.autoBuildPath);
+  const specDirExpr = specId ? `Path('${escapePythonString(getSpecsDir(project.autoBuildPath))}') / '${escapePythonString(specId)}'` : 'None';
 
-# Add backend to path
-backend_path = Path('${project.autoBuildPath.replace(/\\/g, '\\\\')}')
-if str(backend_path) not in sys.path:
-    sys.path.insert(0, str(backend_path))
+  const script = `
+${preamble}
 
 from api.context_viewer import get_token_breakdown
 
-spec_dir = ${specId ? `Path('${getSpecsDir()}') / '${specId}'` : 'None'}
+spec_dir = ${specDirExpr}
 breakdown = get_token_breakdown(spec_dir)
 print(json.dumps(breakdown))
-`.trim()
-  ];
+`.trim();
 
-  const result = await runPythonSubprocess({
-    pythonCmd,
-    args,
-    cwd: project.path,
-    timeout: 30000
-  });
-
-  if (result.code !== 0) {
-    throw new Error(`Failed to get token breakdown: ${result.stderr}`);
-  }
-
-  return JSON.parse(result.stdout.trim());
+  const output = await runPythonScript(project.path, script);
+  return JSON.parse(output);
 }
 
 /**
@@ -113,41 +116,22 @@ async function getPrioritizationScores(
     throw new Error('Project not found');
   }
 
-  const pythonCmd = await parsePythonCommand(project.path);
-  const taskArg = task ? `'${task.replace(/'/g, "\\'")}'` : 'None';
-  const args = [
-    '-c',
-    `
-import sys
-import json
-from pathlib import Path
+  const preamble = buildPythonPreamble(project.autoBuildPath);
+  const taskArg = task ? `'${escapePythonString(task)}'` : 'None';
 
-# Add backend to path
-backend_path = Path('${project.autoBuildPath.replace(/\\/g, '\\\\')}')
-if str(backend_path) not in sys.path:
-    sys.path.insert(0, str(backend_path))
+  const script = `
+${preamble}
 
 from api.context_viewer import get_prioritization_scores
 
-project_dir = Path('${project.path.replace(/\\/g, '\\\\')}')
+project_dir = Path('${escapePythonString(project.path)}')
 task = ${taskArg}
 scores = get_prioritization_scores(project_dir, task)
 print(json.dumps(scores))
-`.trim()
-  ];
+`.trim();
 
-  const result = await runPythonSubprocess({
-    pythonCmd,
-    args,
-    cwd: project.path,
-    timeout: 30000
-  });
-
-  if (result.code !== 0) {
-    throw new Error(`Failed to get prioritization scores: ${result.stderr}`);
-  }
-
-  return JSON.parse(result.stdout.trim());
+  const output = await runPythonScript(project.path, script);
+  return JSON.parse(output);
 }
 
 /**
@@ -162,39 +146,20 @@ async function getOptimizationReport(
     throw new Error('Project not found');
   }
 
-  const pythonCmd = await parsePythonCommand(project.path);
-  const args = [
-    '-c',
-    `
-import sys
-import json
-from pathlib import Path
+  const preamble = buildPythonPreamble(project.autoBuildPath);
 
-# Add backend to path
-backend_path = Path('${project.autoBuildPath.replace(/\\/g, '\\\\')}')
-if str(backend_path) not in sys.path:
-    sys.path.insert(0, str(backend_path))
+  const script = `
+${preamble}
 
 from api.context_viewer import get_optimization_report
 
-spec_dir = Path('${getSpecsDir()}') / '${specId}'
+spec_dir = Path('${escapePythonString(getSpecsDir(project.autoBuildPath))}') / '${escapePythonString(specId)}'
 report = get_optimization_report(spec_dir)
 print(json.dumps(report))
-`.trim()
-  ];
+`.trim();
 
-  const result = await runPythonSubprocess({
-    pythonCmd,
-    args,
-    cwd: project.path,
-    timeout: 30000
-  });
-
-  if (result.code !== 0) {
-    throw new Error(`Failed to get optimization report: ${result.stderr}`);
-  }
-
-  return JSON.parse(result.stdout.trim());
+  const output = await runPythonScript(project.path, script);
+  return JSON.parse(output);
 }
 
 /**
@@ -209,39 +174,20 @@ async function exportContextSnapshot(
     throw new Error('Project not found');
   }
 
-  const pythonCmd = await parsePythonCommand(project.path);
-  const args = [
-    '-c',
-    `
-import sys
-import json
-from pathlib import Path
+  const preamble = buildPythonPreamble(project.autoBuildPath);
 
-# Add backend to path
-backend_path = Path('${project.autoBuildPath.replace(/\\/g, '\\\\')}')
-if str(backend_path) not in sys.path:
-    sys.path.insert(0, str(backend_path))
+  const script = `
+${preamble}
 
 from api.context_viewer import export_context_snapshot
 
-spec_dir = Path('${getSpecsDir()}') / '${specId}'
+spec_dir = Path('${escapePythonString(getSpecsDir(project.autoBuildPath))}') / '${escapePythonString(specId)}'
 snapshot = export_context_snapshot(spec_dir)
 print(json.dumps(snapshot))
-`.trim()
-  ];
+`.trim();
 
-  const result = await runPythonSubprocess({
-    pythonCmd,
-    args,
-    cwd: project.path,
-    timeout: 30000
-  });
-
-  if (result.code !== 0) {
-    throw new Error(`Failed to export context snapshot: ${result.stderr}`);
-  }
-
-  return JSON.parse(result.stdout.trim());
+  const output = await runPythonScript(project.path, script);
+  return JSON.parse(output);
 }
 
 /**

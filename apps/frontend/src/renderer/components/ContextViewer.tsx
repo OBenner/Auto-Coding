@@ -6,7 +6,7 @@
  * are prioritized in the AI context.
  */
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Database,
@@ -14,16 +14,10 @@ import {
   TrendingUp,
   Zap,
   BarChart3,
-  Settings,
   RefreshCw,
   Download,
   ChevronDown,
   ChevronRight,
-  Check,
-  X,
-  ArrowUp,
-  ArrowDown,
-  Minus
 } from 'lucide-react';
 import { Card, CardContent } from './ui/card';
 import { Badge } from './ui/badge';
@@ -51,7 +45,7 @@ export function ContextViewer({ specId, task }: ContextViewerProps) {
 
   const [stats, setStats] = useState<ContextStats | null>(null);
   const [breakdown, setBreakdown] = useState<TokenBreakdown | null>(null);
-  const [scores, setScores] = useState<PrioritizationScores | null>(null);
+  const [, setScores] = useState<PrioritizationScores | null>(null);
   const [report, setReport] = useState<OptimizationReport | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
