@@ -47,11 +47,53 @@
   },
   "history": {
     "title": "Historique de livraison",
-    "description": "Voir les tentatives de livraison webhook récentes et leur statut."
+    "description": "Voir les tentatives de livraison webhook récentes et leur statut.",
+    "status": {
+      "success": "Succès",
+      "failed": "Échec",
+      "pending": "En attente",
+      "timeout": "Délai expiré"
+    },
+    "time": {
+      "justNow": "À l'instant",
+      "minsAgo": "il y a {{count}} min",
+      "hoursAgo": "il y a {{count}} h",
+      "daysAgo": "il y a {{count}} j"
+    },
+    "attempts": "Tentative {{count}}",
+    "error": {
+      "title": "Échec du chargement de l'historique"
+    },
+    "empty": {
+      "title": "Aucun historique de livraison",
+      "description": "Les livraisons webhook apparaîtront ici une fois les événements déclenchés."
+    },
+    "details": {
+      "error": "Erreur",
+      "response": "Réponse",
+      "payload": "Payload",
+      "nextRetry": "Prochaine réessai : {{time}}"
+    },
+    "retry": "Réessayer"
   },
   "stats": {
     "title": "Statistiques",
-    "description": "Voir les statistiques de livraison webhook et les taux de réussite."
+    "description": "Voir les statistiques de livraison webhook et les taux de réussite.",
+    "total": "Total des livraisons",
+    "success": "Réussies",
+    "failed": "Échouées",
+    "pending": "En attente",
+    "successRate": "Taux de réussite",
+    "successRateDescription": "Pourcentage de livraisons webhook réussies",
+    "avgDuration": "Durée moyenne",
+    "avgDurationDescription": "Temps moyen de livraison des webhooks",
+    "error": {
+      "title": "Échec du chargement des statistiques"
+    },
+    "empty": {
+      "title": "Aucune statistique disponible",
+      "description": "Les statistiques apparaîtront ici une fois les webhooks livrés."
+    }
   },
   "errors": {
     "nameRequired": "Le nom est requis",

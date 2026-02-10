@@ -45,6 +45,8 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Badge } from './ui/badge';
 import { useWebhookStore, loadWebhooks, loadWebhookMetadata } from '../stores/webhook-store';
+import { WebhookEventLogs } from './WebhookEventLogs';
+import { WebhookStats } from './WebhookStats';
 import type {
   WebhookConfig,
   WebhookEventType,
@@ -95,8 +97,10 @@ export function WebhooksPage({ projectId }: WebhooksPageProps) {
     webhooksError,
     deliveries,
     deliveriesLoading,
+    deliveriesError,
     stats,
     statsLoading,
+    statsError,
     isTestingWebhook,
     testResult,
     eventTypes,
@@ -116,6 +120,22 @@ export function WebhooksPage({ projectId }: WebhooksPageProps) {
     loadWebhooks(projectId);
     loadWebhookMetadata();
   }, [projectId]);
+
+  // Load delivery history when history tab is activated
+  useEffect(() => {
+    if (activeTab === 'history') {
+      const { loadDeliveryHistory } = useWebhookStore.getState();
+      loadDeliveryHistory(projectId);
+    }
+  }, [activeTab, projectId]);
+
+  // Load statistics when stats tab is activated
+  useEffect(() => {
+    if (activeTab === 'stats') {
+      const { loadDeliveryStats } = useWebhookStore.getState();
+      loadDeliveryStats(projectId);
+    }
+  }, [activeTab, projectId]);
 
   // Handle opening dialog for new webhook
   const handleAddWebhook = () => {
@@ -543,31 +563,21 @@ export function WebhooksPage({ projectId }: WebhooksPageProps) {
 
           {/* Delivery History Tab */}
           <TabsContent value="history" className="flex-1 overflow-hidden m-0">
-            <ScrollArea className="h-full">
-              <div className="p-6">
-                <div className="text-center py-12">
-                  <Clock className="mx-auto h-12 w-12 text-muted-foreground" />
-                  <h3 className="mt-4 text-lg font-semibold">{t('webhooks:history.title')}</h3>
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    {t('webhooks:history.description')}
-                  </p>
-                </div>
-              </div>
-            </ScrollArea>
+            <WebhookEventLogs
+              deliveries={deliveries}
+              loading={deliveriesLoading}
+              error={deliveriesError}
+            />
           </TabsContent>
 
           {/* Statistics Tab */}
           <TabsContent value="stats" className="flex-1 overflow-hidden m-0">
             <ScrollArea className="h-full">
-              <div className="p-6">
-                <div className="text-center py-12">
-                  <CheckCircle className="mx-auto h-12 w-12 text-muted-foreground" />
-                  <h3 className="mt-4 text-lg font-semibold">{t('webhooks:stats.title')}</h3>
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    {t('webhooks:stats.description')}
-                  </p>
-                </div>
-              </div>
+              <WebhookStats
+                stats={stats}
+                loading={statsLoading}
+                error={statsError}
+              />
             </ScrollArea>
           </TabsContent>
         </Tabs>

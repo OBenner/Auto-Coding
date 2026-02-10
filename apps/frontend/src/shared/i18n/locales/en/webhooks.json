@@ -47,11 +47,53 @@
   },
   "history": {
     "title": "Delivery History",
-    "description": "View recent webhook delivery attempts and their status."
+    "description": "View recent webhook delivery attempts and their status.",
+    "status": {
+      "success": "Success",
+      "failed": "Failed",
+      "pending": "Pending",
+      "timeout": "Timeout"
+    },
+    "time": {
+      "justNow": "Just now",
+      "minsAgo": "{{count}}m ago",
+      "hoursAgo": "{{count}}h ago",
+      "daysAgo": "{{count}}d ago"
+    },
+    "attempts": "Attempt {{count}}",
+    "error": {
+      "title": "Failed to load delivery history"
+    },
+    "empty": {
+      "title": "No delivery history",
+      "description": "Webhook deliveries will appear here once events are triggered."
+    },
+    "details": {
+      "error": "Error",
+      "response": "Response",
+      "payload": "Payload",
+      "nextRetry": "Next retry: {{time}}"
+    },
+    "retry": "Retry"
   },
   "stats": {
     "title": "Statistics",
-    "description": "View webhook delivery statistics and success rates."
+    "description": "View webhook delivery statistics and success rates.",
+    "total": "Total Deliveries",
+    "success": "Successful",
+    "failed": "Failed",
+    "pending": "Pending",
+    "successRate": "Success Rate",
+    "successRateDescription": "Percentage of successful webhook deliveries",
+    "avgDuration": "Avg Duration",
+    "avgDurationDescription": "Average time for webhook delivery",
+    "error": {
+      "title": "Failed to load statistics"
+    },
+    "empty": {
+      "title": "No statistics available",
+      "description": "Statistics will appear here once webhooks have been delivered."
+    }
   },
   "errors": {
     "nameRequired": "Name is required",
