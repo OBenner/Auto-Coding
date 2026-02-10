@@ -4,7 +4,15 @@
  * Manages task/spec state with real-time updates for the web frontend.
  * Follows patterns from desktop app stores (task-store.ts) and web stores (auth-store.ts, spec-store.ts).
  *
- * Note: WebSocket integration for real-time updates will be added in phase 4.
+ * WebSocket integration is available via websocket-task-integration.ts.
+ * Import and initialize in your app root:
+ * ```tsx
+ * import { initializeWebSocketTaskIntegration } from './store/websocket-task-integration';
+ * useEffect(() => {
+ *   const cleanup = initializeWebSocketTaskIntegration();
+ *   return cleanup;
+ * }, []);
+ * ```
  */
 
 import { create } from 'zustand';

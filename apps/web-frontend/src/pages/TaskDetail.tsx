@@ -14,6 +14,7 @@ import { Badge } from '../components/ui/badge';
 import { ScrollArea } from '../components/ui/scroll-area';
 import { BuildProgress } from '../components/BuildProgress';
 import { apiClient } from '../api/client';
+import { useTaskSubscription } from '../hooks/useWebSocketTaskIntegration';
 import type { TaskDetail as TaskDetailType } from '../api/types';
 
 interface TaskDetailProps {
@@ -27,6 +28,9 @@ export function TaskDetail({ taskId, onBack }: TaskDetailProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Subscribe to WebSocket events for this task
+  useTaskSubscription(taskId);
 
   /**
    * Fetch task details from the API
