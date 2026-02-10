@@ -45,7 +45,7 @@ import { useKanbanSettingsStore, COLLAPSED_COLUMN_WIDTH, DEFAULT_COLUMN_WIDTH, M
 import { useToast } from '../hooks/use-toast';
 import { WorktreeCleanupDialog } from './WorktreeCleanupDialog';
 import { BulkPRDialog } from './BulkPRDialog';
-import type { Task, TaskStatus, TaskOrderState } from '../../shared/types';
+import type { Task, TaskStatus, TaskOrderState, TaskCategory, TaskPriority } from '../../shared/types';
 
 // Type guard for valid drop column targets - preserves literal type from TASK_STATUS_COLUMNS
 const VALID_DROP_COLUMNS = new Set<string>(TASK_STATUS_COLUMNS);
@@ -1513,7 +1513,7 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
         {categories.length > 0 && (
           <Select
             value={filters.categories?.[0] || 'all'}
-            onValueChange={(value) => setCategories(value === 'all' ? [] : [value])}
+            onValueChange={(value) => setCategories(value === 'all' ? [] : [value as TaskCategory])}
           >
             <SelectTrigger className="w-40">
               <SelectValue placeholder={t('kanban.category')} />
@@ -1533,7 +1533,7 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
         {priorities.length > 0 && (
           <Select
             value={filters.priorities?.[0] || 'all'}
-            onValueChange={(value) => setPriorities(value === 'all' ? [] : [value])}
+            onValueChange={(value) => setPriorities(value === 'all' ? [] : [value as TaskPriority])}
           >
             <SelectTrigger className="w-32">
               <SelectValue placeholder={t('kanban.priority')} />
