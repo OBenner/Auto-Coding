@@ -175,7 +175,7 @@ export function ScheduleDialog({
 
     try {
       // Parse natural language time if not 'now' or ISO format
-      let scheduledTimeValue = scheduledTime;
+      let scheduledTimeValue: string | null = scheduledTime;
       if (scheduledTime === 'now') {
         scheduledTimeValue = null; // null means immediate
       }
@@ -194,7 +194,7 @@ export function ScheduleDialog({
 
       // Success - close dialog and notify parent
       onOpenChange(false);
-      onScheduled?.(result.data.buildId);
+      onScheduled?.(result.data!.buildId);
     } catch (err) {
       setError(err instanceof Error ? err.message : t('dialogs:scheduler.failedToSchedule'));
     } finally {

@@ -32,8 +32,8 @@ async function findTaskAndProject(taskId: string): Promise<{
   const projects = projectStore.getProjects();
 
   for (const project of projects) {
-    const tasks = projectStore.getTasks(project.id);
-    const task = tasks.find(t => t.id === taskId);
+    const tasks = await projectStore.getTasks(project.id);
+    const task = tasks.find((t: import('../../shared/types').Task) => t.id === taskId);
 
     if (task) {
       return { task, project };

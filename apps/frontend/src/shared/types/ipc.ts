@@ -920,6 +920,8 @@ export interface ElectronAPI {
 
   // Queue Routing API (rate limit recovery)
   queue: import('../../preload/api/queue-api').QueueAPI;
+  // Scheduler API for build scheduling and queue management
+  scheduler: import('../../preload/api/scheduler-api').SchedulerAPI;
 }
 
 declare global {
