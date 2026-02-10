@@ -62,14 +62,28 @@ export class FileWatcher extends EventEmitter {
 
     // Handle file changes
     watcher.on('change', () => {
-      try {
-        const content = readFileSync(planPath, 'utf-8');
-        const plan: ImplementationPlan = JSON.parse(content);
-        this.emit('progress', taskId, plan);
-      } catch {
-        // File might be in the middle of being written
-        // Ignore parse errors, next change event will have complete file
+      // Clear existing timeout for this task
+      const existingTimeout = this.debounceTimeouts.get(taskId);
+      if (existingTimeout) {
+        clearTimeout(existingTimeout);
       }
+
+      // Set new timeout to emit after debounce delay
+      const timeout = setTimeout(() => {
+        try {
+          const content = readFileSync(planPath, 'utf-8');
+          const plan: ImplementationPlan = JSON.parse(content);
+          this.emit('progress', taskId, plan);
+        } catch {
+          // File might be in the middle of being written
+          // Ignore parse errors, next change event will have complete file
+        }
+        // Remove timeout from map after it executes
+        this.debounceTimeouts.delete(taskId);
+      }, this.debounceDelay);
+
+      // Store timeout in map
+      this.debounceTimeouts.set(taskId, timeout);
     });
 
     // Handle errors
@@ -92,6 +106,13 @@ export class FileWatcher extends EventEmitter {
    * Stop watching a task
    */
   async unwatch(taskId: string): Promise<void> {
+    // Clear any pending timeout
+    const timeout = this.debounceTimeouts.get(taskId);
+    if (timeout) {
+      clearTimeout(timeout);
+      this.debounceTimeouts.delete(taskId);
+    }
+
     const watcherInfo = this.watchers.get(taskId);
     if (watcherInfo) {
       await watcherInfo.watcher.close();
@@ -103,6 +124,12 @@ export class FileWatcher extends EventEmitter {
    * Stop all watchers
    */
   async unwatchAll(): Promise<void> {
+    // Clear all pending timeouts
+    for (const timeout of this.debounceTimeouts.values()) {
+      clearTimeout(timeout);
+    }
+    this.debounceTimeouts.clear();
+
     const closePromises = Array.from(this.watchers.values()).map(
       async (info) => {
         await info.watcher.close();
