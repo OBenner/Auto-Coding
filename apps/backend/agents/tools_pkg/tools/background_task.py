@@ -136,6 +136,109 @@ class BackgroundTaskManager:
             logger.error(f"Failed to load task state for {task_id}: {e}")
             return False
 
+    async def _run_command(self, task_id: str) -> None:
+        """
+        Run a command asynchronously and stream output.
+
+        Args:
+            task_id: Task identifier
+        """
+        task = self.tasks[task_id]
+        command = task["command"]
+        work_dir = Path(task["working_dir"])
+        timeout = task["timeout"]
+
+        try:
+            # Update task state to running
+            task["status"] = self.STATE_RUNNING
+            task["started_at"] = datetime.now(UTC).isoformat()
+            self._save_task_state(task_id)
+
+            # Create subprocess with pipes for output streaming
+            process = await asyncio.create_subprocess_shell(
+                command,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,  # Merge stderr into stdout
+                cwd=str(work_dir),
+            )
+
+            # Store process reference
+            self.processes[task_id] = process
+            task["pid"] = process.pid
+            self._save_task_state(task_id)
+
+            logger.debug(f"Task {task_id} started with PID {process.pid}")
+
+            # Stream output with timeout
+            async def read_and_wait():
+                """Read output and wait for completion."""
+                output_lines = []
+                if process.stdout:
+                    async for line in process.stdout:
+                        line_text = line.decode("utf-8", errors="replace")
+                        output_lines.append(line_text)
+
+                        # Update task output periodically (every 10 lines)
+                        if len(output_lines) % 10 == 0:
+                            task["output"] = "".join(output_lines)
+                            self._save_task_state(task_id)
+
+                # Wait for process to complete
+                await process.wait()
+                return output_lines
+
+            try:
+                # Apply timeout to entire read+wait operation
+                output_lines = await asyncio.wait_for(read_and_wait(), timeout=timeout)
+
+                # Save final output
+                task["output"] = "".join(output_lines)
+                task["exit_code"] = process.returncode
+                task["completed_at"] = datetime.now(UTC).isoformat()
+
+                # Determine final status based on exit code
+                if process.returncode == 0:
+                    task["status"] = self.STATE_COMPLETED
+                    logger.info(f"Task {task_id} completed successfully")
+                else:
+                    task["status"] = self.STATE_FAILED
+                    task["error"] = f"Command exited with code {process.returncode}"
+                    logger.warning(
+                        f"Task {task_id} failed with exit code {process.returncode}"
+                    )
+
+            except asyncio.TimeoutError:
+                # Timeout occurred
+                task["status"] = self.STATE_FAILED
+                task["error"] = f"Command timed out after {timeout} seconds"
+                task["completed_at"] = datetime.now(UTC).isoformat()
+                logger.error(f"Task {task_id} timed out after {timeout} seconds")
+
+                # Try to terminate process gracefully
+                try:
+                    process.terminate()
+                    await asyncio.sleep(0.5)
+                    if process.returncode is None:
+                        process.kill()
+                        await asyncio.sleep(0.1)
+                except Exception as e:
+                    logger.error(f"Error terminating process for task {task_id}: {e}")
+
+        except Exception as e:
+            # Unexpected error during command execution
+            task["status"] = self.STATE_FAILED
+            task["error"] = f"Execution error: {str(e)}"
+            task["completed_at"] = datetime.now(UTC).isoformat()
+            logger.error(f"Task {task_id} failed with error: {e}", exc_info=True)
+
+        finally:
+            # Clean up process reference
+            if task_id in self.processes:
+                del self.processes[task_id]
+
+            # Save final task state
+            self._save_task_state(task_id)
+
     async def start_task(
         self,
         command: str,
@@ -181,11 +284,8 @@ class BackgroundTaskManager:
         # Save initial state
         self._save_task_state(task_id)
 
-        # Start command execution (will be implemented in subtask-1-3)
-        # For now, mark as running
-        self.tasks[task_id]["status"] = self.STATE_RUNNING
-        self.tasks[task_id]["started_at"] = datetime.now(UTC).isoformat()
-        self._save_task_state(task_id)
+        # Start command execution in background
+        asyncio.create_task(self._run_command(task_id))
 
         logger.info(f"Started background task {task_id}: {command}")
         return task_id
