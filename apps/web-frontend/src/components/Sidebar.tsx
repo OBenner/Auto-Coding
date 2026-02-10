@@ -1,9 +1,10 @@
 /**
  * Sidebar Component (Web Version)
  * Adapted from Electron frontend - simplified for web
+ * Enhanced with responsive design for mobile devices
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Plus,
@@ -18,7 +19,8 @@ import {
   GitBranch,
   Wrench,
   PanelLeft,
-  PanelLeftClose
+  PanelLeftClose,
+  X
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { ScrollArea } from './ui/scroll-area';
@@ -38,6 +40,10 @@ interface SidebarProps {
   onNewTaskClick: () => void;
   activeView?: SidebarView;
   onViewChange?: (view: SidebarView) => void;
+  /** Whether sidebar is open on mobile (overlay mode) */
+  isMobileOpen?: boolean;
+  /** Callback when mobile sidebar should close */
+  onMobileClose?: () => void;
 }
 
 interface NavItem {
@@ -64,10 +70,24 @@ export function Sidebar({
   onSettingsClick,
   onNewTaskClick,
   activeView = 'kanban',
-  onViewChange
+  onViewChange,
+  isMobileOpen = false,
+  onMobileClose
 }: SidebarProps) {
   const { t } = useTranslation(['navigation', 'common']);
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
+  // Detect mobile screen size
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   const toggleSidebar = () => {
     setIsCollapsed(!isCollapsed);
@@ -75,32 +95,71 @@ export function Sidebar({
 
   const handleViewChange = (view: SidebarView) => {
     onViewChange?.(view);
+    // Close mobile sidebar after selecting a view
+    if (isMobile && onMobileClose) {
+      onMobileClose();
+    }
   };
 
   return (
-    <div
-      className={cn(
-        'flex h-full flex-col border-r bg-background transition-all duration-200',
-        isCollapsed ? 'w-16' : 'w-64'
+    <>
+      {/* Mobile Backdrop */}
+      {isMobile && isMobileOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/50 lg:hidden"
+          onClick={onMobileClose}
+          aria-hidden="true"
+        />
       )}
-    >
+
+      {/* Sidebar */}
+      <div
+        className={cn(
+          'flex h-full flex-col border-r bg-background transition-all duration-200',
+          // Desktop: always visible, width changes based on collapse
+          'lg:relative lg:z-0',
+          isCollapsed ? 'lg:w-16' : 'lg:w-64',
+          // Mobile: fixed overlay, only visible when open
+          isMobile
+            ? isMobileOpen
+              ? 'fixed inset-y-0 left-0 z-50 w-64 transform transition-transform duration-200'
+              : 'fixed inset-y-0 left-0 z-50 w-64 -translate-x-full transform transition-transform duration-200'
+            : 'relative'
+        )}
+      >
       {/* Header */}
       <div className="flex h-14 items-center justify-between border-b px-4">
         {!isCollapsed && (
           <h2 className="text-lg font-semibold">Auto Code</h2>
         )}
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={toggleSidebar}
-          className="h-8 w-8"
-        >
-          {isCollapsed ? (
-            <PanelLeft className="h-4 w-4" />
-          ) : (
-            <PanelLeftClose className="h-4 w-4" />
+        <div className="flex items-center gap-1">
+          {/* Mobile close button */}
+          {isMobile && onMobileClose && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onMobileClose}
+              className="h-8 w-8 lg:hidden"
+              aria-label="Close sidebar"
+            >
+              <X className="h-4 w-4" />
+            </Button>
           )}
-        </Button>
+          {/* Desktop collapse button */}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={toggleSidebar}
+            className="hidden h-8 w-8 lg:flex"
+            aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          >
+            {isCollapsed ? (
+              <PanelLeft className="h-4 w-4" />
+            ) : (
+              <PanelLeftClose className="h-4 w-4" />
+            )}
+          </Button>
+        </div>
       </div>
 
       {/* Navigation */}
@@ -119,13 +178,15 @@ export function Sidebar({
                       size={isCollapsed ? 'icon' : 'default'}
                       className={cn(
                         'w-full',
-                        isCollapsed ? 'h-10 w-10' : 'justify-start',
+                        // Touch-friendly minimum size (44x44px) on mobile
+                        isMobile ? 'min-h-[44px]' : isCollapsed ? 'h-10 w-10' : 'h-10',
+                        'justify-start',
                         isActive && 'bg-accent text-accent-foreground'
                       )}
                       onClick={() => handleViewChange(item.id)}
                     >
-                      <Icon className={cn('h-5 w-5', !isCollapsed && 'mr-2')} />
-                      {!isCollapsed && <span>{item.label}</span>}
+                      <Icon className={cn('h-5 w-5 flex-shrink-0', !isCollapsed && 'mr-2')} />
+                      {!isCollapsed && <span className="truncate">{item.label}</span>}
                       {!isCollapsed && item.shortcut && (
                         <kbd className="ml-auto hidden text-xs text-muted-foreground sm:inline-block">
                           {item.shortcut}
@@ -133,7 +194,7 @@ export function Sidebar({
                       )}
                     </Button>
                   </TooltipTrigger>
-                  {isCollapsed && (
+                  {isCollapsed && !isMobile && (
                     <TooltipContent side="right">
                       <p>{item.label}</p>
                       {item.shortcut && (
@@ -158,14 +219,25 @@ export function Sidebar({
               <Button
                 variant="default"
                 size={isCollapsed ? 'icon' : 'default'}
-                className={cn('w-full', isCollapsed ? 'h-10 w-10' : 'justify-start')}
-                onClick={onNewTaskClick}
+                className={cn(
+                  'w-full',
+                  // Touch-friendly minimum size (44x44px) on mobile
+                  isMobile ? 'min-h-[44px]' : isCollapsed ? 'h-10 w-10' : 'h-10',
+                  'justify-start'
+                )}
+                onClick={() => {
+                  onNewTaskClick();
+                  // Close mobile sidebar after clicking new task
+                  if (isMobile && onMobileClose) {
+                    onMobileClose();
+                  }
+                }}
               >
-                <Plus className={cn('h-5 w-5', !isCollapsed && 'mr-2')} />
-                {!isCollapsed && <span>{t('common:actions.newTask', { defaultValue: 'New Task' })}</span>}
+                <Plus className={cn('h-5 w-5 flex-shrink-0', !isCollapsed && 'mr-2')} />
+                {!isCollapsed && <span className="truncate">{t('common:actions.newTask', { defaultValue: 'New Task' })}</span>}
               </Button>
             </TooltipTrigger>
-            {isCollapsed && (
+            {isCollapsed && !isMobile && (
               <TooltipContent side="right">
                 <p>{t('common:actions.newTask', { defaultValue: 'New Task' })}</p>
               </TooltipContent>
@@ -177,14 +249,25 @@ export function Sidebar({
               <Button
                 variant="ghost"
                 size={isCollapsed ? 'icon' : 'default'}
-                className={cn('w-full', isCollapsed ? 'h-10 w-10' : 'justify-start')}
-                onClick={onSettingsClick}
+                className={cn(
+                  'w-full',
+                  // Touch-friendly minimum size (44x44px) on mobile
+                  isMobile ? 'min-h-[44px]' : isCollapsed ? 'h-10 w-10' : 'h-10',
+                  'justify-start'
+                )}
+                onClick={() => {
+                  onSettingsClick();
+                  // Close mobile sidebar after clicking settings
+                  if (isMobile && onMobileClose) {
+                    onMobileClose();
+                  }
+                }}
               >
-                <Settings className={cn('h-5 w-5', !isCollapsed && 'mr-2')} />
-                {!isCollapsed && <span>{t('common:actions.settings', { defaultValue: 'Settings' })}</span>}
+                <Settings className={cn('h-5 w-5 flex-shrink-0', !isCollapsed && 'mr-2')} />
+                {!isCollapsed && <span className="truncate">{t('common:actions.settings', { defaultValue: 'Settings' })}</span>}
               </Button>
             </TooltipTrigger>
-            {isCollapsed && (
+            {isCollapsed && !isMobile && (
               <TooltipContent side="right">
                 <p>{t('common:actions.settings', { defaultValue: 'Settings' })}</p>
               </TooltipContent>
@@ -193,5 +276,6 @@ export function Sidebar({
         </TooltipProvider>
       </div>
     </div>
+    </>
   );
 }

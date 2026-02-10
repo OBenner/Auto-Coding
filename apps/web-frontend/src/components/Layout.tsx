@@ -1,12 +1,15 @@
 /**
  * Layout Component (Web Version)
  * Main layout wrapper with sidebar navigation and navbar
+ * Enhanced with responsive design for mobile devices
  */
 
 import { useState, type ReactNode } from 'react';
 import { Outlet, useNavigate } from 'react-router-dom';
+import { Menu } from 'lucide-react';
 import { Sidebar, type SidebarView } from './Sidebar';
 import { Navbar } from './Navbar';
+import { Button } from './ui/button';
 import { cn } from '../lib/utils';
 
 interface LayoutProps {
@@ -27,6 +30,7 @@ export function Layout({
   onNewTaskClick
 }: LayoutProps) {
   const [currentView, setCurrentView] = useState<SidebarView>(activeView);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const navigate = useNavigate();
 
   const handleViewChange = (view: SidebarView) => {
@@ -36,10 +40,18 @@ export function Layout({
 
   const handleSettingsClick = () => {
     navigate('/settings');
+    // Close mobile sidebar when navigating
+    setIsMobileSidebarOpen(false);
   };
 
   const handleNewTaskClick = () => {
     navigate('/create');
+    // Close mobile sidebar when navigating
+    setIsMobileSidebarOpen(false);
+  };
+
+  const toggleMobileSidebar = () => {
+    setIsMobileSidebarOpen(!isMobileSidebarOpen);
   };
 
   return (
@@ -50,6 +62,8 @@ export function Layout({
         onViewChange={handleViewChange}
         onSettingsClick={handleSettingsClick}
         onNewTaskClick={handleNewTaskClick}
+        isMobileOpen={isMobileSidebarOpen}
+        onMobileClose={() => setIsMobileSidebarOpen(false)}
       />
 
       {/* Main Content Area */}
@@ -57,10 +71,15 @@ export function Layout({
         {/* Top Navbar */}
         <Navbar
           onSettingsClick={handleSettingsClick}
+          onMenuClick={toggleMobileSidebar}
         />
 
         {/* Content */}
-        <main className={cn('flex-1 overflow-auto p-6')}>
+        <main className={cn(
+          'flex-1 overflow-auto',
+          // Responsive padding
+          'p-4 sm:p-6 lg:p-6'
+        )}>
           {children || <Outlet />}
         </main>
       </div>

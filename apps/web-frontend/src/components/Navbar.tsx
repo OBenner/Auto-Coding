@@ -1,10 +1,11 @@
 /**
  * Navbar Component (Web Version)
  * Top navigation bar with app branding and auth status
+ * Enhanced with responsive design for mobile devices
  */
 
 import { useTranslation } from 'react-i18next';
-import { User, LogOut, Loader2 } from 'lucide-react';
+import { User, LogOut, Loader2, Menu } from 'lucide-react';
 import { Button } from './ui/button';
 import {
   DropdownMenu,
@@ -19,12 +20,15 @@ import { useAuthStore } from '../store/auth-store';
 interface NavbarProps {
   /** Callback when user clicks settings */
   onSettingsClick?: () => void;
+  /** Callback when mobile menu button is clicked */
+  onMenuClick?: () => void;
   /** Additional CSS classes */
   className?: string;
 }
 
 export function Navbar({
   onSettingsClick,
+  onMenuClick,
   className
 }: NavbarProps) {
   const { t } = useTranslation(['common', 'navigation']);
@@ -37,22 +41,38 @@ export function Navbar({
   return (
     <nav
       className={cn(
-        'flex h-14 items-center justify-between border-b bg-background px-6',
+        'flex h-14 items-center justify-between border-b bg-background px-4 sm:px-6',
         className
       )}
     >
-      {/* Brand */}
+      {/* Left side: Menu button (mobile) + Brand */}
       <div className="flex items-center gap-3">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-purple-600">
-          <span className="text-sm font-bold text-white">AC</span>
-        </div>
-        <div className="flex flex-col">
-          <h1 className="text-sm font-semibold leading-none">
-            {t('common:appName')}
-          </h1>
-          <span className="text-xs text-muted-foreground">
-            {t('navigation:messages.welcomeBack')}
-          </span>
+        {/* Mobile menu button */}
+        {onMenuClick && (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onMenuClick}
+            className="h-9 w-9 lg:hidden"
+            aria-label="Toggle sidebar menu"
+          >
+            <Menu className="h-5 w-5" />
+          </Button>
+        )}
+
+        {/* Brand */}
+        <div className="flex items-center gap-3">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex-shrink-0">
+            <span className="text-sm font-bold text-white">AC</span>
+          </div>
+          <div className="flex flex-col">
+            <h1 className="text-sm font-semibold leading-none">
+              {t('common:appName')}
+            </h1>
+            <span className="text-xs text-muted-foreground hidden sm:inline-block">
+              {t('navigation:messages.welcomeBack')}
+            </span>
+          </div>
         </div>
       </div>
 
