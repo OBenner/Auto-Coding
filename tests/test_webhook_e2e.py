@@ -221,15 +221,15 @@ class TestWebhookDelivery:
         # Mock HTTP call
         with patch("httpx.AsyncClient.post", mock_http_client.post):
             delivery = await delivery_system.deliver(
-                webhook_config=webhook_config_slack,
-                event=WebhookEvent.BUILD_STARTED,
-                payload={"event": "build.started", "spec_id": "test-001"},
+                webhook_config_slack,
+                WebhookEvent.BUILD_STARTED.value,
+                {"event": "build.started", "spec_id": "test-001"},
             )
 
         # Verify delivery success
         assert delivery.status == "success"
-        assert delivery.attempt_count == 1
-        assert delivery.response_status == 200
+        assert delivery.attempt_number == 1
+        assert delivery.response_status_code == 200
 
     @pytest.mark.asyncio
     async def test_webhook_delivery_with_signature(
@@ -241,18 +241,18 @@ class TestWebhookDelivery:
         delivery_dir = temp_spec_dir / ".webhooks" / "deliveries"
         delivery_dir.mkdir(parents=True, exist_ok=True)
 
-        async def mock_post(url, *, headers, json, **kwargs):
+        async def mock_post(self, url, *, headers, json, **kwargs):
             nonlocal received_signature, received_payload
             received_signature = headers.get("X-Auto-Clause-Signature")
             received_payload = json
             return httpx.Response(200, request=MagicMock(), content=b'{"status": "ok"}')
 
-        with patch("httpx.AsyncClient.post", mock_post):
+        with patch("integrations.webhooks.delivery.httpx.AsyncClient.post", mock_post):
             delivery_system = WebhookDeliverySystem(delivery_dir)
             await delivery_system.deliver(
-                webhook_config=webhook_config_slack,
-                event=WebhookEvent.BUILD_STARTED,
-                payload={"event": "build.started"},
+                webhook_config_slack,
+                WebhookEvent.BUILD_STARTED.value,
+                {"event": "build.started"},
             )
 
         # Verify signature was sent
@@ -269,7 +269,7 @@ class TestWebhookDelivery:
         delivery_dir = temp_spec_dir / ".webhooks" / "deliveries"
         delivery_dir.mkdir(parents=True, exist_ok=True)
 
-        async def mock_post_5xx(url, *, headers, json, **kwargs):
+        async def mock_post_5xx(self, url, *, headers, json, **kwargs):
             nonlocal attempt_count
             attempt_count += 1
             if attempt_count < 3:
@@ -283,13 +283,13 @@ class TestWebhookDelivery:
         with patch("httpx.AsyncClient.post", mock_post_5xx):
             delivery_system = WebhookDeliverySystem(delivery_dir)
             delivery = await delivery_system.deliver(
-                webhook_config=webhook_config_retry,
-                event=WebhookEvent.BUILD_STARTED,
-                payload={"event": "build.started"},
+                webhook_config_retry,
+                WebhookEvent.BUILD_STARTED.value,
+                {"event": "build.started"},
             )
 
         # Verify retry logic
-        assert delivery.attempt_count == 3
+        assert delivery.attempt_number == 3
         assert delivery.status == "success"
 
     @pytest.mark.asyncio
@@ -301,7 +301,7 @@ class TestWebhookDelivery:
         delivery_dir = temp_spec_dir / ".webhooks" / "deliveries"
         delivery_dir.mkdir(parents=True, exist_ok=True)
 
-        async def mock_post_timeout(url, *, headers, json, timeout, **kwargs):
+        async def mock_post_timeout(self, url, *, headers, json, timeout, **kwargs):
             nonlocal attempt_count
             attempt_count += 1
             if attempt_count < 2:
@@ -311,13 +311,13 @@ class TestWebhookDelivery:
         with patch("httpx.AsyncClient.post", mock_post_timeout):
             delivery_system = WebhookDeliverySystem(delivery_dir)
             delivery = await delivery_system.deliver(
-                webhook_config=webhook_config_retry,
-                event=WebhookEvent.BUILD_STARTED,
-                payload={"event": "build.started"},
+                webhook_config_retry,
+                WebhookEvent.BUILD_STARTED.value,
+                {"event": "build.started"},
             )
 
         # Verify retry logic
-        assert delivery.attempt_count == 2
+        assert delivery.attempt_number == 2
         assert delivery.status == "success"
 
     @pytest.mark.asyncio
@@ -328,7 +328,7 @@ class TestWebhookDelivery:
         delivery_dir = temp_spec_dir / ".webhooks" / "deliveries"
         delivery_dir.mkdir(parents=True, exist_ok=True)
 
-        async def mock_post_4xx(url, *, headers, json, **kwargs):
+        async def mock_post_4xx(self, url, *, headers, json, **kwargs):
             return httpx.Response(
                 404, request=MagicMock(), content=b'{"error": "Not Found"}'
             )
@@ -336,13 +336,13 @@ class TestWebhookDelivery:
         with patch("httpx.AsyncClient.post", mock_post_4xx):
             delivery_system = WebhookDeliverySystem(delivery_dir)
             delivery = await delivery_system.deliver(
-                webhook_config=webhook_config_retry,
-                event=WebhookEvent.BUILD_STARTED,
-                payload={"event": "build.started"},
+                webhook_config_retry,
+                WebhookEvent.BUILD_STARTED.value,
+                {"event": "build.started"},
             )
 
         # Verify no retry on 4xx
-        assert delivery.attempt_count == 1
+        assert delivery.attempt_number == 1
         assert delivery.status == "permanent_failure"
 
     @pytest.mark.asyncio
@@ -357,17 +357,17 @@ class TestWebhookDelivery:
         delivery_dir.mkdir(parents=True, exist_ok=True)
         delivered_webhooks = []
 
-        async def mock_post(url, *, headers, json, **kwargs):
+        async def mock_post(self, url, *, headers, json, **kwargs):
             delivered_webhooks.append(url)
             return httpx.Response(200, request=MagicMock(), content=b'{"status": "ok"}')
 
-        with patch("httpx.AsyncClient.post", mock_post):
+        with patch("integrations.webhooks.delivery.httpx.AsyncClient.post", mock_post):
             delivery_system = WebhookDeliverySystem(delivery_dir)
             webhooks = [webhook_config_slack, webhook_config_discord]
             payload = {"event": "build.started", "spec_id": "test-001"}
 
             deliveries = await delivery_system.deliver_batch(
-                webhook_configs=webhooks, event=WebhookEvent.BUILD_STARTED, payload=payload
+                webhooks, WebhookEvent.BUILD_STARTED.value, payload
             )
 
         # Verify all webhooks received the event
@@ -476,15 +476,16 @@ class TestWebhookDispatcher:
 
         received_payloads = []
 
-        async def mock_post(url, *, headers, json, **kwargs):
+        async def mock_post(self, url, *, headers, json, **kwargs):
             received_payloads.append(json)
             return httpx.Response(200, request=MagicMock(), content=b'{"status": "ok"}')
 
-        with patch("httpx.AsyncClient.post", mock_post):
-            dispatcher = WebhookDispatcher(str(temp_spec_dir), str(temp_spec_dir.parent))
-            await dispatcher.dispatch_event(
+        with patch("integrations.webhooks.delivery.httpx.AsyncClient.post", mock_post):
+            dispatcher = WebhookDispatcher(temp_spec_dir, temp_spec_dir.parent)
+            dispatcher.dispatch_event(
                 event=WebhookEvent.SPEC_CREATED,
                 data={"spec_id": "test-001", "spec_title": "Test Feature"},
+                blocking=True,
             )
 
         # Verify webhook was called
@@ -502,17 +503,18 @@ class TestWebhookDispatcher:
 
         received_count = [0]
 
-        async def mock_post(url, *, headers, json, **kwargs):
+        async def mock_post(self, url, *, headers, json, **kwargs):
             received_count[0] += 1
             return httpx.Response(200, request=MagicMock(), content=b'{"status": "ok"}')
 
-        with patch("httpx.AsyncClient.post", mock_post):
-            dispatcher = WebhookDispatcher(str(temp_spec_dir), str(temp_spec_dir.parent))
+        with patch("integrations.webhooks.delivery.httpx.AsyncClient.post", mock_post):
+            dispatcher = WebhookDispatcher(temp_spec_dir, temp_spec_dir.parent)
 
             # Send SPEC_CREATED (not subscribed)
-            await dispatcher.dispatch_event(
+            dispatcher.dispatch_event(
                 event=WebhookEvent.SPEC_CREATED,
                 data={},
+                blocking=True,
             )
 
         # Verify webhook was not called (not subscribed to SPEC_CREATED)
@@ -527,29 +529,24 @@ class TestWebhookDispatcher:
     ):
         """Test dispatching event to multiple subscribed webhooks."""
         # Save both configs
-        slack_path = (
-            temp_spec_dir / ".webhooks" / "configs" / f"{webhook_config_slack.webhook_id}.json"
-        )
-        discord_path = (
-            temp_spec_dir / ".webhooks" / "configs" / f"{webhook_config_discord.webhook_id}.json"
-        )
-
-        webhook_config_slack.save(str(slack_path))
-        webhook_config_discord.save(str(discord_path))
+        config_dir = temp_spec_dir / ".webhooks" / "configs"
+        webhook_config_slack.save(config_dir)
+        webhook_config_discord.save(config_dir)
 
         received_urls = []
 
-        async def mock_post(url, *, headers, json, **kwargs):
+        async def mock_post(self, url, *, headers, json, **kwargs):
             received_urls.append(url)
             return httpx.Response(200, request=MagicMock(), content=b'{"status": "ok"}')
 
-        with patch("httpx.AsyncClient.post", mock_post):
-            dispatcher = WebhookDispatcher(str(temp_spec_dir), str(temp_spec_dir.parent))
+        with patch("integrations.webhooks.delivery.httpx.AsyncClient.post", mock_post):
+            dispatcher = WebhookDispatcher(temp_spec_dir, temp_spec_dir.parent)
 
             # Send BUILD_COMPLETED (both Slack and Discord are subscribed)
-            await dispatcher.dispatch_event(
+            dispatcher.dispatch_event(
                 event=WebhookEvent.BUILD_COMPLETED,
                 data={"spec_id": "test-001", "status": "success"},
+                blocking=True,
             )
 
         # Verify both webhooks received the event
@@ -564,17 +561,17 @@ class TestWebhookDispatcher:
 
         received_payload = None
 
-        async def mock_post(url, *, headers, json, **kwargs):
+        async def mock_post(self, url, *, headers, json, **kwargs):
             nonlocal received_payload
             received_payload = json
             return httpx.Response(200, request=MagicMock(), content=b'{"status": "ok"}')
 
-        with patch("httpx.AsyncClient.post", mock_post):
-            dispatcher = WebhookDispatcher(str(temp_spec_dir), str(temp_spec_dir.parent))
-            result = await dispatcher.test_webhook(webhook_config_slack.webhook_id)
+        with patch("integrations.webhooks.delivery.httpx.AsyncClient.post", mock_post):
+            dispatcher = WebhookDispatcher(temp_spec_dir, temp_spec_dir.parent)
+            result = dispatcher.test_webhook(webhook_config_slack.webhook_id)
 
         # Verify test webhook was sent
-        assert result is True
+        assert result["success"] is True
         assert received_payload is not None
         assert received_payload["event"] == "test"
 
@@ -607,19 +604,20 @@ class TestWebhookE2E:
         # Step 2: Trigger event
         received_events = []
 
-        async def mock_post(url, *, headers, json, **kwargs):
+        async def mock_post(self, url, *, headers, json, **kwargs):
             received_events.append(json)
             return httpx.Response(200, request=MagicMock(), content=b'{"status": "ok"}')
 
-        with patch("httpx.AsyncClient.post", mock_post):
-            dispatcher = WebhookDispatcher(str(temp_spec_dir), str(temp_spec_dir.parent))
-            await dispatcher.dispatch_event(
+        with patch("integrations.webhooks.delivery.httpx.AsyncClient.post", mock_post):
+            dispatcher = WebhookDispatcher(temp_spec_dir, temp_spec_dir.parent)
+            dispatcher.dispatch_event(
                 event=WebhookEvent.BUILD_STARTED,
                 data={
                     "spec_id": "e2e-test-001",
                     "spec_title": "E2E Test Feature",
                     "phase": "planning",
                 },
+                blocking=True,
             )
 
         # Step 3: Verify delivery
@@ -654,7 +652,7 @@ class TestWebhookE2E:
         # Step 2 & 3: Trigger event with simulated failures and retries
         attempt_times = []
 
-        async def mock_post_with_retry(url, *, headers, json, **kwargs):
+        async def mock_post_with_retry(self, url, *, headers, json, **kwargs):
             attempt_times.append(time.time())
             if len(attempt_times) < 3:
                 # First 2 attempts fail
@@ -665,10 +663,11 @@ class TestWebhookE2E:
             return httpx.Response(200, request=MagicMock(), content=b'{"status": "ok"}')
 
         with patch("httpx.AsyncClient.post", mock_post_with_retry):
-            dispatcher = WebhookDispatcher(str(temp_spec_dir), str(temp_spec_dir.parent))
-            await dispatcher.dispatch_event(
+            dispatcher = WebhookDispatcher(temp_spec_dir, temp_spec_dir.parent)
+            dispatcher.dispatch_event(
                 event=WebhookEvent.BUILD_STARTED,
                 data={"spec_id": "retry-test-001"},
+                blocking=True,
             )
 
         # Step 4: Verify retries happened with exponential backoff
@@ -699,18 +698,19 @@ class TestWebhookE2E:
         received_signature = None
         received_payload = None
 
-        async def mock_post(url, *, headers, json, **kwargs):
+        async def mock_post(self, url, *, headers, json, **kwargs):
             nonlocal received_signature, received_payload
             received_signature = headers.get("X-Auto-Clause-Signature")
             received_payload = json
             return httpx.Response(200, request=MagicMock(), content=b'{"status": "ok"}')
 
         # Step 2: Send event
-        with patch("httpx.AsyncClient.post", mock_post):
-            dispatcher = WebhookDispatcher(str(temp_spec_dir), str(temp_spec_dir.parent))
-            await dispatcher.dispatch_event(
+        with patch("integrations.webhooks.delivery.httpx.AsyncClient.post", mock_post):
+            dispatcher = WebhookDispatcher(temp_spec_dir, temp_spec_dir.parent)
+            dispatcher.dispatch_event(
                 event=WebhookEvent.BUILD_COMPLETED,
                 data={"spec_id": "security-test-001", "status": "completed"},
+                blocking=True,
             )
 
         # Step 3: Verify signature was sent
@@ -748,16 +748,17 @@ class TestWebhookTemplates:
         """Test Slack template is correctly rendered."""
         received_payload = None
 
-        async def mock_post(url, *, headers, json, **kwargs):
+        async def mock_post(self, url, *, headers, json, **kwargs):
             nonlocal received_payload
             received_payload = json
             return httpx.Response(200, request=MagicMock(), content=b'{"status": "ok"}')
 
-        with patch("httpx.AsyncClient.post", mock_post):
-            dispatcher = WebhookDispatcher(str(temp_spec_dir), str(temp_spec_dir.parent))
-            await dispatcher.dispatch_event(
+        with patch("integrations.webhooks.delivery.httpx.AsyncClient.post", mock_post):
+            dispatcher = WebhookDispatcher(temp_spec_dir, temp_spec_dir.parent)
+            dispatcher.dispatch_event(
                 event=WebhookEvent.BUILD_STARTED,
                 data={"spec_id": "slack-test-001", "spec_title": "Slack Test"},
+                blocking=True,
             )
 
         # Verify Slack Block Kit format
@@ -772,16 +773,17 @@ class TestWebhookTemplates:
         """Test Discord template is correctly rendered."""
         received_payload = None
 
-        async def mock_post(url, *, headers, json, **kwargs):
+        async def mock_post(self, url, *, headers, json, **kwargs):
             nonlocal received_payload
             received_payload = json
             return httpx.Response(200, request=MagicMock(), content=b'{"status": "ok"}')
 
-        with patch("httpx.AsyncClient.post", mock_post):
-            dispatcher = WebhookDispatcher(str(temp_spec_dir), str(temp_spec_dir.parent))
-            await dispatcher.dispatch_event(
+        with patch("integrations.webhooks.delivery.httpx.AsyncClient.post", mock_post):
+            dispatcher = WebhookDispatcher(temp_spec_dir, temp_spec_dir.parent)
+            dispatcher.dispatch_event(
                 event=WebhookEvent.SPEC_CREATED,
                 data={"spec_id": "discord-test-001", "spec_title": "Discord Test"},
+                blocking=True,
             )
 
         # Verify Discord embed format
@@ -807,17 +809,18 @@ class TestDeliveryStatistics:
         config_dir = temp_spec_dir / ".webhooks" / "configs"
         webhook_config_slack.save(config_dir)
 
-        async def mock_post(url, *, headers, json, **kwargs):
+        async def mock_post(self, url, *, headers, json, **kwargs):
             return httpx.Response(200, request=MagicMock(), content=b'{"status": "ok"}')
 
-        with patch("httpx.AsyncClient.post", mock_post):
-            dispatcher = WebhookDispatcher(str(temp_spec_dir), str(temp_spec_dir.parent))
+        with patch("integrations.webhooks.delivery.httpx.AsyncClient.post", mock_post):
+            dispatcher = WebhookDispatcher(temp_spec_dir, temp_spec_dir.parent)
 
             # Send 3 successful events
             for i in range(3):
-                await dispatcher.dispatch_event(
+                dispatcher.dispatch_event(
                     event=WebhookEvent.BUILD_STARTED,
                     data={"spec_id": f"stats-test-{i}"},
+                    blocking=True,
                 )
 
         # Check statistics
@@ -849,16 +852,19 @@ class TestErrorHandling:
             enabled=True,
         )
 
-        async def mock_post(url, *, headers, json, **kwargs):
+        async def mock_post(self, url, *, headers, json, **kwargs):
             # This should fail with invalid URL
             raise httpx.UnsupportedProtocol("Invalid URL scheme")
 
-        with patch("httpx.AsyncClient.post", mock_post):
-            delivery_system = WebhookDeliverySystem()
+        delivery_dir = temp_spec_dir / ".webhooks" / "deliveries"
+        delivery_dir.mkdir(parents=True, exist_ok=True)
+
+        with patch("integrations.webhooks.delivery.httpx.AsyncClient.post", mock_post):
+            delivery_system = WebhookDeliverySystem(delivery_dir)
             delivery = await delivery_system.deliver(
-                webhook_config=invalid_config,
-                event=WebhookEvent.BUILD_STARTED,
-                payload={"event": "build.started"},
+                invalid_config,
+                WebhookEvent.BUILD_STARTED.value,
+                {"event": "build.started"},
             )
 
         # Verify error was handled
@@ -874,15 +880,16 @@ class TestErrorHandling:
 
         call_count = [0]
 
-        async def mock_post(url, *, headers, json, **kwargs):
+        async def mock_post(self, url, *, headers, json, **kwargs):
             call_count[0] += 1
             return httpx.Response(200, request=MagicMock(), content=b'{"status": "ok"}')
 
-        with patch("httpx.AsyncClient.post", mock_post):
-            dispatcher = WebhookDispatcher(str(temp_spec_dir), str(temp_spec_dir.parent))
-            await dispatcher.dispatch_event(
+        with patch("integrations.webhooks.delivery.httpx.AsyncClient.post", mock_post):
+            dispatcher = WebhookDispatcher(temp_spec_dir, temp_spec_dir.parent)
+            dispatcher.dispatch_event(
                 event=WebhookEvent.BUILD_STARTED,
                 data={"spec_id": "test-001"},
+                blocking=True,
             )
 
         # Verify webhook was not called
@@ -912,25 +919,26 @@ class TestPerformance:
                 events=[WebhookEvent.BUILD_STARTED.value],
                 enabled=True,
             )
-            config_path = temp_spec_dir / ".webhooks" / "configs" / f"{config.webhook_id}.json"
-            config.save(str(config_path))
+            config_dir = temp_spec_dir / ".webhooks" / "configs"
+            config.save(config_dir)
             webhooks.append(config)
 
         delivery_times = []
 
-        async def mock_post(url, *, headers, json, **kwargs):
+        async def mock_post(self, url, *, headers, json, **kwargs):
             start = time.time()
             # Simulate network delay
             await asyncio.sleep(0.1)
             delivery_times.append(time.time() - start)
             return httpx.Response(200, request=MagicMock(), content=b'{"status": "ok"}')
 
-        with patch("httpx.AsyncClient.post", mock_post):
-            dispatcher = WebhookDispatcher(str(temp_spec_dir), str(temp_spec_dir.parent))
+        with patch("integrations.webhooks.delivery.httpx.AsyncClient.post", mock_post):
+            dispatcher = WebhookDispatcher(temp_spec_dir, temp_spec_dir.parent)
             start_time = time.time()
-            await dispatcher.dispatch_event(
+            dispatcher.dispatch_event(
                 event=WebhookEvent.BUILD_STARTED,
                 data={"spec_id": "perf-test-001"},
+                blocking=True,
             )
             total_time = time.time() - start_time
 
