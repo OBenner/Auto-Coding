@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useMemo } from 'react';
+import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import {
   Terminal,
@@ -138,6 +138,15 @@ export function TaskLogs({
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<LogFilterType>('all');
 
+  // Performance measurement
+  const renderStartTime = useMemo(() => performance.now(), []);
+  const previousLogCountRef = useRef(0);
+  const performanceMetricsRef = useRef({
+    initialRender: 0,
+    filterChanges: [] as Array<{ filter: LogFilterType; time: number; itemCount: number }>,
+    logUpdates: [] as Array<{ logCount: number; time: number }>
+  });
+
   // Helper function to check if an entry matches the current filter
   const entryMatchesFilter = useCallback((entry: TaskLogEntry | undefined, filter: LogFilterType): boolean => {
     if (!entry || filter === 'all') return true;
@@ -267,6 +276,87 @@ export function TaskLogs({
     },
     [toggleDetail]
   );
+
+  // Calculate total log count across all phases
+  const totalLogCount = useMemo(() => {
+    if (!phaseLogs) return 0;
+    return Object.values(phaseLogs.phases).reduce(
+      (sum, phase) => sum + (phase?.entries?.length || 0),
+      0
+    );
+  }, [phaseLogs]);
+
+  // Performance: Measure initial render when logs load
+  useEffect(() => {
+    if (phaseLogs && totalLogCount > 0) {
+      const renderEndTime = performance.now();
+      const initialRenderTime = renderEndTime - renderStartTime;
+
+      performanceMetricsRef.current.initialRender = initialRenderTime;
+
+      // Log performance metrics to console for verification
+      console.group('📊 TaskLogs Performance Metrics');
+      console.log(`Initial Render: ${initialRenderTime.toFixed(2)}ms`);
+      console.log(`Total Log Entries: ${totalLogCount}`);
+      console.log(`Flattened Items: ${flattenedItems.length}`);
+      console.log(`Filtered Items: ${filteredItems.length}`);
+      console.log(`Performance Target: <100ms ${initialRenderTime < 100 ? '✅ PASS' : '❌ FAIL'}`);
+      console.groupEnd();
+
+      // Track for log update measurements
+      previousLogCountRef.current = totalLogCount;
+    }
+  }, [phaseLogs, totalLogCount, flattenedItems.length, filteredItems.length, renderStartTime]);
+
+  // Performance: Measure render time when logs update
+  useEffect(() => {
+    if (phaseLogs && totalLogCount > 0 && previousLogCountRef.current > 0) {
+      const updateStartTime = performance.now();
+
+      // Use requestAnimationFrame to measure after React completes rendering
+      requestAnimationFrame(() => {
+        const updateEndTime = performance.now();
+        const updateTime = updateEndTime - updateStartTime;
+
+        performanceMetricsRef.current.logUpdates.push({
+          logCount: totalLogCount,
+          time: updateTime
+        });
+
+        console.log(`🔄 TaskLogs Update: ${totalLogCount} entries rendered in ${updateTime.toFixed(2)}ms`);
+
+        previousLogCountRef.current = totalLogCount;
+      });
+    }
+  }, [phaseLogs, totalLogCount]);
+
+  // Performance: Measure filter change performance
+  useEffect(() => {
+    if (phaseLogs && totalLogCount > 0) {
+      const filterStartTime = performance.now();
+
+      // Use requestAnimationFrame to measure after React completes rendering
+      requestAnimationFrame(() => {
+        const filterEndTime = performance.now();
+        const filterTime = filterEndTime - filterStartTime;
+
+        performanceMetricsRef.current.filterChanges.push({
+          filter: filterType,
+          time: filterTime,
+          itemCount: filteredItems.length
+        });
+
+        console.log(`🔍 Filter Change (${filterType}): ${filteredItems.length} items rendered in ${filterTime.toFixed(2)}ms`);
+      });
+    }
+  }, [filterType, filteredItems.length, phaseLogs, totalLogCount]);
+
+  // Expose performance metrics to window for debugging (development only)
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'development') {
+      (window as any).__taskLogsPerformance = performanceMetricsRef.current;
+    }
+  }, []);
 
   if (isLoadingLogs) {
     return (
