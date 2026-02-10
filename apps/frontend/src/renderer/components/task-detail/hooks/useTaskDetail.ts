@@ -80,6 +80,10 @@ export function useTaskDetail({ task }: UseTaskDetailOptions) {
   const logsEndRef = useRef<HTMLDivElement>(null);
   const logsContainerRef = useRef<HTMLDivElement>(null);
 
+  // Track previous log count to detect new log entries
+  const previousLogCountRef = useRef<number>(0);
+  const [shouldAutoScroll, setShouldAutoScroll] = useState(false);
+
   // Merge preview state
   const [mergePreview, setMergePreview] = useState<{
     files: string[];
@@ -155,25 +159,54 @@ export function useTaskDetail({ task }: UseTaskDetailOptions) {
   }, [task.id, isActiveTask, hasCheckedRunning, executionPhase, task.executionProgress?.phase]);
 
   // Handle scroll events in logs to detect if user scrolled up
-  const handleLogsScroll = (e: React.UIEvent<HTMLDivElement>) => {
+  const handleLogsScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
     const target = e.target as HTMLDivElement;
     const isNearBottom = target.scrollHeight - target.scrollTop - target.clientHeight < 100;
-    setIsUserScrolledUp(!isNearBottom);
-  };
 
-  // Auto-scroll logs to bottom only if user hasn't scrolled up
-  useEffect(() => {
-    if (activeTab === 'logs' && logsEndRef.current && !isUserScrolledUp) {
-      logsEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    // Update scroll state based on user position
+    setIsUserScrolledUp(!isNearBottom);
+
+    // If user scrolls to bottom, re-enable auto-scroll for active tasks
+    if (isNearBottom && isActiveTask) {
+      setShouldAutoScroll(true);
     }
-  }, [activeTab, isUserScrolledUp]);
+  }, [isActiveTask]);
 
   // Reset scroll state when switching to logs tab
   useEffect(() => {
     if (activeTab === 'logs') {
       setIsUserScrolledUp(false);
+      // Enable auto-scroll when switching to logs tab for active tasks
+      if (isActiveTask) {
+        setShouldAutoScroll(true);
+      }
+    } else {
+      // Disable auto-scroll when leaving logs tab
+      setShouldAutoScroll(false);
     }
-  }, [activeTab]);
+  }, [activeTab, isActiveTask]);
+
+  // Detect when new logs arrive and trigger auto-scroll for active tasks
+  useEffect(() => {
+    if (!phaseLogs || activeTab !== 'logs') return;
+
+    // Calculate current total log count across all phases
+    const currentLogCount = Object.values(phaseLogs.phases).reduce(
+      (sum, phase) => sum + (phase?.entries?.length || 0),
+      0
+    );
+
+    // Check if new logs arrived
+    const hasNewLogs = currentLogCount > previousLogCountRef.current;
+
+    // Update the ref for next comparison
+    previousLogCountRef.current = currentLogCount;
+
+    // For active tasks, enable auto-scroll when new logs arrive and user hasn't manually scrolled up
+    if (isActiveTask && hasNewLogs && !isUserScrolledUp) {
+      setShouldAutoScroll(true);
+    }
+  }, [phaseLogs, activeTab, isActiveTask, isUserScrolledUp]);
 
   // Reset feedback images when task changes to prevent image leakage between tasks
   useEffect(() => {
@@ -526,6 +559,7 @@ export function useTaskDetail({ task }: UseTaskDetailOptions) {
     showPRDialog,
     isCreatingPR,
     isLoadingPlan,
+    shouldAutoScroll,
 
     // Setters
     setFeedback,

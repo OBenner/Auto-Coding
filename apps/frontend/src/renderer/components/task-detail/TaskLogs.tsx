@@ -36,6 +36,7 @@ interface TaskLogsProps {
   logsContainerRef: React.RefObject<HTMLDivElement | null>;
   onLogsScroll: (e: React.UIEvent<HTMLDivElement>) => void;
   onTogglePhase: (phase: TaskLogPhase) => void;
+  shouldAutoScroll: boolean;
 }
 
 const PHASE_LABELS: Record<TaskLogPhase, string> = {
@@ -132,7 +133,8 @@ export function TaskLogs({
   logsEndRef,
   logsContainerRef,
   onLogsScroll,
-  onTogglePhase
+  onTogglePhase,
+  shouldAutoScroll
 }: TaskLogsProps) {
   const parentRef = useRef<HTMLDivElement>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -260,6 +262,18 @@ export function TaskLogs({
     estimateSize,
     overscan: OVERSCAN,
   });
+
+  // Auto-scroll to bottom when new logs arrive for active tasks
+  useEffect(() => {
+    if (shouldAutoScroll && filteredItems.length > 0) {
+      // Scroll to the last item using the virtualizer's scrollToIndex
+      // This is more efficient than scrollIntoView for virtualized lists
+      rowVirtualizer.scrollToIndex(filteredItems.length - 1, {
+        align: 'end',
+        behavior: 'smooth',
+      });
+    }
+  }, [shouldAutoScroll, filteredItems.length, rowVirtualizer]);
 
   // Create toggle handler for phase headers
   const createPhaseToggleHandler = useCallback(
