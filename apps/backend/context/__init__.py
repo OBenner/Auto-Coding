@@ -14,6 +14,7 @@ from .pattern_discovery import PatternDiscoverer
 from .search import CodeSearcher
 from .serialization import load_context, save_context, serialize_context
 from .service_matcher import ServiceMatcher
+from .token_estimator import TokenEstimator
 
 __all__ = [
     # Main builder
@@ -27,6 +28,7 @@ __all__ = [
     "KeywordExtractor",
     "FileCategorizer",
     "PatternDiscoverer",
+    "TokenEstimator",
     # Graphiti integration
     "fetch_graph_hints",
     "is_graphiti_enabled",
