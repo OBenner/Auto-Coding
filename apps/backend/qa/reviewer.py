@@ -107,6 +107,52 @@ async def run_qa_agent_session(
         print("✓ Memory context loaded for QA reviewer")
         debug_success("qa_reviewer", "Graphiti memory context loaded for QA")
 
+    # Run pattern validation on modified files
+    from .pattern_validator import validate_patterns_for_qa
+
+    pattern_validation_result = await validate_patterns_for_qa(
+        spec_dir, project_dir, modified_files=None
+    )
+
+    if pattern_validation_result:
+        print("✓ Pattern validation completed")
+        debug_success(
+            "qa_reviewer",
+            "Pattern validation completed",
+            violations=pattern_validation_result["summary"].get("total_violations", 0),
+        )
+
+        # Add pattern validation results to prompt
+        prompt += "\n\n---\n\n## Pattern Validation Results\n\n"
+
+        if pattern_validation_result["passed"]:
+            prompt += "✅ **All code follows learned codebase patterns**\n\n"
+        else:
+            summary = pattern_validation_result["summary"]
+            prompt += f"⚠️ **Pattern violations detected:**\n"
+            prompt += f"- {summary['errors']} errors\n"
+            prompt += f"- {summary['warnings']} warnings\n"
+            prompt += f"- {summary['info']} info items\n\n"
+
+            # Include violation details
+            if pattern_validation_result["violations"]:
+                prompt += "**Violation Details:**\n\n"
+                for violation in pattern_validation_result["violations"][:10]:
+                    location = violation["file_path"]
+                    if violation.get("line_number"):
+                        location += f":{violation['line_number']}"
+                    prompt += f"- [{violation['severity']}] {location}: {violation['description']}\n"
+
+                if len(pattern_validation_result["violations"]) > 10:
+                    remaining = len(pattern_validation_result["violations"]) - 10
+                    prompt += f"\n...and {remaining} more violations.\n"
+
+                prompt += (
+                    "\n**Action Required:** Review these violations during your QA validation. "
+                    "Pattern violations should be included in your issues list if they affect "
+                    "code consistency and maintainability.\n"
+                )
+
     # Add session context
     prompt += f"\n\n---\n\n**QA Session**: {qa_session}\n"
     prompt += f"**Max Iterations**: {max_iterations}\n"
