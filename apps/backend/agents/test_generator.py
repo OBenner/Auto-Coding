@@ -31,7 +31,7 @@ from ui import (
 )
 
 # Import framework-specific generators
-from .vitest_generator import generate_vitest_tests
+from .vitest_generator import generate_vitest_tests, validate_vitest_tests
 
 logger = logging.getLogger(__name__)
 
@@ -75,27 +75,40 @@ def detect_test_framework(analysis_results: dict[str, Any]) -> str:
         return "pytest"
 
 
-def validate_generated_tests(test_files: list[Path], project_dir: Path) -> bool:
+def validate_generated_tests(
+    test_files: list[Path], project_dir: Path, framework: str = "pytest"
+) -> bool:
     """
     Validate that generated tests are syntactically correct.
 
-    Uses pytest --collect-only to verify tests can be collected without errors.
+    Routes to framework-specific validation:
+    - pytest: Uses pytest --collect-only to verify tests can be collected
+    - vitest: Uses TypeScript compiler and Vitest to verify tests
 
     Args:
         test_files: List of generated test file paths
         project_dir: Project root directory
+        framework: Test framework ("pytest" or "vitest")
 
     Returns:
         True if all tests are valid, False otherwise
     """
-    import subprocess
-
     if not test_files:
         logger.warning("No test files to validate")
         return False
 
+    # Route to framework-specific validation
+    if framework == "vitest":
+        logger.info("Using Vitest validation for TypeScript/React tests")
+        return validate_vitest_tests(test_files, project_dir)
+
+    # Default to pytest validation
+    logger.info("Using pytest validation for Python tests")
+
+    import subprocess
+
     print()
-    print_status("Validating generated tests...", "progress")
+    print_status("Validating generated pytest tests...", "progress")
 
     for test_file in test_files:
         file_path = project_dir / test_file
@@ -331,7 +344,7 @@ Begin by loading context (Phase 0 in your prompt).
     print()
 
     # Validate generated tests
-    validation_success = validate_generated_tests(test_files, project_dir)
+    validation_success = validate_generated_tests(test_files, project_dir, "pytest")
 
     # Log results
     if task_logger:
