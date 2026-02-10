@@ -1,0 +1,84 @@
+{
+  "title": "Settings",
+  "sections": {
+    "general": "General",
+    "api": "API Configuration",
+    "authentication": "Authentication",
+    "appearance": "Appearance",
+    "advanced": "Advanced"
+  },
+  "general": {
+    "language": "Language",
+    "languageDescription": "Select your preferred language",
+    "theme": "Theme",
+    "themeOptions": {
+      "light": "Light",
+      "dark": "Dark",
+      "system": "System"
+    },
+    "notifications": "Notifications",
+    "notificationsDescription": "Enable desktop notifications for task updates"
+  },
+  "api": {
+    "title": "API Configuration",
+    "description": "Configure connection to Auto-Coding backend",
+    "apiUrl": "API URL",
+    "apiUrlPlaceholder": "http://localhost:8000",
+    "apiUrlDescription": "Backend API endpoint URL",
+    "wsUrl": "WebSocket URL",
+    "wsUrlPlaceholder": "ws://localhost:8000/ws",
+    "wsUrlDescription": "WebSocket endpoint for real-time updates",
+    "timeout": "Request Timeout",
+    "timeoutDescription": "Maximum time to wait for API responses (seconds)",
+    "testConnection": "Test Connection",
+    "connectionSuccess": "Connection successful",
+    "connectionFailed": "Connection failed"
+  },
+  "authentication": {
+    "title": "Authentication",
+    "description": "Manage your authentication credentials",
+    "token": "Access Token",
+    "tokenPlaceholder": "Enter your access token",
+    "tokenDescription": "Token for authenticating API requests",
+    "verifyToken": "Verify Token",
+    "tokenValid": "Token is valid",
+    "tokenInvalid": "Token is invalid",
+    "clearToken": "Clear Token",
+    "status": "Authentication Status",
+    "authenticated": "Authenticated",
+    "notAuthenticated": "Not Authenticated"
+  },
+  "appearance": {
+    "title": "Appearance",
+    "description": "Customize the look and feel",
+    "compactMode": "Compact Mode",
+    "compactModeDescription": "Use a more condensed UI layout",
+    "animations": "Animations",
+    "animationsDescription": "Enable UI animations and transitions"
+  },
+  "advanced": {
+    "title": "Advanced Settings",
+    "description": "Advanced configuration options",
+    "debugMode": "Debug Mode",
+    "debugModeDescription": "Enable verbose logging in console",
+    "autoReconnect": "Auto-Reconnect",
+    "autoReconnectDescription": "Automatically reconnect WebSocket on disconnect",
+    "cacheEnabled": "Enable Caching",
+    "cacheEnabledDescription": "Cache API responses for faster loading",
+    "clearCache": "Clear Cache",
+    "cacheCleared": "Cache cleared successfully"
+  },
+  "buttons": {
+    "save": "Save Settings",
+    "cancel": "Cancel",
+    "reset": "Reset to Defaults",
+    "apply": "Apply"
+  },
+  "messages": {
+    "saveSuccess": "Settings saved successfully",
+    "saveFailed": "Failed to save settings",
+    "resetConfirm": "Are you sure you want to reset all settings to defaults?",
+    "resetSuccess": "Settings reset to defaults",
+    "unsavedChanges": "You have unsaved changes. Are you sure you want to leave?"
+  }
+}

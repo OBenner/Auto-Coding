@@ -1,0 +1,92 @@
+{
+  "generic": "An error occurred",
+  "unknownError": "An unknown error occurred",
+  "operationFailed": "Operation failed",
+  "networkError": "Network error",
+  "notFound": "Not found",
+  "unauthorized": "Unauthorized",
+  "forbidden": "Forbidden",
+  "serverError": "Server error",
+  "timeout": "Request timeout",
+  "api": {
+    "connectionFailed": "Failed to connect to API",
+    "requestFailed": "API request failed",
+    "invalidResponse": "Invalid API response",
+    "timeout": "API request timed out",
+    "unauthorized": "API authentication failed",
+    "notFound": "API endpoint not found: {{endpoint}}",
+    "serverError": "API server error: {{message}}"
+  },
+  "task": {
+    "notFound": "Task not found: {{taskId}}",
+    "createFailed": "Failed to create task",
+    "startFailed": "Failed to start task: {{error}}",
+    "stopFailed": "Failed to stop task: {{error}}",
+    "deleteFailed": "Failed to delete task: {{error}}",
+    "loadFailed": "Failed to load task details",
+    "alreadyRunning": "Task is already running",
+    "notRunning": "Task is not running",
+    "invalidStatus": "Invalid task status: {{status}}",
+    "parseError": "Failed to parse task data: {{error}}"
+  },
+  "spec": {
+    "notFound": "Spec not found: {{specId}}",
+    "createFailed": "Failed to create spec",
+    "loadFailed": "Failed to load spec details",
+    "deleteFailed": "Failed to delete spec: {{error}}",
+    "invalidFormat": "Invalid spec format",
+    "parseError": "Failed to parse spec: {{error}}"
+  },
+  "websocket": {
+    "connectionFailed": "WebSocket connection failed",
+    "disconnected": "WebSocket disconnected",
+    "reconnectFailed": "Failed to reconnect WebSocket",
+    "sendFailed": "Failed to send WebSocket message",
+    "invalidMessage": "Invalid WebSocket message received"
+  },
+  "auth": {
+    "tokenMissing": "Authentication token is missing",
+    "tokenInvalid": "Authentication token is invalid",
+    "tokenExpired": "Authentication token has expired",
+    "verificationFailed": "Token verification failed",
+    "unauthorized": "You are not authorized to perform this action",
+    "sessionExpired": "Your session has expired. Please log in again."
+  },
+  "validation": {
+    "required": "This field is required",
+    "invalidFormat": "Invalid format",
+    "tooShort": "Value is too short (minimum: {{min}})",
+    "tooLong": "Value is too long (maximum: {{max}})",
+    "invalidUrl": "Invalid URL format",
+    "invalidEmail": "Invalid email format",
+    "mustBeNumber": "Value must be a number",
+    "mustBePositive": "Value must be positive",
+    "outOfRange": "Value must be between {{min}} and {{max}}"
+  },
+  "file": {
+    "uploadFailed": "File upload failed",
+    "invalidType": "Invalid file type: {{type}}",
+    "tooLarge": "File is too large (maximum: {{maxSize}})",
+    "readFailed": "Failed to read file",
+    "notFound": "File not found: {{filename}}"
+  },
+  "settings": {
+    "loadFailed": "Failed to load settings",
+    "saveFailed": "Failed to save settings",
+    "resetFailed": "Failed to reset settings",
+    "invalidValue": "Invalid setting value: {{setting}}"
+  },
+  "cache": {
+    "loadFailed": "Failed to load cached data",
+    "saveFailed": "Failed to save to cache",
+    "clearFailed": "Failed to clear cache"
+  },
+  "general": {
+    "pageNotFound": "Page not found",
+    "accessDenied": "Access denied",
+    "sessionExpired": "Session expired",
+    "maintenanceMode": "System is under maintenance",
+    "tryAgain": "Please try again",
+    "contactSupport": "Please contact support if the problem persists"
+  }
+}
