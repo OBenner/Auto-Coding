@@ -259,7 +259,7 @@ export function Sidebar({
       resizeObserverRef.current?.disconnect();
       resizeObserverRef.current = null;
     };
-  }, [activeView, visibleNavItems]);
+  }, [activeView, visibleNavItems, isCollapsed]);
 
   // Check git status when project changes
   useEffect(() => {
