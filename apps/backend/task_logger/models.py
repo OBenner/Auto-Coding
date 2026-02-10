@@ -47,6 +47,17 @@ class LogEntry:
         None  # Subphase grouping (e.g., "PROJECT DISCOVERY", "CONTEXT GATHERING")
     )
     collapsed: bool | None = None  # Whether to show collapsed by default in UI
+    # Decision point tracking fields
+    is_decision_point: bool | None = (
+        None  # Whether this entry represents an important decision point
+    )
+    reasoning: str | None = (
+        None  # Agent's reasoning/thinking at this decision point
+    )
+    alternatives: list[str] | None = (
+        None  # Alternative options that were considered
+    )
+    decision: str | None = None  # The final decision or choice made
 
     def to_dict(self) -> dict:
         """Convert to dictionary, excluding None values."""
