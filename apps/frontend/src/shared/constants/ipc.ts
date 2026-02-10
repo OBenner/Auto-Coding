@@ -444,6 +444,11 @@ export const IPC_CHANNELS = {
   MERGE_ANALYTICS_GET_PATTERNS: 'mergeAnalytics:getPatterns',
   MERGE_ANALYTICS_EXPORT: 'mergeAnalytics:export',
 
+  // Productivity Analytics operations
+  PRODUCTIVITY_ANALYTICS_GET_SUMMARY: 'productivityAnalytics:getSummary',
+  PRODUCTIVITY_ANALYTICS_GET_TRENDS: 'productivityAnalytics:getTrends',
+  PRODUCTIVITY_ANALYTICS_EXPORT: 'productivityAnalytics:export',
+
   // Memory Infrastructure status (LadybugDB - no Docker required)
   MEMORY_STATUS: 'memory:status',
   MEMORY_LIST_DATABASES: 'memory:listDatabases',
