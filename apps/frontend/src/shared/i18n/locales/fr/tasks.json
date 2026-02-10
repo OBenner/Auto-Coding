@@ -109,7 +109,9 @@
     "lockColumn": "Verrouiller la largeur de la colonne",
     "unlockColumn": "Déverrouiller la largeur de la colonne",
     "columnLocked": "La largeur de la colonne est verrouillée",
-    "expandAll": "Développer toutes les colonnes"
+    "expandAll": "Développer toutes les colonnes",
+    "batchQA": "QA par lot",
+    "batchStatusUpdate": "Mettre à jour le statut"
   },
   "queue": {
     "limitReached": "Limite de tâches parallèles atteinte ({{current}}/{{max}}). Tâche déplacée vers la file d'attente.",
@@ -252,7 +254,9 @@
     "deselectAll": "Désélectionner toutes les tâches",
     "editTask": "Modifier la tâche : {{title}}",
     "deleteTask": "Supprimer la tâche : {{title}}",
-    "moveTask": "Déplacer la tâche vers {{status}}"
+    "moveTask": "Déplacer la tâche vers {{status}}",
+    "batchQA": "Exécuter la QA sur les tâches sélectionnées",
+    "batchStatusUpdate": "Mettre à jour le statut des tâches sélectionnées"
   },
   "wizard": {
     "createTitle": "Créer une nouvelle tâche",
