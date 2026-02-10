@@ -65,10 +65,12 @@ export class WebSocketClient {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private pingTimer: ReturnType<typeof setInterval> | null = null;
   private subscriptions = new Set<string>();
+  private manualClose = false; // Track if disconnect was intentional
 
   // Event handlers
   private eventHandlers = new Map<string, Set<EventHandler>>();
   private stateHandlers = new Set<(state: ConnectionState) => void>();
+  private errorHandlers = new Set<(error: Error) => void>();
 
   constructor(config: Partial<WebSocketConfig> = {}) {
     this.config = { ...DEFAULT_WS_CONFIG, ...config };
@@ -116,6 +118,9 @@ export class WebSocketClient {
       return;
     }
 
+    // Reset manual close flag to allow reconnection on subsequent calls
+    this.manualClose = false;
+
     try {
       this.setState("connecting");
       this.log(`Connecting to ${this.config.url}/ws/agent-events`);
@@ -126,6 +131,7 @@ export class WebSocketClient {
         this.log("Connected");
         this.setState("connected");
         this.reconnectAttempts = 0;
+        this.manualClose = false; // Reset manual close flag on successful connection
 
         // Start ping interval
         this.startPing();
@@ -146,18 +152,49 @@ export class WebSocketClient {
       };
 
       this.ws.onerror = (error) => {
+        const errorObj = new Error("WebSocket connection error");
         console.error("WebSocket error:", error);
+
+        // Emit to error handlers
+        for (const handler of this.errorHandlers) {
+          try {
+            handler(errorObj);
+          } catch (err) {
+            console.error("Error in error handler:", err);
+          }
+        }
+
         this.setState("error");
       };
 
-      this.ws.onclose = () => {
-        this.log("Connection closed");
+      this.ws.onclose = (event) => {
+        this.log(`Connection closed (code: ${event.code}, reason: ${event.reason})`);
         this.setState("disconnected");
         this.stopPing();
+
+        // Don't reconnect if this was a manual disconnect
+        if (this.manualClose) {
+          this.log("Manual disconnect, skipping reconnect");
+          return;
+        }
 
         // Attempt reconnect if enabled
         if (this.config.reconnect && this.reconnectAttempts < this.config.maxReconnectAttempts) {
           this.scheduleReconnect();
+        } else if (this.reconnectAttempts >= this.config.maxReconnectAttempts) {
+          this.log("Max reconnect attempts reached, giving up");
+
+          // Emit error to notify listeners
+          const maxRetriesError = new Error(
+            `Max reconnect attempts (${this.config.maxReconnectAttempts}) reached`
+          );
+          for (const handler of this.errorHandlers) {
+            try {
+              handler(maxRetriesError);
+            } catch (err) {
+              console.error("Error in error handler:", err);
+            }
+          }
         }
       };
     } catch (error) {
@@ -171,12 +208,13 @@ export class WebSocketClient {
    */
   disconnect(): void {
     this.log("Disconnecting");
+    this.manualClose = true; // Mark as intentional disconnect
     this.config.reconnect = false; // Disable auto-reconnect
     this.clearReconnectTimer();
     this.stopPing();
 
     if (this.ws) {
-      this.ws.close();
+      this.ws.close(1000, "Client disconnect"); // 1000 = Normal Closure
       this.ws = null;
     }
 
@@ -184,15 +222,21 @@ export class WebSocketClient {
   }
 
   /**
-   * Schedule a reconnection attempt
+   * Schedule a reconnection attempt with exponential backoff
    */
   private scheduleReconnect(): void {
     this.clearReconnectTimer();
 
     this.reconnectAttempts++;
-    const delay = this.config.reconnectDelay * this.reconnectAttempts;
+    // Exponential backoff: delay * 2^(attempts-1), capped at 30 seconds
+    const delay = Math.min(
+      this.config.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1),
+      30000
+    );
 
-    this.log(`Scheduling reconnect attempt ${this.reconnectAttempts} in ${delay}ms`);
+    this.log(
+      `Scheduling reconnect attempt ${this.reconnectAttempts}/${this.config.maxReconnectAttempts} in ${delay}ms`
+    );
 
     this.reconnectTimer = setTimeout(() => {
       this.connect();
@@ -340,6 +384,20 @@ export class WebSocketClient {
   }
 
   /**
+   * Register an error handler
+   */
+  onError(handler: (error: Error) => void): void {
+    this.errorHandlers.add(handler);
+  }
+
+  /**
+   * Unregister an error handler
+   */
+  offError(handler: (error: Error) => void): void {
+    this.errorHandlers.delete(handler);
+  }
+
+  /**
    * Get current connection state
    */
   getState(): ConnectionState {
@@ -358,6 +416,36 @@ export class WebSocketClient {
    */
   getSubscriptions(): string[] {
     return Array.from(this.subscriptions);
+  }
+
+  /**
+   * Get current reconnect attempt count
+   */
+  getReconnectAttempts(): number {
+    return this.reconnectAttempts;
+  }
+
+  /**
+   * Manually trigger reconnection
+   * Useful when max reconnect attempts has been reached
+   */
+  reconnect(): void {
+    this.log("Manual reconnection triggered");
+    this.clearReconnectTimer();
+
+    // Reset reconnect attempts and enable reconnect
+    this.reconnectAttempts = 0;
+    this.manualClose = false;
+    this.config.reconnect = true;
+
+    // Connect if not already connecting/connected
+    if (
+      !this.ws ||
+      this.ws.readyState === WebSocket.CLOSED ||
+      this.ws.readyState === WebSocket.CLOSING
+    ) {
+      this.connect();
+    }
   }
 
   /**
