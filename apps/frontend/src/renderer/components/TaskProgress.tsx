@@ -4,7 +4,17 @@ import { Terminal as XTerm } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import '@xterm/xterm/css/xterm.css';
-import { Clock, MemoryStick, Terminal, AlertCircle } from 'lucide-react';
+import { Clock, MemoryStick, Terminal, AlertCircle, X, Loader2 } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '../ui/alert-dialog';
 import type { BackgroundTask, BackgroundTaskStatus } from '../../shared/types';
 
 interface TaskProgressProps {
@@ -35,6 +45,10 @@ export function TaskProgress({ taskId, onClose }: TaskProgressProps) {
   const [task, setTask] = useState<BackgroundTask | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Cancel dialog state
+  const [showCancelDialog, setShowCancelDialog] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
 
   // Track if component is mounted (prevent state updates after unmount)
   const isMountedRef = useRef(true);
@@ -266,6 +280,32 @@ export function TaskProgress({ taskId, onClose }: TaskProgressProps) {
     return `${mb.toFixed(2)} MB`;
   };
 
+  /**
+   * Handle task cancellation
+   */
+  const handleCancel = async () => {
+    if (!task || isCancelling) return;
+
+    setIsCancelling(true);
+
+    try {
+      const result = await window.electronAPI.backgroundTaskCancel(taskId);
+      if (result.success) {
+        // Refresh task status to show cancelled state
+        await fetchTaskStatus();
+      } else {
+        setError(result.error || 'Failed to cancel task');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      if (isMountedRef.current) {
+        setIsCancelling(false);
+        setShowCancelDialog(false);
+      }
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -312,9 +352,22 @@ export function TaskProgress({ taskId, onClose }: TaskProgressProps) {
               {task.workingDir}
             </div>
           </div>
-          <span className={`px-2 py-0.5 text-xs rounded-full flex-shrink-0 ${getStatusBadgeColor(task.status)}`}>
-            {getStatusLabel(task.status)}
-          </span>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <span className={`px-2 py-0.5 text-xs rounded-full ${getStatusBadgeColor(task.status)}`}>
+              {getStatusLabel(task.status)}
+            </span>
+            {/* Cancel button - only show for running tasks */}
+            {task.status === 'running' && (
+              <button
+                onClick={() => setShowCancelDialog(true)}
+                disabled={isCancelling}
+                className="p-1 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded transition-colors"
+                title={t('common:buttons.cancel')}
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Metadata Grid */}
@@ -375,6 +428,66 @@ export function TaskProgress({ taskId, onClose }: TaskProgressProps) {
           data-testid="task-progress-terminal"
         />
       </div>
+
+      {/* Cancel Confirmation Dialog */}
+      <AlertDialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <X className="h-5 w-5 text-destructive" />
+              Cancel Task
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="text-sm text-muted-foreground space-y-3">
+                <p>
+                  Are you sure you want to cancel this running task?
+                </p>
+                <p className="text-destructive">
+                  This will terminate the process immediately. Any unsaved progress will be lost.
+                </p>
+                <div className="bg-muted/50 rounded-lg p-3 text-sm">
+                  <div className="flex flex-col gap-1">
+                    <div className="flex items-center gap-2">
+                      <Terminal className="w-3.5 h-3.5 text-muted-foreground" />
+                      <code className="text-xs font-mono text-foreground">
+                        {task.command}
+                      </code>
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      Duration: {formatDuration(task.startedAt, task.completedAt)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isCancelling}>
+              {t('common:buttons.cancel')}
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                handleCancel();
+              }}
+              disabled={isCancelling}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isCancelling ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Cancelling...
+                </>
+              ) : (
+                <>
+                  <X className="mr-2 h-4 w-4" />
+                  Cancel Task
+                </>
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
