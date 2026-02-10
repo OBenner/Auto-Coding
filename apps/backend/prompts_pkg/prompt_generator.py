@@ -368,6 +368,36 @@ def load_subtask_context(
     return context
 
 
+def get_recovery_context(
+    spec_dir: Path, project_dir: Path, subtask_id: str
+) -> tuple[int, list[str] | None]:
+    """
+    Get recovery context for a subtask.
+
+    Retrieves attempt count and recovery hints from the recovery manager
+    to support retry logic with different approaches.
+
+    Args:
+        spec_dir: Spec directory containing recovery state
+        project_dir: Project root directory
+        subtask_id: ID of the subtask to get recovery context for
+
+    Returns:
+        Tuple of (attempt_count, recovery_hints):
+            - attempt_count: Number of previous attempts (0 if first attempt)
+            - recovery_hints: List of hints from previous attempts, or None if first attempt
+    """
+    from services.recovery import RecoveryManager
+
+    recovery_manager = RecoveryManager(spec_dir, project_dir)
+    attempt_count = recovery_manager.get_attempt_count(subtask_id)
+    recovery_hints = (
+        recovery_manager.get_recovery_hints(subtask_id) if attempt_count > 0 else None
+    )
+
+    return attempt_count, recovery_hints
+
+
 def format_context_for_prompt(context: dict) -> str:
     """
     Format loaded context into a prompt section.
