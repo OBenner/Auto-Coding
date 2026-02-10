@@ -1,6 +1,7 @@
 """Test Suite Template"""
 
-from typing import Any, Dict
+from typing import Any
+
 from ..registry import Template
 
 
@@ -13,13 +14,26 @@ class TestSuiteTemplate(Template):
             description="Comprehensive test suite for component/feature",
             category="testing",
             parameters={
-                "test_target": {"type": str, "required": True, "description": "What to test"},
-                "test_types": {"type": list, "required": True, "description": "Test types (unit, integration, e2e)"},
-                "coverage_goal": {"type": int, "required": False, "default": 80, "description": "Code coverage % goal"},
+                "test_target": {
+                    "type": str,
+                    "required": True,
+                    "description": "What to test",
+                },
+                "test_types": {
+                    "type": list,
+                    "required": True,
+                    "description": "Test types (unit, integration, e2e)",
+                },
+                "coverage_goal": {
+                    "type": int,
+                    "required": False,
+                    "default": 80,
+                    "description": "Code coverage % goal",
+                },
             },
         )
 
-    def generate(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    def generate(self, params: dict[str, Any]) -> dict[str, Any]:
         target = params["test_target"]
         test_types = params["test_types"]
         coverage = params.get("coverage_goal", 80)
@@ -39,5 +53,7 @@ class TestSuiteTemplate(Template):
                 "Tests run in under 5 minutes",
             ],
             "technical_details": f"Target: {target}\nTypes: {', '.join(test_types)}\nCoverage: {coverage}%",
-            "test_coverage": [f"{t.capitalize()} tests implemented" for t in test_types],
+            "test_coverage": [
+                f"{t.capitalize()} tests implemented" for t in test_types
+            ],
         }

@@ -6,7 +6,6 @@ Tests for TemplateLibrary operations including search, filter, and template mana
 """
 
 import pytest
-from pathlib import Path
 from apps.backend.spec.templates.library import TemplateLibrary, suggest_templates
 from apps.backend.spec.templates.registry import Template
 

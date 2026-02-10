@@ -1,6 +1,7 @@
 """PDF Generation Template"""
 
-from typing import Any, Dict
+from typing import Any
+
 from ..registry import Template
 
 
@@ -13,13 +14,27 @@ class PdfGenerationTemplate(Template):
             description="Generate PDF documents from templates",
             category="feature",
             parameters={
-                "document_type": {"type": str, "required": True, "description": "Type of PDF (invoice, report, certificate)"},
-                "template_engine": {"type": str, "required": False, "default": "html-to-pdf", "description": "PDF engine"},
-                "include_graphics": {"type": bool, "required": False, "default": True, "description": "Include charts/images"},
+                "document_type": {
+                    "type": str,
+                    "required": True,
+                    "description": "Type of PDF (invoice, report, certificate)",
+                },
+                "template_engine": {
+                    "type": str,
+                    "required": False,
+                    "default": "html-to-pdf",
+                    "description": "PDF engine",
+                },
+                "include_graphics": {
+                    "type": bool,
+                    "required": False,
+                    "default": True,
+                    "description": "Include charts/images",
+                },
             },
         )
 
-    def generate(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    def generate(self, params: dict[str, Any]) -> dict[str, Any]:
         doc_type = params["document_type"]
         engine = params.get("template_engine", "html-to-pdf")
         graphics = params.get("include_graphics", True)
@@ -35,7 +50,12 @@ class PdfGenerationTemplate(Template):
             "acceptance_criteria": [
                 f"Generate {doc_type} PDFs",
                 f"Using {engine} engine",
-            ] + (["Include charts and images"] if graphics else []),
+            ]
+            + (["Include charts and images"] if graphics else []),
             "technical_details": f"Type: {doc_type}\nEngine: {engine}",
-            "test_coverage": ["PDF generation tests", "Format validation tests", "Content accuracy tests"],
+            "test_coverage": [
+                "PDF generation tests",
+                "Format validation tests",
+                "Content accuracy tests",
+            ],
         }

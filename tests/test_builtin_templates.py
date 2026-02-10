@@ -7,7 +7,6 @@ generate valid specs, and have proper parameter validation.
 """
 
 import pytest
-from pathlib import Path
 from apps.backend.spec.templates.builtin import get_builtin_templates, register_builtin_templates
 from apps.backend.spec.templates.registry import TemplateRegistry
 from apps.backend.spec.templates.generator import SpecGenerator

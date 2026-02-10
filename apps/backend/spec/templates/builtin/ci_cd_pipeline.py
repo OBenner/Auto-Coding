@@ -1,6 +1,7 @@
 """CI/CD Pipeline Template"""
 
-from typing import Any, Dict
+from typing import Any
+
 from ..registry import Template
 
 
@@ -13,13 +14,26 @@ class CiCdPipelineTemplate(Template):
             description="CI/CD pipeline with automated testing and deployment",
             category="infrastructure",
             parameters={
-                "platform": {"type": str, "required": True, "description": "CI/CD platform (github-actions, gitlab-ci, jenkins)"},
-                "stages": {"type": list, "required": True, "description": "Pipeline stages (build, test, deploy)"},
-                "deploy_environments": {"type": list, "required": False, "default": ["staging", "production"], "description": "Deployment environments"},
+                "platform": {
+                    "type": str,
+                    "required": True,
+                    "description": "CI/CD platform (github-actions, gitlab-ci, jenkins)",
+                },
+                "stages": {
+                    "type": list,
+                    "required": True,
+                    "description": "Pipeline stages (build, test, deploy)",
+                },
+                "deploy_environments": {
+                    "type": list,
+                    "required": False,
+                    "default": ["staging", "production"],
+                    "description": "Deployment environments",
+                },
             },
         )
 
-    def generate(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    def generate(self, params: dict[str, Any]) -> dict[str, Any]:
         platform = params["platform"]
         stages = params["stages"]
         envs = params.get("deploy_environments", ["staging", "production"])
@@ -39,5 +53,9 @@ class CiCdPipelineTemplate(Template):
                 "Deployment rollback capability",
             ],
             "technical_details": f"Platform: {platform}\nStages: {', '.join(stages)}\nEnvironments: {', '.join(envs)}",
-            "test_coverage": ["Pipeline configuration tests", "Deployment tests", "Rollback tests"],
+            "test_coverage": [
+                "Pipeline configuration tests",
+                "Deployment tests",
+                "Rollback tests",
+            ],
         }

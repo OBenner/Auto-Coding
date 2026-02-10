@@ -6,7 +6,7 @@ Template base classes and registry for managing spec templates.
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 
 class Template(ABC):
@@ -17,7 +17,7 @@ class Template(ABC):
         name: str,
         description: str,
         category: str,
-        parameters: Dict[str, Any],
+        parameters: dict[str, Any],
     ):
         """
         Initialize a template.
@@ -34,7 +34,7 @@ class Template(ABC):
         self.parameters = parameters
 
     @abstractmethod
-    def generate(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    def generate(self, params: dict[str, Any]) -> dict[str, Any]:
         """
         Generate spec content from template parameters.
 
@@ -46,7 +46,7 @@ class Template(ABC):
         """
         pass
 
-    def validate_params(self, params: Dict[str, Any]) -> List[str]:
+    def validate_params(self, params: dict[str, Any]) -> list[str]:
         """
         Validate user-provided parameters.
 
@@ -74,7 +74,7 @@ class TemplateRegistry:
     """Registry for managing spec templates."""
 
     _instance: Optional["TemplateRegistry"] = None
-    _templates: Dict[str, Template] = {}
+    _templates: dict[str, Template] = {}
 
     def __new__(cls):
         """Ensure singleton instance."""
@@ -92,7 +92,7 @@ class TemplateRegistry:
         """
         self._templates[template.name] = template
 
-    def get(self, name: str) -> Optional[Template]:
+    def get(self, name: str) -> Template | None:
         """
         Get template by name.
 
@@ -104,7 +104,7 @@ class TemplateRegistry:
         """
         return self._templates.get(name)
 
-    def list_all(self) -> List[Template]:
+    def list_all(self) -> list[Template]:
         """
         List all registered templates.
 
@@ -113,7 +113,7 @@ class TemplateRegistry:
         """
         return list(self._templates.values())
 
-    def list_by_category(self, category: str) -> List[Template]:
+    def list_by_category(self, category: str) -> list[Template]:
         """
         List templates by category.
 
@@ -125,7 +125,7 @@ class TemplateRegistry:
         """
         return [t for t in self._templates.values() if t.category == category]
 
-    def get_categories(self) -> List[str]:
+    def get_categories(self) -> list[str]:
         """
         Get all unique template categories.
 

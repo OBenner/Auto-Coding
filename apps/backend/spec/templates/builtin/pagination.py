@@ -1,6 +1,7 @@
 """Pagination Template"""
 
-from typing import Any, Dict
+from typing import Any
+
 from ..registry import Template
 
 
@@ -13,13 +14,27 @@ class PaginationTemplate(Template):
             description="Pagination for large data sets",
             category="feature",
             parameters={
-                "entity_name": {"type": str, "required": True, "description": "Entity to paginate"},
-                "default_page_size": {"type": int, "required": False, "default": 20, "description": "Items per page"},
-                "pagination_type": {"type": str, "required": False, "default": "offset", "description": "Type (offset, cursor)"},
+                "entity_name": {
+                    "type": str,
+                    "required": True,
+                    "description": "Entity to paginate",
+                },
+                "default_page_size": {
+                    "type": int,
+                    "required": False,
+                    "default": 20,
+                    "description": "Items per page",
+                },
+                "pagination_type": {
+                    "type": str,
+                    "required": False,
+                    "default": "offset",
+                    "description": "Type (offset, cursor)",
+                },
             },
         )
 
-    def generate(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    def generate(self, params: dict[str, Any]) -> dict[str, Any]:
         entity = params["entity_name"]
         page_size = params.get("default_page_size", 20)
         pagination_type = params.get("pagination_type", "offset")
@@ -40,5 +55,9 @@ class PaginationTemplate(Template):
                 "Display total count and current page",
             ],
             "technical_details": f"Type: {pagination_type}\nPage size: {page_size}\nEntity: {entity}",
-            "test_coverage": ["Pagination logic tests", "Edge case tests (empty, single page)", "Performance tests"],
+            "test_coverage": [
+                "Pagination logic tests",
+                "Edge case tests (empty, single page)",
+                "Performance tests",
+            ],
         }

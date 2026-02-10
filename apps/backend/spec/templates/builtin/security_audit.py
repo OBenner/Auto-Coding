@@ -1,6 +1,7 @@
 """Security Audit Template"""
 
-from typing import Any, Dict
+from typing import Any
+
 from ..registry import Template
 
 
@@ -13,13 +14,27 @@ class SecurityAuditTemplate(Template):
             description="Security audit and vulnerability assessment",
             category="security",
             parameters={
-                "audit_scope": {"type": list, "required": True, "description": "Areas to audit (auth, api, database, dependencies)"},
-                "compliance_standard": {"type": str, "required": False, "default": "OWASP Top 10", "description": "Compliance standard"},
-                "penetration_testing": {"type": bool, "required": False, "default": False, "description": "Include pen testing"},
+                "audit_scope": {
+                    "type": list,
+                    "required": True,
+                    "description": "Areas to audit (auth, api, database, dependencies)",
+                },
+                "compliance_standard": {
+                    "type": str,
+                    "required": False,
+                    "default": "OWASP Top 10",
+                    "description": "Compliance standard",
+                },
+                "penetration_testing": {
+                    "type": bool,
+                    "required": False,
+                    "default": False,
+                    "description": "Include pen testing",
+                },
             },
         )
 
-    def generate(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    def generate(self, params: dict[str, Any]) -> dict[str, Any]:
         scope = params["audit_scope"]
         standard = params.get("compliance_standard", "OWASP Top 10")
         pen_test = params.get("penetration_testing", False)
@@ -37,7 +52,12 @@ class SecurityAuditTemplate(Template):
                 f"Check compliance with {standard}",
                 "Document all findings with severity ratings",
                 "Provide remediation recommendations",
-            ] + (["Conduct penetration testing"] if pen_test else []),
+            ]
+            + (["Conduct penetration testing"] if pen_test else []),
             "technical_details": f"Scope: {', '.join(scope)}\nStandard: {standard}",
-            "test_coverage": ["Security scans", "Vulnerability tests", "Compliance checks"],
+            "test_coverage": [
+                "Security scans",
+                "Vulnerability tests",
+                "Compliance checks",
+            ],
         }

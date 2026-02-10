@@ -1,6 +1,7 @@
 """Performance Optimization Template"""
 
-from typing import Any, Dict
+from typing import Any
+
 from ..registry import Template
 
 
@@ -13,13 +14,25 @@ class PerformanceOptimizationTemplate(Template):
             description="Performance optimization for specific component/feature",
             category="performance",
             parameters={
-                "target_component": {"type": str, "required": True, "description": "Component to optimize"},
-                "optimization_type": {"type": str, "required": True, "description": "Type (database, frontend, api, algorithm)"},
-                "performance_goal": {"type": str, "required": True, "description": "Goal (e.g., '50% faster', 'reduce memory by 30%')"},
+                "target_component": {
+                    "type": str,
+                    "required": True,
+                    "description": "Component to optimize",
+                },
+                "optimization_type": {
+                    "type": str,
+                    "required": True,
+                    "description": "Type (database, frontend, api, algorithm)",
+                },
+                "performance_goal": {
+                    "type": str,
+                    "required": True,
+                    "description": "Goal (e.g., '50% faster', 'reduce memory by 30%')",
+                },
             },
         )
 
-    def generate(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    def generate(self, params: dict[str, Any]) -> dict[str, Any]:
         component = params["target_component"]
         opt_type = params["optimization_type"]
         goal = params["performance_goal"]
@@ -39,5 +52,9 @@ class PerformanceOptimizationTemplate(Template):
                 "Monitor performance metrics in production",
             ],
             "technical_details": f"Component: {component}\nType: {opt_type}\nGoal: {goal}",
-            "test_coverage": ["Performance benchmarks", "Load tests", "Regression tests"],
+            "test_coverage": [
+                "Performance benchmarks",
+                "Load tests",
+                "Regression tests",
+            ],
         }

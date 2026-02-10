@@ -1,6 +1,7 @@
 """Admin Panel Template"""
 
-from typing import Any, Dict
+from typing import Any
+
 from ..registry import Template
 
 
@@ -13,13 +14,27 @@ class AdminPanelTemplate(Template):
             description="Admin panel for managing application data",
             category="feature",
             parameters={
-                "managed_entities": {"type": list, "required": True, "description": "Entities to manage"},
-                "permissions": {"type": bool, "required": False, "default": True, "description": "Role-based permissions"},
-                "audit_log": {"type": bool, "required": False, "default": True, "description": "Audit logging"},
+                "managed_entities": {
+                    "type": list,
+                    "required": True,
+                    "description": "Entities to manage",
+                },
+                "permissions": {
+                    "type": bool,
+                    "required": False,
+                    "default": True,
+                    "description": "Role-based permissions",
+                },
+                "audit_log": {
+                    "type": bool,
+                    "required": False,
+                    "default": True,
+                    "description": "Audit logging",
+                },
             },
         )
 
-    def generate(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    def generate(self, params: dict[str, Any]) -> dict[str, Any]:
         entities = params["managed_entities"]
         permissions = params.get("permissions", True)
         audit = params.get("audit_log", True)
@@ -36,8 +51,13 @@ class AdminPanelTemplate(Template):
                 f"Manage: {', '.join(entities)}",
                 "CRUD operations for all entities",
                 "Search and filter capabilities",
-            ] + (["Role-based access control"] if permissions else [])
+            ]
+            + (["Role-based access control"] if permissions else [])
             + (["Audit log for all admin actions"] if audit else []),
             "technical_details": f"Entities: {', '.join(entities)}",
-            "test_coverage": ["CRUD tests", "Permission tests" if permissions else "", "Audit tests" if audit else ""],
+            "test_coverage": [
+                "CRUD tests",
+                "Permission tests" if permissions else "",
+                "Audit tests" if audit else "",
+            ],
         }

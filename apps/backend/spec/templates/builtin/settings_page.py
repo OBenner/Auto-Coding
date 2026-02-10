@@ -1,6 +1,7 @@
 """Settings Page Template"""
 
-from typing import Any, Dict
+from typing import Any
+
 from ..registry import Template
 
 
@@ -13,13 +14,26 @@ class SettingsPageTemplate(Template):
             description="Application settings page with preferences",
             category="ui",
             parameters={
-                "setting_categories": {"type": list, "required": True, "description": "Setting categories"},
-                "settings": {"type": list, "required": True, "description": "Individual settings"},
-                "export_import": {"type": bool, "required": False, "default": False, "description": "Export/import settings"},
+                "setting_categories": {
+                    "type": list,
+                    "required": True,
+                    "description": "Setting categories",
+                },
+                "settings": {
+                    "type": list,
+                    "required": True,
+                    "description": "Individual settings",
+                },
+                "export_import": {
+                    "type": bool,
+                    "required": False,
+                    "default": False,
+                    "description": "Export/import settings",
+                },
             },
         )
 
-    def generate(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    def generate(self, params: dict[str, Any]) -> dict[str, Any]:
         categories = params["setting_categories"]
         settings = params["settings"]
         export_import = params.get("export_import", False)
@@ -37,7 +51,12 @@ class SettingsPageTemplate(Template):
                 f"Settings: {', '.join(settings)}",
                 "Settings persist to database/local storage",
                 "Validation for setting values",
-            ] + (["Export and import settings"] if export_import else []),
+            ]
+            + (["Export and import settings"] if export_import else []),
             "technical_details": f"Categories: {', '.join(categories)}\nSettings: {', '.join(settings)}",
-            "test_coverage": ["Settings save tests", "Validation tests", "Persistence tests"],
+            "test_coverage": [
+                "Settings save tests",
+                "Validation tests",
+                "Persistence tests",
+            ],
         }

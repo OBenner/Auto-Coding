@@ -1,6 +1,7 @@
 """Search Feature Template"""
 
-from typing import Any, Dict
+from typing import Any
+
 from ..registry import Template
 
 
@@ -13,14 +14,32 @@ class SearchFeatureTemplate(Template):
             description="Full-text search with filters and autocomplete",
             category="feature",
             parameters={
-                "search_entities": {"type": list, "required": True, "description": "Entities to search"},
-                "search_fields": {"type": list, "required": True, "description": "Fields to search in"},
-                "filters": {"type": list, "required": False, "default": [], "description": "Available filters"},
-                "autocomplete": {"type": bool, "required": False, "default": True, "description": "Autocomplete"},
+                "search_entities": {
+                    "type": list,
+                    "required": True,
+                    "description": "Entities to search",
+                },
+                "search_fields": {
+                    "type": list,
+                    "required": True,
+                    "description": "Fields to search in",
+                },
+                "filters": {
+                    "type": list,
+                    "required": False,
+                    "default": [],
+                    "description": "Available filters",
+                },
+                "autocomplete": {
+                    "type": bool,
+                    "required": False,
+                    "default": True,
+                    "description": "Autocomplete",
+                },
             },
         )
 
-    def generate(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    def generate(self, params: dict[str, Any]) -> dict[str, Any]:
         entities = params["search_entities"]
         fields = params["search_fields"]
         filters = params.get("filters", [])
@@ -38,8 +57,13 @@ class SearchFeatureTemplate(Template):
                 f"Search across: {', '.join(entities)}",
                 f"Search in fields: {', '.join(fields)}",
                 "Real-time search results",
-            ] + ([f"Filters: {', '.join(filters)}"] if filters else [])
+            ]
+            + ([f"Filters: {', '.join(filters)}"] if filters else [])
             + (["Autocomplete suggestions"] if autocomplete else []),
             "technical_details": f"Entities: {', '.join(entities)}\nFields: {', '.join(fields)}",
-            "test_coverage": ["Search accuracy tests", "Filter tests", "Performance tests"],
+            "test_coverage": [
+                "Search accuracy tests",
+                "Filter tests",
+                "Performance tests",
+            ],
         }

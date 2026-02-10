@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { Search, Filter, FileText, Zap, Circle } from 'lucide-react';
-import { useTranslation } from 'react-i18next';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -71,7 +70,6 @@ function getCategoryColor(category: TemplateCategory): string {
 }
 
 export function TemplateLibrary({ projectId, onTemplateSelect }: TemplateLibraryProps) {
-  const { t } = useTranslation(['common', 'tasks']);
   const [templates, setTemplates] = useState<TemplateInfo[]>([]);
   const [categories, setCategories] = useState<TemplateCategory[]>([]);
   const [loading, setLoading] = useState(true);

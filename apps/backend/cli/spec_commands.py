@@ -7,7 +7,7 @@ CLI commands for managing specs (listing, finding, etc.)
 
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 # Ensure parent directory is in path for imports (before other imports)
 _PARENT_DIR = Path(__file__).parent.parent
@@ -193,8 +193,8 @@ def print_specs_list(project_dir: Path, auto_create: bool = True) -> None:
 
 
 def list_templates(
-    project_dir: Path, category: Optional[str] = None, tags: Optional[List[str]] = None
-) -> List[Dict[str, Any]]:
+    project_dir: Path, category: str | None = None, tags: list[str] | None = None
+) -> list[dict[str, Any]]:
     """
     List all available templates with optional filtering.
 
@@ -222,7 +222,7 @@ def list_templates(
 
 
 def print_templates_list(
-    project_dir: Path, category: Optional[str] = None, tags: Optional[List[str]] = None
+    project_dir: Path, category: str | None = None, tags: list[str] | None = None
 ) -> None:
     """
     Print a formatted list of all available templates.
@@ -244,7 +244,7 @@ def print_templates_list(
     print()
 
     # Group templates by category
-    categories: Dict[str, List[Dict[str, Any]]] = {}
+    categories: dict[str, list[dict[str, Any]]] = {}
     for template in templates:
         cat = template.get("category", "General")
         if cat not in categories:
@@ -334,7 +334,7 @@ def show_template_info(project_dir: Path, template_name: str) -> None:
 
 
 def preview_template_spec(
-    project_dir: Path, template_name: str, params: Dict[str, Any]
+    project_dir: Path, template_name: str, params: dict[str, Any]
 ) -> None:
     """
     Preview a generated spec from a template without saving it.

@@ -5,37 +5,35 @@ Built-in Templates
 Pre-built templates for common development tasks.
 """
 
-from typing import Dict, List
-
 from ..registry import Template, TemplateRegistry
-from .authentication import AuthenticationTemplate
-from .crud_api import CrudApiTemplate
-from .database_migration import DatabaseMigrationTemplate
-from .ui_component import UiComponentTemplate
-from .api_integration import ApiIntegrationTemplate
-from .file_upload import FileUploadTemplate
-from .search_feature import SearchFeatureTemplate
-from .pagination import PaginationTemplate
-from .caching import CachingLayerTemplate
-from .email_notifications import EmailNotificationsTemplate
-from .pdf_generation import PdfGenerationTemplate
-from .export_data import ExportDataTemplate
-from .import_data import ImportDataTemplate
-from .user_profile import UserProfileTemplate
-from .settings_page import SettingsPageTemplate
-from .dashboard_widget import DashboardWidgetTemplate
 from .admin_panel import AdminPanelTemplate
-from .logging_system import LoggingSystemTemplate
-from .error_handling import ErrorHandlingTemplate
-from .performance_optimization import PerformanceOptimizationTemplate
-from .security_audit import SecurityAuditTemplate
-from .test_suite import TestSuiteTemplate
-from .documentation import DocumentationTemplate
+from .api_integration import ApiIntegrationTemplate
+from .authentication import AuthenticationTemplate
+from .caching import CachingLayerTemplate
 from .ci_cd_pipeline import CiCdPipelineTemplate
+from .crud_api import CrudApiTemplate
+from .dashboard_widget import DashboardWidgetTemplate
+from .database_migration import DatabaseMigrationTemplate
+from .documentation import DocumentationTemplate
+from .email_notifications import EmailNotificationsTemplate
+from .error_handling import ErrorHandlingTemplate
+from .export_data import ExportDataTemplate
+from .file_upload import FileUploadTemplate
+from .import_data import ImportDataTemplate
+from .logging_system import LoggingSystemTemplate
 from .monitoring_dashboard import MonitoringDashboardTemplate
+from .pagination import PaginationTemplate
+from .pdf_generation import PdfGenerationTemplate
+from .performance_optimization import PerformanceOptimizationTemplate
+from .search_feature import SearchFeatureTemplate
+from .security_audit import SecurityAuditTemplate
+from .settings_page import SettingsPageTemplate
+from .test_suite import TestSuiteTemplate
+from .ui_component import UiComponentTemplate
+from .user_profile import UserProfileTemplate
 
 
-def get_builtin_templates() -> List[Template]:
+def get_builtin_templates() -> list[Template]:
     """
     Get all built-in templates.
 

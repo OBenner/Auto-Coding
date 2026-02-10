@@ -5,7 +5,7 @@ Database Migration Template
 Template for database schema migrations.
 """
 
-from typing import Any, Dict
+from typing import Any
 
 from ..registry import Template
 
@@ -44,7 +44,7 @@ class DatabaseMigrationTemplate(Template):
             },
         )
 
-    def generate(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    def generate(self, params: dict[str, Any]) -> dict[str, Any]:
         """Generate database migration spec from parameters."""
         migration_type = params["migration_type"]
         table_name = params["table_name"]
@@ -68,7 +68,8 @@ class DatabaseMigrationTemplate(Template):
                 "Migration is idempotent (can be run multiple times safely)",
                 "Migration is tracked in schema version history",
                 "Zero downtime for production deployment",
-                "All existing data preserved" + (" and transformed correctly" if data_migration else ""),
+                "All existing data preserved"
+                + (" and transformed correctly" if data_migration else ""),
             ],
             "technical_details": f"""
 ### Migration Details
@@ -121,10 +122,13 @@ class DatabaseMigrationTemplate(Template):
                 "Test migration idempotency (run twice)",
                 "Verify data integrity after migration",
                 "Performance tests for large tables",
-            ] + (["Test data transformation logic"] if data_migration else []),
+            ]
+            + (["Test data transformation logic"] if data_migration else []),
         }
 
-    def _generate_sample_up_migration(self, migration_type: str, table_name: str, changes: list) -> str:
+    def _generate_sample_up_migration(
+        self, migration_type: str, table_name: str, changes: list
+    ) -> str:
         """Generate sample SQL for up migration."""
         if migration_type == "create_table":
             return f"CREATE TABLE {table_name} (\n  id SERIAL PRIMARY KEY,\n  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP\n);"
@@ -137,7 +141,9 @@ class DatabaseMigrationTemplate(Template):
         else:
             return f"-- {migration_type} on {table_name}\n-- Add your SQL here"
 
-    def _generate_sample_down_migration(self, migration_type: str, table_name: str, changes: list) -> str:
+    def _generate_sample_down_migration(
+        self, migration_type: str, table_name: str, changes: list
+    ) -> str:
         """Generate sample SQL for down migration."""
         if migration_type == "create_table":
             return f"DROP TABLE {table_name};"

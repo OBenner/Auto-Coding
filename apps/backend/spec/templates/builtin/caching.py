@@ -1,6 +1,7 @@
 """Caching Layer Template"""
 
-from typing import Any, Dict
+from typing import Any
+
 from ..registry import Template
 
 
@@ -13,14 +14,32 @@ class CachingLayerTemplate(Template):
             description="Caching layer for performance optimization",
             category="performance",
             parameters={
-                "cache_type": {"type": str, "required": True, "description": "Cache type (redis, memcached, in-memory)"},
-                "cached_data": {"type": list, "required": True, "description": "Data to cache"},
-                "ttl_seconds": {"type": int, "required": False, "default": 3600, "description": "Cache TTL in seconds"},
-                "invalidation_strategy": {"type": str, "required": False, "default": "ttl", "description": "Invalidation (ttl, manual, event-based)"},
+                "cache_type": {
+                    "type": str,
+                    "required": True,
+                    "description": "Cache type (redis, memcached, in-memory)",
+                },
+                "cached_data": {
+                    "type": list,
+                    "required": True,
+                    "description": "Data to cache",
+                },
+                "ttl_seconds": {
+                    "type": int,
+                    "required": False,
+                    "default": 3600,
+                    "description": "Cache TTL in seconds",
+                },
+                "invalidation_strategy": {
+                    "type": str,
+                    "required": False,
+                    "default": "ttl",
+                    "description": "Invalidation (ttl, manual, event-based)",
+                },
             },
         )
 
-    def generate(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    def generate(self, params: dict[str, Any]) -> dict[str, Any]:
         cache_type = params["cache_type"]
         cached_data = params["cached_data"]
         ttl = params.get("ttl_seconds", 3600)
@@ -42,5 +61,9 @@ class CachingLayerTemplate(Template):
                 "Cache hit/miss monitoring",
             ],
             "technical_details": f"Type: {cache_type}\nTTL: {ttl}s\nInvalidation: {invalidation}",
-            "test_coverage": ["Cache hit/miss tests", "Invalidation tests", "Performance benchmarks"],
+            "test_coverage": [
+                "Cache hit/miss tests",
+                "Invalidation tests",
+                "Performance benchmarks",
+            ],
         }

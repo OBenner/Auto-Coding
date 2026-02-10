@@ -7,7 +7,7 @@ Template library manager for browsing, searching, and managing templates.
 
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from .generator import SpecGenerator
 from .registry import Template, TemplateRegistry
@@ -16,7 +16,7 @@ from .registry import Template, TemplateRegistry
 class TemplateLibrary:
     """Manages the template library and provides search/filter capabilities."""
 
-    def __init__(self, custom_templates_dir: Optional[Path] = None):
+    def __init__(self, custom_templates_dir: Path | None = None):
         """
         Initialize the template library.
 
@@ -35,7 +35,7 @@ class TemplateLibrary:
         if custom_templates_dir:
             self._load_custom_templates()
 
-    def get_template(self, name: str) -> Optional[Template]:
+    def get_template(self, name: str) -> Template | None:
         """
         Get a template by name.
 
@@ -48,8 +48,8 @@ class TemplateLibrary:
         return self.registry.get(name)
 
     def list_templates(
-        self, category: Optional[str] = None, tags: Optional[List[str]] = None
-    ) -> List[Dict[str, Any]]:
+        self, category: str | None = None, tags: list[str] | None = None
+    ) -> list[dict[str, Any]]:
         """
         List available templates with optional filtering.
 
@@ -88,7 +88,7 @@ class TemplateLibrary:
 
         return template_info
 
-    def get_categories(self) -> List[str]:
+    def get_categories(self) -> list[str]:
         """
         Get all available template categories.
 
@@ -97,7 +97,7 @@ class TemplateLibrary:
         """
         return self.registry.get_categories()
 
-    def search_templates(self, query: str) -> List[Dict[str, Any]]:
+    def search_templates(self, query: str) -> list[dict[str, Any]]:
         """
         Search templates by name or description.
 
@@ -121,8 +121,8 @@ class TemplateLibrary:
         return matches
 
     def create_spec_from_template(
-        self, template_name: str, params: Dict[str, Any], spec_dir: Path
-    ) -> Dict[str, Any]:
+        self, template_name: str, params: dict[str, Any], spec_dir: Path
+    ) -> dict[str, Any]:
         """
         Create a spec from a template.
 
@@ -145,8 +145,8 @@ class TemplateLibrary:
         return generator.generate_spec(params, spec_dir)
 
     def preview_template(
-        self, template_name: str, params: Dict[str, Any]
-    ) -> Optional[str]:
+        self, template_name: str, params: dict[str, Any]
+    ) -> str | None:
         """
         Preview a spec without saving it.
 
@@ -195,7 +195,7 @@ class TemplateLibrary:
         for template_file in self.custom_templates_dir.glob("*.json"):
             try:
                 with open(template_file, encoding="utf-8") as f:
-                    template_data = json.load(f)
+                    json.load(f)
 
                 # Note: We'd need to implement a way to reconstruct Template instances
                 # from JSON data. For now, we just skip custom templates.
@@ -207,7 +207,7 @@ class TemplateLibrary:
 
 def suggest_templates(
     project_dir: Path, task_description: str = "", use_project_analysis: bool = True
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """
     Suggest templates based on project analysis and task description.
 
@@ -656,7 +656,7 @@ def suggest_templates(
 
 
 def _add_suggestion(
-    suggestions: Dict[str, tuple], template_name: str, reason: str, score: float
+    suggestions: dict[str, tuple], template_name: str, reason: str, score: float
 ) -> None:
     """
     Add or update a template suggestion with the highest relevance score.

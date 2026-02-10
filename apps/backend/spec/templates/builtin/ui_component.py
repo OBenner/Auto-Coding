@@ -5,7 +5,7 @@ UI Component Template
 Template for creating reusable UI components.
 """
 
-from typing import Any, Dict
+from typing import Any
 
 from ..registry import Template
 
@@ -51,7 +51,7 @@ class UiComponentTemplate(Template):
             },
         )
 
-    def generate(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    def generate(self, params: dict[str, Any]) -> dict[str, Any]:
         """Generate UI component spec from parameters."""
         component_name = params["component_name"]
         framework = params.get("framework", "react")
@@ -75,7 +75,12 @@ class UiComponentTemplate(Template):
                 f"Component accepts all required props: {props_str}",
                 "Component is responsive across mobile, tablet, and desktop",
                 "Component follows design system guidelines",
-            ] + (["Component manages internal state correctly"] if state_management else [])
+            ]
+            + (
+                ["Component manages internal state correctly"]
+                if state_management
+                else []
+            )
             + (
                 [
                     "Component meets WCAG 2.1 Level AA accessibility standards",
@@ -97,7 +102,7 @@ class UiComponentTemplate(Template):
 
 ```{self._get_framework_extension(framework)}
 <{component_name}
-  {chr(10).join([f'  {prop}={{/* value */}}' for prop in props[:3]])}
+  {chr(10).join([f"  {prop}={{/* value */}}" for prop in props[:3]])}
 />
 ```
 
@@ -132,7 +137,8 @@ class UiComponentTemplate(Template):
                 "Tests for all prop combinations",
                 "Tests for responsive behavior",
                 "Visual regression tests",
-            ] + (["Tests for state changes"] if state_management else [])
+            ]
+            + (["Tests for state changes"] if state_management else [])
             + (
                 [
                     "Accessibility tests (axe-core)",

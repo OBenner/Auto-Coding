@@ -7,7 +7,6 @@ Tests for SpecGenerator class including spec generation, preview, and validation
 
 import pytest
 import json
-from pathlib import Path
 from datetime import datetime
 from apps.backend.spec.templates.generator import SpecGenerator
 from apps.backend.spec.templates.registry import Template

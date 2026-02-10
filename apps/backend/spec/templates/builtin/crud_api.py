@@ -5,7 +5,7 @@ CRUD API Template
 Template for creating RESTful CRUD API endpoints.
 """
 
-from typing import Any, Dict
+from typing import Any
 
 from ..registry import Template
 
@@ -50,7 +50,7 @@ class CrudApiTemplate(Template):
             },
         )
 
-    def generate(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    def generate(self, params: dict[str, Any]) -> dict[str, Any]:
         """Generate CRUD API spec from parameters."""
         resource = params["resource_name"]
         resource_plural = params["resource_name_plural"]
@@ -72,27 +72,29 @@ class CrudApiTemplate(Template):
             ],
             "acceptance_criteria": [
                 f"POST /{resource_plural.lower()} creates a new {resource}",
-                f"GET /{resource_plural.lower()} returns list of {resource_plural}" + (" with pagination" if pagination else ""),
+                f"GET /{resource_plural.lower()} returns list of {resource_plural}"
+                + (" with pagination" if pagination else ""),
                 f"GET /{resource_plural.lower()}/{{id}} returns a single {resource}",
                 f"PUT/PATCH /{resource_plural.lower()}/{{id}} updates a {resource}",
                 f"DELETE /{resource_plural.lower()}/{{id}} removes a {resource}",
                 "All endpoints return appropriate HTTP status codes (200, 201, 400, 404, 500)",
                 "Request validation with clear error messages",
                 "Response includes all resource fields: " + fields_str,
-            ] + (["Authentication required for all endpoints"] if auth_required else []),
+            ]
+            + (["Authentication required for all endpoints"] if auth_required else []),
             "technical_details": f"""
 ### Endpoints
 
 **Create {resource}**
 - Method: POST
 - Path: /{resource_plural.lower()}
-- Body: {{{', '.join([f'"{f}": "..."' for f in fields])}}}
+- Body: {{{", ".join([f'"{f}": "..."' for f in fields])}}}
 - Response: 201 Created with {resource} object
 
 **List {resource_plural}**
 - Method: GET
 - Path: /{resource_plural.lower()}
-{f"- Query Params: page, limit, sort, filter" if pagination else ""}
+{"- Query Params: page, limit, sort, filter" if pagination else ""}
 - Response: 200 OK with array of {resource_plural}
 
 **Get {resource}**
@@ -130,5 +132,6 @@ class CrudApiTemplate(Template):
                 f"Integration tests for updating {resource}",
                 f"Integration tests for deleting {resource}",
                 "Tests for error handling (404, 400, 500)",
-            ] + (["Tests for authentication/authorization"] if auth_required else []),
+            ]
+            + (["Tests for authentication/authorization"] if auth_required else []),
         }

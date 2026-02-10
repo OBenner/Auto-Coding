@@ -1,6 +1,7 @@
 """Export Data Template"""
 
-from typing import Any, Dict
+from typing import Any
+
 from ..registry import Template
 
 
@@ -13,13 +14,26 @@ class ExportDataTemplate(Template):
             description="Export data to various formats (CSV, Excel, JSON)",
             category="feature",
             parameters={
-                "entity_name": {"type": str, "required": True, "description": "Entity to export"},
-                "formats": {"type": list, "required": True, "description": "Export formats (csv, excel, json, pdf)"},
-                "filters": {"type": bool, "required": False, "default": True, "description": "Support filtering"},
+                "entity_name": {
+                    "type": str,
+                    "required": True,
+                    "description": "Entity to export",
+                },
+                "formats": {
+                    "type": list,
+                    "required": True,
+                    "description": "Export formats (csv, excel, json, pdf)",
+                },
+                "filters": {
+                    "type": bool,
+                    "required": False,
+                    "default": True,
+                    "description": "Support filtering",
+                },
             },
         )
 
-    def generate(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    def generate(self, params: dict[str, Any]) -> dict[str, Any]:
         entity = params["entity_name"]
         formats = params["formats"]
         filters = params.get("filters", True)
@@ -35,7 +49,12 @@ class ExportDataTemplate(Template):
             "acceptance_criteria": [
                 f"Export {entity} to: {', '.join(formats)}",
                 "Large dataset support (streaming)",
-            ] + (["Filter data before export"] if filters else []),
+            ]
+            + (["Filter data before export"] if filters else []),
             "technical_details": f"Entity: {entity}\nFormats: {', '.join(formats)}",
-            "test_coverage": ["Export tests for each format", "Large dataset tests", "Filter tests"],
+            "test_coverage": [
+                "Export tests for each format",
+                "Large dataset tests",
+                "Filter tests",
+            ],
         }

@@ -5,7 +5,7 @@ Authentication Template
 Template for implementing user authentication flows.
 """
 
-from typing import Any, Dict
+from typing import Any
 
 from ..registry import Template
 
@@ -52,7 +52,7 @@ class AuthenticationTemplate(Template):
             },
         )
 
-    def generate(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    def generate(self, params: dict[str, Any]) -> dict[str, Any]:
         """Generate authentication spec from parameters."""
         auth_method = params["auth_method"]
         providers = params.get("providers", ["email"])
@@ -70,19 +70,47 @@ class AuthenticationTemplate(Template):
                 "As a user, I want to sign up for an account",
                 "As a user, I want to log in securely",
                 "As a user, I want to log out",
-            ] + (["As a user, I want to reset my forgotten password"] if password_reset else [])
-            + (["As a user, I want to verify my email address"] if email_verification else [])
-            + (["As a user, I want to enable two-factor authentication for extra security"] if mfa_support else []),
+            ]
+            + (
+                ["As a user, I want to reset my forgotten password"]
+                if password_reset
+                else []
+            )
+            + (
+                ["As a user, I want to verify my email address"]
+                if email_verification
+                else []
+            )
+            + (
+                [
+                    "As a user, I want to enable two-factor authentication for extra security"
+                ]
+                if mfa_support
+                else []
+            ),
             "acceptance_criteria": [
-                f"Sign up endpoint creates new user account",
+                "Sign up endpoint creates new user account",
                 f"Login endpoint validates credentials and returns {auth_method.upper()} token/session",
                 "Logout endpoint invalidates session/token",
                 "Password must meet security requirements (min length, complexity)",
                 "Failed login attempts are rate-limited to prevent brute force",
-            ] + (["Password reset flow sends email with secure reset link"] if password_reset else [])
-            + (["Email verification required before account activation"] if email_verification else [])
+            ]
+            + (
+                ["Password reset flow sends email with secure reset link"]
+                if password_reset
+                else []
+            )
+            + (
+                ["Email verification required before account activation"]
+                if email_verification
+                else []
+            )
             + (["MFA enrollment and verification endpoints"] if mfa_support else [])
-            + ([f"OAuth integration for: {providers_str}"] if any(p != "email" for p in providers) else []),
+            + (
+                [f"OAuth integration for: {providers_str}"]
+                if any(p != "email" for p in providers)
+                else []
+            ),
             "technical_details": f"""
 ### Authentication Method
 
@@ -110,7 +138,7 @@ class AuthenticationTemplate(Template):
 {"**Password Reset**" if password_reset else ""}
 {"- Method: POST" if password_reset else ""}
 {"- Path: /auth/password-reset" if password_reset else ""}
-{"- Body: { \"email\": \"...\" }" if password_reset else ""}
+{'- Body: { "email": "..." }' if password_reset else ""}
 {"- Response: 200 OK (email sent)" if password_reset else ""}
 
 {"**Email Verification**" if email_verification else ""}
@@ -138,7 +166,8 @@ class AuthenticationTemplate(Template):
                 "Integration tests for logout",
                 "Tests for rate limiting",
                 "Tests for invalid credentials",
-            ] + (["Tests for password reset flow"] if password_reset else [])
+            ]
+            + (["Tests for password reset flow"] if password_reset else [])
             + (["Tests for email verification"] if email_verification else [])
             + (["Tests for MFA enrollment and verification"] if mfa_support else []),
         }

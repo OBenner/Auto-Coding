@@ -1,6 +1,7 @@
 """Dashboard Widget Template"""
 
-from typing import Any, Dict
+from typing import Any
+
 from ..registry import Template
 
 
@@ -13,14 +14,31 @@ class DashboardWidgetTemplate(Template):
             description="Dashboard widget with data visualization",
             category="ui",
             parameters={
-                "widget_name": {"type": str, "required": True, "description": "Widget name"},
-                "data_source": {"type": str, "required": True, "description": "Data source API"},
-                "visualization_type": {"type": str, "required": True, "description": "Chart type (bar, line, pie, table)"},
-                "refresh_interval": {"type": int, "required": False, "default": 60, "description": "Refresh interval (seconds)"},
+                "widget_name": {
+                    "type": str,
+                    "required": True,
+                    "description": "Widget name",
+                },
+                "data_source": {
+                    "type": str,
+                    "required": True,
+                    "description": "Data source API",
+                },
+                "visualization_type": {
+                    "type": str,
+                    "required": True,
+                    "description": "Chart type (bar, line, pie, table)",
+                },
+                "refresh_interval": {
+                    "type": int,
+                    "required": False,
+                    "default": 60,
+                    "description": "Refresh interval (seconds)",
+                },
             },
         )
 
-    def generate(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    def generate(self, params: dict[str, Any]) -> dict[str, Any]:
         name = params["widget_name"]
         source = params["data_source"]
         viz = params["visualization_type"]
@@ -42,5 +60,9 @@ class DashboardWidgetTemplate(Template):
                 "Responsive design",
             ],
             "technical_details": f"Type: {viz}\nSource: {source}\nRefresh: {interval}s",
-            "test_coverage": ["Data fetching tests", "Rendering tests", "Refresh tests"],
+            "test_coverage": [
+                "Data fetching tests",
+                "Rendering tests",
+                "Refresh tests",
+            ],
         }

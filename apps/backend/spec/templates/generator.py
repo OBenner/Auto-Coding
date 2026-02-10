@@ -8,7 +8,7 @@ Generates specification documents from templates and parameters.
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from .registry import Template
 
@@ -26,8 +26,8 @@ class SpecGenerator:
         self.template = template
 
     def generate_spec(
-        self, params: Dict[str, Any], spec_dir: Optional[Path] = None
-    ) -> Dict[str, Any]:
+        self, params: dict[str, Any], spec_dir: Path | None = None
+    ) -> dict[str, Any]:
         """
         Generate a complete spec document from template parameters.
 
@@ -60,7 +60,7 @@ class SpecGenerator:
 
         return spec_content
 
-    def preview_spec(self, params: Dict[str, Any]) -> str:
+    def preview_spec(self, params: dict[str, Any]) -> str:
         """
         Generate a preview of the spec document without saving.
 
@@ -73,7 +73,7 @@ class SpecGenerator:
         spec_content = self.generate_spec(params)
         return self._format_spec_markdown(spec_content)
 
-    def _save_spec(self, spec_content: Dict[str, Any], spec_dir: Path) -> None:
+    def _save_spec(self, spec_content: dict[str, Any], spec_dir: Path) -> None:
         """
         Save generated spec to disk.
 
@@ -94,7 +94,7 @@ class SpecGenerator:
         with open(metadata_file, "w", encoding="utf-8") as f:
             json.dump(spec_content.get("metadata", {}), f, indent=2)
 
-    def _format_spec_markdown(self, spec_content: Dict[str, Any]) -> str:
+    def _format_spec_markdown(self, spec_content: dict[str, Any]) -> str:
         """
         Format spec content as markdown.
 
@@ -147,7 +147,7 @@ class SpecGenerator:
 
         return "\n".join(lines)
 
-    def validate_generated_spec(self, spec_content: Dict[str, Any]) -> List[str]:
+    def validate_generated_spec(self, spec_content: dict[str, Any]) -> list[str]:
         """
         Validate that generated spec contains required sections.
 
