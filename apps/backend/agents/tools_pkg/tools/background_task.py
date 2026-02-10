@@ -9,6 +9,7 @@ progress tracking, and state persistence.
 import asyncio
 import json
 import logging
+import shlex
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -88,7 +89,8 @@ class BackgroundTaskManager:
         Returns:
             Unique task ID string
         """
-        timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
+        # Add microsecond precision for uniqueness (fixes collision bug when multiple tasks start within same second)
+        timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S_%f")
         return f"task_{timestamp}"
 
     def _get_task_state_file(self, task_id: str) -> Path:
@@ -224,9 +226,17 @@ class BackgroundTaskManager:
             task["started_at"] = datetime.now(UTC).isoformat()
             self._save_task_state(task_id)
 
-            # Create subprocess with pipes for output streaming
-            process = await asyncio.create_subprocess_shell(
-                command,
+            # SECURITY: Parse command safely to prevent shell injection (CWE-78)
+            # Using shlex.split() + create_subprocess_exec() instead of create_subprocess_shell()
+            # This prevents command injection attacks like: echo "test" && rm -rf /
+            try:
+                args = shlex.split(command)
+            except ValueError as e:
+                raise ValueError(f"Invalid command syntax: {e}")
+
+            # Create subprocess with argument list (not shell string)
+            process = await asyncio.create_subprocess_exec(
+                *args,  # Pass as argument list, not shell string
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,  # Merge stderr into stdout
                 cwd=str(work_dir),
@@ -328,9 +338,15 @@ class BackgroundTaskManager:
             self._capture_error_context(task_id)
 
         finally:
-            # Clean up process reference
+            # Clean up process reference and close streams to prevent resource leaks
             if task_id in self.processes:
-                del self.processes[task_id]
+                proc = self.processes.pop(task_id)
+                if proc:
+                    # Close streams to prevent resource leaks (fixes PytestUnraisableExceptionWarning)
+                    if proc.stdout:
+                        proc.stdout.close()
+                    if proc.stderr:
+                        proc.stderr.close()
 
             # Save final task state
             self._save_task_state(task_id)
