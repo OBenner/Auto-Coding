@@ -14,7 +14,9 @@ with specialized prompts, tools, and behaviors.
 """
 
 from .models import AgentTemplate
+from .registry import AgentTemplateRegistry
 
 __all__ = [
     "AgentTemplate",
+    "AgentTemplateRegistry",
 ]
