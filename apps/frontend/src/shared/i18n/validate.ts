@@ -63,7 +63,8 @@ export const findMissingKeys = (
 ): MissingKeysMap => {
   const missingKeys: MissingKeysMap = {};
 
-  if (!(baseLanguage in resources)) {
+  // Return empty result if either language is invalid
+  if (!(baseLanguage in resources) || !(targetLanguage in resources)) {
     return missingKeys;
   }
 
@@ -96,6 +97,11 @@ export const isLanguageComplete = (
   language: string,
   baseLanguage: string = 'en'
 ): boolean => {
+  // Invalid languages are not complete
+  if (!(language in resources) || !(baseLanguage in resources)) {
+    return false;
+  }
+
   const missingKeys = findMissingKeys(language, baseLanguage);
   return Object.keys(missingKeys).length === 0;
 };

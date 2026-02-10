@@ -259,6 +259,8 @@ t('items:count', { count: 5 });  // "5 items"
 
 ## Adding a new language
 
+> **📁 Note**: Production translations go in `locales/`. Incomplete example translations are available in `locales.examples/` (e.g., `es/`, `de/`) for reference only. These are community drafts and should not be used directly.
+
 ### Prerequisites
 
 Before adding a new language, ensure you have:
@@ -277,6 +279,8 @@ mkdir de  # For German (de)
 mkdir ja  # For Japanese (ja)
 ```
 
+> **💡 Tip**: You can reference example translations in `locales.examples/` (e.g., `es/`, `de/`) to see the expected structure, though these are incomplete community drafts.
+
 ### Step 2: Create namespace files
 
 Create ALL namespace JSON files in the new language directory:
@@ -285,7 +289,7 @@ Create ALL namespace JSON files in the new language directory:
 cd apps/frontend/src/shared/i18n/locales/es
 
 # Copy English as a template
-cp ../en/*.json .
+cp ../../locales/en/*.json .
 
 # Or create files manually
 touch common.json
@@ -328,7 +332,7 @@ Translate each namespace file from English to the target language:
 }
 ```
 
-**Spanish (`locales/es/common.json`):**
+**Spanish (`locales.examples/es/common.json` - reference only):**
 ```json
 {
   "buttons": {
