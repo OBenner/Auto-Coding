@@ -135,6 +135,29 @@ export function GitHubIssues({ onOpenSettings, onNavigateToTask }: GitHubIssuesP
     resetInvestigationStatus();
   }, [resetInvestigationStatus]);
 
+  const handleQuickCreate = useCallback(async (issue: GitHubIssue) => {
+    if (!selectedProject?.id) return;
+
+    try {
+      const result = await window.electronAPI.github.importGitHubIssues(
+        selectedProject.id,
+        [issue.number]
+      );
+
+      if (result.success) {
+        // Navigate to the newly created task if available
+        if (result.data?.imported && result.data.imported > 0) {
+          // Optionally navigate to tasks view or show success message
+          console.log(`Spec created for issue #${issue.number}`);
+        }
+      } else {
+        console.error('Failed to create spec:', result.error);
+      }
+    } catch (error) {
+      console.error('Error creating spec from issue:', error);
+    }
+  }, [selectedProject?.id]);
+
   // Not connected state
   if (!syncStatus?.connected) {
     return <NotConnectedState error={syncStatus?.error || null} onOpenSettings={onOpenSettings} />;
@@ -173,6 +196,7 @@ export function GitHubIssues({ onOpenSettings, onNavigateToTask }: GitHubIssuesP
             error={error}
             onSelectIssue={selectIssue}
             onInvestigate={handleInvestigate}
+            onQuickCreate={handleQuickCreate}
             onLoadMore={!isSearchActive ? handleLoadMore : undefined}
           />
         </div>

@@ -391,5 +391,9 @@
   "referenceImages": {
     "title": "Images de référence (facultatif)",
     "description": "Ajoutez des références visuelles comme des captures d'écran ou des conceptions pour aider l'IA à comprendre vos exigences."
+  },
+  "githubIssues": {
+    "quickCreateSpec": "Créer rapidement un spec",
+    "investigate": "Enquêter"
   }
 }
