@@ -50,7 +50,8 @@ import type {
   WebhookEventType,
   WebhookTemplate,
   WebhookEventTypeMeta,
-  WebhookTemplateMeta
+  WebhookTemplateMeta,
+  WebhookRetryConfig
 } from '../../shared/types/webhook';
 
 interface WebhooksPageProps {
@@ -65,6 +66,7 @@ interface WebhookForm {
   template: WebhookTemplate;
   enabled: boolean;
   headers: Record<string, string>;
+  retry_config: WebhookRetryConfig;
 }
 
 const emptyForm: WebhookForm = {
@@ -74,7 +76,13 @@ const emptyForm: WebhookForm = {
   events: [],
   template: 'generic',
   enabled: true,
-  headers: {}
+  headers: {},
+  retry_config: {
+    max_retries: 3,
+    initial_delay: 1.0,
+    max_delay: 60.0,
+    backoff_multiplier: 2.0
+  }
 };
 
 export function WebhooksPage({ projectId }: WebhooksPageProps) {
@@ -127,7 +135,8 @@ export function WebhooksPage({ projectId }: WebhooksPageProps) {
       events: webhook.events,
       template: webhook.template,
       enabled: webhook.enabled,
-      headers: { ...webhook.headers }
+      headers: { ...webhook.headers },
+      retry_config: { ...webhook.retry_config }
     });
     setFormErrors({});
     setShowDialog(true);
