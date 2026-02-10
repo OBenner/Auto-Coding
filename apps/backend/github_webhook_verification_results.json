@@ -1,0 +1,114 @@
+{
+  "timestamp": "2026-02-10T19:44:32.081260",
+  "handler_tests": {
+    "timestamp": "2026-02-10T19:44:29.754623",
+    "tests": [
+      {
+        "name": "Spec Directory",
+        "passed": true
+      },
+      {
+        "name": "Import GitHubWebhookHandler",
+        "passed": true
+      },
+      {
+        "name": "Initialize handler",
+        "passed": true
+      },
+      {
+        "name": "Handler registry",
+        "passed": true,
+        "supported_integrations": [
+          "github",
+          "generic"
+        ]
+      },
+      {
+        "name": "Create webhook config",
+        "passed": true
+      },
+      {
+        "name": "Validate push payload",
+        "passed": true
+      },
+      {
+        "name": "Extract push event data",
+        "passed": true,
+        "event_data": {
+          "event_type": "push",
+          "branch": "feature/084-test-branch",
+          "repo": "Auto-Claude"
+        }
+      },
+      {
+        "name": "Determine action (push)",
+        "passed": true,
+        "action": "trigger_build"
+      },
+      {
+        "name": "Process PR merge payload",
+        "passed": true,
+        "pr_number": 123,
+        "action": "trigger_build"
+      },
+      {
+        "name": "Main branch push no action",
+        "passed": true
+      },
+      {
+        "name": "PR opened no action",
+        "passed": true
+      },
+      {
+        "name": "Full webhook processing",
+        "passed": true,
+        "action": "trigger_build",
+        "message": "Build trigger prepared for unknown"
+      },
+      {
+        "name": "Handler factory function",
+        "passed": true
+      }
+    ],
+    "summary": {
+      "passed": 13,
+      "failed": 0,
+      "total": 13
+    }
+  },
+  "server_tests": {
+    "timestamp": "2026-02-10T19:44:29.845574",
+    "tests": [
+      {
+        "name": "Server health check",
+        "passed": true,
+        "note": "Skipped - server not running"
+      }
+    ],
+    "summary": {
+      "passed": 1,
+      "failed": 0,
+      "total": 1
+    }
+  },
+  "logs_tests": {
+    "timestamp": "2026-02-10T19:44:32.078675",
+    "tests": [
+      {
+        "name": "Retrieve webhook logs",
+        "passed": true,
+        "log_count": 0
+      }
+    ],
+    "summary": {
+      "passed": 1,
+      "failed": 0,
+      "total": 1
+    }
+  },
+  "summary": {
+    "total_tests": 15,
+    "passed": 15,
+    "failed": 0
+  }
+}
