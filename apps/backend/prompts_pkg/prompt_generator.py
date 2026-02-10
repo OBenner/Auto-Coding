@@ -15,6 +15,9 @@ This approach:
 import json
 from pathlib import Path
 
+from context.compressor import ContextCompressor
+from context.token_estimator import TokenEstimator
+
 
 def get_relative_spec_path(spec_dir: Path, project_dir: Path) -> str:
     """
@@ -314,13 +317,17 @@ def load_subtask_context(
     max_file_lines: int = 200,
 ) -> dict:
     """
-    Load minimal context needed for a subtask.
+    Load minimal context needed for a subtask with smart compression.
+
+    Uses ContextCompressor to intelligently compress large files instead of
+    simple line truncation, preserving important information while reducing
+    token usage.
 
     Args:
         spec_dir: Spec directory
         project_dir: Project root
         subtask: The subtask being implemented
-        max_file_lines: Maximum lines to include per file
+        max_file_lines: Approximate maximum lines (converted to token threshold)
 
     Returns:
         Dict with file contents and relevant context
@@ -331,39 +338,69 @@ def load_subtask_context(
         "spec_excerpt": None,
     }
 
-    # Load pattern files (truncated)
+    # Initialize compressor and token estimator
+    # Convert max_file_lines to approximate token threshold
+    # Average: ~10-15 tokens per line of code, so use 12.5 as middle ground
+    token_threshold = max_file_lines * 12
+    compressor = ContextCompressor(
+        compression_threshold=token_threshold,
+        target_ratio=0.5,  # Target 50% of original for subtask context
+        token_estimator=TokenEstimator(),
+    )
+
+    # Load pattern files with smart compression
     for pattern_path in subtask.get("patterns_from", []):
         full_path = project_dir / pattern_path
         if full_path.exists():
             try:
-                lines = full_path.read_text(encoding="utf-8").split("\n")
-                if len(lines) > max_file_lines:
-                    content = "\n".join(lines[:max_file_lines])
-                    content += (
-                        f"\n\n... (truncated, {len(lines) - max_file_lines} more lines)"
-                    )
-                else:
-                    content = "\n".join(lines)
+                # Use smart compression instead of simple truncation
+                result = compressor.compress_file(full_path, strategy="auto")
+                content = result.compressed_content
+
+                # Add compression metadata if applied
+                if result.method != "none":
+                    content += f"\n\n... (compressed from {result.original_tokens} to {result.compressed_tokens} tokens using {result.method})"
+
                 context["patterns"][pattern_path] = content
             except Exception:
-                context["patterns"][pattern_path] = "(Could not read file)"
+                # Fallback to simple truncation if compression fails
+                try:
+                    lines = full_path.read_text(encoding="utf-8").split("\n")
+                    if len(lines) > max_file_lines:
+                        content = "\n".join(lines[:max_file_lines])
+                        content += f"\n\n... (truncated, {len(lines) - max_file_lines} more lines)"
+                    else:
+                        content = "\n".join(lines)
+                    context["patterns"][pattern_path] = content
+                except Exception:
+                    context["patterns"][pattern_path] = "(Could not read file)"
 
-    # Load files to modify (truncated)
+    # Load files to modify with smart compression
     for file_path in subtask.get("files_to_modify", []):
         full_path = project_dir / file_path
         if full_path.exists():
             try:
-                lines = full_path.read_text(encoding="utf-8").split("\n")
-                if len(lines) > max_file_lines:
-                    content = "\n".join(lines[:max_file_lines])
-                    content += (
-                        f"\n\n... (truncated, {len(lines) - max_file_lines} more lines)"
-                    )
-                else:
-                    content = "\n".join(lines)
+                # Use smart compression instead of simple truncation
+                result = compressor.compress_file(full_path, strategy="auto")
+                content = result.compressed_content
+
+                # Add compression metadata if applied
+                if result.method != "none":
+                    content += f"\n\n... (compressed from {result.original_tokens} to {result.compressed_tokens} tokens using {result.method})"
+
                 context["files_to_modify"][file_path] = content
             except Exception:
-                context["files_to_modify"][file_path] = "(Could not read file)"
+                # Fallback to simple truncation if compression fails
+                try:
+                    lines = full_path.read_text(encoding="utf-8").split("\n")
+                    if len(lines) > max_file_lines:
+                        content = "\n".join(lines[:max_file_lines])
+                        content += f"\n\n... (truncated, {len(lines) - max_file_lines} more lines)"
+                    else:
+                        content = "\n".join(lines)
+                    context["files_to_modify"][file_path] = content
+                except Exception:
+                    context["files_to_modify"][file_path] = "(Could not read file)"
 
     return context
 
