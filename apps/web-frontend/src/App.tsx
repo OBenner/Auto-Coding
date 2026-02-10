@@ -6,22 +6,8 @@ import { Settings } from './pages/Settings'
 import { UsageDashboard } from './pages/UsageDashboard'
 import { TaskList } from './pages/TaskList'
 import { TaskDetail } from './pages/TaskDetail'
+import { Dashboard } from './pages/Dashboard'
 import { Layout } from './components/Layout'
-
-/**
- * Temporary Dashboard placeholder component
- * Will be replaced with full Dashboard implementation in phase-3
- */
-function DashboardPlaceholder() {
-  return (
-    <div className="space-y-4">
-      <h1 className="text-2xl font-bold">Dashboard</h1>
-      <p className="text-muted-foreground">
-        Dashboard page coming soon. Navigate using the sidebar to view tasks and settings.
-      </p>
-    </div>
-  )
-}
 
 /**
  * Temporary CreateSpec placeholder component
@@ -79,11 +65,11 @@ function App() {
 
         {/* Main app routes - inside layout */}
         <Route element={<Layout />}>
-          {/* Redirect root to tasks (main view) */}
-          <Route path="/" element={<Navigate to="/tasks" replace />} />
+          {/* Dashboard is now the main landing page */}
+          <Route path="/" element={<Dashboard />} />
 
-          {/* Dashboard route (placeholder for now) */}
-          <Route path="/dashboard" element={<DashboardPlaceholder />} />
+          {/* Dashboard route */}
+          <Route path="/dashboard" element={<Dashboard />} />
 
           {/* Task routes */}
           <Route path="/tasks" element={<TaskListPage />} />
