@@ -125,6 +125,7 @@ def invalidate_project_cache(project_dir: Path | None = None) -> None:
                 logger.debug(f"Invalidated project index cache for {project_dir}")
 
 
+from agents.templates.models import AgentTemplate
 from agents.tools_pkg import (
     CONTEXT7_TOOLS,
     ELECTRON_TOOLS,
@@ -529,6 +530,7 @@ def create_client(
     max_thinking_tokens: int | None = None,
     output_format: dict | None = None,
     agents: dict | None = None,
+    custom_template: AgentTemplate | None = None,
 ) -> ClaudeSDKClient:
     """
     Create a Claude Agent SDK client with multi-layered security.
@@ -555,12 +557,16 @@ def create_client(
                Format: {"agent-name": {"description": "...", "prompt": "...",
                         "tools": [...], "model": "inherit"}}
                See: https://platform.claude.com/docs/en/agent-sdk/subagents
+        custom_template: Optional custom agent template with user-defined prompts,
+                        tools, and MCP server configuration. When provided, overrides
+                        default agent_type configuration from AGENT_CONFIGS.
 
     Returns:
         Configured ClaudeSDKClient
 
     Raises:
-        ValueError: If agent_type is not found in AGENT_CONFIGS
+        ValueError: If agent_type is not found in AGENT_CONFIGS or if custom_template
+                   validation fails
 
     Security layers (defense in depth):
     1. Sandbox - OS-level bash command isolation prevents filesystem escape
@@ -604,25 +610,63 @@ def create_client(
     # Load per-project MCP configuration from .auto-claude/.env
     mcp_config = load_project_mcp_config(project_dir)
 
-    # Get allowed tools using phase-aware configuration
-    # This respects AGENT_CONFIGS and only includes tools the agent needs
-    # Also respects per-project MCP configuration
-    allowed_tools_list = get_allowed_tools(
-        agent_type,
-        project_capabilities,
-        linear_enabled,
-        mcp_config,
-    )
+    # Handle custom template configuration
+    # Custom templates override AGENT_CONFIGS for tools, MCP servers, and thinking level
+    if custom_template:
+        # Validate custom template before using it
+        from agents.templates.validator import validate_template
 
-    # Get required MCP servers for this agent type
-    # This is the key optimization - only start servers the agent needs
-    # Now also respects per-project MCP configuration
-    required_servers = get_required_mcp_servers(
-        agent_type,
-        project_capabilities,
-        linear_enabled,
-        mcp_config,
-    )
+        is_valid, errors = validate_template(custom_template)
+        if not is_valid:
+            raise ValueError(
+                f"Custom template validation failed: {'; '.join(errors)}"
+            )
+
+        # Use template's tool configuration
+        allowed_tools_list = custom_template.tools
+
+        # Use template's MCP server configuration
+        required_servers = custom_template.mcp_servers
+
+        # Override max_thinking_tokens based on template's thinking level if not explicitly set
+        if max_thinking_tokens is None:
+            thinking_level_tokens = {
+                "none": None,
+                "low": 2000,
+                "medium": 5000,
+                "high": 10000,
+                "ultrathink": 16000,
+            }
+            max_thinking_tokens = thinking_level_tokens.get(
+                custom_template.thinking_level, None
+            )
+
+        logger.info(
+            f"Using custom template '{custom_template.name}' "
+            f"(tools: {len(allowed_tools_list)}, "
+            f"MCP servers: {len(required_servers)}, "
+            f"thinking: {custom_template.thinking_level})"
+        )
+    else:
+        # Get allowed tools using phase-aware configuration
+        # This respects AGENT_CONFIGS and only includes tools the agent needs
+        # Also respects per-project MCP configuration
+        allowed_tools_list = get_allowed_tools(
+            agent_type,
+            project_capabilities,
+            linear_enabled,
+            mcp_config,
+        )
+
+        # Get required MCP servers for this agent type
+        # This is the key optimization - only start servers the agent needs
+        # Now also respects per-project MCP configuration
+        required_servers = get_required_mcp_servers(
+            agent_type,
+            project_capabilities,
+            linear_enabled,
+            mcp_config,
+        )
 
     # Check if Graphiti MCP is enabled (already filtered by get_required_mcp_servers)
     graphiti_mcp_enabled = "graphiti" in required_servers
@@ -861,6 +905,16 @@ def create_client(
         f"your work through thorough testing. You communicate progress through Git commits "
         f"and build-progress.txt updates."
     )
+
+    # Include custom template prompt if provided
+    if custom_template and custom_template.custom_prompt:
+        base_prompt = (
+            f"{base_prompt}\n\n"
+            f"# Custom Agent Instructions (from template: {custom_template.name})\n\n"
+            f"{custom_template.custom_prompt}"
+        )
+        print(f"   - Custom template: {custom_template.name} ({custom_template.category})")
+        print(f"   - Template description: {custom_template.description}")
 
     # Include CLAUDE.md if enabled and present
     if should_use_claude_md():
