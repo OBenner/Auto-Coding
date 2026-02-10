@@ -107,7 +107,7 @@ class DependencyAnalyzer(BaseAnalyzer):
         """
         Analyze the risk of updating a single dependency.
 
-        This method will be implemented in subtask-2-2 to provide:
+        Provides:
         - Risk level classification (low, medium, high)
         - Breaking change probability estimation
         - Risk factors identification
@@ -122,19 +122,71 @@ class DependencyAnalyzer(BaseAnalyzer):
         Returns:
             DependencyRiskAssessment with detailed risk analysis
         """
-        # Placeholder - will be implemented in subtask-2-2
+        # Classify update type based on semantic versioning
         update_type = self._classify_update_type(current_version, target_version)
+
+        # Initialize risk factors
+        risk_factors = []
+
+        # Determine risk level and breaking change probability based on update type
+        if update_type == "patch":
+            risk_level = "low"
+            breaking_change_probability = 0.1
+            recommended_action = "update"
+            risk_factors.append("Patch update - typically backwards compatible")
+
+        elif update_type == "minor":
+            risk_level = "medium"
+            breaking_change_probability = 0.3
+            recommended_action = "test_first"
+            risk_factors.append("Minor update - may include new features")
+            risk_factors.append("Review changelog for deprecations")
+
+        elif update_type == "major":
+            risk_level = "high"
+            breaking_change_probability = 0.8
+            recommended_action = "defer"
+            risk_factors.append("Major update - likely contains breaking changes")
+            risk_factors.append("Requires careful review and testing")
+            risk_factors.append("May need code changes to adapt")
+
+        else:  # unknown
+            risk_level = "medium"
+            breaking_change_probability = 0.5
+            recommended_action = "test_first"
+            risk_factors.append("Unable to determine update type")
+            risk_factors.append("Version format may not follow semver")
+
+        # Add ecosystem-specific risk factors
+        if ecosystem == "python" and package_name in [
+            "django", "flask", "fastapi", "sqlalchemy", "pytest"
+        ]:
+            risk_factors.append("Core framework dependency - requires thorough testing")
+            breaking_change_probability = min(breaking_change_probability + 0.1, 1.0)
+
+        elif ecosystem == "npm" and package_name in [
+            "react", "vue", "angular", "express", "next", "typescript"
+        ]:
+            risk_factors.append("Core framework dependency - requires thorough testing")
+            breaking_change_probability = min(breaking_change_probability + 0.1, 1.0)
+
+        # Build notes
+        notes = f"{update_type.capitalize()} update from {current_version} to {target_version}"
+        if risk_level == "high":
+            notes += ". Recommend reviewing release notes and creating a separate branch for testing."
+        elif risk_level == "medium":
+            notes += ". Test in development environment before merging."
 
         return DependencyRiskAssessment(
             package_name=package_name,
             current_version=current_version,
             target_version=target_version,
             update_type=update_type,
-            risk_level="medium",
-            risk_factors=[],
-            breaking_change_probability=0.5,
-            recommended_action="test_first",
-            notes="Risk assessment not yet implemented",
+            risk_level=risk_level,
+            risk_factors=risk_factors,
+            breaking_change_probability=breaking_change_probability,
+            recommended_action=recommended_action,
+            notes=notes,
         )
 
     def batch_updates(
