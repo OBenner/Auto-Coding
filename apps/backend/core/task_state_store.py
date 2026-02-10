@@ -236,3 +236,119 @@ class TaskStateStore:
             if self.delete_state(task_id):
                 count += 1
         return count
+
+    def find_orphaned_tasks(self) -> list[str]:
+        """
+        Find tasks that were running when app crashed/restarted.
+
+        Orphaned tasks are those with status "running" but no active process.
+        These tasks need to be recovered or marked as failed on app restart.
+
+        Returns:
+            List of task IDs for orphaned tasks
+
+        Example:
+            orphaned = store.find_orphaned_tasks()
+            for task_id in orphaned:
+                print(f"Task {task_id} was interrupted")
+        """
+        orphaned_ids = []
+        try:
+            all_states = self.load_all_states()
+            for task_id, state in all_states.items():
+                if state.get("status") == "running":
+                    orphaned_ids.append(task_id)
+            logger.debug(f"Found {len(orphaned_ids)} orphaned tasks")
+            return orphaned_ids
+        except Exception as e:
+            logger.error(f"Failed to find orphaned tasks: {e}", exc_info=True)
+            return []
+
+    def mark_task_orphaned(
+        self, task_id: str, reason: str = "App restarted"
+    ) -> bool:
+        """
+        Mark a task as orphaned due to app restart or crash.
+
+        Updates task state to indicate it was interrupted and cannot continue.
+        Preserves existing output and metadata for debugging.
+
+        Args:
+            task_id: Task identifier
+            reason: Reason why task was orphaned (default: "App restarted")
+
+        Returns:
+            True if marked successfully, False otherwise
+
+        Example:
+            store.mark_task_orphaned("task_123", "App crashed")
+        """
+        if not task_id or not task_id.strip():
+            logger.error("Cannot mark task orphaned: task_id is empty")
+            return False
+
+        try:
+            state = self.load_state(task_id)
+            if not state:
+                logger.warning(f"Cannot mark non-existent task as orphaned: {task_id}")
+                return False
+
+            # Update state to mark as orphaned
+            state["status"] = "failed"
+            state["error"] = f"Task orphaned: {reason}"
+            state["orphaned"] = True
+
+            # Save updated state
+            success = self.save_state(task_id, state)
+            if success:
+                logger.info(f"Marked task {task_id} as orphaned: {reason}")
+            return success
+        except Exception as e:
+            logger.error(
+                f"Failed to mark task {task_id} as orphaned: {e}", exc_info=True
+            )
+            return False
+
+    def recover_on_startup(self) -> dict[str, Any]:
+        """
+        Recover task state after app restart.
+
+        Finds orphaned tasks and marks them as failed so they don't appear
+        as still running. Preserves output and metadata for user review.
+
+        Returns:
+            Recovery statistics dict with keys:
+            - orphaned_count: Number of tasks that were orphaned
+            - marked_count: Number successfully marked as failed
+            - failed_count: Number that failed to mark
+
+        Example:
+            stats = store.recover_on_startup()
+            print(f"Recovered {stats['marked_count']} orphaned tasks")
+        """
+        stats = {"orphaned_count": 0, "marked_count": 0, "failed_count": 0}
+
+        try:
+            orphaned_ids = self.find_orphaned_tasks()
+            stats["orphaned_count"] = len(orphaned_ids)
+
+            if not orphaned_ids:
+                logger.debug("No orphaned tasks found during startup recovery")
+                return stats
+
+            logger.info(f"Recovering {len(orphaned_ids)} orphaned tasks")
+
+            for task_id in orphaned_ids:
+                if self.mark_task_orphaned(task_id, "App restarted"):
+                    stats["marked_count"] += 1
+                else:
+                    stats["failed_count"] += 1
+
+            logger.info(
+                f"Startup recovery complete: {stats['marked_count']} marked, "
+                f"{stats['failed_count']} failed"
+            )
+            return stats
+        except Exception as e:
+            logger.error(f"Failed to recover on startup: {e}", exc_info=True)
+            return stats
