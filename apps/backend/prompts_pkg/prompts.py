@@ -573,3 +573,48 @@ The project root is: `{project_dir}`
 
 """
     return spec_context + base_prompt
+
+
+def get_performance_profiler_prompt(spec_dir: Path) -> str:
+    """
+    Load the performance profiler agent prompt with spec path and key files injected.
+
+    Args:
+        spec_dir: Directory containing the spec and profiling results
+
+    Returns:
+        The performance profiler prompt content with paths injected
+    """
+    prompt_file = PROMPTS_DIR / "performance_profiler.md"
+
+    if not prompt_file.exists():
+        raise FileNotFoundError(
+            f"Performance profiler prompt not found at {prompt_file}\n"
+            "Make sure the apps/backend/prompts/performance_profiler.md file exists."
+        )
+
+    prompt = prompt_file.read_text(encoding="utf-8")
+
+    # Inject spec directory information at the beginning
+    spec_context = f"""## YOUR ENVIRONMENT
+
+**Working Directory:** {spec_dir.parent.parent.parent}
+**Spec Location:** `{spec_dir}/`
+
+**Important Files:**
+- Spec: `{spec_dir}/spec.md`
+- Implementation plan: `{spec_dir}/implementation_plan.json`
+- Performance history: `{spec_dir}/performance_history.json`
+- Project index: `{spec_dir}/project_index.json`
+
+**Your task:**
+1. Profile the codebase to identify performance bottlenecks
+2. Analyze runtime and memory usage
+3. Suggest optimizations with measurable impact
+4. Implement optimizations with user approval
+5. Validate improvements with before/after comparisons
+
+---
+
+"""
+    return spec_context + prompt

@@ -26,6 +26,7 @@ from .prompt_generator import (
 from .prompts import (
     get_coding_prompt,
     get_followup_planner_prompt,
+    get_performance_profiler_prompt,
     get_planner_prompt,
     get_qa_fixer_prompt,
     get_qa_reviewer_prompt,
@@ -44,6 +45,7 @@ __all__ = [
     "get_planner_prompt",
     "get_coding_prompt",
     "get_followup_planner_prompt",
+    "get_performance_profiler_prompt",
     "get_qa_reviewer_prompt",
     "get_qa_fixer_prompt",
     "is_first_run",
