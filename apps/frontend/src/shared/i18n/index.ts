@@ -1,5 +1,6 @@
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
+import { debugWarn } from '../utils/debug-logger';
 
 // Import English translation resources
 import enCommon from './locales/en/common.json';
@@ -139,6 +140,9 @@ i18n
     },
     react: {
       useSuspense: false // Disable suspense for Electron compatibility
+    },
+    missingKeyHandler: (lngs: string[], ns: string, key: string, fallbackValue: string) => {
+      debugWarn(`[i18n] Missing translation key: "${ns}:${key}" for languages: ${lngs.join(', ')}`);
     }
   });
 
