@@ -162,7 +162,7 @@ function main() {
   log('\n🔍 Translation Validation\n', colors.cyan);
 
   // Define paths
-  const localesDir = path.join(__dirname, '..', 'apps', 'frontend', 'src', 'shared', 'i18n', 'locales');
+  const localesDir = path.join(__dirname, '..', 'src', 'shared', 'i18n', 'locales');
   const referenceLocale = 'en';
 
   // Check if locales directory exists
