@@ -22,6 +22,7 @@ __all__ = [
     # Main API
     "run_autonomous_agent",
     "run_followup_planner",
+    "run_performance_profiler",
     # Memory
     "debug_memory_system_status",
     "get_graphiti_context",
@@ -71,6 +72,10 @@ def __getattr__(name):
         from .planner import run_followup_planner
 
         return run_followup_planner
+    elif name == "run_performance_profiler":
+        from .performance_profiler import run_performance_profiler
+
+        return run_performance_profiler
     elif name in ("post_session_processing", "run_agent_session"):
         from .session import post_session_processing, run_agent_session
 
