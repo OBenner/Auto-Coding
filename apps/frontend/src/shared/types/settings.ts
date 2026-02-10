@@ -6,6 +6,30 @@ import type { NotificationSettings, GraphitiEmbeddingProvider } from './project'
 import type { ChangelogFormat, ChangelogAudience, ChangelogEmojiLevel } from './changelog';
 import type { SupportedLanguage } from '../constants/i18n';
 
+// ============================================
+// Recent Actions Types
+// ============================================
+
+/**
+ * Recent action entry for quick actions menu
+ */
+export interface RecentAction {
+  /** Unique identifier for this action instance */
+  id: string;
+  /** Type of action performed */
+  type: 'batch_qa' | 'batch_status_update' | 'create_task' | 'start_task' | 'stop_task';
+  /** Display label for the action */
+  label: string;
+  /** Timestamp when the action was performed */
+  timestamp: Date;
+  /** Number of items affected (for batch operations) */
+  itemCount?: number;
+  /** Target status (for status updates) */
+  targetStatus?: string;
+  /** Project ID where the action was performed */
+  projectId?: string;
+}
+
 // Color theme types for multi-theme support
 export type ColorTheme = 'default' | 'dusk' | 'lime' | 'ocean' | 'retro' | 'neo' | 'forest';
 
@@ -292,6 +316,8 @@ export interface AppSettings {
   sidebarCollapsed?: boolean;
   // Keyboard shortcuts customization
   keyboardShortcuts?: Record<KeyboardShortcutAction, KeyCombination>;
+  // Recent actions for quick actions menu (persisted between sessions)
+  recentActions?: RecentAction[];
 }
 
 // Auto-Code Source Environment Configuration (for auto-claude repo .env)

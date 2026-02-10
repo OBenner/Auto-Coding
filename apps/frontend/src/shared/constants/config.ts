@@ -63,7 +63,9 @@ export const DEFAULT_APP_SETTINGS = {
   // Auto-name Claude terminals based on initial message (enabled by default)
   autoNameClaudeTerminals: true,
   // Keyboard shortcuts (customizable by users)
-  keyboardShortcuts: DEFAULT_KEYBOARD_SHORTCUTS
+  keyboardShortcuts: DEFAULT_KEYBOARD_SHORTCUTS,
+  // Recent actions for quick actions menu (persisted between sessions)
+  recentActions: []
 };
 
 // ============================================

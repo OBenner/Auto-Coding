@@ -402,3 +402,30 @@ export async function loadProfiles(): Promise<void> {
     store.setProfilesLoading(false);
   }
 }
+
+/**
+ * Get recent actions from settings
+ * Returns the recentActions array from current settings
+ */
+export function getRecentActions(): import('../../shared/types/settings').RecentAction[] {
+  const store = useSettingsStore.getState();
+  return store.settings.recentActions || [];
+}
+
+/**
+ * Save recent actions to settings
+ * Updates the recentActions array in settings and persists to disk
+ */
+export async function saveRecentActions(actions: import('../../shared/types/settings').RecentAction[]): Promise<boolean> {
+  const store = useSettingsStore.getState();
+  try {
+    const result = await window.electronAPI.saveSettings({ recentActions: actions });
+    if (result.success) {
+      store.updateSettings({ recentActions: actions });
+      return true;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
