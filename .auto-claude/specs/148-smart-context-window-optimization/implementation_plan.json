@@ -1,0 +1,535 @@
+{
+  "feature": "Smart Context Window Optimization",
+  "description": "# Smart Context Window Optimization\n\nIntelligent context window management that prioritizes relevant code, removes redundant information, and dynamically adjusts context based on task complexity. Uses semantic similarity to rank and select most relevant files for large codebases.\n\n## Rationale\nAddresses pain point: 'Context window bottleneck - enterprise monorepos exceed LLM context limits'. Critical for large codebases. Competitors analyze only ~10% of files fabricating 60% of details. This is a key differentiator for enterprise users with monorepos.\n\n## User Stories\n- As a developer, I want AI to focus on relevant files, not waste context on unrelated code\n- As a user with a large monorepo, I want AI to work within context limits without fabricating details\n- As a developer, I want to understand why certain files were included/excluded from context\n\n## Acceptance Criteria\n- [ ] Semantic relevance scoring ranks files by importance to task\n- [ ] Redundant code detection removes duplicate context\n- [ ] Context window usage displayed in real-time with warnings\n- [ ] Dynamic context adjustment based on task complexity\n- [ ] Context compression for large files (summaries, key sections)\n- [ ] User can override context selection with file priority hints\n- [ ] Context selection reasoning exposed to user for transparency\n",
+  "created_at": "2026-02-09T16:26:58.401Z",
+  "updated_at": "2026-02-10T13:43:24.805Z",
+  "status": "in_progress",
+  "workflow_type": "feature",
+  "workflow_rationale": "New feature enhancing existing context system. Backend implementation first, then CLI integration.",
+  "phases": [
+    {
+      "id": "phase-1-token-estimation",
+      "name": "Token Estimation Foundation",
+      "type": "implementation",
+      "description": "Build token counting and budget management system",
+      "depends_on": [],
+      "parallel_safe": true,
+      "subtasks": [
+        {
+          "id": "subtask-1-1",
+          "description": "Create TokenEstimator class for accurate file token counting",
+          "service": "backend",
+          "files_to_create": [
+            "apps/backend/context/token_estimator.py"
+          ],
+          "files_to_modify": [],
+          "patterns_from": [
+            "apps/backend/merge/ai_resolver/context.py"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "cd apps/backend && python -c \"from context.token_estimator import TokenEstimator; print('OK')\"",
+            "expected": "OK"
+          },
+          "status": "completed"
+        },
+        {
+          "id": "subtask-1-2",
+          "description": "Add tiktoken dependency to requirements.txt",
+          "service": "backend",
+          "files_to_modify": [
+            "apps/backend/requirements.txt"
+          ],
+          "files_to_create": [],
+          "patterns_from": [],
+          "verification": {
+            "type": "command",
+            "command": "cd apps/backend && grep tiktoken requirements.txt",
+            "expected": "tiktoken"
+          },
+          "status": "completed"
+        },
+        {
+          "id": "subtask-1-3",
+          "description": "Update context models to include token metadata",
+          "service": "backend",
+          "files_to_modify": [
+            "apps/backend/context/models.py"
+          ],
+          "files_to_create": [],
+          "patterns_from": [
+            "apps/backend/core/token_stats.py"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "cd apps/backend && python -c \"from context.models import FileMatch; f = FileMatch('test.py', 'backend', 'test', 0.0); print(hasattr(f, 'estimated_tokens'))\"",
+            "expected": "True"
+          },
+          "status": "completed"
+        }
+      ]
+    },
+    {
+      "id": "phase-2-semantic-scoring",
+      "name": "Semantic Relevance Scoring",
+      "type": "implementation",
+      "description": "Implement semantic similarity scoring for better file ranking",
+      "depends_on": [
+        "phase-1-token-estimation"
+      ],
+      "parallel_safe": false,
+      "subtasks": [
+        {
+          "id": "subtask-2-1",
+          "description": "Create SemanticScorer using embeddings from Graphiti",
+          "service": "backend",
+          "files_to_create": [
+            "apps/backend/context/semantic_scorer.py"
+          ],
+          "files_to_modify": [],
+          "patterns_from": [
+            "apps/backend/integrations/graphiti/queries_pkg/search.py"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "cd apps/backend && python -c \"from context.semantic_scorer import SemanticScorer; print('OK')\"",
+            "expected": "OK"
+          },
+          "status": "completed"
+        },
+        {
+          "id": "subtask-2-2",
+          "description": "Enhance CodeSearcher to use semantic scoring",
+          "service": "backend",
+          "files_to_modify": [
+            "apps/backend/context/search.py"
+          ],
+          "files_to_create": [],
+          "patterns_from": [
+            "apps/backend/context/search.py"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "cd apps/backend && python -c \"from context.search import CodeSearcher; print(hasattr(CodeSearcher, 'search_with_semantics'))\"",
+            "expected": "True"
+          },
+          "status": "completed"
+        },
+        {
+          "id": "subtask-2-3",
+          "description": "Update ContextBuilder to use semantic scoring",
+          "service": "backend",
+          "files_to_modify": [
+            "apps/backend/context/builder.py"
+          ],
+          "files_to_create": [],
+          "patterns_from": [
+            "apps/backend/context/builder.py"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "cd apps/backend && python -c \"from context.builder import ContextBuilder; print('OK')\"",
+            "expected": "OK"
+          },
+          "status": "completed"
+        }
+      ]
+    },
+    {
+      "id": "phase-3-redundancy-detection",
+      "name": "Redundancy Detection",
+      "type": "implementation",
+      "description": "Detect and remove duplicate/similar code to save tokens",
+      "depends_on": [
+        "phase-2-semantic-scoring"
+      ],
+      "parallel_safe": false,
+      "subtasks": [
+        {
+          "id": "subtask-3-1",
+          "description": "Create RedundancyDetector for finding duplicate code",
+          "service": "backend",
+          "files_to_create": [
+            "apps/backend/context/redundancy_detector.py"
+          ],
+          "files_to_modify": [],
+          "patterns_from": [
+            "apps/backend/context/pattern_discovery.py"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "cd apps/backend && python -c \"from context.redundancy_detector import RedundancyDetector; print('OK')\"",
+            "expected": "OK"
+          },
+          "status": "completed"
+        },
+        {
+          "id": "subtask-3-2",
+          "description": "Integrate redundancy detection into ContextBuilder",
+          "service": "backend",
+          "files_to_modify": [
+            "apps/backend/context/builder.py"
+          ],
+          "files_to_create": [],
+          "patterns_from": [
+            "apps/backend/context/builder.py"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "cd apps/backend && python -c \"from context.builder import ContextBuilder; print('OK')\"",
+            "expected": "OK"
+          },
+          "status": "completed"
+        }
+      ]
+    },
+    {
+      "id": "phase-4-compression",
+      "name": "Smart Context Compression",
+      "type": "implementation",
+      "description": "Implement intelligent compression for large files",
+      "depends_on": [
+        "phase-3-redundancy-detection"
+      ],
+      "parallel_safe": false,
+      "subtasks": [
+        {
+          "id": "subtask-4-1",
+          "description": "Create ContextCompressor for summarizing large files",
+          "service": "backend",
+          "files_to_create": [
+            "apps/backend/context/compressor.py"
+          ],
+          "files_to_modify": [],
+          "patterns_from": [
+            "apps/backend/prompts_pkg/prompt_generator.py"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "cd apps/backend && python -c \"from context.compressor import ContextCompressor; print('OK')\"",
+            "expected": "OK"
+          },
+          "status": "completed"
+        },
+        {
+          "id": "subtask-4-2",
+          "description": "Update load_subtask_context to use smart compression",
+          "service": "backend",
+          "files_to_modify": [
+            "apps/backend/prompts_pkg/prompt_generator.py"
+          ],
+          "files_to_create": [],
+          "patterns_from": [
+            "apps/backend/prompts_pkg/prompt_generator.py"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "cd apps/backend && python -c \"from prompt_generator import load_subtask_context; print('OK')\"",
+            "expected": "OK"
+          },
+          "status": "completed"
+        }
+      ]
+    },
+    {
+      "id": "phase-5-user-overrides",
+      "name": "User Configuration and Overrides",
+      "type": "implementation",
+      "description": "Allow users to override context selection with file priorities",
+      "depends_on": [
+        "phase-4-compression"
+      ],
+      "parallel_safe": true,
+      "subtasks": [
+        {
+          "id": "subtask-5-1",
+          "description": "Create PriorityManager for user file hints",
+          "service": "backend",
+          "files_to_create": [
+            "apps/backend/context/priority_manager.py"
+          ],
+          "files_to_modify": [],
+          "patterns_from": [
+            "apps/backend/context/service_matcher.py"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "cd apps/backend && python -c \"from context.priority_manager import PriorityManager; print('OK')\"",
+            "expected": "OK"
+          },
+          "status": "completed"
+        },
+        {
+          "id": "subtask-5-2",
+          "description": "Update ContextBuilder to respect user priorities",
+          "service": "backend",
+          "files_to_modify": [
+            "apps/backend/context/builder.py"
+          ],
+          "files_to_create": [],
+          "patterns_from": [
+            "apps/backend/context/builder.py"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "cd apps/backend && python -c \"from context.builder import ContextBuilder; print('OK')\"",
+            "expected": "OK"
+          },
+          "status": "completed"
+        },
+        {
+          "id": "subtask-5-3",
+          "description": "Add context-priority.json schema and documentation",
+          "service": "backend",
+          "files_to_create": [
+            ".auto-claude/context-priority.schema.json"
+          ],
+          "files_to_modify": [],
+          "patterns_from": [],
+          "verification": {
+            "type": "manual",
+            "instructions": "Verify schema file exists and is valid JSON"
+          },
+          "status": "completed"
+        }
+      ]
+    },
+    {
+      "id": "phase-6-transparency-display",
+      "name": "Transparency and Display",
+      "type": "implementation",
+      "description": "Show context window usage and selection reasoning",
+      "depends_on": [
+        "phase-5-user-overrides"
+      ],
+      "parallel_safe": false,
+      "subtasks": [
+        {
+          "id": "subtask-6-1",
+          "description": "Add context selection reasoning to TaskContext model",
+          "service": "backend",
+          "files_to_modify": [
+            "apps/backend/context/models.py"
+          ],
+          "files_to_create": [],
+          "patterns_from": [
+            "apps/backend/context/models.py"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "cd apps/backend && python -c \"from context.models import TaskContext; print('OK')\"",
+            "expected": "OK"
+          },
+          "status": "pending"
+        },
+        {
+          "id": "subtask-6-2",
+          "description": "Update format_context_for_prompt to include reasoning",
+          "service": "backend",
+          "files_to_modify": [
+            "apps/backend/prompts_pkg/prompt_generator.py"
+          ],
+          "files_to_create": [],
+          "patterns_from": [
+            "apps/backend/prompts_pkg/prompt_generator.py"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "cd apps/backend && python -c \"from prompt_generator import format_context_for_prompt; print('OK')\"",
+            "expected": "OK"
+          },
+          "status": "pending"
+        },
+        {
+          "id": "subtask-6-3",
+          "description": "Add context window usage display to agent output",
+          "service": "backend",
+          "files_to_modify": [
+            "apps/backend/agents/coder.py"
+          ],
+          "files_to_create": [],
+          "patterns_from": [
+            "apps/backend/agents/coder.py"
+          ],
+          "verification": {
+            "type": "manual",
+            "instructions": "Run a spec build and verify context usage is displayed"
+          },
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": "phase-7-integration-testing",
+      "name": "Integration and Testing",
+      "type": "integration",
+      "description": "Test full context optimization pipeline",
+      "depends_on": [
+        "phase-6-transparency-display"
+      ],
+      "parallel_safe": false,
+      "subtasks": [
+        {
+          "id": "subtask-7-1",
+          "description": "Write unit tests for token estimation",
+          "service": "backend",
+          "files_to_create": [
+            "apps/backend/tests/context/test_token_estimator.py"
+          ],
+          "files_to_modify": [],
+          "patterns_from": [],
+          "verification": {
+            "type": "command",
+            "command": "cd apps/backend && pytest tests/context/test_token_estimator.py -v",
+            "expected": "PASSED"
+          },
+          "status": "pending"
+        },
+        {
+          "id": "subtask-7-2",
+          "description": "Write unit tests for semantic scoring",
+          "service": "backend",
+          "files_to_create": [
+            "apps/backend/tests/context/test_semantic_scorer.py"
+          ],
+          "files_to_modify": [],
+          "patterns_from": [],
+          "verification": {
+            "type": "command",
+            "command": "cd apps/backend && pytest tests/context/test_semantic_scorer.py -v",
+            "expected": "PASSED"
+          },
+          "status": "pending"
+        },
+        {
+          "id": "subtask-7-3",
+          "description": "Write unit tests for redundancy detection",
+          "service": "backend",
+          "files_to_create": [
+            "apps/backend/tests/context/test_redundancy_detector.py"
+          ],
+          "files_to_modify": [],
+          "patterns_from": [],
+          "verification": {
+            "type": "command",
+            "command": "cd apps/backend && pytest tests/context/test_redundancy_detector.py -v",
+            "expected": "PASSED"
+          },
+          "status": "pending"
+        },
+        {
+          "id": "subtask-7-4",
+          "description": "End-to-end test context optimization on real codebase",
+          "service": "backend",
+          "files_to_create": [],
+          "files_to_modify": [],
+          "patterns_from": [],
+          "verification": {
+            "type": "e2e",
+            "steps": [
+              "Run context builder on a task",
+              "Verify semantic scoring ranks relevant files higher",
+              "Verify redundancy detection removes duplicates",
+              "Verify token estimation is accurate",
+              "Verify compression preserves key information"
+            ]
+          },
+          "status": "pending"
+        }
+      ]
+    }
+  ],
+  "planStatus": "in_progress",
+  "summary": {
+    "total_phases": 7,
+    "total_subtasks": 20,
+    "services_involved": [
+      "backend"
+    ],
+    "parallelism": {
+      "max_parallel_phases": 2,
+      "parallel_groups": [
+        {
+          "phases": [
+            "phase-1-token-estimation",
+            "phase-5-user-overrides"
+          ],
+          "reason": "Phase 1 (token estimation) and Phase 5 (user overrides) can be developed independently"
+        }
+      ],
+      "recommended_workers": 1,
+      "speedup_estimate": "1.2x faster with parallel execution"
+    },
+    "startup_command": "source apps/backend/.venv/bin/activate && python apps/backend/run.py --spec 148"
+  },
+  "verification_strategy": {
+    "risk_level": "medium",
+    "skip_validation": false,
+    "test_creation_phase": "post_implementation",
+    "test_types_required": [
+      "unit",
+      "integration"
+    ],
+    "security_scanning_required": false,
+    "staging_deployment_required": false,
+    "acceptance_criteria": [
+      "Semantic relevance scoring ranks files by importance to task",
+      "Redundant code detection removes duplicate context",
+      "Token estimation is accurate within 10% margin",
+      "Context compression preserves key information",
+      "User can override context selection with file priority hints",
+      "Context selection reasoning is exposed to user"
+    ],
+    "verification_steps": [
+      {
+        "name": "Unit Tests",
+        "command": "cd apps/backend && pytest tests/context/ -v",
+        "expected_outcome": "All tests pass",
+        "type": "test",
+        "required": true,
+        "blocking": true
+      },
+      {
+        "name": "Integration Test",
+        "command": "cd apps/backend && python -c \"from context.builder import ContextBuilder; from pathlib import Path; b = ContextBuilder(Path('.')); c = b.build_context('Add caching'); print('OK')\"",
+        "expected_outcome": "OK",
+        "type": "test",
+        "required": true,
+        "blocking": true
+      }
+    ],
+    "reasoning": "Medium risk change to core context system requires unit and integration test coverage"
+  },
+  "qa_acceptance": {
+    "unit_tests": {
+      "required": true,
+      "commands": [
+        "cd apps/backend && pytest tests/context/ -v"
+      ],
+      "minimum_coverage": null
+    },
+    "integration_tests": {
+      "required": true,
+      "commands": [
+        "cd apps/backend && pytest tests/context/test_integration.py -v"
+      ],
+      "services_to_test": [
+        "backend"
+      ]
+    },
+    "e2e_tests": {
+      "required": false,
+      "commands": [],
+      "flows": []
+    },
+    "browser_verification": {
+      "required": false,
+      "pages": []
+    },
+    "database_verification": {
+      "required": false,
+      "checks": []
+    }
+  },
+  "qa_signoff": null
+}
