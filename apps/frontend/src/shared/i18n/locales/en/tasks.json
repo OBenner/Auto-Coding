@@ -135,6 +135,7 @@
       "idle": "Idle",
       "planning": "Planning",
       "coding": "Coding",
+      "testGeneration": "Testing",
       "reviewing": "Reviewing",
       "fixing": "Fixing",
       "complete": "Complete",
