@@ -50,6 +50,8 @@ import {
   findHomebrewPython,
   getClaudeDetectionPaths,
   sortNvmVersionDirs,
+  getGitDetectionPaths,
+  getGitHubCLIDetectionPaths,
   type ClaudeDetectionPaths,
 } from './platform/paths';
 
@@ -448,10 +450,7 @@ class CLIToolManager {
 
     // 2. Homebrew (macOS)
     if (isMacOS()) {
-      const homebrewPaths = [
-        '/opt/homebrew/bin/git', // Apple Silicon
-        '/usr/local/bin/git', // Intel Mac
-      ];
+      const homebrewPaths = getGitDetectionPaths();
 
       for (const gitPath of homebrewPaths) {
         if (existsSync(gitPath)) {
@@ -563,10 +562,7 @@ class CLIToolManager {
 
     // 2. Homebrew (macOS)
     if (isMacOS()) {
-      const homebrewPaths = [
-        '/opt/homebrew/bin/gh', // Apple Silicon
-        '/usr/local/bin/gh', // Intel Mac
-      ];
+      const homebrewPaths = getGitHubCLIDetectionPaths();
 
       for (const ghPath of homebrewPaths) {
         if (existsSync(ghPath)) {
@@ -1462,10 +1458,7 @@ class CLIToolManager {
 
     // 2. Homebrew (macOS)
     if (isMacOS()) {
-      const homebrewPaths = [
-        '/opt/homebrew/bin/git',
-        '/usr/local/bin/git',
-      ];
+      const homebrewPaths = getGitDetectionPaths();
 
       for (const gitPath of homebrewPaths) {
         if (await existsAsync(gitPath)) {
@@ -1568,10 +1561,7 @@ class CLIToolManager {
 
     // 2. Homebrew (macOS)
     if (isMacOS()) {
-      const homebrewPaths = [
-        '/opt/homebrew/bin/gh',
-        '/usr/local/bin/gh',
-      ];
+      const homebrewPaths = getGitHubCLIDetectionPaths();
 
       for (const ghPath of homebrewPaths) {
         if (await existsAsync(ghPath)) {
