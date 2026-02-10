@@ -1,0 +1,307 @@
+"""
+Dependency Analyzer Module
+===========================
+
+Analyzes dependency updates for risk assessment and batching recommendations.
+Integrates with DependencyScanner results to provide intelligent update strategies.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
+
+from .base import BaseAnalyzer
+
+
+# =============================================================================
+# DATA CLASSES
+# =============================================================================
+
+
+@dataclass
+class UpdateBatch:
+    """
+    Represents a batch of compatible dependency updates.
+
+    Attributes:
+        batch_id: Unique identifier for this batch
+        update_type: Type of updates in this batch (major, minor, patch)
+        ecosystem: Package ecosystem (python, npm, etc.)
+        packages: List of package names in this batch
+        risk_level: Overall risk level for this batch
+        is_security_batch: Whether this batch contains security updates
+        priority: Priority score (higher = more urgent)
+        notes: Additional notes about this batch
+    """
+
+    batch_id: str
+    update_type: str
+    ecosystem: str
+    packages: list[str] = field(default_factory=list)
+    risk_level: str = "low"  # low, medium, high
+    is_security_batch: bool = False
+    priority: int = 0
+    notes: str = ""
+
+
+@dataclass
+class DependencyRiskAssessment:
+    """
+    Risk assessment for a single dependency update.
+
+    Attributes:
+        package_name: Name of the package
+        current_version: Current version
+        target_version: Target version to update to
+        update_type: Type of update (major, minor, patch)
+        risk_level: Assessed risk level (low, medium, high)
+        risk_factors: List of identified risk factors
+        breaking_change_probability: Probability of breaking changes (0.0-1.0)
+        recommended_action: Recommended action (update, defer, test_first, etc.)
+        notes: Additional notes about this assessment
+    """
+
+    package_name: str
+    current_version: str
+    target_version: str
+    update_type: str
+    risk_level: str = "medium"
+    risk_factors: list[str] = field(default_factory=list)
+    breaking_change_probability: float = 0.5
+    recommended_action: str = "test_first"
+    notes: str = ""
+
+
+# =============================================================================
+# DEPENDENCY ANALYZER
+# =============================================================================
+
+
+class DependencyAnalyzer(BaseAnalyzer):
+    """
+    Analyzes dependency updates for risk assessment and batching.
+
+    Integrates with DependencyScanner results to provide:
+    - Risk classification for each update
+    - Update batching recommendations
+    - Breaking change probability assessment
+    - Priority scoring for updates
+    """
+
+    def __init__(self, path: Path, analysis: dict[str, Any] | None = None):
+        """
+        Initialize the dependency analyzer.
+
+        Args:
+            path: Path to the project directory
+            analysis: Optional analysis dict to populate with results
+        """
+        super().__init__(path)
+        self.analysis = analysis if analysis is not None else {}
+
+    def analyze_update_risk(
+        self, package_name: str, current_version: str, target_version: str, ecosystem: str
+    ) -> DependencyRiskAssessment:
+        """
+        Analyze the risk of updating a single dependency.
+
+        This method will be implemented in subtask-2-2 to provide:
+        - Risk level classification (low, medium, high)
+        - Breaking change probability estimation
+        - Risk factors identification
+        - Recommended action
+
+        Args:
+            package_name: Name of the package
+            current_version: Current version
+            target_version: Target version to update to
+            ecosystem: Package ecosystem (python, npm, etc.)
+
+        Returns:
+            DependencyRiskAssessment with detailed risk analysis
+        """
+        # Placeholder - will be implemented in subtask-2-2
+        update_type = self._classify_update_type(current_version, target_version)
+
+        return DependencyRiskAssessment(
+            package_name=package_name,
+            current_version=current_version,
+            target_version=target_version,
+            update_type=update_type,
+            risk_level="medium",
+            risk_factors=[],
+            breaking_change_probability=0.5,
+            recommended_action="test_first",
+            notes="Risk assessment not yet implemented",
+        )
+
+    def batch_updates(
+        self, updates: list[dict[str, Any]]
+    ) -> list[UpdateBatch]:
+        """
+        Group compatible updates into batches.
+
+        This method will be implemented in subtask-2-3 to provide:
+        - Batch grouping by update type and ecosystem
+        - Priority scoring
+        - Security update separation
+        - Risk-aware batching
+
+        Args:
+            updates: List of update dictionaries (from DependencyScanner)
+
+        Returns:
+            List of UpdateBatch objects
+        """
+        # Placeholder - will be implemented in subtask-2-3
+        return []
+
+    def get_update_priority(
+        self,
+        package_name: str,
+        update_type: str,
+        is_security: bool,
+        severity: str | None = None,
+    ) -> int:
+        """
+        Calculate priority score for a dependency update.
+
+        Priority factors:
+        - Security updates (highest priority)
+        - CVE severity
+        - Update type (patch > minor > major)
+        - Known issues with current version
+
+        Args:
+            package_name: Name of the package
+            update_type: Type of update (major, minor, patch)
+            is_security: Whether this is a security update
+            severity: CVE severity if applicable
+
+        Returns:
+            Priority score (0-100, higher = more urgent)
+        """
+        priority = 0
+
+        # Security updates get highest priority
+        if is_security:
+            priority += 50
+            # Add severity bonus
+            if severity == "critical":
+                priority += 30
+            elif severity == "high":
+                priority += 20
+            elif severity == "medium":
+                priority += 10
+
+        # Update type priority (patch > minor > major)
+        if update_type == "patch":
+            priority += 15
+        elif update_type == "minor":
+            priority += 10
+        elif update_type == "major":
+            priority += 5
+
+        return min(priority, 100)  # Cap at 100
+
+    def _classify_update_type(self, current: str, latest: str) -> str:
+        """
+        Classify update type based on semantic versioning.
+
+        Args:
+            current: Current version string
+            latest: Latest version string
+
+        Returns:
+            Update type: "major", "minor", "patch", or "unknown"
+        """
+        try:
+            # Remove 'v' prefix if present
+            current = current.lstrip("v")
+            latest = latest.lstrip("v")
+
+            # Parse version numbers
+            current_parts = [int(x) for x in current.split(".")[:3]]
+            latest_parts = [int(x) for x in latest.split(".")[:3]]
+
+            # Pad to 3 parts if needed
+            while len(current_parts) < 3:
+                current_parts.append(0)
+            while len(latest_parts) < 3:
+                latest_parts.append(0)
+
+            # Compare versions
+            if latest_parts[0] > current_parts[0]:
+                return "major"
+            elif latest_parts[1] > current_parts[1]:
+                return "minor"
+            elif latest_parts[2] > current_parts[2]:
+                return "patch"
+            else:
+                return "unknown"
+        except (ValueError, IndexError):
+            # If version parsing fails, default to unknown
+            return "unknown"
+
+    def get_analysis_summary(self) -> dict[str, Any]:
+        """
+        Get a summary of the dependency analysis.
+
+        Returns:
+            Dictionary with analysis summary
+        """
+        return {
+            "analyzer": "DependencyAnalyzer",
+            "project_path": str(self.path),
+            "analysis": self.analysis,
+        }
+
+
+# =============================================================================
+# CONVENIENCE FUNCTIONS
+# =============================================================================
+
+
+def analyze_dependency_update(
+    project_path: Path,
+    package_name: str,
+    current_version: str,
+    target_version: str,
+    ecosystem: str,
+) -> DependencyRiskAssessment:
+    """
+    Convenience function to analyze a single dependency update.
+
+    Args:
+        project_path: Path to the project directory
+        package_name: Name of the package
+        current_version: Current version
+        target_version: Target version to update to
+        ecosystem: Package ecosystem (python, npm, etc.)
+
+    Returns:
+        DependencyRiskAssessment with risk analysis
+    """
+    analyzer = DependencyAnalyzer(project_path)
+    return analyzer.analyze_update_risk(
+        package_name, current_version, target_version, ecosystem
+    )
+
+
+def batch_dependency_updates(
+    project_path: Path, updates: list[dict[str, Any]]
+) -> list[UpdateBatch]:
+    """
+    Convenience function to batch dependency updates.
+
+    Args:
+        project_path: Path to the project directory
+        updates: List of update dictionaries (from DependencyScanner)
+
+    Returns:
+        List of UpdateBatch objects
+    """
+    analyzer = DependencyAnalyzer(project_path)
+    return analyzer.batch_updates(updates)
