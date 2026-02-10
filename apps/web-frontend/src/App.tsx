@@ -7,22 +7,8 @@ import { UsageDashboard } from './pages/UsageDashboard'
 import { TaskList } from './pages/TaskList'
 import { TaskDetail } from './pages/TaskDetail'
 import { Dashboard } from './pages/Dashboard'
+import { CreateSpec } from './pages/CreateSpec'
 import { Layout } from './components/Layout'
-
-/**
- * Temporary CreateSpec placeholder component
- * Will be replaced with full CreateSpec implementation in phase-3
- */
-function CreateSpecPlaceholder() {
-  return (
-    <div className="space-y-4">
-      <h1 className="text-2xl font-bold">Create Spec</h1>
-      <p className="text-muted-foreground">
-        Spec creation form coming soon.
-      </p>
-    </div>
-  )
-}
 
 /**
  * TaskList wrapper component that integrates with React Router
@@ -75,8 +61,8 @@ function App() {
           <Route path="/tasks" element={<TaskListPage />} />
           <Route path="/tasks/:id" element={<TaskDetailPage />} />
 
-          {/* Create spec route (placeholder for now) */}
-          <Route path="/create" element={<CreateSpecPlaceholder />} />
+          {/* Create spec route */}
+          <Route path="/create" element={<CreateSpec />} />
 
           {/* Settings and usage routes */}
           <Route path="/settings/*" element={<Settings />} />
