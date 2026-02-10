@@ -16,6 +16,8 @@ import { ProfileAPI, createProfileAPI } from './profile-api';
 import { ScreenshotAPI, createScreenshotAPI } from './screenshot-api';
 import { QueueAPI, createQueueAPI } from './queue-api';
 import { PluginAPI, createPluginAPI } from './plugin-api';
+import type { PatternAPI } from './modules/pattern-api';
+import { createPatternAPI } from './modules/pattern-api';
 
 export interface ElectronAPI extends
   ProjectAPI,
@@ -33,10 +35,13 @@ export interface ElectronAPI extends
   McpAPI,
   ProfileAPI,
   ScreenshotAPI,
-  PluginAPI {
+  PluginAPI,
+  PatternAPI {
   github: GitHubAPI;
   /** Queue routing API for rate limit recovery */
   queue: QueueAPI;
+  /** Pattern learning API for codebase patterns */
+  pattern: PatternAPI;
 }
 
 export const createElectronAPI = (): ElectronAPI => ({
@@ -54,7 +59,8 @@ export const createElectronAPI = (): ElectronAPI => ({
   ...createScreenshotAPI(),
   ...createPluginAPI(),
   github: createGitHubAPI(),
-  queue: createQueueAPI()  // Queue routing for rate limit recovery
+  queue: createQueueAPI(),  // Queue routing for rate limit recovery
+  pattern: createPatternAPI()
 });
 
 // Export individual API creators for potential use in tests or specialized contexts
@@ -74,7 +80,8 @@ export {
   createMcpAPI,
   createScreenshotAPI,
   createQueueAPI,
-  createPluginAPI
+  createPluginAPI,
+  createPatternAPI
 };
 
 export type {
@@ -95,5 +102,6 @@ export type {
   McpAPI,
   ScreenshotAPI,
   QueueAPI,
-  PluginAPI
+  PluginAPI,
+  PatternAPI
 };

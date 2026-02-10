@@ -7,7 +7,7 @@
  * - Approve, override, or delete patterns
  * - See pattern details (confidence, reasoning)
  */
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Sparkles,
@@ -21,6 +21,8 @@ import {
   ChevronDown,
   ChevronRight
 } from 'lucide-react';
+import { projectStore } from '../../stores/project-store';
+import type { Pattern } from '../../../preload/api/modules/pattern-api';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { Card } from '../ui/card';
@@ -44,13 +46,9 @@ import {
   AlertDialogTitle
 } from '../ui/alert-dialog';
 
-interface Pattern {
-  id: string;
-  text: string;
-  category: 'naming-conventions' | 'error-handling' | 'code-organization';
-  confidence: 'high' | 'medium' | 'low';
-  reasoning?: string;
-  approved?: boolean;
+// Use Pattern from preload API, but extend it with id for React keys
+interface PatternWithId extends Pattern {
+  id: string; // Using index as string for React keys
 }
 
 type CategoryFilter = 'all' | Pattern['category'];
@@ -62,13 +60,62 @@ export function PatternReviewPanel() {
   const { t } = useTranslation('common');
 
   // State
-  const [patterns, setPatterns] = useState<Pattern[]>([]);
+  const [patterns, setPatterns] = useState<PatternWithId[]>([]);
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all');
   const [expandedPatternId, setExpandedPatternId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [deleteConfirmPattern, setDeleteConfirmPattern] = useState<Pattern | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [deleteConfirmPattern, setDeleteConfirmPattern] = useState<PatternWithId | null>(null);
   const [editingPatternId, setEditingPatternId] = useState<string | null>(null);
   const [editText, setEditText] = useState('');
+
+  // Get current project and spec
+  const currentProject = projectStore.getProjects()[0]; // Use first project for now
+  const currentSpecId = currentProject?.id || '068-codebase-pattern-learning'; // Use current spec for testing
+
+  /**
+   * Load patterns from backend
+   */
+  const loadPatterns = async () => {
+    if (!currentProject) {
+      setError('No project found');
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const categoryFilterParam = categoryFilter === 'all' ? undefined : categoryFilter;
+      const result = await window.electronAPI.pattern.listPatterns(
+        currentProject.id,
+        currentSpecId,
+        categoryFilterParam
+      );
+
+      if (result.success && result.data) {
+        // Convert Pattern to PatternWithId by adding id from index
+        const patternsWithId = result.data.map((p: Pattern) => ({
+          ...p,
+          id: String(p.index)
+        }));
+        setPatterns(patternsWithId);
+      } else {
+        setError(result.error || 'Failed to load patterns');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  /**
+   * Load patterns on component mount and when category filter changes
+   */
+  useEffect(() => {
+    loadPatterns();
+  }, [categoryFilter]);
 
   // Filter patterns by category
   const filteredPatterns = categoryFilter === 'all'
@@ -82,12 +129,34 @@ export function PatternReviewPanel() {
     }
     acc[pattern.category].push(pattern);
     return acc;
-  }, {} as Record<string, Pattern[]>);
+  }, {} as Record<string, PatternWithId[]>);
 
-  // Handlers (will be implemented with IPC in next subtask)
+  // Handlers
   const handleApprove = async (patternId: string) => {
-    console.log('Approve pattern:', patternId);
-    // TODO: Call IPC handler in subtask-3-3
+    if (!currentProject) return;
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const patternIndex = parseInt(patternId);
+      const result = await window.electronAPI.pattern.approvePattern(
+        currentProject.id,
+        currentSpecId,
+        patternIndex
+      );
+
+      if (result.success) {
+        // Refresh patterns after approval
+        await loadPatterns();
+      } else {
+        setError(result.error || 'Failed to approve pattern');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleStartEdit = (pattern: Pattern) => {
@@ -96,10 +165,33 @@ export function PatternReviewPanel() {
   };
 
   const handleSaveEdit = async (patternId: string) => {
-    console.log('Override pattern:', patternId, 'with:', editText);
-    // TODO: Call IPC handler in subtask-3-3
-    setEditingPatternId(null);
-    setEditText('');
+    if (!currentProject || !editText.trim()) return;
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const patternIndex = parseInt(patternId);
+      const result = await window.electronAPI.pattern.overridePattern(
+        currentProject.id,
+        currentSpecId,
+        patternIndex,
+        editText
+      );
+
+      if (result.success) {
+        // Refresh patterns after override
+        await loadPatterns();
+        setEditingPatternId(null);
+        setEditText('');
+      } else {
+        setError(result.error || 'Failed to override pattern');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleCancelEdit = () => {
@@ -108,10 +200,31 @@ export function PatternReviewPanel() {
   };
 
   const handleDelete = async () => {
-    if (!deleteConfirmPattern) return;
-    console.log('Delete pattern:', deleteConfirmPattern.id);
-    // TODO: Call IPC handler in subtask-3-3
-    setDeleteConfirmPattern(null);
+    if (!deleteConfirmPattern || !currentProject) return;
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const patternIndex = parseInt(deleteConfirmPattern.id);
+      const result = await window.electronAPI.pattern.deletePattern(
+        currentProject.id,
+        currentSpecId,
+        patternIndex
+      );
+
+      if (result.success) {
+        // Refresh patterns after deletion
+        await loadPatterns();
+        setDeleteConfirmPattern(null);
+      } else {
+        setError(result.error || 'Failed to delete pattern');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const toggleExpanded = (patternId: string) => {
@@ -159,6 +272,11 @@ export function PatternReviewPanel() {
             Review and manage patterns learned from your codebase
           </p>
         </div>
+        {error && (
+          <div className="text-sm text-destructive bg-destructive/10 px-3 py-1.5 rounded-md">
+            {error}
+          </div>
+        )}
       </div>
 
       {/* Filter Bar */}
