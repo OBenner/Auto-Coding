@@ -86,3 +86,58 @@ class PhaseLog:
             "completed_at": self.completed_at,
             "entries": self.entries,
         }
+
+
+@dataclass
+class SessionMetadata:
+    """Metadata for a session."""
+
+    session_id: int
+    started_at: str
+    completed_at: str | None = None
+    duration_seconds: float | None = None
+    subtasks: list[str] | None = None
+
+    def __post_init__(self):
+        if self.subtasks is None:
+            self.subtasks = []
+
+    def to_dict(self) -> dict:
+        """Convert to dictionary, excluding None values for optional fields."""
+        result = {
+            "session_id": self.session_id,
+            "started_at": self.started_at,
+        }
+        if self.completed_at is not None:
+            result["completed_at"] = self.completed_at
+        if self.duration_seconds is not None:
+            result["duration_seconds"] = self.duration_seconds
+        if self.subtasks:
+            result["subtasks"] = self.subtasks
+        return result
+
+
+@dataclass
+class SubtaskTransition:
+    """A transition between subtasks."""
+
+    timestamp: str
+    from_subtask: str | None
+    to_subtask: str | None
+    session: int | None = None
+
+    def to_dict(self) -> dict:
+        """
+        Convert to dictionary.
+
+        Always includes from_subtask and to_subtask (even if None) since None
+        is meaningful (indicates start/end of subtask work).
+        """
+        result = {
+            "timestamp": self.timestamp,
+            "from_subtask": self.from_subtask,
+            "to_subtask": self.to_subtask,
+        }
+        if self.session is not None:
+            result["session"] = self.session
+        return result

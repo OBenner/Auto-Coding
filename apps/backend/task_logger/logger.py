@@ -45,6 +45,7 @@ class TaskLogger:
         self.current_phase: LogPhase | None = None
         self.current_session: int | None = None
         self.current_subtask: str | None = None
+        self.last_subtask: str | None = None  # Track last subtask for transition detection
         self.storage = LogStorage(spec_dir)
 
     @property
@@ -115,9 +116,65 @@ class TaskLogger:
         """Set the current session number."""
         self.current_session = session
 
+    def start_session(self, session: int) -> None:
+        """
+        Start a new session.
+
+        Args:
+            session: Session number
+        """
+        self.current_session = session
+        self.storage.start_session(session)
+
+        # Debug log (when DEBUG=true)
+        self._debug_log(f"Session {session} started", LogEntryType.INFO)
+
+    def end_session(self) -> None:
+        """End the current session and calculate duration."""
+        if self.current_session is not None:
+            self.storage.end_session(self.current_session)
+
+            # Debug log (when DEBUG=true)
+            self._debug_log(
+                f"Session {self.current_session} ended", LogEntryType.INFO
+            )
+
     def set_subtask(self, subtask_id: str | None) -> None:
-        """Set the current subtask being processed."""
-        self.current_subtask = subtask_id
+        """
+        Set the current subtask being processed.
+
+        Automatically tracks subtask transitions.
+
+        Args:
+            subtask_id: New subtask ID (None to clear)
+        """
+        # Detect transition
+        if subtask_id != self.current_subtask:
+            # Record the transition
+            self.storage.add_subtask_transition(
+                from_subtask=self.current_subtask,
+                to_subtask=subtask_id,
+                session=self.current_session,
+            )
+
+            # Add subtask to session
+            if subtask_id and self.current_session is not None:
+                self.storage.add_subtask_to_session(self.current_session, subtask_id)
+
+            # Debug log (when DEBUG=true)
+            if subtask_id:
+                self._debug_log(
+                    f"Subtask transition: {self.current_subtask} -> {subtask_id}",
+                    LogEntryType.INFO,
+                )
+            else:
+                self._debug_log(
+                    f"Subtask ended: {self.current_subtask}", LogEntryType.INFO
+                )
+
+            # Update current subtask
+            self.last_subtask = self.current_subtask
+            self.current_subtask = subtask_id
 
     def start_phase(self, phase: LogPhase, message: str | None = None) -> None:
         """

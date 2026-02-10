@@ -9,7 +9,7 @@ import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
 
-from .models import LogEntry, LogPhase
+from .models import LogEntry, LogPhase, SessionMetadata, SubtaskTransition
 
 
 class LogStorage:
@@ -64,6 +64,8 @@ class LogStorage:
                     "entries": [],
                 },
             },
+            "sessions": [],
+            "subtask_transitions": [],
         }
 
     def save(self) -> None:
@@ -157,6 +159,118 @@ class LogStorage:
             new_spec_id: New spec ID
         """
         self._data["spec_id"] = new_spec_id
+
+    def start_session(self, session_id: int) -> None:
+        """
+        Start a new session.
+
+        Args:
+            session_id: Session number
+        """
+        # Initialize sessions list if it doesn't exist (for backward compatibility)
+        if "sessions" not in self._data:
+            self._data["sessions"] = []
+
+        session = SessionMetadata(
+            session_id=session_id,
+            started_at=self._timestamp(),
+        )
+        self._data["sessions"].append(session.to_dict())
+        self.save()
+
+    def end_session(self, session_id: int) -> None:
+        """
+        End a session and calculate duration.
+
+        Args:
+            session_id: Session number to end
+        """
+        if "sessions" not in self._data:
+            return
+
+        # Find the session
+        for session in self._data["sessions"]:
+            if session["session_id"] == session_id:
+                completed_at = self._timestamp()
+                session["completed_at"] = completed_at
+
+                # Calculate duration in seconds
+                try:
+                    started = datetime.fromisoformat(session["started_at"])
+                    completed = datetime.fromisoformat(completed_at)
+                    duration = (completed - started).total_seconds()
+                    session["duration_seconds"] = duration
+                except (ValueError, KeyError):
+                    pass
+
+                self.save()
+                break
+
+    def add_subtask_to_session(self, session_id: int, subtask_id: str) -> None:
+        """
+        Add a subtask to a session's list of subtasks.
+
+        Args:
+            session_id: Session number
+            subtask_id: Subtask ID
+        """
+        if "sessions" not in self._data:
+            return
+
+        # Find the session
+        for session in self._data["sessions"]:
+            if session["session_id"] == session_id:
+                if "subtasks" not in session:
+                    session["subtasks"] = []
+                if subtask_id not in session["subtasks"]:
+                    session["subtasks"].append(subtask_id)
+                    self.save()
+                break
+
+    def add_subtask_transition(
+        self,
+        from_subtask: str | None,
+        to_subtask: str | None,
+        session: int | None = None,
+    ) -> None:
+        """
+        Record a subtask transition.
+
+        Args:
+            from_subtask: Previous subtask ID (None if starting first subtask)
+            to_subtask: New subtask ID (None if ending subtask)
+            session: Session number
+        """
+        # Initialize subtask_transitions list if it doesn't exist (for backward compatibility)
+        if "subtask_transitions" not in self._data:
+            self._data["subtask_transitions"] = []
+
+        transition = SubtaskTransition(
+            timestamp=self._timestamp(),
+            from_subtask=from_subtask,
+            to_subtask=to_subtask,
+            session=session,
+        )
+        self._data["subtask_transitions"].append(transition.to_dict())
+        self.save()
+
+    def get_session_data(self, session_id: int) -> dict | None:
+        """
+        Get data for a specific session.
+
+        Args:
+            session_id: Session number
+
+        Returns:
+            Session data or None if not found
+        """
+        if "sessions" not in self._data:
+            return None
+
+        for session in self._data["sessions"]:
+            if session["session_id"] == session_id:
+                return session
+        return None
 
 
 def load_task_logs(spec_dir: Path) -> dict | None:
