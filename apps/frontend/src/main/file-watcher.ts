@@ -4,6 +4,11 @@ import path from 'path';
 import { EventEmitter } from 'events';
 import type { ImplementationPlan } from '../shared/types';
 
+/**
+ * Default debounce delay in milliseconds
+ */
+const DEFAULT_DEBOUNCE_DELAY = 300;
+
 interface WatcherInfo {
   taskId: string;
   watcher: FSWatcher;
@@ -15,6 +20,13 @@ interface WatcherInfo {
  */
 export class FileWatcher extends EventEmitter {
   private watchers: Map<string, WatcherInfo> = new Map();
+  private debounceTimeouts: Map<string, NodeJS.Timeout> = new Map();
+  private debounceDelay: number;
+
+  constructor(debounceDelay: number = DEFAULT_DEBOUNCE_DELAY) {
+    super();
+    this.debounceDelay = debounceDelay;
+  }
 
   /**
    * Start watching a task's implementation plan
