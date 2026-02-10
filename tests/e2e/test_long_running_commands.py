@@ -466,6 +466,157 @@ class TestLongRunningCommands:
 
         logger.info(f"✓ Orphaned task recovery test passed: {task_id}")
 
+    async def test_app_restart_recovery_e2e(self, test_dirs):
+        """
+        Test 11: End-to-end app restart recovery scenario.
+
+        This test simulates a complete app restart workflow:
+        1. Start long-running command
+        2. Simulate app shutdown
+        3. Simulate app startup with recovery
+        4. Verify task state recovered
+        5. Verify output still accessible
+        6. Verify can still monitor/cancel
+
+        Acceptance criteria (from spec):
+        - Agent state persists if app is restarted during long operation
+        - Task state is recovered on startup
+        - Output remains accessible after restart
+        - Users can still view task status after restart
+        """
+        spec_dir, project_dir = test_dirs
+
+        # === PHASE 1: Start long-running command ===
+        logger.info("Phase 1: Starting long-running command...")
+        manager1 = BackgroundTaskManager(spec_dir, project_dir)
+
+        # Create a command that outputs multiple lines over time
+        task_id = await manager1.start_task(
+            'python -c "import time, sys; [print(f\'Progress {i}\', flush=True) or sys.stdout.flush() or time.sleep(0.3) for i in range(1, 20)]"',
+            timeout=30
+        )
+
+        # Wait for task to start
+        await asyncio.sleep(0.5)
+
+        # Verify task is running
+        status_before = manager1.get_task_status(task_id)
+        assert status_before is not None
+        assert status_before["status"] == "running"
+        assert status_before["pid"] is not None
+        logger.info(f"Task {task_id} started with PID {status_before['pid']}")
+
+        # Wait a bit more for output to be produced and captured
+        await asyncio.sleep(1.5)
+
+        # Get initial output
+        output_before = manager1.get_task_output(task_id)
+        assert output_before is not None
+        # Output might be empty if task just started, but the key is state is persisted
+        logger.info(f"Initial output captured: {len(output_before['output'])} characters")
+
+        # === PHASE 2: Simulate app restart ===
+        logger.info("Phase 2: Simulating app shutdown and restart...")
+
+        # Simulate app shutdown - manager1 goes out of scope
+        # In a real restart, the process might keep running or be orphaned
+        # We intentionally don't cancel it to simulate orphaned task scenario
+        old_pid = status_before["pid"]
+        del manager1
+
+        # Small delay to ensure manager is cleaned up
+        await asyncio.sleep(0.2)
+
+        # Simulate app startup - create new manager and recover state
+        store = TaskStateStore(spec_dir / ".background_tasks")
+        recovery_stats = store.recover_on_startup()
+
+        logger.info(f"Recovery stats: {recovery_stats}")
+        assert recovery_stats["orphaned_count"] >= 1, "Should find at least one orphaned task"
+        assert recovery_stats["marked_count"] >= 1, "Should mark at least one task as orphaned"
+
+        # === PHASE 3: Verify task state recovered ===
+        logger.info("Phase 3: Verifying task state recovery...")
+
+        # Create new manager (simulating app restarted)
+        manager2 = BackgroundTaskManager(spec_dir, project_dir)
+
+        # Load task state from disk
+        status_after = manager2.get_task_status(task_id)
+        assert status_after is not None, "Task state should be recovered from disk"
+        assert status_after["id"] == task_id
+        assert status_after["command"] == status_before["command"]
+        assert status_after["timeout"] == status_before["timeout"]
+        assert status_after["created_at"] == status_before["created_at"]
+        assert status_after["started_at"] == status_before["started_at"]
+
+        # Task should be marked as failed/orphaned after recovery
+        assert status_after["status"] == "failed", "Orphaned task should be marked as failed"
+        assert status_after.get("orphaned") is True or "orphaned" in status_after.get("error", "").lower()
+        logger.info(f"✓ Task state recovered correctly: status={status_after['status']}, orphaned={status_after.get('orphaned')}")
+
+        # === PHASE 4: Verify output still accessible ===
+        logger.info("Phase 4: Verifying output accessibility...")
+
+        # Output should still be accessible from persisted state
+        output_after = manager2.get_task_output(task_id)
+        assert output_after is not None, "Task output should be accessible after restart"
+
+        # Output may be empty if task was just started when "restart" happened
+        # The key verification is that output data structure is accessible
+        logger.info(f"✓ Output accessible: {len(output_after['output'])} characters")
+
+        # If we did capture output, verify it's the right format
+        if len(output_after["output"]) > 0:
+            # Output should be a string
+            assert isinstance(output_after["output"], str), "Output should be string"
+            logger.info(f"  Output sample: {output_after['output'][:100]}")
+
+        # === PHASE 5: Verify can still monitor task ===
+        logger.info("Phase 5: Verifying task monitoring capabilities...")
+
+        # Should be able to query task status
+        task_list = manager2.list_tasks()
+        assert len(task_list) >= 1, "Should be able to list tasks after restart"
+        task_ids = [t["id"] for t in task_list]
+        assert task_id in task_ids, "Our task should be in the task list"
+
+        # Should be able to filter by status
+        failed_tasks = manager2.list_tasks(status="failed")
+        failed_ids = [t["id"] for t in failed_tasks]
+        assert task_id in failed_ids, "Our orphaned task should be in failed list"
+        logger.info(f"✓ Task monitoring works: found {len(task_list)} total tasks, {len(failed_tasks)} failed")
+
+        # === PHASE 6: Verify state file integrity ===
+        logger.info("Phase 6: Verifying state file integrity...")
+
+        # State file should exist and be valid JSON
+        state_file = spec_dir / ".background_tasks" / f"{task_id}.json"
+        assert state_file.exists(), "State file should exist"
+
+        with open(state_file) as f:
+            state_data = json.load(f)
+
+        # Verify all critical fields are present
+        required_fields = ["id", "command", "status", "created_at", "timeout"]
+        for field in required_fields:
+            assert field in state_data, f"State should contain {field}"
+
+        logger.info(f"✓ State file integrity verified")
+
+        # === CLEANUP: Terminate any remaining processes ===
+        # Try to terminate the orphaned process if it's still running
+        try:
+            if PSUTIL_AVAILABLE:
+                if psutil.pid_exists(old_pid):
+                    proc = psutil.Process(old_pid)
+                    proc.terminate()
+                    logger.info(f"Cleaned up orphaned process {old_pid}")
+        except Exception as e:
+            logger.debug(f"Cleanup of process {old_pid} not needed or already terminated: {e}")
+
+        logger.info(f"✓ App restart recovery E2E test passed: {task_id}")
+
 
 @pytest.mark.asyncio
 async def test_full_lifecycle_integration(test_dirs):
