@@ -25,6 +25,7 @@ Usage:
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -372,10 +373,173 @@ class DependencyScanner:
         """
         Check for security vulnerabilities in dependencies.
 
-        Will be implemented in subtask-1-4.
+        Runs security audit tools (pip-audit, npm audit) and enriches
+        the existing updates with CVE information and severity data.
         """
-        # Placeholder - to be implemented in subtask-1-4
-        pass
+        # Check Python dependencies for CVEs
+        if self._is_python_project(project_dir):
+            self._check_python_cves(project_dir, result)
+
+        # Check Node.js dependencies for CVEs
+        if self._is_node_project(project_dir):
+            self._check_node_cves(project_dir, result)
+
+    def _check_python_cves(
+        self, project_dir: Path, result: DependencyScanResult
+    ) -> None:
+        """
+        Check Python dependencies for CVE vulnerabilities using pip-audit.
+
+        Enriches existing updates with CVE data and marks security updates.
+        """
+        try:
+            # Run pip-audit to get vulnerability information
+            cmd = ["pip-audit", "--format", "json"]
+
+            proc = subprocess.run(
+                cmd,
+                cwd=project_dir,
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
+
+            if not proc.stdout:
+                return
+
+            try:
+                audit_output = json.loads(proc.stdout)
+
+                # pip-audit returns a list of vulnerabilities
+                # Format: [{"name": "package", "version": "1.0", "vulns": [{"id": "CVE-...", ...}]}]
+                for vuln_entry in audit_output:
+                    pkg_name = vuln_entry.get("name", "").lower()
+                    pkg_version = vuln_entry.get("version", "")
+                    vulnerabilities = vuln_entry.get("vulns", [])
+
+                    if not vulnerabilities:
+                        continue
+
+                    # Find matching update in our results
+                    for update in result.updates_available:
+                        if update.name.lower() == pkg_name and update.ecosystem == "python":
+                            # This package has known vulnerabilities
+                            update.is_security = True
+
+                            # Extract CVE IDs and severity
+                            cve_ids = []
+                            max_severity = "low"
+
+                            for vuln in vulnerabilities:
+                                # Get CVE ID (could be in 'id' or 'aliases')
+                                vuln_id = vuln.get("id", "")
+                                if vuln_id:
+                                    cve_ids.append(vuln_id)
+
+                                # Determine severity
+                                # pip-audit doesn't always provide severity, so we default to 'high'
+                                # if fix_versions exist (meaning it's patchable)
+                                if vuln.get("fix_versions"):
+                                    if max_severity in ["low", "medium"]:
+                                        max_severity = "high"
+                                else:
+                                    if max_severity == "low":
+                                        max_severity = "medium"
+
+                            update.cve_ids = cve_ids
+                            update.severity = max_severity
+
+            except json.JSONDecodeError as e:
+                result.scan_errors.append(f"Failed to parse pip-audit output: {e}")
+
+        except FileNotFoundError:
+            # pip-audit not available - this is not an error, just skip
+            pass
+        except subprocess.TimeoutExpired:
+            result.scan_errors.append("pip-audit timed out after 120 seconds")
+        except Exception as e:
+            result.scan_errors.append(f"Python CVE check error: {e}")
+
+    def _check_node_cves(
+        self, project_dir: Path, result: DependencyScanResult
+    ) -> None:
+        """
+        Check Node.js dependencies for CVE vulnerabilities using npm audit.
+
+        Enriches existing updates with CVE data and marks security updates.
+        """
+        try:
+            # Run npm audit to get vulnerability information
+            cmd = ["npm", "audit", "--json"]
+
+            proc = subprocess.run(
+                cmd,
+                cwd=project_dir,
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
+
+            if not proc.stdout:
+                return
+
+            try:
+                audit_output = json.loads(proc.stdout)
+
+                # npm audit v2+ format uses "vulnerabilities" object
+                vulnerabilities = audit_output.get("vulnerabilities", {})
+
+                for pkg_name, vuln_info in vulnerabilities.items():
+                    severity = vuln_info.get("severity", "moderate")
+
+                    # Map npm severity to our standard levels
+                    if severity == "critical":
+                        mapped_severity = "critical"
+                    elif severity == "high":
+                        mapped_severity = "high"
+                    elif severity == "moderate":
+                        mapped_severity = "medium"
+                    else:
+                        mapped_severity = "low"
+
+                    # Extract CVE IDs from the via field
+                    cve_ids = []
+                    via = vuln_info.get("via", [])
+                    if isinstance(via, list):
+                        for via_entry in via:
+                            if isinstance(via_entry, dict):
+                                # CVE might be in 'cve' or 'url' field
+                                cve = via_entry.get("cve")
+                                if cve:
+                                    cve_ids.append(cve)
+                                # Also check URL for CVE pattern
+                                url = via_entry.get("url", "")
+                                if "CVE-" in url:
+                                    import re
+                                    cve_match = re.search(r'CVE-\d{4}-\d+', url)
+                                    if cve_match and cve_match.group() not in cve_ids:
+                                        cve_ids.append(cve_match.group())
+
+                    # Find matching update in our results
+                    for update in result.updates_available:
+                        if update.name == pkg_name and update.ecosystem == "npm":
+                            # This package has known vulnerabilities
+                            update.is_security = True
+                            update.cve_ids = cve_ids
+                            update.severity = mapped_severity
+                            break
+
+            except json.JSONDecodeError:
+                # npm audit may return invalid JSON on no findings, which is okay
+                pass
+
+        except FileNotFoundError:
+            # npm not available - this is not an error, just skip
+            pass
+        except subprocess.TimeoutExpired:
+            result.scan_errors.append("npm audit timed out after 120 seconds")
+        except Exception as e:
+            result.scan_errors.append(f"Node.js CVE check error: {e}")
 
     def _is_python_project(self, project_dir: Path) -> bool:
         """Check if this is a Python project."""
