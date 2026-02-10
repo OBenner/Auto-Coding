@@ -16,6 +16,9 @@ import enTerminal from './locales/en/terminal.json';
 import enErrors from './locales/en/errors.json';
 import enPlugins from './locales/en/plugins.json';
 import enTemplates from './locales/en/templates.json';
+import enAgent from './locales/en/agent.json';
+import enChangelog from './locales/en/changelog.json';
+import enContext from './locales/en/context.json';
 
 // Import French translation resources
 import frCommon from './locales/fr/common.json';
@@ -31,36 +34,41 @@ import frTerminal from './locales/fr/terminal.json';
 import frErrors from './locales/fr/errors.json';
 import frPlugins from './locales/fr/plugins.json';
 import frTemplates from './locales/fr/templates.json';
+import frAgent from './locales/fr/agent.json';
+import frChangelog from './locales/fr/changelog.json';
+import frContext from './locales/fr/context.json';
 
-// Import Spanish translation resources
-import esCommon from './locales/es/common.json';
-import esNavigation from './locales/es/navigation.json';
-import esSettings from './locales/es/settings.json';
-import esTasks from './locales/es/tasks.json';
-import esWelcome from './locales/es/welcome.json';
-import esOnboarding from './locales/es/onboarding.json';
-import esDialogs from './locales/es/dialogs.json';
-import esGitlab from './locales/es/gitlab.json';
-import esTaskReview from './locales/es/taskReview.json';
-import esTerminal from './locales/es/terminal.json';
-import esErrors from './locales/es/errors.json';
-import esPlugins from './locales/es/plugins.json';
-import esTemplates from './locales/es/templates.json';
-
-// Import German translation resources
-import deCommon from './locales/de/common.json';
-import deNavigation from './locales/de/navigation.json';
-import deSettings from './locales/de/settings.json';
-import deTasks from './locales/de/tasks.json';
-import deWelcome from './locales/de/welcome.json';
-import deOnboarding from './locales/de/onboarding.json';
-import deDialogs from './locales/de/dialogs.json';
-import deGitlab from './locales/de/gitlab.json';
-import deTaskReview from './locales/de/taskReview.json';
-import deTerminal from './locales/de/terminal.json';
-import deErrors from './locales/de/errors.json';
-import dePlugins from './locales/de/plugins.json';
-import deTemplates from './locales/de/templates.json';
+// TODO: Spanish and German translations are incomplete (2000+ missing keys each)
+// Uncomment imports and add to resources when translations are complete
+// // Import Spanish translation resources
+// import esCommon from './locales/es/common.json';
+// import esNavigation from './locales/es/navigation.json';
+// import esSettings from './locales/es/settings.json';
+// import esTasks from './locales/es/tasks.json';
+// import esWelcome from './locales/es/welcome.json';
+// import esOnboarding from './locales/es/onboarding.json';
+// import esDialogs from './locales/es/dialogs.json';
+// import esGitlab from './locales/es/gitlab.json';
+// import esTaskReview from './locales/es/taskReview.json';
+// import esTerminal from './locales/es/terminal.json';
+// import esErrors from './locales/es/errors.json';
+// import esPlugins from './locales/es/plugins.json';
+// import esTemplates from './locales/es/templates.json';
+//
+// // Import German translation resources
+// import deCommon from './locales/de/common.json';
+// import deNavigation from './locales/de/navigation.json';
+// import deSettings from './locales/de/settings.json';
+// import deTasks from './locales/de/tasks.json';
+// import deWelcome from './locales/de/welcome.json';
+// import deOnboarding from './locales/de/onboarding.json';
+// import deDialogs from './locales/de/dialogs.json';
+// import deGitlab from './locales/de/gitlab.json';
+// import deTaskReview from './locales/de/taskReview.json';
+// import deTerminal from './locales/de/terminal.json';
+// import deErrors from './locales/de/errors.json';
+// import dePlugins from './locales/de/plugins.json';
+// import deTemplates from './locales/de/templates.json';
 
 export const defaultNS = 'common';
 
@@ -78,7 +86,10 @@ export const resources = {
     terminal: enTerminal,
     errors: enErrors,
     plugins: enPlugins,
-    templates: enTemplates
+    templates: enTemplates,
+    agent: enAgent,
+    changelog: enChangelog,
+    context: enContext
   },
   fr: {
     common: frCommon,
@@ -93,38 +104,42 @@ export const resources = {
     terminal: frTerminal,
     errors: frErrors,
     plugins: frPlugins,
-    templates: frTemplates
-  },
-  es: {
-    common: esCommon,
-    navigation: esNavigation,
-    settings: esSettings,
-    tasks: esTasks,
-    welcome: esWelcome,
-    onboarding: esOnboarding,
-    dialogs: esDialogs,
-    gitlab: esGitlab,
-    taskReview: esTaskReview,
-    terminal: esTerminal,
-    errors: esErrors,
-    plugins: esPlugins,
-    templates: esTemplates
-  },
-  de: {
-    common: deCommon,
-    navigation: deNavigation,
-    settings: deSettings,
-    tasks: deTasks,
-    welcome: deWelcome,
-    onboarding: deOnboarding,
-    dialogs: deDialogs,
-    gitlab: deGitlab,
-    taskReview: deTaskReview,
-    terminal: deTerminal,
-    errors: deErrors,
-    plugins: dePlugins,
-    templates: deTemplates
+    templates: frTemplates,
+    agent: frAgent,
+    changelog: frChangelog,
+    context: frContext
   }
+  // TODO: Uncomment when Spanish and German translations are complete
+  // es: {
+  //   common: esCommon,
+  //   navigation: esNavigation,
+  //   settings: esSettings,
+  //   tasks: esTasks,
+  //   welcome: esWelcome,
+  //   onboarding: esOnboarding,
+  //   dialogs: esDialogs,
+  //   gitlab: esGitlab,
+  //   taskReview: esTaskReview,
+  //   terminal: esTerminal,
+  //   errors: esErrors,
+  //   plugins: esPlugins,
+  //   templates: esTemplates
+  // },
+  // de: {
+  //   common: deCommon,
+  //   navigation: deNavigation,
+  //   settings: deSettings,
+  //   tasks: deTasks,
+  //   welcome: deWelcome,
+  //   onboarding: deOnboarding,
+  //   dialogs: deDialogs,
+  //   gitlab: deGitlab,
+  //   taskReview: deTaskReview,
+  //   terminal: deTerminal,
+  //   errors: deErrors,
+  //   plugins: dePlugins,
+  //   templates: deTemplates
+  // }
 } as const;
 
 i18n
@@ -134,7 +149,7 @@ i18n
     lng: 'en', // Default language (will be overridden by settings)
     fallbackLng: 'en',
     defaultNS,
-    ns: ['common', 'navigation', 'settings', 'tasks', 'welcome', 'onboarding', 'dialogs', 'gitlab', 'taskReview', 'terminal', 'errors', 'plugins', 'templates'],
+    ns: ['common', 'navigation', 'settings', 'tasks', 'welcome', 'onboarding', 'dialogs', 'gitlab', 'taskReview', 'terminal', 'errors', 'plugins', 'templates', 'agent', 'changelog', 'context'],
     interpolation: {
       escapeValue: false // React already escapes values
     },

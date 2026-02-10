@@ -169,16 +169,6 @@
       "requestChanges": "Modifications demandées",
       "comment": "Commentaire"
     },
-    "severity": {
-      "critical": "Bloquant",
-      "criticalDesc": "À corriger",
-      "high": "Requis",
-      "highDesc": "À traiter",
-      "medium": "Recommandé",
-      "mediumDesc": "Améliore la qualité",
-      "low": "Suggestion",
-      "lowDesc": "À considérer"
-    },
     "resolution": {
       "resolved": "résolu(s)",
       "stillOpen": "encore ouvert(s)",

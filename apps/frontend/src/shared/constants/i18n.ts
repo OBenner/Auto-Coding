@@ -15,10 +15,13 @@ export interface LanguageConfig {
 export const AVAILABLE_LANGUAGES: LanguageConfig[] = [
   { value: 'en', label: 'English', nativeLabel: 'English', isRTL: false },
   { value: 'fr', label: 'French', nativeLabel: 'Français', isRTL: false },
-  { value: 'es', label: 'Spanish', nativeLabel: 'Español', isRTL: false },
-  { value: 'de', label: 'German', nativeLabel: 'Deutsch', isRTL: false },
-  { value: 'ar', label: 'Arabic', nativeLabel: 'العربية', isRTL: true },
-  { value: 'he', label: 'Hebrew', nativeLabel: 'עברית', isRTL: true }
+  // TODO: Spanish and German translations are incomplete (2000+ missing keys each)
+  // Enable once translations are complete
+  // { value: 'es', label: 'Spanish', nativeLabel: 'Español', isRTL: false },
+  // { value: 'de', label: 'German', nativeLabel: 'Deutsch', isRTL: false },
+  // Arabic and Hebrew RTL languages - translations not yet created
+  // { value: 'ar', label: 'Arabic', nativeLabel: 'العربية', isRTL: true },
+  // { value: 'he', label: 'Hebrew', nativeLabel: 'עברית', isRTL: true }
 ];
 
 export const DEFAULT_LANGUAGE: SupportedLanguage = 'en';

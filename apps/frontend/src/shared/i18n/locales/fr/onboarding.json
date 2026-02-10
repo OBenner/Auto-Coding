@@ -100,6 +100,7 @@
     "openaiGetKey": "Obtenez votre clé sur",
     "voyageApiKey": "Clé API Voyage AI",
     "voyageApiKeyDescription": "Requise pour les embeddings Voyage AI",
+    "voyageEmbeddingModel": "Modèle d'intégration",
     "googleApiKey": "Clé API Google AI",
     "googleApiKeyDescription": "Requise pour les embeddings Google AI",
     "azureConfig": "Configuration Azure OpenAI",
@@ -118,7 +119,16 @@
       "voyage": "Voyage AI",
       "google": "Google AI",
       "azure": "Azure OpenAI"
-    }
+    },
+    "ollamaConfig": "Configuration Ollama",
+    "checking": "Vérification...",
+    "connected": "Connecté",
+    "notRunning": "Non exécuté",
+    "baseUrl": "URL de base",
+    "embeddingModel": "Modèle d'intégration",
+    "embeddingDim": "Dimension d'intégration",
+    "embeddingDimDescription": "Requis pour les intégrations Ollama (ex: 768 pour nomic-embed-text)",
+    "modelRecommendation": "Recommandé : qwen3-embedding:4b (équilibré), :8b (qualité), :0.6b (rapide)"
   },
   "completion": {
     "title": "Vous êtes prêt !",

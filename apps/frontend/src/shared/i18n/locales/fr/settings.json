@@ -619,60 +619,56 @@
       "description": "Sélectionnez un projet dans la barre latérale pour configurer ses paramètres."
     }
   },
-  "aiProvider": {
-    "title": "Fournisseur d'IA",
-    "description": "Sélectionnez le backend d'IA à utiliser pour les sessions d'agent",
-    "label": "Fournisseur d'IA",
-    "selectProvider": "Sélectionner le fournisseur d'IA",
-    "currentProvider": "Fournisseur actuel",
-    "providers": {
-      "claude": {
-        "name": "Claude Agent SDK",
-        "description": "SDK Agent Claude d'Anthropic (par défaut, recommandé)"
+  "agentModels": {
+    "title": "Configuration des modèles d'agents",
+    "description": "Configurez les modèles Claude et les budgets de jetons de réflexion pour chaque type d'agent",
+    "agents": {
+      "planner": {
+        "label": "Agent Planificateur",
+        "description": "Crée des plans d'implémentation avec des sous-tâches"
       },
-      "litellm": {
-        "name": "LiteLLM",
-        "description": "Interface unifiée supportant plus de 100 fournisseurs LLM"
+      "coder": {
+        "label": "Agent Codeur",
+        "description": "Implémente des sous-tâches individuelles"
       },
-      "openrouter": {
-        "name": "OpenRouter",
-        "description": "Routage multi-modèles cloud avec plus de 400 modèles"
+      "qa_reviewer": {
+        "label": "Agent QA Reviewer",
+        "description": "Valide les critères d'acceptation"
+      },
+      "qa_fixer": {
+        "label": "Agent QA Fixer",
+        "description": "Corrige les problèmes signalés par QA"
       }
     },
-    "configuration": {
-      "title": "Configuration du fournisseur",
-      "apiKey": "Clé API",
-      "apiKeyPlaceholder": "Entrez votre clé API",
-      "apiKeyDescription": "Requise pour les fournisseurs LiteLLM et OpenRouter",
+    "fields": {
       "model": "Modèle",
-      "modelPlaceholder": "ex: gpt-4, claude-3-opus, anthropic/claude-3-sonnet",
-      "modelDescription": "Identifiant du modèle pour le fournisseur sélectionné",
-      "baseUrl": "URL de base (optionnel)",
-      "baseUrlPlaceholder": "https://api.example.com/v1",
-      "baseUrlDescription": "Point de terminaison API personnalisé (laisser vide pour défaut)"
+      "thinkingTokens": "Jetons de réflexion étendue",
+      "thinkingTokensDescription": "Max jetons de réflexion pour la réflexion étendue (0 = désactivé, 5000-16000 = activé)"
     },
-    "validation": {
-      "apiKeyRequired": "La clé API est requise pour ce fournisseur",
-      "modelRequired": "La sélection du modèle est requise"
+    "placeholders": {
+      "model": "Sélectionner un modèle...",
+      "thinkingTokens": "ex: 10000 (ou 0 pour désactiver)"
     },
-    "toast": {
-      "providerChanged": "Fournisseur d'IA modifié",
-      "providerChangedDescription": "Utilisation de {{provider}}",
-      "configSaved": "Configuration enregistrée",
-      "configSavedDescription": "Les paramètres du fournisseur ont été mis à jour",
-      "configError": "Erreur de configuration",
-      "configErrorDescription": "Échec de l'enregistrement des paramètres du fournisseur : {{error}}"
+    "labels": {
+      "modelSelection": "Sélection du modèle",
+      "thinkingTokenBudget": "Budget de jetons de réflexion",
+      "disabled": "Désactivé",
+      "budget": "{{count}} jetons"
     },
     "hints": {
-      "envOverride": "Ce paramètre peut être remplacé par la variable d'environnement AI_ENGINE_PROVIDER",
-      "requiresRestart": "Les modifications prendront effet pour les nouvelles sessions d'agent",
-      "claudeDefault": "Claude Agent SDK est le fournisseur par défaut et le plus testé"
+      "thinkingTokens": "La réflexion étendue permet au modèle de raisonner sur des problèmes complexes. 0 la désactive, 5000-16000 l'active avec le budget spécifié.",
+      "modelSelection": "Choisissez le modèle Claude à utiliser pour cet agent. Différents modèles ont différentes capacités et coûts."
     },
-    "status": {
-      "active": "Actif",
-      "configured": "Configuré",
-      "notConfigured": "Non configuré",
-      "requiresApiKey": "Clé API requise"
+    "validation": {
+      "modelRequired": "Le modèle est requis",
+      "thinkingTokensInvalid": "Les jetons de réflexion doivent être 0 ou entre 5000 et 16000",
+      "thinkingTokensRange": "La valeur doit être 0 ou entre 5000 et 16000"
+    },
+    "toast": {
+      "saveSuccess": "Modèles d'agents mis à jour",
+      "saveSuccessDescription": "La configuration des modèles d'agents a été enregistrée avec succès.",
+      "saveFailed": "Échec de l'enregistrement des modèles d'agents",
+      "saveFailedDescription": "Une erreur s'est produite lors de l'enregistrement de la configuration des modèles d'agents."
     }
   },
   "mcp": {
