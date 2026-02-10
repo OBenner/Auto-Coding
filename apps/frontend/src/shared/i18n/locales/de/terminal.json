@@ -1,0 +1,15 @@
+{
+  "title": "Terminal",
+  "description": "Agent-Terminalausgabe",
+  "running": "Läuft",
+  "stopped": "Gestoppt",
+  "failed": "Fehlgeschlagen",
+  "start": "Starten",
+  "stop": "Stoppen",
+  "restart": "Neu starten",
+  "clear": "Löschen",
+  "copy": "Kopieren",
+  "copied": "Kopiert!",
+  "noOutput": "Noch keine Ausgabe",
+  "noOutputHint": "Die Terminalausgabe erscheint hier, wenn der Agent ausgeführt wird"
+}

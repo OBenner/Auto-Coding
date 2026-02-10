@@ -1,0 +1,118 @@
+{
+  "title": "Einstellungen",
+  "tabs": {
+    "app": "App-Einstellungen",
+    "project": "Projekteinstellungen"
+  },
+  "sections": {
+    "appearance": {
+      "title": "Darstellung",
+      "description": "Personalisiere das Aussehen von Auto-Coding"
+    },
+    "display": {
+      "title": "Anzeige",
+      "description": "Pass die Größe der Interface-Elemente an"
+    },
+    "language": {
+      "title": "Sprache",
+      "description": "Wähle deine bevorzugte Sprache"
+    },
+    "devtools": {
+      "title": "Entwicklungswerkzeuge",
+      "description": "IDE- und Terminal-Einstellungen"
+    },
+    "agent": {
+      "title": "Agent-Einstellungen",
+      "description": "Standardmodell und Framework"
+    },
+    "paths": {
+      "title": "Pfade",
+      "description": "CLI-Tools und Framework-Pfade"
+    },
+    "accounts": {
+      "title": "Konten",
+      "description": "Claude-Konten und API-Endpunkte"
+    },
+    "updates": {
+      "title": "Updates",
+      "description": "Auto-Coding-Updates"
+    },
+    "notifications": {
+      "title": "Benachrichtigungen",
+      "description": "Warnungseinstellungen"
+    },
+    "debug": {
+      "title": "Debug & Logs",
+      "description": "Fehlerbehebungswerkzeuge"
+    }
+  },
+  "language": {
+    "label": "Interface-Sprache",
+    "description": "Wähle die Sprache der Anwendungsoberfläche"
+  },
+  "theme": {
+    "title": "Darstellung",
+    "description": "Personalisiere das Aussehen von Auto-Coding",
+    "mode": "Modus",
+    "modeDescription": "Wähle zwischen hellen und dunklen Themes",
+    "light": "Hell",
+    "dark": "Dunkel",
+    "system": "System",
+    "colorTheme": "Farbschema",
+    "colorThemeDescription": "Wähle dein bevorzugtes Farbschema"
+  },
+  "scale": {
+    "presets": "Skalierungs-Voreinstellungen",
+    "presetsDescription": "Schnelloptionen für häufige Skalierungseinstellungen",
+    "fineTune": "Feinabstimmung",
+    "fineTuneDescription": "Von 75% bis 200% in 5%-Schritten anpassen",
+    "default": "Standard",
+    "comfortable": "Komfortabel",
+    "large": "Groß"
+  },
+  "actions": {
+    "save": "Einstellungen speichern",
+    "rerunWizard": "Assistent erneut ausführen",
+    "rerunWizardDescription": "Einrichtungsassistent neu starten"
+  },
+  "projectSections": {
+    "general": {
+      "title": "Allgemein",
+      "description": "Auto-Build und Agent-Konfiguration",
+      "useClaudeMd": "CLAUDE.md verwenden",
+      "useClaudeMdDescription": "CLAUDE.md-Anweisungen in den Agent-Kontext aufnehmen"
+    },
+    "claude": {
+      "title": "Claude-Auth",
+      "description": "Claude-Authentifizierung"
+    },
+    "linear": {
+      "title": "Linear",
+      "description": "Linear-Integration",
+      "integrationTitle": "Linear-Integration",
+      "integrationDescription": "Mit Linear für Issue-Tracking und Aufgabenimport verbinden",
+      "syncDescription": "Mit Linear für Issue-Tracking synchronisieren"
+    },
+    "github": {
+      "title": "GitHub",
+      "description": "GitHub-Issue-Synchronisierung",
+      "integrationTitle": "GitHub-Integration",
+      "integrationDescription": "Mit GitHub für Issue-Tracking verbinden",
+      "syncDescription": "Mit GitHub Issues synchronisieren"
+    },
+    "gitlab": {
+      "title": "GitLab",
+      "description": "GitLab-Issue-Synchronisierung",
+      "integrationTitle": "GitLab-Integration",
+      "integrationDescription": "Mit GitLab für Issue-Tracking verbinden",
+      "syncDescription": "Mit GitLab Issues synchronisieren"
+    },
+    "memory": {
+      "title": "Speicher",
+      "description": "Graphiti-Speicher-Backend",
+      "integrationTitle": "Speicher",
+      "integrationDescription": "Beständigen sitzungsübergreifenden Speicher für Agenten konfigurieren",
+      "syncDescription": "Beständigen Speicher konfigurieren"
+    }
+  }
+}

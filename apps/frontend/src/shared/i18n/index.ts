@@ -31,6 +31,36 @@ import frErrors from './locales/fr/errors.json';
 import frPlugins from './locales/fr/plugins.json';
 import frTemplates from './locales/fr/templates.json';
 
+// Import Spanish translation resources
+import esCommon from './locales/es/common.json';
+import esNavigation from './locales/es/navigation.json';
+import esSettings from './locales/es/settings.json';
+import esTasks from './locales/es/tasks.json';
+import esWelcome from './locales/es/welcome.json';
+import esOnboarding from './locales/es/onboarding.json';
+import esDialogs from './locales/es/dialogs.json';
+import esGitlab from './locales/es/gitlab.json';
+import esTaskReview from './locales/es/taskReview.json';
+import esTerminal from './locales/es/terminal.json';
+import esErrors from './locales/es/errors.json';
+import esPlugins from './locales/es/plugins.json';
+import esTemplates from './locales/es/templates.json';
+
+// Import German translation resources
+import deCommon from './locales/de/common.json';
+import deNavigation from './locales/de/navigation.json';
+import deSettings from './locales/de/settings.json';
+import deTasks from './locales/de/tasks.json';
+import deWelcome from './locales/de/welcome.json';
+import deOnboarding from './locales/de/onboarding.json';
+import deDialogs from './locales/de/dialogs.json';
+import deGitlab from './locales/de/gitlab.json';
+import deTaskReview from './locales/de/taskReview.json';
+import deTerminal from './locales/de/terminal.json';
+import deErrors from './locales/de/errors.json';
+import dePlugins from './locales/de/plugins.json';
+import deTemplates from './locales/de/templates.json';
+
 export const defaultNS = 'common';
 
 export const resources = {
@@ -63,6 +93,36 @@ export const resources = {
     errors: frErrors,
     plugins: frPlugins,
     templates: frTemplates
+  },
+  es: {
+    common: esCommon,
+    navigation: esNavigation,
+    settings: esSettings,
+    tasks: esTasks,
+    welcome: esWelcome,
+    onboarding: esOnboarding,
+    dialogs: esDialogs,
+    gitlab: esGitlab,
+    taskReview: esTaskReview,
+    terminal: esTerminal,
+    errors: esErrors,
+    plugins: esPlugins,
+    templates: esTemplates
+  },
+  de: {
+    common: deCommon,
+    navigation: deNavigation,
+    settings: deSettings,
+    tasks: deTasks,
+    welcome: deWelcome,
+    onboarding: deOnboarding,
+    dialogs: deDialogs,
+    gitlab: deGitlab,
+    taskReview: deTaskReview,
+    terminal: deTerminal,
+    errors: deErrors,
+    plugins: dePlugins,
+    templates: deTemplates
   }
 } as const;
 

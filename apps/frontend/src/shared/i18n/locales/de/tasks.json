@@ -1,0 +1,173 @@
+{
+  "refreshTasks": "Aufgaben aktualisieren",
+  "status": {
+    "backlog": "Backlog",
+    "queue": "Warteschlange",
+    "todo": "Zu erledigen",
+    "in_progress": "In Bearbeitung",
+    "review": "Überprüfung",
+    "prCreated": "PR erstellt",
+    "complete": "Abgeschlossen",
+    "archived": "Archiviert"
+  },
+  "actions": {
+    "start": "Starten",
+    "stop": "Stoppen",
+    "recover": "Wiederherstellen",
+    "resume": "Fortsetzen",
+    "archive": "Archivieren",
+    "delete": "Löschen",
+    "view": "Details anzeigen",
+    "viewPR": "PR anzeigen",
+    "moveTo": "Verschieben nach",
+    "taskActions": "Aufgabenaktionen",
+    "selectTask": "Aufgabe auswählen: {{title}}",
+    "showMetadata": "Metadaten anzeigen",
+    "hideMetadata": "Metadaten ausblenden"
+  },
+  "labels": {
+    "running": "Läuft",
+    "aiReview": "KI-Überprüfung",
+    "needsReview": "Überprüfung erforderlich",
+    "pending": "Ausstehend",
+    "stuck": "Festgefahren",
+    "incomplete": "Unvollständig",
+    "recovering": "Wiederherstellung...",
+    "needsRecovery": "Wiederherstellung erforderlich",
+    "needsResume": "Fortsetzung erforderlich"
+  },
+  "reviewReason": {
+    "completed": "Abgeschlossen",
+    "hasErrors": "Enthält Fehler",
+    "qaIssues": "QA-Probleme",
+    "approvePlan": "Plan genehmigen"
+  },
+  "tooltips": {
+    "archiveTask": "Aufgabe archivieren",
+    "archiveAllDone": "Alle abgeschlossenen Aufgaben archivieren",
+    "viewPR": "Pull Request im Browser öffnen"
+  },
+  "creation": {
+    "title": "Neue Aufgabe erstellen",
+    "description": "Beschreibe, was du bauen möchtest",
+    "placeholder": "Beschreibe deine Aufgabe..."
+  },
+  "empty": {
+    "title": "Keine Aufgaben",
+    "description": "Erstelle deine erste Aufgabe, um zu beginnen"
+  },
+  "columns": {
+    "backlog": "Planung",
+    "queue": "Warteschlange",
+    "in_progress": "In Bearbeitung",
+    "ai_review": "KI-Überprüfung",
+    "human_review": "Manuelle Überprüfung",
+    "done": "Abgeschlossen",
+    "pr_created": "PR erstellt",
+    "error": "Fehler"
+  },
+  "kanban": {
+    "emptyBacklog": "Keine geplanten Aufgaben",
+    "emptyBacklogHint": "Füge eine Aufgabe hinzu, um zu beginnen",
+    "emptyQueue": "Die Warteschlange ist leer",
+    "emptyQueueHint": "Aufgaben warten hier, wenn die Grenze für parallele Aufgaben erreicht ist",
+    "emptyInProgress": "Nichts in Bearbeitung",
+    "emptyInProgressHint": "Starte eine Aufgabe aus dem Backlog",
+    "emptyAiReview": "Keine Aufgaben zur Überprüfung",
+    "emptyAiReviewHint": "Die KI überprüft abgeschlossene Aufgaben",
+    "emptyHumanReview": "Nichts zu überprüfen",
+    "emptyHumanReviewHint": "Aufgaben warten hier auf deine Genehmigung",
+    "emptyDone": "Keine abgeschlossenen Aufgaben",
+    "emptyDoneHint": "Genehmigte Aufgaben erscheinen hier",
+    "emptyDefault": "Keine Aufgaben",
+    "dropHere": "Hier ablegen",
+    "showArchived": "Archivierte anzeigen",
+    "addTaskAriaLabel": "Neue Aufgabe zum Backlog hinzufügen",
+    "queueAllAriaLabel": "Alle Aufgaben in die Warteschlange verschieben",
+    "closeTaskDetailsAriaLabel": "Aufgabendetails schließen",
+    "editTask": "Aufgabe bearbeiten",
+    "cannotEditWhileRunning": "Bearbeitung während der Ausführung nicht möglich"
+  },
+  "execution": {
+    "phases": {
+      "idle": "Inaktiv",
+      "planning": "Planung",
+      "coding": "Codierung",
+      "reviewing": "Überprüfung",
+      "fixing": "Korrektur",
+      "complete": "Abgeschlossen",
+      "failed": "Fehlgeschlagen"
+    },
+    "labels": {
+      "interrupted": "Unterbrochen",
+      "progress": "Fortschritt",
+      "entry": "Eintrag",
+      "entries": "Einträge"
+    },
+    "shortPhases": {
+      "plan": "Plan",
+      "code": "Code",
+      "qa": "QA"
+    },
+    "resources": {
+      "cpu": "CPU",
+      "memory": "Speicher",
+      "elapsed": "Verstrichen"
+    },
+    "time": {
+      "elapsed": "Verstrichen",
+      "remaining": "Restzeit ca.",
+      "subtask": "Teilaufgabe",
+      "about": "Etwa",
+      "roughly": "Ungefähr",
+      "unknown": "Unbekannt",
+      "lessThanMinute": "Weniger als 1 Minute",
+      "minute": "{{count}} Minute",
+      "minute_plural": "{{count}} Minuten",
+      "hour": "{{count}} Stunde",
+      "hour_plural": "{{count}} Stunden",
+      "day": "{{count}} Tag",
+      "day_plural": "{{count}} Tage"
+    },
+    "confidence": {
+      "high": "Hohe Konfidenz",
+      "medium": "Mittlere Konfidenz",
+      "low": "Niedrige Konfidenz",
+      "samples": "{{count}} Stichproben"
+    }
+  },
+  "wizard": {
+    "createTitle": "Neue Aufgabe erstellen",
+    "createDescription": "Beschreibe, was du bauen möchtest. Die KI wird deine Anfrage analysieren und eine detaillierte Spezifikation erstellen.",
+    "descriptionPlaceholder": "Beschreibe die Funktion, Fehlerbehebung oder Verbesserung, die du implementieren möchtest. Sei so spezifisch wie möglich über Anforderungen, Einschränkungen und erwartetes Verhalten. Tippe @, um Dateien zu referenzieren.",
+    "creating": "Erstellung...",
+    "createTask": "Aufgabe erstellen",
+    "worktreeNotice": {
+      "title": "Isolierter Arbeitsbereich",
+      "description": "Diese Aufgabe wird in einem isolierten git-worktree ausgeführt. Dein Hauptzweig bleibt geschützt, bis du dich entscheidest, zusammenzuführen."
+    }
+  },
+  "form": {
+    "description": "Beschreibung",
+    "descriptionPlaceholder": "Beschreibe die Funktion, Fehlerbehebung oder Verbesserung, die du implementieren möchtest. Sei so spezifisch wie möglich über Anforderungen, Einschränkungen und erwartetes Verhalten.",
+    "taskTitle": "Aufgabentitel",
+    "titlePlaceholder": "Leer lassen für automatische Generierung aus der Beschreibung",
+    "titleHelpText": "Ein kurzer, beschreibender Titel wird automatisch generiert, wenn leer gelassen.",
+    "classificationOptional": "Klassifizierung (optional)",
+    "requireReviewLabel": "Manuelle Überprüfung vor Codierung erforderlich",
+    "requireReviewDescription": "Wenn aktiviert, wirst du aufgefordert, die Spezifikation und den Implementierungsplan zu überprüfen, bevor die Codierungsphase beginnt.",
+    "errors": {
+      "descriptionRequired": "Bitte gib eine Beschreibung ein",
+      "maxImagesReached": "Maximum von 5 Bildern erreicht",
+      "invalidImageType": "Ungültiger Bildtyp. Zulässig: PNG, JPEG, GIF, WebP"
+    }
+  },
+  "notifications": {
+    "backgroundTaskTitle": "Die Aufgabe läuft im Hintergrund weiter",
+    "backgroundTaskDescription": "Die Aufgabe ist noch in Bearbeitung. Du kannst diesen Dialog erneut öffnen, um den Fortschritt zu verfolgen.",
+    "taskComplete": "Aufgabe abgeschlossen",
+    "taskCompleteDescription": "Deine Aufgabe wurde erfolgreich abgeschlossen und ist zur Überprüfung bereit.",
+    "taskFailed": "Aufgabe fehlgeschlagen",
+    "taskFailedDescription": "Deine Aufgabe hat ein Problem festgestellt und benötigt deine Aufmerksamkeit."
+  }
+}

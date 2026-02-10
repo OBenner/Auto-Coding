@@ -3,7 +3,7 @@
  * Available languages, display labels, and RTL configuration
  */
 
-export type SupportedLanguage = 'en' | 'fr' | 'ar' | 'he';
+export type SupportedLanguage = 'en' | 'fr' | 'es' | 'de' | 'ar' | 'he';
 
 export interface LanguageConfig {
   value: SupportedLanguage;
@@ -15,6 +15,8 @@ export interface LanguageConfig {
 export const AVAILABLE_LANGUAGES: LanguageConfig[] = [
   { value: 'en', label: 'English', nativeLabel: 'English', isRTL: false },
   { value: 'fr', label: 'French', nativeLabel: 'Français', isRTL: false },
+  { value: 'es', label: 'Spanish', nativeLabel: 'Español', isRTL: false },
+  { value: 'de', label: 'German', nativeLabel: 'Deutsch', isRTL: false },
   { value: 'ar', label: 'Arabic', nativeLabel: 'العربية', isRTL: true },
   { value: 'he', label: 'Hebrew', nativeLabel: 'עברית', isRTL: true }
 ];

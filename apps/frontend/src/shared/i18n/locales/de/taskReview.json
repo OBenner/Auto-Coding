@@ -1,0 +1,15 @@
+{
+  "title": "Aufgabenüberprüfung",
+  "description": "Aufgaben vor dem Merge überprüfen und genehmigen",
+  "review": "Überprüfen",
+  "approve": "Genehmigen",
+  "requestChanges": "Änderungen anfordern",
+  "comment": "Kommentieren",
+  "submitReview": "Überprüfung senden",
+  "reviewSubmitted": "Überprüfung gesendet",
+  "reviewFailed": "Fehler beim Senden der Überprüfung",
+  "comments": "Kommentare",
+  "noComments": "Keine Kommentare",
+  "addComment": "Kommentar hinzufügen",
+  "reply": "Antworten"
+}

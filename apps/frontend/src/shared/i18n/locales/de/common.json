@@ -1,0 +1,87 @@
+{
+  "sections": {
+    "project": "Projekt",
+    "tools": "Werkzeuge"
+  },
+  "items": {
+    "kanban": "Kanban-Board",
+    "terminals": "Agent-Terminals",
+    "insights": "Insights",
+    "roadmap": "Roadmap",
+    "ideation": "Ideierung",
+    "changelog": "Änderungsprotokoll",
+    "context": "Kontext",
+    "githubIssues": "GitHub-Issues",
+    "githubPRs": "GitHub-PRs",
+    "gitlabIssues": "GitLab-Issues",
+    "gitlabMRs": "GitLab-MRs",
+    "plugins": "Plugins",
+    "worktrees": "Worktrees",
+    "agentTools": "MCP-Übersicht",
+    "mergeAnalytics": "Merge-Analysen"
+  },
+  "actions": {
+    "settings": "Einstellungen",
+    "help": "Hilfe & Feedback",
+    "newTask": "Neue Aufgabe",
+    "collapseSidebar": "Seitenleiste einklappen",
+    "expandSidebar": "Seitenleiste ausklappen"
+  },
+  "tooltips": {
+    "settings": "Anwendungseinstellungen",
+    "help": "Hilfe & Feedback"
+  },
+  "messages": {
+    "initializeToCreateTasks": "Initialisiere Auto-Coding, um Aufgaben zu erstellen"
+  },
+  "updateBanner": {
+    "title": "Update verfügbar",
+    "version": "Version {{version}} ist bereit",
+    "updateAndRestart": "Aktualisieren und neu starten",
+    "installAndRestart": "Installieren und neu starten",
+    "downloading": "Herunterladen...",
+    "dismiss": "Verwerfen",
+    "downloadError": "Fehler beim Herunterladen des Updates"
+  },
+  "claudeCode": {
+    "checking": "Claude Code wird überprüft...",
+    "upToDate": "Claude Code ist aktuell",
+    "updateAvailable": "Claude Code-Update verfügbar",
+    "notInstalled": "Claude Code nicht installiert",
+    "error": "Fehler bei der Überprüfung von Claude Code",
+    "installed": "Installiert",
+    "outdated": "Update verfügbar",
+    "missing": "Nicht installiert",
+    "current": "Aktuell",
+    "latest": "Neueste",
+    "path": "Pfad",
+    "lastChecked": "Letzte Überprüfung",
+    "learnMore": "Mehr über Claude Code erfahren",
+    "learnMoreAriaLabel": "Mehr über Claude Code erfahren (öffnet in einem neuen Fenster)",
+    "viewChangelog": "Claude Code-Änderungsprotokoll anzeigen",
+    "viewChangelogAriaLabel": "Claude Code-Änderungsprotokoll anzeigen (öffnet in einem neuen Fenster)",
+    "updateWarningTitle": "Claude Code aktualisieren?",
+    "updateWarningDescription": "Das Update wird alle laufenden Claude Code-Sitzungen schließen. Nicht gespeicherte Arbeit in diesen Sitzungen könnte verloren gehen. Stellen Sie sicher, dass Sie Ihre Arbeit speichern, bevor Sie fortfahren.",
+    "updateWarningTerminalNote": "Ein Terminalfenster wird geöffnet, um den Installationsbefehl auszuführen. Warten Sie, bis die Installation abgeschlossen ist, bevor Sie fortfahren.",
+    "updateAnyway": "Terminal öffnen und aktualisieren",
+    "switchVersion": "Version wechseln",
+    "selectVersion": "Eine Version auswählen",
+    "loadingVersions": "Versionen werden geladen...",
+    "failedToLoadVersions": "Fehler beim Laden der Versionen",
+    "installingVersion": "Version {{version}} wird installiert...",
+    "rollbackWarningTitle": "Zu Version {{version}} wechseln?",
+    "rollbackWarningDescription": "Das Wechseln der Version wird alle laufenden Claude Code-Sitzungen schließen. Nicht gespeicherte Arbeit in diesen Sitzungen könnte verloren gehen. Stellen Sie sicher, dass Sie Ihre Arbeit speichern, bevor Sie fortfahren.",
+    "rollbackWarningTerminalNote": "Ein Terminalfenster wird geöffnet, um den Installationsbefehl auszuführen. Warten Sie, bis die Installation abgeschlossen ist, bevor Sie fortfahren.",
+    "switchAnyway": "Terminal öffnen und wechseln",
+    "currentVersion": "Aktuell",
+    "switchInstallation": "Installation wechseln",
+    "selectInstallation": "Eine Installation auswählen",
+    "loadingInstallations": "Installationen werden geladen...",
+    "failedToLoadInstallations": "Fehler beim Laden der Installationen",
+    "activeInstallation": "Aktiv",
+    "pathChangeWarningTitle": "CLI-Installation wechseln?",
+    "pathChangeWarningDescription": "Das Wechseln der CLI-Installation verwendet ein anderes Claude Code-Binärprogramm. Laufende Sitzungen verwenden weiterhin die vorherige Installation bis sie neu gestartet werden.",
+    "switchInstallationConfirm": "Wechseln",
+    "versionUnknown": "unbekannte Version"
+  }
+}

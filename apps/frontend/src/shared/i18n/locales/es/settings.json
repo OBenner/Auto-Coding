@@ -1,0 +1,118 @@
+{
+  "title": "Configuración",
+  "tabs": {
+    "app": "Configuración de la aplicación",
+    "project": "Configuración del proyecto"
+  },
+  "sections": {
+    "appearance": {
+      "title": "Apariencia",
+      "description": "Personaliza la apariencia de Auto-Coding"
+    },
+    "display": {
+      "title": "Pantalla",
+      "description": "Ajusta el tamaño de los elementos de la interfaz"
+    },
+    "language": {
+      "title": "Idioma",
+      "description": "Elige tu idioma preferido"
+    },
+    "devtools": {
+      "title": "Herramientas de desarrollo",
+      "description": "Preferencias de IDE y terminal"
+    },
+    "agent": {
+      "title": "Configuración del agente",
+      "description": "Modelo predeterminado y framework"
+    },
+    "paths": {
+      "title": "Rutas",
+      "description": "Herramientas CLI y rutas del framework"
+    },
+    "accounts": {
+      "title": "Cuentas",
+      "description": "Cuentas Claude y endpoints API"
+    },
+    "updates": {
+      "title": "Actualizaciones",
+      "description": "Actualizaciones de Auto-Coding"
+    },
+    "notifications": {
+      "title": "Notificaciones",
+      "description": "Preferencias de alertas"
+    },
+    "debug": {
+      "title": "Debug y Logs",
+      "description": "Herramientas de solución de problemas"
+    }
+  },
+  "language": {
+    "label": "Idioma de la interfaz",
+    "description": "Selecciona el idioma de la interfaz de la aplicación"
+  },
+  "theme": {
+    "title": "Apariencia",
+    "description": "Personaliza la apariencia de Auto-Coding",
+    "mode": "Modo",
+    "modeDescription": "Elige entre temas claros y oscuros",
+    "light": "Claro",
+    "dark": "Oscuro",
+    "system": "Sistema",
+    "colorTheme": "Tema de color",
+    "colorThemeDescription": "Elige tu paleta de colores preferida"
+  },
+  "scale": {
+    "presets": "Ajustes preestablecidos de escala",
+    "presetsDescription": "Opciones de escala rápida para preferencias comunes",
+    "fineTune": "Ajuste fino",
+    "fineTuneDescription": "Ajusta del 75% al 200% en incrementos del 5%",
+    "default": "Predeterminado",
+    "comfortable": "Cómodo",
+    "large": "Grande"
+  },
+  "actions": {
+    "save": "Guardar configuración",
+    "rerunWizard": "Ejecutar asistente nuevamente",
+    "rerunWizardDescription": "Reiniciar el asistente de configuración"
+  },
+  "projectSections": {
+    "general": {
+      "title": "General",
+      "description": "Auto-Build y configuración del agente",
+      "useClaudeMd": "Usar CLAUDE.md",
+      "useClaudeMdDescription": "Incluir las instrucciones de CLAUDE.md en el contexto del agente"
+    },
+    "claude": {
+      "title": "Autenticación Claude",
+      "description": "Autenticación Claude"
+    },
+    "linear": {
+      "title": "Linear",
+      "description": "Integración con Linear",
+      "integrationTitle": "Integración con Linear",
+      "integrationDescription": "Conectar a Linear para seguimiento de issues e importación de tareas",
+      "syncDescription": "Sincronizar con Linear para seguimiento de issues"
+    },
+    "github": {
+      "title": "GitHub",
+      "description": "Sincronización de issues de GitHub",
+      "integrationTitle": "Integración con GitHub",
+      "integrationDescription": "Conectar a GitHub para seguimiento de issues",
+      "syncDescription": "Sincronizar con Issues de GitHub"
+    },
+    "gitlab": {
+      "title": "GitLab",
+      "description": "Sincronización de issues de GitLab",
+      "integrationTitle": "Integración con GitLab",
+      "integrationDescription": "Conectar a GitLab para seguimiento de issues",
+      "syncDescription": "Sincronizar con Issues de GitLab"
+    },
+    "memory": {
+      "title": "Memoria",
+      "description": "Backend de memoria Graphiti",
+      "integrationTitle": "Memoria",
+      "integrationDescription": "Configurar memoria persistente entre sesiones para agentes",
+      "syncDescription": "Configurar memoria persistente"
+    }
+  }
+}

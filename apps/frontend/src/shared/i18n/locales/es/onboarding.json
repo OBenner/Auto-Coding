@@ -1,0 +1,49 @@
+{
+  "initialize": {
+    "title": "Inicializar Auto-Coding",
+    "description": "Este proyecto no tiene Auto-Coding inicializado. ¿Quieres configurarlo ahora?",
+    "willDo": "Esto hará:",
+    "createFolder": "Crear una carpeta .auto-claude en tu proyecto",
+    "copyFramework": "Copiar los archivos del framework Auto-Coding",
+    "setupSpecs": "Configurar el directorio de especificaciones para tus tareas",
+    "sourcePathNotConfigured": "Ruta de origen no configurada",
+    "sourcePathNotConfiguredDescription": "Por favor define la ruta de origen de Auto-Coding en la configuración de la aplicación antes de inicializar.",
+    "initFailed": "Error de inicialización",
+    "initFailedDescription": "Error al inicializar Auto-Coding. Por favor inténtalo de nuevo."
+  },
+  "gitSetup": {
+    "title": "Repositorio Git requerido",
+    "description": "Auto-Coding usa git para construir características de forma segura en espacios de trabajo aislados",
+    "notGitRepo": "Esta carpeta no es un repositorio git",
+    "noCommits": "El repositorio git no tiene commits",
+    "needsInit": "Git debe inicializarse antes de que Auto-Coding pueda gestionar tu código.",
+    "needsCommit": "Se requiere al menos un commit para que Auto-Coding pueda crear worktrees.",
+    "willSetup": "Configuraremos git por ti:",
+    "initRepo": "Inicializar un nuevo repositorio git",
+    "createCommit": "Crear un commit inicial con tus archivos actuales",
+    "manual": "¿Prefieres hacerlo manualmente?",
+    "settingUp": "Configurando Git",
+    "initializingRepo": "Inicializando repositorio git y creando commit inicial...",
+    "success": "Git inicializado",
+    "readyToUse": "¡Tu proyecto ahora está listo para usar con Auto-Coding!"
+  },
+  "githubSetup": {
+    "connectTitle": "Conectar a GitHub",
+    "connectDescription": "Auto-Coding necesita GitHub para gestionar tus ramas de código y mantener las tareas actualizadas.",
+    "claudeTitle": "Conectar a Claude AI",
+    "claudeDescription": "Auto-Coding usa Claude AI para características inteligentes como generación de hojas de ruta, automatización de tareas e ideación.",
+    "selectRepo": "Seleccionar repositorio",
+    "repoDescription": "Auto-Coding usará este repositorio para gestionar ramas de tareas y mantener tu código actualizado.",
+    "selectBranch": "Seleccionar rama base",
+    "branchDescription": "Elige qué rama debe usar Auto-Coding como base para crear ramas de tareas.",
+    "whyBranch": "¿Por qué seleccionar una rama?",
+    "branchExplanation": "Auto-Coding crea espacios de trabajo aislados para cada tarea. Seleccionar la rama base correcta asegura que tus tareas comiencen con el código más reciente de tu línea de desarrollo principal.",
+    "ready": "¡Auto-Coding está listo para usar! Ahora puedes crear tareas que se basarán automáticamente en la rama {{branchName}}.",
+    "createRepoAriaLabel": "Crear un nuevo repositorio en GitHub",
+    "linkRepoAriaLabel": "Enlazar a un repositorio existente",
+    "goBackAriaLabel": "Volver a la selección de repositorio",
+    "selectOwnerAriaLabel": "Seleccionar {{owner}} como propietario del repositorio",
+    "selectOrgAriaLabel": "Seleccionar {{org}} como propietario del repositorio",
+    "selectVisibilityAriaLabel": "Establecer la visibilidad del repositorio en {{visibility}}"
+  }
+}

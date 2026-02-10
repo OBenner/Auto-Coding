@@ -1,0 +1,9 @@
+{
+  "task": {
+    "parseImplementationPlan": "Fehler beim Parsen der Datei implementation_plan.json für {{specId}}: {{error}}",
+    "jsonError": {
+      "titleSuffix": "(JSON-Fehler)",
+      "description": "⚠️ JSON-Parse-Fehler: {{error}}\n\nDie Datei implementation_plan.json ist fehlerhaft. Führe die automatische Korrektur des Backends aus oder repariere die Datei manuell."
+    }
+  }
+}

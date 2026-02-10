@@ -1,0 +1,15 @@
+{
+  "title": "Terminal",
+  "description": "Salida de terminal del agente",
+  "running": "Ejecutándose",
+  "stopped": "Detenido",
+  "failed": "Fallido",
+  "start": "Iniciar",
+  "stop": "Detener",
+  "restart": "Reiniciar",
+  "clear": "Limpiar",
+  "copy": "Copiar",
+  "copied": "¡Copiado!",
+  "noOutput": "Sin salida todavía",
+  "noOutputHint": "La salida del terminal aparecerá aquí cuando el agente se ejecute"
+}

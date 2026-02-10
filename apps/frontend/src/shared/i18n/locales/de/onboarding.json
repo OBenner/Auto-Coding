@@ -1,0 +1,49 @@
+{
+  "initialize": {
+    "title": "Auto-Coding initialisieren",
+    "description": "Dieses Projekt hat Auto-Coding noch nicht initialisiert. Möchtest du es jetzt einrichten?",
+    "willDo": "Dies wird:",
+    "createFolder": "Einen .auto-claude-Ordner in deinem Projekt erstellen",
+    "copyFramework": "Die Auto-Coding-Framework-Dateien kopieren",
+    "setupSpecs": "Das Spezifikationsverzeichnis für deine Aufgaben einrichten",
+    "sourcePathNotConfigured": "Quellpfad nicht konfiguriert",
+    "sourcePathNotConfiguredDescription": "Bitte definiere den Auto-Coding-Quellpfad in den Anwendungseinstellungen, bevor du initialisierst.",
+    "initFailed": "Initialisierung fehlgeschlagen",
+    "initFailedDescription": "Fehler beim Initialisieren von Auto-Coding. Bitte versuche es erneut."
+  },
+  "gitSetup": {
+    "title": "Git-Repository erforderlich",
+    "description": "Auto-Coding verwendet git, um Features sicher in isolierten Arbeitsbereichen zu erstellen",
+    "notGitRepo": "Dieser Ordner ist kein git-Repository",
+    "noCommits": "Das git-Repository hat keine Commits",
+    "needsInit": "Git muss initialisiert werden, bevor Auto-Coding deinen Code verwalten kann.",
+    "needsCommit": "Mindestens ein Commit ist erforderlich, damit Auto-Coding worktrees erstellen kann.",
+    "willSetup": "Wir werden git für dich einrichten:",
+    "initRepo": "Ein neues git-Repository initialisieren",
+    "createCommit": "Ein anfänglicher Commit mit deinen aktuellen Dateien erstellen",
+    "manual": "Möchtest du es manuell durchführen?",
+    "settingUp": "Git wird eingerichtet",
+    "initializingRepo": "Git-Repository wird initialisiert und anfänglicher Commit wird erstellt...",
+    "success": "Git initialisiert",
+    "readyToUse": "Dein Projekt ist jetzt bereit für die Verwendung mit Auto-Coding!"
+  },
+  "githubSetup": {
+    "connectTitle": "Mit GitHub verbinden",
+    "connectDescription": "Auto-Coding benötigt GitHub, um deine Codezweige zu verwalten und Aufgaben aktuell zu halten.",
+    "claudeTitle": "Mit Claude AI verbinden",
+    "claudeDescription": "Auto-Coding verwendet Claude AI für intelligente Funktionen wie Roadmap-Generierung, Aufgabenautomatisierung und Ideierung.",
+    "selectRepo": "Repository auswählen",
+    "repoDescription": "Auto-Coding wird dieses Repository verwenden, um Aufgabenbranches zu verwalten und deinen Code aktuell zu halten.",
+    "selectBranch": "Basisbranch auswählen",
+    "branchDescription": "Wähle, welchen Branch Auto-Coding als Basis zum Erstellen von Aufgabenbranches verwenden soll.",
+    "whyBranch": "Warum einen Branch auswählen?",
+    "branchExplanation": "Auto-Coding erstellt isolierte Arbeitsbereiche für jede Aufgabe. Die Auswahl des richtigen Basisbranches stellt sicher, dass deine Aufgaben mit dem neuesten Code deiner Hauptentwicklungslinie beginnen.",
+    "ready": "Auto-Coding ist einsatzbereit! Du kannst jetzt Aufgaben erstellen, die automatisch auf dem Branch {{branchName}} basieren.",
+    "createRepoAriaLabel": "Ein neues Repository auf GitHub erstellen",
+    "linkRepoAriaLabel": "Mit einem bestehenden Repository verbinden",
+    "goBackAriaLabel": "Zurück zur Repository-Auswahl",
+    "selectOwnerAriaLabel": "{{owner}} als Repository-Besitzer auswählen",
+    "selectOrgAriaLabel": "{{org}} als Repository-Besitzer auswählen",
+    "selectVisibilityAriaLabel": "Repository-Sichtbarkeit auf {{visibility}} setzen"
+  }
+}

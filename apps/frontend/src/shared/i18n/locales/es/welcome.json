@@ -1,0 +1,17 @@
+{
+  "hero": {
+    "title": "Bienvenido a Auto-Coding",
+    "subtitle": "Construye software de forma autónoma con agentes IA"
+  },
+  "actions": {
+    "newProject": "Nuevo proyecto",
+    "openProject": "Abrir proyecto"
+  },
+  "recentProjects": {
+    "title": "Proyectos recientes",
+    "empty": "Sin proyectos",
+    "emptyDescription": "Crea un nuevo proyecto o abre uno existente para comenzar",
+    "openFolder": "Abrir carpeta",
+    "openProjectAriaLabel": "Abrir proyecto {{name}}"
+  }
+}

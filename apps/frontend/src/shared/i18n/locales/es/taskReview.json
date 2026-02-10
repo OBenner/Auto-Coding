@@ -1,0 +1,15 @@
+{
+  "title": "Revisión de tareas",
+  "description": "Revisa y aprueba tareas antes de la fusión",
+  "review": "Revisar",
+  "approve": "Aprobar",
+  "requestChanges": "Solicitar cambios",
+  "comment": "Comentar",
+  "submitReview": "Enviar revisión",
+  "reviewSubmitted": "Revisión enviada",
+  "reviewFailed": "Error al enviar la revisión",
+  "comments": "Comentarios",
+  "noComments": "Sin comentarios",
+  "addComment": "Añadir comentario",
+  "reply": "Responder"
+}

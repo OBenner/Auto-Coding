@@ -1,0 +1,14 @@
+{
+  "title": "Plugins",
+  "description": "Auto-Coding-Plugins verwalten",
+  "noPlugins": "Keine Plugins konfiguriert",
+  "addPlugin": "Plugin hinzufügen",
+  "removePlugin": "Plugin entfernen",
+  "configurePlugin": "Plugin konfigurieren",
+  "pluginAdded": "Plugin hinzugefügt",
+  "pluginRemoved": "Plugin entfernt",
+  "pluginConfigured": "Plugin konfiguriert",
+  "failedToAdd": "Fehler beim Hinzufügen des Plugins",
+  "failedToRemove": "Fehler beim Entfernen des Plugins",
+  "failedToConfigure": "Fehler beim Konfigurieren des Plugins"
+}

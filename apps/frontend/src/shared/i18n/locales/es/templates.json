@@ -1,0 +1,11 @@
+{
+  "title": "Plantillas",
+  "description": "Gestiona plantillas de especificaciones",
+  "noTemplates": "Sin plantillas disponibles",
+  "createTemplate": "Crear plantilla",
+  "useTemplate": "Usar plantilla",
+  "templateCreated": "Plantilla creada",
+  "templateRemoved": "Plantilla eliminada",
+  "failedToCreate": "Error al crear plantilla",
+  "failedToRemove": "Error al eliminar plantilla"
+}

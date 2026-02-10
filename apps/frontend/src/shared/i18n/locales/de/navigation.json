@@ -1,0 +1,37 @@
+{
+  "sections": {
+    "project": "Projekt",
+    "tools": "Werkzeuge"
+  },
+  "items": {
+    "kanban": "Kanban-Board",
+    "terminals": "Agent-Terminals",
+    "insights": "Insights",
+    "roadmap": "Roadmap",
+    "ideation": "Ideierung",
+    "changelog": "Änderungsprotokoll",
+    "context": "Kontext",
+    "githubIssues": "GitHub-Issues",
+    "githubPRs": "GitHub-PRs",
+    "gitlabIssues": "GitLab-Issues",
+    "gitlabMRs": "GitLab-MRs",
+    "plugins": "Plugins",
+    "worktrees": "Worktrees",
+    "agentTools": "MCP-Übersicht",
+    "mergeAnalytics": "Merge-Analysen"
+  },
+  "actions": {
+    "settings": "Einstellungen",
+    "help": "Hilfe & Feedback",
+    "newTask": "Neue Aufgabe",
+    "collapseSidebar": "Seitenleiste einklappen",
+    "expandSidebar": "Seitenleiste ausklappen"
+  },
+  "tooltips": {
+    "settings": "Anwendungseinstellungen",
+    "help": "Hilfe & Feedback"
+  },
+  "messages": {
+    "initializeToCreateTasks": "Initialisiere Auto-Coding, um Aufgaben zu erstellen"
+  }
+}

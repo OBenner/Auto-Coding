@@ -1,0 +1,11 @@
+{
+  "title": "Vorlagen",
+  "description": "Spezifikationsvorlagen verwalten",
+  "noTemplates": "Keine Vorlagen verfügbar",
+  "createTemplate": "Vorlage erstellen",
+  "useTemplate": "Vorlage verwenden",
+  "templateCreated": "Vorlage erstellt",
+  "templateRemoved": "Vorlage entfernt",
+  "failedToCreate": "Fehler beim Erstellen der Vorlage",
+  "failedToRemove": "Fehler beim Entfernen der Vorlage"
+}

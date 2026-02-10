@@ -1,0 +1,10 @@
+{
+  "title": "GitLab",
+  "description": "GitLab-Issue-Synchronisierung",
+  "integrationTitle": "GitLab-Integration",
+  "integrationDescription": "Mit GitLab für Issue-Tracking verbinden",
+  "syncDescription": "Mit GitLab Issues synchronisieren",
+  "notConnected": "GitLab nicht verbunden",
+  "connectPrompt": "Verbinde dein GitLab-Konto, um Issues zu sehen und zu verwalten.",
+  "openSettings": "Einstellungen öffnen"
+}

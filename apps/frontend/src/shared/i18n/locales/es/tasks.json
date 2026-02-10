@@ -1,0 +1,173 @@
+{
+  "refreshTasks": "Actualizar tareas",
+  "status": {
+    "backlog": "Backlog",
+    "queue": "Cola",
+    "todo": "Por hacer",
+    "in_progress": "En progreso",
+    "review": "Revisión",
+    "prCreated": "PR creada",
+    "complete": "Completado",
+    "archived": "Archivado"
+  },
+  "actions": {
+    "start": "Iniciar",
+    "stop": "Detener",
+    "recover": "Recuperar",
+    "resume": "Continuar",
+    "archive": "Archivar",
+    "delete": "Eliminar",
+    "view": "Ver detalles",
+    "viewPR": "Ver PR",
+    "moveTo": "Mover a",
+    "taskActions": "Acciones de tarea",
+    "selectTask": "Seleccionar tarea: {{title}}",
+    "showMetadata": "Mostrar metadatos",
+    "hideMetadata": "Ocultar metadatos"
+  },
+  "labels": {
+    "running": "Ejecutándose",
+    "aiReview": "Revisión IA",
+    "needsReview": "Necesita revisión",
+    "pending": "Pendiente",
+    "stuck": "Atascado",
+    "incomplete": "Incompleto",
+    "recovering": "Recuperando...",
+    "needsRecovery": "Necesita recuperación",
+    "needsResume": "Necesita continuar"
+  },
+  "reviewReason": {
+    "completed": "Completado",
+    "hasErrors": "Tiene errores",
+    "qaIssues": "Problemas QA",
+    "approvePlan": "Aprobar plan"
+  },
+  "tooltips": {
+    "archiveTask": "Archivar tarea",
+    "archiveAllDone": "Archivar todas las tareas completadas",
+    "viewPR": "Abrir pull request en el navegador"
+  },
+  "creation": {
+    "title": "Crear nueva tarea",
+    "description": "Describe qué quieres construir",
+    "placeholder": "Describe tu tarea..."
+  },
+  "empty": {
+    "title": "Sin tareas",
+    "description": "Crea tu primera tarea para comenzar"
+  },
+  "columns": {
+    "backlog": "Planificación",
+    "queue": "Cola",
+    "in_progress": "En progreso",
+    "ai_review": "Revisión IA",
+    "human_review": "Revisión humana",
+    "done": "Completado",
+    "pr_created": "PR creada",
+    "error": "Error"
+  },
+  "kanban": {
+    "emptyBacklog": "No hay tareas planificadas",
+    "emptyBacklogHint": "Añade una tarea para comenzar",
+    "emptyQueue": "La cola está vacía",
+    "emptyQueueHint": "Las tareas esperarán aquí cuando se alcance el límite de tareas paralelas",
+    "emptyInProgress": "Nada en progreso",
+    "emptyInProgressHint": "Inicia una tarea desde el Backlog",
+    "emptyAiReview": "No hay tareas en revisión",
+    "emptyAiReviewHint": "La IA revisará las tareas completadas",
+    "emptyHumanReview": "Nada para revisar",
+    "emptyHumanReviewHint": "Las tareas esperan tu aprobación aquí",
+    "emptyDone": "No hay tareas completadas",
+    "emptyDoneHint": "Las tareas aprobadas aparecen aquí",
+    "emptyDefault": "Sin tareas",
+    "dropHere": "Soltar aquí",
+    "showArchived": "Mostrar archivadas",
+    "addTaskAriaLabel": "Añadir nueva tarea al backlog",
+    "queueAllAriaLabel": "Mover todas las tareas a la cola",
+    "closeTaskDetailsAriaLabel": "Cerrar detalles de tarea",
+    "editTask": "Editar tarea",
+    "cannotEditWhileRunning": "No se puede editar durante la ejecución"
+  },
+  "execution": {
+    "phases": {
+      "idle": "Inactivo",
+      "planning": "Planificación",
+      "coding": "Codificación",
+      "reviewing": "Revisión",
+      "fixing": "Corrigiendo",
+      "complete": "Completado",
+      "failed": "Fallido"
+    },
+    "labels": {
+      "interrupted": "Interrumpido",
+      "progress": "Progreso",
+      "entry": "entrada",
+      "entries": "entradas"
+    },
+    "shortPhases": {
+      "plan": "Plan",
+      "code": "Código",
+      "qa": "QA"
+    },
+    "resources": {
+      "cpu": "CPU",
+      "memory": "Memoria",
+      "elapsed": "Transcurrido"
+    },
+    "time": {
+      "elapsed": "Transcurrido",
+      "remaining": "Tiempo restante est.",
+      "subtask": "Subtarea",
+      "about": "Aproximadamente",
+      "roughly": "Roughly",
+      "unknown": "Desconocido",
+      "lessThanMinute": "Menos de 1 minuto",
+      "minute": "{{count}} minuto",
+      "minute_plural": "{{count}} minutos",
+      "hour": "{{count}} hora",
+      "hour_plural": "{{count}} horas",
+      "day": "{{count}} día",
+      "day_plural": "{{count}} días"
+    },
+    "confidence": {
+      "high": "Alta confianza",
+      "medium": "Confianza media",
+      "low": "Baja confianza",
+      "samples": "{{count}} muestras"
+    }
+  },
+  "wizard": {
+    "createTitle": "Crear nueva tarea",
+    "createDescription": "Describe qué quieres construir. La IA analizará tu solicitud y creará una especificación detallada.",
+    "descriptionPlaceholder": "Describe la funcionalidad, corrección de error o mejora que deseas implementar. Sé tan específico como sea posible sobre los requisitos, restricciones y comportamiento esperado. Escribe @ para referenciar archivos.",
+    "creating": "Creando...",
+    "createTask": "Crear tarea",
+    "worktreeNotice": {
+      "title": "Espacio de trabajo aislado",
+      "description": "Esta tarea se ejecuta en un worktree git aislado. Tu rama principal permanece protegida hasta que decidas fusionar."
+    }
+  },
+  "form": {
+    "description": "Descripción",
+    "descriptionPlaceholder": "Describe la funcionalidad, corrección de error o mejora que deseas implementar. Sé tan específico como sea posible sobre los requisitos, restricciones y comportamiento esperado.",
+    "taskTitle": "Título de la tarea",
+    "titlePlaceholder": "Dejar vacío para generar automáticamente desde la descripción",
+    "titleHelpText": "Se generará automáticamente un título corto y descriptivo si se deja vacío.",
+    "classificationOptional": "Clasificación (opcional)",
+    "requireReviewLabel": "Requerir revisión humana antes de codificar",
+    "requireReviewDescription": "Cuando está activado, se te pedirá que revises la especificación y el plan de implementación antes de que comience la fase de codificación.",
+    "errors": {
+      "descriptionRequired": "Por favor proporciona una descripción",
+      "maxImagesReached": "Máximo de 5 imágenes permitido",
+      "invalidImageType": "Tipo de imagen no válido. Permitidas: PNG, JPEG, GIF, WebP"
+    }
+  },
+  "notifications": {
+    "backgroundTaskTitle": "La tarea continúa en segundo plano",
+    "backgroundTaskDescription": "La tarea aún está en curso. Puedes reabrir este diálogo para seguir el progreso.",
+    "taskComplete": "Tarea completada",
+    "taskCompleteDescription": "Tu tarea se completó con éxito y está lista para revisión.",
+    "taskFailed": "Tarea fallida",
+    "taskFailedDescription": "Tu tarea encontró un problema y necesita tu atención."
+  }
+}

@@ -1,0 +1,87 @@
+{
+  "sections": {
+    "project": "Proyecto",
+    "tools": "Herramientas"
+  },
+  "items": {
+    "kanban": "Tablero Kanban",
+    "terminals": "Terminales de Agente",
+    "insights": "Insights",
+    "roadmap": "Hoja de ruta",
+    "ideation": "Ideación",
+    "changelog": "Registro de cambios",
+    "context": "Contexto",
+    "githubIssues": "Issues de GitHub",
+    "githubPRs": "PRs de GitHub",
+    "gitlabIssues": "Issues de GitLab",
+    "gitlabMRs": "MRs de GitLab",
+    "plugins": "Plugins",
+    "worktrees": "Worktrees",
+    "agentTools": "Vista previa de MCP",
+    "mergeAnalytics": "Análisis de fusiones"
+  },
+  "actions": {
+    "settings": "Configuración",
+    "help": "Ayuda y Feedback",
+    "newTask": "Nueva tarea",
+    "collapseSidebar": "Contraer barra lateral",
+    "expandSidebar": "Expandir barra lateral"
+  },
+  "tooltips": {
+    "settings": "Configuración de la aplicación",
+    "help": "Ayuda y Feedback"
+  },
+  "messages": {
+    "initializeToCreateTasks": "Inicializa Auto-Coding para crear tareas"
+  },
+  "updateBanner": {
+    "title": "Actualización disponible",
+    "version": "La versión {{version}} está lista",
+    "updateAndRestart": "Actualizar y reiniciar",
+    "installAndRestart": "Instalar y reiniciar",
+    "downloading": "Descargando...",
+    "dismiss": "Descartar",
+    "downloadError": "Error al descargar la actualización"
+  },
+  "claudeCode": {
+    "checking": "Verificando Claude Code...",
+    "upToDate": "Claude Code está actualizado",
+    "updateAvailable": "Actualización de Claude Code disponible",
+    "notInstalled": "Claude Code no está instalado",
+    "error": "Error al verificar Claude Code",
+    "installed": "Instalado",
+    "outdated": "Actualización disponible",
+    "missing": "No instalado",
+    "current": "Actual",
+    "latest": "Última",
+    "path": "Ruta",
+    "lastChecked": "Última verificación",
+    "learnMore": "Más información sobre Claude Code",
+    "learnMoreAriaLabel": "Más información sobre Claude Code (se abre en una nueva ventana)",
+    "viewChangelog": "Ver registro de cambios de Claude Code",
+    "viewChangelogAriaLabel": "Ver registro de cambios de Claude Code (se abre en una nueva ventana)",
+    "updateWarningTitle": "¿Actualizar Claude Code?",
+    "updateWarningDescription": "La actualización cerrará todas las sesiones de Claude Code en curso. Cualquier trabajo no guardado en estas sesiones podría perderse. Asegúrese de guardar su trabajo antes de continuar.",
+    "updateWarningTerminalNote": "Se abrirá una ventana de terminal para ejecutar el comando de instalación. Espere a que finalice la instalación antes de continuar.",
+    "updateAnyway": "Abrir terminal y actualizar",
+    "switchVersion": "Cambiar versión",
+    "selectVersion": "Seleccionar una versión",
+    "loadingVersions": "Cargando versiones...",
+    "failedToLoadVersions": "Error al cargar las versiones",
+    "installingVersion": "Instalando versión {{version}}...",
+    "rollbackWarningTitle": "¿Cambiar a la versión {{version}}?",
+    "rollbackWarningDescription": "Cambiar la versión cerrará todas las sesiones de Claude Code en curso. Cualquier trabajo no guardado en estas sesiones podría perderse. Asegúrese de guardar su trabajo antes de continuar.",
+    "rollbackWarningTerminalNote": "Se abrirá una ventana de terminal para ejecutar el comando de instalación. Espere a que finalice la instalación antes de continuar.",
+    "switchAnyway": "Abrir terminal y cambiar",
+    "currentVersion": "Actual",
+    "switchInstallation": "Cambiar instalación",
+    "selectInstallation": "Seleccionar una instalación",
+    "loadingInstallations": "Cargando instalaciones...",
+    "failedToLoadInstallations": "Error al cargar las instalaciones",
+    "activeInstallation": "Activa",
+    "pathChangeWarningTitle": "¿Cambiar instalación de CLI?",
+    "pathChangeWarningDescription": "Cambiar la instalación de CLI usará un binario de Claude Code diferente. Las sesiones en continuarán usando la instalación anterior hasta que se reinicien.",
+    "switchInstallationConfirm": "Cambiar",
+    "versionUnknown": "versión desconocida"
+  }
+}
