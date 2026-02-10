@@ -600,5 +600,21 @@ export const IPC_CHANNELS = {
   TEMPLATE_SEARCH: 'template:search',
   TEMPLATE_PREVIEW: 'template:preview',
   TEMPLATE_CREATE_SPEC: 'template:createSpec',
-  TEMPLATE_SUGGEST: 'template:suggest'
+  TEMPLATE_SUGGEST: 'template:suggest',
+
+  // Scheduler operations
+  SCHEDULER_SCHEDULE_BUILD: 'scheduler:scheduleBuild',
+  SCHEDULER_GET_STATUS: 'scheduler:getStatus',
+  SCHEDULER_CANCEL_BUILD: 'scheduler:cancelBuild',
+  SCHEDULER_START: 'scheduler:start',
+  SCHEDULER_STOP: 'scheduler:stop',
+  SCHEDULER_GET_BUILDS: 'scheduler:getBuilds',
+
+  // Scheduler events (main -> renderer)
+  SCHEDULER_BUILD_SCHEDULED: 'scheduler:buildScheduled',
+  SCHEDULER_BUILD_CANCELLED: 'scheduler:buildCancelled',
+  SCHEDULER_STATUS_CHANGED: 'scheduler:statusChanged',
+  SCHEDULER_BUILD_PROGRESS: 'scheduler:buildProgress',
+  SCHEDULER_BUILD_COMPLETE: 'scheduler:buildComplete',
+  SCHEDULER_BUILD_FAILED: 'scheduler:buildFailed'
 } as const;

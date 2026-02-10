@@ -27,6 +27,7 @@ import { registerIdeationHandlers } from './ideation-handlers';
 import { registerChangelogHandlers } from './changelog-handlers';
 import { registerInsightsHandlers } from './insights-handlers';
 import { registerMemoryHandlers } from './memory-handlers';
+import { registerSchedulerHandlers } from './scheduler-handlers';
 import { registerAppUpdateHandlers } from './app-update-handlers';
 import { registerDebugHandlers } from './debug-handlers';
 import { registerClaudeCodeHandlers } from './claude-code-handlers';
@@ -138,6 +139,9 @@ export function setupIpcHandlers(
   // Template library handlers
   registerTemplateHandlers();
 
+  // Scheduler handlers (build scheduling and queue management)
+  registerSchedulerHandlers(getMainWindow);
+
   console.warn('[IPC] All handler modules registered successfully');
 }
 
@@ -169,5 +173,6 @@ export {
   registerMergeAnalyticsHandlers,
   registerAnalyticsHandlers,
   registerTokenStatsHandlers,
-  registerTemplateHandlers
+  registerTemplateHandlers,
+  registerSchedulerHandlers
 };

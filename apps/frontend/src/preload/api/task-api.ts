@@ -100,6 +100,9 @@ export interface TaskAPI {
   getMergeSummary: (projectId: string, filter?: MergeAnalyticsFilter) => Promise<IPCResult<MergeAnalytics>>;
   getConflictPatterns: (projectId: string, limit?: number) => Promise<IPCResult<ConflictPattern[]>>;
   exportMergeAnalytics: (projectId: string, options: MergeAnalyticsExportOptions) => Promise<IPCResult<{ path: string }>>;
+
+  // Scheduler API (available as a separate property)
+  scheduler?: import('./scheduler-api').SchedulerAPI;
 }
 
 export const createTaskAPI = (): TaskAPI => ({

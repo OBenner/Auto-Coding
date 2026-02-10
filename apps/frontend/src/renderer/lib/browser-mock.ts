@@ -301,6 +301,22 @@ const browserMockAPI: ElectronAPI = {
     onQueueBlockedNoProfiles: () => () => {}
   },
 
+  // Scheduler API (build scheduling and queue management)
+  scheduler: {
+    scheduleBuild: async () => ({ success: true, data: { buildId: 'mock-build-1' } }),
+    getStatus: async () => ({ success: true, data: { schedulerRunning: false, totalBuilds: 0, byStatus: { pending: 0, queued: 0, running: 0, completed: 0, failed: 0, cancelled: 0, retrying: 0 }, builds: [], nextBuild: null } }),
+    cancelBuild: async () => ({ success: true }),
+    start: async () => ({ success: true }),
+    stop: async () => ({ success: true }),
+    getBuilds: async () => ({ success: true, data: [] }),
+    onBuildScheduled: () => () => {},
+    onBuildCancelled: () => () => {},
+    onStatusChanged: () => () => {},
+    onBuildProgress: () => () => {},
+    onBuildComplete: () => () => {},
+    onBuildFailed: () => () => {}
+  },
+
   // Claude Code Operations
   checkClaudeCodeVersion: async () => ({
     success: true,
