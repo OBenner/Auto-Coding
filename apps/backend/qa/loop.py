@@ -16,6 +16,7 @@ from agents.memory_manager import save_user_correction
 from agents.test_generator import run_test_generator_session
 from analysis.code_analyzer import CodeAnalyzer
 from analysis.failure_analyzer import analyze_failure, is_analysis_enabled
+from analysis.ts_analyzer import TypeScriptAnalyzer
 from core.client import create_client
 from debug import debug, debug_error, debug_section, debug_success, debug_warning
 from integrations.graphiti.memory import get_graphiti_memory, is_graphiti_enabled
@@ -460,29 +461,39 @@ async def run_qa_validation_loop(
                         modified_files.extend(subtask.get("files_to_modify", []))
                         modified_files.extend(subtask.get("files_to_create", []))
 
-            # Remove duplicates and filter Python files
-            modified_files = list(set(f for f in modified_files if f.endswith(".py")))
+            # Remove duplicates and filter Python and TypeScript files
+            all_modified_files = list(set(modified_files))
+            python_files = [f for f in all_modified_files if f.endswith(".py")]
+            typescript_files = [
+                f for f in all_modified_files
+                if f.endswith((".ts", ".tsx")) and not f.endswith((".test.ts", ".test.tsx"))
+            ]
+            modified_files = python_files + typescript_files
             debug(
                 "qa_loop",
-                f"Found {len(modified_files)} Python files to analyze",
+                f"Found {len(python_files)} Python and {len(typescript_files)} TypeScript files to analyze",
                 files=modified_files[:5],
             )
 
         if modified_files:
             # Analyze code in modified files
-            analyzer = CodeAnalyzer()
+            py_analyzer = CodeAnalyzer()
+            ts_analyzer = TypeScriptAnalyzer()
             combined_analysis = {
                 "functions": [],
                 "classes": [],
+                "components": [],
                 "imports": [],
                 "edge_cases": [],
             }
 
             for file_path in modified_files:
                 full_path = project_dir / file_path
+
+                # Analyze Python files
                 if full_path.exists() and full_path.suffix == ".py":
                     try:
-                        analysis = analyzer.analyze_file(full_path)
+                        analysis = py_analyzer.analyze_file(full_path)
                         combined_analysis["functions"].extend(
                             analysis.get("functions", [])
                         )
@@ -493,16 +504,41 @@ async def run_qa_validation_loop(
                         )
                         debug(
                             "qa_loop",
-                            f"Analyzed {file_path}",
+                            f"Analyzed Python file {file_path}",
                             functions=len(analysis.get("functions", [])),
                             classes=len(analysis.get("classes", [])),
                         )
                     except Exception as e:
                         debug_warning("qa_loop", f"Failed to analyze {file_path}: {e}")
 
-            if combined_analysis["functions"] or combined_analysis["classes"]:
+                # Analyze TypeScript files
+                elif full_path.exists() and full_path.suffix in (".ts", ".tsx"):
+                    try:
+                        analysis = ts_analyzer.analyze_file(full_path)
+                        combined_analysis["components"].extend(
+                            analysis.get("components", [])
+                        )
+                        combined_analysis["functions"].extend(
+                            analysis.get("functions", [])
+                        )
+                        combined_analysis["imports"].extend(analysis.get("imports", []))
+                        combined_analysis["edge_cases"].extend(
+                            analysis.get("edge_cases", [])
+                        )
+                        debug(
+                            "qa_loop",
+                            f"Analyzed TypeScript file {file_path}",
+                            components=len(analysis.get("components", [])),
+                            functions=len(analysis.get("functions", [])),
+                        )
+                    except Exception as e:
+                        debug_warning("qa_loop", f"Failed to analyze {file_path}: {e}")
+
+            if combined_analysis["functions"] or combined_analysis["classes"] or combined_analysis["components"]:
                 print(
-                    f"   Found {len(combined_analysis['functions'])} functions and {len(combined_analysis['classes'])} classes"
+                    f"   Found {len(combined_analysis['functions'])} functions, "
+                    f"{len(combined_analysis['classes'])} classes, and "
+                    f"{len(combined_analysis['components'])} components"
                 )
                 print("   Generating tests...")
 
