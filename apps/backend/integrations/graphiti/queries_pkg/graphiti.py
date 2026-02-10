@@ -295,13 +295,24 @@ class GraphitiMemory:
             )
             return False
 
-    async def save_pattern(self, pattern: str) -> bool:
-        """Save a code pattern to the knowledge graph."""
+    async def save_pattern(
+        self, pattern: str, category_metadata: dict | None = None
+    ) -> bool:
+        """
+        Save a code pattern to the knowledge graph.
+
+        Args:
+            pattern: Description of the code pattern
+            category_metadata: Optional dict with category, confidence, reasoning
+
+        Returns:
+            True if saved successfully
+        """
         if not await self._ensure_initialized():
             return False
 
         try:
-            result = await self._queries.add_pattern(pattern)
+            result = await self._queries.add_pattern(pattern, category_metadata)
 
             if result and self.state:
                 self.state.episode_count += 1

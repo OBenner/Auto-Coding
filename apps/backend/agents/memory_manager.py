@@ -26,6 +26,11 @@ from graphiti_config import get_graphiti_status, is_graphiti_enabled
 # Now safe since this module is named memory_manager (not memory)
 from memory import save_session_insights as save_file_based_memory
 from memory.graphiti_helpers import get_graphiti_memory
+from memory.patterns import (
+    save_detected_patterns_from_errors,
+    save_detected_patterns_from_naming,
+    save_detected_patterns_from_organization,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -739,3 +744,123 @@ async def save_session_to_graphiti(
         discoveries,
     )
     return result
+
+
+async def detect_and_save_codebase_patterns(
+    spec_dir: Path, project_dir: Path
+) -> dict[str, int]:
+    """
+    Detect and save codebase patterns using pattern detectors.
+
+    This function runs the three pattern detectors (naming, error handling, organization)
+    on the project directory and saves all detected patterns to memory.
+
+    Args:
+        spec_dir: Spec directory
+        project_dir: Project root directory
+
+    Returns:
+        Dictionary with counts of patterns saved by category:
+        {
+            "naming": 5,
+            "error-handling": 3,
+            "code-organization": 4
+        }
+    """
+    if is_debug_enabled():
+        debug(
+            "memory",
+            "Detecting and saving codebase patterns",
+            project_dir=str(project_dir),
+        )
+
+    pattern_counts = {
+        "naming": 0,
+        "error-handling": 0,
+        "code-organization": 0,
+    }
+
+    try:
+        # Import detectors
+        from analysis.analyzers.naming_detector import NamingDetector
+        from analysis.analyzers.error_pattern_detector import ErrorPatternDetector
+        from analysis.analyzers.organization_detector import OrganizationDetector
+
+        # Detect naming conventions
+        try:
+            naming_detector = NamingDetector(project_dir, {"language": "python"})
+            naming_conventions = naming_detector.detect_naming_conventions()
+            save_detected_patterns_from_naming(spec_dir, naming_conventions)
+            pattern_counts["naming"] = len(
+                [k for k, v in naming_conventions.items() if v]
+            )
+            if is_debug_enabled():
+                debug(
+                    "memory",
+                    "Naming conventions detected",
+                    count=pattern_counts["naming"],
+                )
+        except Exception as e:
+            logger.warning(f"Failed to detect naming conventions: {e}")
+            if is_debug_enabled():
+                debug_warning("memory", "Naming detection failed", error=str(e))
+
+        # Detect error handling patterns
+        try:
+            error_detector = ErrorPatternDetector(project_dir)
+            error_patterns = error_detector.detect_error_patterns()
+            save_detected_patterns_from_errors(spec_dir, error_patterns)
+            pattern_counts["error-handling"] = sum(
+                1 for v in error_patterns.values() if v
+            )
+            if is_debug_enabled():
+                debug(
+                    "memory",
+                    "Error patterns detected",
+                    count=pattern_counts["error-handling"],
+                )
+        except Exception as e:
+            logger.warning(f"Failed to detect error patterns: {e}")
+            if is_debug_enabled():
+                debug_warning("memory", "Error pattern detection failed", error=str(e))
+
+        # Detect organization patterns
+        try:
+            org_detector = OrganizationDetector(project_dir)
+            org_patterns = org_detector.detect_organization_patterns()
+            save_detected_patterns_from_organization(spec_dir, org_patterns)
+            pattern_counts["code-organization"] = sum(
+                1 for v in org_patterns.values() if v
+            )
+            if is_debug_enabled():
+                debug(
+                    "memory",
+                    "Organization patterns detected",
+                    count=pattern_counts["code-organization"],
+                )
+        except Exception as e:
+            logger.warning(f"Failed to detect organization patterns: {e}")
+            if is_debug_enabled():
+                debug_warning(
+                    "memory", "Organization detection failed", error=str(e)
+                )
+
+        total_patterns = sum(pattern_counts.values())
+        if is_debug_enabled():
+            debug_success(
+                "memory", "Pattern detection complete", total_patterns=total_patterns
+            )
+        logger.info(f"Detected and saved {total_patterns} codebase patterns")
+
+    except Exception as e:
+        logger.warning(f"Pattern detection failed: {e}")
+        if is_debug_enabled():
+            debug_error("memory", "Pattern detection failed", error=str(e))
+        capture_exception(
+            e,
+            operation="detect_and_save_codebase_patterns",
+            spec_dir=str(spec_dir),
+            project_dir=str(project_dir),
+        )
+
+    return pattern_counts
