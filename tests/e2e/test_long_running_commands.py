@@ -36,13 +36,23 @@ logger = logging.getLogger(__name__)
 @pytest.fixture
 def test_dirs():
     """Create temporary directories for testing."""
-    with tempfile.TemporaryDirectory() as tmpdir:
+    tmpdir = tempfile.mkdtemp()
+    try:
         tmpdir_path = Path(tmpdir)
         spec_dir = tmpdir_path / "spec"
         project_dir = tmpdir_path / "project"
         spec_dir.mkdir()
         project_dir.mkdir()
         yield spec_dir, project_dir
+    finally:
+        # Add delay for Windows to release file handles
+        time.sleep(0.5)
+        # Clean up with ignore_errors for Windows compatibility
+        try:
+            import shutil
+            shutil.rmtree(tmpdir, ignore_errors=True)
+        except Exception:
+            pass  # Ignore cleanup errors on Windows
 
 
 @pytest.fixture

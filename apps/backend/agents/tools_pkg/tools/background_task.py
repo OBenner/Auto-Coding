@@ -493,6 +493,9 @@ class BackgroundTaskManager:
             except Exception as e:
                 logger.error(f"Error cancelling task {task_id}: {e}")
                 return False
+            finally:
+                # Clean up process reference
+                self.processes.pop(task_id, None)
 
         # Update task state
         task["status"] = self.STATE_CANCELLED
