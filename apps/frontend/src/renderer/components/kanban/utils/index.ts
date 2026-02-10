@@ -1,4 +1,4 @@
-import type { Task } from '../../../../../shared/types';
+import type { Task } from '../../../../shared/types';
 
 export function filterTasksBySearch(tasks: Task[], searchQuery: string): Task[] {
   if (!searchQuery) {
