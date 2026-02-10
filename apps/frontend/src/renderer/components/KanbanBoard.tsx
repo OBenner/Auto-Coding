@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useCallback, useRef, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useViewState } from '../contexts/ViewStateContext';
+import { useTaskFiltering } from './kanban/hooks/useTaskFiltering';
 import {
   DndContext,
   DragOverlay,
@@ -721,6 +722,20 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
     error: undefined
   });
 
+  // Use the task filtering hook for comprehensive filtering
+  const {
+    filteredTasks: hookFilteredTasks,
+    categories,
+    priorities,
+    filters,
+    setSearchQuery,
+    setStatuses,
+    setCategories,
+    setPriorities,
+    clearFilters,
+    hasActiveFilters,
+  } = useTaskFiltering(tasks);
+
   // Calculate archived count for Done column button
   const archivedCount = useMemo(() =>
     tasks.filter(t => t.metadata?.archivedAt).length,
@@ -735,13 +750,17 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
     ).length;
   }, [columnPreferences]);
 
-  // Filter tasks based on archive status
+  // Combine hook filtering with archived status filtering
   const filteredTasks = useMemo(() => {
-    if (showArchived) {
-      return tasks; // Show all tasks including archived
+    let result = hookFilteredTasks;
+
+    // Apply archived filter on top of hook's filtering
+    if (!showArchived) {
+      result = result.filter((t) => !t.metadata?.archivedAt);
     }
-    return tasks.filter((t) => !t.metadata?.archivedAt);
-  }, [tasks, showArchived]);
+
+    return result;
+  }, [hookFilteredTasks, showArchived]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
