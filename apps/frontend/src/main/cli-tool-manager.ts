@@ -595,25 +595,19 @@ class CLIToolManager {
       }
     }
 
-    // 4. Windows Program Files
+    // 4. Windows-specific detection using 'where' command
     if (isWindows()) {
-      const windowsPaths = [
-        'C:\\Program Files\\GitHub CLI\\gh.exe',
-        'C:\\Program Files (x86)\\GitHub CLI\\gh.exe',
-      ];
-
-      for (const ghPath of windowsPaths) {
-        if (existsSync(ghPath)) {
-          const validation = this.validateGitHubCLI(ghPath);
-          if (validation.valid) {
-            return {
-              found: true,
-              path: ghPath,
-              version: validation.version,
-              source: 'system-path',
-              message: `Using Windows GitHub CLI: ${ghPath}`,
-            };
-          }
+      const whereGhPath = findWindowsExecutableViaWhere('gh', '[GitHub CLI]');
+      if (whereGhPath) {
+        const validation = this.validateGitHubCLI(whereGhPath);
+        if (validation.valid) {
+          return {
+            found: true,
+            path: whereGhPath,
+            version: validation.version,
+            source: 'windows-where',
+            message: `Using Windows GitHub CLI: ${whereGhPath}`,
+          };
         }
       }
     }
@@ -1357,27 +1351,19 @@ class CLIToolManager {
       }
     }
 
-    // 3. Homebrew Python (macOS) - simplified async version
+    // 3. Homebrew Python (macOS)
     if (isMacOS()) {
-      const homebrewPaths = [
-        '/opt/homebrew/bin/python3',
-        '/opt/homebrew/bin/python3.12',
-        '/opt/homebrew/bin/python3.11',
-        '/opt/homebrew/bin/python3.10',
-        '/usr/local/bin/python3',
-      ];
-      for (const pythonPath of homebrewPaths) {
-        if (await existsAsync(pythonPath)) {
-          const validation = await this.validatePythonAsync(pythonPath);
-          if (validation.valid) {
-            return {
-              found: true,
-              path: pythonPath,
-              version: validation.version,
-              source: 'homebrew',
-              message: `Using Homebrew Python: ${pythonPath}`,
-            };
-          }
+      const homebrewPath = this.findHomebrewPython();
+      if (homebrewPath) {
+        const validation = await this.validatePythonAsync(homebrewPath);
+        if (validation.valid) {
+          return {
+            found: true,
+            path: homebrewPath,
+            version: validation.version,
+            source: 'homebrew',
+            message: `Using Homebrew Python: ${homebrewPath}`,
+          };
         }
       }
     }
@@ -1594,25 +1580,19 @@ class CLIToolManager {
       }
     }
 
-    // 4. Windows Program Files
+    // 4. Windows-specific detection using 'where' command
     if (isWindows()) {
-      const windowsPaths = [
-        'C:\\Program Files\\GitHub CLI\\gh.exe',
-        'C:\\Program Files (x86)\\GitHub CLI\\gh.exe',
-      ];
-
-      for (const winGhPath of windowsPaths) {
-        if (await existsAsync(winGhPath)) {
-          const validation = await this.validateGitHubCLIAsync(winGhPath);
-          if (validation.valid) {
-            return {
-              found: true,
-              path: winGhPath,
-              version: validation.version,
-              source: 'system-path',
-              message: `Using Windows GitHub CLI: ${winGhPath}`,
-            };
-          }
+      const whereGhPath = await findWindowsExecutableViaWhereAsync('gh', '[GitHub CLI]');
+      if (whereGhPath) {
+        const validation = await this.validateGitHubCLIAsync(whereGhPath);
+        if (validation.valid) {
+          return {
+            found: true,
+            path: whereGhPath,
+            version: validation.version,
+            source: 'windows-where',
+            message: `Using Windows GitHub CLI: ${whereGhPath}`,
+          };
         }
       }
     }
