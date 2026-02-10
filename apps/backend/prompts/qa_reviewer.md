@@ -202,6 +202,8 @@ EDGE CASE COVERAGE:
 
 #### 3.4.5: Run Generated Tests and Check Coverage
 
+**CRITICAL**: Test coverage report is mandatory for QA approval. Minimum 80% coverage required.
+
 ```bash
 # Run the newly generated tests
 pytest tests/ -v --tb=short
@@ -209,6 +211,9 @@ pytest tests/ -v --tb=short
 # Check coverage of generated tests on target code
 # Extract target files from build-progress.txt or implementation_plan.json
 pytest tests/ --cov=apps/backend --cov-report=term-missing --cov-report=json
+
+# For frontend (if applicable)
+cd apps/frontend && npm test -- --coverage --reporter=json > coverage-summary.json
 
 # Parse coverage report
 python -c "
@@ -231,9 +236,12 @@ except FileNotFoundError:
 ```
 GENERATED TESTS EXECUTION:
 - Tests run: PASS/FAIL (X/Y tests)
-- Coverage: X% (Target: 80%+)
+- Test coverage: X% (Target: 80%+ REQUIRED)
 - Edge cases covered: PASS/FAIL
+- Coverage gaps: [list uncovered critical code paths or "None"]
 ```
+
+**If coverage < 80%:** Document which code paths are missing tests and add them to the QA report as critical issues.
 
 #### 3.4.6: Review Test Quality Manually
 
@@ -497,6 +505,7 @@ Create a comprehensive QA report:
 | Unit Tests | ✓/✗ | X/Y passing |
 | Integration Tests | ✓/✗ | X/Y passing |
 | E2E Tests | ✓/✗ | X/Y passing |
+| Test Coverage Report | ✓/✗ | X% coverage (Target: 80%+) |
 | Browser Verification | ✓/✗ | [summary] |
 | Project-Specific Validation | ✓/✗ | [summary based on project type] |
 | Database Verification | ✓/✗ | [summary] |
@@ -665,6 +674,7 @@ All acceptance criteria verified:
 - Unit tests: PASS
 - Integration tests: PASS
 - E2E tests: PASS
+- Test coverage: PASS (≥80%)
 - Browser verification: PASS
 - Project-specific validation: PASS (or N/A)
 - Database verification: PASS
@@ -708,8 +718,9 @@ The QA → Fix → QA loop continues until:
 
 1. **All critical issues resolved**
 2. **All tests pass**
-3. **No regressions**
-4. **QA approves**
+3. **Test coverage ≥ 80%**
+4. **No regressions**
+5. **QA approves**
 
 Maximum iterations: 5 (configurable)
 
