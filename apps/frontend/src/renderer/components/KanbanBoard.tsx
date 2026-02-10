@@ -724,7 +724,7 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
 
   // Use the task filtering hook for comprehensive filtering
   const {
-    filteredTasks: hookFilteredTasks,
+    filteredTasks,
     categories,
     priorities,
     filters,
@@ -751,8 +751,8 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
   }, [columnPreferences]);
 
   // Combine hook filtering with archived status filtering
-  const filteredTasks = useMemo(() => {
-    let result = hookFilteredTasks;
+  const visibleTasks = useMemo(() => {
+    let result = filteredTasks;
 
     // Apply archived filter on top of hook's filtering
     if (!showArchived) {
@@ -760,7 +760,7 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
     }
 
     return result;
-  }, [hookFilteredTasks, showArchived]);
+  }, [filteredTasks, showArchived]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -788,7 +788,7 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
       done: []
     };
 
-    filteredTasks.forEach((task) => {
+    visibleTasks.forEach((task) => {
       // Map pr_created tasks to the done column, error tasks to human_review
       const targetColumn = getVisualColumn(task.status);
       if (grouped[targetColumn]) {
@@ -840,7 +840,7 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
     });
 
     return grouped;
-  }, [filteredTasks, taskOrder]);
+  }, [visibleTasks, taskOrder]);
 
   // Prune stale IDs when tasks move out of human_review column
   useEffect(() => {
