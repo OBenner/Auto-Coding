@@ -16,6 +16,7 @@ from .graphiti_integration import fetch_graph_hints, is_graphiti_enabled
 from .keyword_extractor import KeywordExtractor
 from .models import FileMatch, TaskContext
 from .pattern_discovery import PatternDiscoverer
+from .priority_manager import PriorityManager
 from .redundancy_detector import RedundancyDetector
 from .search import CodeSearcher
 from .semantic_scorer import SemanticScorer
@@ -47,6 +48,7 @@ class ContextBuilder:
         self.redundancy_detector = RedundancyDetector(
             self.project_dir, token_estimator=self.token_estimator
         )
+        self.priority_manager = PriorityManager(self.project_dir)
 
     def _load_project_index(self) -> dict:
         """Load project index from file or create new one (.auto-claude is the installed instance)."""
@@ -165,6 +167,19 @@ class ContextBuilder:
             # Load or generate service context
             service_contexts[service_name] = self._get_service_context(
                 service_path, service_name, service_info
+            )
+
+        # Apply user priorities to filter and sort matches
+        all_matches = self.priority_manager.apply_priorities(
+            all_matches,
+            exclude_never=True,
+            sort=True
+        )
+
+        # Log priority application
+        if all_matches:
+            logger.debug(
+                f"Applied user priorities to {len(all_matches)} files"
             )
 
         # Categorize matches
@@ -288,6 +303,19 @@ class ContextBuilder:
             # Load or generate service context
             service_contexts[service_name] = self._get_service_context(
                 service_path, service_name, service_info
+            )
+
+        # Apply user priorities to filter and sort matches
+        all_matches = self.priority_manager.apply_priorities(
+            all_matches,
+            exclude_never=True,
+            sort=True
+        )
+
+        # Log priority application
+        if all_matches:
+            logger.debug(
+                f"Applied user priorities to {len(all_matches)} files"
             )
 
         # Categorize matches
