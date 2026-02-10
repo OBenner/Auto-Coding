@@ -1,0 +1,62 @@
+{
+  "title": "Webhooks",
+  "description": "Configure webhook integrations for agent lifecycle events",
+  "tabs": {
+    "webhooks": "Webhooks",
+    "history": "Delivery History",
+    "stats": "Statistics"
+  },
+  "status": {
+    "enabled": "Enabled",
+    "disabled": "Disabled"
+  },
+  "buttons": {
+    "addWebhook": "Add Webhook"
+  },
+  "empty": {
+    "title": "No webhooks configured",
+    "description": "Create your first webhook to receive notifications about agent lifecycle events."
+  },
+  "error": {
+    "title": "Failed to load webhooks"
+  },
+  "confirmDelete": "Are you sure you want to delete this webhook? This action cannot be undone.",
+  "dialog": {
+    "createTitle": "Create Webhook",
+    "createDescription": "Configure a new webhook endpoint to receive notifications",
+    "editTitle": "Edit Webhook",
+    "editDescription": "Update webhook configuration"
+  },
+  "form": {
+    "name": "Name",
+    "namePlaceholder": "My Slack Webhook",
+    "url": "Webhook URL",
+    "secret": "Secret (Optional)",
+    "secretPlaceholder": "Enter secret for signature verification",
+    "secretHint": "Used to verify webhook signatures. Leave empty if not needed.",
+    "template": "Template",
+    "events": "Events",
+    "enabled": "Enable this webhook"
+  },
+  "events": {
+    "all": "All Events"
+  },
+  "test": {
+    "success": "Test Successful",
+    "failed": "Test Failed"
+  },
+  "history": {
+    "title": "Delivery History",
+    "description": "View recent webhook delivery attempts and their status."
+  },
+  "stats": {
+    "title": "Statistics",
+    "description": "View webhook delivery statistics and success rates."
+  },
+  "errors": {
+    "nameRequired": "Name is required",
+    "urlRequired": "URL is required",
+    "urlInvalid": "Please enter a valid URL",
+    "eventsRequired": "At least one event must be selected"
+  }
+}

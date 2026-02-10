@@ -11,6 +11,7 @@
     "ideation": "Ideation",
     "changelog": "Changelog",
     "context": "Context",
+    "webhooks": "Webhooks",
     "githubIssues": "GitHub Issues",
     "githubPRs": "GitHub PRs",
     "gitlabIssues": "GitLab Issues",

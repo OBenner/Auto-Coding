@@ -1,0 +1,62 @@
+{
+  "title": "Webhooks",
+  "description": "Configurer les intégrations webhook pour les événements du cycle de vie de l'agent",
+  "tabs": {
+    "webhooks": "Webhooks",
+    "history": "Historique de livraison",
+    "stats": "Statistiques"
+  },
+  "status": {
+    "enabled": "Activé",
+    "disabled": "Désactivé"
+  },
+  "buttons": {
+    "addWebhook": "Ajouter un webhook"
+  },
+  "empty": {
+    "title": "Aucun webhook configuré",
+    "description": "Créez votre premier webhook pour recevoir des notifications sur les événements du cycle de vie de l'agent."
+  },
+  "error": {
+    "title": "Échec du chargement des webhooks"
+  },
+  "confirmDelete": "Êtes-vous sûr de vouloir supprimer ce webhook ? Cette action ne peut pas être annulée.",
+  "dialog": {
+    "createTitle": "Créer un webhook",
+    "createDescription": "Configurer un nouveau point de terminaison webhook pour recevoir des notifications",
+    "editTitle": "Modifier le webhook",
+    "editDescription": "Mettre à jour la configuration du webhook"
+  },
+  "form": {
+    "name": "Nom",
+    "namePlaceholder": "Mon Webhook Slack",
+    "url": "URL du webhook",
+    "secret": "Secret (facultatif)",
+    "secretPlaceholder": "Entrez le secret pour la vérification de signature",
+    "secretHint": "Utilisé pour vérifier les signatures webhook. Laissez vide si non nécessaire.",
+    "template": "Modèle",
+    "events": "Événements",
+    "enabled": "Activer ce webhook"
+  },
+  "events": {
+    "all": "Tous les événements"
+  },
+  "test": {
+    "success": "Test réussi",
+    "failed": "Test échoué"
+  },
+  "history": {
+    "title": "Historique de livraison",
+    "description": "Voir les tentatives de livraison webhook récentes et leur statut."
+  },
+  "stats": {
+    "title": "Statistiques",
+    "description": "Voir les statistiques de livraison webhook et les taux de réussite."
+  },
+  "errors": {
+    "nameRequired": "Le nom est requis",
+    "urlRequired": "L'URL est requise",
+    "urlInvalid": "Veuillez entrer une URL valide",
+    "eventsRequired": "Au moins un événement doit être sélectionné"
+  }
+}
