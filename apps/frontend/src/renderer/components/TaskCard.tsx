@@ -51,6 +51,71 @@ const CategoryIcon: Record<TaskCategory, typeof Zap> = {
 // Defined outside component to avoid recreation on every render
 const STUCK_CHECK_SKIP_PHASES = ['complete', 'failed', 'planning'] as const;
 
+/**
+ * Badge priority constants for TaskCard badge consolidation
+ *
+ * Priority badges are shown by default (critical information)
+ * Secondary badges are hidden in expandable metadata section (less critical)
+ */
+const BADGE_PRIORITY = {
+  PRIORITY: 'priority' as const,
+  SECONDARY: 'secondary' as const
+};
+
+/**
+ * Badge type classification for grouping
+ * Maps badge types to their display priority
+ */
+const BADGE_TYPE_PRIORITY = {
+  // Priority badges (always visible)
+  stuck: BADGE_PRIORITY.PRIORITY,
+  incomplete: BADGE_PRIORITY.PRIORITY,
+  archived: BADGE_PRIORITY.PRIORITY,
+  executionPhase: BADGE_PRIORITY.PRIORITY,
+  status: BADGE_PRIORITY.PRIORITY,
+  reviewReason: BADGE_PRIORITY.PRIORITY,
+  impact: BADGE_PRIORITY.PRIORITY,
+  priority: BADGE_PRIORITY.PRIORITY,
+  securitySeverity: BADGE_PRIORITY.PRIORITY,
+
+  // Secondary badges (hidden by default, shown in expandable)
+  category: BADGE_PRIORITY.SECONDARY,
+  complexity: BADGE_PRIORITY.SECONDARY
+} as const;
+
+/**
+ * Helper function to determine if a badge should be shown by default
+ */
+function isBadgePriority(badgeType: keyof typeof BADGE_TYPE_PRIORITY): boolean {
+  return BADGE_TYPE_PRIORITY[badgeType] === BADGE_PRIORITY.PRIORITY;
+}
+
+/**
+ * Badge grouping logic - separates badges into priority and secondary groups
+ */
+interface BadgeGroup {
+  priority: string[];
+  secondary: string[];
+}
+
+function groupBadgesByPriority(badges: { type: keyof typeof BADGE_TYPE_PRIORITY; visible: boolean }[]): BadgeGroup {
+  return badges.reduce<BadgeGroup>(
+    (groups, badge) => {
+      if (!badge.visible) return groups;
+
+      const isPriority = isBadgePriority(badge.type);
+      if (isPriority) {
+        groups.priority.push(badge.type);
+      } else {
+        groups.secondary.push(badge.type);
+      }
+
+      return groups;
+    },
+    { priority: [], secondary: [] }
+  );
+}
+
 function shouldSkipStuckCheck(phase: string | undefined): boolean {
   return STUCK_CHECK_SKIP_PHASES.includes(phase as typeof STUCK_CHECK_SKIP_PHASES[number]);
 }
