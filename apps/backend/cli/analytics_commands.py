@@ -8,7 +8,9 @@ CLI commands for viewing productivity analytics and metrics across all specs
 import sys
 from pathlib import Path
 
-# Ensure parent directory is in path for imports (before other imports)
+# Add apps/backend/ to sys.path so that sibling packages (analysis/, ui/, etc.)
+# can be imported when this module is loaded via relative imports from cli/.
+# This is the established pattern across all CLI modules in this project.
 _PARENT_DIR = Path(__file__).parent.parent
 if str(_PARENT_DIR) not in sys.path:
     sys.path.insert(0, str(_PARENT_DIR))

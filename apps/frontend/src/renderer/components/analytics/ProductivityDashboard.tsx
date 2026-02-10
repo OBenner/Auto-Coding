@@ -343,7 +343,7 @@ export function ProductivityDashboard({ projectId }: ProductivityDashboardProps)
           )}
 
           {/* Empty State */}
-          {!summary || summary.total_specs === 0 && (
+          {(!summary || summary.total_specs === 0) && (
             <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
               <BarChart3 className="h-16 w-16 mb-4 opacity-50" />
               <p className="text-lg font-medium">No productivity data available</p>

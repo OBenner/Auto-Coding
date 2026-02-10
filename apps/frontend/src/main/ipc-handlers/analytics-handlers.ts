@@ -11,6 +11,9 @@ import path from 'path';
 import { projectStore } from '../project-store';
 import { debugError } from '../../shared/utils/debug-logger';
 import { spawn } from 'child_process';
+import { parsePythonCommand } from '../python-detector';
+import { getConfiguredPythonPath } from '../python-env-manager';
+import { getAugmentedEnv } from '../env-utils';
 
 /**
  * Helper to check if a file exists asynchronously
@@ -33,7 +36,8 @@ async function executePythonAnalytics(
   args: string[] = []
 ): Promise<any> {
   return new Promise((resolve, reject) => {
-    const pythonPath = process.platform === 'win32' ? 'python' : 'python3';
+    const pythonCmd = getConfiguredPythonPath();
+    const [pythonCommand, pythonBaseArgs] = parsePythonCommand(pythonCmd);
     const scriptPath = path.join(
       projectPath,
       'apps',
@@ -42,9 +46,9 @@ async function executePythonAnalytics(
       scriptName
     );
 
-    const proc = spawn(pythonPath, [scriptPath, ...args], {
+    const proc = spawn(pythonCommand, [...pythonBaseArgs, scriptPath, ...args], {
       cwd: projectPath,
-      env: { ...process.env, PYTHONPATH: path.join(projectPath, 'apps', 'backend') },
+      env: getAugmentedEnv(),
     });
 
     let stdout = '';
