@@ -1,0 +1,84 @@
+{
+  "title": "Paramètres",
+  "sections": {
+    "general": "Général",
+    "api": "Configuration de l'API",
+    "authentication": "Authentification",
+    "appearance": "Apparence",
+    "advanced": "Avancé"
+  },
+  "general": {
+    "language": "Langue",
+    "languageDescription": "Sélectionnez votre langue préférée",
+    "theme": "Thème",
+    "themeOptions": {
+      "light": "Clair",
+      "dark": "Sombre",
+      "system": "Système"
+    },
+    "notifications": "Notifications",
+    "notificationsDescription": "Activer les notifications de bureau pour les mises à jour de tâches"
+  },
+  "api": {
+    "title": "Configuration de l'API",
+    "description": "Configurer la connexion au backend Auto-Coding",
+    "apiUrl": "URL de l'API",
+    "apiUrlPlaceholder": "http://localhost:8000",
+    "apiUrlDescription": "URL du point de terminaison de l'API backend",
+    "wsUrl": "URL WebSocket",
+    "wsUrlPlaceholder": "ws://localhost:8000/ws",
+    "wsUrlDescription": "Point de terminaison WebSocket pour les mises à jour en temps réel",
+    "timeout": "Délai d'expiration de la requête",
+    "timeoutDescription": "Temps maximal d'attente des réponses de l'API (secondes)",
+    "testConnection": "Tester la connexion",
+    "connectionSuccess": "Connexion réussie",
+    "connectionFailed": "Échec de la connexion"
+  },
+  "authentication": {
+    "title": "Authentification",
+    "description": "Gérer vos identifiants d'authentification",
+    "token": "Jeton d'accès",
+    "tokenPlaceholder": "Entrez votre jeton d'accès",
+    "tokenDescription": "Jeton pour l'authentification des requêtes API",
+    "verifyToken": "Vérifier le jeton",
+    "tokenValid": "Le jeton est valide",
+    "tokenInvalid": "Le jeton n'est pas valide",
+    "clearToken": "Effacer le jeton",
+    "status": "Statut d'authentification",
+    "authenticated": "Authentifié",
+    "notAuthenticated": "Non authentifié"
+  },
+  "appearance": {
+    "title": "Apparence",
+    "description": "Personnaliser l'apparence",
+    "compactMode": "Mode compact",
+    "compactModeDescription": "Utiliser une mise en page d'interface utilisateur plus condensée",
+    "animations": "Animations",
+    "animationsDescription": "Activer les animations et transitions de l'interface utilisateur"
+  },
+  "advanced": {
+    "title": "Paramètres avancés",
+    "description": "Options de configuration avancées",
+    "debugMode": "Mode débogage",
+    "debugModeDescription": "Activer la journalisation détaillée dans la console",
+    "autoReconnect": "Reconnexion automatique",
+    "autoReconnectDescription": "Reconnecter automatiquement WebSocket lors de la déconnexion",
+    "cacheEnabled": "Activer la mise en cache",
+    "cacheEnabledDescription": "Mettre en cache les réponses de l'API pour un chargement plus rapide",
+    "clearCache": "Effacer le cache",
+    "cacheCleared": "Cache effacé avec succès"
+  },
+  "buttons": {
+    "save": "Enregistrer les paramètres",
+    "cancel": "Annuler",
+    "reset": "Réinitialiser aux valeurs par défaut",
+    "apply": "Appliquer"
+  },
+  "messages": {
+    "saveSuccess": "Paramètres enregistrés avec succès",
+    "saveFailed": "Échec de l'enregistrement des paramètres",
+    "resetConfirm": "Êtes-vous sûr de vouloir réinitialiser tous les paramètres aux valeurs par défaut ?",
+    "resetSuccess": "Paramètres réinitialisés aux valeurs par défaut",
+    "unsavedChanges": "Vous avez des modifications non enregistrées. Êtes-vous sûr de vouloir quitter ?"
+  }
+}
