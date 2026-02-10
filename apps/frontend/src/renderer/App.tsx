@@ -60,6 +60,8 @@ import { useTaskStore, loadTasks } from './stores/task-store';
 import { useSettingsStore, loadSettings, loadProfiles, saveSettings } from './stores/settings-store';
 import { useClaudeProfileStore } from './stores/claude-profile-store';
 import { useTerminalStore, restoreTerminalSessions } from './stores/terminal-store';
+import { useQuickActionsStore } from './stores/quick-actions-store';
+import { canRepeatAction, getActionLabel, getTimeAgo } from './stores/quick-actions-store';
 import { initializeGitHubListeners } from './stores/github';
 import { initDownloadProgressListener } from './stores/download-store';
 import { GlobalDownloadIndicator } from './components/GlobalDownloadIndicator';
@@ -167,6 +169,9 @@ export function App() {
 
   // Command palette state
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+
+  // Quick actions store
+  const recentActions = useQuickActionsStore((state) => state.recentActions);
 
   // Setup drag sensors
   const sensors = useSensors(
@@ -880,6 +885,46 @@ export function App() {
     }
   ], [setIsNewTaskDialogOpen, setIsSettingsDialogOpen, setActiveView, handleAddProject]);
 
+  // Convert recent actions to command actions
+  const recentCommandActions = useMemo<CommandAction[]>(() => {
+    return recentActions
+      .filter(canRepeatAction)
+      .map((action) => ({
+        id: `recent-${action.id}`,
+        label: getActionLabel(action),
+        description: `Quick action performed ${getTimeAgo(action.timestamp)}`,
+        icon: null,
+        onSelect: () => {
+          // TODO: Implement action replay functionality
+          console.log('[CommandPalette] Replay action:', action);
+        },
+        keywords: ['recent', 'quick', 'repeat', action.type, action.label]
+      }));
+  }, [recentActions]);
+
+  // Command groups with recent actions and general commands
+  const commandGroups = useMemo(() => {
+    const groups = [];
+
+    // Add recent actions group if there are any
+    if (recentCommandActions.length > 0) {
+      groups.push({
+        id: 'recent-actions',
+        label: 'Recent Actions',
+        commands: recentCommandActions
+      });
+    }
+
+    // Add general commands group
+    groups.push({
+      id: 'general',
+      label: 'General',
+      commands: commandActions
+    });
+
+    return groups;
+  }, [recentCommandActions, commandActions]);
+
   return (
     <ViewStateProvider>
       <TooltipProvider>
@@ -1236,7 +1281,7 @@ export function App() {
         <CommandPalette
           open={isCommandPaletteOpen}
           onOpenChange={setIsCommandPaletteOpen}
-          commands={commandActions}
+          commandGroups={commandGroups}
         />
 
         {/* Toast notifications */}
