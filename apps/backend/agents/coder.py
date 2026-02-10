@@ -116,11 +116,11 @@ def _display_context_window_usage(
 
     for file_path in pattern_files:
         content = context["patterns"][file_path]
-        pattern_tokens += token_estimator.estimate_tokens(content)
+        pattern_tokens += token_estimator.count_tokens(content)
 
     for file_path in files_to_modify:
         content = context["files_to_modify"][file_path]
-        modify_tokens += token_estimator.estimate_tokens(content)
+        modify_tokens += token_estimator.count_tokens(content)
 
     total_tokens = pattern_tokens + modify_tokens
 
