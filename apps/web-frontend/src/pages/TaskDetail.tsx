@@ -7,12 +7,12 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ArrowLeft, RefreshCw, AlertCircle, CheckCircle2, Circle, Loader2 } from 'lucide-react';
+import { ArrowLeft, RefreshCw, AlertCircle } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Card, CardContent } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { ScrollArea } from '../components/ui/scroll-area';
-import { Separator } from '../components/ui/separator';
+import { BuildProgress } from '../components/BuildProgress';
 import { apiClient } from '../api/client';
 import type { TaskDetail as TaskDetailType } from '../api/types';
 
@@ -22,7 +22,7 @@ interface TaskDetailProps {
 }
 
 export function TaskDetail({ taskId, onBack }: TaskDetailProps) {
-  const { t } = useTranslation(['common']);
+  const { t } = useTranslation(['common', 'tasks']);
   const [task, setTask] = useState<TaskDetailType | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -86,11 +86,11 @@ export function TaskDetail({ taskId, onBack }: TaskDetailProps) {
           <div className="flex gap-2 justify-center">
             <Button onClick={onBack} variant="outline">
               <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to Tasks
+              {t('common:buttons.back')}
             </Button>
             <Button onClick={handleRefresh}>
               <RefreshCw className="h-4 w-4 mr-2" />
-              Try Again
+              {t('common:buttons.retry')}
             </Button>
           </div>
         </div>
@@ -121,18 +121,18 @@ export function TaskDetail({ taskId, onBack }: TaskDetailProps) {
             variant="outline"
           >
             <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
-            Refresh
+            {t('common:buttons.refresh')}
           </Button>
         </div>
 
         <div className="grid gap-6">
-          {/* Status and Progress Card */}
+          {/* Status Card */}
           <Card>
             <CardContent className="space-y-4 pt-6">
-              <h3 className="text-lg font-semibold mb-4">Status & Progress</h3>
+              <h3 className="text-lg font-semibold mb-4">{t('common:labels.status')}</h3>
               <div className="flex items-center gap-4">
                 <div>
-                  <p className="text-sm text-gray-600 mb-1">Status</p>
+                  <p className="text-sm text-gray-600 mb-1">{t('tasks:labels.status')}</p>
                   <Badge variant="outline" className="text-sm">
                     {task.status}
                   </Badge>
@@ -146,50 +146,20 @@ export function TaskDetail({ taskId, onBack }: TaskDetailProps) {
                   </div>
                 )}
               </div>
-
-              <Separator />
-
-              {/* Progress Bar */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-600">Overall Progress</span>
-                  <span className="font-semibold">
-                    {task.progress.percentage}%
-                  </span>
-                </div>
-                <div className="h-3 bg-gray-200 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-blue-600 transition-all duration-300"
-                    style={{ width: `${task.progress.percentage}%` }}
-                  />
-                </div>
-                <div className="grid grid-cols-4 gap-2 text-xs text-gray-600">
-                  <div className="flex items-center gap-1">
-                    <CheckCircle2 className="h-3 w-3 text-green-600" />
-                    <span>{task.progress.completed} completed</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <Loader2 className="h-3 w-3 text-blue-600" />
-                    <span>{task.progress.in_progress} in progress</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <Circle className="h-3 w-3 text-gray-400" />
-                    <span>{task.progress.pending} pending</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <AlertCircle className="h-3 w-3 text-red-600" />
-                    <span>{task.progress.failed} failed</span>
-                  </div>
-                </div>
-              </div>
             </CardContent>
           </Card>
+
+          {/* Build Progress Card */}
+          <BuildProgress
+            taskId={task.number}
+            progress={task.progress}
+          />
 
           {/* Spec Content Card */}
           {task.spec_content && (
             <Card>
               <CardContent className="pt-6">
-                <h3 className="text-lg font-semibold mb-4">Specification</h3>
+                <h3 className="text-lg font-semibold mb-4">{t('common:specs')}</h3>
                 <ScrollArea className="h-[400px] w-full rounded-md border p-4">
                   <pre className="text-sm font-mono whitespace-pre-wrap">
                     {task.spec_content}
@@ -202,7 +172,7 @@ export function TaskDetail({ taskId, onBack }: TaskDetailProps) {
           {/* Folder Location Card */}
           <Card>
             <CardContent className="pt-6">
-              <h3 className="text-lg font-semibold mb-4">Location</h3>
+              <h3 className="text-lg font-semibold mb-4">{t('common:labels.location', 'Location')}</h3>
               <div className="flex items-center gap-2">
                 <code className="text-sm bg-gray-100 px-3 py-1 rounded">
                   {task.folder}
