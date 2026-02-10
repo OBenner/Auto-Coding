@@ -238,9 +238,9 @@ export function TaskProgress({ taskId, onClose }: TaskProgressProps) {
       case 'completed':
         return t('tasks:status.complete');
       case 'failed':
-        return 'Failed';
+        return t('tasks:labels.failed');
       case 'cancelled':
-        return 'Cancelled';
+        return t('tasks:labels.cancelled');
       case 'pending':
       default:
         return t('tasks:labels.pending');

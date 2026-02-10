@@ -34,7 +34,9 @@
     "incomplete": "Incomplete",
     "recovering": "Recovering...",
     "needsRecovery": "Needs Recovery",
-    "needsResume": "Needs Resume"
+    "needsResume": "Needs Resume",
+    "failed": "Failed",
+    "cancelled": "Cancelled"
   },
   "reviewReason": {
     "completed": "Completed",
