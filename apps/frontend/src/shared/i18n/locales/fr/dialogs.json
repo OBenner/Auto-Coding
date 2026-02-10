@@ -180,5 +180,9 @@
     "step3": "Cliquez sur « Réauthentifier » sur votre profil",
     "gotIt": "Compris",
     "goToSettings": "Aller aux paramètres"
+  },
+  "deleteConversation": {
+    "title": "Supprimer la conversation ?",
+    "description": "Ceci supprimera définitivement cette conversation et tous ses messages. Cette action est irréversible."
   }
 }

@@ -704,5 +704,15 @@
     "graphView": "Graph View",
     "deleteMemory": "Delete Memory",
     "exportMemories": "Export Memories"
+  },
+  "chatHistory": {
+    "title": "Chat History",
+    "noConversations": "No conversations yet",
+    "rename": "Rename",
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "daysAgo": "{{count}} days ago",
+    "message": "{{count}} message",
+    "message_plural": "{{count}} messages"
   }
 }
