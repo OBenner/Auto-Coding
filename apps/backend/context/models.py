@@ -34,3 +34,6 @@ class TaskContext:
         default_factory=list
     )  # Historical hints from Graphiti
     total_estimated_tokens: int = 0  # Total estimated tokens for the context
+    selection_reasoning: list[str] = field(
+        default_factory=list
+    )  # Explanation of why files/services were selected
