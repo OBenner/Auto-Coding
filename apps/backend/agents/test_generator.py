@@ -2,7 +2,11 @@
 Test Generator Agent Module
 ============================
 
-AI agent that generates pytest tests based on code analysis results.
+AI agent that generates tests based on code analysis results.
+Supports multiple test frameworks:
+- pytest for Python code
+- Vitest for TypeScript/React code
+
 Uses the Test Generator Agent prompt to create comprehensive test coverage.
 """
 
@@ -26,7 +30,49 @@ from ui import (
     print_status,
 )
 
+# Import framework-specific generators
+from .vitest_generator import generate_vitest_tests
+
 logger = logging.getLogger(__name__)
+
+
+def detect_test_framework(analysis_results: dict[str, Any]) -> str:
+    """
+    Detect which test framework to use based on analysis results.
+
+    Args:
+        analysis_results: Code analysis results from CodeAnalyzer or TypeScriptAnalyzer
+
+    Returns:
+        "pytest" for Python code, "vitest" for TypeScript/React code
+    """
+    # Check for TypeScript/React indicators
+    has_components = "components" in analysis_results and analysis_results.get(
+        "components"
+    )
+    has_hooks = "hooks" in analysis_results and analysis_results.get("hooks")
+    has_tsx_files = any(
+        str(f).endswith((".tsx", ".ts"))
+        for f in analysis_results.get("analyzed_files", [])
+    )
+
+    # Check for Python indicators
+    has_classes = "classes" in analysis_results and analysis_results.get("classes")
+    has_py_files = any(
+        str(f).endswith(".py") for f in analysis_results.get("analyzed_files", [])
+    )
+
+    # Decision logic
+    if has_components or has_hooks or has_tsx_files:
+        return "vitest"
+    elif has_classes or has_py_files:
+        return "pytest"
+    else:
+        # Default to pytest if unclear
+        logger.warning(
+            "Could not determine test framework from analysis results, defaulting to pytest"
+        )
+        return "pytest"
 
 
 def validate_generated_tests(test_files: list[Path], project_dir: Path) -> bool:
@@ -101,12 +147,15 @@ async def run_test_generator_session(
     verbose: bool = False,
 ) -> dict[str, Any]:
     """
-    Run Test Generator Agent session to generate pytest tests.
+    Run Test Generator Agent session to generate tests for analyzed code.
+
+    Automatically detects the appropriate test framework (pytest or vitest)
+    based on the code analysis results and routes to the corresponding generator.
 
     Args:
         project_dir: Root directory for the project
         spec_dir: Directory containing the spec
-        analysis_results: Code analysis results from CodeAnalyzer
+        analysis_results: Code analysis results from CodeAnalyzer or TypeScriptAnalyzer
         model: Claude model to use (defaults to phase config)
         max_thinking_tokens: Extended thinking token budget (optional)
         verbose: Whether to show detailed output
@@ -116,7 +165,29 @@ async def run_test_generator_session(
         - generated_files: List of generated test file paths (relative to project_dir)
         - success: Whether generation succeeded
         - error: Error message if failed
+        - framework: Test framework used ("pytest" or "vitest")
     """
+    # Detect which test framework to use
+    framework = detect_test_framework(analysis_results)
+    logger.info(f"Detected test framework: {framework}")
+
+    # Route to the appropriate generator
+    if framework == "vitest":
+        logger.info("Routing to Vitest generator for TypeScript/React tests")
+        result = await generate_vitest_tests(
+            project_dir=project_dir,
+            spec_dir=spec_dir,
+            analysis_results=analysis_results,
+            model=model,
+            max_thinking_tokens=max_thinking_tokens,
+            verbose=verbose,
+        )
+        result["framework"] = "vitest"
+        return result
+
+    # Default to pytest for Python tests
+    logger.info("Routing to pytest generator for Python tests")
+
     # Initialize task logger
     task_logger = get_task_logger(spec_dir)
 
@@ -279,4 +350,5 @@ Begin by loading context (Phase 0 in your prompt).
         "generated_files": [str(f) for f in test_files],
         "success": validation_success,
         "error": None if validation_success else "Test validation failed",
+        "framework": "pytest",
     }
