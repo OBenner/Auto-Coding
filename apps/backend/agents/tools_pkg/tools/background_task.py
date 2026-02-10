@@ -295,6 +295,8 @@ class BackgroundTaskManager:
                     logger.warning(
                         f"Task {task_id} failed with exit code {process.returncode}"
                     )
+                    # Capture error context for failed tasks
+                    self._capture_error_context(task_id)
 
             except asyncio.TimeoutError:
                 # Timeout occurred
@@ -302,6 +304,9 @@ class BackgroundTaskManager:
                 task["error"] = f"Command timed out after {timeout} seconds"
                 task["completed_at"] = datetime.now(UTC).isoformat()
                 logger.error(f"Task {task_id} timed out after {timeout} seconds")
+
+                # Capture error context for timeout
+                self._capture_error_context(task_id)
 
                 # Try to terminate process gracefully
                 try:
@@ -319,6 +324,8 @@ class BackgroundTaskManager:
             task["error"] = f"Execution error: {str(e)}"
             task["completed_at"] = datetime.now(UTC).isoformat()
             logger.error(f"Task {task_id} failed with error: {e}", exc_info=True)
+            # Capture error context for execution errors
+            self._capture_error_context(task_id)
 
         finally:
             # Clean up process reference
@@ -427,6 +434,31 @@ class BackgroundTaskManager:
             "exit_code": task.get("exit_code"),
         }
 
+    def get_error_context(self, task_id: str) -> dict[str, Any] | None:
+        """
+        Get error context from a failed task.
+
+        Args:
+            task_id: Task identifier
+
+        Returns:
+            Dict with error context or None if not found/not failed
+        """
+        # Try to load from disk if not in memory
+        if task_id not in self.tasks:
+            self._load_task_state(task_id)
+
+        if task_id not in self.tasks:
+            return None
+
+        task = self.tasks[task_id]
+
+        # If task failed but no error context captured yet, capture it now
+        if task["status"] == self.STATE_FAILED and "error_context" not in task:
+            return self._capture_error_context(task_id)
+
+        return task.get("error_context")
+
     async def cancel_task(self, task_id: str) -> bool:
         """
         Cancel a running task.
@@ -498,6 +530,123 @@ class BackgroundTaskManager:
 
         return tasks
 
+    def _classify_error(self, error_msg: str, output: str) -> str:
+        """
+        Classify error type from error message and output.
+
+        Args:
+            error_msg: Error message
+            output: Command output
+
+        Returns:
+            Error type classification
+        """
+        combined = f"{error_msg} {output}".lower()
+
+        # Timeout errors (check first - most specific)
+        if "timed out" in error_msg.lower() or "timeout" in error_msg.lower():
+            return "timeout"
+
+        # Memory errors
+        memory_indicators = ["out of memory", "oom", "memory error", "cannot allocate"]
+        if any(indicator in combined for indicator in memory_indicators):
+            return "memory"
+
+        # Build/compilation errors (check before test failures to avoid false positives)
+        build_indicators = [
+            "syntax error",
+            "syntaxerror",
+            "compilation error",
+            "parse error",
+            "parseerror",
+            "build failed",
+            "unexpected token",
+        ]
+        if any(indicator in combined for indicator in build_indicators):
+            return "build_error"
+
+        # Command not found / missing dependencies
+        missing_indicators = [
+            "command not found",
+            "not found",
+            "no such file",
+            "cannot find",
+            "modulenotfounderror",
+            "module not found",
+        ]
+        if any(indicator in combined for indicator in missing_indicators):
+            return "command_not_found"
+
+        # Permission errors
+        permission_indicators = [
+            "permission denied",
+            "eacces",
+            "access denied",
+            "not permitted",
+        ]
+        if any(indicator in combined for indicator in permission_indicators):
+            return "permission_denied"
+
+        # Network errors
+        network_indicators = [
+            "network error",
+            "connection refused",
+            "connection timeout",
+            "unreachable",
+            "dns",
+        ]
+        if any(indicator in combined for indicator in network_indicators):
+            return "network"
+
+        # Test failures (check after build errors)
+        test_indicators = ["test failed", "assertion", "assertion error"]
+        if any(indicator in combined for indicator in test_indicators):
+            return "test_failed"
+
+        return "unknown"
+
+    def _capture_error_context(self, task_id: str) -> dict[str, Any]:
+        """
+        Capture error context from a failed task.
+
+        Args:
+            task_id: Task identifier
+
+        Returns:
+            Dict with error context information
+        """
+        if task_id not in self.tasks:
+            return {}
+
+        task = self.tasks[task_id]
+        error_msg = task.get("error", "")
+        output = task.get("output", "")
+
+        # Classify the error
+        error_type = self._classify_error(error_msg, output)
+
+        # Extract relevant output snippets (last 20 lines or less)
+        output_lines = output.split("\n") if output else []
+        relevant_output = "\n".join(output_lines[-20:]) if output_lines else ""
+
+        # Build error context
+        error_context = {
+            "error_type": error_type,
+            "error_message": error_msg,
+            "exit_code": task.get("exit_code"),
+            "relevant_output": relevant_output,
+            "timeout_used": task.get("timeout"),
+            "memory_stats": task.get("memory_stats"),
+            "retry_suggestion": self.get_retry_suggestion(error_type),
+            "captured_at": datetime.now(UTC).isoformat(),
+        }
+
+        # Store error context in task
+        task["error_context"] = error_context
+        self._save_task_state(task_id)
+
+        return error_context
+
     @staticmethod
     def get_retry_suggestion(error_type: str) -> str:
         """
@@ -515,6 +664,8 @@ class BackgroundTaskManager:
             "command_not_found": "install_dependencies",
             "permission_denied": "check_permissions",
             "network": "check_network",
+            "build_error": "fix_syntax_or_compilation",
+            "test_failed": "review_test_failures",
         }
 
         return suggestions.get(error_type, "retry")
