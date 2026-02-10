@@ -148,9 +148,10 @@ export function GitHubIssues({ onOpenSettings, onNavigateToTask }: GitHubIssuesP
         // Navigate to the newly created task if available
         if (result.data?.imported && result.data.imported > 0) {
           // Optionally navigate to tasks view or show success message
-          console.log(`Spec created for issue #${issue.number}`);
+          // TODO: Add toast notification for successful spec creation
         }
       } else {
+        // TODO: Show error toast to user
         console.error('Failed to create spec:', result.error);
       }
     } catch (error) {
