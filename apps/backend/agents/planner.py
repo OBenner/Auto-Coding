@@ -113,10 +113,6 @@ async def run_followup_planner(
         scan_result = scanner.scan(
             project_dir=project_dir,
             spec_dir=spec_dir,
-            run_security=True,
-            run_performance=True,
-            run_breaking_changes=False,  # No old version available for followup
-            run_architecture=True,
         )
 
         # Log scan summary
