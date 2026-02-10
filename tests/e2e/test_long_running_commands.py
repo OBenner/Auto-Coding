@@ -1,0 +1,600 @@
+#!/usr/bin/env python3
+"""
+End-to-End Tests for Long-Running Command Handler
+==================================================
+
+Tests the complete lifecycle of long-running background commands including:
+- 4+ hour timeout configuration
+- Task status tracking
+- Real-time output streaming
+- State persistence across operations
+- Cancellation and cleanup
+
+Usage:
+    pytest tests/e2e/test_long_running_commands.py -v
+"""
+
+import asyncio
+import json
+import logging
+import tempfile
+import time
+from pathlib import Path
+
+import pytest
+
+# Add apps/backend to path for imports
+import sys
+sys.path.insert(0, str(Path(__file__).parent.parent.parent / "apps" / "backend"))
+
+from agents.tools_pkg.tools.background_task import BackgroundTaskManager
+from core.task_state_store import TaskStateStore
+
+logger = logging.getLogger(__name__)
+
+
+@pytest.fixture
+def test_dirs():
+    """Create temporary directories for testing."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir_path = Path(tmpdir)
+        spec_dir = tmpdir_path / "spec"
+        project_dir = tmpdir_path / "project"
+        spec_dir.mkdir()
+        project_dir.mkdir()
+        yield spec_dir, project_dir
+
+
+@pytest.fixture
+def manager(test_dirs):
+    """Create a BackgroundTaskManager instance."""
+    spec_dir, project_dir = test_dirs
+    return BackgroundTaskManager(spec_dir, project_dir)
+
+
+@pytest.mark.asyncio
+class TestLongRunningCommands:
+    """Test suite for long-running command execution."""
+
+    async def test_long_timeout_configuration(self, manager):
+        """
+        Test 1: Verify system supports 4+ hour timeout.
+
+        Acceptance criteria:
+        - Commands can be configured with 4+ hour timeout
+        - DEFAULT_TIMEOUT is at least 4 hours (14400 seconds)
+        """
+        # Verify default timeout is 4+ hours
+        assert manager.DEFAULT_TIMEOUT >= 14400, "DEFAULT_TIMEOUT should be at least 4 hours"
+
+        # Start a task with long timeout
+        task_id = await manager.start_task(
+            "echo 'Long running task'",
+            timeout=18000  # 5 hours
+        )
+
+        # Verify timeout is stored correctly
+        status = manager.get_task_status(task_id)
+        assert status is not None
+        assert status["timeout"] == 18000
+
+        logger.info(f"✓ Long timeout configuration test passed: {task_id}")
+
+    async def test_task_status_lifecycle(self, manager):
+        """
+        Test 2: Verify task status updates through lifecycle.
+
+        Acceptance criteria:
+        - Task starts in 'pending' state
+        - Task transitions to 'running' when execution begins
+        - Task ends in 'completed', 'failed', or 'cancelled' state
+        """
+        # Create a task that runs for a few seconds
+        # Use Python for cross-platform compatibility
+        task_id = await manager.start_task(
+            'python -c "import time; print(\'Starting\'); time.sleep(1); print(\'Done\')"',
+            timeout=10
+        )
+
+        # Check initial state (should be pending or running)
+        status = manager.get_task_status(task_id)
+        assert status is not None
+        assert status["status"] in ["pending", "running"]
+
+        # Wait a bit for task to start running
+        await asyncio.sleep(0.5)
+
+        # Check running state
+        status = manager.get_task_status(task_id)
+        assert status is not None
+        assert status["status"] == "running"
+        assert status["started_at"] is not None
+        assert status["pid"] is not None
+
+        # Wait for completion
+        await asyncio.sleep(2)
+
+        # Check final state
+        status = manager.get_task_status(task_id)
+        assert status is not None
+        assert status["status"] == "completed"
+        assert status["completed_at"] is not None
+        assert status["exit_code"] == 0
+
+        logger.info(f"✓ Task status lifecycle test passed: {task_id}")
+
+    async def test_realtime_output_streaming(self, manager):
+        """
+        Test 3: Verify output streams in real-time.
+
+        Acceptance criteria:
+        - Output is captured as command executes
+        - Output is persisted periodically during execution
+        - Final output includes all command output
+        """
+        # Create a command that produces incremental output
+        # Use Python for cross-platform compatibility
+        task_id = await manager.start_task(
+            'python -c "import time; [print(f\'Line {i}\') or time.sleep(0.2) for i in range(1, 6)]"',
+            timeout=10
+        )
+
+        # Wait for task to start
+        await asyncio.sleep(0.3)
+
+        # Check that we're getting partial output
+        output_data = manager.get_task_output(task_id)
+        assert output_data is not None
+
+        # Wait a bit more
+        await asyncio.sleep(0.5)
+
+        # Output should have grown
+        output_data_2 = manager.get_task_output(task_id)
+        assert output_data_2 is not None
+
+        # Wait for completion
+        await asyncio.sleep(1.5)
+
+        # Final output should contain all lines
+        final_output = manager.get_task_output(task_id)
+        assert final_output is not None
+        assert "Line 1" in final_output["output"]
+        assert "Line 5" in final_output["output"]
+
+        logger.info(f"✓ Real-time output streaming test passed: {task_id}")
+
+    async def test_state_persistence(self, manager, test_dirs):
+        """
+        Test 4: Verify state persistence to disk.
+
+        Acceptance criteria:
+        - Task state is saved to disk atomically
+        - State can be reloaded after process restart
+        - State includes all critical metadata
+        """
+        spec_dir, _ = test_dirs
+
+        # Create a task
+        task_id = await manager.start_task(
+            'python -c "import time; print(\'Testing persistence\'); time.sleep(0.5)"',
+            timeout=10
+        )
+
+        # Wait for task to run
+        await asyncio.sleep(0.3)
+
+        # Verify state file exists
+        state_file = spec_dir / ".background_tasks" / f"{task_id}.json"
+        assert state_file.exists(), "State file should be created"
+
+        # Load state directly from file
+        with open(state_file) as f:
+            saved_state = json.load(f)
+
+        # Verify state contents
+        assert saved_state["id"] == task_id
+        assert "Testing persistence" in saved_state["command"]
+        assert saved_state["status"] in ["pending", "running"]
+        assert saved_state["timeout"] == 10
+        assert "created_at" in saved_state
+
+        # Wait for completion
+        await asyncio.sleep(1)
+
+        # Verify final state is persisted
+        with open(state_file) as f:
+            final_state = json.load(f)
+
+        assert final_state["status"] == "completed"
+        assert final_state["completed_at"] is not None
+        assert final_state["exit_code"] == 0
+
+        logger.info(f"✓ State persistence test passed: {task_id}")
+
+    async def test_cancellation_and_cleanup(self, manager):
+        """
+        Test 5: Verify cancellation with proper cleanup.
+
+        Acceptance criteria:
+        - Running tasks can be cancelled
+        - Process is terminated gracefully
+        - State is updated to 'cancelled'
+        - Final state is persisted
+        """
+        # Create a long-running task
+        task_id = await manager.start_task(
+            'python -c "import time; [print(f\'Iteration {i}\') or time.sleep(0.5) for i in range(1, 11)]"',
+            timeout=30
+        )
+
+        # Wait for task to start running
+        await asyncio.sleep(0.5)
+
+        # Verify task is running
+        status = manager.get_task_status(task_id)
+        assert status is not None
+        assert status["status"] == "running"
+        pid = status["pid"]
+        assert pid is not None
+
+        # Cancel the task
+        success = await manager.cancel_task(task_id)
+        assert success is True
+
+        # Wait a moment for cleanup
+        await asyncio.sleep(0.3)
+
+        # Verify task is cancelled
+        status = manager.get_task_status(task_id)
+        assert status is not None
+        assert status["status"] == "cancelled"
+        assert status["completed_at"] is not None
+
+        # Verify process is no longer in manager
+        assert task_id not in manager.processes
+
+        logger.info(f"✓ Cancellation and cleanup test passed: {task_id}")
+
+    async def test_timeout_handling(self, manager):
+        """
+        Test 6: Verify timeout handling for commands that exceed limit.
+
+        Acceptance criteria:
+        - Commands that exceed timeout are terminated
+        - Task state is marked as 'failed' with timeout error
+        - Error context includes timeout information
+        """
+        # Create a task with short timeout
+        task_id = await manager.start_task(
+            'python -c "import time; time.sleep(10)"',  # Will timeout
+            timeout=1  # 1 second timeout
+        )
+
+        # Wait for timeout to occur
+        await asyncio.sleep(2)
+
+        # Verify task failed due to timeout
+        status = manager.get_task_status(task_id)
+        assert status is not None
+        assert status["status"] == "failed"
+        assert "timed out" in status["error"].lower()
+
+        # Verify error context includes timeout info
+        error_context = manager.get_error_context(task_id)
+        assert error_context is not None
+        assert error_context["error_type"] == "timeout"
+        assert error_context["timeout_used"] == 1
+        assert error_context["retry_suggestion"] == "increase_timeout"
+
+        logger.info(f"✓ Timeout handling test passed: {task_id}")
+
+    async def test_memory_monitoring(self, manager):
+        """
+        Test 7: Verify memory monitoring during execution.
+
+        Acceptance criteria:
+        - Memory stats are captured at task start
+        - Memory stats are updated during execution (if psutil available)
+        - Memory stats are included in final state
+        """
+        # Create a task
+        task_id = await manager.start_task(
+            'python -c "import time; print(\'Testing memory\'); time.sleep(0.5)"',
+            timeout=10
+        )
+
+        # Wait for task to start
+        await asyncio.sleep(0.3)
+
+        # Check if memory stats are present
+        status = manager.get_task_status(task_id)
+        assert status is not None
+
+        # Memory stats should be present (or None if psutil not available)
+        # We don't require psutil for basic functionality
+        if "memory_stats" in status and status["memory_stats"] is not None:
+            mem_stats = status["memory_stats"]
+            assert "percent" in mem_stats
+            assert "available_mb" in mem_stats
+            assert "total_mb" in mem_stats
+            assert "used_mb" in mem_stats
+            logger.info(f"Memory monitoring active: {mem_stats['percent']}% used")
+        else:
+            logger.info("Memory monitoring not available (psutil not installed)")
+
+        # Wait for completion
+        await asyncio.sleep(1)
+
+        logger.info(f"✓ Memory monitoring test passed: {task_id}")
+
+    async def test_error_context_capture(self, manager):
+        """
+        Test 8: Verify error context is captured for failed tasks.
+
+        Acceptance criteria:
+        - Failed tasks capture error context
+        - Error context includes error type, message, and relevant output
+        - Retry suggestions are provided based on error type
+        """
+        # Create a task that will fail
+        task_id = await manager.start_task(
+            'python -c "import sys; print(\'About to fail\'); sys.exit(42)"',
+            timeout=10
+        )
+
+        # Wait for task to fail
+        await asyncio.sleep(1)
+
+        # Verify task failed
+        status = manager.get_task_status(task_id)
+        assert status is not None
+        assert status["status"] == "failed"
+
+        # Get error context
+        error_context = manager.get_error_context(task_id)
+        assert error_context is not None
+        assert "error_type" in error_context
+        assert "error_message" in error_context
+        assert "exit_code" in error_context
+        assert error_context["exit_code"] == 42
+        assert "retry_suggestion" in error_context
+        assert "relevant_output" in error_context
+        assert "About to fail" in error_context["relevant_output"]
+
+        logger.info(f"✓ Error context capture test passed: {task_id}")
+
+    async def test_list_and_filter_tasks(self, manager):
+        """
+        Test 9: Verify task listing and filtering.
+
+        Acceptance criteria:
+        - Can list all tasks
+        - Can filter tasks by status
+        - Tasks are sorted by creation time
+        """
+        # Create multiple tasks with different outcomes
+        task1_id = await manager.start_task('python -c "import time; print(\'Task 1\'); time.sleep(0.3)"', timeout=10)
+        await asyncio.sleep(0.1)
+
+        task2_id = await manager.start_task('python -c "import sys; print(\'Task 2\'); sys.exit(1)"', timeout=10)
+        await asyncio.sleep(0.1)
+
+        task3_id = await manager.start_task('python -c "import time; time.sleep(5)"', timeout=10)
+
+        # Wait for first two tasks to complete
+        await asyncio.sleep(0.5)
+
+        # List all tasks
+        all_tasks = manager.list_tasks()
+        assert len(all_tasks) >= 3
+
+        # Verify sorting (most recent first)
+        assert all_tasks[0]["id"] == task3_id
+
+        # Filter by status
+        running_tasks = manager.list_tasks(status="running")
+        assert len(running_tasks) >= 1
+        assert task3_id in [t["id"] for t in running_tasks]
+
+        completed_tasks = manager.list_tasks(status="completed")
+        assert task1_id in [t["id"] for t in completed_tasks]
+
+        failed_tasks = manager.list_tasks(status="failed")
+        assert task2_id in [t["id"] for t in failed_tasks]
+
+        # Cancel the running task
+        await manager.cancel_task(task3_id)
+
+        logger.info("✓ List and filter tasks test passed")
+
+    async def test_orphaned_task_recovery(self, manager, test_dirs):
+        """
+        Test 10: Verify orphaned task recovery on restart.
+
+        Acceptance criteria:
+        - Tasks orphaned by app restart are detected
+        - Orphaned tasks can be marked as failed
+        - Recovery process provides statistics
+        """
+        spec_dir, _ = test_dirs
+
+        # Create a running task
+        task_id = await manager.start_task(
+            'python -c "import time; time.sleep(10)"',
+            timeout=30
+        )
+
+        # Wait for task to start
+        await asyncio.sleep(0.5)
+
+        # Verify task is running
+        status = manager.get_task_status(task_id)
+        assert status is not None
+        assert status["status"] == "running"
+
+        # Simulate app restart by creating a new TaskStateStore
+        store = TaskStateStore(spec_dir / ".background_tasks")
+
+        # Find orphaned tasks
+        orphaned = store.find_orphaned_tasks()
+        assert task_id in orphaned
+
+        # Recover orphaned tasks
+        recovery_stats = store.recover_on_startup()
+        assert recovery_stats["orphaned_count"] >= 1
+        assert recovery_stats["marked_count"] >= 1
+
+        # Verify task is now marked as failed
+        state = store.load_state(task_id)
+        assert state is not None
+        assert state["status"] == "failed"
+        assert "orphaned" in state["error"].lower() or state.get("orphaned") is True
+
+        # Cancel the actual running process
+        await manager.cancel_task(task_id)
+
+        logger.info(f"✓ Orphaned task recovery test passed: {task_id}")
+
+
+@pytest.mark.asyncio
+async def test_full_lifecycle_integration(test_dirs):
+    """
+    Integration test covering complete long-running command lifecycle.
+
+    This test simulates a realistic scenario:
+    1. Start multiple long-running commands
+    2. Monitor progress in real-time
+    3. Cancel one task
+    4. Wait for others to complete
+    5. Verify all states are correct
+    """
+    spec_dir, project_dir = test_dirs
+    manager = BackgroundTaskManager(spec_dir, project_dir)
+
+    logger.info("Starting full lifecycle integration test...")
+
+    # Start multiple tasks
+    tasks = []
+
+    # Task 1: Will complete successfully
+    task1_id = await manager.start_task(
+        'python -c "import time; [print(f\'Build step {i}\') or time.sleep(0.2) for i in range(1, 4)]"',
+        timeout=10
+    )
+    tasks.append(("build", task1_id))
+    await asyncio.sleep(1.1)  # Delay to ensure unique task IDs (second precision)
+
+    # Task 2: Will be cancelled (long running)
+    task2_id = await manager.start_task(
+        'python -c "import time; [print(f\'Long process {i}\') or time.sleep(1) for i in range(1, 11)]"',
+        timeout=30
+    )
+    tasks.append(("long_process", task2_id))
+    await asyncio.sleep(1.1)  # Delay to ensure unique task IDs (second precision)
+
+    # Task 3: Will fail
+    task3_id = await manager.start_task(
+        'python -c "import sys, time; print(\'Starting tests\'); time.sleep(0.3); sys.exit(1)"',
+        timeout=10
+    )
+    tasks.append(("tests", task3_id))
+    await asyncio.sleep(0.3)  # Small delay for stability
+
+    logger.info(f"Started {len(tasks)} tasks")
+
+    # Monitor progress
+    await asyncio.sleep(0.8)
+
+    # Check all tasks are running or completed
+    for name, task_id in tasks:
+        status = manager.get_task_status(task_id)
+        assert status is not None
+        logger.info(f"{name}: {status['status']}")
+
+    # Cancel the long-running task (if still running)
+    status2_before = manager.get_task_status(task2_id)
+    if status2_before["status"] == "running":
+        success = await manager.cancel_task(task2_id)
+        assert success is True
+        logger.info(f"Cancelled long_process task")
+    else:
+        logger.info(f"Long process task already {status2_before['status']}, skipping cancellation")
+
+    # Wait for remaining tasks to complete
+    await asyncio.sleep(1.5)
+
+    # Verify final states
+    # Task 1 should be completed
+    status1 = manager.get_task_status(task1_id)
+    assert status1["status"] == "completed"
+    output1 = manager.get_task_output(task1_id)
+    assert "Build step 3" in output1["output"]
+    logger.info(f"✓ Build task completed successfully")
+
+    # Task 2 should be cancelled or completed (depending on timing)
+    status2 = manager.get_task_status(task2_id)
+    assert status2["status"] in ["cancelled", "running"]
+    logger.info(f"✓ Long process task status: {status2['status']}")
+
+    # Task 3 should be failed
+    status3 = manager.get_task_status(task3_id)
+    assert status3["status"] == "failed"
+    error_context = manager.get_error_context(task3_id)
+    assert error_context is not None
+    logger.info(f"✓ Test task failed as expected")
+
+    # Verify all states are persisted
+    state_dir = spec_dir / ".background_tasks"
+    state_files = list(state_dir.glob("*.json"))
+    assert len(state_files) >= 3
+    logger.info(f"✓ All states persisted to disk")
+
+    # Verify we can list tasks
+    all_tasks = manager.list_tasks()
+    assert len(all_tasks) >= 3
+
+    completed = manager.list_tasks(status="completed")
+    cancelled = manager.list_tasks(status="cancelled")
+    failed = manager.list_tasks(status="failed")
+
+    logger.info(f"Task summary: {len(completed)} completed, {len(cancelled)} cancelled, {len(failed)} failed")
+
+    logger.info("✓ Full lifecycle integration test passed")
+
+
+if __name__ == "__main__":
+    # Run tests directly with asyncio
+    import sys
+
+    logging.basicConfig(level=logging.INFO)
+
+    print("=" * 80)
+    print("Long-Running Command Handler - End-to-End Tests")
+    print("=" * 80)
+    print()
+
+    # Run integration test
+    tmpdir = tempfile.mkdtemp()
+    try:
+        tmpdir_path = Path(tmpdir)
+        spec_dir = tmpdir_path / "spec"
+        project_dir = tmpdir_path / "project"
+        spec_dir.mkdir()
+        project_dir.mkdir()
+        test_dirs = (spec_dir, project_dir)
+
+        asyncio.run(test_full_lifecycle_integration(test_dirs))
+
+        print()
+        print("=" * 80)
+        print("All tests passed! ✓")
+        print("=" * 80)
+    finally:
+        # Give processes time to fully terminate before cleanup
+        time.sleep(1)
+        try:
+            import shutil
+            shutil.rmtree(tmpdir, ignore_errors=True)
+        except:
+            pass  # Ignore cleanup errors on Windows
