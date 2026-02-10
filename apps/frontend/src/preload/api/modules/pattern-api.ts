@@ -7,9 +7,10 @@ import { invokeIpc } from './ipc-utils';
  */
 export interface Pattern {
   index: number;
+  id: string;
   text: string;
   category?: 'naming-conventions' | 'error-handling' | 'code-organization';
-  confidence?: number;
+  confidence?: 'high' | 'medium' | 'low';
   reasoning?: string;
   approved?: boolean;
 }

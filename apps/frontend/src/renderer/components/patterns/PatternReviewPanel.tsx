@@ -21,7 +21,7 @@ import {
   ChevronDown,
   ChevronRight
 } from 'lucide-react';
-import { projectStore } from '../../stores/project-store';
+import { useProjectStore } from '../../stores/project-store';
 import type { Pattern } from '../../../preload/api/modules/pattern-api';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
@@ -46,11 +46,6 @@ import {
   AlertDialogTitle
 } from '../ui/alert-dialog';
 
-// Use Pattern from preload API, but extend it with id for React keys
-interface PatternWithId extends Pattern {
-  id: string; // Using index as string for React keys
-}
-
 type CategoryFilter = 'all' | Pattern['category'];
 
 /**
@@ -60,17 +55,18 @@ export function PatternReviewPanel() {
   const { t } = useTranslation('common');
 
   // State
-  const [patterns, setPatterns] = useState<PatternWithId[]>([]);
+  const [patterns, setPatterns] = useState<Pattern[]>([]);
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all');
   const [expandedPatternId, setExpandedPatternId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [deleteConfirmPattern, setDeleteConfirmPattern] = useState<PatternWithId | null>(null);
+  const [deleteConfirmPattern, setDeleteConfirmPattern] = useState<Pattern | null>(null);
   const [editingPatternId, setEditingPatternId] = useState<string | null>(null);
   const [editText, setEditText] = useState('');
 
   // Get current project and spec
-  const currentProject = projectStore.getProjects()[0]; // Use first project for now
+  const { projects } = useProjectStore();
+  const currentProject = projects[0]; // Use first project for now
   const currentSpecId = currentProject?.id || '068-codebase-pattern-learning'; // Use current spec for testing
 
   /**
@@ -94,12 +90,8 @@ export function PatternReviewPanel() {
       );
 
       if (result.success && result.data) {
-        // Convert Pattern to PatternWithId by adding id from index
-        const patternsWithId = result.data.map((p: Pattern) => ({
-          ...p,
-          id: String(p.index)
-        }));
-        setPatterns(patternsWithId);
+        // Backend now returns patterns with id field, no need to add it
+        setPatterns(result.data);
       } else {
         setError(result.error || 'Failed to load patterns');
       }
@@ -123,13 +115,16 @@ export function PatternReviewPanel() {
     : patterns.filter(p => p.category === categoryFilter);
 
   // Group patterns by category for display
-  const groupedPatterns = filteredPatterns.reduce((acc, pattern) => {
-    if (!acc[pattern.category]) {
-      acc[pattern.category] = [];
-    }
-    acc[pattern.category].push(pattern);
-    return acc;
-  }, {} as Record<string, PatternWithId[]>);
+  const groupedPatterns = filteredPatterns
+    .filter(p => p.category)  // Remove patterns without category
+    .reduce((acc, pattern) => {
+      const cat = pattern.category!;  // Non-null assertion (safe after filter)
+      if (!acc[cat]) {
+        acc[cat] = [];
+      }
+      acc[cat].push(pattern);
+      return acc;
+    }, {} as Record<string, Pattern[]>);
 
   // Handlers
   const handleApprove = async (patternId: string) => {

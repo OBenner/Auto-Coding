@@ -15,13 +15,25 @@ import { getRunnerEnv } from './github/utils/runner-env';
 import { debugLog, debugError } from '../../shared/utils/debug-logger';
 
 /**
- * Pattern information returned from backend
+ * Pattern information returned from backend (Python subprocess)
  */
-export interface Pattern {
+interface BackendPattern {
   index: number;
   text: string;
   category?: string;
-  confidence?: number;
+  confidence?: number;  // Backend returns 0.0-1.0
+  reasoning?: string;
+}
+
+/**
+ * Pattern information returned to frontend (with converted types)
+ */
+export interface Pattern {
+  index: number;
+  id: string;
+  text: string;
+  category?: string;
+  confidence?: 'high' | 'medium' | 'low';
   reasoning?: string;
 }
 
@@ -57,6 +69,16 @@ async function getPythonEnv(): Promise<{ pythonPath: string; env: Record<string,
  */
 function getSpecDir(projectPath: string, specId: string): string {
   return path.join(projectPath, '.auto-claude', 'specs', specId);
+}
+
+/**
+ * Convert numeric confidence (0.0-1.0 from backend) to string ('high'/'medium'/'low' for frontend)
+ */
+function confidenceToString(confidence: number | undefined): 'high' | 'medium' | 'low' | undefined {
+  if (confidence === undefined) return undefined;
+  if (confidence >= 0.8) return 'high';
+  if (confidence >= 0.5) return 'medium';
+  return 'low';
 }
 
 /**
@@ -131,10 +153,20 @@ print(json.dumps({'patterns': formatted_patterns}))
           return { success: false, error: result.error || 'Failed to list patterns' };
         }
 
-        const data = JSON.parse(result.stdout.trim()) as { patterns: Pattern[] };
+        const data = JSON.parse(result.stdout.trim()) as { patterns: BackendPattern[] };
         debugLog('[PATTERN_LIST] Returning', data.patterns.length, 'patterns');
 
-        return { success: true, data: data.patterns };
+        // Add id field and convert confidence from number to string
+        const patternsWithId: Pattern[] = data.patterns.map(p => ({
+          index: p.index,
+          id: String(p.index),
+          text: p.text,
+          category: p.category,
+          confidence: p.confidence !== undefined ? confidenceToString(p.confidence) : undefined,
+          reasoning: p.reasoning
+        }));
+
+        return { success: true, data: patternsWithId };
       } catch (error) {
         debugError('[PATTERN_LIST] Error:', error);
         return {
@@ -268,10 +300,20 @@ print(json.dumps(result))
           return { success: false, error: result.error || 'Failed to get pattern details' };
         }
 
-        const pattern = JSON.parse(result.stdout.trim()) as Pattern;
+        const pattern = JSON.parse(result.stdout.trim()) as BackendPattern;
         debugLog('[PATTERN_GET_DETAILS] Returning pattern:', pattern.index);
 
-        return { success: true, data: pattern };
+        // Add id field and convert confidence from number to string
+        const patternWithId: Pattern = {
+          index: pattern.index,
+          id: String(pattern.index),
+          text: pattern.text,
+          category: pattern.category,
+          confidence: pattern.confidence !== undefined ? confidenceToString(pattern.confidence) : undefined,
+          reasoning: pattern.reasoning
+        };
+
+        return { success: true, data: patternWithId };
       } catch (error) {
         debugError('[PATTERN_GET_DETAILS] Error:', error);
         return {

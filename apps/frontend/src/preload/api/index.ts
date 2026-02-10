@@ -35,8 +35,7 @@ export interface ElectronAPI extends
   McpAPI,
   ProfileAPI,
   ScreenshotAPI,
-  PluginAPI,
-  PatternAPI {
+  PluginAPI {
   github: GitHubAPI;
   /** Queue routing API for rate limit recovery */
   queue: QueueAPI;

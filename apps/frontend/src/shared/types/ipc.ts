@@ -909,6 +909,9 @@ export interface ElectronAPI {
 
   // Queue Routing API (rate limit recovery)
   queue: import('../../preload/api/queue-api').QueueAPI;
+
+  // Pattern learning API (codebase patterns)
+  pattern: import('../../preload/api/modules/pattern-api').PatternAPI;
 }
 
 declare global {
