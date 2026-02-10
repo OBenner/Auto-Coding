@@ -338,15 +338,10 @@ class BackgroundTaskManager:
             self._capture_error_context(task_id)
 
         finally:
-            # Clean up process reference and close streams to prevent resource leaks
+            # Clean up process reference
+            # Note: asyncio subprocess manages stream cleanup automatically
             if task_id in self.processes:
                 proc = self.processes.pop(task_id)
-                if proc:
-                    # Close streams to prevent resource leaks (fixes PytestUnraisableExceptionWarning)
-                    if proc.stdout:
-                        proc.stdout.close()
-                    if proc.stderr:
-                        proc.stderr.close()
 
             # Save final task state
             self._save_task_state(task_id)
