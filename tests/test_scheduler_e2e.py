@@ -26,7 +26,6 @@ from scheduler.models import (
     ScheduledBuild,
     SchedulePriority,
 )
-from scheduler.notification_service import NotificationService  # noqa: F401
 from scheduler.queue_manager import QueueManager
 from scheduler.scheduler import Scheduler, SchedulerEvent
 from scheduler.storage import SchedulerStorage

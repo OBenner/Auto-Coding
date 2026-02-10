@@ -319,13 +319,13 @@ class SchedulerStorage:
         }
 
         # Count by status
-        for status in BuildStatus:
+        for status in list(BuildStatus):
             count = sum(1 for b in builds if b.status == status)
             if count > 0:
                 stats["by_status"][status.value] = count
 
         # Count by priority
-        for priority in SchedulePriority:
+        for priority in list(SchedulePriority):
             count = sum(1 for b in builds if b.priority == priority)
             if count > 0:
                 stats["by_priority"][priority.value] = count
