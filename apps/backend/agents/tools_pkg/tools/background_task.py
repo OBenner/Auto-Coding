@@ -450,7 +450,7 @@ def create_background_task_tools(spec_dir: Path, project_dir: Path) -> list:
     manager = BackgroundTaskManager(spec_dir, project_dir)
 
     # -------------------------------------------------------------------------
-    # Tool: start_background_command (will be fully implemented in subtask-2-1)
+    # Tool: start_background_command
     # -------------------------------------------------------------------------
     @tool(
         "start_background_command",
