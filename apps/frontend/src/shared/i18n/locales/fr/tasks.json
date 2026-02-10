@@ -399,5 +399,23 @@
   "gitlabIssues": {
     "quickCreateSpec": "Créer rapidement un spec",
     "investigate": "Enquêter"
+  },
+  "batchStatusUpdate": {
+    "title": "Mettre à jour le statut",
+    "description": "Mettre à jour le statut pour {{count}} tâche(s) sélectionnée(s)",
+    "updating": "Mise à jour du statut ({{current}} sur {{total}})...",
+    "resultsDescription": "{{success}} réussie(s), {{failed}} échouée(s)",
+    "tasksToUpdate": "Tâches à mettre à jour",
+    "newStatus": "Nouveau statut",
+    "selectStatus": "Sélectionner le statut",
+    "statusHint": "Toutes les tâches sélectionnées seront mises à jour vers ce statut",
+    "updateAll": "Tout mettre à jour",
+    "updatingStatus": "Mise à jour de la tâche {{current}} sur {{total}}",
+    "completed": "terminée(s)",
+    "succeeded": "réussie(s)",
+    "failed": "échouée(s)",
+    "errors": {
+      "unknown": "Une erreur inconnue s'est produite"
+    }
   }
 }
