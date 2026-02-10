@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Clock,
   GitPullRequest,
@@ -70,26 +71,27 @@ function parsePRReviewContent(content: string): ParsedPRReview | null {
 }
 
 function VerdictBadge({ verdict }: { verdict: string }) {
+  const { t } = useTranslation('context');
   switch (verdict) {
     case 'approve':
       return (
         <Badge className="bg-green-500/10 text-green-400 border-green-500/30 gap-1">
           <CheckCircle className="h-3 w-3" />
-          Approved
+          {t('prReviewCard.approved')}
         </Badge>
       );
     case 'request_changes':
       return (
         <Badge className="bg-amber-500/10 text-amber-400 border-amber-500/30 gap-1">
           <XCircle className="h-3 w-3" />
-          Changes Requested
+          {t('prReviewCard.changesRequested')}
         </Badge>
       );
     case 'comment':
       return (
         <Badge className="bg-blue-500/10 text-blue-400 border-blue-500/30 gap-1">
           <MessageSquare className="h-3 w-3" />
-          Commented
+          {t('prReviewCard.commented')}
         </Badge>
       );
     default:
@@ -119,6 +121,7 @@ function SeverityBadge({ severity, count }: { severity: string; count: number })
 }
 
 export function PRReviewCard({ memory, onDelete }: PRReviewCardProps) {
+  const { t } = useTranslation('context');
   const [expanded, setExpanded] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const parsed = useMemo(() => parsePRReviewContent(memory.content), [memory.content]);
@@ -130,7 +133,7 @@ export function PRReviewCard({ memory, onDelete }: PRReviewCardProps) {
         <CardContent className="pt-4">
           <div className="flex items-center gap-2">
             <GitPullRequest className="h-4 w-4 text-cyan-400" />
-            <Badge variant="outline">PR Review</Badge>
+            <Badge variant="outline">{t('prReviewCard.review')}</Badge>
             <span className="text-xs text-muted-foreground">{formatDate(memory.timestamp)}</span>
           </div>
           <pre className="mt-3 text-xs text-muted-foreground whitespace-pre-wrap font-mono">
@@ -169,7 +172,7 @@ export function PRReviewCard({ memory, onDelete }: PRReviewCardProps) {
                 </span>
                 {parsed.isFollowup && (
                   <Badge variant="secondary" className="text-xs">
-                    Follow-up
+                    {t('prReviewCard.followup')}
                   </Badge>
                 )}
               </div>
@@ -179,7 +182,7 @@ export function PRReviewCard({ memory, onDelete }: PRReviewCardProps) {
                 <VerdictBadge verdict={parsed.verdict} />
                 {totalFindings > 0 && (
                   <span className="text-xs text-muted-foreground">
-                    {totalFindings} finding{totalFindings !== 1 ? 's' : ''}
+                    {t('prReviewCard.findingCount', { count: totalFindings })}
                   </span>
                 )}
               </div>
@@ -224,12 +227,12 @@ export function PRReviewCard({ memory, onDelete }: PRReviewCardProps) {
                 {expanded ? (
                   <>
                     <ChevronUp className="h-4 w-4" />
-                    Collapse
+                    {t('prReviewCard.collapse')}
                   </>
                 ) : (
                   <>
                     <ChevronDown className="h-4 w-4" />
-                    Details
+                    {t('prReviewCard.details')}
                   </>
                 )}
               </Button>
@@ -245,7 +248,7 @@ export function PRReviewCard({ memory, onDelete }: PRReviewCardProps) {
               <div>
                 <div className="flex items-center gap-2 mb-2">
                   <Bug className="h-4 w-4 text-orange-400" />
-                  <span className="text-sm font-medium text-foreground">Key Findings</span>
+                  <span className="text-sm font-medium text-foreground">{t('prReviewCard.keyFindings')}</span>
                   <Badge variant="secondary" className="text-xs px-1.5 py-0">
                     {parsed.keyFindings.length}
                   </Badge>
@@ -276,7 +279,7 @@ export function PRReviewCard({ memory, onDelete }: PRReviewCardProps) {
                   ))}
                   {parsed.keyFindings.length > 5 && (
                     <p className="text-xs text-muted-foreground">
-                      +{parsed.keyFindings.length - 5} more findings
+                      {t('prReviewCard.moreFindings', { count: parsed.keyFindings.length - 5 })}
                     </p>
                   )}
                 </div>
@@ -288,7 +291,7 @@ export function PRReviewCard({ memory, onDelete }: PRReviewCardProps) {
               <div>
                 <div className="flex items-center gap-2 mb-2">
                   <AlertTriangle className="h-4 w-4 text-red-400" />
-                  <span className="text-sm font-medium text-foreground">Gotchas Discovered</span>
+                  <span className="text-sm font-medium text-foreground">{t('prReviewCard.gotchasDiscovered')}</span>
                   <Badge variant="secondary" className="text-xs px-1.5 py-0">
                     {parsed.gotchas.length}
                   </Badge>
@@ -309,7 +312,7 @@ export function PRReviewCard({ memory, onDelete }: PRReviewCardProps) {
               <div>
                 <div className="flex items-center gap-2 mb-2">
                   <Sparkles className="h-4 w-4 text-purple-400" />
-                  <span className="text-sm font-medium text-foreground">Patterns Identified</span>
+                  <span className="text-sm font-medium text-foreground">{t('prReviewCard.patternsIdentified')}</span>
                   <Badge variant="secondary" className="text-xs px-1.5 py-0">
                     {parsed.patterns.length}
                   </Badge>
@@ -335,7 +338,7 @@ export function PRReviewCard({ memory, onDelete }: PRReviewCardProps) {
                   onClick={() => window.open(`https://github.com/${parsed.repo}/pull/${parsed.prNumber}`, '_blank')}
                 >
                   <ExternalLink className="h-3 w-3" />
-                  View PR on GitHub
+                  {t('prReviewCard.viewOnGitHub')}
                 </Button>
               </div>
             )}
@@ -347,13 +350,13 @@ export function PRReviewCard({ memory, onDelete }: PRReviewCardProps) {
       <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete PR Review Memory</AlertDialogTitle>
+            <AlertDialogTitle>{t('prReviewCard.delete.title')}</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete this PR review memory? This action cannot be undone.
+              {t('prReviewCard.delete.description')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t('prReviewCard.delete.cancel')}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
                 onDelete?.(memory.id);
@@ -361,7 +364,7 @@ export function PRReviewCard({ memory, onDelete }: PRReviewCardProps) {
               }}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Delete
+              {t('prReviewCard.delete.confirm')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

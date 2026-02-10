@@ -21,6 +21,7 @@
  * ```
  */
 import { useState, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Loader2, Download, FileJson, FileText, Calendar } from 'lucide-react';
 import {
   Dialog,
@@ -59,27 +60,28 @@ interface MemoryExportDialogProps {
 
 type ExportFormat = 'json' | 'csv';
 
-// Memory type options for filtering
-const MEMORY_TYPE_OPTIONS: { value: MemoryType | 'all'; label: string }[] = [
-  { value: 'all', label: 'All Types' },
-  { value: 'session_insight', label: 'Session Insights' },
-  { value: 'codebase_discovery', label: 'Codebase Discoveries' },
-  { value: 'codebase_map', label: 'Codebase Maps' },
-  { value: 'pattern', label: 'Patterns' },
-  { value: 'gotcha', label: 'Gotchas' },
-  { value: 'task_outcome', label: 'Task Outcomes' },
-  { value: 'pr_review', label: 'PR Reviews' },
-  { value: 'pr_finding', label: 'PR Findings' },
-  { value: 'pr_pattern', label: 'PR Patterns' },
-  { value: 'pr_gotcha', label: 'PR Gotchas' }
-];
-
 export function MemoryExportDialog({
   projectId,
   memories,
   open,
   onOpenChange
 }: MemoryExportDialogProps) {
+  const { t } = useTranslation('context');
+  // Memory type options for filtering - using translations
+  const MEMORY_TYPE_OPTIONS: { value: MemoryType | 'all'; label: string }[] = [
+    { value: 'all', label: t('exportDialog.memoryTypes.all') },
+    { value: 'session_insight', label: t('exportDialog.memoryTypes.session_insight') },
+    { value: 'codebase_discovery', label: t('exportDialog.memoryTypes.codebase_discovery') },
+    { value: 'codebase_map', label: t('exportDialog.memoryTypes.codebase_map') },
+    { value: 'pattern', label: t('exportDialog.memoryTypes.pattern') },
+    { value: 'gotcha', label: t('exportDialog.memoryTypes.gotcha') },
+    { value: 'task_outcome', label: t('exportDialog.memoryTypes.task_outcome') },
+    { value: 'pr_review', label: t('exportDialog.memoryTypes.pr_review') },
+    { value: 'pr_finding', label: t('exportDialog.memoryTypes.pr_finding') },
+    { value: 'pr_pattern', label: t('exportDialog.memoryTypes.pr_pattern') },
+    { value: 'pr_gotcha', label: t('exportDialog.memoryTypes.pr_gotcha') }
+  ];
+
   // Form state
   const [format, setFormat] = useState<ExportFormat>('json');
   const [selectedType, setSelectedType] = useState<MemoryType | 'all'>('all');
@@ -110,7 +112,7 @@ export function MemoryExportDialog({
   // Convert memories to CSV format
   const convertToCSV = (data: MemoryEpisode[]): string => {
     if (data.length === 0) {
-      return 'No data to export';
+      return t('exportDialog.noData');
     }
 
     const headers = includeMetadata
@@ -144,7 +146,7 @@ export function MemoryExportDialog({
 
   const handleExport = async () => {
     if (filteredMemories.length === 0) {
-      setError('No memories to export with the selected filters');
+      setError(t('exportDialog.noMemories'));
       return;
     }
 
@@ -211,10 +213,10 @@ export function MemoryExportDialog({
         <DialogHeader>
           <DialogTitle className="text-foreground flex items-center gap-2">
             <Download className="h-5 w-5" />
-            Export Memory Data
+            {t('exportDialog.title')}
           </DialogTitle>
           <DialogDescription>
-            Export your memory graph in various formats for backup or analysis.
+            {t('exportDialog.description')}
           </DialogDescription>
         </DialogHeader>
 
@@ -222,7 +224,7 @@ export function MemoryExportDialog({
           {/* Export Format */}
           <div className="space-y-2">
             <Label htmlFor="export-format" className="text-sm font-medium text-foreground">
-              Export Format
+              {t('exportDialog.format')}
             </Label>
             <Select
               value={format}
@@ -236,13 +238,13 @@ export function MemoryExportDialog({
                 <SelectItem value="json">
                   <div className="flex items-center gap-2">
                     <FileJson className="h-4 w-4" />
-                    <span>JSON (Structured Data)</span>
+                    <span>{t('exportDialog.jsonFormat')}</span>
                   </div>
                 </SelectItem>
                 <SelectItem value="csv">
                   <div className="flex items-center gap-2">
                     <FileText className="h-4 w-4" />
-                    <span>CSV (Spreadsheet)</span>
+                    <span>{t('exportDialog.csvFormat')}</span>
                   </div>
                 </SelectItem>
               </SelectContent>
@@ -252,7 +254,7 @@ export function MemoryExportDialog({
           {/* Memory Type Filter */}
           <div className="space-y-2">
             <Label htmlFor="memory-type" className="text-sm font-medium text-foreground">
-              Memory Type
+              {t('exportDialog.memoryType')}
             </Label>
             <Select
               value={selectedType}
@@ -284,14 +286,14 @@ export function MemoryExportDialog({
               htmlFor="include-metadata"
               className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
             >
-              Include metadata (IDs, scores, session numbers)
+              {t('exportDialog.includeMetadata')}
             </Label>
           </div>
 
           {/* Export Preview */}
           <div className="rounded-lg border border-border bg-muted/30 p-3">
             <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Memories to export:</span>
+              <span className="text-muted-foreground">{t('exportDialog.memoriesToExport')}</span>
               <Badge variant="outline" className="font-mono">
                 {filteredMemories.length}
               </Badge>
@@ -308,7 +310,7 @@ export function MemoryExportDialog({
 
         <DialogFooter>
           <Button variant="outline" onClick={handleClose} disabled={isExporting}>
-            Cancel
+            {t('exportDialog.cancel')}
           </Button>
           <Button
             onClick={handleExport}
@@ -317,12 +319,12 @@ export function MemoryExportDialog({
             {isExporting ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Exporting...
+                {t('exportDialog.exporting')}
               </>
             ) : (
               <>
                 <Download className="mr-2 h-4 w-4" />
-                Export
+                {t('exportDialog.export')}
               </>
             )}
           </Button>

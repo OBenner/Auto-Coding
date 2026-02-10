@@ -1,0 +1,164 @@
+{
+  "tabs": {
+    "projectIndex": "Index du Projet",
+    "memories": "Mémoires"
+  },
+  "projectIndex": {
+    "title": "Structure du Projet",
+    "description": "Connaissances découvertes par l'IA sur votre codebase",
+    "refresh": "Actualiser",
+    "refreshTooltip": "Réanalyser la structure du projet",
+    "analyzeProject": "Analyser le Projet",
+    "notFound": "Aucun Index de Projet Trouvé",
+    "notFoundDescription": "Cliquez sur le bouton Actualiser pour analyser la structure de votre projet et créer un index.",
+    "error": "Échec du chargement de l'index du projet",
+    "overview": "Vue d'ensemble",
+    "services": "Services",
+    "infrastructure": "Infrastructure",
+    "conventions": "Conventions",
+    "serviceCount_one": "{{count}} service",
+    "serviceCount_other": "{{count}} services",
+    "labels": {
+      "dockerCompose": "Docker Compose",
+      "ciCd": "CI/CD",
+      "deployment": "Déploiement",
+      "dockerServices": "Services Docker",
+      "pythonLinting": "Linting Python",
+      "jsLinting": "Linting JS",
+      "formatting": "Formatage",
+      "gitHooks": "Git Hooks",
+      "typescript": "TypeScript",
+      "enabled": "Activé"
+    },
+    "serviceDetails": {
+      "testing": "Tests : {{value}}",
+      "orm": "ORM : {{value}}",
+      "port": "Port : {{value}}",
+      "styling": "Style : {{value}}",
+      "state": "État : {{value}}",
+      "appleFrameworks": "Frameworks Apple",
+      "spmDependencies": "Dépendances SPM",
+      "keyDirectories": "Répertoires Clés"
+    }
+  },
+  "memories": {
+    "status": {
+      "title": "Statut de la Mémoire Graph",
+      "connected": "Connecté",
+      "notAvailable": "Non Disponible",
+      "database": "Base de données",
+      "path": "Chemin",
+      "notConfigured": "La mémoire Graphiti n'est pas configurée",
+      "enableHint": "Pour activer la mémoire graph, définissez <code>GRAPHITI_ENABLED=true</code> dans les paramètres du projet."
+    },
+    "stats": {
+      "total": "Total",
+      "prReviews": "Revisions PR",
+      "sessions": "Sessions",
+      "codebase": "Codebase",
+      "patterns": "Motifs",
+      "gotchas": "Pièges"
+    },
+    "filters": {
+      "all": "Tout",
+      "pr": "Revisions PR",
+      "sessions": "Sessions",
+      "codebase": "Codebase",
+      "patterns": "Motifs",
+      "gotchas": "Pièges"
+    },
+    "search": {
+      "title": "Rechercher des Mémoires",
+      "placeholder": "Rechercher des motifs, idées, pièges...",
+      "resultCount_one": "{{count}} résultat trouvé",
+      "resultCount_other": "{{count}} résultats trouvés",
+      "score": "Score : {{score}}"
+    },
+    "browser": {
+      "title": "Navigateur de Mémoire",
+      "memoryCount": "{{filtered}} sur {{total}} mémoires",
+      "export": "Exporter",
+      "noMemories": "Aucune mémoire enregistrée pour le moment. Les mémoires sont créées pendant les sessions de l'agent IA et les révisions PR.",
+      "noMatch": "Aucune mémoire ne correspond au filtre sélectionné.",
+      "showAll": "Afficher toutes les mémoires"
+    },
+    "graph": {
+      "noData": "Aucune donnée graph disponible",
+      "nodesWillAppear": "Les nœuds de mémoire apparaîtront ici au fur et à mesure de leur création",
+      "legend": "Légende",
+      "episodic": "Épisodique",
+      "entity": "Entité"
+    }
+  },
+  "memoryCard": {
+    "expand": "Développer",
+    "collapse": "Réduire",
+    "whatWorked": "Ce qui a fonctionné",
+    "whatFailed": "Ce qui a échoué",
+    "approach": "Approche",
+    "recommendations": "Recommandations",
+    "patterns": "Motifs",
+    "gotchas": "Pièges",
+    "changedFiles": "Fichiers Modifiés",
+    "fileInsights": "Informations sur les Fichiers",
+    "subtasksCompleted": "Sous-tâches Terminées",
+    "delete": {
+      "title": "Supprimer la Mémoire",
+      "description": "Êtes-vous sûr de vouloir supprimer cette mémoire ? Cette action ne peut pas être annulée.",
+      "confirm": "Supprimer",
+      "cancel": "Annuler"
+    }
+  },
+  "prReviewCard": {
+    "review": "Révision PR",
+    "approved": "Approuvé",
+    "changesRequested": "Modifications Demandées",
+    "commented": "Commenté",
+    "followup": "Suivi",
+    "findingCount_one": "{{count}} problème",
+    "findingCount_other": "{{count}} problèmes",
+    "keyFindings": "Principales Découvertes",
+    "gotchasDiscovered": "Pièges Découverts",
+    "patternsIdentified": "Motifs Identifiés",
+    "viewOnGitHub": "Voir la PR sur GitHub",
+    "moreFindings": "+{{count}} autres problèmes",
+    "delete": {
+      "title": "Supprimer la Mémoire de Révision PR",
+      "description": "Êtes-vous sûr de vouloir supprimer cette mémoire de révision PR ? Cette action ne peut pas être annulée.",
+      "confirm": "Supprimer",
+      "cancel": "Annuler"
+    },
+    "details": "Détails",
+    "collapse": "Réduire"
+  },
+  "exportDialog": {
+    "title": "Exporter les Données de Mémoire",
+    "description": "Exportez votre graphe de mémoire dans différents formats pour sauvegarde ou analyse.",
+    "format": "Format d'Export",
+    "jsonFormat": "JSON (Données Structurées)",
+    "csvFormat": "CSV (Tableur)",
+    "memoryType": "Type de Mémoire",
+    "allTypes": "Tous les Types",
+    "includeMetadata": "Inclure les métadonnées (IDs, scores, numéros de session)",
+    "memoriesToExport": "Mémoires à exporter :",
+    "noData": "Aucune donnée à exporter",
+    "noMemories": "Aucune mémoire à exporter avec les filtres sélectionnés",
+    "cancel": "Annuler",
+    "export": "Exporter",
+    "exporting": "Exportation...",
+    "error": "Échec de l'export des mémoires",
+    "memoryTypes": {
+      "all": "Tous les Types",
+      "session_insight": "Aperçus de Session",
+      "codebase_discovery": "Découvertes de Codebase",
+      "codebase_map": "Cartes de Codebase",
+      "pattern": "Motifs",
+      "gotcha": "Pièges",
+      "task_outcome": "Résultats de Tâche",
+      "pr_review": "Revisions PR",
+      "pr_finding": "Découvertes PR",
+      "pr_pattern": "Motifs PR",
+      "pr_gotcha": "Pièges PR"
+    }
+  }
+}

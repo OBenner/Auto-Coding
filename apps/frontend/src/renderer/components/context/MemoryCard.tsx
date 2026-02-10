@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Clock,
   CheckCircle2,
@@ -119,6 +120,7 @@ function isPRReviewMemory(memory: MemoryEpisode): boolean {
 }
 
 export function MemoryCard({ memory, onDelete }: MemoryCardProps) {
+  const { t } = useTranslation('context');
   const [expanded, setExpanded] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const parsed = useMemo(() => parseMemoryContent(memory.content), [memory.content]);
@@ -210,12 +212,12 @@ export function MemoryCard({ memory, onDelete }: MemoryCardProps) {
                 {expanded ? (
                   <>
                     <ChevronUp className="h-4 w-4" />
-                    Collapse
+                    {t('memoryCard.collapse')}
                   </>
                 ) : (
                   <>
                     <ChevronDown className="h-4 w-4" />
-                    Expand
+                    {t('memoryCard.expand')}
                   </>
                 )}
               </Button>
@@ -229,7 +231,7 @@ export function MemoryCard({ memory, onDelete }: MemoryCardProps) {
             {/* What Worked */}
             {parsed.what_worked && parsed.what_worked.length > 0 && (
               <div>
-                <SectionHeader icon={CheckCircle2} title="What Worked" count={parsed.what_worked.length} />
+                <SectionHeader icon={CheckCircle2} title={t('memoryCard.whatWorked')} count={parsed.what_worked.length} />
                 <ul className="space-y-0.5">
                   {parsed.what_worked.map((item, idx) => (
                     /* biome-ignore lint/suspicious/noArrayIndexKey: String items without unique IDs */
@@ -242,7 +244,7 @@ export function MemoryCard({ memory, onDelete }: MemoryCardProps) {
             {/* What Failed */}
             {parsed.what_failed && parsed.what_failed.length > 0 && (
               <div>
-                <SectionHeader icon={XCircle} title="What Failed" count={parsed.what_failed.length} />
+                <SectionHeader icon={XCircle} title={t('memoryCard.whatFailed')} count={parsed.what_failed.length} />
                 <ul className="space-y-0.5">
                   {parsed.what_failed.map((item, idx) => (
                     /* biome-ignore lint/suspicious/noArrayIndexKey: String items without unique IDs */
@@ -257,7 +259,7 @@ export function MemoryCard({ memory, onDelete }: MemoryCardProps) {
               <div>
                 <SectionHeader
                   icon={parsed.discoveries.approach_outcome.success ? CheckCircle2 : AlertTriangle}
-                  title="Approach"
+                  title={t('memoryCard.approach')}
                 />
                 <div className="pl-4 space-y-2">
                   <p className="text-sm text-foreground">
@@ -283,7 +285,7 @@ export function MemoryCard({ memory, onDelete }: MemoryCardProps) {
               <div>
                 <SectionHeader
                   icon={Lightbulb}
-                  title="Recommendations"
+                  title={t('memoryCard.recommendations')}
                   count={(parsed.recommendations_for_next_session?.length ?? 0) + (parsed.discoveries?.recommendations?.length ?? 0)}
                 />
                 <ul className="space-y-0.5">
@@ -302,7 +304,7 @@ export function MemoryCard({ memory, onDelete }: MemoryCardProps) {
             {/* Patterns Discovered */}
             {parsed.discoveries?.patterns_discovered && parsed.discoveries.patterns_discovered.length > 0 && (
               <div>
-                <SectionHeader icon={Sparkles} title="Patterns" count={parsed.discoveries.patterns_discovered.length} />
+                <SectionHeader icon={Sparkles} title={t('memoryCard.patterns')} count={parsed.discoveries.patterns_discovered.length} />
                 <div className="flex flex-wrap gap-2 pl-4">
                   {parsed.discoveries.patterns_discovered.map((pattern, idx) => {
                     const text = typeof pattern === 'string' ? pattern : pattern.pattern;
@@ -320,7 +322,7 @@ export function MemoryCard({ memory, onDelete }: MemoryCardProps) {
             {/* Gotchas */}
             {parsed.discoveries?.gotchas_discovered && parsed.discoveries.gotchas_discovered.length > 0 && (
               <div>
-                <SectionHeader icon={AlertTriangle} title="Gotchas" count={parsed.discoveries.gotchas_discovered.length} />
+                <SectionHeader icon={AlertTriangle} title={t('memoryCard.gotchas')} count={parsed.discoveries.gotchas_discovered.length} />
                 <ul className="space-y-0.5">
                   {parsed.discoveries.gotchas_discovered.map((gotcha, idx) => {
                     const text = typeof gotcha === 'string' ? gotcha : gotcha.gotcha;
@@ -336,7 +338,7 @@ export function MemoryCard({ memory, onDelete }: MemoryCardProps) {
             {/* Changed Files */}
             {parsed.discoveries?.changed_files && parsed.discoveries.changed_files.length > 0 && (
               <div>
-                <SectionHeader icon={FileCode} title="Changed Files" count={parsed.discoveries.changed_files.length} />
+                <SectionHeader icon={FileCode} title={t('memoryCard.changedFiles')} count={parsed.discoveries.changed_files.length} />
                 <div className="flex flex-wrap gap-1.5 pl-4">
                   {parsed.discoveries.changed_files.map((file, idx) => (
                     /* biome-ignore lint/suspicious/noArrayIndexKey: String items without unique IDs */
@@ -351,7 +353,7 @@ export function MemoryCard({ memory, onDelete }: MemoryCardProps) {
             {/* File Insights */}
             {parsed.discoveries?.file_insights && parsed.discoveries.file_insights.length > 0 && (
               <div>
-                <SectionHeader icon={FileCode} title="File Insights" count={parsed.discoveries.file_insights.length} />
+                <SectionHeader icon={FileCode} title={t('memoryCard.fileInsights')} count={parsed.discoveries.file_insights.length} />
                 <div className="space-y-2 pl-4">
                   {parsed.discoveries.file_insights.map((insight, idx) => (
                     /* biome-ignore lint/suspicious/noArrayIndexKey: Insight items without unique IDs */
@@ -376,7 +378,7 @@ export function MemoryCard({ memory, onDelete }: MemoryCardProps) {
             {/* Subtasks Completed */}
             {parsed.subtasks_completed && parsed.subtasks_completed.length > 0 && (
               <div>
-                <SectionHeader icon={CheckCircle2} title="Subtasks Completed" count={parsed.subtasks_completed.length} />
+                <SectionHeader icon={CheckCircle2} title={t('memoryCard.subtasksCompleted')} count={parsed.subtasks_completed.length} />
                 <div className="flex flex-wrap gap-1.5 pl-4">
                   {parsed.subtasks_completed.map((task, idx) => (
                     /* biome-ignore lint/suspicious/noArrayIndexKey: String items without unique IDs */
@@ -402,13 +404,13 @@ export function MemoryCard({ memory, onDelete }: MemoryCardProps) {
       <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Memory</AlertDialogTitle>
+            <AlertDialogTitle>{t('memoryCard.delete.title')}</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete this memory? This action cannot be undone.
+              {t('memoryCard.delete.description')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t('memoryCard.delete.cancel')}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
                 onDelete?.(memory.id);
@@ -416,7 +418,7 @@ export function MemoryCard({ memory, onDelete }: MemoryCardProps) {
               }}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Delete
+              {t('memoryCard.delete.confirm')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

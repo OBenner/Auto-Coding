@@ -1,0 +1,164 @@
+{
+  "tabs": {
+    "projectIndex": "Project Index",
+    "memories": "Memories"
+  },
+  "projectIndex": {
+    "title": "Project Structure",
+    "description": "AI-discovered knowledge about your codebase",
+    "refresh": "Refresh",
+    "refreshTooltip": "Re-analyze project structure",
+    "analyzeProject": "Analyze Project",
+    "notFound": "No Project Index Found",
+    "notFoundDescription": "Click the Refresh button to analyze your project structure and create an index.",
+    "error": "Failed to load project index",
+    "overview": "Overview",
+    "services": "Services",
+    "infrastructure": "Infrastructure",
+    "conventions": "Conventions",
+    "serviceCount_one": "{{count}} service",
+    "serviceCount_other": "{{count}} services",
+    "labels": {
+      "dockerCompose": "Docker Compose",
+      "ciCd": "CI/CD",
+      "deployment": "Deployment",
+      "dockerServices": "Docker Services",
+      "pythonLinting": "Python Linting",
+      "jsLinting": "JS Linting",
+      "formatting": "Formatting",
+      "gitHooks": "Git Hooks",
+      "typescript": "TypeScript",
+      "enabled": "Enabled"
+    },
+    "serviceDetails": {
+      "testing": "Testing: {{value}}",
+      "orm": "ORM: {{value}}",
+      "port": "Port: {{value}}",
+      "styling": "Styling: {{value}}",
+      "state": "State: {{value}}",
+      "appleFrameworks": "Apple Frameworks",
+      "spmDependencies": "SPM Dependencies",
+      "keyDirectories": "Key Directories"
+    }
+  },
+  "memories": {
+    "status": {
+      "title": "Graph Memory Status",
+      "connected": "Connected",
+      "notAvailable": "Not Available",
+      "database": "Database",
+      "path": "Path",
+      "notConfigured": "Graphiti memory is not configured",
+      "enableHint": "To enable graph memory, set <code>GRAPHITI_ENABLED=true</code> in project settings."
+    },
+    "stats": {
+      "total": "Total",
+      "prReviews": "PR Reviews",
+      "sessions": "Sessions",
+      "codebase": "Codebase",
+      "patterns": "Patterns",
+      "gotchas": "Gotchas"
+    },
+    "filters": {
+      "all": "All",
+      "pr": "PR Reviews",
+      "sessions": "Sessions",
+      "codebase": "Codebase",
+      "patterns": "Patterns",
+      "gotchas": "Gotchas"
+    },
+    "search": {
+      "title": "Search Memories",
+      "placeholder": "Search for patterns, insights, gotchas...",
+      "resultCount_one": "{{count}} result found",
+      "resultCount_other": "{{count}} results found",
+      "score": "Score: {{score}}"
+    },
+    "browser": {
+      "title": "Memory Browser",
+      "memoryCount": "{{filtered}} of {{total}} memories",
+      "export": "Export",
+      "noMemories": "No memories recorded yet. Memories are created during AI agent sessions and PR reviews.",
+      "noMatch": "No memories match the selected filter.",
+      "showAll": "Show all memories"
+    },
+    "graph": {
+      "noData": "No graph data available",
+      "nodesWillAppear": "Memory nodes will appear here as they are created",
+      "legend": "Legend",
+      "episodic": "Episodic",
+      "entity": "Entity"
+    }
+  },
+  "memoryCard": {
+    "expand": "Expand",
+    "collapse": "Collapse",
+    "whatWorked": "What Worked",
+    "whatFailed": "What Failed",
+    "approach": "Approach",
+    "recommendations": "Recommendations",
+    "patterns": "Patterns",
+    "gotchas": "Gotchas",
+    "changedFiles": "Changed Files",
+    "fileInsights": "File Insights",
+    "subtasksCompleted": "Subtasks Completed",
+    "delete": {
+      "title": "Delete Memory",
+      "description": "Are you sure you want to delete this memory? This action cannot be undone.",
+      "confirm": "Delete",
+      "cancel": "Cancel"
+    }
+  },
+  "prReviewCard": {
+    "review": "PR Review",
+    "approved": "Approved",
+    "changesRequested": "Changes Requested",
+    "commented": "Commented",
+    "followup": "Follow-up",
+    "findingCount_one": "{{count}} finding",
+    "findingCount_other": "{{count}} findings",
+    "keyFindings": "Key Findings",
+    "gotchasDiscovered": "Gotchas Discovered",
+    "patternsIdentified": "Patterns Identified",
+    "viewOnGitHub": "View PR on GitHub",
+    "moreFindings": "+{{count}} more findings",
+    "delete": {
+      "title": "Delete PR Review Memory",
+      "description": "Are you sure you want to delete this PR review memory? This action cannot be undone.",
+      "confirm": "Delete",
+      "cancel": "Cancel"
+    },
+    "details": "Details",
+    "collapse": "Collapse"
+  },
+  "exportDialog": {
+    "title": "Export Memory Data",
+    "description": "Export your memory graph in various formats for backup or analysis.",
+    "format": "Export Format",
+    "jsonFormat": "JSON (Structured Data)",
+    "csvFormat": "CSV (Spreadsheet)",
+    "memoryType": "Memory Type",
+    "allTypes": "All Types",
+    "includeMetadata": "Include metadata (IDs, scores, session numbers)",
+    "memoriesToExport": "Memories to export:",
+    "noData": "No data to export",
+    "noMemories": "No memories to export with the selected filters",
+    "cancel": "Cancel",
+    "export": "Export",
+    "exporting": "Exporting...",
+    "error": "Failed to export memories",
+    "memoryTypes": {
+      "all": "All Types",
+      "session_insight": "Session Insights",
+      "codebase_discovery": "Codebase Discoveries",
+      "codebase_map": "Codebase Maps",
+      "pattern": "Patterns",
+      "gotcha": "Gotchas",
+      "task_outcome": "Task Outcomes",
+      "pr_review": "PR Reviews",
+      "pr_finding": "PR Findings",
+      "pr_pattern": "PR Patterns",
+      "pr_gotcha": "PR Gotchas"
+    }
+  }
+}

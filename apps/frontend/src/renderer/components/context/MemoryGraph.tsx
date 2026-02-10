@@ -1,4 +1,5 @@
 import { useCallback, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   ReactFlow,
   Node,
@@ -97,6 +98,7 @@ function transformEdges(graphEdges: GraphEdge[]): Edge[] {
 }
 
 export function MemoryGraph({ nodes: graphNodes, edges: graphEdges }: MemoryGraphProps) {
+  const { t } = useTranslation('context');
   // Transform graph data to ReactFlow format
   const initialNodes = useMemo(() => transformNodes(graphNodes), [graphNodes]);
   const initialEdges = useMemo(() => transformEdges(graphEdges), [graphEdges]);
@@ -121,8 +123,8 @@ export function MemoryGraph({ nodes: graphNodes, edges: graphEdges }: MemoryGrap
       <Card className="bg-muted/30 border-border/50 flex items-center justify-center h-[500px]">
         <div className="text-center text-muted-foreground space-y-2">
           <Database className="h-12 w-12 mx-auto opacity-50" />
-          <p className="text-sm">No graph data available</p>
-          <p className="text-xs">Memory nodes will appear here as they are created</p>
+          <p className="text-sm">{t('memories.graph.noData')}</p>
+          <p className="text-xs">{t('memories.graph.nodesWillAppear')}</p>
         </div>
       </Card>
     );
@@ -170,18 +172,18 @@ export function MemoryGraph({ nodes: graphNodes, edges: graphEdges }: MemoryGrap
         <Panel position="top-right" className="bg-background/80 backdrop-blur-sm border border-border rounded-lg p-3 space-y-2">
           <div className="flex items-center gap-2 text-xs">
             <Info className="h-3 w-3 text-muted-foreground" />
-            <span className="text-muted-foreground font-medium">Legend</span>
+            <span className="text-muted-foreground font-medium">{t('memories.graph.legend')}</span>
           </div>
           <div className="flex items-center gap-2 text-xs">
             <Brain className="h-3 w-3 text-accent" />
             <Badge variant="outline" className="bg-accent/10 text-accent border-accent/30 text-xs">
-              Episodic
+              {t('memories.graph.episodic')}
             </Badge>
           </div>
           <div className="flex items-center gap-2 text-xs">
             <Database className="h-3 w-3 text-primary" />
             <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30 text-xs">
-              Entity
+              {t('memories.graph.entity')}
             </Badge>
           </div>
         </Panel>
