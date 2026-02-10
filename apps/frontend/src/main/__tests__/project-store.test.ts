@@ -47,8 +47,8 @@ async function waitForFile(filePath: string, timeout = 2000): Promise<string> {
 
 /**
  * Wait for the ProjectStore's async initialization to complete.
- * The constructor fires initializeAsync() in the background (not awaited),
- * which can race with subsequent synchronous method calls. This helper
+ * The constructor fires initializeAsync() in the background (fire-and-forget),
+ * which can race with subsequent method calls on macOS. This helper
  * yields enough event-loop ticks for the async init (mkdir + readFile) to finish.
  */
 async function waitForStoreInit(): Promise<void> {
