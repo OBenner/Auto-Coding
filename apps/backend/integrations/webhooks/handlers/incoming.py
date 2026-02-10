@@ -320,6 +320,203 @@ class IncomingWebhookHandler(ABC):
 
 
 # =============================================================================
+# GitHub Webhook Handler
+# =============================================================================
+
+
+class GitHubWebhookHandler(IncomingWebhookHandler):
+    """
+    Handler for GitHub webhooks.
+
+    Processes incoming webhooks from GitHub for events like:
+    - Push events (commits pushed to a branch)
+    - Pull request events (PR opened, merged, closed)
+
+    Extracts repository, branch, and commit information to trigger builds.
+    """
+
+    def validate_payload(self, payload: dict[str, Any]) -> bool:
+        """
+        Validate that the payload is a correctly formatted GitHub webhook.
+
+        Args:
+            payload: Webhook payload data
+
+        Returns:
+            True if payload is valid GitHub webhook, False otherwise
+        """
+        # GitHub webhooks should have a 'repository' key
+        if "repository" not in payload:
+            return False
+
+        # Repository should be a dict with 'name' and 'full_name'
+        repository = payload.get("repository", {})
+        if not isinstance(repository, dict):
+            return False
+
+        if "name" not in repository or "full_name" not in repository:
+            return False
+
+        # Should have some kind of event indicator
+        # Either 'ref' (for push) or 'pull_request' (for PR events)
+        # or 'action' (for most other events)
+        if not any(key in payload for key in ["ref", "pull_request", "action"]):
+            return False
+
+        return True
+
+    def extract_event_data(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """
+        Extract relevant data from the GitHub webhook payload.
+
+        Args:
+            payload: Webhook payload data
+
+        Returns:
+            Dictionary with extracted data (event type, repo, branch, etc.)
+        """
+        repository = payload.get("repository", {})
+
+        # Extract repository information
+        repo_name = repository.get("name", "")
+        repo_full_name = repository.get("full_name", "")
+        repo_url = repository.get("html_url", "")
+        clone_url = repository.get("clone_url", "")
+
+        # Determine event type
+        event_type = "unknown"
+        if "ref" in payload:
+            event_type = "push"
+        elif "pull_request" in payload:
+            event_type = "pull_request"
+
+        # Extract branch/ref information
+        ref = payload.get("ref", "")
+        branch = ""
+
+        if ref.startswith("refs/heads/"):
+            branch = ref.replace("refs/heads/", "")
+        elif ref.startswith("refs/tags/"):
+            branch = ref.replace("refs/tags/", "")
+
+        # Extract PR information if present
+        pr_info = {}
+        if "pull_request" in payload:
+            pr = payload.get("pull_request", {})
+            pr_info = {
+                "pr_number": pr.get("number"),
+                "pr_title": pr.get("title"),
+                "pr_action": payload.get("action", ""),
+                "pr_state": pr.get("state", ""),
+                "pr_merged": pr.get("merged", False),
+                "pr_merge_commit_sha": pr.get("merge_commit_sha"),
+            }
+
+        # Extract sender/actor information
+        sender = payload.get("sender", {})
+        actor = sender.get("login", "")
+
+        # Extract commit information
+        commit_info = {}
+        if event_type == "push":
+            commit_info = {
+                "before": payload.get("before", ""),
+                "after": payload.get("after", ""),
+                "commits": [
+                    {
+                        "id": c.get("id"),
+                        "message": c.get("message"),
+                        "author": c.get("author", {}).get("name"),
+                        "url": c.get("url"),
+                    }
+                    for c in payload.get("commits", [])
+                ],
+                "pusher": payload.get("pusher", {}).get("email", ""),
+            }
+        elif event_type == "pull_request":
+            pr = payload.get("pull_request", {})
+            commit_info = {
+                "pr_head_sha": pr.get("head", {}).get("sha"),
+                "pr_base_sha": pr.get("base", {}).get("sha"),
+                "pr_merge_commit_sha": pr.get("merge_commit_sha"),
+            }
+
+        # Build extracted data
+        extracted = {
+            "integration": "github",
+            "event_type": event_type,
+            "repo_name": repo_name,
+            "repo_full_name": repo_full_name,
+            "repo_url": repo_url,
+            "clone_url": clone_url,
+            "ref": ref,
+            "branch": branch,
+            "actor": actor,
+            **pr_info,
+            "commits": commit_info,
+        }
+
+        # Add spec_id if available from webhook config mapping
+        # This would be set when the webhook is configured
+        # For now, we'll derive it from the branch name or PR title
+        if branch:
+            # Try to extract spec ID from branch name (e.g., "feature/084-xxx")
+            if "-" in branch:
+                parts = branch.split("-")
+                if len(parts) >= 2 and parts[1].isdigit():
+                    extracted["spec_id"] = f"{parts[0]}-{parts[1]}"
+
+        return extracted
+
+    def determine_action(self, payload: dict[str, Any]) -> WebhookAction:
+        """
+        Determine what action to take based on the GitHub webhook payload.
+
+        Args:
+            payload: Webhook payload data
+
+        Returns:
+            WebhookAction indicating what action to take
+        """
+        # Handle push events
+        if "ref" in payload:
+            ref = payload.get("ref", "")
+
+            # Only trigger on branch pushes, not tags
+            if ref.startswith("refs/heads/"):
+                branch = ref.replace("refs/heads/", "")
+
+                # Skip specific branches if needed
+                # For example, skip build branches or dependency update bots
+                if branch in ["main", "master", "develop"]:
+                    # Could still trigger if configured
+                    logger.debug(f"Push to {branch} - no action by default")
+                    return WebhookAction.NO_ACTION
+
+                # Trigger build for feature branches
+                logger.info(f"Push to feature branch {branch} - triggering build")
+                return WebhookAction.TRIGGER_BUILD
+
+        # Handle pull request events
+        if "pull_request" in payload:
+            action = payload.get("action", "")
+            pr = payload.get("pull_request", {})
+            merged = pr.get("merged", False)
+
+            # Only trigger on merged PRs
+            if action == "closed" and merged:
+                logger.info("PR merged - triggering build")
+                return WebhookAction.TRIGGER_BUILD
+
+            # Could also trigger when PR is opened for testing
+            if action == "opened":
+                logger.info("PR opened - could trigger test build")
+                return WebhookAction.NO_ACTION
+
+        return WebhookAction.NO_ACTION
+
+
+# =============================================================================
 # Handler Registry
 # =============================================================================
 
@@ -418,3 +615,12 @@ def create_handler_for_webhook(
     """
     integration = webhook_config.integration.value
     return HandlerRegistry.get_handler(integration, spec_dir, project_dir)
+
+
+# =============================================================================
+# Handler Registration
+# =============================================================================
+
+
+# Register built-in handlers
+HandlerRegistry.register("github", GitHubWebhookHandler)
