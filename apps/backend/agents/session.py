@@ -496,6 +496,14 @@ async def post_session_processing(
             approach=f"Implemented: {subtask.get('description', 'subtask')[:100]}",
         )
 
+        # Get recovery hints for context (if this was a retry)
+        attempt_count = recovery_manager.get_attempt_count(subtask_id)
+        recovery_hints = (
+            recovery_manager.get_recovery_hints(subtask_id)
+            if attempt_count > 1
+            else None
+        )
+
         # Record good commit for rollback safety
         if commit_after and commit_after != commit_before:
             recovery_manager.record_good_commit(commit_after, subtask_id)
@@ -574,6 +582,15 @@ async def post_session_processing(
             error="Subtask not marked as completed",
         )
 
+        # Get recovery hints to help next attempt
+        attempt_count = recovery_manager.get_attempt_count(subtask_id)
+        recovery_hints = recovery_manager.get_recovery_hints(subtask_id)
+        if recovery_hints:
+            print_status(
+                f"Recovery hints available for next attempt ({attempt_count} attempts so far)",
+                "info",
+            )
+
         # Still record commit if one was made (partial progress)
         if commit_after and commit_after != commit_before:
             recovery_manager.record_good_commit(commit_after, subtask_id)
@@ -636,6 +653,14 @@ async def post_session_processing(
             approach="Session ended without progress",
             error=f"Subtask status is {subtask_status}",
         )
+
+        # Get recovery hints to help diagnose and retry
+        attempt_count = recovery_manager.get_attempt_count(subtask_id)
+        recovery_hints = recovery_manager.get_recovery_hints(subtask_id)
+        if recovery_hints and attempt_count > 0:
+            print_status(
+                f"Recovery hints available ({attempt_count} attempts)", "info"
+            )
 
         # Record Linear session result (if enabled)
         if linear_enabled:
