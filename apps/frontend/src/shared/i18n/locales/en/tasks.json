@@ -399,5 +399,23 @@
   "gitlabIssues": {
     "quickCreateSpec": "Quick Create Spec",
     "investigate": "Investigate"
+  },
+  "batchStatusUpdate": {
+    "title": "Update Status",
+    "description": "Update status for {{count}} selected task(s)",
+    "updating": "Updating status ({{current}} of {{total}})...",
+    "resultsDescription": "{{success}} succeeded, {{failed}} failed",
+    "tasksToUpdate": "Tasks to update",
+    "newStatus": "New Status",
+    "selectStatus": "Select status",
+    "statusHint": "All selected tasks will be updated to this status",
+    "updateAll": "Update All",
+    "updatingStatus": "Updating task {{current}} of {{total}}",
+    "completed": "completed",
+    "succeeded": "succeeded",
+    "failed": "failed",
+    "errors": {
+      "unknown": "An unknown error occurred"
+    }
   }
 }
