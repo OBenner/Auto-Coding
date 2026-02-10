@@ -170,12 +170,127 @@ class DependencyScanner:
         self, project_dir: Path, result: DependencyScanResult
     ) -> None:
         """
-        Scan Python dependencies for updates.
+        Scan Python dependencies for updates using pip list --outdated.
 
-        Will be implemented in subtask-1-2.
+        Checks for outdated Python packages and adds them to the result.
+        Supports both pip and uv package managers.
         """
-        # Placeholder - to be implemented in subtask-1-2
-        pass
+        # Try uv first (faster), then fall back to pip
+        if self._check_uv_available():
+            self._scan_python_with_uv(project_dir, result)
+        elif self._check_pip_available():
+            self._scan_python_with_pip(project_dir, result)
+        else:
+            result.scan_errors.append(
+                "Python dependency scanning skipped - pip/uv not available"
+            )
+
+    def _scan_python_with_pip(
+        self, project_dir: Path, result: DependencyScanResult
+    ) -> None:
+        """Scan Python dependencies using pip."""
+        try:
+            # Run pip list --outdated --format=json
+            proc = subprocess.run(
+                ["pip", "list", "--outdated", "--format=json"],
+                capture_output=True,
+                text=True,
+                timeout=30,
+                cwd=project_dir,
+            )
+
+            if proc.returncode != 0:
+                result.scan_errors.append(
+                    f"pip list --outdated failed: {proc.stderr.strip()}"
+                )
+                return
+
+            # Parse JSON output
+            outdated_packages = json.loads(proc.stdout)
+
+            for pkg in outdated_packages:
+                name = pkg.get("name", "unknown")
+                current = pkg.get("version", "unknown")
+                latest = pkg.get("latest_version", "unknown")
+
+                # Classify update type
+                update_type = self._classify_update_type(current, latest)
+
+                # Create DependencyUpdate object
+                update = DependencyUpdate(
+                    name=name,
+                    current_version=current,
+                    latest_version=latest,
+                    update_type=update_type,
+                    ecosystem="python",
+                    changelog_url=f"https://pypi.org/project/{name}/{latest}/",
+                )
+
+                result.updates_available.append(update)
+
+        except subprocess.TimeoutExpired:
+            result.scan_errors.append(
+                "pip list --outdated timed out after 30 seconds"
+            )
+        except json.JSONDecodeError as e:
+            result.scan_errors.append(f"Failed to parse pip output: {e}")
+        except Exception as e:
+            result.scan_errors.append(f"Python dependency scan error: {e}")
+
+    def _scan_python_with_uv(
+        self, project_dir: Path, result: DependencyScanResult
+    ) -> None:
+        """Scan Python dependencies using uv (faster alternative to pip)."""
+        try:
+            # Run uv pip list --outdated --format=json
+            proc = subprocess.run(
+                ["uv", "pip", "list", "--outdated", "--format=json"],
+                capture_output=True,
+                text=True,
+                timeout=30,
+                cwd=project_dir,
+            )
+
+            if proc.returncode != 0:
+                # Fall back to pip if uv fails
+                result.scan_errors.append(
+                    f"uv pip list --outdated failed, falling back to pip: {proc.stderr.strip()}"
+                )
+                if self._check_pip_available():
+                    self._scan_python_with_pip(project_dir, result)
+                return
+
+            # Parse JSON output (same format as pip)
+            outdated_packages = json.loads(proc.stdout)
+
+            for pkg in outdated_packages:
+                name = pkg.get("name", "unknown")
+                current = pkg.get("version", "unknown")
+                latest = pkg.get("latest_version", "unknown")
+
+                # Classify update type
+                update_type = self._classify_update_type(current, latest)
+
+                # Create DependencyUpdate object
+                update = DependencyUpdate(
+                    name=name,
+                    current_version=current,
+                    latest_version=latest,
+                    update_type=update_type,
+                    ecosystem="python",
+                    changelog_url=f"https://pypi.org/project/{name}/{latest}/",
+                )
+
+                result.updates_available.append(update)
+
+        except subprocess.TimeoutExpired:
+            result.scan_errors.append(
+                "uv pip list --outdated timed out after 30 seconds"
+            )
+        except json.JSONDecodeError as e:
+            result.scan_errors.append(f"Failed to parse uv output: {e}")
+        except Exception as e:
+            result.scan_errors.append(f"Python dependency scan error (uv): {e}")
 
     def _scan_node_dependencies(
         self, project_dir: Path, result: DependencyScanResult
