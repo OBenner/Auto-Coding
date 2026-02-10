@@ -1,4 +1,4 @@
-import i18n from '@/shared/i18n';
+import i18n from '@shared/i18n';
 
 export function formatDate(timestamp: string): string {
   if (!timestamp) return '';

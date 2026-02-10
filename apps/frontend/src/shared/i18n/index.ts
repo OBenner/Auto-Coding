@@ -156,7 +156,7 @@ i18n
     react: {
       useSuspense: false // Disable suspense for Electron compatibility
     },
-    missingKeyHandler: (lngs: string[], ns: string, key: string, fallbackValue: string) => {
+    missingKeyHandler: (lngs: readonly string[], ns: string, key: string, fallbackValue: string, updateMissing: boolean, options: any) => {
       debugWarn(`[i18n] Missing translation key: "${ns}:${key}" for languages: ${lngs.join(', ')}`);
     }
   });
