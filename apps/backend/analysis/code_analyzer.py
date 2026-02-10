@@ -95,6 +95,7 @@ class AnalysisResult:
         total_lines: Total lines in file
         edge_cases: List of detected edge case patterns
         naming_conventions: Detected naming conventions (variable, function, class styles)
+        error_patterns: Detected error handling patterns (exception types, logging, etc.)
     """
 
     file_path: str
@@ -105,6 +106,7 @@ class AnalysisResult:
     total_lines: int = 0
     edge_cases: list[dict[str, Any]] = field(default_factory=list)
     naming_conventions: dict[str, Any] = field(default_factory=dict)
+    error_patterns: dict[str, Any] = field(default_factory=dict)
 
 
 # =============================================================================
@@ -212,6 +214,9 @@ class CodeAnalyzer:
 
         # Detect naming conventions in this file
         result.naming_conventions = self._detect_naming_conventions(result)
+
+        # Detect error handling patterns in this file
+        result.error_patterns = self._detect_error_patterns(tree)
 
         return result
 
@@ -561,6 +566,113 @@ class CodeAnalyzer:
 
         return None
 
+    def _detect_error_patterns(self, tree: ast.AST) -> dict[str, Any]:
+        """
+        Detect error handling patterns in the analyzed file.
+
+        Analyzes try/except blocks, exception types, logging patterns,
+        and error propagation strategies.
+
+        Args:
+            tree: AST tree of the source code
+
+        Returns:
+            Dictionary with detected error patterns:
+            - exception_types: List of exception types caught/raised
+            - custom_exceptions: Custom exception classes defined
+            - has_logging: Whether error logging is used
+            - error_strategy: Whether errors are handled or propagated
+        """
+        patterns = {
+            "exception_types": [],
+            "custom_exceptions": [],
+            "has_logging": False,
+            "error_strategy": "unknown",
+            "try_except_count": 0,
+            "raise_count": 0,
+        }
+
+        try_blocks = 0
+        re_raises = 0
+        handles = 0
+
+        for node in ast.walk(tree):
+            # Detect custom exception classes
+            if isinstance(node, ast.ClassDef):
+                for base in node.bases:
+                    base_name = ""
+                    if isinstance(base, ast.Name):
+                        base_name = base.id
+                    elif isinstance(base, ast.Attribute):
+                        base_name = ast.unparse(base)
+
+                    if "Exception" in base_name or "Error" in base_name:
+                        patterns["custom_exceptions"].append(node.name)
+
+            # Analyze try/except blocks
+            elif isinstance(node, ast.Try):
+                try_blocks += 1
+                for handler in node.handlers:
+                    # Extract exception type
+                    if handler.type:
+                        exc_type = None
+                        if isinstance(handler.type, ast.Name):
+                            exc_type = handler.type.id
+                        elif isinstance(handler.type, ast.Attribute):
+                            exc_type = ast.unparse(handler.type)
+
+                        if exc_type and exc_type not in patterns["exception_types"]:
+                            patterns["exception_types"].append(exc_type)
+
+                    # Check for logging in handler
+                    for child in ast.walk(handler):
+                        if isinstance(child, ast.Call) and isinstance(
+                            child.func, ast.Attribute
+                        ):
+                            attr = child.func.attr
+                            if attr in ["error", "exception", "warning", "critical"]:
+                                patterns["has_logging"] = True
+
+                    # Check if exception is re-raised
+                    has_reraise = any(
+                        isinstance(n, ast.Raise) and n.exc is None
+                        for n in ast.walk(handler)
+                    )
+                    if has_reraise:
+                        re_raises += 1
+                    else:
+                        handles += 1
+
+            # Count raise statements
+            elif isinstance(node, ast.Raise):
+                patterns["raise_count"] += 1
+                # Extract raised exception type
+                if node.exc:
+                    exc_type = None
+                    if isinstance(node.exc, ast.Call):
+                        if isinstance(node.exc.func, ast.Name):
+                            exc_type = node.exc.func.id
+                        elif isinstance(node.exc.func, ast.Attribute):
+                            exc_type = ast.unparse(node.exc.func)
+
+                    if exc_type and exc_type not in patterns["exception_types"]:
+                        patterns["exception_types"].append(exc_type)
+
+        patterns["try_except_count"] = try_blocks
+
+        # Determine error strategy
+        if try_blocks > 0:
+            if re_raises > handles:
+                patterns["error_strategy"] = "propagate"
+            elif handles > 0:
+                patterns["error_strategy"] = "handle"
+            else:
+                patterns["error_strategy"] = "mixed"
+        elif patterns["raise_count"] > 0:
+            patterns["error_strategy"] = "raise_only"
+
+        return patterns
+
     def _result_to_dict(self, result: AnalysisResult) -> dict[str, Any]:
         """Convert AnalysisResult to dictionary."""
         return {
@@ -606,4 +718,5 @@ class CodeAnalyzer:
             "total_lines": result.total_lines,
             "edge_cases": result.edge_cases,
             "naming_conventions": result.naming_conventions,
+            "error_patterns": result.error_patterns,
         }
