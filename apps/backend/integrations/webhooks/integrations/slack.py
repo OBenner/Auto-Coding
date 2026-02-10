@@ -126,8 +126,9 @@ class SlackIntegration(BaseIntegration):
         """
         try:
             # Create a test event
+            from ..models import WebhookEventType
             test_event = WebhookEvent(
-                type="custom",  # type: ignore[arg-type]
+                type=WebhookEventType.CUSTOM,
                 data={
                     "test": True,
                     "message": "This is a test notification from Auto Claude",
