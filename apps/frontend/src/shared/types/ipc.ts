@@ -46,7 +46,9 @@ import type {
   TaskMetadata,
   TaskLogs,
   TaskLogStreamChunk,
-  ImageAttachment
+  ImageAttachment,
+  BackgroundTask,
+  BackgroundTaskStatus
 } from './task';
 import type {
   MergeOperationRecord,
@@ -197,6 +199,14 @@ export interface ElectronAPI {
   archiveTasks: (projectId: string, taskIds: string[], version?: string) => Promise<IPCResult<boolean>>;
   unarchiveTasks: (projectId: string, taskIds: string[]) => Promise<IPCResult<boolean>>;
 
+  // Background task operations (long-running commands)
+  backgroundTaskStart: (command: string, workingDir: string, timeout?: number) => Promise<IPCResult<{ taskId: string }>>;
+  backgroundTaskCancel: (taskId: string) => Promise<IPCResult<{ cancelled: boolean }>>;
+  backgroundTaskGetStatus: (taskId: string) => Promise<IPCResult<BackgroundTask>>;
+  backgroundTaskGetOutput: (taskId: string) => Promise<IPCResult<{ output: string }>>;
+  backgroundTaskListRunning: () => Promise<IPCResult<BackgroundTask[]>>;
+  backgroundTaskListByStatus: (status: BackgroundTaskStatus) => Promise<IPCResult<BackgroundTask[]>>;
+
   // Merge analytics operations
   getMergeHistory: (projectId: string, filter?: MergeAnalyticsFilter) => Promise<IPCResult<MergeOperationRecord[]>>;
   getMergeSummary: (projectId: string, filter?: MergeAnalyticsFilter) => Promise<IPCResult<MergeAnalytics>>;
@@ -209,6 +219,11 @@ export interface ElectronAPI {
   onTaskLog: (callback: (taskId: string, log: string) => void) => () => void;
   onTaskStatusChange: (callback: (taskId: string, status: TaskStatus) => void) => () => void;
   onTaskExecutionProgress: (callback: (taskId: string, progress: ExecutionProgress) => void) => () => void;
+
+  // Background task event listeners
+  onBackgroundTaskProgress?: (callback: (taskId: string, output: string) => void) => () => void;
+  onBackgroundTaskComplete?: (callback: (taskId: string) => void) => () => void;
+  onBackgroundTaskError?: (callback: (taskId: string, error: string) => void) => () => void;
 
   // Terminal operations
   createTerminal: (options: TerminalCreateOptions) => Promise<IPCResult>;

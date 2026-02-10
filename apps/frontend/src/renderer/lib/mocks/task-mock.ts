@@ -84,6 +84,50 @@ export const taskMock = {
 
   unwatchTaskLogs: async () => ({ success: true }),
 
+  // Background task operations (long-running commands)
+  backgroundTaskStart: async (_command: string, _workingDir: string, _timeout?: number) => ({
+    success: true,
+    data: { taskId: `bg-task-${Date.now()}` }
+  }),
+
+  backgroundTaskCancel: async () => ({
+    success: true,
+    data: { cancelled: true }
+  }),
+
+  backgroundTaskGetStatus: async (taskId: string) => ({
+    success: true,
+    data: {
+      id: taskId,
+      command: 'echo "Mock command"',
+      workingDir: '/mock/path',
+      status: 'completed' as const,
+      createdAt: new Date().toISOString(),
+      startedAt: new Date().toISOString(),
+      completedAt: new Date().toISOString(),
+      timeout: 14400,
+      output: 'Mock output\n',
+      error: null,
+      exitCode: 0,
+      pid: null
+    }
+  }),
+
+  backgroundTaskGetOutput: async () => ({
+    success: true,
+    data: { output: 'Mock output\n' }
+  }),
+
+  backgroundTaskListRunning: async () => ({
+    success: true,
+    data: []
+  }),
+
+  backgroundTaskListByStatus: async () => ({
+    success: true,
+    data: []
+  }),
+
   // Event Listeners (no-op in browser)
   onTaskProgress: () => () => {},
   onTaskError: () => () => {},
@@ -91,5 +135,8 @@ export const taskMock = {
   onTaskStatusChange: () => () => {},
   onTaskExecutionProgress: () => () => {},
   onTaskLogsChanged: () => () => {},
-  onTaskLogsStream: () => () => {}
+  onTaskLogsStream: () => () => {},
+  onBackgroundTaskProgress: () => () => {},
+  onBackgroundTaskComplete: () => () => {},
+  onBackgroundTaskError: () => () => {}
 };
