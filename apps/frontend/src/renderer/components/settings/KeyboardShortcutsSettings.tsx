@@ -18,7 +18,8 @@ import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { cn } from '../../lib/utils';
 import { SettingsSection } from './SettingsSection';
-import { useKeyboardShortcutsStore, formatKeyCombination, parseKeyboardEvent, type KeyboardShortcutAction } from '../../stores/keyboard-shortcuts-store';
+import { useKeyboardShortcutsStore, formatKeyCombination, parseKeyboardEvent } from '../../stores/keyboard-shortcuts-store';
+import type { KeyboardShortcutAction } from '../../../shared/types/settings';
 import { DEFAULT_KEYBOARD_SHORTCUTS } from '../../../shared/types/settings';
 import { useToast } from '../../hooks/use-toast';
 
@@ -88,7 +89,7 @@ export function KeyboardShortcutsSettings({ isOpen }: KeyboardShortcutsSettingsP
   // Track changes
   useEffect(() => {
     const hasChanged = Object.entries(shortcuts).some(
-      ([action, keyCombo]) => keyCombo !== DEFAULT_KEYBOARD_SHORTCUTS[action as KeyboardShortcutAction]
+      ([action, keyCombo]) => keyCombo !== DEFAULT_KEYBOARD_SHORTCUTS[action as keyof typeof DEFAULT_KEYBOARD_SHORTCUTS]
     );
     setHasChanges(hasChanged);
   }, [shortcuts]);
@@ -109,7 +110,7 @@ export function KeyboardShortcutsSettings({ isOpen }: KeyboardShortcutsSettingsP
     setRecordedKeys(formatKeyCombination(parsed));
 
     // Auto-save on first key press
-    if (parsed && parsed !== shortcuts[isRecording]) {
+    if (parsed && isRecording && parsed !== shortcuts[isRecording]) {
       updateShortcut(isRecording, parsed);
       setIsRecording(null);
       setRecordedKeys('');
@@ -180,7 +181,7 @@ export function KeyboardShortcutsSettings({ isOpen }: KeyboardShortcutsSettingsP
         {/* Shortcuts list */}
         <div className="space-y-3">
           {shortcutDefinitions.map((definition) => {
-            const currentShortcut = shortcuts[definition.action];
+            const currentShortcut = shortcuts[definition.action as keyof typeof shortcuts];
             const isCurrentlyRecording = isRecording === definition.action;
 
             return (

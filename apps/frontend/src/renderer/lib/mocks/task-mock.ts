@@ -94,6 +94,16 @@ export const taskMock = {
 
   checkTaskRunning: async () => ({ success: true, data: false }),
 
+  // Batch operations
+  batchRunQA: async (taskId: string) => ({
+    success: true,
+    data: {
+      success: true,
+      issues: []
+    },
+    error: undefined
+  }),
+
   // Task logs operations
   getTaskLogs: async () => ({
     success: true,

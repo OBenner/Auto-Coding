@@ -1241,7 +1241,7 @@ export function registerTaskExecutionHandlers(
         }
 
         // Check if task is in a valid state for QA
-        if (task.status === 'backlog' || task.status === 'planning') {
+        if (task.status === 'backlog') {
           return {
             success: false,
             error: 'Task not started. Cannot run QA on a task that has not been started yet.'

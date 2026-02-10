@@ -57,7 +57,7 @@ export function BatchStatusUpdateDialog({
 }: BatchStatusUpdateDialogProps) {
   const { t } = useTranslation(['tasks', 'common']);
   const addRecentAction = useQuickActionsStore((state) => state.addRecentAction);
-  const selectedProjectId = useProjectStore((state) => state.activeProjectId || state.selectedProjectId);
+  const selectedProjectId = useProjectStore((state) => (state.activeProjectId || state.selectedProjectId) ?? undefined);
 
   // Common options for all status updates
   const [newStatus, setNewStatus] = useState<TaskStatus | ''>('');

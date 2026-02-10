@@ -64,7 +64,7 @@ export function BatchQADialog({
 }: BatchQADialogProps) {
   const { t } = useTranslation(['taskReview', 'common', 'tasks']);
   const addRecentAction = useQuickActionsStore((state) => state.addRecentAction);
-  const selectedProjectId = useProjectStore((state) => state.activeProjectId || state.selectedProjectId);
+  const selectedProjectId = useProjectStore((state) => (state.activeProjectId || state.selectedProjectId) ?? undefined);
 
   // Progress tracking
   const [step, setStep] = useState<'confirm' | 'running' | 'results'>('confirm');
