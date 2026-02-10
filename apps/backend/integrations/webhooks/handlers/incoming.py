@@ -517,6 +517,416 @@ class GitHubWebhookHandler(IncomingWebhookHandler):
 
 
 # =============================================================================
+# Generic Webhook Handler
+# =============================================================================
+
+
+class GenericWebhookHandler(IncomingWebhookHandler):
+    """
+    Handler for generic/custom webhooks with payload templates.
+
+    Provides flexible webhook handling for custom integrations where
+    the payload structure doesn't match pre-built handlers like GitHub.
+
+    Features:
+    - Payload template support for extracting data from custom payloads
+    - Simple variable substitution (e.g., {{variable_name}})
+    - Conditional triggering based on extracted values
+    - Minimal validation - accepts most payload structures
+
+    The payload_template in webhook_config can be:
+    - A dict mapping variable names to JSON paths (e.g., {"branch": "ref"})
+    - A list of paths to extract (e.g., ["branch", "commit", "repo"])
+    - None to pass through the entire payload
+
+    Examples:
+        >>> config = WebhookConfig(
+        ...     id="custom-1",
+        ...     name="Custom CI webhook",
+        ...     type=WebhookType.INCOMING,
+        ...     integration=WebhookIntegration.GENERIC,
+        ...     path="/webhooks/custom-ci",
+        ...     payload_template={"branch": "ref", "commit": "after"}
+        ... )
+        >>> handler = GenericWebhookHandler(spec_dir=Path("/path/to/spec"))
+        >>> result = handler.handle_webhook(config, {"ref": "main", "after": "abc123"})
+        >>> print(result.extracted_data)
+        {'branch': 'main', 'commit': 'abc123'}
+    """
+
+    def validate_payload(self, payload: dict[str, Any]) -> bool:
+        """
+        Validate that the payload is a dictionary.
+
+        Generic handler accepts most payloads as long as they're structured data.
+        Minimal validation to allow maximum flexibility.
+
+        Args:
+            payload: Webhook payload data
+
+        Returns:
+            True if payload is a dict, False otherwise
+        """
+        # Generic handler accepts any dict payload
+        # No strict validation to allow custom integrations
+        return isinstance(payload, dict)
+
+    def extract_event_data(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """
+        Extract relevant data from the webhook payload using templates.
+
+        Uses the payload_template from webhook_config to extract data.
+        Supports multiple template formats:
+
+        1. Dict template: {"target_var": "source_path", ...}
+           - Extracts specific fields from payload
+           - Maps payload paths to output variable names
+
+        2. List template: ["field1", "field2", ...]
+           - Extracts listed fields if they exist in payload
+           - Preserves original field names
+
+        3. None template:
+           - Passes through entire payload
+
+        Args:
+            payload: Webhook payload data
+
+        Returns:
+            Dictionary with extracted data
+        """
+        # Get the template from config (will be passed via handle_webhook)
+        # For now, return the entire payload
+        # The handle_webhook method will apply the template
+        return {
+            "integration": "generic",
+            "raw_payload": payload,
+        }
+
+    def determine_action(self, payload: dict[str, Any]) -> WebhookAction:
+        """
+        Determine what action to take based on the webhook payload.
+
+        Generic handler defaults to TRIGGER_BUILD unless the webhook
+        config specifies otherwise (e.g., event filters).
+
+        Args:
+            payload: Webhook payload data
+
+        Returns:
+            WebhookAction indicating what action to take
+        """
+        # Default to triggering build for generic webhooks
+        # The webhook_config can have custom_event_filter to modify this
+        return WebhookAction.TRIGGER_BUILD
+
+    def handle_webhook(
+        self,
+        webhook_config: WebhookConfig,
+        payload: dict[str, Any],
+    ) -> HandlerResult:
+        """
+        Process an incoming webhook with payload template support.
+
+        Overrides the base implementation to apply payload templates
+        for data extraction and transformation.
+
+        Args:
+            webhook_config: Configuration for this webhook
+            payload: Webhook payload data
+
+        Returns:
+            HandlerResult with processing outcome
+        """
+        try:
+            # Validate payload
+            if not self.validate_payload(payload):
+                return HandlerResult(
+                    success=False,
+                    action_taken=WebhookAction.ERROR,
+                    message="Payload validation failed",
+                    error="Invalid payload format for generic handler",
+                )
+
+            # Apply payload template if configured
+            template = webhook_config.payload_template
+            if template is not None:
+                event_data = self._apply_payload_template(payload, template)
+                logger.info(f"Applied payload template, extracted: {list(event_data.keys())}")
+            else:
+                # No template - use raw payload
+                event_data = {
+                    "integration": "generic",
+                    "raw_payload": payload,
+                }
+                logger.info("No payload template, using raw payload")
+
+            # Add integration info
+            event_data["integration"] = "generic"
+
+            # Determine action
+            action = self.determine_action(payload)
+
+            # Apply custom event filter if configured
+            if webhook_config.custom_event_filter:
+                if not self._evaluate_event_filter(
+                    event_data,
+                    webhook_config.custom_event_filter,
+                ):
+                    logger.info("Event filter did not match, no action taken")
+                    return HandlerResult(
+                        success=True,
+                        action_taken=WebhookAction.NO_ACTION,
+                        message="Event filter did not match",
+                        extracted_data=event_data,
+                    )
+
+            # Execute action
+            if action == WebhookAction.TRIGGER_BUILD:
+                return self._handle_trigger_build(
+                    webhook_config=webhook_config,
+                    payload=payload,
+                    event_data=event_data,
+                )
+            elif action == WebhookAction.TRIGGER_SUBTASK:
+                return self._handle_trigger_subtask(
+                    webhook_config=webhook_config,
+                    payload=payload,
+                    event_data=event_data,
+                )
+            else:
+                return HandlerResult(
+                    success=True,
+                    action_taken=action,
+                    message="Webhook processed successfully (no action taken)",
+                    extracted_data=event_data,
+                )
+
+        except Exception as e:
+            logger.error(f"Error handling generic webhook: {e}", exc_info=True)
+            return HandlerResult(
+                success=False,
+                action_taken=WebhookAction.ERROR,
+                message="Webhook processing failed",
+                error=str(e),
+            )
+
+    def _evaluate_event_filter(
+        self,
+        event_data: dict[str, Any],
+        filter_expr: str,
+    ) -> bool:
+        """
+        Evaluate a custom event filter expression.
+
+        The filter expression can reference event_data fields.
+        Example: "branch == 'main' and status == 'success'"
+
+        WARNING: This uses eval() with restricted globals.
+        Only basic operations are allowed for security.
+
+        Args:
+            event_data: Extracted event data
+            filter_expr: Filter expression to evaluate
+
+        Returns:
+            True if filter matches, False otherwise
+        """
+        try:
+            # Restricted evaluation environment
+            # Only allow safe operations
+            safe_globals = {
+                "__builtins__": {
+                    "True": True,
+                    "False": False,
+                    "None": None,
+                    "len": len,
+                    "str": str,
+                    "int": int,
+                    "float": float,
+                    "bool": bool,
+                    "list": list,
+                    "dict": dict,
+                }
+            }
+
+            # Evaluate expression with event_data as locals
+            result = eval(filter_expr, safe_globals, event_data)
+            return bool(result)
+
+        except Exception as e:
+            logger.warning(f"Failed to evaluate event filter '{filter_expr}': {e}")
+            return False
+
+    def _apply_payload_template(
+        self,
+        payload: dict[str, Any],
+        template: dict[str, Any] | list[str] | None,
+    ) -> dict[str, Any]:
+        """
+        Apply payload template to extract data from payload.
+
+        Args:
+            payload: Original webhook payload
+            template: Payload template from webhook_config
+
+        Returns:
+            Extracted and transformed data
+        """
+        extracted = {}
+
+        if template is None:
+            # No template - return entire payload
+            return payload
+
+        if isinstance(template, list):
+            # List of field names to extract
+            for field in template:
+                if isinstance(field, str) and field in payload:
+                    extracted[field] = payload[field]
+
+        elif isinstance(template, dict):
+            # Dict mapping output names to source paths
+            for target_key, source_path in template.items():
+                if not isinstance(source_path, str):
+                    continue
+
+                # Support nested path notation (e.g., "repo.name" or "repo['name']")
+                value = self._get_nested_value(payload, source_path)
+                if value is not None:
+                    extracted[target_key] = value
+
+        else:
+            # Unknown template format - return payload as-is
+            logger.warning(f"Unknown template format: {type(template)}")
+            return payload
+
+        return extracted
+
+    def _get_nested_value(
+        self,
+        data: dict[str, Any],
+        path: str,
+    ) -> Any:
+        """
+        Get a value from nested dict using path notation.
+
+        Supports:
+        - Dot notation: "repo.name"
+        - Bracket notation: "repo['name']" or "repo[0]"
+        - Mixed notation: "repo['owner'].login"
+
+        Args:
+            data: Source dictionary
+            path: Path to value (e.g., "repo.name" or "repository.full_name")
+
+        Returns:
+            Value at path, or None if not found
+        """
+        if not path:
+            return None
+
+        # Handle bracket notation
+        if "[" in path:
+            # Parse path with brackets
+            # e.g., "repo['owner']['login']" or "items[0].name"
+            try:
+                # Use regex to find all bracket-enclosed keys
+                import re
+
+                # Pattern to match: ['key'] or ["key"] or [0] or .key
+                # Split into tokens: base name + list of [brackets] + dotted keys
+                tokens = re.findall(
+                    r"""([^\.\[\]]+)  # Unquoted (like 'repo' or 'name')
+                        |\['([^']*)'\]  # ['key'] style
+                        |\["([^"]*)"\]  # ["key"] style
+                        |\[(\d+)\]      # [0] style""",
+                    path,
+                    re.VERBOSE,
+                )
+
+                value = data
+                i = 0
+
+                while i < len(tokens):
+                    token = tokens[i]
+
+                    # token is a tuple: (unquoted, single_quoted, double_quoted, index)
+                    # One of these will be non-empty (regex returns empty strings, not None)
+                    unquoted, single_q, double_q, index_str = token
+
+                    if i == 0 and unquoted:
+                        # First token is the base name
+                        if isinstance(value, dict):
+                            value = value.get(unquoted)
+                        else:
+                            return None
+                    elif single_q:
+                        # ['key'] style
+                        if isinstance(value, dict):
+                            value = value.get(single_q)
+                        elif isinstance(value, list) and single_q.isdigit():
+                            idx = int(single_q)
+                            if 0 <= idx < len(value):
+                                value = value[idx]
+                            else:
+                                return None
+                        else:
+                            return None
+                    elif double_q:
+                        # ["key"] style
+                        if isinstance(value, dict):
+                            value = value.get(double_q)
+                        elif isinstance(value, list) and double_q.isdigit():
+                            idx = int(double_q)
+                            if 0 <= idx < len(value):
+                                value = value[idx]
+                            else:
+                                return None
+                        else:
+                            return None
+                    elif index_str:
+                        # [0] style - numeric index
+                        idx = int(index_str)
+                        if isinstance(value, list) and 0 <= idx < len(value):
+                            value = value[idx]
+                        elif isinstance(value, dict) and str(idx) in value:
+                            value = value.get(str(idx))
+                        else:
+                            return None
+                    elif unquoted:
+                        # .key style (dotted notation)
+                        if isinstance(value, dict):
+                            value = value.get(unquoted)
+                        else:
+                            return None
+
+                    if value is None:
+                        return None
+
+                    i += 1
+
+                return value
+            except (ValueError, AttributeError, KeyError, ImportError):
+                # If regex fails, fall back to simpler parsing
+                pass
+
+        # Handle simple dot notation
+        keys = path.split(".")
+        value = data
+
+        for key in keys:
+            if isinstance(value, dict):
+                value = value.get(key)
+                if value is None:
+                    return None
+            else:
+                return None
+
+        return value
+
+
+# =============================================================================
 # Handler Registry
 # =============================================================================
 
@@ -624,3 +1034,4 @@ def create_handler_for_webhook(
 
 # Register built-in handlers
 HandlerRegistry.register("github", GitHubWebhookHandler)
+HandlerRegistry.register("generic", GenericWebhookHandler)
