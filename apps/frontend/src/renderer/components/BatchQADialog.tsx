@@ -19,6 +19,8 @@ import { Button } from './ui/button';
 import { Progress } from './ui/progress';
 import { ScrollArea } from './ui/scroll-area';
 import type { Task } from '../../shared/types';
+import { useQuickActionsStore } from '../stores/quick-actions-store';
+import { useProjectStore } from '../stores/project-store';
 
 /**
  * Check if an error message indicates a task-related issue (no worktree, not started, etc.)
@@ -61,6 +63,8 @@ export function BatchQADialog({
   onComplete
 }: BatchQADialogProps) {
   const { t } = useTranslation(['taskReview', 'common', 'tasks']);
+  const addRecentAction = useQuickActionsStore((state) => state.addRecentAction);
+  const selectedProjectId = useProjectStore((state) => state.activeProjectId || state.selectedProjectId);
 
   // Progress tracking
   const [step, setStep] = useState<'confirm' | 'running' | 'results'>('confirm');
@@ -150,9 +154,17 @@ export function BatchQADialog({
     }
 
     if (!isCancelledRef.current) {
+      // Add to recent actions when batch QA completes
+      addRecentAction({
+        type: 'batch_qa',
+        label: 'Batch QA',
+        itemCount: tasks.length,
+        projectId: selectedProjectId
+      });
+
       setStep('results');
     }
-  }, [tasks, t]);
+  }, [tasks, t, addRecentAction, selectedProjectId]);
 
   const handleClose = () => {
     isCancelledRef.current = true;

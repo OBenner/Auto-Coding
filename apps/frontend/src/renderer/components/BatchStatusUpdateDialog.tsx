@@ -25,6 +25,8 @@ import {
   SelectValue,
 } from './ui/select';
 import type { Task, TaskStatus } from '../../shared/types';
+import { useQuickActionsStore } from '../stores/quick-actions-store';
+import { useProjectStore } from '../stores/project-store';
 
 /**
  * Result for a single task in the bulk status update
@@ -54,6 +56,8 @@ export function BatchStatusUpdateDialog({
   onComplete
 }: BatchStatusUpdateDialogProps) {
   const { t } = useTranslation(['tasks', 'common']);
+  const addRecentAction = useQuickActionsStore((state) => state.addRecentAction);
+  const selectedProjectId = useProjectStore((state) => state.activeProjectId || state.selectedProjectId);
 
   // Common options for all status updates
   const [newStatus, setNewStatus] = useState<TaskStatus | ''>('');
@@ -143,9 +147,18 @@ export function BatchStatusUpdateDialog({
     }
 
     if (!isCancelledRef.current) {
+      // Add to recent actions when batch status update completes
+      addRecentAction({
+        type: 'batch_status_update',
+        label: 'Batch Status Update',
+        itemCount: tasks.length,
+        targetStatus: newStatus,
+        projectId: selectedProjectId
+      });
+
       setStep('results');
     }
-  }, [tasks, newStatus, t]);
+  }, [tasks, newStatus, t, addRecentAction, selectedProjectId]);
 
   const handleClose = () => {
     isCancelledRef.current = true;
