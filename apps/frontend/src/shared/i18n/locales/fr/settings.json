@@ -170,7 +170,15 @@
   },
   "language": {
     "label": "Langue de l'interface",
-    "description": "Sélectionnez la langue de l'interface de l'application"
+    "description": "Sélectionnez la langue de l'interface de l'application",
+    "options": {
+      "en": "Anglais",
+      "fr": "Français",
+      "es": "Espagnol",
+      "de": "Allemand",
+      "ar": "Arabe",
+      "he": "Hébreu"
+    }
   },
   "scale": {
     "presets": "Préréglages d'échelle",

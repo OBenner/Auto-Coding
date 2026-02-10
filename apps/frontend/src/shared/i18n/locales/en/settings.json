@@ -170,7 +170,15 @@
   },
   "language": {
     "label": "Interface Language",
-    "description": "Select the language for the application interface"
+    "description": "Select the language for the application interface",
+    "options": {
+      "en": "English",
+      "fr": "French",
+      "es": "Spanish",
+      "de": "German",
+      "ar": "Arabic",
+      "he": "Hebrew"
+    }
   },
   "scale": {
     "presets": "Scale Presets",
