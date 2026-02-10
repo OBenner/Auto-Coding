@@ -40,6 +40,12 @@ TOOL_GET_SESSION_CONTEXT = "mcp__auto-claude__get_session_context"
 TOOL_UPDATE_QA_STATUS = "mcp__auto-claude__update_qa_status"
 TOOL_GET_SPEC_STATISTICS = "mcp__auto-claude__get_spec_statistics"
 
+# Background task management tools
+TOOL_START_BACKGROUND = "mcp__auto-claude__start_background_command"
+TOOL_GET_TASK_STATUS = "mcp__auto-claude__get_task_status"
+TOOL_GET_TASK_OUTPUT = "mcp__auto-claude__get_task_output"
+TOOL_CANCEL_TASK = "mcp__auto-claude__cancel_task"
+
 # =============================================================================
 # External MCP Tools
 # =============================================================================
