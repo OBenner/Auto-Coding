@@ -1,5 +1,6 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import { motion, AnimatePresence } from 'motion/react';
 import {
   Plus,
   Settings,
@@ -127,6 +128,15 @@ export function Sidebar({
 
   // Sidebar collapsed state from settings
   const isCollapsed = settings.sidebarCollapsed ?? false;
+
+  // Refs for position tracking (used for animated indicator)
+  const navContainerRef = useRef<HTMLDivElement>(null);
+  const navItemRefs = useRef<Map<SidebarView, HTMLButtonElement>>(new Map());
+  const [indicatorPosition, setIndicatorPosition] = useState<{
+    top: number;
+    height: number;
+    opacity: number;
+  } | null>(null);
 
   const toggleSidebar = () => {
     saveSettings({ sidebarCollapsed: !isCollapsed });
