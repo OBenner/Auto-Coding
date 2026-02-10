@@ -216,10 +216,11 @@ async def run_test_generator_session(
     print()
 
     # Determine model and thinking budget
+    # Test generation is part of the QA phase
     if model is None:
-        model = get_phase_model("test_generation")
+        model = get_phase_model(spec_dir, "qa")
     if max_thinking_tokens is None:
-        max_thinking_tokens = get_phase_thinking_budget("test_generation")
+        max_thinking_tokens = get_phase_thinking_budget(spec_dir, "qa")
 
     print_key_value("Model", model)
     print_key_value(
