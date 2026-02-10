@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Download, RefreshCw, AlertCircle } from 'lucide-react';
 import { debugLog } from '../shared/utils/debug-logger';
@@ -71,6 +71,7 @@ import type { Task, Project, ColorTheme } from '../shared/types';
 import { ProjectTabBar } from './components/ProjectTabBar';
 import { AddProjectModal } from './components/AddProjectModal';
 import { ViewStateProvider } from './contexts/ViewStateContext';
+import { CommandPalette, type CommandAction } from './components/CommandPalette';
 
 // Version constant for version-specific warnings (e.g., reauthentication notices)
 const VERSION_WARNING_275 = '2.7.5';
@@ -163,6 +164,9 @@ export function App() {
   const [showRemoveProjectDialog, setShowRemoveProjectDialog] = useState(false);
   const [removeProjectError, setRemoveProjectError] = useState<string | null>(null);
   const [projectToRemove, setProjectToRemove] = useState<Project | null>(null);
+
+  // Command palette state
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
 
   // Setup drag sensors
   const sensors = useSensors(
@@ -403,6 +407,12 @@ export function App() {
         } catch (error) {
           console.error('Failed to add project:', error);
         }
+      }
+
+      // Cmd/Ctrl+K: Open command palette
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        setIsCommandPaletteOpen(true);
       }
     };
 
@@ -805,6 +815,71 @@ export function App() {
     }
   };
 
+  // Define command palette actions
+  const commandActions = useMemo<CommandAction[]>(() => [
+    {
+      id: 'new-task',
+      label: 'common:commands.newTask',
+      description: 'common:commands.newTaskDescription',
+      shortcut: '⌘N',
+      icon: null,
+      onSelect: () => setIsNewTaskDialogOpen(true),
+      keywords: ['create', 'new', 'task', 'spec']
+    },
+    {
+      id: 'open-settings',
+      label: 'common:commands.openSettings',
+      description: 'common:commands.openSettingsDescription',
+      shortcut: '⌘,',
+      icon: null,
+      onSelect: () => setIsSettingsDialogOpen(true),
+      keywords: ['settings', 'preferences', 'config']
+    },
+    {
+      id: 'view-kanban',
+      label: 'common:commands.viewKanban',
+      description: 'common:commands.viewKanbanDescription',
+      shortcut: 'G then K',
+      icon: null,
+      onSelect: () => setActiveView('kanban'),
+      keywords: ['kanban', 'board', 'tasks']
+    },
+    {
+      id: 'view-terminals',
+      label: 'common:commands.viewTerminals',
+      description: 'common:commands.viewTerminalsDescription',
+      shortcut: 'G then T',
+      icon: null,
+      onSelect: () => setActiveView('terminals'),
+      keywords: ['terminal', 'terminals', 'console', 'shell']
+    },
+    {
+      id: 'view-roadmap',
+      label: 'common:commands.viewRoadmap',
+      description: 'common:commands.viewRoadmapDescription',
+      icon: null,
+      onSelect: () => setActiveView('roadmap'),
+      keywords: ['roadmap', 'timeline', 'plan']
+    },
+    {
+      id: 'view-context',
+      label: 'common:commands.viewContext',
+      description: 'common:commands.viewContextDescription',
+      icon: null,
+      onSelect: () => setActiveView('context'),
+      keywords: ['context', 'memory', 'graph']
+    },
+    {
+      id: 'add-project',
+      label: 'common:commands.addProject',
+      description: 'common:commands.addProjectDescription',
+      shortcut: '⌘T',
+      icon: null,
+      onSelect: handleAddProject,
+      keywords: ['project', 'add', 'new']
+    }
+  ], [setIsNewTaskDialogOpen, setIsSettingsDialogOpen, setActiveView, handleAddProject]);
+
   return (
     <ViewStateProvider>
       <TooltipProvider>
@@ -1156,6 +1231,13 @@ export function App() {
 
         {/* Global Download Indicator - shows Ollama model download progress */}
         <GlobalDownloadIndicator />
+
+        {/* Command Palette - triggered with Cmd/Ctrl+K */}
+        <CommandPalette
+          open={isCommandPaletteOpen}
+          onOpenChange={setIsCommandPaletteOpen}
+          commands={commandActions}
+        />
 
         {/* Toast notifications */}
         <Toaster />

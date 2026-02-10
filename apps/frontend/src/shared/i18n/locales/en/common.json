@@ -704,5 +704,21 @@
     "graphView": "Graph View",
     "deleteMemory": "Delete Memory",
     "exportMemories": "Export Memories"
+  },
+  "commands": {
+    "newTask": "New Task",
+    "newTaskDescription": "Create a new task or spec",
+    "openSettings": "Open Settings",
+    "openSettingsDescription": "Open application settings",
+    "viewKanban": "View Kanban Board",
+    "viewKanbanDescription": "Switch to kanban board view",
+    "viewTerminals": "View Terminals",
+    "viewTerminalsDescription": "Switch to terminals view",
+    "viewRoadmap": "View Roadmap",
+    "viewRoadmapDescription": "Switch to roadmap view",
+    "viewContext": "View Context",
+    "viewContextDescription": "Switch to context/memory view",
+    "addProject": "Add Project",
+    "addProjectDescription": "Add a new project"
   }
 }
