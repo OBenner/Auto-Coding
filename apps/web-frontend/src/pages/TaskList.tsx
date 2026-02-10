@@ -3,15 +3,17 @@
  *
  * Displays all tasks from the backend in a grid layout.
  * Allows navigation to individual task details.
+ *
+ * Integrated with task store for state management.
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { RefreshCw, AlertCircle } from 'lucide-react';
 import { TaskCard } from '../components/TaskCard';
 import { Button } from '../components/ui/button';
 import { ScrollArea } from '../components/ui/scroll-area';
-import { apiClient } from '../api/client';
+import { useTaskStore } from '../store/task-store';
 import type { Task } from '../shared/types';
 import type { TaskSummary } from '../api/types';
 
@@ -20,64 +22,57 @@ interface TaskListProps {
 }
 
 export function TaskList({ onTaskClick }: TaskListProps) {
-  const { t } = useTranslation(['common']);
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [isRefreshing, setIsRefreshing] = useState(false);
+  const { t } = useTranslation(['common', 'tasks', 'navigation', 'buttons']);
+
+  // Get state and actions from task store
+  const {
+    tasks,
+    isLoading,
+    error,
+    fetchTasks,
+    refreshTasks
+  } = useTaskStore();
 
   /**
    * Convert API TaskSummary to frontend Task type
+   * Maps backend API response to frontend Task type for TaskCard component
    */
   const convertTaskSummary = useCallback((summary: TaskSummary): Task => {
     return {
       id: summary.number,
       specId: summary.number,
       title: summary.name,
-      description: `Status: ${summary.status}`,
-      status: 'backlog', // Default status - will be updated with real data in future
+      description: `${t('labels.status')}: ${summary.status}`,
+      status: summary.status as any, // Will be refined when backend provides proper status enum
       subtasks: [],
       createdAt: new Date(),
       updatedAt: new Date(),
       metadata: {}
     };
-  }, []);
+  }, [t]);
+
+  // Convert tasks from store to Task type for TaskCard
+  const convertedTasks = useMemo(() => {
+    return tasks.map(convertTaskSummary);
+  }, [tasks, convertTaskSummary]);
 
   /**
-   * Fetch tasks from the API
+   * Initial load of tasks
    */
-  const fetchTasks = useCallback(async (showRefreshIndicator = false) => {
-    try {
-      if (showRefreshIndicator) {
-        setIsRefreshing(true);
-      } else {
-        setIsLoading(true);
-      }
-      setError(null);
-
-      const response = await apiClient.listTasks();
-      const convertedTasks = response.tasks.map(convertTaskSummary);
-      setTasks(convertedTasks);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to load tasks';
-      setError(message);
-    } finally {
-      setIsLoading(false);
-      setIsRefreshing(false);
-    }
-  }, [convertTaskSummary]);
-
-  // Initial load
   useEffect(() => {
     fetchTasks();
   }, [fetchTasks]);
 
-  // Handle refresh button click
-  const handleRefresh = useCallback(() => {
-    fetchTasks(true);
-  }, [fetchTasks]);
+  /**
+   * Handle refresh button click
+   */
+  const handleRefresh = useCallback(async () => {
+    await refreshTasks();
+  }, [refreshTasks]);
 
-  // Handle task card click
+  /**
+   * Handle task card click
+   */
   const handleTaskClick = useCallback((task: Task) => {
     onTaskClick(task.id);
   }, [onTaskClick]);
@@ -85,10 +80,10 @@ export function TaskList({ onTaskClick }: TaskListProps) {
   // Loading state
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4" />
-          <p className="text-gray-600">{t('common:loading')}</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4" />
+          <p className="text-muted-foreground">{t('buttons.loading')}</p>
         </div>
       </div>
     );
@@ -97,16 +92,16 @@ export function TaskList({ onTaskClick }: TaskListProps) {
   // Error state
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+      <div className="flex items-center justify-center min-h-[400px] p-4">
         <div className="text-center max-w-md">
-          <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">
-            {t('common:error')}
+          <AlertCircle className="h-12 w-12 text-destructive mx-auto mb-4" />
+          <h2 className="text-xl font-semibold mb-2">
+            {t('labels.error')}
           </h2>
-          <p className="text-gray-600 mb-4">{error}</p>
+          <p className="text-muted-foreground mb-4">{error}</p>
           <Button onClick={handleRefresh}>
             <RefreshCw className="h-4 w-4 mr-2" />
-            Try Again
+            {t('buttons.retry')}
           </Button>
         </div>
       </div>
@@ -116,30 +111,14 @@ export function TaskList({ onTaskClick }: TaskListProps) {
   // Empty state
   if (tasks.length === 0) {
     return (
-      <div className="min-h-screen bg-gray-50">
-        <div className="max-w-7xl mx-auto p-6">
-          <div className="flex items-center justify-between mb-6">
-            <h1 className="text-3xl font-bold text-gray-900">
-              {t('common:tasks')}
-            </h1>
-            <Button
-              onClick={handleRefresh}
-              disabled={isRefreshing}
-              variant="outline"
-            >
-              <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
-              Refresh
-            </Button>
-          </div>
-
-          <div className="flex items-center justify-center min-h-[400px]">
-            <div className="text-center">
-              <p className="text-lg text-gray-600 mb-2">No tasks found</p>
-              <p className="text-sm text-gray-500">
-                Tasks will appear here once you create specs
-              </p>
-            </div>
-          </div>
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <p className="text-lg text-muted-foreground mb-2">
+            {t('empty.title')}
+          </p>
+          <p className="text-sm text-muted-foreground">
+            {t('empty.description')}
+          </p>
         </div>
       </div>
     );
@@ -147,41 +126,39 @@ export function TaskList({ onTaskClick }: TaskListProps) {
 
   // Task list view
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto p-6">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">
-              {t('common:tasks')}
-            </h1>
-            <p className="text-sm text-gray-600 mt-1">
-              {tasks.length} {tasks.length === 1 ? 'task' : 'tasks'} total
-            </p>
-          </div>
-          <Button
-            onClick={handleRefresh}
-            disabled={isRefreshing}
-            variant="outline"
-          >
-            <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
-            Refresh
-          </Button>
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">
+            {t('tasks')}
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            {tasks.length} {tasks.length === 1 ? 'task' : 'tasks'} total
+          </p>
         </div>
-
-        {/* Task Grid */}
-        <ScrollArea className="h-[calc(100vh-200px)]">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {tasks.map((task) => (
-              <TaskCard
-                key={task.id}
-                task={task}
-                onClick={() => handleTaskClick(task)}
-              />
-            ))}
-          </div>
-        </ScrollArea>
+        <Button
+          onClick={handleRefresh}
+          disabled={isLoading}
+          variant="outline"
+        >
+          <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+          {t('buttons.refresh')}
+        </Button>
       </div>
+
+      {/* Task Grid */}
+      <ScrollArea className="h-[calc(100vh-250px)]">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pb-4">
+          {convertedTasks.map((task) => (
+            <TaskCard
+              key={task.id}
+              task={task}
+              onClick={() => handleTaskClick(task)}
+            />
+          ))}
+        </div>
+      </ScrollArea>
     </div>
   );
 }
