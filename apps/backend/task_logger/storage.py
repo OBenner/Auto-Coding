@@ -9,7 +9,7 @@ import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
 
-from .models import LogEntry, LogPhase, SessionMetadata, SubtaskTransition
+from .models import Bookmark, LogEntry, LogPhase, SessionMetadata, SubtaskTransition
 
 
 class LogStorage:
@@ -33,7 +33,11 @@ class LogStorage:
         if self.log_file.exists():
             try:
                 with open(self.log_file, encoding="utf-8") as f:
-                    return json.load(f)
+                    data = json.load(f)
+                    # Ensure bookmarks array exists (for backward compatibility)
+                    if "bookmarks" not in data:
+                        data["bookmarks"] = []
+                    return data
             except (OSError, json.JSONDecodeError, UnicodeDecodeError):
                 pass
 
@@ -66,6 +70,7 @@ class LogStorage:
             },
             "sessions": [],
             "subtask_transitions": [],
+            "bookmarks": [],
         }
 
     def save(self) -> None:
@@ -271,6 +276,75 @@ class LogStorage:
             if session["session_id"] == session_id:
                 return session
         return None
+
+    def add_bookmark(self, bookmark: Bookmark) -> None:
+        """
+        Add a bookmark to the logs.
+
+        Args:
+            bookmark: The bookmark to add
+        """
+        # Initialize bookmarks list if it doesn't exist (for backward compatibility)
+        if "bookmarks" not in self._data:
+            self._data["bookmarks"] = []
+
+        self._data["bookmarks"].append(bookmark.to_dict())
+        self.save()
+
+    def get_bookmarks(
+        self,
+        phase: str | None = None,
+        session: int | None = None,
+        subtask_id: str | None = None,
+    ) -> list[dict]:
+        """
+        Get bookmarks, optionally filtered by phase, session, or subtask.
+
+        Args:
+            phase: Optional phase filter
+            session: Optional session filter
+            subtask_id: Optional subtask filter
+
+        Returns:
+            List of bookmark dictionaries
+        """
+        if "bookmarks" not in self._data:
+            return []
+
+        bookmarks = self._data["bookmarks"]
+
+        # Apply filters
+        if phase is not None:
+            bookmarks = [b for b in bookmarks if b.get("phase") == phase]
+        if session is not None:
+            bookmarks = [b for b in bookmarks if b.get("session") == session]
+        if subtask_id is not None:
+            bookmarks = [b for b in bookmarks if b.get("subtask_id") == subtask_id]
+
+        return bookmarks
+
+    def remove_bookmark(self, bookmark_id: str) -> bool:
+        """
+        Remove a bookmark by its ID.
+
+        Args:
+            bookmark_id: The bookmark ID to remove
+
+        Returns:
+            True if bookmark was found and removed, False otherwise
+        """
+        if "bookmarks" not in self._data:
+            return False
+
+        initial_length = len(self._data["bookmarks"])
+        self._data["bookmarks"] = [
+            b for b in self._data["bookmarks"] if b.get("id") != bookmark_id
+        ]
+
+        if len(self._data["bookmarks"]) < initial_length:
+            self.save()
+            return True
+        return False
 
 
 def load_task_logs(spec_dir: Path) -> dict | None:

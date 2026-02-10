@@ -7,7 +7,7 @@ from pathlib import Path
 
 from core.debug import debug, debug_error, debug_info, debug_success, is_debug_enabled
 
-from .models import LogEntry, LogEntryType, LogPhase
+from .models import Bookmark, LogEntry, LogEntryType, LogPhase
 from .storage import LogStorage
 from .streaming import emit_marker
 
@@ -586,6 +586,103 @@ class TaskLogger:
     def get_phase_logs(self, phase: LogPhase) -> dict:
         """Get logs for a specific phase."""
         return self.storage.get_phase_data(phase.value)
+
+    def create_bookmark(
+        self,
+        label: str,
+        note: str | None = None,
+        entry_timestamp: str | None = None,
+    ) -> str:
+        """
+        Create a bookmark at the current moment or at a specific log entry.
+
+        Args:
+            label: User-provided label/title for the bookmark
+            note: Optional note/comment
+            entry_timestamp: Optional timestamp of specific log entry to bookmark.
+                           If not provided, uses current timestamp.
+
+        Returns:
+            The bookmark ID
+        """
+        import uuid
+
+        bookmark_id = str(uuid.uuid4())
+        phase_key = (self.current_phase or LogPhase.CODING).value
+
+        bookmark = Bookmark(
+            id=bookmark_id,
+            timestamp=self._timestamp(),
+            entry_timestamp=entry_timestamp or self._timestamp(),
+            phase=phase_key,
+            label=label,
+            note=note,
+            session=self.current_session,
+            subtask_id=self.current_subtask,
+        )
+
+        self.storage.add_bookmark(bookmark)
+
+        # Emit streaming marker for real-time UI updates
+        self._emit(
+            "BOOKMARK_CREATED",
+            {
+                "id": bookmark_id,
+                "label": label,
+                "phase": phase_key,
+                "session": self.current_session,
+            },
+        )
+
+        # Debug log (when DEBUG=true)
+        self._debug_log(f"Bookmark created: {label}", LogEntryType.INFO, phase_key)
+
+        return bookmark_id
+
+    def get_bookmarks(
+        self,
+        phase: str | None = None,
+        session: int | None = None,
+        subtask_id: str | None = None,
+    ) -> list[dict]:
+        """
+        Get bookmarks, optionally filtered.
+
+        Args:
+            phase: Optional phase filter
+            session: Optional session filter
+            subtask_id: Optional subtask filter
+
+        Returns:
+            List of bookmark dictionaries
+        """
+        return self.storage.get_bookmarks(
+            phase=phase, session=session, subtask_id=subtask_id
+        )
+
+    def remove_bookmark(self, bookmark_id: str) -> bool:
+        """
+        Remove a bookmark by its ID.
+
+        Args:
+            bookmark_id: The bookmark ID to remove
+
+        Returns:
+            True if bookmark was found and removed, False otherwise
+        """
+        success = self.storage.remove_bookmark(bookmark_id)
+
+        if success:
+            # Emit streaming marker for real-time UI updates
+            self._emit("BOOKMARK_REMOVED", {"id": bookmark_id})
+
+            # Debug log (when DEBUG=true)
+            phase_key = (self.current_phase or LogPhase.CODING).value
+            self._debug_log(
+                f"Bookmark removed: {bookmark_id}", LogEntryType.INFO, phase_key
+            )
+
+        return success
 
     def clear(self) -> None:
         """Clear all logs (useful for testing)."""

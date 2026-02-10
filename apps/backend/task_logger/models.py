@@ -141,3 +141,34 @@ class SubtaskTransition:
         if self.session is not None:
             result["session"] = self.session
         return result
+
+
+@dataclass
+class Bookmark:
+    """A bookmark marking an interesting moment in a session."""
+
+    id: str  # Unique bookmark ID
+    timestamp: str  # When the bookmark was created
+    entry_timestamp: str  # Timestamp of the log entry being bookmarked
+    phase: str  # Phase where the bookmark was created
+    label: str  # User-provided label/title
+    note: str | None = None  # Optional user note/comment
+    session: int | None = None  # Session number
+    subtask_id: str | None = None  # Associated subtask
+
+    def to_dict(self) -> dict:
+        """Convert to dictionary, excluding None values for optional fields."""
+        result = {
+            "id": self.id,
+            "timestamp": self.timestamp,
+            "entry_timestamp": self.entry_timestamp,
+            "phase": self.phase,
+            "label": self.label,
+        }
+        if self.note is not None:
+            result["note"] = self.note
+        if self.session is not None:
+            result["session"] = self.session
+        if self.subtask_id is not None:
+            result["subtask_id"] = self.subtask_id
+        return result
