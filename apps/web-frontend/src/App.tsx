@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react'
+import React, { useEffect, useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useParams } from 'react-router-dom'
 import { Signup } from './pages/Signup'
 import { Login } from './pages/Login'
@@ -9,8 +9,10 @@ import { TaskDetail } from './pages/TaskDetail'
 import { Dashboard } from './pages/Dashboard'
 import { CreateSpec } from './pages/CreateSpec'
 import { Layout } from './components/Layout'
+import { ErrorBoundary } from './components/ErrorBoundary'
+import { AppLoading } from './components/AppLoading'
 import { useWebSocketIntegration } from './hooks/useWebSocketTaskIntegration'
-import { initializeAuth } from './store/auth-store'
+import { initializeAuth, useAuthStore } from './store/auth-store'
 
 /**
  * TaskList wrapper component that integrates with React Router
@@ -46,19 +48,32 @@ function TaskDetailPage() {
 /**
  * App Provider Component
  * Initializes WebSocket integration and auth state on app startup
+ * Shows loading state while auth is being verified
  */
 function AppProvider({ children }: { children: React.ReactNode }) {
   const { isConnected } = useWebSocketIntegration()
+  const [isInitializing, setIsInitializing] = useState(true)
+  const { isVerifying } = useAuthStore()
 
   useEffect(() => {
     // Initialize auth state on app startup
-    initializeAuth().catch((error) => {
-      // Silently fail - auth check runs in background
-      console.error('Failed to initialize auth:', error)
-    })
+    initializeAuth()
+      .catch((error) => {
+        // Silently fail - auth check runs in background
+        console.error('Failed to initialize auth:', error)
+      })
+      .finally(() => {
+        // Mark initialization as complete after auth check
+        setIsInitializing(false)
+      })
   }, [])
 
-  // You can use isConnected to show loading state or connection status
+  // Show loading screen while auth is initializing or verifying
+  if (isInitializing || isVerifying) {
+    return <AppLoading />
+  }
+
+  // You can use isConnected to show connection status
   // For now, we just render children regardless of connection state
   // The WebSocket will reconnect automatically
 
@@ -67,35 +82,37 @@ function AppProvider({ children }: { children: React.ReactNode }) {
 
 function App() {
   return (
-    <AppProvider>
-      <BrowserRouter>
-        <Routes>
-          {/* Auth routes - outside layout */}
-          <Route path="/signup" element={<Signup />} />
-          <Route path="/login" element={<Login />} />
+    <ErrorBoundary>
+      <AppProvider>
+        <BrowserRouter>
+          <Routes>
+            {/* Auth routes - outside layout */}
+            <Route path="/signup" element={<Signup />} />
+            <Route path="/login" element={<Login />} />
 
-          {/* Main app routes - inside layout */}
-          <Route element={<Layout />}>
-            {/* Dashboard is now the main landing page */}
-            <Route path="/" element={<Dashboard />} />
+            {/* Main app routes - inside layout */}
+            <Route element={<Layout />}>
+              {/* Dashboard is now the main landing page */}
+              <Route path="/" element={<Dashboard />} />
 
-            {/* Dashboard route */}
-            <Route path="/dashboard" element={<Dashboard />} />
+              {/* Dashboard route */}
+              <Route path="/dashboard" element={<Dashboard />} />
 
-            {/* Task routes */}
-            <Route path="/tasks" element={<TaskListPage />} />
-            <Route path="/tasks/:id" element={<TaskDetailPage />} />
+              {/* Task routes */}
+              <Route path="/tasks" element={<TaskListPage />} />
+              <Route path="/tasks/:id" element={<TaskDetailPage />} />
 
-            {/* Create spec route */}
-            <Route path="/create" element={<CreateSpec />} />
+              {/* Create spec route */}
+              <Route path="/create" element={<CreateSpec />} />
 
-            {/* Settings and usage routes */}
-            <Route path="/settings/*" element={<Settings />} />
-            <Route path="/usage" element={<UsageDashboard />} />
-          </Route>
-        </Routes>
-      </BrowserRouter>
-    </AppProvider>
+              {/* Settings and usage routes */}
+              <Route path="/settings/*" element={<Settings />} />
+              <Route path="/usage" element={<UsageDashboard />} />
+            </Route>
+          </Routes>
+        </BrowserRouter>
+      </AppProvider>
+    </ErrorBoundary>
   )
 }
 

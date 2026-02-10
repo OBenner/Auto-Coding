@@ -88,5 +88,11 @@
     "maintenanceMode": "Le système est en maintenance",
     "tryAgain": "Veuillez réessayer",
     "contactSupport": "Veuillez contacter le support si le problème persiste"
+  },
+  "errorBoundary": {
+    "title": "Une erreur s'est produite",
+    "description": "Une erreur s'est produite lors du rendu de ce contenu",
+    "errorMessage": "Message d'erreur",
+    "tryAgain": "Réessayer"
   }
 }

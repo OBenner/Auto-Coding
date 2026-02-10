@@ -88,5 +88,11 @@
     "maintenanceMode": "System is under maintenance",
     "tryAgain": "Please try again",
     "contactSupport": "Please contact support if the problem persists"
+  },
+  "errorBoundary": {
+    "title": "Something went wrong",
+    "description": "An error occurred while rendering this content",
+    "errorMessage": "Error message",
+    "tryAgain": "Try Again"
   }
 }
