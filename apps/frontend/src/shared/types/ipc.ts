@@ -846,6 +846,9 @@ export interface ElectronAPI {
   // GitHub API (nested for organized access)
   github: import('../../preload/api/modules/github-api').GitHubAPI;
 
+  // GitLab API (nested for organized access)
+  gitlab: import('../../preload/api/modules/gitlab-api').GitLabAPI;
+
   // Claude Code CLI operations
   checkClaudeCodeVersion: () => Promise<IPCResult<import('./cli').ClaudeCodeVersionInfo>>;
   installClaudeCode: () => Promise<IPCResult<{ command: string }>>;

@@ -395,5 +395,9 @@
   "githubIssues": {
     "quickCreateSpec": "Quick Create Spec",
     "investigate": "Investigate"
+  },
+  "gitlabIssues": {
+    "quickCreateSpec": "Quick Create Spec",
+    "investigate": "Investigate"
   }
 }
