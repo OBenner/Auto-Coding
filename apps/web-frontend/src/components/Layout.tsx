@@ -4,7 +4,7 @@
  */
 
 import { useState, type ReactNode } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet, useNavigate } from 'react-router-dom';
 import { Sidebar, type SidebarView } from './Sidebar';
 import { Navbar } from './Navbar';
 import { cn } from '../lib/utils';
@@ -16,17 +16,6 @@ interface LayoutProps {
   activeView?: SidebarView;
   /** Callback when sidebar view changes */
   onViewChange?: (view: SidebarView) => void;
-  /** Whether user is authenticated */
-  isAuthenticated?: boolean;
-  /** Current user info */
-  user?: {
-    name?: string;
-    email?: string;
-  };
-  /** Callback when user logs out */
-  onLogout?: () => void;
-  /** Callback when settings is clicked */
-  onSettingsClick?: () => void;
   /** Callback when new task is clicked */
   onNewTaskClick?: () => void;
 }
@@ -35,13 +24,10 @@ export function Layout({
   children,
   activeView = 'kanban',
   onViewChange,
-  isAuthenticated = false,
-  user,
-  onLogout,
-  onSettingsClick,
   onNewTaskClick
 }: LayoutProps) {
   const [currentView, setCurrentView] = useState<SidebarView>(activeView);
+  const navigate = useNavigate();
 
   const handleViewChange = (view: SidebarView) => {
     setCurrentView(view);
@@ -49,11 +35,11 @@ export function Layout({
   };
 
   const handleSettingsClick = () => {
-    onSettingsClick?.();
+    navigate('/settings');
   };
 
   const handleNewTaskClick = () => {
-    onNewTaskClick?.();
+    navigate('/create');
   };
 
   return (
@@ -70,9 +56,6 @@ export function Layout({
       <div className="flex flex-1 flex-col overflow-hidden">
         {/* Top Navbar */}
         <Navbar
-          isAuthenticated={isAuthenticated}
-          user={user}
-          onLogout={onLogout}
           onSettingsClick={handleSettingsClick}
         />
 

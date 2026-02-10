@@ -4,7 +4,7 @@
  */
 
 import { useTranslation } from 'react-i18next';
-import { User, LogOut } from 'lucide-react';
+import { User, LogOut, Loader2 } from 'lucide-react';
 import { Button } from './ui/button';
 import {
   DropdownMenu,
@@ -14,17 +14,9 @@ import {
   DropdownMenuTrigger
 } from './ui/dropdown-menu';
 import { cn } from '../lib/utils';
+import { useAuthStore } from '../store/auth-store';
 
 interface NavbarProps {
-  /** Whether user is authenticated */
-  isAuthenticated?: boolean;
-  /** Current user info (if authenticated) */
-  user?: {
-    name?: string;
-    email?: string;
-  };
-  /** Callback when user clicks logout */
-  onLogout?: () => void;
   /** Callback when user clicks settings */
   onSettingsClick?: () => void;
   /** Additional CSS classes */
@@ -32,13 +24,15 @@ interface NavbarProps {
 }
 
 export function Navbar({
-  isAuthenticated = false,
-  user,
-  onLogout,
   onSettingsClick,
   className
 }: NavbarProps) {
   const { t } = useTranslation(['common', 'navigation']);
+  const { isAuthenticated, user, isVerifying, logout } = useAuthStore();
+
+  const handleLogout = () => {
+    logout();
+  };
 
   return (
     <nav
@@ -64,7 +58,14 @@ export function Navbar({
 
       {/* Right side: Auth status & user menu */}
       <div className="flex items-center gap-4">
-        {isAuthenticated && user ? (
+        {isVerifying ? (
+          <div className="flex items-center gap-2">
+            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+            <span className="text-sm text-muted-foreground">
+              {t('common:labels.loading')}
+            </span>
+          </div>
+        ) : isAuthenticated && user ? (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
@@ -93,12 +94,10 @@ export function Navbar({
                   {t('navigation:actions.settings')}
                 </DropdownMenuItem>
               )}
-              {onLogout && (
-                <DropdownMenuItem onClick={onLogout}>
-                  <LogOut className="mr-2 h-4 w-4" />
-                  {t('navigation:actions.logout')}
-                </DropdownMenuItem>
-              )}
+              <DropdownMenuItem onClick={handleLogout}>
+                <LogOut className="mr-2 h-4 w-4" />
+                {t('navigation:actions.logout')}
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         ) : (

@@ -10,6 +10,7 @@ import { Dashboard } from './pages/Dashboard'
 import { CreateSpec } from './pages/CreateSpec'
 import { Layout } from './components/Layout'
 import { useWebSocketIntegration } from './hooks/useWebSocketTaskIntegration'
+import { initializeAuth } from './store/auth-store'
 
 /**
  * TaskList wrapper component that integrates with React Router
@@ -44,10 +45,18 @@ function TaskDetailPage() {
 
 /**
  * App Provider Component
- * Initializes WebSocket integration and provides app-level context
+ * Initializes WebSocket integration and auth state on app startup
  */
 function AppProvider({ children }: { children: React.ReactNode }) {
   const { isConnected } = useWebSocketIntegration()
+
+  useEffect(() => {
+    // Initialize auth state on app startup
+    initializeAuth().catch((error) => {
+      // Silently fail - auth check runs in background
+      console.error('Failed to initialize auth:', error)
+    })
+  }, [])
 
   // You can use isConnected to show loading state or connection status
   // For now, we just render children regardless of connection state
