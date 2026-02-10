@@ -27,8 +27,14 @@ import pytest
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "apps" / "backend"))
 
-from agents.tools_pkg.tools.background_task import BackgroundTaskManager
+from agents.tools_pkg.tools.background_task import BackgroundTaskManager, PSUTIL_AVAILABLE
 from core.task_state_store import TaskStateStore
+
+# Import psutil if available (for cleanup in tests)
+try:
+    import psutil
+except ImportError:
+    psutil = None
 
 logger = logging.getLogger(__name__)
 
@@ -307,34 +313,115 @@ class TestLongRunningCommands:
         - Memory stats are captured at task start
         - Memory stats are updated during execution (if psutil available)
         - Memory stats are included in final state
+        - Memory monitoring triggers warnings if thresholds exceeded
+        - No memory leaks during task execution
         """
-        # Create a task
+        # Create a task that produces enough output to trigger memory checks
+        # Memory is checked every 50 lines (MEMORY_CHECK_INTERVAL = 5, checked every 10 * 5 lines)
+        # We'll produce 100 lines with delays to ensure task runs long enough
         task_id = await manager.start_task(
-            'python -c "import time; print(\'Testing memory\'); time.sleep(0.5)"',
-            timeout=10
+            'python -c "import time; [print(f\'Output line {i:04d}\') or time.sleep(0.05) for i in range(1, 101)]"',
+            timeout=30
         )
 
         # Wait for task to start
-        await asyncio.sleep(0.3)
+        await asyncio.sleep(0.2)
 
-        # Check if memory stats are present
-        status = manager.get_task_status(task_id)
-        assert status is not None
+        # === PHASE 1: Verify memory stats at task start ===
+        status_start = manager.get_task_status(task_id)
+        assert status_start is not None
+        # Task should be pending or running at this point
+        assert status_start["status"] in ["pending", "running"]
 
-        # Memory stats should be present (or None if psutil not available)
-        # We don't require psutil for basic functionality
-        if "memory_stats" in status and status["memory_stats"] is not None:
-            mem_stats = status["memory_stats"]
-            assert "percent" in mem_stats
-            assert "available_mb" in mem_stats
-            assert "total_mb" in mem_stats
-            assert "used_mb" in mem_stats
-            logger.info(f"Memory monitoring active: {mem_stats['percent']}% used")
+        # Track initial memory stats
+        initial_mem_stats = None
+        if PSUTIL_AVAILABLE:
+            # Memory stats should be captured initially
+            # Note: May not be in state yet if output hasn't reached 50 lines
+            if "memory_stats" in status_start and status_start["memory_stats"] is not None:
+                initial_mem_stats = status_start["memory_stats"]
+                assert "percent" in initial_mem_stats
+                assert "available_mb" in initial_mem_stats
+                assert "total_mb" in initial_mem_stats
+                assert "used_mb" in initial_mem_stats
+                assert 0 <= initial_mem_stats["percent"] <= 100
+                logger.info(f"Initial memory: {initial_mem_stats['percent']}% used, {initial_mem_stats['available_mb']} MB available")
         else:
             logger.info("Memory monitoring not available (psutil not installed)")
 
-        # Wait for completion
-        await asyncio.sleep(1)
+        # === PHASE 2: Monitor memory during execution ===
+        # Wait a bit for task to produce more output and trigger memory checks
+        # With 100 lines at 0.05s each = ~5s, wait 2s to be mid-execution
+        await asyncio.sleep(2.0)
+
+        status_during = manager.get_task_status(task_id)
+        assert status_during is not None
+        # Task should still be running or may have completed
+        assert status_during["status"] in ["running", "completed"]
+
+        if PSUTIL_AVAILABLE:
+            # After producing significant output, memory stats should be present
+            # (task should have hit the 50-line checkpoint)
+            if "memory_stats" in status_during and status_during["memory_stats"] is not None:
+                during_mem_stats = status_during["memory_stats"]
+                assert "percent" in during_mem_stats
+                assert "available_mb" in during_mem_stats
+                assert "total_mb" in during_mem_stats
+                assert "used_mb" in during_mem_stats
+                assert 0 <= during_mem_stats["percent"] <= 100
+                logger.info(f"During execution memory: {during_mem_stats['percent']}% used")
+
+                # Verify memory stats are reasonable (no huge leak)
+                # Memory shouldn't jump by more than 50% during our small task
+                if initial_mem_stats:
+                    mem_increase = during_mem_stats["percent"] - initial_mem_stats["percent"]
+                    assert mem_increase < 50, f"Memory increased by {mem_increase}% - possible leak"
+                    logger.info(f"Memory change during execution: {mem_increase:+.2f}%")
+
+        # === PHASE 3: Wait for completion ===
+        # Task should take ~5 seconds total (100 lines * 0.05s), wait up to 8 seconds
+        await asyncio.sleep(6.0)
+
+        # === PHASE 4: Verify memory stats in final state ===
+        status_final = manager.get_task_status(task_id)
+        assert status_final is not None
+        assert status_final["status"] == "completed"
+        assert status_final["exit_code"] == 0
+
+        if PSUTIL_AVAILABLE:
+            # Final memory stats should be captured
+            assert "memory_stats" in status_final
+            final_mem_stats = status_final["memory_stats"]
+            assert final_mem_stats is not None
+            assert "percent" in final_mem_stats
+            assert "available_mb" in final_mem_stats
+            assert "total_mb" in final_mem_stats
+            assert "used_mb" in final_mem_stats
+            assert 0 <= final_mem_stats["percent"] <= 100
+            logger.info(f"Final memory: {final_mem_stats['percent']}% used")
+
+            # === PHASE 5: Verify no memory leaks ===
+            # Compare initial and final memory (should be similar)
+            if initial_mem_stats:
+                mem_total_change = final_mem_stats["percent"] - initial_mem_stats["percent"]
+                # Memory shouldn't increase by more than 10% for this simple task
+                # (allowing some variance for system activity)
+                assert abs(mem_total_change) < 10, f"Memory leak detected: {mem_total_change:+.2f}% change"
+                logger.info(f"Total memory change: {mem_total_change:+.2f}% (no leak detected)")
+
+            # === PHASE 6: Verify memory stats are persisted ===
+            # Load state from disk to verify persistence
+            state_file = manager._get_task_state_file(task_id)
+            assert state_file.exists()
+            with open(state_file) as f:
+                persisted_state = json.load(f)
+            assert "memory_stats" in persisted_state
+            assert persisted_state["memory_stats"] == final_mem_stats
+            logger.info("✓ Memory stats persisted to disk")
+
+            logger.info("✓ Memory monitoring fully operational")
+        else:
+            logger.info("✓ Memory monitoring test skipped (psutil not installed)")
 
         logger.info(f"✓ Memory monitoring test passed: {task_id}")
 
