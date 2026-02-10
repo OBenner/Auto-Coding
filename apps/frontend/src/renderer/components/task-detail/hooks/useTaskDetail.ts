@@ -78,7 +78,6 @@ export function useTaskDetail({ task }: UseTaskDetailOptions) {
   const [expandedPhases, setExpandedPhases] = useState<Set<TaskLogPhase>>(new Set());
   const [isLoadingPlan, setIsLoadingPlan] = useState(false);
   const logsEndRef = useRef<HTMLDivElement>(null);
-  const logsContainerRef = useRef<HTMLDivElement>(null);
 
   // Track previous log count to detect new log entries
   const previousLogCountRef = useRef<number>(0);
@@ -545,7 +544,6 @@ export function useTaskDetail({ task }: UseTaskDetailOptions) {
     isLoadingLogs,
     expandedPhases,
     logsEndRef,
-    logsContainerRef,
     selectedProject,
     isRunning,
     needsReview,

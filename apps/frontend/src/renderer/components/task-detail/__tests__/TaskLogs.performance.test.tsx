@@ -65,7 +65,6 @@ function createMockTask(overrides: Partial<any> = {}): any {
 function createMockRefs() {
   return {
     logsEndRef: React.createRef<HTMLDivElement>(),
-    logsContainerRef: React.createRef<HTMLDivElement>(),
   };
 }
 

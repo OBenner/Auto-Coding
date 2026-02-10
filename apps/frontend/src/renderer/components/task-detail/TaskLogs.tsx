@@ -34,7 +34,6 @@ interface TaskLogsProps {
   expandedPhases: Set<TaskLogPhase>;
   isStuck: boolean;
   logsEndRef: React.RefObject<HTMLDivElement | null>;
-  logsContainerRef: React.RefObject<HTMLDivElement | null>;
   onLogsScroll: (e: React.UIEvent<HTMLDivElement>) => void;
   onTogglePhase: (phase: TaskLogPhase) => void;
   shouldAutoScroll: boolean;
@@ -132,7 +131,6 @@ export function TaskLogs({
   expandedPhases,
   isStuck,
   logsEndRef,
-  logsContainerRef,
   onLogsScroll,
   onTogglePhase,
   shouldAutoScroll
@@ -424,24 +422,6 @@ export function TaskLogs({
     return (
       <div className="flex items-center justify-center py-8">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
-
-  // Fallback to legacy raw logs if no phase logs exist
-  if (!phaseLogs && task.logs && task.logs.length > 0) {
-    return (
-      <div
-        ref={logsContainerRef}
-        className="h-full overflow-y-auto scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent"
-        onScroll={onLogsScroll}
-      >
-        <div className="p-4">
-          <pre className="text-xs font-mono text-muted-foreground whitespace-pre-wrap break-all">
-            {task.logs.join('')}
-            <div ref={logsEndRef} />
-          </pre>
-        </div>
       </div>
     );
   }
