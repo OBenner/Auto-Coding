@@ -364,7 +364,7 @@ interface AgentCardProps {
 function AgentCard({ id, config, modelLabel, thinkingLabel, overrides, mcpServerStates, customServers, onAddMcp, onRemoveMcp }: AgentCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [showAddDialog, setShowAddDialog] = useState(false);
-  const { t } = useTranslation(['settings']);
+  const { t } = useTranslation(['settings', 'common']);
   const category = CATEGORIES[config.category as keyof typeof CATEGORIES];
   const CategoryIcon = category.icon;
 
@@ -448,7 +448,7 @@ function AgentCard({ id, config, modelLabel, thinkingLabel, overrides, mcpServer
         </div>
         <div className="flex items-center gap-2 text-muted-foreground">
           <span className="text-xs">
-            {effectiveMcps.length} MCP
+            {t('settings:mcp.mcpCount', { count: effectiveMcps.length })}
           </span>
           {isExpanded ? (
             <ChevronDown className="h-4 w-4" />
@@ -465,7 +465,7 @@ function AgentCard({ id, config, modelLabel, thinkingLabel, overrides, mcpServer
           <div>
             <div className="flex items-center justify-between mb-2">
               <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                MCP Servers
+                {t('settings:mcp.mcpServers')}
               </h4>
               {availableMcps.length > 0 && (
                 <button
@@ -548,7 +548,7 @@ function AgentCard({ id, config, modelLabel, thinkingLabel, overrides, mcpServer
           {/* Tools */}
           <div>
             <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
-              Available Tools
+              {t('settings:mcp.availableTools')}
             </h4>
             {config.tools.length > 0 ? (
               <div className="flex flex-wrap gap-1.5">
@@ -562,7 +562,7 @@ function AgentCard({ id, config, modelLabel, thinkingLabel, overrides, mcpServer
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground">Text-only (no tools)</p>
+              <p className="text-sm text-muted-foreground">{t('settings:mcp.textOnly')}</p>
             )}
           </div>
         </div>
@@ -634,7 +634,7 @@ function AgentCard({ id, config, modelLabel, thinkingLabel, overrides, mcpServer
 }
 
 export function AgentTools() {
-  const { t } = useTranslation(['settings']);
+  const { t } = useTranslation(['settings', 'common']);
   const settings = useSettingsStore((state) => state.settings);
   const projects = useProjectStore((state) => state.projects);
   const selectedProjectId = useProjectStore((state) => state.selectedProjectId);
@@ -1021,10 +1021,10 @@ export function AgentTools() {
           </div>
           <div className="flex-1">
             <div className="flex items-center gap-2">
-              <h1 className="text-xl font-semibold text-foreground">MCP Server Overview</h1>
+              <h1 className="text-xl font-semibold text-foreground">{t('settings:mcp.title')}</h1>
               {selectedProject && (
                 <span className="text-sm text-muted-foreground">
-                  for {selectedProject.name}
+                  {t('settings:mcp.forProject', { projectName: selectedProject.name })}
                 </span>
               )}
             </div>
@@ -1265,14 +1265,14 @@ export function AgentTools() {
                                 onClick={() => handleTestConnection(server)}
                                 disabled={isTesting}
                                 className="h-7 px-2 text-xs"
-                                title="Test Connection"
+                                title={t('settings:mcp.testConnection')}
                               >
                                 {isTesting ? (
                                   <Loader2 className="h-3 w-3 animate-spin" />
                                 ) : (
                                   <RefreshCw className="h-3 w-3" />
                                 )}
-                                <span className="ml-1">Test</span>
+                                <span className="ml-1">{t('settings:mcp.test')}</span>
                               </Button>
                               {/* Edit/Delete - show on hover */}
                               <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -1280,7 +1280,7 @@ export function AgentTools() {
                                   type="button"
                                   onClick={() => { setEditingCustomServer(server); setShowCustomMcpDialog(true); }}
                                   className="p-1.5 text-muted-foreground hover:text-foreground transition-colors"
-                                  title="Edit"
+                                  title={t('common:edit')}
                                 >
                                   <Pencil className="h-3.5 w-3.5" />
                                 </button>
@@ -1288,7 +1288,7 @@ export function AgentTools() {
                                   type="button"
                                   onClick={() => handleDeleteCustomServer(server.id)}
                                   className="p-1.5 text-muted-foreground hover:text-destructive transition-colors"
-                                  title="Delete"
+                                  title={t('common:delete')}
                                 >
                                   <Trash2 className="h-3.5 w-3.5" />
                                 </button>
@@ -1334,7 +1334,7 @@ export function AgentTools() {
                     {category.label}
                   </h2>
                   <span className="text-xs text-muted-foreground">
-                    ({agents.length} agents)
+                    {t('settings:mcp.agentsCount', { count: agents.length })}
                   </span>
                 </button>
 
