@@ -198,6 +198,7 @@ export interface ElectronAPI {
   // Task archive operations
   archiveTasks: (projectId: string, taskIds: string[], version?: string) => Promise<IPCResult<boolean>>;
   unarchiveTasks: (projectId: string, taskIds: string[]) => Promise<IPCResult<boolean>>;
+  exportTask: (projectId: string, taskId: string) => Promise<IPCResult<string>>;
 
   // Merge analytics operations
   getMergeHistory: (projectId: string, filter?: MergeAnalyticsFilter) => Promise<IPCResult<MergeOperationRecord[]>>;
