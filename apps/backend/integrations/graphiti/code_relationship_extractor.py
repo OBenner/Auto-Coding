@@ -256,7 +256,6 @@ class CodeRelationshipExtractor:
             elif isinstance(node, ast.ImportFrom):
                 # Handle: from module import name1, name2 [as alias]
                 if node.module:
-                    names = [alias.name for alias in node.names]
                     # Handle multiple imports from same module
                     for alias in node.names:
                         imports.append(
@@ -323,7 +322,6 @@ class CodeRelationshipExtractor:
         Returns:
             List of FunctionCall objects
         """
-        calls = []
 
         # Use custom visitor to track context
         class CallVisitor(ast.NodeVisitor):

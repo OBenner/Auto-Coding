@@ -17,9 +17,6 @@ sys.path.insert(0, str(backend_dir))
 
 from integrations.graphiti.code_relationship_extractor import (
     CodeRelationshipExtractor,
-    FunctionCall,
-    ImportRelationship,
-    InheritanceRelationship,
 )
 
 

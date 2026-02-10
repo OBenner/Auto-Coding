@@ -15,8 +15,8 @@ from core.sentry import capture_exception
 
 from .schema import (
     EPISODE_TYPE_CLASS_INHERITANCE,
-    EPISODE_TYPE_CODE_RELATIONSHIP,
     EPISODE_TYPE_CODE_PURPOSE,
+    EPISODE_TYPE_CODE_RELATIONSHIP,
     EPISODE_TYPE_FUNCTION_CALL,
     EPISODE_TYPE_IMPORT_DEPENDENCY,
 )
@@ -92,7 +92,9 @@ class CodeRelationshipQueries:
                 group_id=self.group_id,
             )
 
-            logger.debug(f"Stored function call: {caller} -> {callee} ({file_path}:{lineno})")
+            logger.debug(
+                f"Stored function call: {caller} -> {callee} ({file_path}:{lineno})"
+            )
             return True
 
         except Exception as e:
@@ -212,7 +214,9 @@ class CodeRelationshipQueries:
                 group_id=self.group_id,
             )
 
-            logger.debug(f"Stored inheritance: {child} -> {parent} ({file_path}:{lineno})")
+            logger.debug(
+                f"Stored inheritance: {child} -> {parent} ({file_path}:{lineno})"
+            )
             return True
 
         except Exception as e:
@@ -273,7 +277,9 @@ class CodeRelationshipQueries:
 
             # Create a rich source description that includes semantic information
             # This helps Graphiti's semantic search find code by purpose
-            semantic_description = f"{entity_type.capitalize()} '{entity_name}': {purpose}"
+            semantic_description = (
+                f"{entity_type.capitalize()} '{entity_name}': {purpose}"
+            )
             if tags:
                 semantic_description += f" [tags: {', '.join(tags)}]"
 
@@ -457,7 +463,9 @@ class CodeRelationshipQueries:
                                             "caller": data.get("caller"),
                                             "file_path": data.get("file_path"),
                                             "lineno": data.get("lineno"),
-                                            "call_type": data.get("call_type", "function"),
+                                            "call_type": data.get(
+                                                "call_type", "function"
+                                            ),
                                             "module": data.get("module"),
                                         }
                                     )
@@ -528,7 +536,9 @@ class CodeRelationshipQueries:
                                             "callee": data.get("callee"),
                                             "file_path": data.get("file_path"),
                                             "lineno": data.get("lineno"),
-                                            "call_type": data.get("call_type", "function"),
+                                            "call_type": data.get(
+                                                "call_type", "function"
+                                            ),
                                             "module": data.get("module"),
                                         }
                                     )
@@ -726,9 +736,7 @@ class CodeRelationshipQueries:
                 current = parent_name
                 depth += 1
 
-            logger.info(
-                f"Got inheritance chain for {class_name}: {' -> '.join(chain)}"
-            )
+            logger.info(f"Got inheritance chain for {class_name}: {' -> '.join(chain)}")
             return chain
 
         except Exception as e:
@@ -961,7 +969,9 @@ class CodeRelationshipQueries:
             # Sort by relevance score (higher is better)
             entities.sort(key=lambda x: x.get("score", 0.0), reverse=True)
 
-            logger.info(f"Found {len(entities)} entities for purpose query: {query[:50]}...")
+            logger.info(
+                f"Found {len(entities)} entities for purpose query: {query[:50]}..."
+            )
             return entities[:limit]
 
         except Exception as e:

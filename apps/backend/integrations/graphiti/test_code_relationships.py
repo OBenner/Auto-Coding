@@ -6,11 +6,10 @@ Test Code Relationship Storage
 Tests for the CodeRelationshipQueries module.
 """
 
-import asyncio
 import json
 import sys
 from pathlib import Path
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 
@@ -1142,7 +1141,10 @@ class TestSemanticIndexing:
         assert episode_body["spec_id"] == "test_spec"
         assert episode_body["entity_name"] == "authenticate_user"
         assert episode_body["entity_type"] == "function"
-        assert episode_body["purpose"] == "Validates user credentials and creates a session token"
+        assert (
+            episode_body["purpose"]
+            == "Validates user credentials and creates a session token"
+        )
         assert episode_body["file_path"] == "src/auth/login.py"
         assert episode_body["lineno"] == 42
         assert "JWT token" in episode_body["docstring"]
@@ -1312,7 +1314,10 @@ class TestSemanticIndexing:
         # Verify first result (highest score)
         assert results[0]["entity_name"] == "authenticate_user"
         assert results[0]["entity_type"] == "function"
-        assert results[0]["purpose"] == "Validates user credentials and creates a session token"
+        assert (
+            results[0]["purpose"]
+            == "Validates user credentials and creates a session token"
+        )
         assert results[0]["file_path"] == "src/auth/login.py"
         assert results[0]["lineno"] == 42
         assert "authentication" in results[0]["tags"]
@@ -1327,7 +1332,9 @@ class TestSemanticIndexing:
         assert results[2]["entity_type"] == "class"
 
     @pytest.mark.asyncio
-    async def test_search_by_purpose_with_entity_type_filter(self, queries, mock_client):
+    async def test_search_by_purpose_with_entity_type_filter(
+        self, queries, mock_client
+    ):
         """Test searching by purpose with entity type filter."""
         # Mock results with mixed entity types
         mock_result1 = Mock()

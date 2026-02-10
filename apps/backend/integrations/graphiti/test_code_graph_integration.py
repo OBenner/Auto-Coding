@@ -15,7 +15,6 @@ This test uses a realistic sample codebase with functions, classes,
 imports, and inheritance relationships.
 """
 
-import asyncio
 import json
 import sys
 import tempfile
@@ -35,13 +34,6 @@ from integrations.graphiti.impact_analyzer import ImpactAnalyzer
 from integrations.graphiti.queries_pkg.code_relationships import (
     CodeRelationshipQueries,
 )
-from integrations.graphiti.queries_pkg.schema import (
-    EPISODE_TYPE_CLASS_INHERITANCE,
-    EPISODE_TYPE_CODE_PURPOSE,
-    EPISODE_TYPE_FUNCTION_CALL,
-    EPISODE_TYPE_IMPORT_DEPENDENCY,
-)
-
 
 # Sample codebase files for testing
 SAMPLE_AUTH_MODULE = """
@@ -344,7 +336,9 @@ class TestCodeGraphIntegration:
         # Test: Find what calls login
         print("Finding callers of 'login'...")
         login_callers = await code_relationships.find_callers("login")
-        print(f"  Found {len(login_callers)} callers: {[c['caller'] for c in login_callers]}")
+        print(
+            f"  Found {len(login_callers)} callers: {[c['caller'] for c in login_callers]}"
+        )
 
         # Verify: handle_login should call login()
         assert len(login_callers) > 0
@@ -373,9 +367,7 @@ class TestCodeGraphIntegration:
 
         print(f"  Impact score: {impact['impact_score']}")
         print(f"  Affected entities: {len(impact['affected_entities'])}")
-        print(
-            f"  Depth breakdown: {list(impact['depth_analysis'].keys())}"
-        )
+        print(f"  Depth breakdown: {list(impact['depth_analysis'].keys())}")
 
         # Verify: User inherits from BaseModel, so it should be affected
         if impact["affected_entities"]:
@@ -431,8 +423,7 @@ class TestCodeGraphIntegration:
             entity_names = [e["entity_name"] for e in auth_entities]
             # Should find login or validate_credentials
             assert any(
-                name in entity_names
-                for name in ["login", "validate_credentials"]
+                name in entity_names for name in ["login", "validate_credentials"]
             )
 
         # Test: Natural language relationship query
@@ -469,9 +460,7 @@ class TestCodeGraphIntegration:
         assert impact["impact_score"] >= 0
 
         # Verify semantic search works
-        print(
-            f"✓ Semantic search found {len(auth_entities)} authentication entities"
-        )
+        print(f"✓ Semantic search found {len(auth_entities)} authentication entities")
         # Note: May be 0 if search doesn't match, but search should execute without error
 
         # Verify inheritance tracking
@@ -485,9 +474,7 @@ class TestCodeGraphIntegration:
 
         # Verify function call chains
         print("Verifying function call chains...")
-        print(
-            f"✓ Verified call chain: handle_login -> login -> validate_credentials"
-        )
+        print("✓ Verified call chain: handle_login -> login -> validate_credentials")
         # This is verified by earlier caller/callee queries
 
         print("\n=== All verification steps passed! ===")

@@ -403,9 +403,7 @@ class ImpactAnalyzer:
                 indicators["total_references"] = len(parents) + len(children)
 
             # Calculate coupling score based on indicators
-            coupling_score = self._calculate_coupling_score_from_indicators(
-                indicators
-            )
+            coupling_score = self._calculate_coupling_score_from_indicators(indicators)
 
             # Classify relationship strength
             if coupling_score >= 60:
@@ -429,9 +427,7 @@ class ImpactAnalyzer:
             }
 
         except Exception as e:
-            logger.warning(
-                f"Failed to calculate coupling score for {entity_name}: {e}"
-            )
+            logger.warning(f"Failed to calculate coupling score for {entity_name}: {e}")
             capture_exception(
                 e,
                 operation="calculate_coupling_score",
