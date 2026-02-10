@@ -76,12 +76,13 @@ class SlackIntegration(BaseIntegration):
             spec_dir: Spec directory (for state persistence)
             project_dir: Optional project root directory
         """
-        super().__init__(spec_dir=spec_dir, project_dir=project_dir)
-
-        # Load Slack-specific configuration
+        # Load Slack-specific configuration BEFORE calling super().__init__()
+        # because _check_configured() is called in parent's __init__
         self.webhook_url = os.environ.get("SLACK_WEBHOOK_URL")
         self.bot_token = os.environ.get("SLACK_BOT_TOKEN")
         self.default_channel = os.environ.get("SLACK_CHANNEL")
+
+        super().__init__(spec_dir=spec_dir, project_dir=project_dir)
 
     def _check_configured(self) -> bool:
         """
