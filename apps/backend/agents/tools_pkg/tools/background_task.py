@@ -360,7 +360,7 @@ class BackgroundTaskManager:
         if task["status"] != self.STATE_RUNNING:
             return False
 
-        # Terminate process if running (will be implemented in subtask-1-3)
+        # Terminate process if running
         if task_id in self.processes:
             process = self.processes[task_id]
             try:
@@ -547,7 +547,7 @@ def create_background_task_tools(spec_dir: Path, project_dir: Path) -> list:
     tools.append(get_task_output)
 
     # -------------------------------------------------------------------------
-    # Tool: cancel_task (will be fully implemented in subtask-2-3)
+    # Tool: cancel_task
     # -------------------------------------------------------------------------
     @tool(
         "cancel_task",
