@@ -164,6 +164,9 @@ describe('File Watcher Integration', () => {
       // Simulate file change event
       mockWatcher.emit('change', planPath);
 
+      // Wait for debounce period (default 300ms)
+      await new Promise(resolve => setTimeout(resolve, 350));
+
       expect(progressHandler).toHaveBeenCalledWith('task-1', expect.objectContaining({
         phases: expect.arrayContaining([
           expect.objectContaining({
@@ -304,6 +307,240 @@ describe('File Watcher Integration', () => {
       const currentPlan = watcher.getCurrentPlan('nonexistent');
 
       expect(currentPlan).toBeNull();
+    });
+
+    it('should stop watching multiple tasks', async () => {
+      const plan1Path = path.join(TEST_SPEC_DIR, 'task1', 'implementation_plan.json');
+      const plan2Path = path.join(TEST_SPEC_DIR, 'task2', 'implementation_plan.json');
+
+      mkdirSync(path.join(TEST_SPEC_DIR, 'task1'), { recursive: true });
+      mkdirSync(path.join(TEST_SPEC_DIR, 'task2'), { recursive: true });
+      writeFileSync(plan1Path, JSON.stringify(createTestPlan()));
+      writeFileSync(plan2Path, JSON.stringify(createTestPlan()));
+
+      const { FileWatcher } = await import('../../main/file-watcher');
+      const watcher = new FileWatcher();
+
+      await watcher.watch('task-1', path.join(TEST_SPEC_DIR, 'task1'));
+      await watcher.watch('task-2', path.join(TEST_SPEC_DIR, 'task2'));
+
+      expect(watcher.isWatching('task-1')).toBe(true);
+      expect(watcher.isWatching('task-2')).toBe(true);
+
+      await watcher.unwatchAll();
+
+      expect(watcher.isWatching('task-1')).toBe(false);
+      expect(watcher.isWatching('task-2')).toBe(false);
+    });
+  });
+
+  describe('FileWatcher - Debounce Behavior', () => {
+    it('should debounce rapid file changes', async () => {
+      const planPath = path.join(TEST_SPEC_DIR, 'implementation_plan.json');
+      writeFileSync(planPath, JSON.stringify(createTestPlan()));
+
+      const { FileWatcher } = await import('../../main/file-watcher');
+      const watcher = new FileWatcher(100); // Short debounce for testing
+
+      const progressHandler = vi.fn();
+      watcher.on('progress', progressHandler);
+
+      await watcher.watch('task-1', TEST_SPEC_DIR);
+      progressHandler.mockClear();
+
+      // Simulate 5 rapid changes
+      for (let i = 1; i <= 5; i++) {
+        const updatedPlan = createTestPlan({
+          updated_at: new Date(Date.now() + i).toISOString()
+        });
+        writeFileSync(planPath, JSON.stringify(updatedPlan));
+        mockWatcher.emit('change', planPath);
+      }
+
+      // Wait for debounce period
+      await new Promise(resolve => setTimeout(resolve, 150));
+
+      // Should only emit once after debounce
+      expect(progressHandler).toHaveBeenCalledTimes(1);
+    });
+
+    it('should emit latest state after debounce period', async () => {
+      const planPath = path.join(TEST_SPEC_DIR, 'implementation_plan.json');
+      writeFileSync(planPath, JSON.stringify(createTestPlan()));
+
+      const { FileWatcher } = await import('../../main/file-watcher');
+      const watcher = new FileWatcher(100);
+
+      const progressHandler = vi.fn();
+      watcher.on('progress', progressHandler);
+
+      await watcher.watch('task-1', TEST_SPEC_DIR);
+      progressHandler.mockClear();
+
+      // First change
+      const plan1 = createTestPlan({
+        phases: [
+          {
+            phase: 1,
+            name: 'Phase 1',
+            type: 'implementation',
+            subtasks: [
+              { id: 'subtask-1', description: 'Task 1', status: 'in_progress' }
+            ]
+          }
+        ]
+      });
+      writeFileSync(planPath, JSON.stringify(plan1));
+      mockWatcher.emit('change', planPath);
+
+      // Second change (should override first)
+      const plan2 = createTestPlan({
+        phases: [
+          {
+            phase: 1,
+            name: 'Phase 1',
+            type: 'implementation',
+            subtasks: [
+              { id: 'subtask-1', description: 'Task 1', status: 'completed' }
+            ]
+          }
+        ]
+      });
+      writeFileSync(planPath, JSON.stringify(plan2));
+      mockWatcher.emit('change', planPath);
+
+      // Wait for debounce
+      await new Promise(resolve => setTimeout(resolve, 150));
+
+      // Should emit only the latest state
+      expect(progressHandler).toHaveBeenCalledTimes(1);
+      expect(progressHandler).toHaveBeenCalledWith('task-1', expect.objectContaining({
+        phases: expect.arrayContaining([
+          expect.objectContaining({
+            subtasks: expect.arrayContaining([
+              expect.objectContaining({ status: 'completed' })
+            ])
+          })
+        ])
+      }));
+    });
+
+    it('should respect custom debounce delay', async () => {
+      const planPath = path.join(TEST_SPEC_DIR, 'implementation_plan.json');
+      writeFileSync(planPath, JSON.stringify(createTestPlan()));
+
+      const { FileWatcher } = await import('../../main/file-watcher');
+      const watcher = new FileWatcher(200); // Custom delay
+
+      const progressHandler = vi.fn();
+      watcher.on('progress', progressHandler);
+
+      await watcher.watch('task-1', TEST_SPEC_DIR);
+      progressHandler.mockClear();
+
+      writeFileSync(planPath, JSON.stringify(createTestPlan({ feature: 'Updated' })));
+      mockWatcher.emit('change', planPath);
+
+      // Check before debounce period
+      await new Promise(resolve => setTimeout(resolve, 100));
+      expect(progressHandler).not.toHaveBeenCalled();
+
+      // Wait for full debounce period
+      await new Promise(resolve => setTimeout(resolve, 150));
+      expect(progressHandler).toHaveBeenCalledTimes(1);
+    });
+
+    it('should clear pending debounce on unwatch', async () => {
+      const planPath = path.join(TEST_SPEC_DIR, 'implementation_plan.json');
+      writeFileSync(planPath, JSON.stringify(createTestPlan()));
+
+      const { FileWatcher } = await import('../../main/file-watcher');
+      const watcher = new FileWatcher(200);
+
+      const progressHandler = vi.fn();
+      watcher.on('progress', progressHandler);
+
+      await watcher.watch('task-1', TEST_SPEC_DIR);
+      progressHandler.mockClear();
+
+      // Trigger change
+      writeFileSync(planPath, JSON.stringify(createTestPlan({ feature: 'Updated' })));
+      mockWatcher.emit('change', planPath);
+
+      // Unwatch before debounce period expires
+      await watcher.unwatch('task-1');
+
+      // Wait past debounce period
+      await new Promise(resolve => setTimeout(resolve, 250));
+
+      // Should not emit because unwatch cleared the timeout
+      expect(progressHandler).not.toHaveBeenCalled();
+    });
+
+    it('should clear all pending debounces on unwatchAll', async () => {
+      const plan1Path = path.join(TEST_SPEC_DIR, 'task1', 'implementation_plan.json');
+      const plan2Path = path.join(TEST_SPEC_DIR, 'task2', 'implementation_plan.json');
+
+      mkdirSync(path.join(TEST_SPEC_DIR, 'task1'), { recursive: true });
+      mkdirSync(path.join(TEST_SPEC_DIR, 'task2'), { recursive: true });
+      writeFileSync(plan1Path, JSON.stringify(createTestPlan()));
+      writeFileSync(plan2Path, JSON.stringify(createTestPlan()));
+
+      const { FileWatcher } = await import('../../main/file-watcher');
+      const watcher = new FileWatcher(200);
+
+      const progressHandler = vi.fn();
+      watcher.on('progress', progressHandler);
+
+      await watcher.watch('task-1', path.join(TEST_SPEC_DIR, 'task1'));
+      await watcher.watch('task-2', path.join(TEST_SPEC_DIR, 'task2'));
+      progressHandler.mockClear();
+
+      // Trigger changes on both tasks
+      writeFileSync(plan1Path, JSON.stringify(createTestPlan({ feature: 'Updated 1' })));
+      writeFileSync(plan2Path, JSON.stringify(createTestPlan({ feature: 'Updated 2' })));
+      mockWatcher.emit('change', plan1Path);
+      mockWatcher.emit('change', plan2Path);
+
+      // Unwatch all before debounce period expires
+      await watcher.unwatchAll();
+
+      // Wait past debounce period
+      await new Promise(resolve => setTimeout(resolve, 250));
+
+      // Should not emit for either task
+      expect(progressHandler).not.toHaveBeenCalled();
+    });
+
+    it('should handle consecutive debounce windows separately', async () => {
+      const planPath = path.join(TEST_SPEC_DIR, 'implementation_plan.json');
+      writeFileSync(planPath, JSON.stringify(createTestPlan()));
+
+      const { FileWatcher } = await import('../../main/file-watcher');
+      const watcher = new FileWatcher(100);
+
+      const progressHandler = vi.fn();
+      watcher.on('progress', progressHandler);
+
+      await watcher.watch('task-1', TEST_SPEC_DIR);
+      progressHandler.mockClear();
+
+      // First batch of changes
+      writeFileSync(planPath, JSON.stringify(createTestPlan({ feature: 'Update 1' })));
+      mockWatcher.emit('change', planPath);
+
+      // Wait for first debounce to complete
+      await new Promise(resolve => setTimeout(resolve, 150));
+      expect(progressHandler).toHaveBeenCalledTimes(1);
+      progressHandler.mockClear();
+
+      // Second batch of changes
+      writeFileSync(planPath, JSON.stringify(createTestPlan({ feature: 'Update 2' })));
+      mockWatcher.emit('change', planPath);
+
+      // Wait for second debounce to complete
+      await new Promise(resolve => setTimeout(resolve, 150));
+      expect(progressHandler).toHaveBeenCalledTimes(1);
     });
   });
 });
