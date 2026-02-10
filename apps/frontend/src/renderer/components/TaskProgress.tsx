@@ -14,7 +14,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '../ui/alert-dialog';
+} from './ui/alert-dialog';
 import type { BackgroundTask, BackgroundTaskStatus } from '../../shared/types';
 
 interface TaskProgressProps {
@@ -466,7 +466,7 @@ export function TaskProgress({ taskId, onClose }: TaskProgressProps) {
               {t('common:buttons.cancel')}
             </AlertDialogCancel>
             <AlertDialogAction
-              onClick={(e) => {
+              onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
                 e.preventDefault();
                 handleCancel();
               }}

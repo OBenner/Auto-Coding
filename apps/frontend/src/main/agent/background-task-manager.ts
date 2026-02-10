@@ -115,8 +115,7 @@ export class BackgroundTaskManager {
     this.emitter.emit('background-task-created', taskId, task);
 
     // Get Python environment
-    const { pythonPath, pythonArgs } = await parsePythonCommand(autoBuildSource);
-    const venvPath = pythonEnvManager.getVenvPath(autoBuildSource);
+    const [pythonPath, pythonArgs] = parsePythonCommand(autoBuildSource);
 
     // Prepare MCP tools script path
     const mcpToolsPath = path.join(autoBuildSource, 'agents', 'tools_pkg', 'tools', 'background_task.py');
@@ -140,12 +139,12 @@ print(json.dumps({'task_id': task_id}))
     ];
 
     // Spawn Python process
+    const pythonEnv = pythonEnvManager.getPythonEnv();
     const proc = spawn(pythonPath, args, {
       cwd: workingDir,
       env: {
-        ...process.env,
-        PYTHONPATH: autoBuildSource,
-        VIRTUAL_ENV: venvPath
+        ...pythonEnv,
+        PYTHONPATH: autoBuildSource
       },
       shell: false
     });
