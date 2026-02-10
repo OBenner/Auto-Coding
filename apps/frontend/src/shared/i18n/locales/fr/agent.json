@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "title": "Profils d'agents",
+    "subtitle": "Sélectionnez une configuration prédéfinie pour le modèle et le niveau de réflexion",
+    "description": "Les profils d'agent fournissent des configurations prédéfinies pour le modèle Claude et le niveau de réflexion. Quand vous créez une nouvelle tâche, ces paramètres seront utilisés par défaut. Vous pouvez toujours les modifier dans l'assistant de création de tâche.",
+    "thinking": "Réflexion"
+  }
+}
