@@ -124,6 +124,11 @@ export function Sidebar({
   const [pendingProject, setPendingProject] = useState<Project | null>(null);
   const [isInitializing, setIsInitializing] = useState(false);
   const [envConfig, setEnvConfig] = useState<ProjectEnvConfig | null>(null);
+  const [indicatorPosition, setIndicatorPosition] = useState<{
+    top: number;
+    height: number;
+    opacity: number;
+  }>({ top: 0, height: 0, opacity: 0 });
 
   const selectedProject = projects.find((p) => p.id === selectedProjectId);
 
@@ -133,6 +138,7 @@ export function Sidebar({
   // Refs for position tracking (used for animated indicator)
   const navContainerRef = useRef<HTMLDivElement>(null);
   const navItemRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
+  const resizeObserverRef = useRef<ResizeObserver | null>(null);
 
   const toggleSidebar = () => {
     saveSettings({ sidebarCollapsed: !isCollapsed });
@@ -207,6 +213,53 @@ export function Sidebar({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [selectedProjectId, onViewChange, visibleNavItems]);
+
+  // Track position changes using ResizeObserver for smooth indicator animations
+  useEffect(() => {
+    const container = navContainerRef.current;
+    const activeItem = navItemRefs.current.get(activeView);
+
+    if (!container || !activeItem) {
+      setIndicatorPosition((prev) => ({ ...prev, opacity: 0 }));
+      return;
+    }
+
+    const updatePosition = () => {
+      const container = navContainerRef.current;
+      const activeItem = navItemRefs.current.get(activeView);
+
+      if (!container || !activeItem) {
+        setIndicatorPosition((prev) => ({ ...prev, opacity: 0 }));
+        return;
+      }
+
+      const containerRect = container.getBoundingClientRect();
+      const itemRect = activeItem.getBoundingClientRect();
+
+      // Calculate position relative to container
+      const top = itemRect.top - containerRect.top;
+      const height = itemRect.height;
+
+      setIndicatorPosition({ top, height, opacity: 1 });
+    };
+
+    // Initial measurement
+    updatePosition();
+
+    // Create ResizeObserver to detect layout changes
+    resizeObserverRef.current = new ResizeObserver(updatePosition);
+
+    // Observe the container and all nav items
+    resizeObserverRef.current.observe(container);
+    navItemRefs.current.forEach((item) => {
+      resizeObserverRef.current?.observe(item);
+    });
+
+    return () => {
+      resizeObserverRef.current?.disconnect();
+      resizeObserverRef.current = null;
+    };
+  }, [activeView, visibleNavItems]);
 
   // Check git status when project changes
   useEffect(() => {
@@ -408,6 +461,7 @@ export function Sidebar({
                   activeView={activeView}
                   containerRef={navContainerRef}
                   itemRefs={navItemRefs}
+                  position={indicatorPosition}
                 />
               )}
               <nav ref={navContainerRef} className="space-y-1">

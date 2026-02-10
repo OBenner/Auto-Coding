@@ -9,6 +9,8 @@ export interface NavIndicatorProps {
   containerRef: React.RefObject<HTMLDivElement>;
   /** Map of view IDs to their button elements */
   itemRefs: React.MutableRefObject<Map<string, HTMLButtonElement>>;
+  /** Position and dimensions for the indicator (optional, will measure if not provided) */
+  position?: { top: number; height: number; opacity: number };
   /** Optional additional className */
   className?: string;
 }
@@ -24,24 +26,32 @@ export const NavIndicator = memo(function NavIndicator({
   activeView,
   containerRef,
   itemRefs,
+  position: positionProp,
   className,
 }: NavIndicatorProps) {
   const rafRef = useRef<number | null>(null);
-  const [position, setPosition] = useState<{
+  const [internalPosition, setInternalPosition] = useState<{
     top: number;
     height: number;
     opacity: number;
   }>({ top: 0, height: 0, opacity: 0 });
 
-  // Update indicator position when active view changes
+  // Use provided position prop, or fall back to internal measurement
+  const position = positionProp ?? internalPosition;
+
+  // Update indicator position when active view changes (only if no position prop provided)
   useEffect(() => {
+    if (positionProp !== undefined) {
+      return; // Skip if position is controlled by parent
+    }
+
     const updatePosition = () => {
       const container = containerRef.current;
       const activeItem = itemRefs.current.get(activeView);
 
       if (!container || !activeItem) {
         // Fade out if we can't find the elements
-        setPosition((prev) => ({ ...prev, opacity: 0 }));
+        setInternalPosition((prev) => ({ ...prev, opacity: 0 }));
         return;
       }
 
@@ -59,7 +69,7 @@ export const NavIndicator = memo(function NavIndicator({
 
       // Schedule state update on next animation frame
       rafRef.current = requestAnimationFrame(() => {
-        setPosition({ top, height, opacity: 1 });
+        setInternalPosition({ top, height, opacity: 1 });
         rafRef.current = null;
       });
     };
@@ -77,7 +87,7 @@ export const NavIndicator = memo(function NavIndicator({
       }
       clearTimeout(timeoutId);
     };
-  }, [activeView, containerRef, itemRefs]);
+  }, [activeView, containerRef, itemRefs, positionProp]);
 
   // Don't render if no position or invisible
   if (position.opacity === 0) {
