@@ -195,20 +195,184 @@ class DependencyAnalyzer(BaseAnalyzer):
         """
         Group compatible updates into batches.
 
-        This method will be implemented in subtask-2-3 to provide:
-        - Batch grouping by update type and ecosystem
-        - Priority scoring
-        - Security update separation
-        - Risk-aware batching
+        Groups updates by:
+        - Update type (major, minor, patch) and ecosystem
+        - Security updates are separated into dedicated batches
+        - Priority scoring based on severity and update type
+
+        Strategy:
+        - Security updates get their own batches (highest priority)
+        - Patch updates are batched together (low risk, can be combined)
+        - Minor updates are batched by ecosystem (medium risk)
+        - Major updates are kept in separate batches (high risk, requires careful review)
 
         Args:
             updates: List of update dictionaries (from DependencyScanner)
 
         Returns:
-            List of UpdateBatch objects
+            List of UpdateBatch objects, ordered by priority (highest first)
         """
-        # Placeholder - will be implemented in subtask-2-3
-        return []
+        if not updates:
+            return []
+
+        batches: list[UpdateBatch] = []
+        batch_counter = 0
+
+        # Group updates by category for batching
+        security_updates_by_ecosystem: dict[str, list[dict[str, Any]]] = {}
+        patch_updates_by_ecosystem: dict[str, list[dict[str, Any]]] = {}
+        minor_updates_by_ecosystem: dict[str, list[dict[str, Any]]] = {}
+        major_updates: list[dict[str, Any]] = []
+
+        # Categorize updates
+        for update in updates:
+            ecosystem = update.get("ecosystem", "unknown")
+            update_type = update.get("update_type", "unknown")
+            is_security = update.get("is_security", False)
+
+            if is_security:
+                # Security updates get their own category
+                if ecosystem not in security_updates_by_ecosystem:
+                    security_updates_by_ecosystem[ecosystem] = []
+                security_updates_by_ecosystem[ecosystem].append(update)
+
+            elif update_type == "patch":
+                # Group patch updates together (safe to batch)
+                if ecosystem not in patch_updates_by_ecosystem:
+                    patch_updates_by_ecosystem[ecosystem] = []
+                patch_updates_by_ecosystem[ecosystem].append(update)
+
+            elif update_type == "minor":
+                # Group minor updates by ecosystem
+                if ecosystem not in minor_updates_by_ecosystem:
+                    minor_updates_by_ecosystem[ecosystem] = []
+                minor_updates_by_ecosystem[ecosystem].append(update)
+
+            elif update_type == "major":
+                # Major updates are kept separate due to high risk
+                major_updates.append(update)
+
+        # Create security update batches (highest priority)
+        for ecosystem, sec_updates in security_updates_by_ecosystem.items():
+            batch_counter += 1
+
+            # Calculate overall severity for the batch
+            severities = [u.get("severity") for u in sec_updates if u.get("severity")]
+            if "critical" in severities:
+                max_severity = "critical"
+            elif "high" in severities:
+                max_severity = "high"
+            elif "medium" in severities:
+                max_severity = "medium"
+            else:
+                max_severity = "low"
+
+            # Calculate priority for the batch
+            avg_priority = sum(
+                self.get_update_priority(
+                    u.get("name", ""),
+                    u.get("update_type", ""),
+                    True,
+                    u.get("severity"),
+                )
+                for u in sec_updates
+            ) // len(sec_updates)
+
+            batch = UpdateBatch(
+                batch_id=f"security-{ecosystem}-{batch_counter}",
+                update_type="security",
+                ecosystem=ecosystem,
+                packages=[u.get("name", "") for u in sec_updates],
+                risk_level="high",
+                is_security_batch=True,
+                priority=avg_priority,
+                notes=f"Security updates for {len(sec_updates)} {ecosystem} package(s). "
+                      f"Max severity: {max_severity}. Recommend immediate update and testing.",
+            )
+            batches.append(batch)
+
+        # Create patch update batches (low risk, can be combined)
+        for ecosystem, patch_updates_list in patch_updates_by_ecosystem.items():
+            batch_counter += 1
+
+            avg_priority = sum(
+                self.get_update_priority(
+                    u.get("name", ""),
+                    u.get("update_type", ""),
+                    False,
+                )
+                for u in patch_updates_list
+            ) // max(len(patch_updates_list), 1)
+
+            batch = UpdateBatch(
+                batch_id=f"patch-{ecosystem}-{batch_counter}",
+                update_type="patch",
+                ecosystem=ecosystem,
+                packages=[u.get("name", "") for u in patch_updates_list],
+                risk_level="low",
+                is_security_batch=False,
+                priority=avg_priority,
+                notes=f"Patch updates for {len(patch_updates_list)} {ecosystem} package(s). "
+                      f"Low risk - typically backwards compatible. Safe to batch together.",
+            )
+            batches.append(batch)
+
+        # Create minor update batches (medium risk)
+        for ecosystem, minor_updates_list in minor_updates_by_ecosystem.items():
+            batch_counter += 1
+
+            avg_priority = sum(
+                self.get_update_priority(
+                    u.get("name", ""),
+                    u.get("update_type", ""),
+                    False,
+                )
+                for u in minor_updates_list
+            ) // max(len(minor_updates_list), 1)
+
+            batch = UpdateBatch(
+                batch_id=f"minor-{ecosystem}-{batch_counter}",
+                update_type="minor",
+                ecosystem=ecosystem,
+                packages=[u.get("name", "") for u in minor_updates_list],
+                risk_level="medium",
+                is_security_batch=False,
+                priority=avg_priority,
+                notes=f"Minor updates for {len(minor_updates_list)} {ecosystem} package(s). "
+                      f"Medium risk - may include new features. Test in development environment.",
+            )
+            batches.append(batch)
+
+        # Create individual batches for major updates (high risk, one per package)
+        for major_update in major_updates:
+            batch_counter += 1
+            ecosystem = major_update.get("ecosystem", "unknown")
+            package_name = major_update.get("name", "unknown")
+
+            priority = self.get_update_priority(
+                package_name,
+                "major",
+                False,
+            )
+
+            batch = UpdateBatch(
+                batch_id=f"major-{ecosystem}-{package_name}-{batch_counter}",
+                update_type="major",
+                ecosystem=ecosystem,
+                packages=[package_name],
+                risk_level="high",
+                is_security_batch=False,
+                priority=priority,
+                notes=f"Major update for {package_name} ({major_update.get('current_version')} → "
+                      f"{major_update.get('latest_version')}). High risk - likely contains breaking changes. "
+                      f"Review release notes and test in separate branch.",
+            )
+            batches.append(batch)
+
+        # Sort batches by priority (highest first)
+        batches.sort(key=lambda b: b.priority, reverse=True)
+
+        return batches
 
     def get_update_priority(
         self,
