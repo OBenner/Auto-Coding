@@ -83,6 +83,11 @@ vi.mock("electron", () => {
       defaultSession: {
         clearCache: vi.fn(() => Promise.resolve()),
         clearStorageData: vi.fn(() => Promise.resolve()),
+        webRequest: {
+          onHeadersReceived: vi.fn((callback: any) => {
+            // No-op for this test - we're not testing CSP here
+          }),
+        },
       },
     },
     screen: {
