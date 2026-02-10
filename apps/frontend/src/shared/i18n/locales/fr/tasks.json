@@ -109,7 +109,14 @@
     "lockColumn": "Verrouiller la largeur de la colonne",
     "unlockColumn": "Déverrouiller la largeur de la colonne",
     "columnLocked": "La largeur de la colonne est verrouillée",
-    "expandAll": "Développer toutes les colonnes"
+    "expandAll": "Développer toutes les colonnes",
+    "searchTasks": "Rechercher des tâches...",
+    "allStatuses": "Tous les statuts",
+    "category": "Catégorie",
+    "allCategories": "Toutes les catégories",
+    "priority": "Priorité",
+    "allPriorities": "Toutes les priorités",
+    "clearFilters": "Effacer les filtres"
   },
   "queue": {
     "limitReached": "Limite de tâches parallèles atteinte ({{current}}/{{max}}). Tâche déplacée vers la file d'attente.",

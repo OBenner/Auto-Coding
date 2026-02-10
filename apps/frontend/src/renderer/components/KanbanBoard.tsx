@@ -20,11 +20,19 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy
 } from '@dnd-kit/sortable';
-import { Plus, Inbox, Loader2, Eye, CheckCircle2, Archive, RefreshCw, GitPullRequest, X, Settings, ListPlus, ChevronLeft, ChevronRight, ChevronsRight, Lock, Unlock } from 'lucide-react';
+import { Plus, Inbox, Loader2, Eye, CheckCircle2, Archive, RefreshCw, GitPullRequest, X, Settings, ListPlus, ChevronLeft, ChevronRight, ChevronsRight, Lock, Unlock, Search, Filter } from 'lucide-react';
 import { Checkbox } from './ui/checkbox';
 import { ScrollArea } from './ui/scroll-area';
 import { Button } from './ui/button';
+import { Input } from './ui/input';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from './ui/select';
 import { TaskCard } from './TaskCard';
 import { SortableTaskCard } from './SortableTaskCard';
 import { TaskCardSkeleton } from './skeletons/TaskCardSkeleton';
@@ -1468,6 +1476,93 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
           </div>
         </div>
       )}
+
+      {/* Filter controls */}
+      <div className="flex items-center gap-3 px-6 pb-4">
+        {/* Search input */}
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder={t('kanban.searchTasks')}
+            value={filters.searchQuery || ''}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+
+        {/* Status filter */}
+        <Select
+          value={filters.statuses?.[0] || 'all'}
+          onValueChange={(value) => setStatuses(value === 'all' ? [] : [value as TaskStatus])}
+        >
+          <SelectTrigger className="w-32">
+            <Filter className="h-4 w-4 mr-2" />
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">{t('kanban.allStatuses')}</SelectItem>
+            {TASK_STATUS_COLUMNS.map((status) => (
+              <SelectItem key={status} value={status}>
+                {t(TASK_STATUS_LABELS[status])}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        {/* Category filter */}
+        {categories.length > 0 && (
+          <Select
+            value={filters.categories?.[0] || 'all'}
+            onValueChange={(value) => setCategories(value === 'all' ? [] : [value])}
+          >
+            <SelectTrigger className="w-40">
+              <SelectValue placeholder={t('kanban.category')} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{t('kanban.allCategories')}</SelectItem>
+              {categories.map((category) => (
+                <SelectItem key={category} value={category}>
+                  {category}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+
+        {/* Priority filter */}
+        {priorities.length > 0 && (
+          <Select
+            value={filters.priorities?.[0] || 'all'}
+            onValueChange={(value) => setPriorities(value === 'all' ? [] : [value])}
+          >
+            <SelectTrigger className="w-32">
+              <SelectValue placeholder={t('kanban.priority')} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{t('kanban.allPriorities')}</SelectItem>
+              {priorities.map((priority) => (
+                <SelectItem key={priority} value={priority}>
+                  {priority}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+
+        {/* Clear filters button */}
+        {hasActiveFilters && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={clearFilters}
+            className="gap-2 text-muted-foreground hover:text-foreground"
+          >
+            <X className="h-4 w-4" />
+            {t('kanban.clearFilters')}
+          </Button>
+        )}
+      </div>
+
       {/* Kanban columns */}
       <DndContext
         sensors={sensors}
