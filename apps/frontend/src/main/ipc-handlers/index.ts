@@ -37,6 +37,7 @@ import { registerTerminalWorktreeIpcHandlers } from './terminal';
 import { registerMergeAnalyticsHandlers } from './merge-analytics-handlers';
 import { registerTokenStatsHandlers } from './token-stats-handler';
 import { registerTemplateHandlers } from './template-handlers';
+import { registerPatternHandlers } from './pattern-handlers';
 import { notificationService } from '../notification-service';
 
 /**
@@ -134,6 +135,9 @@ export function setupIpcHandlers(
   // Template library handlers
   registerTemplateHandlers();
 
+  // Pattern learning handlers
+  registerPatternHandlers();
+
   console.warn('[IPC] All handler modules registered successfully');
 }
 
@@ -164,5 +168,6 @@ export {
   registerScreenshotHandlers,
   registerMergeAnalyticsHandlers,
   registerTokenStatsHandlers,
-  registerTemplateHandlers
+  registerTemplateHandlers,
+  registerPatternHandlers
 };

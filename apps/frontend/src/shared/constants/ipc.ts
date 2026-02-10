@@ -595,5 +595,13 @@ export const IPC_CHANNELS = {
   TEMPLATE_SEARCH: 'template:search',
   TEMPLATE_PREVIEW: 'template:preview',
   TEMPLATE_CREATE_SPEC: 'template:createSpec',
-  TEMPLATE_SUGGEST: 'template:suggest'
+  TEMPLATE_SUGGEST: 'template:suggest',
+
+  // Pattern operations (codebase pattern learning)
+  PATTERN_LIST: 'pattern:list',
+  PATTERN_GET_CATEGORIES: 'pattern:getCategories',
+  PATTERN_GET_DETAILS: 'pattern:getDetails',
+  PATTERN_APPROVE: 'pattern:approve',
+  PATTERN_OVERRIDE: 'pattern:override',
+  PATTERN_DELETE: 'pattern:delete'
 } as const;
