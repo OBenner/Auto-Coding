@@ -414,6 +414,8 @@ def format_context_for_prompt(context: dict) -> str:
             - patterns: Dict of reference file paths to contents
             - files_to_modify: Dict of file paths to current contents
             - pattern_suggestions: Pre-formatted string of pattern suggestions from Graphiti
+            - selection_reasoning: List of strings explaining why files were selected
+            - token_summary: Dict with token usage statistics (optional)
 
     Returns:
         Formatted string to append to prompt
@@ -424,6 +426,23 @@ def format_context_for_prompt(context: dict) -> str:
     if context.get("pattern_suggestions"):
         sections.append(context["pattern_suggestions"])
         sections.append("")  # Add spacing after pattern suggestions
+
+    # Add selection reasoning for transparency
+    if context.get("selection_reasoning"):
+        sections.append("## Context Selection Reasoning\n")
+        sections.append("The following files were selected for this task based on:\n")
+        for reason in context["selection_reasoning"]:
+            sections.append(f"- {reason}")
+        sections.append("")  # Add spacing after reasoning
+
+    # Add token summary if available
+    if context.get("token_summary"):
+        summary = context["token_summary"]
+        sections.append("## Token Usage Summary\n")
+        sections.append(f"- **Total Estimated Tokens:** {summary.get('total_tokens', 'N/A')}")
+        sections.append(f"- **Files Included:** {summary.get('file_count', 'N/A')}")
+        sections.append(f"- **Compression Applied:** {summary.get('compression_method', 'None')}")
+        sections.append("")  # Add spacing after token summary
 
     if context.get("patterns"):
         sections.append("## Reference Files (Patterns to Follow)\n")
