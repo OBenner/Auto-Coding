@@ -4,6 +4,7 @@ import type { APIProfile, ProfileFormData, TestConnectionResult, ModelInfo } fro
 import { DEFAULT_APP_SETTINGS } from '../../shared/constants';
 import { toast } from '../hooks/use-toast';
 import { markSettingsLoaded } from '../lib/sentry';
+import { initializeKeyboardShortcuts } from './keyboard-shortcuts-store';
 
 interface SettingsState {
   settings: AppSettings;
@@ -345,6 +346,9 @@ export async function loadSettings(): Promise<void> {
           onboardingCompleted: migratedSettings.onboardingCompleted
         });
       }
+
+      // Initialize keyboard shortcuts from localStorage
+      initializeKeyboardShortcuts();
 
       // Only mark settings as loaded on SUCCESS
       // This ensures Sentry respects user's opt-out preference even if settings fail to load

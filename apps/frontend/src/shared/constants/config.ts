@@ -3,6 +3,8 @@
  * Default settings, file paths, and project structure
  */
 
+import { DEFAULT_KEYBOARD_SHORTCUTS } from '../types/settings';
+
 // ============================================
 // Terminal Timing Constants
 // ============================================
@@ -59,7 +61,9 @@ export const DEFAULT_APP_SETTINGS = {
   // Anonymous error reporting (Sentry) - enabled by default to help improve the app
   sentryEnabled: true,
   // Auto-name Claude terminals based on initial message (enabled by default)
-  autoNameClaudeTerminals: true
+  autoNameClaudeTerminals: true,
+  // Keyboard shortcuts (customizable by users)
+  keyboardShortcuts: DEFAULT_KEYBOARD_SHORTCUTS
 };
 
 // ============================================
