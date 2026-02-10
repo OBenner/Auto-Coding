@@ -296,12 +296,75 @@ class DependencyScanner:
         self, project_dir: Path, result: DependencyScanResult
     ) -> None:
         """
-        Scan Node.js dependencies for updates.
+        Scan Node.js dependencies for updates using npm outdated.
 
-        Will be implemented in subtask-1-3.
+        Checks for outdated Node.js packages and adds them to the result.
         """
-        # Placeholder - to be implemented in subtask-1-3
-        pass
+        if not self._check_npm_available():
+            result.scan_errors.append(
+                "Node.js dependency scanning skipped - npm not available"
+            )
+            return
+
+        self._scan_node_with_npm(project_dir, result)
+
+    def _scan_node_with_npm(
+        self, project_dir: Path, result: DependencyScanResult
+    ) -> None:
+        """Scan Node.js dependencies using npm outdated."""
+        try:
+            # Run npm outdated --json
+            # Note: npm outdated returns exit code 1 when updates are available
+            proc = subprocess.run(
+                ["npm", "outdated", "--json"],
+                capture_output=True,
+                text=True,
+                timeout=30,
+                cwd=project_dir,
+            )
+
+            # npm outdated returns non-zero when updates are available, so check stderr
+            if proc.returncode not in (0, 1):
+                result.scan_errors.append(
+                    f"npm outdated failed: {proc.stderr.strip()}"
+                )
+                return
+
+            # Parse JSON output
+            # npm outdated format: { "package-name": { "current": "1.0.0", "wanted": "1.1.0", "latest": "2.0.0", ... } }
+            if not proc.stdout.strip():
+                # No outdated packages
+                return
+
+            outdated_packages = json.loads(proc.stdout)
+
+            for pkg_name, pkg_info in outdated_packages.items():
+                current = pkg_info.get("current", "unknown")
+                latest = pkg_info.get("latest", "unknown")
+
+                # Classify update type
+                update_type = self._classify_update_type(current, latest)
+
+                # Create DependencyUpdate object
+                update = DependencyUpdate(
+                    name=pkg_name,
+                    current_version=current,
+                    latest_version=latest,
+                    update_type=update_type,
+                    ecosystem="npm",
+                    changelog_url=f"https://www.npmjs.com/package/{pkg_name}/v/{latest}",
+                )
+
+                result.updates_available.append(update)
+
+        except subprocess.TimeoutExpired:
+            result.scan_errors.append(
+                "npm outdated timed out after 30 seconds"
+            )
+        except json.JSONDecodeError as e:
+            result.scan_errors.append(f"Failed to parse npm output: {e}")
+        except Exception as e:
+            result.scan_errors.append(f"Node.js dependency scan error: {e}")
 
     def _check_security_vulnerabilities(
         self, project_dir: Path, result: DependencyScanResult
