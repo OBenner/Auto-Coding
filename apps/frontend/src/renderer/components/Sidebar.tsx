@@ -6,7 +6,7 @@ import {
   Settings,
   LayoutGrid,
   Terminal,
-  Map,
+  Map as MapIcon,
   BookOpen,
   Lightbulb,
   AlertCircle,
@@ -82,7 +82,7 @@ const baseNavItems: NavItem[] = [
   { id: 'kanban', labelKey: 'navigation:items.kanban', icon: LayoutGrid, shortcut: 'K' },
   { id: 'terminals', labelKey: 'navigation:items.terminals', icon: Terminal, shortcut: 'A' },
   { id: 'insights', labelKey: 'navigation:items.insights', icon: Sparkles, shortcut: 'N' },
-  { id: 'roadmap', labelKey: 'navigation:items.roadmap', icon: Map, shortcut: 'D' },
+  { id: 'roadmap', labelKey: 'navigation:items.roadmap', icon: MapIcon, shortcut: 'D' },
   { id: 'ideation', labelKey: 'navigation:items.ideation', icon: Lightbulb, shortcut: 'I' },
   { id: 'changelog', labelKey: 'navigation:items.changelog', icon: FileText, shortcut: 'L' },
   { id: 'scheduler', labelKey: 'navigation:items.scheduler', icon: Calendar, shortcut: 'S' },
@@ -225,18 +225,17 @@ export function Sidebar({
     }
 
     const updatePosition = () => {
-      const container = navContainerRef.current;
-      const activeItem = navItemRefs.current.get(activeView);
+      const containerEl = navContainerRef.current;
+      const activeEl = navItemRefs.current.get(activeView);
 
-      if (!container || !activeItem) {
+      if (!containerEl || !activeEl) {
         setIndicatorPosition((prev) => ({ ...prev, opacity: 0 }));
         return;
       }
 
-      const containerRect = container.getBoundingClientRect();
-      const itemRect = activeItem.getBoundingClientRect();
+      const containerRect = containerEl.getBoundingClientRect();
+      const itemRect = activeEl.getBoundingClientRect();
 
-      // Calculate position relative to container
       const top = itemRect.top - containerRect.top;
       const height = itemRect.height;
 
@@ -246,18 +245,29 @@ export function Sidebar({
     // Initial measurement
     updatePosition();
 
-    // Create ResizeObserver to detect layout changes
-    resizeObserverRef.current = new ResizeObserver(updatePosition);
+    const handleScroll = () => {
+      requestAnimationFrame(updatePosition);
+    };
 
-    // Observe the container and all nav items
-    resizeObserverRef.current.observe(container);
-    navItemRefs.current.forEach((item) => {
-      resizeObserverRef.current?.observe(item);
-    });
+    // Observe layout changes if ResizeObserver is available
+    if (typeof ResizeObserver !== 'undefined') {
+      resizeObserverRef.current = new ResizeObserver(() => {
+        requestAnimationFrame(updatePosition);
+      });
+
+      resizeObserverRef.current.observe(container);
+      navItemRefs.current.forEach((item) => {
+        resizeObserverRef.current?.observe(item);
+      });
+    }
+
+    // Also update on scroll of the scrollable area
+    container.addEventListener('scroll', handleScroll, { passive: true });
 
     return () => {
       resizeObserverRef.current?.disconnect();
       resizeObserverRef.current = null;
+      container.removeEventListener('scroll', handleScroll);
     };
   }, [activeView, visibleNavItems, isCollapsed]);
 
@@ -460,16 +470,14 @@ export function Sidebar({
                 </h3>
               )}
               {/* Animated indicator for active nav item */}
-              <AnimatePresence>
-                {selectedProjectId && (
-                  <NavIndicator
-                    activeView={activeView}
-                    containerRef={navContainerRef}
-                    itemRefs={navItemRefs}
-                    position={indicatorPosition}
-                  />
-                )}
-              </AnimatePresence>
+              {selectedProjectId && (
+                <NavIndicator
+                  activeView={activeView}
+                  containerRef={navContainerRef}
+                  itemRefs={navItemRefs}
+                  position={indicatorPosition}
+                />
+              )}
               <nav ref={navContainerRef} className="space-y-1">
                 <AnimatePresence mode="popLayout">
                   {visibleNavItems.map((item) => renderNavItem(item))}

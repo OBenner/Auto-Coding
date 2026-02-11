@@ -1,12 +1,12 @@
 import { memo, useRef, useEffect, useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion } from 'motion/react';
 import { cn } from '../lib/utils';
 
 export interface NavIndicatorProps {
   /** The active view ID */
   activeView: string;
   /** Container ref to measure positioning */
-  containerRef: React.RefObject<HTMLDivElement>;
+  containerRef: React.RefObject<HTMLDivElement | null>;
   /** Map of view IDs to their button elements */
   itemRefs: React.MutableRefObject<Map<string, HTMLButtonElement>>;
   /** Position and dimensions for the indicator (optional, will measure if not provided) */
@@ -89,37 +89,28 @@ export const NavIndicator = memo(function NavIndicator({
     };
   }, [activeView, containerRef, itemRefs, positionProp]);
 
-  return (
-    <AnimatePresence>
-      {position.opacity > 0 && (
-        <motion.div
-          className={cn(
-            'absolute left-0 right-0 rounded-md bg-accent/50',
-            'pointer-events-none',
-            className
-          )}
-          layout
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{
-            top: position.top,
-            height: position.height,
-            opacity: position.opacity,
-            scale: 1,
-          }}
-          exit={{ opacity: 0, scale: 0.95 }}
-          transition={{
-            type: 'spring',
-            stiffness: 500,
-            damping: 30,
-            opacity: { duration: 0.15 },
-          }}
-          style={{
-            // Use inline styles for layout properties that animate
-            top: 0,
-            height: 0,
-          }}
-        />
+  return position.opacity > 0 ? (
+    <motion.div
+      className={cn(
+        'absolute left-0 right-0 rounded-md bg-accent/50',
+        'pointer-events-none',
+        className
       )}
-    </AnimatePresence>
-  );
+      layout
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{
+        top: position.top,
+        height: position.height,
+        opacity: position.opacity,
+        scale: 1,
+      }}
+      exit={{ opacity: 0, scale: 0.95 }}
+      transition={{
+        type: 'spring',
+        stiffness: 500,
+        damping: 30,
+        opacity: { duration: 0.15 },
+      }}
+    />
+  ) : null;
 });
