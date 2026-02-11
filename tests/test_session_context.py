@@ -8,8 +8,6 @@ that enables persistent conversation history and codebase awareness.
 import sys
 from pathlib import Path
 
-import pytest
-
 # Add backend to path
 backend_path = Path(__file__).parent.parent / "apps" / "backend"
 sys.path.insert(0, str(backend_path))

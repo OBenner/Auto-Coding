@@ -5,12 +5,6 @@ Test Session Resume Functionality
 Tests for session resumption with full context restore.
 """
 
-import asyncio
-import json
-from datetime import datetime
-from pathlib import Path
-from unittest.mock import MagicMock, patch
-
 import pytest
 
 # Test imports

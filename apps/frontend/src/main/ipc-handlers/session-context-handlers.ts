@@ -13,7 +13,6 @@ import { projectStore } from '../project-store';
 import {
   loadProjectEnvVars,
   isGraphitiEnabled,
-  getGraphitiDatabaseDetails
 } from './context/utils';
 import { runPythonSubprocess } from './github/utils/subprocess-runner';
 import { parsePythonCommand } from '../python-detector';

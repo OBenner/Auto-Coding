@@ -815,7 +815,9 @@ class SessionContext:
         relevant_candidates.sort(key=lambda x: x["relevance_score"], reverse=True)
 
         # Take top M relevant rounds
-        relevant_rounds = [r["result"] for r in relevant_candidates[:max_relevant_rounds]]
+        relevant_rounds = [
+            r["result"] for r in relevant_candidates[:max_relevant_rounds]
+        ]
 
         debug(
             "session_context",

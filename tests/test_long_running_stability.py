@@ -19,13 +19,18 @@ Usage:
 
     # Manual mode (generates test plan for manual execution)
     python tests/test_long_running_stability.py --mode manual
+
+NOTE: This is a standalone test script, not a pytest test module.
+Run directly: python tests/test_long_running_stability.py
 """
+
+# Prevent pytest from collecting functions in this standalone script
+__test__ = False
 
 import argparse
 import json
 import sys
-import time
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -296,7 +301,6 @@ def run_automated_stability_test(
                         metrics.add_degradation(round_num, issue, {})
 
                 # Progress report
-                elapsed = (timestamp - metrics.start_time).total_seconds()
                 progress = (round_num / total_rounds) * 100
                 print(f"  Round {round_num}/{total_rounds} ({progress:.1f}%) - "
                       f"{len(quality_data['issues'])} issues, "
@@ -578,6 +582,8 @@ def main():
         print("\nGenerate a manual test plan with:")
         print("  python tests/test_long_running_stability.py --mode manual --output-plan test_plan.json")
         return 1
+
+    return 1
 
 
 if __name__ == "__main__":

@@ -165,9 +165,7 @@ class ConversationHistory:
         self.session_start = datetime.now()
         self.session_id = f"{subtask_id}_{self.session_start.strftime('%Y%m%d_%H%M%S')}"
 
-    def add_round(
-        self, user_message: str, phase: str = "coding"
-    ) -> ConversationRound:
+    def add_round(self, user_message: str, phase: str = "coding") -> ConversationRound:
         """Start a new conversation round."""
         round_number = len(self.rounds) + 1
         round_obj = ConversationRound(
@@ -204,9 +202,7 @@ class ConversationHistory:
         }
 
     @classmethod
-    def from_dict(
-        cls, spec_dir: Path, data: dict[str, Any]
-    ) -> "ConversationHistory":
+    def from_dict(cls, spec_dir: Path, data: dict[str, Any]) -> "ConversationHistory":
         """Reconstruct from dictionary."""
         history = cls(spec_dir=spec_dir, subtask_id=data.get("subtask_id"))
         history.session_id = data["session_id"]
@@ -851,7 +847,9 @@ async def run_agent_session(
 
     # Initialize or reuse conversation history tracking
     if conversation_history is None:
-        conversation_history = ConversationHistory(spec_dir=spec_dir, subtask_id=subtask_id)
+        conversation_history = ConversationHistory(
+            spec_dir=spec_dir, subtask_id=subtask_id
+        )
         debug("session", "Created new conversation history", subtask_id=subtask_id)
     else:
         debug(
@@ -864,7 +862,9 @@ async def run_agent_session(
     current_round = conversation_history.add_round(
         user_message=message, phase=phase.value
     )
-    debug("session", "Created conversation round", round_number=current_round.round_number)
+    debug(
+        "session", "Created conversation round", round_number=current_round.round_number
+    )
 
     try:
         # Send the query

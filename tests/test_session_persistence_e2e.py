@@ -8,12 +8,17 @@ with 50+ conversation rounds, meeting the acceptance criteria:
 - Conversation history of 50+ rounds without quality degradation
 - Highlighted code references persist across entire session
 - Session context survives app restart and agent respawns
+
+NOTE: This is a standalone test script, not a pytest test module.
+Run directly: python tests/test_session_persistence_e2e.py
 """
+
+# Prevent pytest from collecting functions in this standalone script
+__test__ = False
 
 import json
 import sys
 import time
-from datetime import datetime
 from pathlib import Path
 
 # Add apps/backend to path
@@ -477,10 +482,9 @@ def main():
             # Test 1: Basic persistence
             result1 = test_conversation_history_persistence(spec_dir)
             if isinstance(result1, tuple):
-                success1, history_file = result1
+                success1, _history_file = result1
             else:
                 success1 = result1
-                history_file = None
 
             if not success1:
                 print("\n✗ TEST 1 FAILED - Aborting remaining tests")
