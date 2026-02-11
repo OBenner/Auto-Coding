@@ -43,8 +43,11 @@ import { GitLabIssues } from './components/GitLabIssues';
 import { GitHubPRs } from './components/github-prs';
 import { GitLabMergeRequests } from './components/gitlab-merge-requests';
 import { Changelog } from './components/Changelog';
+import { CalendarView } from './components/Scheduler/CalendarView';
+import { QueueView } from './components/Scheduler/QueueView';
 import { Worktrees } from './components/Worktrees';
 import { AgentTools } from './components/AgentTools';
+import { ProductivityDashboard } from './components/analytics/ProductivityDashboard';
 import { WelcomeScreen } from './components/WelcomeScreen';
 import { RateLimitModal } from './components/RateLimitModal';
 import { SDKRateLimitModal } from './components/SDKRateLimitModal';
@@ -874,6 +877,22 @@ export function App() {
                     isActive={activeView === 'terminals'}
                   />
                 </div>
+                {activeView === 'scheduler' && (activeProjectId || selectedProjectId) && (
+                  <div className="flex flex-col h-full overflow-hidden">
+                    <div className="flex-1 overflow-auto">
+                      <div className="p-6 space-y-6">
+                        <CalendarView
+                          projectId={activeProjectId || selectedProjectId!}
+                          builds={[]}
+                        />
+                        <QueueView
+                          projectId={activeProjectId || selectedProjectId!}
+                          builds={[]}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
                 {activeView === 'roadmap' && (activeProjectId || selectedProjectId) && (
                   <Roadmap projectId={activeProjectId || selectedProjectId!} onGoToTask={handleGoToTask} />
                 )}
@@ -932,6 +951,9 @@ export function App() {
                   <Worktrees projectId={activeProjectId || selectedProjectId!} />
                 )}
                 {activeView === 'agent-tools' && <AgentTools />}
+                {activeView === 'analytics' && (activeProjectId || selectedProjectId) && (
+                  <ProductivityDashboard projectId={activeProjectId || selectedProjectId!} />
+                )}
               </>
             ) : (
               <WelcomeScreen

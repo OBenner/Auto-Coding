@@ -1,5 +1,5 @@
 import { app } from 'electron';
-import { existsSync, Dirent, promises as fsPromises } from 'fs';
+import { Dirent, promises as fsPromises } from 'fs';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import type { Project, ProjectSettings, Task, TaskStatus, TaskMetadata, ImplementationPlan, ReviewReason, PlanSubtask } from '../shared/types';
@@ -79,22 +79,35 @@ export class ProjectStore {
    * Load store from disk (async version)
    */
   private async loadAsync(): Promise<StoreData> {
-    if (existsSync(this.storePath)) {
-      try {
-        const content = await fsPromises.readFile(this.storePath, 'utf-8');
-        const data = JSON.parse(content);
-        // Convert date strings back to Date objects
-        data.projects = data.projects.map((p: Project) => ({
-          ...p,
-          createdAt: new Date(p.createdAt),
-          updatedAt: new Date(p.updatedAt)
-        }));
-        return data;
-      } catch {
-        return { projects: [], settings: {} };
-      }
+    if (!(await this.fileExists(this.storePath))) {
+      return { projects: [], settings: {} };
     }
-    return { projects: [], settings: {} };
+
+    try {
+      const content = await fsPromises.readFile(this.storePath, 'utf-8');
+      const raw = JSON.parse(content);
+
+      const rawProjects = Array.isArray(raw.projects) ? raw.projects : [];
+      const projects: Project[] = rawProjects.map((p: Project) => {
+        const createdAt = p?.createdAt ? new Date(p.createdAt) : new Date();
+        const updatedAt = p?.updatedAt ? new Date(p.updatedAt) : createdAt;
+
+        return {
+          ...p,
+          createdAt: Number.isNaN(createdAt.getTime()) ? new Date() : createdAt,
+          updatedAt: Number.isNaN(updatedAt.getTime()) ? new Date() : updatedAt,
+        };
+      });
+
+      return {
+        projects,
+        settings: raw.settings || {},
+        tabState: raw.tabState,
+      };
+    } catch (err) {
+      console.error('[ProjectStore] Failed to read/parse store file:', this.storePath, err);
+      return { projects: [], settings: {} };
+    }
   }
 
 
@@ -167,7 +180,9 @@ export class ProjectStore {
         console.warn(`[ProjectStore] .auto-claude folder was deleted for project "${existing.name}" - resetting autoBuildPath`);
         existing.autoBuildPath = '';
         existing.updatedAt = new Date();
-        this.saveAsync();
+        this.saveAsync().catch(err => {
+          console.error('[ProjectStore] Failed to persist project reset:', err);
+        });
       }
       return existing;
     }
@@ -189,7 +204,9 @@ export class ProjectStore {
     };
 
     this.data.projects.push(project);
-    this.saveAsync();
+    this.saveAsync().catch(err => {
+      console.error('[ProjectStore] Failed to persist new project:', err);
+    });
 
     return project;
   }
@@ -202,7 +219,9 @@ export class ProjectStore {
     if (project) {
       project.autoBuildPath = autoBuildPath;
       project.updatedAt = new Date();
-      this.saveAsync();
+      this.saveAsync().catch(err => {
+        console.error('[ProjectStore] Failed to persist autoBuildPath update:', err);
+      });
     }
     return project;
   }
@@ -214,7 +233,9 @@ export class ProjectStore {
     const index = this.data.projects.findIndex((p) => p.id === projectId);
     if (index !== -1) {
       this.data.projects.splice(index, 1);
-      this.saveAsync();
+      this.saveAsync().catch(err => {
+        console.error('[ProjectStore] Failed to persist project removal:', err);
+      });
       return true;
     }
     return false;
@@ -251,7 +272,9 @@ export class ProjectStore {
         : null,
       tabOrder: tabState.tabOrder.filter(id => validProjectIds.includes(id))
     };
-    this.saveAsync();
+    this.saveAsync().catch(err => {
+      console.error('[ProjectStore] Failed to persist tab state:', err);
+    });
   }
 
   /**
@@ -261,7 +284,7 @@ export class ProjectStore {
    *
    * @returns Array of project IDs that were reset due to missing .auto-claude folder
    */
-  validateProjects(): string[] {
+  async validateProjects(): Promise<string[]> {
     const resetProjectIds: string[] = [];
     let hasChanges = false;
 
@@ -272,13 +295,14 @@ export class ProjectStore {
       }
 
       // Check if the project path still exists
-      if (!existsSync(project.path)) {
+      if (!await this.fileExists(project.path)) {
         console.warn(`[ProjectStore] Project path no longer exists: ${project.path}`);
         continue; // Don't reset - let user handle this case
       }
 
-      // Check if .auto-claude folder still exists
-      if (!isInitialized(project.path)) {
+      // Check if .auto-claude folder still exists (async to avoid blocking main process)
+      const autoClaudeDir = path.join(project.path, '.auto-claude');
+      if (!(await this.fileExists(autoClaudeDir))) {
         console.warn(`[ProjectStore] .auto-claude folder missing for project "${project.name}" at ${project.path}`);
         project.autoBuildPath = '';
         project.updatedAt = new Date();
@@ -288,7 +312,9 @@ export class ProjectStore {
     }
 
     if (hasChanges) {
-      this.saveAsync();
+      await this.saveAsync().catch(err => {
+        console.error('[ProjectStore] Failed to persist project validation changes:', err);
+      });
       console.warn(`[ProjectStore] Reset ${resetProjectIds.length} project(s) due to missing .auto-claude folder`);
     }
 
@@ -313,7 +339,9 @@ export class ProjectStore {
     if (project) {
       project.settings = { ...project.settings, ...settings };
       project.updatedAt = new Date();
-      this.saveAsync();
+      this.saveAsync().catch(err => {
+        console.error('[ProjectStore] Failed to persist settings update:', err);
+      });
     }
     return project;
   }
@@ -342,7 +370,7 @@ export class ProjectStore {
     // 1. Scan main project specs directory (source of truth for task existence)
     const mainSpecsDir = path.join(project.path, specsBaseDir);
     const mainSpecIds = new Set<string>();
-    if (existsSync(mainSpecsDir)) {
+    if (await this.fileExists(mainSpecsDir)) {
       const mainTasks = await this.loadTasksFromSpecsDir(mainSpecsDir, project.path, 'main', projectId, specsBaseDir);
       allTasks.push(...mainTasks);
       // Track which specs exist in main project
@@ -353,14 +381,14 @@ export class ProjectStore {
     // NOTE FOR MAINTAINERS: Worktree tasks are only included if the spec also exists in main.
     // This prevents deleted tasks from "coming back" when the worktree isn't cleaned up.
     const worktreesDir = getTaskWorktreeDir(project.path);
-    if (existsSync(worktreesDir)) {
+    if (await this.fileExists(worktreesDir)) {
       try {
         const worktrees = await fsPromises.readdir(worktreesDir, { withFileTypes: true });
         for (const worktree of worktrees) {
           if (!worktree.isDirectory()) continue;
 
           const worktreeSpecsDir = path.join(worktreesDir, worktree.name, specsBaseDir);
-          if (existsSync(worktreeSpecsDir)) {
+          if (await this.fileExists(worktreeSpecsDir)) {
             const worktreeTasks = await this.loadTasksFromSpecsDir(
               worktreeSpecsDir,
               path.join(worktreesDir, worktree.name),

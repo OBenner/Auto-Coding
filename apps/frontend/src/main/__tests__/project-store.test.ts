@@ -948,6 +948,10 @@ describe('ProjectStore', () => {
 
       const { ProjectStore } = await import('../project-store');
       const store = new ProjectStore();
+      // Wait for async init to complete so it doesn't race with addProject
+      // and overwrite in-memory data (the constructor fires initializeAsync
+      // in the background which reloads this.data from disk).
+      await waitForStoreInit();
 
       const project = store.addProject(TEST_PROJECT_PATH);
 
@@ -957,10 +961,12 @@ describe('ProjectStore', () => {
       expect(tasksBefore[0].metadata?.archivedAt).toBeUndefined();
 
       // Archive the task
-      await store.archiveTasks(project.id, ['005-cache-test']);
+      const archiveResult = await store.archiveTasks(project.id, ['005-cache-test']);
+      expect(archiveResult).toBe(true);
 
       // After archiving, cache should be invalidated and getTasks should return updated data
       const tasksAfter = await store.getTasks(project.id);
+      expect(tasksAfter).toHaveLength(1);
       expect(tasksAfter[0].metadata?.archivedAt).toBeDefined();
     });
 
@@ -982,12 +988,16 @@ describe('ProjectStore', () => {
 
       const { ProjectStore } = await import('../project-store');
       const store = new ProjectStore();
+      // Wait for async init to complete so it doesn't race with addProject
+      // and overwrite in-memory data (the constructor fires initializeAsync
+      // in the background which reloads this.data from disk).
       await waitForStoreInit();
 
       const project = store.addProject(TEST_PROJECT_PATH);
 
       // First call should populate cache
       const tasksBefore = await store.getTasks(project.id);
+      expect(tasksBefore).toHaveLength(1);
       expect(tasksBefore[0].title).toBe('Initial Feature');
 
       // Modify the file directly (simulating external change)
@@ -1003,6 +1013,7 @@ describe('ProjectStore', () => {
 
       // Now should return fresh data
       const tasksAfterInvalidation = await store.getTasks(project.id);
+      expect(tasksAfterInvalidation).toHaveLength(1);
       expect(tasksAfterInvalidation[0].title).toBe('Updated Feature');
     });
   });

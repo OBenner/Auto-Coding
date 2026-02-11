@@ -14,3 +14,4 @@ export * from './github-api';
 export * from './shell-api';
 export * from './debug-api';
 export * from './session-context-api';
+export * from './productivity-analytics-api';

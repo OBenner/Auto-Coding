@@ -8,7 +8,7 @@ intelligent auto-recovery loop in QA Fixer.
 
 import json
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -81,8 +81,8 @@ class RecoveryMetrics:
             "failed_recoveries": 0,
             "circular_fixes": 0,
             "recovery_history": [],
-            "created_at": datetime.now(timezone.utc).isoformat(),
-            "last_updated": datetime.now(timezone.utc).isoformat(),
+            "created_at": datetime.now(UTC).isoformat(),
+            "last_updated": datetime.now(UTC).isoformat(),
         }
 
     def _save_metrics(self) -> bool:
@@ -95,7 +95,7 @@ class RecoveryMetrics:
             True if saved successfully
         """
         try:
-            self._metrics["last_updated"] = datetime.now(timezone.utc).isoformat()
+            self._metrics["last_updated"] = datetime.now(UTC).isoformat()
             tmp_file = self._metrics_file.with_suffix(".json.tmp")
             with open(tmp_file, "w", encoding="utf-8") as f:
                 json.dump(self._metrics, f, indent=2, ensure_ascii=False)
@@ -144,7 +144,7 @@ class RecoveryMetrics:
             "attempt_number": self._metrics["total_attempts"],
             "outcome": outcome,
             "iterations": iterations,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "issues_fixed": issues_fixed,
         }
 
@@ -175,7 +175,7 @@ class RecoveryMetrics:
             "attempt_number": self._metrics["total_attempts"],
             "outcome": "user_intervention",
             "iterations": iteration,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "issues_fixed": 0,
         }
 

@@ -1,0 +1,51 @@
+{
+  "wizard": {
+    "title": "Paramètres du modèle",
+    "description": "Remplissez les paramètres pour générer votre spécification",
+    "parameter": {
+      "required": "Obligatoire",
+      "optional": "Optionnel"
+    },
+    "actions": {
+      "preview": "Aperçu de la spec",
+      "cancel": "Annuler",
+      "back": "Retour",
+      "next": "Suivant",
+      "create": "Créer la spec"
+    },
+    "validation": {
+      "required": "Ce champ est obligatoire",
+      "invalidNumber": "Veuillez entrer un nombre valide",
+      "invalidInteger": "Veuillez entrer un entier valide",
+      "minValue": "La valeur doit être au moins {{min}}",
+      "maxValue": "La valeur doit être au maximum {{max}}",
+      "patternMismatch": "Format invalide"
+    },
+    "placeholder": {
+      "string": "Entrer {{name}}...",
+      "number": "Entrer un nombre...",
+      "list": "Entrer des valeurs séparées par des virgules...",
+      "boolean": "Sélectionner vrai ou faux"
+    },
+    "examples": {
+      "title": "Exemples",
+      "use": "Utiliser cet exemple"
+    },
+    "loading": "Chargement du modèle...",
+    "noParameters": "Ce modèle ne nécessite aucun paramètre"
+  },
+  "preview": {
+    "sections": {
+      "rationale": "Justification",
+      "userStories": "User Stories",
+      "acceptanceCriteria": "Critères d'acceptation",
+      "technicalDetails": "Détails techniques",
+      "testCoverage": "Couverture de tests",
+      "dependencies": "Dépendances"
+    },
+    "empty": {
+      "title": "Aucun contenu de spécification",
+      "description": "Générez une spécification pour voir l'aperçu"
+    }
+  }
+}

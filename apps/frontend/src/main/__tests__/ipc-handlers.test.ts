@@ -4,7 +4,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { EventEmitter } from "events";
-import { mkdirSync, mkdtempSync, writeFileSync, rmSync, existsSync, readFileSync } from "fs";
+import { mkdirSync, mkdtempSync, writeFileSync, rmSync, existsSync } from "fs";
 import { tmpdir } from "os";
 import path from "path";
 
@@ -688,6 +688,12 @@ describe("IPC Handlers", { timeout: 15000 }, () => {
     });
 
     it("should forward exit events with status change on failure", async () => {
+      // Pre-populate the store file so that ProjectStore's async initializeAsync()
+      // loads a known state instead of racing with addProject(). Without this,
+      // initializeAsync can complete after addProject, overwriting in-memory data.
+      const storeFile = path.join(TEST_DIR, "userData", "store", "projects.json");
+      writeFileSync(storeFile, JSON.stringify({ projects: [], settings: {} }));
+
       const { setupIpcHandlers } = await import("../ipc-handlers");
       setupIpcHandlers(
         mockAgentManager as never,
@@ -697,10 +703,13 @@ describe("IPC Handlers", { timeout: 15000 }, () => {
       );
 
       // Wait for ProjectStore's async initialization to complete
-      await new Promise((resolve) => setTimeout(resolve, 100));
+      await new Promise((resolve) => setTimeout(resolve, 500));
 
       // Add project first
       await ipcMain.invokeHandler("project:add", {}, TEST_PROJECT_PATH);
+
+      // Wait for the fire-and-forget saveAsync to flush
+      await new Promise((resolve) => setTimeout(resolve, 200));
 
       // Create a spec/task directory with implementation_plan.json
       const specDir = path.join(TEST_PROJECT_PATH, ".auto-claude", "specs", "task-1");
@@ -713,15 +722,18 @@ describe("IPC Handlers", { timeout: 15000 }, () => {
       mockAgentManager.emit("exit", "task-1", 1, "task-execution");
 
       // The exit handler uses an async IIFE with multiple awaits
-      // (findTaskAndProject, getTasks, etc.), so we must flush the promise
-      // queue before checking the assertion.
-      await new Promise((resolve) => setTimeout(resolve, 500));
-
-      expect(mockMainWindow.webContents.send).toHaveBeenCalledWith(
-        "task:statusChange",
-        "task-1",
-        "human_review",
-        expect.any(String) // projectId for multi-project filtering
+      // (findTaskAndProject, getTasks, etc.). Use vi.waitFor() instead of a fixed
+      // timeout to reliably handle varying I/O latency across platforms (Windows, macOS).
+      await vi.waitFor(
+        () => {
+          expect(mockMainWindow.webContents.send).toHaveBeenCalledWith(
+            "task:statusChange",
+            "task-1",
+            "human_review",
+            expect.any(String) // projectId for multi-project filtering
+          );
+        },
+        { timeout: 5000, interval: 100 }
       );
     });
   });

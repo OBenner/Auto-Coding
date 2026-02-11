@@ -243,6 +243,52 @@ const browserMockAPI: ElectronAPI = {
     onPRUpdated: () => () => {}
   },
 
+  // Template Library Operations
+  listTemplates: async (_projectId: string, _options?: { category?: string | 'all'; tags?: string[] }) => ({
+    success: true,
+    data: []
+  }),
+  getTemplate: async (_projectId: string, _templateName: string) => ({
+    success: true,
+    data: {
+      name: 'mock-template',
+      description: 'Mock template',
+      category: 'api' as const,
+      parameters: {},
+      tags: []
+    }
+  }),
+  getTemplateCategories: async (_projectId: string) => ({
+    success: true,
+    data: ['api', 'authentication', 'database', 'ui', 'file', 'search', 'pagination', 'caching', 'notification', 'data_processing', 'user_management', 'settings', 'dashboard', 'admin', 'logging', 'testing', 'documentation', 'cicd', 'security', 'performance', 'other']
+  }),
+  searchTemplates: async (_projectId: string, _query: string) => ({
+    success: true,
+    data: []
+  }),
+  previewTemplate: async (_projectId: string, _templateName: string, _parameters: Record<string, unknown>) => ({
+    success: true,
+    data: {
+      title: 'Mock Template',
+      description: 'Template preview',
+      rationale: 'Mock rationale',
+      user_stories: [],
+      acceptance_criteria: [],
+      technical_details: 'Mock technical details'
+    }
+  }),
+  createSpecFromTemplate: async (_projectId: string, _templateName: string, _parameters: Record<string, unknown>, _specId?: string) => ({
+    success: true,
+    data: {
+      specId: '001-mock',
+      specPath: '/mock/path'
+    }
+  }),
+  suggestTemplates: async (_projectId: string, _taskDescription: string) => ({
+    success: true,
+    data: []
+  }),
+
   // Queue Routing API (rate limit recovery)
   queue: {
     getRunningTasksByProfile: async () => ({ success: true, data: { byProfile: {}, totalRunning: 0 } }),
@@ -253,6 +299,22 @@ const browserMockAPI: ElectronAPI = {
     onQueueProfileSwapped: () => () => {},
     onQueueSessionCaptured: () => () => {},
     onQueueBlockedNoProfiles: () => () => {}
+  },
+
+  // Scheduler API (build scheduling and queue management)
+  scheduler: {
+    scheduleBuild: async () => ({ success: true, data: { buildId: 'mock-build-1' } }),
+    getStatus: async () => ({ success: true, data: { schedulerRunning: false, totalBuilds: 0, byStatus: { pending: 0, queued: 0, running: 0, completed: 0, failed: 0, cancelled: 0, retrying: 0 }, builds: [], nextBuild: null } }),
+    cancelBuild: async () => ({ success: true }),
+    start: async () => ({ success: true }),
+    stop: async () => ({ success: true }),
+    getBuilds: async () => ({ success: true, data: [] }),
+    onBuildScheduled: () => () => {},
+    onBuildCancelled: () => () => {},
+    onStatusChanged: () => () => {},
+    onBuildProgress: () => () => {},
+    onBuildComplete: () => () => {},
+    onBuildFailed: () => () => {}
   },
 
   // Claude Code Operations
@@ -402,7 +464,47 @@ const browserMockAPI: ElectronAPI = {
   enablePlugin: async () => ({ success: true, data: { success: true } }),
   disablePlugin: async () => ({ success: true, data: { success: true } }),
   installPlugin: async () => ({ success: true, data: { success: true } }),
-  uninstallPlugin: async () => ({ success: true, data: { success: true } })
+  uninstallPlugin: async () => ({ success: true, data: { success: true } }),
+
+  // Productivity analytics operations
+  getProductivitySummary: async (
+    _projectId?: string,
+    filter?: import('../../shared/types').ProductivityAnalyticsFilter
+  ) => {
+    const now = Date.now();
+    const windowDays = filter?.window_days ?? 30;
+    const periodEnd = filter?.end_date ? new Date(filter.end_date).getTime() : now;
+    const periodStart = filter?.start_date
+      ? new Date(filter.start_date).getTime()
+      : periodEnd - windowDays * 24 * 60 * 60 * 1000;
+
+    return {
+      success: true as const,
+      data: {
+        period_start: new Date(periodStart).toISOString(),
+        period_end: new Date(periodEnd).toISOString(),
+        total_specs: 0,
+        completed_specs: 0,
+        in_progress_specs: 0,
+        failed_specs: 0,
+        total_time_saved_hours: 0,
+        total_build_time_hours: 0,
+        average_success_rate: 0,
+        first_attempt_success_rate: 0,
+        specs_by_type: {},
+        specs_by_complexity: {},
+        average_subtasks_per_spec: 0,
+        average_qa_iterations: 0,
+        total_subtasks_completed: 0,
+        specs: []
+      }
+    };
+  },
+  getProductivityTrends: async (
+    _projectId?: string,
+    _filter?: import('../../shared/types').ProductivityAnalyticsFilter
+  ) => ({ success: true as const, data: [] as import('../../shared/types').ProductivityTrendPoint[] }),
+  exportProductivityAnalytics: async () => ({ success: true as const, data: '/mock/export/productivity' })
 };
 
 /**

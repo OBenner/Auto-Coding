@@ -78,9 +78,17 @@ export class WebSocketClient {
   /**
    * Internal logging helper
    */
+  /**
+   * Sanitize a value for safe log output (prevent log injection).
+   */
+  // eslint-disable-next-line no-control-regex
+  private static sanitize(v: unknown, max = 200): string {
+    return String(v).replace(/[\x00-\x1f\x7f]/g, '').slice(0, max);
+  }
+
   private log(message: string, ...args: unknown[]): void {
     if (this.config.debug) {
-      console.log(`[WebSocketClient] ${message}`, ...args);
+      console.log(`[WebSocketClient] ${WebSocketClient.sanitize(message)}`, ...args);
     }
   }
 
@@ -278,7 +286,7 @@ export class WebSocketClient {
         try {
           handler(event);
         } catch (error) {
-          console.error(`Error in ${event.event_type} event handler:`, error);
+          console.error(`Error in ${WebSocketClient.sanitize(event.event_type, 50)} event handler:`, error);
         }
       }
     }

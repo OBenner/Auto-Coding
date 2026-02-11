@@ -56,6 +56,12 @@ import type {
   MergeAnalyticsExportOptions
 } from './merge-analytics';
 import type {
+  ProductivitySummary,
+  ProductivityTrendPoint,
+  ProductivityAnalyticsFilter,
+  ProductivityAnalyticsExportOptions
+} from './productivity-analytics';
+import type {
   TerminalCreateOptions,
   TerminalSession,
   TerminalRestoreResult,
@@ -145,6 +151,7 @@ import type {
   GitLabNewCommitsCheck
 } from './integrations';
 import type { APIProfile, ProfilesFile, TestConnectionResult, DiscoverModelsResult } from './profile';
+import type { TemplateInfo, TemplateCategory, GeneratedSpec } from './template';
 
 // Electron API exposed via contextBridge
 // Tab state interface (persisted in main process)
@@ -170,6 +177,7 @@ export interface ElectronAPI {
   // Task operations
   getTasks: (projectId: string, options?: { forceRefresh?: boolean }) => Promise<IPCResult<Task[]>>;
   createTask: (projectId: string, title: string, description: string, metadata?: TaskMetadata) => Promise<IPCResult<Task>>;
+  createTaskFromTemplate: (projectId: string, templateName: string, parameters: Record<string, unknown>) => Promise<IPCResult<Task>>;
   deleteTask: (taskId: string) => Promise<IPCResult>;
   updateTask: (taskId: string, updates: { title?: string; description?: string }) => Promise<IPCResult<Task>>;
   startTask: (taskId: string, options?: TaskStartOptions) => void;
@@ -891,8 +899,29 @@ export interface ElectronAPI {
   installPlugin: (source: { type: string; path?: string; marketplace_id?: string }) => Promise<IPCResult<{ success: boolean; plugin?: { name: string; version: string } }>>;
   uninstallPlugin: (pluginName: string) => Promise<IPCResult<{ success: boolean }>>;
 
+  // Productivity analytics operations
+  getProductivitySummary: (projectId: string, filter?: ProductivityAnalyticsFilter) => Promise<IPCResult<ProductivitySummary>>;
+  getProductivityTrends: (projectId: string, filter?: ProductivityAnalyticsFilter) => Promise<IPCResult<ProductivityTrendPoint[]>>;
+  exportProductivityAnalytics: (projectId: string, options: ProductivityAnalyticsExportOptions) => Promise<IPCResult<string>>;
+
+  // Template library operations
+  listTemplates: (projectId: string, options?: { category?: TemplateCategory | 'all'; tags?: string[] }) => Promise<IPCResult<TemplateInfo[]>>;
+  getTemplate: (projectId: string, templateName: string) => Promise<IPCResult<TemplateInfo>>;
+  getTemplateCategories: (projectId: string) => Promise<IPCResult<string[]>>;
+  searchTemplates: (projectId: string, query: string) => Promise<IPCResult<TemplateInfo[]>>;
+  previewTemplate: (projectId: string, templateName: string, parameters: Record<string, unknown>) => Promise<IPCResult<GeneratedSpec>>;
+  createSpecFromTemplate: (
+    projectId: string,
+    templateName: string,
+    parameters: Record<string, unknown>,
+    specId?: string
+  ) => Promise<IPCResult<{ specId: string; specPath: string }>>;
+  suggestTemplates: (projectId: string, taskDescription: string) => Promise<IPCResult<string[]>>;
+
   // Queue Routing API (rate limit recovery)
   queue: import('../../preload/api/queue-api').QueueAPI;
+  // Scheduler API for build scheduling and queue management
+  scheduler: import('../../preload/api/scheduler-api').SchedulerAPI;
 }
 
 declare global {

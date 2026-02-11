@@ -215,6 +215,7 @@
     "sourceHomebrew": "Homebrew",
     "sourceNvm": "NVM",
     "sourceSystemPath": "PATH système",
+    "sourceWindowsWhere": "Windows Where",
     "sourceBundled": "Intégré",
     "sourceFallback": "Valeur par défaut",
     "notDetected": "Non détecté",
