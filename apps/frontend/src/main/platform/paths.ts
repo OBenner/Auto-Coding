@@ -940,27 +940,38 @@ export const WINDOWS_GIT_PATHS: WindowsToolPaths = {
 };
 
 /**
- * Validate path for security
+ * Validate path for security (canonical implementation)
  *
  * Rejects paths containing shell metacharacters, environment variables,
- * or directory traversal patterns that could be exploited.
+ * directory traversal patterns, or control characters that could be exploited.
  *
  * @param pathStr - Path to validate
  * @returns true if path is safe, false otherwise
  */
 export function isSecurePath(pathStr: string): boolean {
+  // Reject empty or whitespace-only strings
+  if (!pathStr || !pathStr.trim()) return false;
+
   const dangerousPatterns = [
-    /[;&|`${}[\]<>!"^]/,  // Shell metacharacters (parentheses removed - safe when quoted)
+    /[;&|`${}[\]<>!"^]/,   // Shell metacharacters (parentheses removed - safe when quoted)
     /%[^%]+%/,              // Windows environment variable expansion (e.g., %PATH%)
     /\.\.\//,               // Unix directory traversal
     /\.\.\\/,               // Windows directory traversal
-    /[\r\n]/,               // Newlines (command injection)
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: Intentionally matching control characters for security validation
+    /[\r\n\x00]/,           // Newlines (command injection), null bytes (path truncation)
   ];
 
   for (const pattern of dangerousPatterns) {
     if (pattern.test(pathStr)) {
       return false;
     }
+  }
+
+  // On Windows, validate executable names additionally
+  if (isWindows()) {
+    const basename = path.basename(pathStr, getExecutableExtension());
+    // Allow only alphanumeric, dots, hyphens, and underscores in the name
+    return /^[\w.-]+$/.test(basename);
   }
 
   return true;
