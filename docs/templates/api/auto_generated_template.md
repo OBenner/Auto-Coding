@@ -479,10 +479,35 @@ This template can be populated using the following tools:
 
 #### Python (AST-based generation)
 
+> **Note:** The following `generate_docs` implementation is illustrative pseudocode.
+> Helper functions like `extract_parameters` and `get_module_version` must be
+> implemented in your own tooling.
+
 ```python
 import ast
-import inspect
+from datetime import datetime
 from pathlib import Path
+from typing import Any
+
+
+def extract_parameters(args: ast.arguments) -> list[dict[str, Any]]:
+    """Extract parameter metadata from function arguments."""
+    params: list[dict[str, Any]] = []
+    for arg in args.args:
+        params.append({
+            'PARAM_NAME': arg.arg,
+            'PARAM_TYPE': 'Any',
+            'PARAM_REQUIRED': True,
+            'PARAM_DEFAULT': 'N/A',
+            'PARAM_DESCRIPTION': '',
+        })
+    return params
+
+
+def get_module_version(module_path: str) -> str:
+    """Stub for resolving a module version. Replace with your own logic."""
+    return '0.1.0'
+
 
 def generate_docs(module_path: str) -> dict:
     """
@@ -504,9 +529,7 @@ def generate_docs(module_path: str) -> dict:
                 'FUNCTION_SIGNATURE': ast.unparse(node),
                 'FUNCTION_DESCRIPTION': ast.get_docstring(node) or '',
                 'LINE_NUMBER': node.lineno,
-                # Extract parameters from node.args
                 'PARAMETERS': extract_parameters(node.args),
-                # Extract return type from node.returns
                 'RETURN_TYPE': ast.unparse(node.returns) if node.returns else 'None',
             })
         elif isinstance(node, ast.ClassDef):
@@ -514,7 +537,6 @@ def generate_docs(module_path: str) -> dict:
                 'CLASS_NAME': node.name,
                 'CLASS_DESCRIPTION': ast.get_docstring(node) or '',
                 'CLASS_LINE_NUMBER': node.lineno,
-                # Extract methods, properties, etc.
             })
 
     return {

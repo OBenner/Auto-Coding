@@ -9,6 +9,7 @@ architecture diagrams, and user guides.
 
 import json
 import logging
+import time
 from pathlib import Path
 from typing import Any
 
@@ -125,9 +126,9 @@ async def run_documentation_generator_session(
 
     # Determine model and thinking budget
     if model is None:
-        model = get_phase_model("documentation_generation")
+        model = get_phase_model("documentation_generator")
     if max_thinking_tokens is None:
-        max_thinking_tokens = get_phase_thinking_budget("documentation_generation")
+        max_thinking_tokens = get_phase_thinking_budget("documentation_generator")
 
     print_key_value("Model", model)
     print_key_value(
@@ -145,9 +146,9 @@ async def run_documentation_generator_session(
             f"{len(analysis_results.get('classes', []))} classes for documentation",
         )
 
-    # Load the documentation generator prompt
+    # Validate the documentation generator prompt exists
     try:
-        prompt = get_agent_prompt("documentation_generator")
+        get_agent_prompt("documentation_generator")
     except Exception as e:
         error_msg = f"Failed to load documentation_generator prompt: {e}"
         logger.error(error_msg)
@@ -205,7 +206,7 @@ Begin by loading context (Phase 0 in your prompt).
     try:
         print_status("Starting documentation generation session...", "progress")
 
-        response = await client.create_agent_session(
+        await client.create_agent_session(
             name="documentation-generator-session",
             starting_message=starting_message,
         )
@@ -215,11 +216,11 @@ Begin by loading context (Phase 0 in your prompt).
                 LogEntryType.INFO, "Documentation generation session completed"
             )
 
-        # Parse generated files from response
-        # The agent should document which files it created
-        generated_files = []
+        # Detect generated files by scanning common doc locations
+        # for recently modified markdown files
+        generated_files: list[Path] = []
+        now = time.time()
 
-        # Check for common documentation locations
         doc_dirs = [
             project_dir / "docs" / "api",
             project_dir / "docs" / "architecture",
@@ -229,38 +230,46 @@ Begin by loading context (Phase 0 in your prompt).
 
         for doc_dir in doc_dirs:
             if doc_dir.exists():
-                # Look for recently modified markdown files
                 for md_file in doc_dir.glob("*.md"):
-                    # Consider files modified in the last minute as generated
-                    import time
-
-                    if time.time() - md_file.stat().st_mtime < 60:
+                    if now - md_file.stat().st_mtime < 60:
                         generated_files.append(md_file.relative_to(project_dir))
 
         if verbose:
             print()
-            print_status(f"Generated {len(generated_files)} documentation files", "info")
+            print_status(
+                f"Generated {len(generated_files)} documentation files", "info"
+            )
             for file in generated_files:
                 print(f"  - {file}")
 
         # Validate generated documentation
+        success = True
+        error_msg: str | None = None
+
         if generated_files:
             validation_success = validate_generated_docs(generated_files, project_dir)
             if not validation_success:
                 logger.warning("Documentation validation failed")
+                success = False
+                error_msg = "Some generated documentation files failed validation"
                 if task_logger:
                     task_logger.log_entry(
                         LogEntryType.WARNING,
-                        "Some generated documentation files failed validation",
+                        error_msg,
                     )
 
         print()
-        print_status("Documentation generation complete", "success")
+        print_status(
+            "Documentation generation complete"
+            if success
+            else "Documentation validation failed",
+            "success" if success else "error",
+        )
 
         return {
             "generated_files": [str(f) for f in generated_files],
-            "success": True,
-            "error": None,
+            "success": success,
+            "error": error_msg,
         }
 
     except Exception as e:

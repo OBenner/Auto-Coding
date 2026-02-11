@@ -14,8 +14,9 @@ This module provides:
 Uses lazy imports to avoid circular dependencies.
 """
 
-# Explicit import required by CodeQL static analysis
+# Explicit imports required by CodeQL static analysis
 # (CodeQL doesn't recognize __getattr__ dynamic exports)
+from .documentation_generator import run_documentation_generator_session
 from .utils import sync_spec_to_source
 
 __all__ = [
