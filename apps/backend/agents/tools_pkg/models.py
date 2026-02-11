@@ -331,6 +331,20 @@ AGENT_CONFIGS = {
         "auto_claude_tools": [],
         "thinking_default": "high",
     },
+    # ═══════════════════════════════════════════════════════════════════════
+    # DOCUMENTATION GENERATION
+    # ═══════════════════════════════════════════════════════════════════════
+    "documentation_generator": {
+        "tools": BASE_READ_TOOLS + BASE_WRITE_TOOLS + WEB_TOOLS,
+        "mcp_servers": ["context7", "graphiti", "auto-claude"],
+        "mcp_servers_optional": [],
+        "auto_claude_tools": [
+            TOOL_GET_BUILD_PROGRESS,
+            TOOL_RECORD_DISCOVERY,
+            TOOL_GET_SESSION_CONTEXT,
+        ],
+        "thinking_default": "medium",
+    },
 }
 
 
