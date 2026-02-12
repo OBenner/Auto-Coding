@@ -23,11 +23,8 @@ The security system has three layers:
 See project_analyzer.py for the detection logic.
 """
 
-# Import everything from the security module to maintain backward compatibility
-from security import *  # noqa: F401, F403
-
-# Explicitly import commonly used items for clarity
-from security import (
+# Import from the security module to maintain backward compatibility
+from security import (  # noqa: F401
     BASE_COMMANDS,
     VALIDATORS,
     SecurityProfile,

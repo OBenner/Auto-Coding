@@ -593,7 +593,7 @@ class TestCalendarViewE2E:
 
         # Verify JSON serialization works
         json_str = json.dumps(build_dict)
-        assert json_str is not None
+        assert isinstance(json_str, str) and len(json_str) > 0
 
         # Verify deserialization
         loaded_dict = json.loads(json_str)

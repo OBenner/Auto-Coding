@@ -38,10 +38,10 @@ try:
 except ImportError:
 
     def debug(*args, **kwargs):
-        pass
+        """No-op fallback when debug module is unavailable."""
 
     def debug_warning(*args, **kwargs):
-        pass
+        """No-op fallback when debug module is unavailable."""
 
 
 # Track if we've already tried to install the git hook this session

@@ -141,7 +141,7 @@ Provide a verdict (PASS or FAIL), reason, and score.
                 try:
                     parsed = json.loads(result)
                     print(f"  result parsed as JSON: {parsed}")
-                except:
+                except Exception:
                     print(f"  result is not JSON")
 
             # Try to validate with Pydantic if we got data

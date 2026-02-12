@@ -1249,7 +1249,7 @@ export function registerTaskExecutionHandlers(
         }
 
         // Find worktree path if it exists
-        const worktreePath = await findTaskWorktree(project.path, task.specId);
+        const worktreePath = findTaskWorktree(project.path, task.specId);
         const hasWorktree = worktreePath !== null;
 
         // Determine project path for QA (worktree if exists, otherwise main project)

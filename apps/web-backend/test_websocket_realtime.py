@@ -360,7 +360,7 @@ async def test_multiple_clients():
                         event = json.loads(msg)
                         if event.get("event_type") == "log":
                             received_by_client1.append(event)
-                except:
+                except Exception:
                     pass
 
             async def listen_client2():
@@ -370,7 +370,7 @@ async def test_multiple_clients():
                         event = json.loads(msg)
                         if event.get("event_type") == "log":
                             received_by_client2.append(event)
-                except:
+                except Exception:
                     pass
 
             async def broadcast():

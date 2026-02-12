@@ -24,31 +24,61 @@ from typing import Any
 # Configure logging
 logger = logging.getLogger(__name__)
 
-# Import debug utilities
+# Import debug utilities - wrapped with source module name for CodeQL compliance
+_SOURCE = "plugins.isolation"
 try:
     from debug import (
-        debug,
-        debug_error,
-        debug_success,
-        debug_verbose,
-        debug_warning,
+        debug as _raw_debug,
     )
+    from debug import (
+        debug_error as _raw_debug_error,
+    )
+    from debug import (
+        debug_success as _raw_debug_success,
+    )
+    from debug import (
+        debug_verbose as _raw_debug_verbose,
+    )
+    from debug import (
+        debug_warning as _raw_debug_warning,
+    )
+
+    def debug(msg: str, **kwargs) -> None:
+        """Debug log with source module."""
+        _raw_debug(_SOURCE, msg, **kwargs)
+
+    def debug_verbose(msg: str, **kwargs) -> None:
+        """Verbose debug log with source module."""
+        _raw_debug_verbose(_SOURCE, msg, **kwargs)
+
+    def debug_success(msg: str, **kwargs) -> None:
+        """Success debug log with source module."""
+        _raw_debug_success(_SOURCE, msg, **kwargs)
+
+    def debug_error(msg: str, **kwargs) -> None:
+        """Error debug log with source module."""
+        _raw_debug_error(_SOURCE, msg, **kwargs)
+
+    def debug_warning(msg: str, **kwargs) -> None:
+        """Warning debug log with source module."""
+        _raw_debug_warning(_SOURCE, msg, **kwargs)
+
 except ImportError:
 
     def debug(*args, **kwargs):
-        pass
+        """No-op fallback when debug module is unavailable."""
 
     def debug_verbose(*args, **kwargs):
-        pass
+        """No-op fallback when debug module is unavailable."""
 
     def debug_success(*args, **kwargs):
-        pass
+        """No-op fallback when debug module is unavailable."""
 
     def debug_error(*args, **kwargs):
-        pass
+        """No-op fallback when debug module is unavailable."""
 
     def debug_warning(*args, **kwargs):
-        pass
+        """No-op fallback when debug module is unavailable."""
 
 
 @dataclass
