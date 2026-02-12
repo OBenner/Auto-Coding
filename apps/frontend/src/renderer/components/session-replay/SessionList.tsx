@@ -5,21 +5,21 @@
  * Displays sessions with metadata and allows filtering by status and search query.
  */
 
-import { useState, useMemo, useCallback, memo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Search, Clock, CheckCircle2, Loader2, X, Filter } from 'lucide-react';
+import { Search, CheckCircle2, Loader2, X, Filter } from 'lucide-react';
 import { Input } from '../ui/input';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import { Separator } from '../ui/separator';
-import { Card, CardContent } from '../ui/card';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuTrigger,
   DropdownMenuItem,
 } from '../ui/dropdown-menu';
-import { cn, formatRelativeTime } from '../lib/utils';
+import { cn } from '../lib/utils';
+import { SessionCard } from './SessionCard';
 import type {
   SessionMetadata,
   SessionFilterState,
@@ -142,102 +142,6 @@ function FilterDropdown<T extends string>({
     </DropdownMenu>
   );
 }
-
-/**
- * SessionCard component for displaying individual session
- */
-const SessionCard = memo(function SessionCard({
-  session,
-  onClick,
-}: {
-  session: SessionMetadata;
-  onClick?: () => void;
-}) {
-  const { t } = useTranslation('session-replay');
-
-  const isCompleted = session.completed_at !== null;
-  const duration = session.duration_seconds
-    ? `${Math.floor(session.duration_seconds / 60)}m`
-    : null;
-
-  return (
-    <Card
-      className={cn(
-        "hover:border-primary/50 hover:bg-accent/5 transition-all cursor-pointer",
-        onClick && "hover:shadow-md"
-      )}
-      onClick={onClick}
-    >
-      <CardContent className="p-4">
-        <div className="flex items-start justify-between gap-3">
-          {/* Session Info */}
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-2">
-              <Badge
-                variant={isCompleted ? "success" : "warning"}
-                className="gap-1"
-              >
-                {isCompleted ? (
-                  <CheckCircle2 className="h-3 w-3" />
-                ) : (
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                )}
-                <span className="text-xs">
-                  {isCompleted
-                    ? t('sessionList.statusCompleted')
-                    : t('sessionList.statusInProgress')}
-                </span>
-              </Badge>
-              <span className="text-xs text-muted-foreground">
-                {t('sessionList.title')} #{session.session_number}
-              </span>
-            </div>
-
-            <div className="flex items-center gap-3 text-xs text-muted-foreground">
-              <div className="flex items-center gap-1">
-                <Clock className="h-3 w-3" />
-                <span>{formatRelativeTime(session.started_at)}</span>
-              </div>
-              {duration && (
-                <>
-                  <Separator orientation="vertical" className="h-3" />
-                  <div className="flex items-center gap-1">
-                    <span>{duration}</span>
-                  </div>
-                </>
-              )}
-              {session.subtasks.length > 0 && (
-                <>
-                  <Separator orientation="vertical" className="h-3" />
-                  <div className="flex items-center gap-1">
-                    <span>
-                      {session.subtasks.length} {t('sessionList.subtasks')}
-                    </span>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-
-          {/* View Button */}
-          {onClick && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="shrink-0"
-              onClick={(e) => {
-                e.stopPropagation();
-                onClick();
-              }}
-            >
-              {t('sessionList.viewSession')}
-            </Button>
-          )}
-        </div>
-      </CardContent>
-    </Card>
-  );
-});
 
 /**
  * Main SessionList component
