@@ -273,8 +273,9 @@ def _generate_markdown_report(
         for update in python_updates:
             security_badge = "🔒" if update.is_security else ""
             cve_list = ", ".join(update.cve_ids) if update.cve_ids else ""
+            package_link = f"[{update.name}]({update.changelog_url})" if update.changelog_url else update.name
             lines.append(
-                f"| [{update.name}]({update.package_url}) | "
+                f"| {package_link} | "
                 f"`{update.current_version}` | "
                 f"`{update.latest_version}` | "
                 f"{update.update_type} | "
@@ -293,8 +294,9 @@ def _generate_markdown_report(
         for update in node_updates:
             security_badge = "🔒" if update.is_security else ""
             cve_list = ", ".join(update.cve_ids) if update.cve_ids else ""
+            package_link = f"[{update.name}]({update.changelog_url})" if update.changelog_url else update.name
             lines.append(
-                f"| [{update.name}]({update.package_url}) | "
+                f"| {package_link} | "
                 f"`{update.current_version}` | "
                 f"`{update.latest_version}` | "
                 f"{update.update_type} | "
