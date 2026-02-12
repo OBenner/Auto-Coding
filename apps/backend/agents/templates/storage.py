@@ -195,3 +195,33 @@ def list_template_names(project_dir: Path) -> list[str]:
         return [f.stem for f in templates_dir.glob("*.json")]
     except OSError:
         return []
+
+
+def export_template(template: AgentTemplate, export_path: Path) -> None:
+    """
+    Export a template to a specific JSON file path.
+
+    This allows exporting templates to custom locations for sharing,
+    backup, or distribution purposes.
+
+    Args:
+        template: AgentTemplate instance to export
+        export_path: Full path where the template JSON file should be saved
+
+    Raises:
+        ValueError: If template validation fails
+        OSError: If file write fails
+    """
+    # Validate template before exporting
+    errors = template.validate()
+    if errors:
+        raise ValueError(f"Cannot export invalid template: {', '.join(errors)}")
+
+    # Create parent directories if they don't exist
+    export_path.parent.mkdir(parents=True, exist_ok=True)
+
+    try:
+        with open(export_path, "w", encoding="utf-8") as f:
+            json.dump(template.to_dict(), f, indent=2, ensure_ascii=False)
+    except OSError as e:
+        raise OSError(f"Failed to export template to '{export_path}': {e}") from e
