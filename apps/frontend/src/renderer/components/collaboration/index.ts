@@ -6,3 +6,4 @@
 
 export { CollaborativeSpecEditor } from './CollaborativeSpecEditor';
 export { PresenceIndicators } from './PresenceIndicators';
+export { CommentThread } from './CommentThread';
