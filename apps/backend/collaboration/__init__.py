@@ -6,6 +6,11 @@ Real-time collaborative spec editing with comments, suggestions,
 presence indicators, and version tracking.
 """
 
+from collaboration.crdt_store import (
+    CRDTStore,
+    CrdtOperation,
+    OpType,
+)
 from collaboration.models import (
     Comment,
     CommentStatus,
@@ -36,4 +41,7 @@ __all__ = [
     "save_suggestions",
     "load_versions",
     "save_versions",
+    "CRDTStore",
+    "CrdtOperation",
+    "OpType",
 ]
