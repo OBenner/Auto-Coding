@@ -12,6 +12,7 @@
     "changelog": "Changelog",
     "scheduler": "Scheduler",
     "context": "Context",
+    "sessionContext": "Session Context",
     "githubIssues": "GitHub Issues",
     "githubPRs": "GitHub PRs",
     "gitlabIssues": "GitLab Issues",
