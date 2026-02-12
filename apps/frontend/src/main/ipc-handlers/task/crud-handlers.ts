@@ -11,6 +11,7 @@ import { findAllSpecPaths } from '../../utils/spec-path-helpers';
 import { withSpecNumberLock } from '../../utils/spec-number-lock';
 import { runPythonSubprocess } from '../github/utils/subprocess-runner';
 import { getRunnerEnv } from '../github/utils/runner-env';
+import { getConfiguredPythonPath } from '../../python-env-manager';
 
 /**
  * Helper to get the backend directory path
@@ -25,7 +26,7 @@ function getBackendDir(): string {
  */
 async function getPythonEnv(): Promise<{ pythonPath: string; env: Record<string, string> }> {
   const env = await getRunnerEnv();
-  const pythonPath = 'python';
+  const pythonPath = getConfiguredPythonPath();
   return { pythonPath, env };
 }
 

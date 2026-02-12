@@ -205,6 +205,10 @@ export class UsageMonitor extends EventEmitter {
   private currentUsageProfileId: string | null = null; // Track which profile's usage is in currentUsage
   private isChecking = false;
 
+  // Exponential backoff for global check failures (e.g., ETIMEDOUT when API unreachable)
+  private consecutiveGlobalFailures = 0;
+  private static MAX_BACKOFF_MULTIPLIER = 10; // Cap at 10x base interval (5 min at 30s base)
+
   // Per-profile API failure tracking with cooldown-based retry
   // Map<profileId, lastFailureTimestamp> - stores when API last failed for this profile
   private apiFailureTimestamps: Map<string, number> = new Map();
@@ -267,17 +271,36 @@ export class UsageMonitor extends EventEmitter {
 
     const profileManager = getClaudeProfileManager();
     const settings = profileManager.getAutoSwitchSettings();
-    const interval = settings.usageCheckInterval || 30000; // 30 seconds for accurate usage tracking
+    const baseInterval = settings.usageCheckInterval || 30000; // 30 seconds for accurate usage tracking
 
-    this.debugLog('[UsageMonitor] Starting with interval: ' + interval + ' ms (30-second updates for accurate usage stats)');
+    this.debugLog('[UsageMonitor] Starting with base interval: ' + baseInterval + ' ms (30-second updates for accurate usage stats)');
 
-    // Check immediately
-    this.checkUsageAndSwap();
+    // Check immediately, then schedule next check with dynamic interval
+    const scheduleNext = () => {
+      const backoffMultiplier = Math.min(
+        Math.pow(2, this.consecutiveGlobalFailures),
+        UsageMonitor.MAX_BACKOFF_MULTIPLIER
+      );
+      const nextInterval = baseInterval * backoffMultiplier;
 
-    // Then check periodically
-    this.intervalId = setInterval(() => {
-      this.checkUsageAndSwap();
-    }, interval);
+      if (this.consecutiveGlobalFailures > 0) {
+        this.debugLog(`[UsageMonitor] Backing off: ${nextInterval}ms (${this.consecutiveGlobalFailures} consecutive failures)`);
+      }
+
+      this.intervalId = setTimeout(() => {
+        this.checkUsageAndSwap().then(() => {
+          if (this.intervalId) scheduleNext(); // Continue if not stopped
+        }).catch(() => {
+          if (this.intervalId) scheduleNext(); // Continue even on error
+        });
+      }, nextInterval);
+    };
+
+    this.checkUsageAndSwap().then(() => {
+      scheduleNext();
+    }).catch(() => {
+      scheduleNext();
+    });
   }
 
   /**
@@ -285,8 +308,9 @@ export class UsageMonitor extends EventEmitter {
    */
   stop(): void {
     if (this.intervalId) {
-      clearInterval(this.intervalId);
+      clearTimeout(this.intervalId);
       this.intervalId = null;
+      this.consecutiveGlobalFailures = 0;
       this.debugLog('[UsageMonitor] Stopped');
     }
   }
@@ -898,7 +922,8 @@ export class UsageMonitor extends EventEmitter {
       const credential = await this.getCredential();
       const usage = await this.fetchUsage(profileId, credential, activeProfile);
       if (!usage) {
-        this.debugLog('[UsageMonitor] Failed to fetch usage');
+        this.consecutiveGlobalFailures++;
+        this.debugLog('[UsageMonitor] Failed to fetch usage (failure #' + this.consecutiveGlobalFailures + ')');
         return;
       }
 
@@ -911,6 +936,9 @@ export class UsageMonitor extends EventEmitter {
       // Step 2.5: Persist usage to profile for caching (so other profiles can display cached usage)
       const profileManager = getClaudeProfileManager();
       profileManager.updateProfileUsageFromAPI(profileId, usage.sessionPercent, usage.weeklyPercent);
+
+      // Usage fetch succeeded - reset backoff counter
+      this.consecutiveGlobalFailures = 0;
 
       // Step 3: Emit usage update for UI (always emit, regardless of proactive swap settings)
       this.emit('usage-updated', usage);
@@ -971,7 +999,8 @@ export class UsageMonitor extends EventEmitter {
         }
       }
 
-      console.error('[UsageMonitor] Check failed:', error);
+      this.consecutiveGlobalFailures++;
+      console.error('[UsageMonitor] Check failed (failure #' + this.consecutiveGlobalFailures + '):', error);
     } finally {
       this.isChecking = false;
     }
