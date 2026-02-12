@@ -11,10 +11,11 @@ Supported Providers:
 - google: Google Gemini API - Gemini 2.0, Gemini 1.5 models
 - litellm: LiteLLM unified API - 100+ LLMs via single interface
 - openrouter: OpenRouter cloud routing - 400+ models with pay-per-use
+- ollama: Ollama local models - Privacy-first local inference
 
 Environment Variables:
     # Core
-    AI_ENGINE_PROVIDER: Provider selection (claude|openai|google|litellm|openrouter, default: claude)
+    AI_ENGINE_PROVIDER: Provider selection (claude|openai|google|litellm|openrouter|ollama, default: claude)
 
     # Claude Agent SDK (default)
     ANTHROPIC_API_KEY: Required for Claude provider
@@ -37,6 +38,10 @@ Environment Variables:
     OPENROUTER_API_KEY: Required for OpenRouter provider
     OPENROUTER_MODEL: Model identifier (default: anthropic/claude-sonnet-4)
     OPENROUTER_BASE_URL: API base URL (default: https://openrouter.ai/api/v1)
+
+    # Ollama
+    OLLAMA_MODEL: Model identifier (e.g., llama2, mistral, codellama)
+    OLLAMA_BASE_URL: API base URL (default: http://localhost:11434/v1)
 """
 
 import os
@@ -52,12 +57,14 @@ class AIEngineProvider(str, Enum):
     GOOGLE = "google"
     LITELLM = "litellm"
     OPENROUTER = "openrouter"
+    OLLAMA = "ollama"
 
 
 # Default values
 DEFAULT_PROVIDER = "claude"
 DEFAULT_OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 DEFAULT_OPENROUTER_MODEL = "anthropic/claude-sonnet-4"
+DEFAULT_OLLAMA_BASE_URL = "http://localhost:11434/v1"
 
 
 @dataclass
@@ -93,6 +100,10 @@ class ProviderConfig:
     openrouter_api_key: str = ""
     openrouter_model: str = DEFAULT_OPENROUTER_MODEL
     openrouter_base_url: str = DEFAULT_OPENROUTER_BASE_URL
+
+    # Ollama settings
+    ollama_model: str = ""
+    ollama_base_url: str = DEFAULT_OLLAMA_BASE_URL
 
     @classmethod
     def from_env(cls) -> "ProviderConfig":
@@ -131,6 +142,10 @@ class ProviderConfig:
             "OPENROUTER_BASE_URL", DEFAULT_OPENROUTER_BASE_URL
         )
 
+        # Ollama settings
+        ollama_model = os.environ.get("OLLAMA_MODEL", "")
+        ollama_base_url = os.environ.get("OLLAMA_BASE_URL", DEFAULT_OLLAMA_BASE_URL)
+
         return cls(
             provider=provider,
             anthropic_api_key=anthropic_api_key,
@@ -146,6 +161,8 @@ class ProviderConfig:
             openrouter_api_key=openrouter_api_key,
             openrouter_model=openrouter_model,
             openrouter_base_url=openrouter_base_url,
+            ollama_model=ollama_model,
+            ollama_base_url=ollama_base_url,
         )
 
     def is_valid(self) -> bool:
@@ -165,6 +182,9 @@ class ProviderConfig:
             return bool(self.litellm_model)
         elif self.provider == AIEngineProvider.OPENROUTER.value:
             return bool(self.openrouter_api_key)
+        elif self.provider == AIEngineProvider.OLLAMA.value:
+            # Ollama only requires model to be specified
+            return bool(self.ollama_model)
         return False
 
     def get_validation_errors(self) -> list[str]:
@@ -196,6 +216,11 @@ class ProviderConfig:
                 errors.append(
                     "OpenRouter provider requires OPENROUTER_API_KEY environment variable"
                 )
+        elif self.provider == AIEngineProvider.OLLAMA.value:
+            if not self.ollama_model:
+                errors.append(
+                    "Ollama provider requires OLLAMA_MODEL environment variable"
+                )
         else:
             errors.append(f"Unknown provider: {self.provider}")
 
@@ -213,6 +238,8 @@ class ProviderConfig:
             return f"LiteLLM ({self.litellm_model or 'no model configured'})"
         elif self.provider == AIEngineProvider.OPENROUTER.value:
             return f"OpenRouter ({self.openrouter_model})"
+        elif self.provider == AIEngineProvider.OLLAMA.value:
+            return f"Ollama ({self.ollama_model or 'no model configured'})"
         return f"Unknown ({self.provider})"
 
     def get_model_for_provider(self) -> str | None:
@@ -227,6 +254,8 @@ class ProviderConfig:
             return self.litellm_model or None
         elif self.provider == AIEngineProvider.OPENROUTER.value:
             return self.openrouter_model
+        elif self.provider == AIEngineProvider.OLLAMA.value:
+            return self.ollama_model or None
         return None
 
 
@@ -265,6 +294,9 @@ def get_available_providers() -> list[str]:
 
     if config.openrouter_api_key:
         available.append(AIEngineProvider.OPENROUTER.value)
+
+    if config.ollama_model:
+        available.append(AIEngineProvider.OLLAMA.value)
 
     return available
 
