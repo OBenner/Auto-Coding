@@ -12,7 +12,7 @@ import {
   Pause,
   SkipBack,
   SkipForward,
-  Stop,
+  Square,
   Settings2,
   Bookmark,
 } from 'lucide-react';
@@ -328,7 +328,7 @@ export function SessionPlayer({
               className="h-8 w-8 p-0"
               aria-label={t('sessionPlayer.stop')}
             >
-              <Stop className="h-4 w-4" />
+              <Square className="h-4 w-4" />
             </Button>
 
             {/* Previous Button */}
