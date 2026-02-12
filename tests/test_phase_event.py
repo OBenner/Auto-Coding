@@ -44,8 +44,8 @@ class TestExecutionPhaseEnum:
 
     def test_phase_count(self):
         """Expected number of phases exists."""
-        # planning, coding, qa_review, qa_fixing, complete, failed
-        assert len(ExecutionPhase) == 6
+        # planning, coding, test_generation, qa_review, qa_fixing, complete, failed
+        assert len(ExecutionPhase) == 7
 
     def test_planning_phase_exists(self):
         """PLANNING phase has correct value."""
@@ -70,6 +70,10 @@ class TestExecutionPhaseEnum:
     def test_failed_phase_exists(self):
         """FAILED phase has correct value."""
         assert ExecutionPhase.FAILED.value == "failed"
+
+    def test_test_generation_phase_exists(self):
+        """TEST_GENERATION phase has correct value."""
+        assert ExecutionPhase.TEST_GENERATION.value == "test_generation"
 
     def test_phase_is_string_subclass(self):
         """ExecutionPhase inherits from str for easy serialization."""

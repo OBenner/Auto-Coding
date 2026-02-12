@@ -1098,7 +1098,8 @@ async function downloadAllPlatforms() {
     try {
       await downloadPython(platform, arch);
     } catch (error) {
-      console.error(`[download-python] Failed for ${platform}-${arch}: ${error.message}`);
+      // eslint-disable-next-line no-control-regex
+      console.error(`[download-python] Failed for ${platform}-${arch}: ${String(error.message).replace(/[\x00-\x1f\x7f]/g, '').slice(0, 200)}`);
       throw error;
     }
   }
@@ -1177,7 +1178,8 @@ Examples:
     }
     console.log('[download-python] Done!');
   } catch (error) {
-    console.error(`[download-python] Error: ${error.message}`);
+    // eslint-disable-next-line no-control-regex
+    console.error(`[download-python] Error: ${String(error.message).replace(/[\x00-\x1f\x7f]/g, '').slice(0, 200)}`);
     process.exit(1);
   }
 }

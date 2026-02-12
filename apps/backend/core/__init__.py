@@ -8,13 +8,7 @@ Core components for the Auto Code autonomous coding framework.
 # Note: We use lazy imports here because the full agent module has many dependencies
 # that may not be needed for basic operations like workspace management.
 
-__all__ = [
-    "run_autonomous_agent",
-    "run_followup_planner",
-    "WorkspaceManager",
-    "WorktreeManager",
-    "ProgressTracker",
-]
+__all__: list[str] = []
 
 
 def __getattr__(name):

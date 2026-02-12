@@ -24,8 +24,8 @@ if str(_backend_dir) not in sys.path:
 
 from scheduler.models import (
     BuildStatus,
-    SchedulePriority,
     ScheduledBuild,
+    SchedulePriority,
 )
 from scheduler.scheduler import Scheduler, SchedulerEvent
 from scheduler.queue_manager import QueueManager
@@ -36,6 +36,7 @@ from scheduler.notification_service import NotificationService, BuildEvent
 # ============================================================================
 # Fixtures
 # ============================================================================
+
 
 @pytest.fixture
 def temp_project_dir(tmp_path):
@@ -123,6 +124,7 @@ def sample_build_with_deps():
 # ============================================================================
 # E2E Test: Build Scheduling and Storage
 # ============================================================================
+
 
 class TestSchedulingE2E:
     """Test build scheduling workflow end-to-end."""
@@ -217,6 +219,7 @@ class TestSchedulingE2E:
 # E2E Test: Queue Management
 # ============================================================================
 
+
 class TestQueueManagementE2E:
     """Test queue view and status updates."""
 
@@ -233,7 +236,9 @@ class TestQueueManagementE2E:
 
         # Manually mark as running (simulating execution)
         # Need to use queue_manager to update both in-memory and storage
-        scheduler.queue_manager.update_build_status(sample_build.id, BuildStatus.RUNNING)
+        scheduler.queue_manager.update_build_status(
+            sample_build.id, BuildStatus.RUNNING
+        )
 
         # Verify running count
         status = scheduler.get_queue_status()
@@ -248,8 +253,8 @@ class TestQueueManagementE2E:
         for i, status in enumerate([BuildStatus.QUEUED, BuildStatus.RUNNING, BuildStatus.COMPLETED]):
             build = ScheduledBuild(
                 id=str(uuid.uuid4()),
-                spec_id=f"00{i+1}-test",
-                spec_name=f"Test {i+1}",
+                spec_id=f"00{i + 1}-test",
+                spec_name=f"Test {i + 1}",
                 status=status,
             )
             if status == BuildStatus.RUNNING:
@@ -276,6 +281,7 @@ class TestQueueManagementE2E:
 # E2E Test: Build Execution
 # ============================================================================
 
+
 class TestBuildExecutionE2E:
     """Test actual build execution workflow."""
 
@@ -283,6 +289,7 @@ class TestBuildExecutionE2E:
         """Test that scheduler picks up and executes immediate builds."""
         # Track events
         events = []
+
         def track_event(event_type, build, **kwargs):
             events.append((event_type, build.id if build else None))
 
@@ -316,6 +323,7 @@ class TestBuildExecutionE2E:
         """Test that scheduler waits for scheduled time before executing."""
         # Track events
         events = []
+
         def track_event(event_type, build, **kwargs):
             events.append((event_type, build.id if build else None, datetime.now()))
 
@@ -348,6 +356,7 @@ class TestBuildExecutionE2E:
         """Test that scheduler retries failed builds."""
         # Track events
         events = []
+
         def track_event(event_type, build, **kwargs):
             events.append((event_type, build.id if build else None))
 
@@ -356,6 +365,7 @@ class TestBuildExecutionE2E:
 
         # Mock build execution to fail first time, succeed second time
         call_count = [0]
+
         def mock_run(*args, **kwargs):
             call_count[0] += 1
             mock_result = MagicMock()
@@ -384,6 +394,7 @@ class TestBuildExecutionE2E:
 # ============================================================================
 # E2E Test: Dependency Resolution
 # ============================================================================
+
 
 class TestDependencyResolutionE2E:
     """Test dependency-aware build execution."""
@@ -427,6 +438,7 @@ class TestDependencyResolutionE2E:
 # ============================================================================
 # E2E Test: Notifications
 # ============================================================================
+
 
 class TestNotificationE2E:
     """Test notification system integration."""
@@ -489,6 +501,7 @@ class TestNotificationE2E:
 # ============================================================================
 # E2E Test: Calendar View Data
 # ============================================================================
+
 
 class TestCalendarViewE2E:
     """Test calendar view data structure for frontend."""
@@ -583,6 +596,7 @@ class TestCalendarViewE2E:
 # E2E Test: Complete Workflow
 # ============================================================================
 
+
 class TestCompleteWorkflowE2E:
     """Test the complete scheduling workflow from start to finish."""
 
@@ -590,6 +604,7 @@ class TestCompleteWorkflowE2E:
         """Test complete workflow: schedule -> queue -> execute -> notify."""
         # Track all events
         events = []
+
         def track_all_events(event_type, build, **kwargs):
             events.append({
                 "type": event_type,
@@ -598,7 +613,11 @@ class TestCompleteWorkflowE2E:
             })
 
         # Register callbacks for all events
-        for event in [SchedulerEvent.BUILD_EXECUTING, SchedulerEvent.BUILD_SUCCESS, SchedulerEvent.BUILD_FAILURE]:
+        for event in [
+            SchedulerEvent.BUILD_EXECUTING,
+            SchedulerEvent.BUILD_SUCCESS,
+            SchedulerEvent.BUILD_FAILURE,
+        ]:
             scheduler.register_callback(event, track_all_events)
 
         # Create a build
@@ -647,8 +666,8 @@ class TestCompleteWorkflowE2E:
         for i in range(3):
             build = ScheduledBuild(
                 id=str(uuid.uuid4()),
-                spec_id=f"00{i+1}-test",
-                spec_name=f"Parallel Test {i+1}",
+                spec_id=f"00{i + 1}-test",
+                spec_name=f"Parallel Test {i + 1}",
                 priority=SchedulePriority.NORMAL,
             )
             scheduler.schedule_build(build)

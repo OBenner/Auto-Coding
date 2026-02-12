@@ -12,7 +12,7 @@ This module provides:
 - Time-based execution
 """
 
-from .models import ScheduledBuild, BuildStatus, SchedulePriority
+from .models import BuildStatus, ScheduledBuild, SchedulePriority
 from .storage import SchedulerStorage
 
 __all__ = [

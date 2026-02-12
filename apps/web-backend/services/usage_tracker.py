@@ -14,6 +14,11 @@ from core.config import settings
 logger = logging.getLogger(__name__)
 
 
+def _sanitize_log(value: str) -> str:
+    """Sanitize value for safe logging (prevent log injection)."""
+    return str(value).replace("\n", "\\n").replace("\r", "\\r")
+
+
 class UsageTracker:
     """
     Service for tracking API usage and rate limiting with Redis.
@@ -145,7 +150,7 @@ class UsageTracker:
                 pipe.execute()
 
             logger.debug(
-                f"Recorded request for user {user_id}: {method} {endpoint} -> {status_code}"
+                f"Recorded request for user {_sanitize_log(str(user_id))}: {method} {endpoint} -> {status_code}"
             )
 
             return True
@@ -193,7 +198,7 @@ class UsageTracker:
                         "metrics": data
                     })
 
-            logger.info(f"Retrieved usage data for user {user_id} ({len(results)} periods)")
+            logger.info(f"Retrieved usage data for user {_sanitize_log(str(user_id))} ({len(results)} periods)")
 
             return results
 
@@ -286,7 +291,7 @@ class UsageTracker:
             is_allowed = current_count < limit
 
             logger.debug(
-                f"Rate limit check for user {user_id}: "
+                f"Rate limit check for user {_sanitize_log(str(user_id))}: "
                 f"{current_count}/{limit} ({period})"
             )
 
@@ -312,7 +317,7 @@ class UsageTracker:
             user_key = self._get_user_key(user_id, period)
             self.redis.delete(user_key)
 
-            logger.info(f"Reset usage for user {user_id} ({period})")
+            logger.info(f"Reset usage for user {_sanitize_log(str(user_id))} ({period})")
 
             return True
 

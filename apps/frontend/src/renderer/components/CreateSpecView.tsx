@@ -21,7 +21,6 @@
  * ```
  */
 import { useState, useEffect } from 'react';
-import { useTranslation } from 'react-i18next';
 import {
   CheckCircle2,
   XCircle,
@@ -347,7 +346,6 @@ export function CreateSpecView({
   onPatternModified,
   className
 }: CreateSpecViewProps) {
-  const { t } = useTranslation(['tasks', 'common']);
   const [patterns, setPatterns] = useState<PatternWithAction[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

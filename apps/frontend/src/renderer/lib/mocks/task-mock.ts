@@ -27,6 +27,26 @@ export const taskMock = {
     }
   }),
 
+  createTaskFromTemplate: async (projectId: string, templateName: string, _parameters: Record<string, unknown>) => ({
+    success: true,
+    data: {
+      id: `task-${Date.now()}`,
+      projectId,
+      specId: `00${mockTasks.length + 1}-${templateName}`,
+      title: `Task from ${templateName}`,
+      description: `Task created from template: ${templateName}`,
+      status: 'backlog' as const,
+      subtasks: [],
+      logs: [],
+      metadata: {
+        sourceType: 'template' as const,
+        templateName
+      },
+      createdAt: new Date(),
+      updatedAt: new Date()
+    }
+  }),
+
   deleteTask: async () => ({ success: true }),
 
   updateTask: async (_taskId: string, updates: { title?: string; description?: string }) => ({
@@ -73,6 +93,16 @@ export const taskMock = {
   }),
 
   checkTaskRunning: async () => ({ success: true, data: false }),
+
+  // Batch operations
+  batchRunQA: async (taskId: string) => ({
+    success: true,
+    data: {
+      success: true,
+      issues: []
+    },
+    error: undefined
+  }),
 
   // Task logs operations
   getTaskLogs: async () => ({

@@ -442,8 +442,13 @@ class SecurityScanner:
 
     def to_dict(self, result: SecurityScanResult) -> dict[str, Any]:
         """Convert result to dictionary for JSON serialization."""
+        # Redact matched_text to prevent clear-text secret logging
+        redacted_secrets = [
+            {**secret, "matched_text": "[redacted]"}
+            for secret in result.secrets
+        ]
         return {
-            "secrets": result.secrets,
+            "secrets": redacted_secrets,
             "vulnerabilities": [
                 {
                     "severity": v.severity,

@@ -18,6 +18,9 @@ export * from './integrations';
 export * from './app-update';
 export * from './cli';
 export * from './merge-analytics';
+export * from './session-context';
+export * from './productivity-analytics';
+export * from './template';
 export * from './scheduler';
 
 // IPC types (must be last to use types from other modules)

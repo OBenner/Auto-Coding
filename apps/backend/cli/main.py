@@ -16,24 +16,25 @@ if str(_PARENT_DIR) not in sys.path:
     sys.path.insert(0, str(_PARENT_DIR))
 
 
+from .analytics_commands import handle_analytics_command
 from .batch_commands import (
     handle_batch_cleanup_command,
     handle_batch_create_command,
     handle_batch_status_command,
 )
 from .build_commands import handle_build_command
+from .followup_commands import handle_followup_command
+from .qa_commands import (
+    handle_qa_command,
+    handle_qa_status_command,
+    handle_review_status_command,
+)
 from .scheduler_commands import (
     handle_schedule_cancel_command,
     handle_schedule_command,
     handle_schedule_start_command,
     handle_schedule_status_command,
     handle_schedule_stop_command,
-)
-from .followup_commands import handle_followup_command
-from .qa_commands import (
-    handle_qa_command,
-    handle_qa_status_command,
-    handle_review_status_command,
 )
 from .spec_commands import print_specs_list
 from .utils import (
@@ -386,6 +387,38 @@ Environment Variables:
         help="Filter analytics by task ID",
     )
 
+    # Productivity analytics commands
+    parser.add_argument(
+        "--analytics",
+        action="store_true",
+        help="Show productivity analytics across all specs",
+    )
+    parser.add_argument(
+        "--analytics-trends",
+        action="store_true",
+        help="Show productivity trends over time",
+    )
+    parser.add_argument(
+        "--analytics-days",
+        type=int,
+        default=30,
+        help="Number of days for trends analysis (default: 30)",
+    )
+    parser.add_argument(
+        "--analytics-granularity",
+        type=str,
+        default="daily",
+        choices=["daily", "weekly", "monthly"],
+        help="Time granularity for trends (default: daily)",
+    )
+    parser.add_argument(
+        "--analytics-export-path",
+        type=str,
+        default=None,
+        metavar="FILE",
+        help="Export analytics to file (with --analytics)",
+    )
+
     return parser.parse_args()
 
 
@@ -464,7 +497,11 @@ def _run_cli() -> None:
 
     # Handle scheduler commands
     if args.schedule:
-        deps = args.schedule_deps.split(",") if args.schedule_deps else None
+        deps = (
+            [d.strip() for d in args.schedule_deps.split(",") if d.strip()]
+            if args.schedule_deps
+            else None
+        )
         handle_schedule_command(
             args.schedule,
             str(project_dir),
@@ -506,6 +543,21 @@ def _run_cli() -> None:
             project_dir,
             output_path=args.analytics_output,
             format=args.analytics_format,
+        )
+        return
+
+    # Handle productivity analytics command
+    if args.analytics:
+        export_path = (
+            Path(args.analytics_export_path) if args.analytics_export_path else None
+        )
+        handle_analytics_command(
+            project_dir=project_dir,
+            trends=args.analytics_trends,
+            days=args.analytics_days,
+            granularity=args.analytics_granularity,
+            export_path=export_path,
+            export_format=args.analytics_format,
         )
         return
 

@@ -55,6 +55,36 @@ function createTestFinding(severity: PRReviewFinding['severity'], id: string = '
   };
 }
 
+/**
+ * Determine if a review is "clean" (no critical/high/medium findings).
+ * Mirrors the isCleanReview logic in the PRDetail component.
+ */
+function isCleanReview(reviewResult: PRReviewResult): boolean {
+  return reviewResult.success &&
+    !reviewResult.findings.some(f =>
+      f.severity === 'critical' || f.severity === 'high' || f.severity === 'medium'
+    );
+}
+
+/**
+ * Determine if the "Post Clean Review" button should be shown.
+ * Mirrors the button visibility logic in the PRDetail component.
+ */
+function shouldShowCleanReviewButton(
+  reviewResult: PRReviewResult,
+  selectedCount: number,
+  hasPostedFindings: boolean,
+  cleanReviewPosted: boolean
+): boolean {
+  return (
+    selectedCount === 0 &&
+    isCleanReview(reviewResult) &&
+    !hasPostedFindings &&
+    !cleanReviewPosted &&
+    reviewResult.overallStatus !== 'request_changes'
+  );
+}
+
 describe('PRDetail Clean Review Functionality', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -76,13 +106,7 @@ describe('PRDetail Clean Review Functionality', () => {
         findings: []
       });
 
-      // isCleanReview logic: success && no critical/high/medium findings
-      const isCleanReview = reviewResult.success &&
-        !reviewResult.findings.some(f =>
-          f.severity === 'critical' || f.severity === 'high' || f.severity === 'medium'
-        );
-
-      expect(isCleanReview).toBe(true);
+      expect(isCleanReview(reviewResult)).toBe(true);
       expect(reviewResult.findings).toHaveLength(0);
     });
 
@@ -95,12 +119,7 @@ describe('PRDetail Clean Review Functionality', () => {
         ]
       });
 
-      const isCleanReview = reviewResult.success &&
-        !reviewResult.findings.some(f =>
-          f.severity === 'critical' || f.severity === 'high' || f.severity === 'medium'
-        );
-
-      expect(isCleanReview).toBe(true);
+      expect(isCleanReview(reviewResult)).toBe(true);
       expect(reviewResult.findings).toHaveLength(3);
     });
 
@@ -112,12 +131,7 @@ describe('PRDetail Clean Review Functionality', () => {
         ]
       });
 
-      const isCleanReview = reviewResult.success &&
-        !reviewResult.findings.some(f =>
-          f.severity === 'critical' || f.severity === 'high' || f.severity === 'medium'
-        );
-
-      expect(isCleanReview).toBe(false);
+      expect(isCleanReview(reviewResult)).toBe(false);
     });
 
     it('should return false for review with HIGH severity findings', () => {
@@ -128,12 +142,7 @@ describe('PRDetail Clean Review Functionality', () => {
         ]
       });
 
-      const isCleanReview = reviewResult.success &&
-        !reviewResult.findings.some(f =>
-          f.severity === 'critical' || f.severity === 'high' || f.severity === 'medium'
-        );
-
-      expect(isCleanReview).toBe(false);
+      expect(isCleanReview(reviewResult)).toBe(false);
     });
 
     it('should return false for review with CRITICAL severity findings', () => {
@@ -143,12 +152,7 @@ describe('PRDetail Clean Review Functionality', () => {
         ]
       });
 
-      const isCleanReview = reviewResult.success &&
-        !reviewResult.findings.some(f =>
-          f.severity === 'critical' || f.severity === 'high' || f.severity === 'medium'
-        );
-
-      expect(isCleanReview).toBe(false);
+      expect(isCleanReview(reviewResult)).toBe(false);
     });
 
     it('should return false for failed review', () => {
@@ -157,12 +161,7 @@ describe('PRDetail Clean Review Functionality', () => {
         findings: []
       });
 
-      const isCleanReview = reviewResult.success &&
-        !reviewResult.findings.some(f =>
-          f.severity === 'critical' || f.severity === 'high' || f.severity === 'medium'
-        );
-
-      expect(isCleanReview).toBe(false);
+      expect(isCleanReview(reviewResult)).toBe(false);
     });
   });
 
@@ -195,12 +194,12 @@ describe('PRDetail Clean Review Functionality', () => {
         findings: [createTestFinding('low')]
       });
 
-      const selectedCount: number = 1; // Finding selected
+      const selectedCount: number = 1; // Finding selected — condition below should be false
       const hasPostedFindings = false;
       const cleanReviewPosted = false;
 
       const shouldShowButton =
-        selectedCount === 0 &&
+        selectedCount === 0 && // lgtm[js/useless-comparison-test] Intentional: verifying condition is false when findings are selected
         reviewResult.success &&
         !reviewResult.findings.some(f =>
           f.severity === 'critical' || f.severity === 'high' || f.severity === 'medium'
@@ -338,7 +337,7 @@ describe('PRDetail Clean Review Functionality', () => {
 
       // Post Clean Review button: selectedCount === 0 && other conditions
       const showPostCleanReview =
-        selectedCount === 0 &&
+        selectedCount === 0 && // lgtm[js/useless-comparison-test] Intentional: verifying condition is false when findings are selected
         reviewResult.success &&
         !reviewResult.findings.some(f =>
           f.severity === 'critical' || f.severity === 'high' || f.severity === 'medium'

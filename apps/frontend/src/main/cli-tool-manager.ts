@@ -27,10 +27,8 @@ import os from 'os';
 import { promisify } from 'util';
 import { app } from 'electron';
 import { findExecutable, findExecutableAsync, getAugmentedEnv, getAugmentedEnvAsync, shouldUseShell, existsAsync } from './env-utils';
-import { isWindows, isMacOS, isUnix, joinPaths, getExecutableExtension } from './platform';
+import { isWindows, isMacOS, isUnix } from './platform';
 import type { ToolDetectionResult } from '../shared/types';
-import { findHomebrewPython as findHomebrewPythonUtil } from './utils/homebrew-python';
-
 const execFileAsync = promisify(execFile);
 
 export type ExecFileSyncOptionsWithVerbatim = ExecFileSyncOptions & {
@@ -49,7 +47,16 @@ import {
   findWindowsExecutableViaWhere,
   findWindowsExecutableViaWhereAsync,
   isSecurePath,
+  findHomebrewPython,
+  getClaudeDetectionPaths,
+  sortNvmVersionDirs,
+  getGitDetectionPaths,
+  getGitHubCLIDetectionPaths,
+  type ClaudeDetectionPaths,
 } from './platform/paths';
+
+// Re-export platform utilities for backward compatibility
+export { getClaudeDetectionPaths, sortNvmVersionDirs };
 
 /**
  * Supported CLI tools managed by this system
@@ -126,100 +133,6 @@ function isWrongPlatformPath(pathStr: string | undefined): boolean {
 // ============================================================================
 // SHARED HELPERS - Used by both sync and async Claude detection
 // ============================================================================
-
-/**
- * Configuration for Claude CLI detection paths
- */
-interface ClaudeDetectionPaths {
-  /** Homebrew paths for macOS (Apple Silicon and Intel) */
-  homebrewPaths: string[];
-  /** Platform-specific standard installation paths */
-  platformPaths: string[];
-  /** Path to NVM versions directory for Node.js-installed Claude */
-  nvmVersionsDir: string;
-}
-
-/**
- * Get all candidate paths for Claude CLI detection.
- *
- * Returns platform-specific paths where Claude CLI might be installed.
- * This pure function consolidates path configuration used by both sync
- * and async detection methods.
- *
- * Note: This is the single source of truth for CLI detection paths.
- * The Python backend relies on the Claude Agent SDK's bundled CLI,
- * so it no longer needs its own path detection logic.
- *
- * @param homeDir - User's home directory (from os.homedir())
- * @returns Object containing homebrew, platform, and NVM paths
- *
- * @example
- * const paths = getClaudeDetectionPaths('/Users/john');
- * // On macOS: { homebrewPaths: ['/opt/homebrew/bin/claude', ...], ... }
- */
-export function getClaudeDetectionPaths(homeDir: string): ClaudeDetectionPaths {
-  const homebrewPaths = [
-    '/opt/homebrew/bin/claude', // Apple Silicon
-    '/usr/local/bin/claude',    // Intel Mac
-  ];
-
-  const platformPaths = isWindows()
-    ? [
-        joinPaths(homeDir, 'AppData', 'Local', 'Programs', 'claude', `claude${getExecutableExtension()}`),
-        joinPaths(homeDir, 'AppData', 'Roaming', 'npm', 'claude.cmd'),
-        joinPaths(homeDir, '.local', 'bin', `claude${getExecutableExtension()}`),
-        'C:\\Program Files\\Claude\\claude.exe',
-        'C:\\Program Files (x86)\\Claude\\claude.exe',
-      ]
-    : [
-        joinPaths(homeDir, '.local', 'bin', 'claude'),
-        joinPaths(homeDir, 'bin', 'claude'),
-      ];
-
-  const nvmVersionsDir = joinPaths(homeDir, '.nvm', 'versions', 'node');
-
-  return { homebrewPaths, platformPaths, nvmVersionsDir };
-}
-
-/**
- * Sort NVM version directories by semantic version (newest first).
- *
- * Filters entries to only include directories starting with 'v' (version directories)
- * and sorts them in descending order so the newest Node.js version is checked first.
- *
- * @param entries - Directory entries from readdir with { name, isDirectory() }
- * @returns Array of version directory names sorted newest first
- *
- * @example
- * const entries = [
- *   { name: 'v18.0.0', isDirectory: () => true },
- *   { name: 'v20.0.0', isDirectory: () => true },
- *   { name: '.DS_Store', isDirectory: () => false },
- * ];
- * sortNvmVersionDirs(entries); // ['v20.0.0', 'v18.0.0']
- */
-export function sortNvmVersionDirs(
-  entries: Array<{ name: string; isDirectory(): boolean }>
-): string[] {
-  // Regex to match valid semver directories: v20.0.0, v18.17.1, etc.
-  // This prevents NaN from malformed versions (e.g., v20.abc.1) breaking sort
-  const semverRegex = /^v\d+\.\d+\.\d+$/;
-
-  return entries
-    .filter((entry) => entry.isDirectory() && semverRegex.test(entry.name))
-    .sort((a, b) => {
-      // Parse version numbers: v20.0.0 -> [20, 0, 0]
-      const vA = a.name.slice(1).split('.').map(Number);
-      const vB = b.name.slice(1).split('.').map(Number);
-      // Compare major, minor, patch in order (descending)
-      for (let i = 0; i < 3; i++) {
-        const diff = (vB[i] ?? 0) - (vA[i] ?? 0);
-        if (diff !== 0) return diff;
-      }
-      return 0;
-    })
-    .map((entry) => entry.name);
-}
 
 /**
  * Build a ToolDetectionResult from a validation result.
@@ -537,10 +450,7 @@ class CLIToolManager {
 
     // 2. Homebrew (macOS)
     if (isMacOS()) {
-      const homebrewPaths = [
-        '/opt/homebrew/bin/git', // Apple Silicon
-        '/usr/local/bin/git', // Intel Mac
-      ];
+      const homebrewPaths = getGitDetectionPaths();
 
       for (const gitPath of homebrewPaths) {
         if (existsSync(gitPath)) {
@@ -652,10 +562,7 @@ class CLIToolManager {
 
     // 2. Homebrew (macOS)
     if (isMacOS()) {
-      const homebrewPaths = [
-        '/opt/homebrew/bin/gh', // Apple Silicon
-        '/usr/local/bin/gh', // Intel Mac
-      ];
+      const homebrewPaths = getGitHubCLIDetectionPaths();
 
       for (const ghPath of homebrewPaths) {
         if (existsSync(ghPath)) {
@@ -688,25 +595,19 @@ class CLIToolManager {
       }
     }
 
-    // 4. Windows Program Files
+    // 4. Windows-specific detection using 'where' command
     if (isWindows()) {
-      const windowsPaths = [
-        'C:\\Program Files\\GitHub CLI\\gh.exe',
-        'C:\\Program Files (x86)\\GitHub CLI\\gh.exe',
-      ];
-
-      for (const ghPath of windowsPaths) {
-        if (existsSync(ghPath)) {
-          const validation = this.validateGitHubCLI(ghPath);
-          if (validation.valid) {
-            return {
-              found: true,
-              path: ghPath,
-              version: validation.version,
-              source: 'system-path',
-              message: `Using Windows GitHub CLI: ${ghPath}`,
-            };
-          }
+      const whereGhPath = findWindowsExecutableViaWhere('gh', '[GitHub CLI]');
+      if (whereGhPath) {
+        const validation = this.validateGitHubCLI(whereGhPath);
+        if (validation.valid) {
+          return {
+            found: true,
+            path: whereGhPath,
+            version: validation.version,
+            source: 'windows-where',
+            message: `Using Windows GitHub CLI: ${whereGhPath}`,
+          };
         }
       }
     }
@@ -1450,27 +1351,19 @@ class CLIToolManager {
       }
     }
 
-    // 3. Homebrew Python (macOS) - simplified async version
+    // 3. Homebrew Python (macOS)
     if (isMacOS()) {
-      const homebrewPaths = [
-        '/opt/homebrew/bin/python3',
-        '/opt/homebrew/bin/python3.12',
-        '/opt/homebrew/bin/python3.11',
-        '/opt/homebrew/bin/python3.10',
-        '/usr/local/bin/python3',
-      ];
-      for (const pythonPath of homebrewPaths) {
-        if (await existsAsync(pythonPath)) {
-          const validation = await this.validatePythonAsync(pythonPath);
-          if (validation.valid) {
-            return {
-              found: true,
-              path: pythonPath,
-              version: validation.version,
-              source: 'homebrew',
-              message: `Using Homebrew Python: ${pythonPath}`,
-            };
-          }
+      const homebrewPath = this.findHomebrewPython();
+      if (homebrewPath) {
+        const validation = await this.validatePythonAsync(homebrewPath);
+        if (validation.valid) {
+          return {
+            found: true,
+            path: homebrewPath,
+            version: validation.version,
+            source: 'homebrew',
+            message: `Using Homebrew Python: ${homebrewPath}`,
+          };
         }
       }
     }
@@ -1551,10 +1444,7 @@ class CLIToolManager {
 
     // 2. Homebrew (macOS)
     if (isMacOS()) {
-      const homebrewPaths = [
-        '/opt/homebrew/bin/git',
-        '/usr/local/bin/git',
-      ];
+      const homebrewPaths = getGitDetectionPaths();
 
       for (const gitPath of homebrewPaths) {
         if (await existsAsync(gitPath)) {
@@ -1657,10 +1547,7 @@ class CLIToolManager {
 
     // 2. Homebrew (macOS)
     if (isMacOS()) {
-      const homebrewPaths = [
-        '/opt/homebrew/bin/gh',
-        '/usr/local/bin/gh',
-      ];
+      const homebrewPaths = getGitHubCLIDetectionPaths();
 
       for (const ghPath of homebrewPaths) {
         if (await existsAsync(ghPath)) {
@@ -1693,25 +1580,19 @@ class CLIToolManager {
       }
     }
 
-    // 4. Windows Program Files
+    // 4. Windows-specific detection using 'where' command
     if (isWindows()) {
-      const windowsPaths = [
-        'C:\\Program Files\\GitHub CLI\\gh.exe',
-        'C:\\Program Files (x86)\\GitHub CLI\\gh.exe',
-      ];
-
-      for (const winGhPath of windowsPaths) {
-        if (await existsAsync(winGhPath)) {
-          const validation = await this.validateGitHubCLIAsync(winGhPath);
-          if (validation.valid) {
-            return {
-              found: true,
-              path: winGhPath,
-              version: validation.version,
-              source: 'system-path',
-              message: `Using Windows GitHub CLI: ${winGhPath}`,
-            };
-          }
+      const whereGhPath = await findWindowsExecutableViaWhereAsync('gh', '[GitHub CLI]');
+      if (whereGhPath) {
+        const validation = await this.validateGitHubCLIAsync(whereGhPath);
+        if (validation.valid) {
+          return {
+            found: true,
+            path: whereGhPath,
+            version: validation.version,
+            source: 'windows-where',
+            message: `Using Windows GitHub CLI: ${whereGhPath}`,
+          };
         }
       }
     }
@@ -1752,7 +1633,7 @@ class CLIToolManager {
    * @returns Path to Homebrew Python or null if not found
    */
   private findHomebrewPython(): string | null {
-    return findHomebrewPythonUtil(
+    return findHomebrewPython(
       (pythonPath) => this.validatePython(pythonPath),
       '[CLI Tools]'
     );

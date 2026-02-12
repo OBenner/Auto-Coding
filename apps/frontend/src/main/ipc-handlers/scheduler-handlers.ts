@@ -15,7 +15,7 @@ import type {
   BuildStatus,
   SchedulerStatus
 } from '../../shared/types/scheduler';
-import { spawnSync } from 'child_process';
+import { spawn } from 'child_process';
 import path from 'path';
 import { getToolPath } from '../cli-tool-manager';
 import { existsSync, readFileSync } from 'fs';
@@ -33,8 +33,8 @@ async function findTaskAndProject(taskId: string): Promise<{
   const projects = projectStore.getProjects();
 
   for (const project of projects) {
-    const tasks = projectStore.getTasks(project.id);
-    const task = tasks.find(t => t.id === taskId);
+    const tasks = await projectStore.getTasks(project.id);
+    const task = tasks.find((t: import('../../shared/types').Task) => t.id === taskId);
 
     if (task) {
       return { task, project };
@@ -61,67 +61,86 @@ function getPythonEnvironment(): {
 }
 
 /**
- * Execute a scheduler CLI command
+ * Execute a scheduler CLI command asynchronously
+ * Uses spawn instead of spawnSync to avoid blocking the Electron main thread
  */
 function executeSchedulerCommand(
   projectPath: string,
   args: string[]
-): { success: boolean; stdout: string; stderr: string; code: number | null } {
+): Promise<{ success: boolean; stdout: string; stderr: string; code: number | null }> {
   const { pythonPath, autoBuildSource } = getPythonEnvironment();
 
   if (!autoBuildSource) {
-    return {
+    return Promise.resolve({
       success: false,
       stdout: '',
       stderr: 'Auto-build source path not configured',
       code: -1
-    };
+    });
   }
 
   const runpyPath = path.join(autoBuildSource, 'run.py');
 
   if (!existsSync(runpyPath)) {
-    return {
+    return Promise.resolve({
       success: false,
       stdout: '',
       stderr: `run.py not found at ${runpyPath}`,
       code: -1
-    };
+    });
   }
 
-  try {
-    const result = spawnSync(
-      pythonPath,
-      [runpyPath, ...args],
-      {
-        cwd: projectPath,
-        env: getIsolatedGitEnv(),
-        encoding: 'utf-8',
-        timeout: 30000
-      }
-    );
+  return new Promise((resolve) => {
+    try {
+      const child = spawn(
+        pythonPath,
+        [runpyPath, ...args],
+        {
+          cwd: projectPath,
+          env: { ...process.env, ...getIsolatedGitEnv() },
+          timeout: 30000
+        }
+      );
 
-    return {
-      success: result.status === 0,
-      stdout: result.stdout || '',
-      stderr: result.stderr || '',
-      code: result.status
-    };
-  } catch (error) {
-    return {
-      success: false,
-      stdout: '',
-      stderr: error instanceof Error ? error.message : String(error),
-      code: -1
-    };
-  }
+      let stdout = '';
+      let stderr = '';
+
+      child.stdout.on('data', (data) => { stdout += data.toString(); });
+      child.stderr.on('data', (data) => { stderr += data.toString(); });
+
+      child.on('close', (code) => {
+        resolve({
+          success: code === 0,
+          stdout,
+          stderr,
+          code
+        });
+      });
+
+      child.on('error', (error) => {
+        resolve({
+          success: false,
+          stdout,
+          stderr: error.message,
+          code: -1
+        });
+      });
+    } catch (error) {
+      resolve({
+        success: false,
+        stdout: '',
+        stderr: error instanceof Error ? error.message : String(error),
+        code: -1
+      });
+    }
+  });
 }
 
 /**
  * Read scheduled builds from storage
  */
 function getScheduledBuilds(projectPath: string): ScheduledBuild[] {
-  const schedulerPath = path.join(projectPath, '.auto-claude', 'scheduler', 'builds.json');
+  const schedulerPath = path.join(projectPath, '.auto-claude', 'scheduler', 'schedule.json');
 
   if (!existsSync(schedulerPath)) {
     return [];
@@ -173,7 +192,7 @@ export function registerSchedulerHandlers(
       }
 
       // Execute schedule command
-      const result = executeSchedulerCommand(project.path, args);
+      const result = await executeSchedulerCommand(project.path, args);
 
       if (!result.success) {
         return {
@@ -223,7 +242,7 @@ export function registerSchedulerHandlers(
       }
 
       // Execute status command
-      const result = executeSchedulerCommand(
+      const result = await executeSchedulerCommand(
         project.path,
         ['schedule', '--status']
       );
@@ -283,7 +302,7 @@ export function registerSchedulerHandlers(
       }
 
       // Execute cancel command
-      const result = executeSchedulerCommand(
+      const result = await executeSchedulerCommand(
         project.path,
         ['schedule', '--cancel', buildId]
       );
@@ -322,7 +341,7 @@ export function registerSchedulerHandlers(
       }
 
       // Execute start command
-      const result = executeSchedulerCommand(
+      const result = await executeSchedulerCommand(
         project.path,
         ['schedule', '--start']
       );
@@ -361,7 +380,7 @@ export function registerSchedulerHandlers(
       }
 
       // Execute stop command
-      const result = executeSchedulerCommand(
+      const result = await executeSchedulerCommand(
         project.path,
         ['schedule', '--stop']
       );
