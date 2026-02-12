@@ -42,6 +42,10 @@ class Settings:
             "AUTO_CLAUDE_BACKEND_DIR",
             os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "backend"))
         )
+        self.PYTHON_BACKEND_URL: str = os.getenv(
+            "PYTHON_BACKEND_URL",
+            "http://127.0.0.1:8000"
+        )
 
         # WebSocket configuration
         self.WS_HEARTBEAT_INTERVAL: int = int(os.getenv("WS_HEARTBEAT_INTERVAL", "30"))
