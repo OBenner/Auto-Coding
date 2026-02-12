@@ -89,12 +89,15 @@ app.add_middleware(
 )
 
 # Import and register API routes
-from api.routes import users, auth, git, usage
+from api.routes import agents, auth, git, specs, tasks, usage, users
 
-app.include_router(users.router)
+app.include_router(agents.router)
 app.include_router(auth.router)
 app.include_router(git.router)
+app.include_router(specs.router)
+app.include_router(tasks.router)
 app.include_router(usage.router)
+app.include_router(users.router)
 
 
 @app.get("/")

@@ -277,6 +277,27 @@ async def list_specs():
         )
 
 
+@router.get("/health", status_code=status.HTTP_200_OK)
+async def specs_health():
+    """
+    Health check for specs API.
+
+    Returns basic status information about the specs API endpoint.
+
+    Returns:
+        Dictionary with status and configuration info
+    """
+    project_dir = _get_project_dir()
+    specs_dir = _get_specs_dir()
+
+    return {
+        "status": "ok",
+        "endpoint": "specs",
+        "project_dir": str(project_dir),
+        "specs_dir_exists": specs_dir.exists(),
+    }
+
+
 @router.get("/{spec_id}", response_model=SpecDetail, status_code=status.HTTP_200_OK)
 async def get_spec_detail(spec_id: str):
     """
@@ -370,24 +391,3 @@ async def get_spec_detail(spec_id: str):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to get spec detail: {str(e)}",
         )
-
-
-@router.get("/health", status_code=status.HTTP_200_OK)
-async def specs_health():
-    """
-    Health check for specs API.
-
-    Returns basic status information about the specs API endpoint.
-
-    Returns:
-        Dictionary with status and configuration info
-    """
-    project_dir = _get_project_dir()
-    specs_dir = _get_specs_dir()
-
-    return {
-        "status": "ok",
-        "endpoint": "specs",
-        "project_dir": str(project_dir),
-        "specs_dir_exists": specs_dir.exists(),
-    }
