@@ -665,5 +665,11 @@ export const IPC_CHANNELS = {
   COLLABORATION_PRESENCE_UPDATED: 'collaboration:presenceUpdated',
   COLLABORATION_COMMENT_ADDED: 'collaboration:commentAdded',
   COLLABORATION_SUGGESTION_ADDED: 'collaboration:suggestionAdded',
-  COLLABORATION_ERROR: 'collaboration:error'
+  COLLABORATION_ERROR: 'collaboration:error',
+
+  // Collaboration sync operations (Linear/GitHub)
+  COLLABORATION_SYNC_TO_LINEAR: 'collaboration:syncToLinear',
+  COLLABORATION_SYNC_TO_GITHUB: 'collaboration:syncToGitHub',
+  COLLABORATION_GET_SYNC_STATUS: 'collaboration:getSyncStatus',
+  COLLABORATION_SYNC_STATUS_UPDATE: 'collaboration:syncStatusUpdate'  // Event: main -> renderer
 } as const;
