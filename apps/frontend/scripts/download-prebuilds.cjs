@@ -236,7 +236,8 @@ async function downloadPrebuilds() {
     if (fs.existsSync(tempDir)) {
       fs.rmSync(tempDir, { recursive: true, force: true });
     }
-    console.log(`[prebuilds] Download/extract failed: ${String(err.message).replace(/[\x00-\x1f\x7f]/g, '').slice(0, 200)}`);
+    const _safeMsg = String(err.message || '').replace(/\n|\r/g, ' ').replace(/[\x00-\x1f\x7f]/g, '').slice(0, 200);
+    console.log('[prebuilds] Download/extract failed: ' + _safeMsg);
     return { success: false, reason: 'install-failed', error: err.message };
   }
 }

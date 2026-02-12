@@ -10,8 +10,11 @@ Gathers project context including:
 """
 
 import json
+import logging
 import sys
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 # Add auto-claude to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -61,7 +64,7 @@ class ProjectAnalyzer:
                             context["tech_stack"].append(service_info["framework"])
                     context["tech_stack"] = list(set(context["tech_stack"]))
             except (json.JSONDecodeError, KeyError):
-                pass
+                logger.debug("Failed to parse project index for ideation context")
 
         # Get roadmap context if enabled
         if self.include_roadmap:
@@ -79,7 +82,7 @@ class ProjectAnalyzer:
                         audience = roadmap.get("target_audience", {})
                         context["target_audience"] = audience.get("primary")
                 except (json.JSONDecodeError, KeyError):
-                    pass
+                    logger.debug("Failed to parse roadmap.json for ideation context")
 
             # Also check discovery for audience
             discovery_path = (
@@ -98,7 +101,7 @@ class ProjectAnalyzer:
                             "existing_features", []
                         )
                 except (json.JSONDecodeError, KeyError):
-                    pass
+                    logger.debug("Failed to parse roadmap_discovery.json")
 
         # Get kanban context if enabled
         if self.include_kanban:

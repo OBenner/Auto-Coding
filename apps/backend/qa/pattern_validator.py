@@ -178,7 +178,7 @@ async def get_learned_patterns(
                 try:
                     await memory.close()
                 except (OSError, RuntimeError):
-                    pass
+                    logger.debug("Failed to close Graphiti memory connection")
 
     return patterns_by_category
 

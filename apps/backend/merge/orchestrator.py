@@ -51,7 +51,6 @@ try:
         debug_success,
         debug_verbose,
         debug_warning,
-        is_debug_enabled,
     )
 except ImportError:
 
@@ -75,10 +74,6 @@ except ImportError:
 
     def debug_section(*args, **kwargs):
         """No-op fallback when debug module is unavailable."""
-
-    def is_debug_enabled():
-        """No-op fallback when debug module is unavailable."""
-        return False
 
 
 logger = logging.getLogger(__name__)

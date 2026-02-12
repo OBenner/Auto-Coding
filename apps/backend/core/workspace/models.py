@@ -6,9 +6,12 @@ Workspace Models
 Data classes and enums for workspace management.
 """
 
+import logging
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 class WorkspaceMode(Enum):
@@ -270,6 +273,6 @@ class SpecNumberLock:
                 num = int(folder.name[:3])
                 max_num = max(max_num, num)
             except ValueError:
-                pass
+                logger.debug("Non-numeric spec folder prefix: %s", folder.name)
 
         return max_num

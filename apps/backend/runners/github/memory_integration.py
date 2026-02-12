@@ -51,16 +51,12 @@ try:
         GraphitiMemory,
         GroupIdMode,
         get_graphiti_memory,
-        is_graphiti_enabled,
     )
     from memory.graphiti_helpers import is_graphiti_memory_enabled
 
     GRAPHITI_AVAILABLE = True
 except (ImportError, ValueError, SystemError):
     GRAPHITI_AVAILABLE = False
-
-    def is_graphiti_enabled() -> bool:
-        return False
 
     def is_graphiti_memory_enabled() -> bool:
         return False

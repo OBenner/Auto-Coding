@@ -23,14 +23,8 @@ logger = logging.getLogger(__name__)
 
 # Import debug utilities
 try:
-    from debug import debug, debug_error, debug_warning
+    from debug import debug_warning
 except ImportError:
-
-    def debug(*args, **kwargs):
-        """No-op fallback when debug module is unavailable."""
-
-    def debug_error(*args, **kwargs):
-        """No-op fallback when debug module is unavailable."""
 
     def debug_warning(*args, **kwargs):
         """No-op fallback when debug module is unavailable."""

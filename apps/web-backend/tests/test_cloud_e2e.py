@@ -56,7 +56,7 @@ class CloudE2ETest:
                     self.log(f"{service_name} is ready!", "SUCCESS")
                     return True
             except requests.exceptions.RequestException:
-                pass
+                self.log(f"{service_name} not ready yet, retrying...", "INFO")
             time.sleep(2)
 
         self.log(f"{service_name} did not become ready within {timeout}s", "ERROR")

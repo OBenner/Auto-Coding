@@ -42,9 +42,7 @@ try:
         debug_detailed,
         debug_error,
         debug_success,
-        debug_verbose,
         debug_warning,
-        is_debug_enabled,
     )
 except ImportError:
 
@@ -52,9 +50,6 @@ except ImportError:
         """No-op fallback when debug module is unavailable."""
 
     def debug_detailed(*args, **kwargs):
-        """No-op fallback when debug module is unavailable."""
-
-    def debug_verbose(*args, **kwargs):
         """No-op fallback when debug module is unavailable."""
 
     def debug_success(*args, **kwargs):
@@ -65,10 +60,6 @@ except ImportError:
 
     def debug_warning(*args, **kwargs):
         """No-op fallback when debug module is unavailable."""
-
-    def is_debug_enabled():
-        """No-op fallback when debug module is unavailable."""
-        return False
 
 
 # Import merge system

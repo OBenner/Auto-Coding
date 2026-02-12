@@ -373,8 +373,8 @@ async function main() {
 // Run main() only when this file is executed directly (not when imported for testing)
 if (require.main === module) {
   main().catch((err) => {
-    const safeMsg = String(err.message || '').replace(/\n|\r/g, ' ').slice(0, 200);
-    console.error(`[package] Error: ${safeMsg}`);
+    const safeMsg = String(err.message || '').replace(/[\x00-\x1f\x7f\n\r]/g, ' ').slice(0, 200);
+    console.error('[package] Error: ' + safeMsg);
     process.exitCode = 1;
   });
 }

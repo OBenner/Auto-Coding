@@ -403,7 +403,7 @@ async function fetchLatestStableRelease(): Promise<AppUpdateInfo | null> {
 
           // biome-ignore lint/suspicious/noControlCharactersInRegex: Sanitizing for log injection
           const version = latestStable.tag_name.replace(/^v/, '').replace(/[\x00-\x1f\x7f]/g, '').slice(0, 50);
-          console.warn(`[app-updater] Found latest stable release: ${version}`);
+          console.warn('[app-updater] Found latest stable release: ' + version);
 
           resolve({
             version,
@@ -414,7 +414,7 @@ async function fetchLatestStableRelease(): Promise<AppUpdateInfo | null> {
           // Sanitize error message for logging (prevent log injection from malformed JSON)
           // biome-ignore lint/suspicious/noControlCharactersInRegex: Sanitizing for log injection
           const safeError = (e instanceof Error ? e.message : 'Unknown parse error').replace(/[\x00-\x1f\x7f]/g, '').slice(0, 200);
-          console.error(`[app-updater] Failed to parse releases JSON: ${safeError}`);
+          console.error('[app-updater] Failed to parse releases JSON: ' + safeError);
           resolve(null);
         }
       });
@@ -423,7 +423,7 @@ async function fetchLatestStableRelease(): Promise<AppUpdateInfo | null> {
     request.on('error', (error) => {
       // biome-ignore lint/suspicious/noControlCharactersInRegex: Sanitizing for log injection
       const safeMsg = (error instanceof Error ? error.message : 'Unknown error').replace(/[\x00-\x1f\x7f]/g, '').slice(0, 200);
-      console.error(`[app-updater] Failed to fetch releases: ${safeMsg}`);
+      console.error('[app-updater] Failed to fetch releases: ' + safeMsg);
       resolve(null);
     });
 

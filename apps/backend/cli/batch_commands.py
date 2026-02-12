@@ -6,11 +6,14 @@ Commands for creating and managing multiple tasks from batch files.
 """
 
 import json
+import logging
 import shutil
 import subprocess
 from pathlib import Path
 
 from ui import highlight, print_status
+
+logger = logging.getLogger(__name__)
 
 
 def handle_batch_create_command(batch_file: str, project_dir: str) -> bool:
@@ -148,7 +151,7 @@ def handle_batch_status_command(project_dir: str) -> bool:
                     req = json.load(f)
                     title = req.get("task_description", title)
             except json.JSONDecodeError:
-                pass
+                logger.debug("Failed to parse requirements.json in %s", spec_name)
 
         # Determine status
         if (spec_dir / "spec.md").exists():

@@ -456,7 +456,7 @@ def test_json_parsing_robustness():
             if json_match:
                 return json.loads(json_match.group(1))
         except (json.JSONDecodeError, ValueError):
-            pass
+            return []  # Malformed JSON in AI response
         return []
 
     # Test valid JSON

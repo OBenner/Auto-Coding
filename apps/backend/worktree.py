@@ -47,3 +47,12 @@ from core.worktree import (  # noqa: F401
     WorktreeInfo,
     WorktreeManager,
 )
+
+__all__ = [
+    "PullRequestResult",
+    "PushAndCreatePRResult",
+    "PushBranchResult",
+    "WorktreeError",
+    "WorktreeInfo",
+    "WorktreeManager",
+]

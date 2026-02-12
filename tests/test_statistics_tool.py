@@ -37,7 +37,7 @@ try:
     _stats_mod.tool = _mock_tool_decorator
     _stats_mod.SDK_TOOLS_AVAILABLE = True
 except ImportError:
-    pass
+    _stats_mod = None  # Module not yet imported; will be patched later
 
 
 class TestTimestampParsing:

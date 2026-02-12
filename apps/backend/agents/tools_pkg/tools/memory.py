@@ -390,7 +390,7 @@ def create_memory_tools(spec_dir: Path, project_dir: Path) -> list:
                         desc = info.get("description", "No description")
                         result_parts.append(f"- `{path}`: {desc}")
             except (OSError, json.JSONDecodeError, KeyError, TypeError):
-                pass
+                logger.debug("Failed to load codebase map", exc_info=True)
 
         # Load gotchas
         gotchas_file = memory_dir / "gotchas.md"
@@ -404,7 +404,7 @@ def create_memory_tools(spec_dir: Path, project_dir: Path) -> list:
                         content[-1000:] if len(content) > 1000 else content
                     )
             except OSError:
-                pass
+                logger.debug("Failed to load gotchas file", exc_info=True)
 
         # Load patterns
         patterns_file = memory_dir / "patterns.md"
@@ -417,7 +417,7 @@ def create_memory_tools(spec_dir: Path, project_dir: Path) -> list:
                         content[-1000:] if len(content) > 1000 else content
                     )
             except OSError:
-                pass
+                logger.debug("Failed to load patterns file", exc_info=True)
 
         if not result_parts:
             return {

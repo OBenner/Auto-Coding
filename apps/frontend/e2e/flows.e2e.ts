@@ -9,13 +9,12 @@
  * To run: npx playwright test --config=e2e/playwright.config.ts
  */
 import { test, expect, _electron as electron, ElectronApplication, Page } from '@playwright/test';
-import { mkdirSync, rmSync, existsSync, writeFileSync, readFileSync } from 'fs';
+import { mkdirSync, mkdtempSync, rmSync, existsSync, writeFileSync, readFileSync } from 'fs';
 import path from 'path';
 import os from 'os';
-import crypto from 'crypto';
 
-// Test data directory - use os.tmpdir() + random suffix to avoid predictable temp paths
-const TEST_DATA_DIR = path.join(os.tmpdir(), `auto-code-ui-e2e-${crypto.randomUUID()}`);
+// Test data directory - use mkdtempSync for secure temp directory creation
+const TEST_DATA_DIR = mkdtempSync(path.join(os.tmpdir(), 'auto-code-ui-e2e-'));
 const TEST_PROJECT_DIR = path.join(TEST_DATA_DIR, 'test-project');
 
 // Setup test environment

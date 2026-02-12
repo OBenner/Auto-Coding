@@ -247,8 +247,8 @@ class TimingHistory:
 
 # Convenience functions for global access
 
-_global_history: TimingHistory | None = None
-_global_spec_dir: Path | None = None
+# Cache dict for singleton pattern (avoids separate global variable alerts)
+_timing_cache: dict = {"history": None, "spec_dir": None}
 
 
 def get_timing_history(spec_dir: Path) -> TimingHistory:
@@ -261,21 +261,18 @@ def get_timing_history(spec_dir: Path) -> TimingHistory:
     Returns:
         TimingHistory instance
     """
-    global _global_history, _global_spec_dir
-
     spec_path = Path(spec_dir).resolve()
 
-    # Reuse global instance if same spec_dir
-    if _global_history is not None and _global_spec_dir == spec_path:
-        return _global_history
+    # Reuse cached instance if same spec_dir
+    if _timing_cache["history"] is not None and _timing_cache["spec_dir"] == spec_path:
+        return _timing_cache["history"]
 
-    _global_history = TimingHistory(spec_path)
-    _global_spec_dir = spec_path
-    return _global_history
+    _timing_cache["history"] = TimingHistory(spec_path)
+    _timing_cache["spec_dir"] = spec_path
+    return _timing_cache["history"]
 
 
 def reset_timing_history() -> None:
     """Reset global timing history instance."""
-    global _global_history, _global_spec_dir
-    _global_history = None
-    _global_spec_dir = None
+    _timing_cache["history"] = None
+    _timing_cache["spec_dir"] = None

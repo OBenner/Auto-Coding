@@ -189,7 +189,7 @@ async def test_execution_events():
                             received_events.append(event)
                             print_info(f"Received: {event.get('event_type')} event")
                 except asyncio.TimeoutError:
-                    pass
+                    print_info("Event listening timed out")
 
             # Start broadcaster task
             async def broadcast_events():

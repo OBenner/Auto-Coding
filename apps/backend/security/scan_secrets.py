@@ -16,11 +16,14 @@ Exit codes:
 """
 
 import argparse
+import logging
 import re
 import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 # =============================================================================
 # SECRET PATTERNS
@@ -271,7 +274,7 @@ def load_secretsignore(project_dir: Path) -> list[str]:
             if line and not line.startswith("#"):
                 patterns.append(line)
     except OSError:
-        pass
+        logger.debug("Failed to read ignore file: %s", ignore_file)
 
     return patterns
 
