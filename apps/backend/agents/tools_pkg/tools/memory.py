@@ -281,7 +281,12 @@ def create_memory_tools(spec_dir: Path, project_dir: Path) -> list:
     @tool(
         "record_feedback",
         "Record user feedback (accept/reject/modify) for agent outputs. Use this to track user preferences and enable adaptive behavior.",
-        {"feedback_type": str, "task_description": str, "agent_type": str, "context": str},
+        {
+            "feedback_type": str,
+            "task_description": str,
+            "agent_type": str,
+            "context": str,
+        },
     )
     async def record_feedback(args: dict[str, Any]) -> dict[str, Any]:
         """Record user feedback to preference profile (Graphiti)."""

@@ -85,7 +85,7 @@ export function FeedbackButtons({
         toast({
           title: t('common:feedback.notAvailable'),
           description: t('common:feedback.notAvailableDescription'),
-          variant: 'warning'
+          variant: 'default'
         });
       }
     } catch (error) {

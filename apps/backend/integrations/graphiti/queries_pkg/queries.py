@@ -571,7 +571,9 @@ class GraphitiQueries:
                 group_id=self.group_id,
             )
 
-            logger.info(f"Saved preference profile to Graphiti (group: {self.group_id})")
+            logger.info(
+                f"Saved preference profile to Graphiti (group: {self.group_id})"
+            )
             return True
 
         except Exception as e:

@@ -340,7 +340,7 @@ def verify_integration():
 
     # Check data flow
     try:
-        from agents.preferences import PreferenceProfile, VerbosityLevel
+        from agents.preferences import PreferenceProfile, VerbosityLevel, modify_prompt_for_preferences
 
         profile = PreferenceProfile(verbosity_level=VerbosityLevel.CONCISE)
         prompt = modify_prompt_for_preferences("Test prompt", profile)

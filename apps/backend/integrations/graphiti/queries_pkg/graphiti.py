@@ -526,7 +526,7 @@ class GraphitiMemory:
 
     async def add_feedback_to_profile(
         self,
-        feedback_type: "FeedbackType",
+        feedback_type: str,
         task_description: str,
         agent_type: str,
         context: dict,

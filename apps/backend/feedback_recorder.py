@@ -23,38 +23,38 @@ from pathlib import Path
 def parse_args():
     """Parse command-line arguments."""
     parser = argparse.ArgumentParser(
-        description='Record user feedback to preference profile'
+        description="Record user feedback to preference profile"
     )
     parser.add_argument(
-        '--feedback-type',
+        "--feedback-type",
         required=True,
-        choices=['accepted', 'rejected', 'modified'],
-        help='Type of feedback: accepted, rejected, or modified'
+        choices=["accepted", "rejected", "modified"],
+        help="Type of feedback: accepted, rejected, or modified",
     )
     parser.add_argument(
-        '--agent-type',
+        "--agent-type",
         required=True,
-        help='Type of agent that generated the output (e.g., planner, coder, qa_reviewer)'
+        help="Type of agent that generated the output (e.g., planner, coder, qa_reviewer)",
     )
     parser.add_argument(
-        '--task-description',
+        "--task-description",
         required=True,
-        help='Description of the task the agent was working on'
+        help="Description of the task the agent was working on",
     )
     parser.add_argument(
-        '--context',
-        default='{}',
-        help='Additional context as JSON string (e.g., {"issue": "too verbose"})'
+        "--context",
+        default="{}",
+        help='Additional context as JSON string (e.g., {"issue": "too verbose"})',
     )
     parser.add_argument(
-        '--spec-dir',
+        "--spec-dir",
         default=None,
-        help='Spec directory path (optional, inferred from current directory if not provided)'
+        help="Spec directory path (optional, inferred from current directory if not provided)",
     )
     parser.add_argument(
-        '--project-dir',
+        "--project-dir",
         default=None,
-        help='Project directory path (optional, inferred from current directory if not provided)'
+        help="Project directory path (optional, inferred from current directory if not provided)",
     )
 
     return parser.parse_args()
@@ -75,16 +75,18 @@ def infer_directories():
 
     # Check if we're in a worktree
     # Worktrees are typically at .worktrees/{spec-name}/ or similar
-    if '.worktrees' in cwd.parts:
+    if ".worktrees" in cwd.parts:
         # We're in a worktree - find project root by going up past .worktrees
-        worktree_idx = cwd.parts.index('.worktrees')
+        worktree_idx = cwd.parts.index(".worktrees")
         project_dir = Path(*cwd.parts[:worktree_idx])
 
         # Find spec directory (usually .auto-claude/specs/{spec-id})
-        spec_name = cwd.parts[worktree_idx + 1] if worktree_idx + 1 < len(cwd.parts) else None
+        spec_name = (
+            cwd.parts[worktree_idx + 1] if worktree_idx + 1 < len(cwd.parts) else None
+        )
         if spec_name:
             # Try common spec directory locations
-            for spec_base in ['.auto-claude/specs', 'specs']:
+            for spec_base in [".auto-claude/specs", "specs"]:
                 spec_dir = project_dir / spec_base / spec_name
                 if spec_dir.exists():
                     return spec_dir, project_dir
@@ -96,7 +98,7 @@ def infer_directories():
     # Find project root by looking for .auto-claude directory
     current = cwd
     while current != current.parent:
-        if (current / '.auto-claude').exists():
+        if (current / ".auto-claude").exists():
             return None, current  # spec_dir is None (will be inferred by backend)
         current = current.parent
 
@@ -128,6 +130,12 @@ async def record_feedback(args):
         else:
             spec_dir, project_dir = infer_directories()
 
+        if spec_dir is None:
+            return {
+                "success": False,
+                "error": "Could not determine spec directory. Use --spec-dir to specify it.",
+            }
+
         # Import save_feedback from memory_manager
         from agents.memory_manager import save_feedback
 
@@ -144,19 +152,13 @@ async def record_feedback(args):
         if result:
             return {
                 "success": True,
-                "message": f"Recorded {args.feedback_type} feedback for {args.agent_type}"
+                "message": f"Recorded {args.feedback_type} feedback for {args.agent_type}",
             }
         else:
-            return {
-                "success": False,
-                "error": "Failed to save feedback to memory"
-            }
+            return {"success": False, "error": "Failed to save feedback to memory"}
 
     except Exception as e:
-        return {
-            "success": False,
-            "error": str(e)
-        }
+        return {"success": False, "error": str(e)}
 
 
 async def main():
@@ -173,5 +175,5 @@ async def main():
     sys.exit(0 if result["success"] else 1)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     asyncio.run(main())

@@ -187,7 +187,7 @@ async def get_pattern_suggestions(
     memory = None
     try:
         # Get GraphitiMemory instance
-        memory = await get_graphiti_memory(spec_dir, project_dir)
+        memory = get_graphiti_memory(spec_dir, project_dir)
         if memory is None:
             if is_debug_enabled():
                 debug_warning(
@@ -336,7 +336,7 @@ async def get_graphiti_context(
     memory = None
     try:
         # Use centralized helper for GraphitiMemory instantiation (async)
-        memory = await get_graphiti_memory(spec_dir, project_dir)
+        memory = get_graphiti_memory(spec_dir, project_dir)
         if memory is None:
             if is_debug_enabled():
                 debug_warning(
@@ -556,7 +556,7 @@ async def save_session_memory(
         memory = None
         try:
             # Use centralized helper for GraphitiMemory instantiation (async)
-            memory = await get_graphiti_memory(spec_dir, project_dir)
+            memory = get_graphiti_memory(spec_dir, project_dir)
             if memory is None:
                 if is_debug_enabled():
                     debug_warning("memory", "GraphitiMemory not available")
@@ -724,7 +724,7 @@ async def save_feedback(
 
     memory = None
     try:
-        memory = await get_graphiti_memory(spec_dir, project_dir)
+        memory = get_graphiti_memory(spec_dir, project_dir)
         if memory is None:
             if is_debug_enabled():
                 debug_warning("memory", "GraphitiMemory not available for feedback")
@@ -780,7 +780,11 @@ async def save_feedback(
                 f"Continue current approach for {agent_type} tasks"
             )
         elif feedback_enum == FeedbackType.REJECTED:
-            reason = context.get("reason", "No reason provided") if context else "No reason provided"
+            reason = (
+                context.get("reason", "No reason provided")
+                if context
+                else "No reason provided"
+            )
             insights["what_failed"].append(
                 f"{agent_type} output rejected: {task_description[:200]}"
             )
@@ -795,7 +799,11 @@ async def save_feedback(
                 f"Adjust {agent_type} approach: {reason[:300]}"
             )
         elif feedback_enum == FeedbackType.MODIFIED:
-            modifications = context.get("modifications", "User made changes") if context else "User made changes"
+            modifications = (
+                context.get("modifications", "User made changes")
+                if context
+                else "User made changes"
+            )
             reason = context.get("reason", "") if context else ""
             insights["what_worked"].append(
                 f"{agent_type} output partially accepted (with modifications)"
@@ -830,9 +838,7 @@ async def save_feedback(
         )
 
         if result and profile_result:
-            logger.info(
-                f"User feedback saved: {feedback_type} for {agent_type} task"
-            )
+            logger.info(f"User feedback saved: {feedback_type} for {agent_type} task")
             if is_debug_enabled():
                 debug_success(
                     "memory",
@@ -896,7 +902,7 @@ async def save_user_correction(
 
     memory = None
     try:
-        memory = await get_graphiti_memory(spec_dir, project_dir)
+        memory = get_graphiti_memory(spec_dir, project_dir)
         if memory is None:
             if is_debug_enabled():
                 debug_warning(

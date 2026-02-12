@@ -544,7 +544,10 @@ def load_preferences(
     try:
         # Import here to avoid circular dependencies
         from agents.preferences import PreferenceProfile, modify_prompt_for_preferences
-        from integrations.graphiti.memory import get_graphiti_memory, is_graphiti_enabled
+        from integrations.graphiti.memory import (
+            get_graphiti_memory,
+            is_graphiti_enabled,
+        )
 
         # Only load preferences if Graphiti is enabled
         if not is_graphiti_enabled():

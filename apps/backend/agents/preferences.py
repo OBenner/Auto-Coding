@@ -87,9 +87,7 @@ class PreferenceProfile:
     project_type: ProjectType = ProjectType.ESTABLISHED
 
     # Coding style preferences
-    coding_style: CodingStylePreferences = field(
-        default_factory=CodingStylePreferences
-    )
+    coding_style: CodingStylePreferences = field(default_factory=CodingStylePreferences)
 
     # Feedback history
     feedback_history: list[FeedbackRecord] = field(default_factory=list)
@@ -407,7 +405,9 @@ def modify_prompt_for_preferences(prompt: str, profile: PreferenceProfile) -> st
         ),
     }
     if effective_risk in risk_guidance:
-        instructions.append(f"## Risk Tolerance Guidance\n{risk_guidance[effective_risk]}")
+        instructions.append(
+            f"## Risk Tolerance Guidance\n{risk_guidance[effective_risk]}"
+        )
 
     # 3. Project type context
     project_guidance = {
@@ -429,22 +429,32 @@ def modify_prompt_for_preferences(prompt: str, profile: PreferenceProfile) -> st
         ),
     }
     if profile.project_type in project_guidance:
-        instructions.append(f"## Project Context\n{project_guidance[profile.project_type]}")
+        instructions.append(
+            f"## Project Context\n{project_guidance[profile.project_type]}"
+        )
 
     # 4. Coding style preferences
     style_instructions = []
     style = profile.coding_style
 
     if style.indentation != "auto":
-        style_instructions.append(f"- Use {style.indentation} for indentation (not auto-detected)")
+        style_instructions.append(
+            f"- Use {style.indentation} for indentation (not auto-detected)"
+        )
     if style.quote_style != "auto":
-        style_instructions.append(f"- Use {style.quote_style} quotes for strings (not auto-detected)")
+        style_instructions.append(
+            f"- Use {style.quote_style} quotes for strings (not auto-detected)"
+        )
     if style.line_length:
         style_instructions.append(f"- Limit lines to {style.line_length} characters")
     if style.naming_convention != "auto":
-        style_instructions.append(f"- Follow {style.naming_convention} naming convention")
+        style_instructions.append(
+            f"- Follow {style.naming_convention} naming convention"
+        )
     if style.comment_density == "minimal":
-        style_instructions.append("- Keep comments minimal - only for non-obvious logic")
+        style_instructions.append(
+            "- Keep comments minimal - only for non-obvious logic"
+        )
     elif style.comment_density == "verbose":
         style_instructions.append(
             "- Add comprehensive comments and docstrings for all non-trivial code"
@@ -453,7 +463,9 @@ def modify_prompt_for_preferences(prompt: str, profile: PreferenceProfile) -> st
         style_instructions.append("- Do not add type hints (user preference)")
 
     if style_instructions:
-        instructions.append("## Coding Style Preferences\n" + "\n".join(style_instructions))
+        instructions.append(
+            "## Coding Style Preferences\n" + "\n".join(style_instructions)
+        )
 
     # 5. Explicit user instructions
     if profile.user_instructions:
