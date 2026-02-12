@@ -1,0 +1,467 @@
+{
+  "feature": "Comprehensive Documentation Portal",
+  "workflow_type": "simple",
+  "workflow_rationale": "Documentation-only task with no code implementation. Writing markdown files is straightforward and doesn't require complex multi-phase orchestration.",
+  "phases": [
+    {
+      "id": "phase-1-audit",
+      "name": "Documentation Audit",
+      "type": "setup",
+      "description": "Catalog existing documentation and identify gaps",
+      "depends_on": [],
+      "parallel_safe": true,
+      "subtasks": [
+        {
+          "id": "subtask-1-1",
+          "description": "Catalog all existing documentation files",
+          "service": "documentation",
+          "files_to_modify": [],
+          "files_to_create": [
+            "docs/audit/EXISTING-DOCS.md"
+          ],
+          "patterns_from": [
+            "docs/README.md"
+          ],
+          "verification": {
+            "type": "manual",
+            "instructions": "Review catalog to confirm all 42 existing docs are listed"
+          },
+          "status": "completed"
+        },
+        {
+          "id": "subtask-1-2",
+          "description": "Map features to documentation coverage",
+          "service": "documentation",
+          "files_to_modify": [],
+          "files_to_create": [
+            "docs/audit/FEATURE-COVERAGE-GAP.md"
+          ],
+          "patterns_from": [
+            "README.md"
+          ],
+          "verification": {
+            "type": "manual",
+            "instructions": "Verify all features from README are mapped to docs"
+          },
+          "status": "completed",
+          "notes": "Created comprehensive feature coverage analysis mapping all 8 features from README to existing documentation. Identified 3 critical gaps (Memory System, LLM Providers) and 2 important gaps (Parallel Execution, Integrations). Overall coverage: 67%."
+        }
+      ]
+    },
+    {
+      "id": "phase-2-essential-guides",
+      "name": "Essential User Guides",
+      "type": "implementation",
+      "description": "Create core user-facing documentation for new users",
+      "depends_on": [
+        "phase-1-audit"
+      ],
+      "parallel_safe": true,
+      "subtasks": [
+        {
+          "id": "subtask-2-1",
+          "description": "Create 15-minute quick start guide",
+          "service": "documentation",
+          "files_to_modify": [
+            "README.md"
+          ],
+          "files_to_create": [
+            "guides/QUICK-START.md"
+          ],
+          "patterns_from": [
+            "docs/STYLE_GUIDE.md",
+            "README.md"
+          ],
+          "verification": {
+            "type": "manual",
+            "instructions": "Verify guide can be followed in under 15 minutes"
+          },
+          "status": "completed",
+          "notes": "Created comprehensive 970-word quick start guide covering 6 steps: Download & Install (2 min), Connect Claude (3 min), Open Project (1 min), Create Task (2 min), Watch Agents Build (5 min), Review & Merge (2 min). Includes time estimates, troubleshooting tips, and common questions. Updated README.md to link to the detailed guide. Follows STYLE_GUIDE.md conventions (active voice, clear headings, proper markdown formatting)."
+        },
+        {
+          "id": "subtask-2-2",
+          "description": "Create advanced usage patterns guide",
+          "service": "documentation",
+          "files_to_modify": [
+            "guides/README.md"
+          ],
+          "files_to_create": [
+            "guides/ADVANCED-USAGE.md"
+          ],
+          "patterns_from": [
+            "guides/CLI-USAGE.md"
+          ],
+          "verification": {
+            "type": "manual",
+            "instructions": "Verify all advanced patterns are documented with examples"
+          },
+          "status": "completed",
+          "notes": "Created comprehensive 790-line advanced usage guide with 8 major sections covering: Parallel Execution (multiple specs, subagent spawning), Agent Customization (modifying prompts, creating custom agents), Memory System (Graphiti configuration and usage), LLM Provider Configuration (OpenAI, Anthropic, Ollama, Google), Third-Party Integrations (GitHub, GitLab, Linear setup), QA Customization (custom criteria, test commands, E2E testing), Interactive Controls (pause/resume, human input), Workspace Best Practices (merge strategies, worktree management), Performance Optimization, and troubleshooting. Follows CLI-USAGE.md pattern with tables, code examples, and practical examples. Updated guides/README.md to include the new guide."
+        },
+        {
+          "id": "subtask-2-3",
+          "description": "Create agent customization guide",
+          "service": "documentation",
+          "files_to_modify": [
+            "guides/README.md"
+          ],
+          "files_to_create": [
+            "guides/AGENT-CUSTOMIZATION.md"
+          ],
+          "patterns_from": [
+            "apps/backend/prompts/README.md"
+          ],
+          "verification": {
+            "type": "manual",
+            "instructions": "Verify guide explains prompt editing and agent creation"
+          },
+          "status": "completed",
+          "notes": "Created comprehensive 925-line agent customization guide with 7 major sections: Understanding Agents (agent roles and when they're used), Agent Architecture (session flow and code structure), Modifying Agent Prompts (with 3 detailed examples: coding standards, QA enforcement, project patterns), Creating Custom Agents (5-step process with full optimizer agent example including prompt file, Python implementation, permissions registration, and workflow integration), Agent Testing (unit and integration tests), Best Practices (prompt design, permissions, thinking tokens), and Advanced Patterns (multi-agent workflows, conditional execution, specialization). Updated guides/README.md to include the new guide. Follows the established guide pattern with tables, code examples, troubleshooting section, and related documentation links."
+        }
+      ]
+    },
+    {
+      "id": "phase-3-feature-docs",
+      "name": "Feature Documentation",
+      "type": "implementation",
+      "description": "Create dedicated documentation pages for all major features",
+      "depends_on": [
+        "phase-2-essential-guides"
+      ],
+      "parallel_safe": true,
+      "subtasks": [
+        {
+          "id": "subtask-3-1",
+          "description": "Document multi-agent pipeline feature",
+          "service": "documentation",
+          "files_to_modify": [],
+          "files_to_create": [
+            "docs/features/MULTI-AGENT-PIPELINE.md"
+          ],
+          "patterns_from": [
+            ".planning/codebase/ARCHITECTURE.md"
+          ],
+          "verification": {
+            "type": "manual",
+            "instructions": "Verify all agent types and workflow are documented"
+          },
+          "status": "completed",
+          "notes": "Created comprehensive 26KB documentation covering: Spec Creation Pipeline (3-8 phases with complexity adaptation), Implementation Pipeline (planner \u2192 coder \u2192 QA loop), All Agent Types (spec agents: gatherer, researcher, writer, critic, complexity assessor; implementation agents: planner, coder, qa_reviewer, qa_fixer, recovery), Memory System Integration, Data Flow, State Management, Security & Validation, Error Handling, Configuration, Performance Characteristics, Monitoring & Observability, Integration Points (Linear, GitHub, Electron MCP), Best Practices, and Troubleshooting. Follows ARCHITECTURE.md pattern with 50 sections, tables, diagrams, and code examples."
+        },
+        {
+          "id": "subtask-3-2",
+          "description": "Document parallel execution feature",
+          "service": "documentation",
+          "files_to_modify": [],
+          "files_to_create": [
+            "docs/features/PARALLEL-EXECUTION.md"
+          ],
+          "patterns_from": [
+            "guides/SPEC-CREATION-PIPELINE.md"
+          ],
+          "verification": {
+            "type": "manual",
+            "instructions": "Verify parallel worker configuration is explained"
+          },
+          "status": "completed",
+          "notes": "Documentation created at docs/features/PARALLEL-EXECUTION.md"
+        },
+        {
+          "id": "subtask-3-3",
+          "description": "Document memory system feature",
+          "service": "documentation",
+          "files_to_modify": [],
+          "files_to_create": [
+            "docs/features/MEMORY-SYSTEM.md"
+          ],
+          "patterns_from": [
+            "apps/backend/integrations/graphiti/CODE_RELATIONSHIP_GRAPH.md"
+          ],
+          "verification": {
+            "type": "manual",
+            "instructions": "Verify Graphiti integration and usage are documented"
+          },
+          "status": "pending"
+        },
+        {
+          "id": "subtask-3-4",
+          "description": "Document GitHub/GitLab integration features",
+          "service": "documentation",
+          "files_to_modify": [],
+          "files_to_create": [
+            "docs/features/GITHUB-INTEGRATION.md"
+          ],
+          "patterns_from": [
+            "apps/backend/runners/github/README.md"
+          ],
+          "verification": {
+            "type": "manual",
+            "instructions": "Verify all integration features are documented"
+          },
+          "status": "pending"
+        },
+        {
+          "id": "subtask-3-5",
+          "description": "Document QA loop feature",
+          "service": "documentation",
+          "files_to_modify": [],
+          "files_to_create": [
+            "docs/features/QA-LOOP.md"
+          ],
+          "patterns_from": [
+            ".planning/codebase/TESTING.md"
+          ],
+          "verification": {
+            "type": "manual",
+            "instructions": "Verify QA workflow and acceptance criteria are documented"
+          },
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": "phase-4-api-reference",
+      "name": "Complete API Reference",
+      "type": "implementation",
+      "description": "Create comprehensive API reference for programmatic usage",
+      "depends_on": [
+        "phase-3-feature-docs"
+      ],
+      "parallel_safe": true,
+      "subtasks": [
+        {
+          "id": "subtask-4-1",
+          "description": "Create Python CLI API reference",
+          "service": "documentation",
+          "files_to_modify": [
+            "docs/api/backend-api.md"
+          ],
+          "files_to_create": [
+            "docs/api/CLI-API-REFERENCE.md"
+          ],
+          "patterns_from": [
+            "docs/api/backend-api.md"
+          ],
+          "verification": {
+            "type": "manual",
+            "instructions": "Verify all CLI commands and parameters are documented"
+          },
+          "status": "pending"
+        },
+        {
+          "id": "subtask-4-2",
+          "description": "Create IPC API reference for frontend",
+          "service": "documentation",
+          "files_to_modify": [],
+          "files_to_create": [
+            "docs/api/IPC-API-REFERENCE.md"
+          ],
+          "patterns_from": [
+            "apps/frontend/src/preload/api/"
+          ],
+          "verification": {
+            "type": "manual",
+            "instructions": "Verify all IPC channels and payloads are documented"
+          },
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": "phase-5-search-navigation",
+      "name": "Search and Navigation",
+      "type": "implementation",
+      "description": "Add search functionality and update navigation indexes",
+      "depends_on": [
+        "phase-4-api-reference"
+      ],
+      "parallel_safe": false,
+      "subtasks": [
+        {
+          "id": "subtask-5-1",
+          "description": "Create documentation search index",
+          "service": "documentation",
+          "files_to_modify": [
+            "docs/README.md",
+            "guides/README.md"
+          ],
+          "files_to_create": [
+            "docs/search/INDEX.md",
+            "docs/search/SEARCH-GUIDE.md"
+          ],
+          "patterns_from": [
+            "docs/README.md"
+          ],
+          "verification": {
+            "type": "manual",
+            "instructions": "Verify index lists all documentation with keywords"
+          },
+          "status": "pending"
+        },
+        {
+          "id": "subtask-5-2",
+          "description": "Update all documentation navigation links",
+          "service": "documentation",
+          "files_to_modify": [
+            "README.md",
+            "guides/README.md",
+            "docs/README.md",
+            "CLAUDE.md"
+          ],
+          "files_to_create": [],
+          "patterns_from": [
+            "docs/STYLE_GUIDE.md"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "grep -r \"\\[.*\\](.*\\.md)\" --include=\"*.md\" guides/ docs/ | wc -l",
+            "expected": "100+"
+          },
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": "phase-6-integration",
+      "name": "Integration and Review",
+      "type": "integration",
+      "description": "Final review, cross-linking, and acceptance criteria validation",
+      "depends_on": [
+        "phase-5-search-navigation"
+      ],
+      "parallel_safe": false,
+      "subtasks": [
+        {
+          "id": "subtask-6-1",
+          "description": "Verify all acceptance criteria are met",
+          "service": "documentation",
+          "files_to_modify": [
+            "README.md"
+          ],
+          "files_to_create": [
+            "docs/VERIFICATION-CHECKLIST.md"
+          ],
+          "patterns_from": [
+            "./.auto-claude/specs/145-comprehensive-documentation-portal/spec.md"
+          ],
+          "verification": {
+            "type": "manual",
+            "instructions": "Confirm all 6 acceptance criteria from spec are satisfied"
+          },
+          "status": "pending"
+        },
+        {
+          "id": "subtask-6-2",
+          "description": "Create documentation portal README",
+          "service": "documentation",
+          "files_to_modify": [
+            "README.md"
+          ],
+          "files_to_create": [
+            "guides/DOCUMENTATION-PORTAL.md"
+          ],
+          "patterns_from": [
+            "README.md"
+          ],
+          "verification": {
+            "type": "manual",
+            "instructions": "Verify portal README provides complete documentation overview"
+          },
+          "status": "pending"
+        }
+      ]
+    }
+  ],
+  "verification_strategy": {
+    "risk_level": "trivial",
+    "skip_validation": false,
+    "test_creation_phase": "none",
+    "test_types_required": [],
+    "security_scanning_required": false,
+    "staging_deployment_required": false,
+    "acceptance_criteria": [
+      "All features have dedicated documentation pages",
+      "Getting started guide enables new users in < 15 minutes",
+      "Architecture documentation explains multi-agent system",
+      "Troubleshooting guide covers common issues",
+      "API reference for programmatic usage",
+      "Search functionality across all documentation"
+    ],
+    "verification_steps": [
+      {
+        "name": "Documentation Completeness",
+        "command": "find guides/ docs/ -name \"*.md\" | wc -l",
+        "expected_outcome": "50+ documentation files",
+        "type": "manual",
+        "required": true,
+        "blocking": false
+      },
+      {
+        "name": "Link Validation",
+        "command": "grep -r '\\[.*\\](.*\\.md)' --include=\"*.md\" guides/ docs/ | head -20",
+        "expected_outcome": "Documentation links are present",
+        "type": "manual",
+        "required": true,
+        "blocking": false
+      }
+    ],
+    "reasoning": "Documentation-only change with no functional code. Manual verification of completeness and link validity is sufficient."
+  },
+  "summary": {
+    "total_phases": 6,
+    "total_subtasks": 15,
+    "services_involved": [
+      "documentation"
+    ],
+    "parallelism": {
+      "max_parallel_phases": 3,
+      "parallel_groups": [
+        {
+          "phases": [
+            "phase-2-essential-guides",
+            "phase-3-feature-docs"
+          ],
+          "reason": "Can write user guides and feature docs in parallel"
+        }
+      ],
+      "recommended_workers": 1,
+      "speedup_estimate": "No parallelism benefit - single writer for consistency"
+    },
+    "notes": "Documentation tasks benefit from single-author consistency. Parallel writing could create style inconsistencies."
+  },
+  "qa_acceptance": {
+    "unit_tests": {
+      "required": false,
+      "commands": [],
+      "minimum_coverage": null
+    },
+    "integration_tests": {
+      "required": false,
+      "commands": [],
+      "services_to_test": []
+    },
+    "e2e_tests": {
+      "required": false,
+      "commands": [],
+      "flows": []
+    },
+    "browser_verification": {
+      "required": false,
+      "pages": []
+    },
+    "documentation_verification": {
+      "required": true,
+      "checks": [
+        "all_markdown_files_valid",
+        "all_links_work",
+        "acceptance_criteria_met",
+        "style_guide_followed"
+      ]
+    }
+  },
+  "qa_signoff": null,
+  "status": "ai_review",
+  "planStatus": "review",
+  "updated_at": "2026-02-12T16:27:45.538Z"
+}
