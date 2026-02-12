@@ -79,7 +79,14 @@
     "similarities": "Similarities",
     "approachComparison": "Approach Comparison",
     "toolComparison": "Tool Usage Comparison",
-    "decisionComparison": "Decision Point Comparison"
+    "decisionComparison": "Decision Point Comparison",
+    "back": "Back to list",
+    "comparing": "Comparing",
+    "vs": "vs",
+    "session": "Session",
+    "status": "Status",
+    "viewSession1": "View",
+    "viewSession2": "View"
   },
   "export": {
     "title": "Export Session",

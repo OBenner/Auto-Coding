@@ -94,3 +94,67 @@ export interface DecisionPoint {
   /** Expected outcome */
   expected_outcome: string;
 }
+
+/**
+ * Session comparison data
+ */
+export interface SessionComparisonData {
+  /** Sessions being compared */
+  sessions: SessionMetadata[];
+  /** Metrics comparison */
+  metrics: SessionMetrics;
+  /** Common subtasks across sessions */
+  common_subtasks: string[];
+  /** Unique subtasks per session */
+  unique_subtasks: Record<string, string[]>;
+}
+
+/**
+ * Session metrics for comparison
+ */
+export interface SessionMetrics {
+  /** Duration in seconds per session */
+  durations: Record<string, number | null>;
+  /** Number of subtasks per session */
+  subtask_counts: Record<string, number>;
+  /** Completion status per session */
+  completion_status: Record<string, string>;
+  /** Tool usage per session */
+  tool_usage?: Record<string, Record<string, number>>;
+  /** Decision point counts per session */
+  decision_counts?: Record<string, number>;
+  /** Efficiency (subtasks per hour) per session */
+  efficiency?: Record<string, number | null>;
+}
+
+/**
+ * Session approach comparison
+ */
+export interface SessionApproachComparison {
+  /** Subtask being compared (null for overall) */
+  subtask_id: string | null;
+  /** Session approaches */
+  sessions: SessionApproach[];
+  /** Tool usage comparison across sessions */
+  tool_usage_comparison: Record<string, Record<string, number>>;
+  /** Decision points by session */
+  decision_points: Record<string, DecisionPoint[]>;
+}
+
+/**
+ * Single session approach data
+ */
+export interface SessionApproach {
+  /** Session ID */
+  session_id: number;
+  /** Number of entries */
+  entry_count: number;
+  /** Tool usage counts */
+  tool_usage: Record<string, number>;
+  /** Decision points in this session */
+  decision_points: DecisionPoint[];
+  /** Start time */
+  start_time: string | null;
+  /** End time */
+  end_time: string | null;
+}
