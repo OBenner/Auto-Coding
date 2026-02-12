@@ -120,5 +120,43 @@
     "running": "Test en cours...",
     "testFailed": "Le test du modèle a échoué. Vérifiez la configuration du modèle et réessayez.",
     "testSuccess": "Test réussi ! Le modèle a généré le contenu suivant :"
+  },
+  "preview": {
+    "sections": {
+      "rationale": "Justification",
+      "userStories": "User Stories",
+      "acceptanceCriteria": "Critères d'acceptation",
+      "technicalDetails": "Détails techniques",
+      "testCoverage": "Couverture de tests",
+      "dependencies": "Dépendances"
+    },
+    "empty": {
+      "title": "Aucun contenu de spécification",
+      "description": "Générez une spécification pour voir l'aperçu"
+    }
+  },
+  "marketplace": {
+    "title": "Marketplace des modèles",
+    "description": "Parcourir et importer des modèles d'agent partagés par la communauté",
+    "searchPlaceholder": "Rechercher des modèles communautaires...",
+    "filter": "Options de filtre",
+    "all": "Tous",
+    "noTemplates": "Aucun modèle trouvé",
+    "emptyMarketplace": "Marketplace communautaire",
+    "emptyMarketplaceHint": "Les modèles communautaires apparaîtront ici lorsque la marketplace sera disponible.",
+    "searchEmptyHint": "Essayez d'ajuster votre recherche ou vos filtres",
+    "templateCount": "{{count}} modèle",
+    "templateCount_plural": "{{count}} modèles",
+    "filteredCount": "Filtré à partir de {{total}}",
+    "import": "Importer le modèle",
+    "importing": "Importation...",
+    "stats": {
+      "downloads": "{{count}} téléchargement",
+      "downloads_plural": "{{count}} téléchargements",
+      "reviews": "{{count}} avis",
+      "reviews_plural": "{{count}} avis"
+    },
+    "author": "Par {{author}}",
+    "version": "v{{version}}"
   }
 }
