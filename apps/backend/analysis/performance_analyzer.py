@@ -235,7 +235,7 @@ class PerformanceAnalyzer:
             1 for issue in result.issues if issue.issue_type == "n_plus_1_query"
         )
         result.memory_leak_count = sum(
-            1 for issue in result. issues if issue.issue_type == "memory_leak"
+            1 for issue in result.issues if issue.issue_type == "memory_leak"
         )
 
         # Count by severity
@@ -291,7 +291,7 @@ class PerformanceAnalyzer:
         return issues
 
     def _detect_n_plus_1_patterns(
-        self, loop_node: ast.For | ast.While | ast.comprension
+        self, loop_node: ast.For | ast.While | ast.comprehension
     ) -> list[PerformanceIssue]:
         """
         Detect N+1 query patterns (database/API calls inside loops).
