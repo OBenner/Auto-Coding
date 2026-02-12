@@ -435,7 +435,8 @@
             "instructions": "Navigate to GitHub issue, click quick create, verify task created"
           },
           "status": "completed",
-          "notes": "Verified quick spec creation from GitHub/GitLab issues implementation: IssueListItem components render FilePlus button on hover, handleQuickCreate functions call importGitHubIssues/importGitLabIssues IPC APIs, i18n translations exist (EN/FR), TypeScript compilation passes with no errors, props properly typed and passed through component hierarchy. Created VERIFICATION_SUBTASK_6_4.md with 10 comprehensive manual test cases covering button visibility, click behavior, error handling, i18n, event propagation, and integration testing. Build verification PASSED."
+          "notes": "Verified quick spec creation from GitHub/GitLab issues implementation: IssueListItem components render FilePlus button on hover, handleQuickCreate functions call importGitHubIssues/importGitLabIssues IPC APIs, i18n translations exist (EN/FR), TypeScript compilation passes with no errors, props properly typed and passed through component hierarchy. Created VERIFICATION_SUBTASK_6_4.md with 10 comprehensive manual test cases covering button visibility, click behavior, error handling, i18n, event propagation, and integration testing. Build verification PASSED.",
+          "updated_at": "2026-02-12T18:00:21.868117+00:00"
         }
       ]
     }
@@ -537,5 +538,6 @@
   },
   "qa_signoff": null,
   "planStatus": "in_progress",
-  "recoveryNote": "Task recovered from stuck state at 2026-02-12T17:41:20.262Z"
+  "recoveryNote": "Task recovered from stuck state at 2026-02-12T17:41:20.262Z",
+  "last_updated": "2026-02-12T18:00:21.868117+00:00"
 }
