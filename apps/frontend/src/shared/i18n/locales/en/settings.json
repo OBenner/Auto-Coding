@@ -402,7 +402,12 @@
     "modelsAvailable": "Models available",
     "autoDiscovery": "Auto-discovery",
     "showModels": "Show available models",
-    "hideModels": "Hide models"
+    "hideModels": "Hide models",
+    "fallbackModel": "Fallback Model",
+    "fallbackModelDescription": "Model to use if primary model is unavailable",
+    "selectFallbackModel": "Select fallback model",
+    "noFallback": "No fallback (use provider default)",
+    "fallbackInfo": "If your primary model becomes unavailable, the system will automatically fall back to this model."
   },
   "agentProfile": {
     "label": "Agent Profile",

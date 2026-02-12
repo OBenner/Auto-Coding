@@ -402,7 +402,12 @@
     "modelsAvailable": "Modèles disponibles",
     "autoDiscovery": "Découverte automatique",
     "showModels": "Afficher les modèles disponibles",
-    "hideModels": "Masquer les modèles"
+    "hideModels": "Masquer les modèles",
+    "fallbackModel": "Modèle de secours",
+    "fallbackModelDescription": "Modèle à utiliser si le modèle principal n'est pas disponible",
+    "selectFallbackModel": "Sélectionner le modèle de secours",
+    "noFallback": "Pas de secours (utiliser le défaut du fournisseur)",
+    "fallbackInfo": "Si votre modèle principal devient indisponible, le système basculera automatiquement vers ce modèle."
   },
   "agentProfile": {
     "label": "Profil d'agent",

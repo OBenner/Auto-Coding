@@ -39,11 +39,18 @@ export function ProviderSettings() {
   const { t } = useTranslation('settings');
   const settings = useSettingsStore((state) => state.settings);
   const selectedProviderId = settings.selectedProviderId || 'anthropic';
+  const selectedFallbackModelId = settings.fallbackModelId || '';
   const [showProviderDetails, setShowProviderDetails] = useState<Record<string, boolean>>({});
 
   // Find the selected provider
   const selectedProvider = useMemo(
     () => API_PROVIDER_PRESETS.find(p => p.id === selectedProviderId) || API_PROVIDER_PRESETS[0],
+    [selectedProviderId]
+  );
+
+  // Get available models for fallback (from selected provider)
+  const availableFallbackModels = useMemo(
+    () => getModelsForProvider(selectedProviderId),
     [selectedProviderId]
   );
 
@@ -55,10 +62,24 @@ export function ProviderSettings() {
     if (!provider) return;
 
     const success = await saveSettings({
-      selectedProviderId: providerId
+      selectedProviderId: providerId,
+      // Clear fallback model if switching providers
+      fallbackModelId: ''
     });
     if (!success) {
       console.error('Failed to save provider selection');
+    }
+  };
+
+  /**
+   * Handle fallback model selection
+   */
+  const handleSelectFallbackModel = async (modelId: string) => {
+    const success = await saveSettings({
+      fallbackModelId: modelId
+    });
+    if (!success) {
+      console.error('Failed to save fallback model selection');
     }
   };
 
@@ -229,6 +250,36 @@ export function ProviderSettings() {
               ))}
             </SelectContent>
           </Select>
+        </div>
+
+        {/* Fallback model selector */}
+        <div className="space-y-3">
+          <div className="space-y-1">
+            <Label>{t('provider.fallbackModel')}</Label>
+            <p className="text-xs text-muted-foreground">
+              {t('provider.fallbackModelDescription')}
+            </p>
+          </div>
+          <Select value={selectedFallbackModelId} onValueChange={handleSelectFallbackModel}>
+            <SelectTrigger>
+              <SelectValue placeholder={t('provider.selectFallbackModel')} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">{t('provider.noFallback')}</SelectItem>
+              {availableFallbackModels.map(model => (
+                <SelectItem key={model.id} value={model.id}>
+                  {model.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {selectedFallbackModelId && (
+            <div className="rounded-lg border border-blue-200 dark:border-blue-900 bg-blue-50 dark:bg-blue-950/30 p-3">
+              <p className="text-xs text-blue-900 dark:text-blue-200">
+                {t('provider.fallbackInfo')}
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Provider cards grid */}

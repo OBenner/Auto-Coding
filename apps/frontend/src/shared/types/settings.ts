@@ -299,6 +299,8 @@ export interface AppSettings {
   onboardingCompleted?: boolean;
   // Selected AI provider (anthropic, openrouter, groq, etc.)
   selectedProviderId?: string;
+  // Fallback model ID to use if primary model unavailable
+  fallbackModelId?: string;
   // Selected agent profile for preset model/thinking configurations
   selectedAgentProfile?: string;
   // Custom phase configuration for Auto profile (overrides defaults)
