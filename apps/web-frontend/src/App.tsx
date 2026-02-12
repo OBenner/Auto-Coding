@@ -8,6 +8,7 @@ import {
 } from "react-router-dom";
 import { getCloudConfig, getCloudStatus } from "./config/cloud";
 import { Changelog } from "./pages/Changelog";
+import { Insights } from "./pages/Insights";
 import { Kanban } from "./pages/Kanban";
 import { Login } from "./pages/Login";
 import { Roadmap } from "./pages/Roadmap";
@@ -123,6 +124,12 @@ function HomePage() {
 							Changelog
 						</a>
 						<a
+							href="/insights"
+							className="px-6 py-2 text-blue-600 hover:text-blue-700 font-medium"
+						>
+							Insights
+						</a>
+						<a
 							href="/tasks/create"
 							className="px-6 py-2 bg-gradient-to-br from-blue-500 to-purple-600 text-white rounded-md hover:opacity-90 font-medium"
 						>
@@ -225,6 +232,7 @@ function App() {
 				<Route path="/settings/*" element={<Settings />} />
 				<Route path="/usage" element={<UsageDashboard />} />
 				<Route path="/terminal" element={<TerminalPage />} />
+				<Route path="/insights" element={<Insights />} />
 				<Route path="/tasks" element={<TaskListWrapper />} />
 				<Route path="/tasks/create" element={<TaskCreate />} />
 				<Route path="/tasks/:id" element={<TaskDetailWrapper />} />
