@@ -16,6 +16,7 @@ from agents.memory_manager import save_user_correction
 from agents.test_generator import run_test_generator_session
 from analysis.code_analyzer import CodeAnalyzer
 from analysis.failure_analyzer import analyze_failure, is_analysis_enabled
+from analysis.failure_storage import store_failure_analysis
 from core.client import create_client
 from debug import debug, debug_error, debug_section, debug_success, debug_warning
 from integrations.graphiti.memory import get_graphiti_memory, is_graphiti_enabled
@@ -718,24 +719,33 @@ async def run_qa_validation_loop(
                         failure_context=failure_context,
                     )
 
-                    # Store root cause in Graphiti
-                    memory = get_graphiti_memory(spec_dir, project_dir)
-                    await memory.save_root_cause(
+                    # Store failure analysis in Graphiti
+                    stored = await store_failure_analysis(
+                        spec_dir=spec_dir,
+                        project_dir=project_dir,
                         failure_type="qa_rejection",
                         root_cause=analysis.get("root_cause", {}),
                         failure_context={
                             "qa_iteration": qa_iteration,
                             "issue_count": len(current_issues),
                             "is_recurring": has_recurring,
+                            "errors": failure_context.get("errors", []),
+                            "issues": current_issues,
                         },
                     )
 
-                    debug_success(
-                        "qa_loop",
-                        "Root cause analysis stored in Graphiti",
-                        category=analysis["root_cause"].get("category", "unknown"),
-                        confidence=analysis["root_cause"].get("confidence", 0.0),
-                    )
+                    if stored:
+                        debug_success(
+                            "qa_loop",
+                            "Failure analysis stored in Graphiti",
+                            category=analysis["root_cause"].get("category", "unknown"),
+                            confidence=analysis["root_cause"].get("confidence", 0.0),
+                        )
+                    else:
+                        debug_warning(
+                            "qa_loop",
+                            "Failed to store failure analysis (Graphiti may be disabled)",
+                        )
 
                 except Exception as e:
                     # Don't fail the build if analysis fails
