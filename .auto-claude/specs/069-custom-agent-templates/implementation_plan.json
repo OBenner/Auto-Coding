@@ -482,7 +482,7 @@
               "Can select custom agent"
             ]
           },
-          "status": "pending"
+          "status": "completed"
         },
         {
           "id": "subtask-7-2",
@@ -654,6 +654,6 @@
   "qa_signoff": null,
   "status": "in_progress",
   "planStatus": "in_progress",
-  "updated_at": "2026-02-12T17:03:59.775Z",
+  "updated_at": "2026-02-12T17:09:51.720Z",
   "recoveryNote": "Task recovered from stuck state at 2026-02-12T11:14:58.225Z"
 }

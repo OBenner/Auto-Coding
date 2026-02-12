@@ -145,6 +145,8 @@ ALLOWED_TEMPLATE_FIELDS = {
     "repo_url",
     "icon",
     "color",
+    "created_at",  # Template metadata
+    "updated_at",  # Template metadata
 }
 
 
