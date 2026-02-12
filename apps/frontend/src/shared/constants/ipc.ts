@@ -628,5 +628,42 @@ export const IPC_CHANNELS = {
   SCHEDULER_STATUS_CHANGED: 'scheduler:statusChanged',
   SCHEDULER_BUILD_PROGRESS: 'scheduler:buildProgress',
   SCHEDULER_BUILD_COMPLETE: 'scheduler:buildComplete',
-  SCHEDULER_BUILD_FAILED: 'scheduler:buildFailed'
+  SCHEDULER_BUILD_FAILED: 'scheduler:buildFailed',
+
+  // Collaboration operations (real-time spec editing)
+  COLLABORATION_CONNECT: 'collaboration:connect',              // Connect to WebSocket server
+  COLLABORATION_DISCONNECT: 'collaboration:disconnect',        // Disconnect from WebSocket server
+  COLLABORATION_GET_STATE: 'collaboration:getState',           // Get current collaboration state
+  COLLABORATION_UPDATE_CONTENT: 'collaboration:updateContent', // Send content update via CRDT
+
+  // Comment operations
+  COLLABORATION_COMMENTS_GET: 'collaboration:commentsGet',
+  COLLABORATION_COMMENT_ADD: 'collaboration:commentAdd',
+  COLLABORATION_COMMENT_UPDATE: 'collaboration:commentUpdate',
+  COLLABORATION_COMMENT_DELETE: 'collaboration:commentDelete',
+  COLLABORATION_COMMENT_RESOLVE: 'collaboration:commentResolve',
+
+  // Suggestion operations
+  COLLABORATION_SUGGESTIONS_GET: 'collaboration:suggestionsGet',
+  COLLABORATION_SUGGESTION_ADD: 'collaboration:suggestionAdd',
+  COLLABORATION_SUGGESTION_ACCEPT: 'collaboration:suggestionAccept',
+  COLLABORATION_SUGGESTION_REJECT: 'collaboration:suggestionReject',
+
+  // Presence operations
+  COLLABORATION_PRESENCE_UPDATE: 'collaboration:presenceUpdate',
+  COLLABORATION_PRESENCE_GET: 'collaboration:presenceGet',
+
+  // Version history operations
+  COLLABORATION_VERSIONS_GET: 'collaboration:versionsGet',
+  COLLABORATION_VERSION_DIFF: 'collaboration:versionDiff',
+  COLLABORATION_VERSION_APPROVE: 'collaboration:versionApprove',
+
+  // Collaboration events (main -> renderer)
+  COLLABORATION_CONNECTED: 'collaboration:connected',
+  COLLABORATION_DISCONNECTED: 'collaboration:disconnected',
+  COLLABORATION_CONTENT_UPDATED: 'collaboration:contentUpdated',
+  COLLABORATION_PRESENCE_UPDATED: 'collaboration:presenceUpdated',
+  COLLABORATION_COMMENT_ADDED: 'collaboration:commentAdded',
+  COLLABORATION_SUGGESTION_ADDED: 'collaboration:suggestionAdded',
+  COLLABORATION_ERROR: 'collaboration:error'
 } as const;
