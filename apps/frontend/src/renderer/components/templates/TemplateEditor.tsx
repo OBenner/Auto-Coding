@@ -1,0 +1,332 @@
+import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { Save, X, TestTube } from 'lucide-react';
+import { cn } from '../../lib/utils';
+import { SettingsSection } from '../settings/SettingsSection';
+import { Label } from '../ui/label';
+import { Button } from '../ui/button';
+import { Input } from '../ui/input';
+import { Textarea } from '../ui/textarea';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from '../ui/select';
+
+// Agent template categories matching backend
+const TEMPLATE_CATEGORIES = [
+  'testing',
+  'documentation',
+  'security',
+  'performance',
+  'refactoring',
+  'migration',
+  'other'
+] as const;
+
+// Thinking levels matching backend
+const THINKING_LEVELS = [
+  { value: 'none', label: 'None' },
+  { value: 'low', label: 'Low' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'high', label: 'High' },
+  { value: 'ultrathink', label: 'Ultra Think' }
+] as const;
+
+interface AgentTemplateData {
+  name: string;
+  description: string;
+  category: string;
+  version: string;
+  custom_prompt: string;
+  thinking_level: string;
+}
+
+interface TemplateEditorProps {
+  initialData?: Partial<AgentTemplateData>;
+  onSave?: (data: AgentTemplateData) => Promise<void>;
+  onTest?: (data: AgentTemplateData) => Promise<void>;
+  onCancel?: () => void;
+}
+
+/**
+ * Template Editor component
+ * Form for creating/editing custom agent templates
+ * Provides prompt configuration and basic metadata fields
+ */
+export function TemplateEditor({
+  initialData,
+  onSave,
+  onTest,
+  onCancel
+}: TemplateEditorProps) {
+  const { t } = useTranslation('templates');
+
+  const [formData, setFormData] = useState<AgentTemplateData>({
+    name: initialData?.name || '',
+    description: initialData?.description || '',
+    category: initialData?.category || '',
+    version: initialData?.version || '1.0.0',
+    custom_prompt: initialData?.custom_prompt || '',
+    thinking_level: initialData?.thinking_level || 'medium'
+  });
+
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [isSaving, setIsSaving] = useState(false);
+  const [isTesting, setIsTesting] = useState(false);
+
+  const handleChange = (field: keyof AgentTemplateData, value: string) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+    // Clear error for this field when user types
+    if (errors[field]) {
+      setErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[field];
+        return newErrors;
+      });
+    }
+  };
+
+  const validate = (): boolean => {
+    const newErrors: Record<string, string> = {};
+
+    if (!formData.name?.trim()) {
+      newErrors.name = t('editor.validation.nameRequired');
+    } else if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(formData.name)) {
+      newErrors.name = 'Name must be lowercase alphanumeric with hyphens only';
+    }
+
+    if (!formData.description?.trim()) {
+      newErrors.description = t('editor.validation.descriptionRequired');
+    }
+
+    if (!formData.category?.trim()) {
+      newErrors.category = t('editor.validation.categoryRequired');
+    }
+
+    if (!formData.version?.trim()) {
+      newErrors.version = t('editor.validation.invalidVersion');
+    } else if (!/^\d+\.\d+\.\d+(-[a-zA-Z0-9.]+)?(\+[a-zA-Z0-9.]+)?$/.test(formData.version)) {
+      newErrors.version = t('editor.validation.invalidVersion');
+    }
+
+    if (formData.custom_prompt && formData.custom_prompt.trim().length < 20) {
+      newErrors.custom_prompt = t('editor.validation.promptTooShort');
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleSave = async () => {
+    if (!validate()) return;
+
+    setIsSaving(true);
+    try {
+      await onSave?.(formData);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleTest = async () => {
+    if (!validate()) return;
+
+    setIsTesting(true);
+    try {
+      await onTest?.(formData);
+    } finally {
+      setIsTesting(false);
+    }
+  };
+
+  return (
+    <SettingsSection
+      title={t('editor.title')}
+      description={t('editor.description')}
+    >
+      <div className="space-y-4">
+        {/* Template Name */}
+        <div className="space-y-2">
+          <Label htmlFor="template-name" className="text-sm font-medium text-foreground">
+            {t('editor.fields.name')}
+          </Label>
+          <Input
+            id="template-name"
+            placeholder={t('editor.placeholders.name')}
+            value={formData.name}
+            onChange={(e) => handleChange('name', e.target.value)}
+            className={cn(
+              errors.name && 'border-destructive focus-visible:ring-destructive'
+            )}
+          />
+          {errors.name && (
+            <p className="text-xs text-destructive">{errors.name}</p>
+          )}
+        </div>
+
+        {/* Description */}
+        <div className="space-y-2">
+          <Label htmlFor="template-description" className="text-sm font-medium text-foreground">
+            {t('editor.fields.description')}
+          </Label>
+          <Input
+            id="template-description"
+            placeholder={t('editor.placeholders.description')}
+            value={formData.description}
+            onChange={(e) => handleChange('description', e.target.value)}
+            className={cn(
+              errors.description && 'border-destructive focus-visible:ring-destructive'
+            )}
+          />
+          {errors.description && (
+            <p className="text-xs text-destructive">{errors.description}</p>
+          )}
+        </div>
+
+        {/* Category and Version - Two columns */}
+        <div className="grid grid-cols-2 gap-4">
+          {/* Category */}
+          <div className="space-y-2">
+            <Label htmlFor="template-category" className="text-sm font-medium text-foreground">
+              {t('editor.fields.category')}
+            </Label>
+            <Select
+              value={formData.category}
+              onValueChange={(value) => handleChange('category', value)}
+            >
+              <SelectTrigger
+                id="template-category"
+                className={cn(
+                  errors.category && 'border-destructive focus-visible:ring-destructive'
+                )}
+              >
+                <SelectValue placeholder={t('editor.placeholders.category')} />
+              </SelectTrigger>
+              <SelectContent>
+                {TEMPLATE_CATEGORIES.map((cat) => (
+                  <SelectItem key={cat} value={cat}>
+                    {cat.charAt(0).toUpperCase() + cat.slice(1)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {errors.category && (
+              <p className="text-xs text-destructive">{errors.category}</p>
+            )}
+          </div>
+
+          {/* Version */}
+          <div className="space-y-2">
+            <Label htmlFor="template-version" className="text-sm font-medium text-foreground">
+              {t('editor.fields.version')}
+            </Label>
+            <Input
+              id="template-version"
+              placeholder={t('editor.placeholders.version')}
+              value={formData.version}
+              onChange={(e) => handleChange('version', e.target.value)}
+              className={cn(
+                errors.version && 'border-destructive focus-visible:ring-destructive'
+              )}
+            />
+            {errors.version && (
+              <p className="text-xs text-destructive">{errors.version}</p>
+            )}
+          </div>
+        </div>
+
+        {/* Thinking Level */}
+        <div className="space-y-2">
+          <Label htmlFor="template-thinking" className="text-sm font-medium text-foreground">
+            {t('editor.fields.thinkingLevel')}
+          </Label>
+          <Select
+            value={formData.thinking_level}
+            onValueChange={(value) => handleChange('thinking_level', value)}
+          >
+            <SelectTrigger id="template-thinking">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {THINKING_LEVELS.map((level) => (
+                <SelectItem key={level.value} value={level.value}>
+                  {level.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Custom System Prompt */}
+        <div className="space-y-2">
+          <Label htmlFor="template-prompt" className="text-sm font-medium text-foreground">
+            {t('editor.fields.customPrompt')}
+          </Label>
+          <Textarea
+            id="template-prompt"
+            placeholder={t('editor.placeholders.customPrompt')}
+            value={formData.custom_prompt}
+            onChange={(e) => handleChange('custom_prompt', e.target.value)}
+            rows={12}
+            className={cn(
+              'font-mono text-xs',
+              errors.custom_prompt && 'border-destructive focus-visible:ring-destructive'
+            )}
+          />
+          {errors.custom_prompt && (
+            <p className="text-xs text-destructive">{errors.custom_prompt}</p>
+          )}
+          <p className="text-xs text-muted-foreground">
+            This prompt will override the default agent system prompt. Use clear instructions to define the agent's behavior and capabilities.
+          </p>
+        </div>
+
+        {/* Action Buttons */}
+        <div className="flex items-center justify-between pt-4 border-t border-border">
+          <div className="flex items-center gap-2">
+            {onTest && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleTest}
+                disabled={isTesting || isSaving}
+              >
+                <TestTube className="h-4 w-4 mr-2" />
+                {isTesting ? 'Testing...' : t('editor.actions.test')}
+              </Button>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            {onCancel && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={onCancel}
+                disabled={isSaving || isTesting}
+              >
+                <X className="h-4 w-4 mr-2" />
+                {t('editor.actions.cancel')}
+              </Button>
+            )}
+            {onSave && (
+              <Button
+                type="button"
+                size="sm"
+                onClick={handleSave}
+                disabled={isSaving || isTesting}
+              >
+                <Save className="h-4 w-4 mr-2" />
+                {isSaving ? 'Saving...' : t('editor.actions.save')}
+              </Button>
+            )}
+          </div>
+        </div>
+      </div>
+    </SettingsSection>
+  );
+}

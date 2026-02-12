@@ -1,4 +1,35 @@
 {
+  "editor": {
+    "title": "Agent Template Editor",
+    "description": "Create and manage custom agent templates",
+    "fields": {
+      "name": "Template Name",
+      "description": "Description",
+      "category": "Category",
+      "version": "Version",
+      "customPrompt": "Custom System Prompt",
+      "thinkingLevel": "Thinking Level"
+    },
+    "placeholders": {
+      "name": "e.g., documentation-agent",
+      "description": "What does this agent template do?",
+      "category": "e.g., documentation, testing, security",
+      "version": "1.0.0",
+      "customPrompt": "Enter the custom system prompt for this agent..."
+    },
+    "validation": {
+      "nameRequired": "Template name is required",
+      "descriptionRequired": "Description is required",
+      "categoryRequired": "Category is required",
+      "promptTooShort": "Custom prompt must be at least 20 characters",
+      "invalidVersion": "Invalid version format (use semantic versioning like 1.0.0)"
+    },
+    "actions": {
+      "save": "Save Template",
+      "cancel": "Cancel",
+      "test": "Test Template"
+    }
+  },
   "wizard": {
     "title": "Template Parameters",
     "description": "Fill in the parameters to generate your spec",
