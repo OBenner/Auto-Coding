@@ -17,9 +17,10 @@ import type { TaskSummary } from '../api/types';
 
 interface TaskListProps {
   onTaskClick: (taskId: string) => void;
+  onCreateTask?: () => void;
 }
 
-export function TaskList({ onTaskClick }: TaskListProps) {
+export function TaskList({ onTaskClick, onCreateTask }: TaskListProps) {
   const { t } = useTranslation(['common']);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -159,14 +160,24 @@ export function TaskList({ onTaskClick }: TaskListProps) {
               {tasks.length} {tasks.length === 1 ? 'task' : 'tasks'} total
             </p>
           </div>
-          <Button
-            onClick={handleRefresh}
-            disabled={isRefreshing}
-            variant="outline"
-          >
-            <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
-            Refresh
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              variant="outline"
+            >
+              <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
+            {onCreateTask && (
+              <Button
+                onClick={onCreateTask}
+                className="bg-gradient-to-br from-blue-500 to-purple-600 hover:opacity-90"
+              >
+                Create Task
+              </Button>
+            )}
+          </div>
         </div>
 
         {/* Task Grid */}

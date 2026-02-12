@@ -125,6 +125,19 @@ export class ApiClient {
   }
 
   /**
+   * Create a new task/spec
+   */
+  async createTask(request: {
+    name: string;
+    description: string;
+  }): Promise<{ spec_id: string; status: string }> {
+    return this.fetch<{ spec_id: string; status: string }>("/api/specs", {
+      method: "POST",
+      body: JSON.stringify(request),
+    });
+  }
+
+  /**
    * Check task API health
    */
   async checkTasksHealth(): Promise<{ status: string }> {

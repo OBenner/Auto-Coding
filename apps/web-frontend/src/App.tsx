@@ -7,6 +7,7 @@ import { UsageDashboard } from './pages/UsageDashboard'
 import { TerminalPage } from './pages/TerminalPage'
 import { TaskList } from './pages/TaskList'
 import { TaskDetail } from './pages/TaskDetail'
+import { TaskCreate } from './pages/TaskCreate'
 import { getCloudConfig, getCloudStatus } from './config/cloud'
 
 function HomePage() {
@@ -93,6 +94,12 @@ function HomePage() {
               View Tasks
             </a>
             <a
+              href="/tasks/create"
+              className="px-6 py-2 bg-gradient-to-br from-blue-500 to-purple-600 text-white rounded-md hover:opacity-90 font-medium"
+            >
+              Create Task
+            </a>
+            <a
               href="/login"
               className="px-6 py-2 text-blue-600 hover:text-blue-700 font-medium"
             >
@@ -100,9 +107,9 @@ function HomePage() {
             </a>
             <a
               href="/signup"
-              className="px-6 py-2 bg-gradient-to-br from-blue-500 to-purple-600 text-white rounded-md hover:opacity-90 font-medium"
+              className="px-6 py-2 text-blue-600 hover:text-blue-700 font-medium"
             >
-              Get Started
+              Sign Up
             </a>
           </div>
         </div>
@@ -121,7 +128,11 @@ function TaskListWrapper() {
     navigate(`/tasks/${taskId}`);
   }, [navigate]);
 
-  return <TaskList onTaskClick={handleTaskClick} />;
+  const handleCreateTask = React.useCallback(() => {
+    navigate('/tasks/create');
+  }, [navigate]);
+
+  return <TaskList onTaskClick={handleTaskClick} onCreateTask={handleCreateTask} />;
 }
 
 // Wrapper component for TaskDetail with useParams
@@ -159,6 +170,7 @@ function App() {
         <Route path="/usage" element={<UsageDashboard />} />
         <Route path="/terminal" element={<TerminalPage />} />
         <Route path="/tasks" element={<TaskListWrapper />} />
+        <Route path="/tasks/create" element={<TaskCreate />} />
         <Route path="/tasks/:id" element={<TaskDetailWrapper />} />
       </Routes>
     </BrowserRouter>
