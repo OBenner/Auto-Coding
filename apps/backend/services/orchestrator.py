@@ -21,12 +21,15 @@ Usage:
 """
 
 import json
+import logging
 import shlex
 import subprocess
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 # =============================================================================
 # DATA CLASSES
@@ -200,8 +203,15 @@ class ServiceOrchestrator:
                         health_check_url=health_url,
                     )
                 )
-        except (OSError, ValueError, KeyError, TypeError, AttributeError):
-            pass  # Docker compose parsing failed
+        except (
+            OSError,
+            ValueError,
+            KeyError,
+            TypeError,
+            AttributeError,
+            yaml.YAMLError,
+        ):
+            logger.debug("Failed to parse docker-compose file: %s", self._compose_file)
 
     def _discover_monorepo_services(self) -> None:
         """Discover services in a monorepo structure."""
