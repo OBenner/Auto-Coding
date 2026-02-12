@@ -137,6 +137,7 @@
       "idle": "Inactif",
       "planning": "Planification",
       "coding": "Codage",
+      "testGeneration": "Tests",
       "reviewing": "Révision",
       "fixing": "Correction",
       "complete": "Terminé",
