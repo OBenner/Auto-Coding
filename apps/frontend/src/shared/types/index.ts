@@ -19,6 +19,7 @@ export * from './app-update';
 export * from './cli';
 export * from './merge-analytics';
 export * from './template';
+export * from './session-replay';
 
 // IPC types (must be last to use types from other modules)
 export * from './ipc';
