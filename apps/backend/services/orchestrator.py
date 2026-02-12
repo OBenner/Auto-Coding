@@ -200,7 +200,7 @@ class ServiceOrchestrator:
                         health_check_url=health_url,
                     )
                 )
-        except (OSError, ValueError, KeyError, TypeError):
+        except (OSError, ValueError, KeyError, TypeError, AttributeError):
             pass  # Docker compose parsing failed
 
     def _discover_monorepo_services(self) -> None:
