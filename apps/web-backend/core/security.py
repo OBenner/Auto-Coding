@@ -155,3 +155,33 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     from passlib.context import CryptContext
     pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
     return pwd_context.verify(plain_password, hashed_password)
+
+
+def verify_websocket_token(token: str) -> dict:
+    """
+    Verify and decode JWT token for WebSocket connections.
+
+    This function is specifically designed for WebSocket authentication,
+    where tokens are typically passed via query parameters instead of headers.
+
+    Args:
+        token: JWT token string to verify
+
+    Returns:
+        Dictionary of decoded token claims
+
+    Raises:
+        HTTPException: If token is invalid or expired (403 status for WebSocket rejection)
+
+    Example:
+        # In WebSocket endpoint
+        token = websocket.query_params.get("token")
+        claims = verify_websocket_token(token)
+    """
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Authentication token required",
+        )
+
+    return verify_token(token)

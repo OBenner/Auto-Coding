@@ -8,8 +8,9 @@ Clients can subscribe to specific spec IDs and receive execution, ideation, and 
 import json
 import logging
 from datetime import datetime
-from typing import Dict, Set
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from typing import Dict, Optional, Set
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, status
+from core.security import verify_websocket_token
 from api.models.agent_event import (
     AgentEvent,
     LogEvent,
@@ -36,35 +37,46 @@ class ConnectionManager:
     """
 
     def __init__(self):
-        # Active connections: {websocket: set of subscribed spec_ids}
-        self.active_connections: Dict[WebSocket, Set[str]] = {}
+        # Active connections: {websocket: {"subscriptions": set of spec_ids, "user": user_claims}}
+        self.active_connections: Dict[WebSocket, Dict] = {}
         # Reverse index: {spec_id: set of subscribed websockets}
         self.spec_subscriptions: Dict[str, Set[WebSocket]] = {}
 
-    async def connect(self, websocket: WebSocket):
-        """Accept a new WebSocket connection"""
+    async def connect(self, websocket: WebSocket, user_claims: Optional[dict] = None):
+        """
+        Accept a new WebSocket connection.
+
+        Args:
+            websocket: The WebSocket connection
+            user_claims: Optional dictionary of authenticated user claims
+        """
         await websocket.accept()
-        self.active_connections[websocket] = set()
-        logger.info(f"WebSocket connected: {id(websocket)}")
+        self.active_connections[websocket] = {
+            "subscriptions": set(),
+            "user": user_claims or {}
+        }
+        user_id = user_claims.get("sub", "anonymous") if user_claims else "anonymous"
+        logger.info(f"WebSocket connected: {id(websocket)} (user: {_sanitize_log(user_id)})")
 
     def disconnect(self, websocket: WebSocket):
         """Remove a WebSocket connection and clean up subscriptions"""
         if websocket in self.active_connections:
             # Remove from spec subscriptions
-            for spec_id in self.active_connections[websocket]:
+            for spec_id in self.active_connections[websocket]["subscriptions"]:
                 if spec_id in self.spec_subscriptions:
                     self.spec_subscriptions[spec_id].discard(websocket)
                     if not self.spec_subscriptions[spec_id]:
                         del self.spec_subscriptions[spec_id]
 
             # Remove connection
+            user_id = self.active_connections[websocket].get("user", {}).get("sub", "unknown")
             del self.active_connections[websocket]
-            logger.info(f"WebSocket disconnected: {id(websocket)}")
+            logger.info(f"WebSocket disconnected: {id(websocket)} (user: {_sanitize_log(user_id)})")
 
     def subscribe(self, websocket: WebSocket, spec_id: str):
         """Subscribe a WebSocket to a specific spec ID"""
         if websocket in self.active_connections:
-            self.active_connections[websocket].add(spec_id)
+            self.active_connections[websocket]["subscriptions"].add(spec_id)
             if spec_id not in self.spec_subscriptions:
                 self.spec_subscriptions[spec_id] = set()
             self.spec_subscriptions[spec_id].add(websocket)
@@ -73,7 +85,7 @@ class ConnectionManager:
     def unsubscribe(self, websocket: WebSocket, spec_id: str):
         """Unsubscribe a WebSocket from a specific spec ID"""
         if websocket in self.active_connections:
-            self.active_connections[websocket].discard(spec_id)
+            self.active_connections[websocket]["subscriptions"].discard(spec_id)
             if spec_id in self.spec_subscriptions:
                 self.spec_subscriptions[spec_id].discard(websocket)
                 if not self.spec_subscriptions[spec_id]:
@@ -157,6 +169,10 @@ async def agent_events_websocket(websocket: WebSocket):
     """
     WebSocket endpoint for real-time agent events.
 
+    Authentication:
+        Clients must provide a valid JWT token via query parameter.
+        Example: ws://localhost:8000/ws/agent-events?token=<your-jwt-token>
+
     Protocol:
         Client -> Server:
             {"action": "subscribe", "spec_id": "001"}
@@ -167,16 +183,44 @@ async def agent_events_websocket(websocket: WebSocket):
             {"event_type": "execution", "spec_id": "001", "timestamp": "...", "data": {...}}
             {"event_type": "log", "spec_id": "001", "timestamp": "...", "log_line": "..."}
             {"event_type": "error", "spec_id": "001", "timestamp": "...", "error_message": "..."}
+            {"status": "error", "message": "Authentication failed"} (on auth failure)
 
     Example:
-        const ws = new WebSocket("ws://localhost:8000/ws/agent-events");
+        // With authentication
+        const token = localStorage.getItem('auth_token');
+        const ws = new WebSocket(`ws://localhost:8000/ws/agent-events?token=${token}`);
         ws.send(JSON.stringify({action: "subscribe", spec_id: "001"}));
         ws.onmessage = (event) => {
             const data = JSON.parse(event.data);
             console.log("Received event:", data);
         };
     """
-    await manager.connect(websocket)
+    # Extract and validate token from query parameters
+    token = websocket.query_params.get("token")
+    user_claims = None
+
+    try:
+        user_claims = verify_websocket_token(token)
+    except Exception as e:
+        # Accept the connection first (required by FastAPI), then close with error
+        await websocket.accept()
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        logger.warning(f"WebSocket authentication failed: {e}")
+        return
+
+    # Connect with authenticated user claims
+    await manager.connect(websocket, user_claims)
+
+    # Send connection confirmation
+    user_id = user_claims.get("sub", "unknown")
+    await manager.send_personal_message(
+        {
+            "status": "connected",
+            "user": user_id,
+            "timestamp": datetime.now().isoformat()
+        },
+        websocket
+    )
 
     try:
         while True:
