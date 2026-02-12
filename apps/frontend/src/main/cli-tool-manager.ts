@@ -27,7 +27,7 @@ import os from 'os';
 import { promisify } from 'util';
 import { app } from 'electron';
 import { findExecutable, findExecutableAsync, getAugmentedEnv, getAugmentedEnvAsync, shouldUseShell, existsAsync } from './env-utils';
-import { isWindows, isMacOS, isUnix, joinPaths, getExecutableExtension } from './platform';
+import { isWindows, isMacOS, isUnix } from './platform';
 import type { ToolDetectionResult } from '../shared/types';
 const execFileAsync = promisify(execFile);
 

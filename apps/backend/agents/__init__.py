@@ -20,28 +20,8 @@ from .documentation_generator import run_documentation_generator_session
 from .utils import sync_spec_to_source
 
 __all__ = [
-    # Main API
-    "run_autonomous_agent",
-    "run_followup_planner",
     "run_documentation_generator_session",
-    # Memory
-    "debug_memory_system_status",
-    "get_graphiti_context",
-    "save_session_memory",
-    "save_session_to_graphiti",
-    # Session
-    "run_agent_session",
-    "post_session_processing",
-    # Utils
-    "get_latest_commit",
-    "get_commit_count",
-    "load_implementation_plan",
-    "find_subtask_in_plan",
-    "find_phase_for_subtask",
     "sync_spec_to_source",
-    # Constants
-    "AUTO_CONTINUE_DELAY_SECONDS",
-    "HUMAN_INTERVENTION_FILE",
 ]
 
 

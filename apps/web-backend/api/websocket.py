@@ -24,6 +24,12 @@ from api.models.agent_event import (
 
 logger = logging.getLogger(__name__)
 
+
+def _sanitize_log(value: str) -> str:
+    """Sanitize value for safe logging (prevent log injection)."""
+    return str(value).replace("\n", "\\n").replace("\r", "\\r")
+
+
 router = APIRouter()
 
 
@@ -68,7 +74,7 @@ class ConnectionManager:
             if spec_id not in self.spec_subscriptions:
                 self.spec_subscriptions[spec_id] = set()
             self.spec_subscriptions[spec_id].add(websocket)
-            logger.info(f"WebSocket {id(websocket)} subscribed to spec {spec_id}")
+            logger.info(f"WebSocket {id(websocket)} subscribed to spec {_sanitize_log(spec_id)}")
 
     def unsubscribe(self, websocket: WebSocket, spec_id: str):
         """Unsubscribe a WebSocket from a specific spec ID"""
@@ -78,7 +84,7 @@ class ConnectionManager:
                 self.spec_subscriptions[spec_id].discard(websocket)
                 if not self.spec_subscriptions[spec_id]:
                     del self.spec_subscriptions[spec_id]
-            logger.info(f"WebSocket {id(websocket)} unsubscribed from spec {spec_id}")
+            logger.info(f"WebSocket {id(websocket)} unsubscribed from spec {_sanitize_log(spec_id)}")
 
     async def send_personal_message(self, message: dict, websocket: WebSocket):
         """Send a message to a specific WebSocket"""
@@ -96,7 +102,7 @@ class ConnectionManager:
             event: The event to broadcast (must be a subclass of AgentEvent)
         """
         if spec_id not in self.spec_subscriptions:
-            logger.debug(f"No subscribers for spec {spec_id}")
+            logger.debug(f"No subscribers for spec {_sanitize_log(spec_id)}")
             return
 
         subscribers = list(self.spec_subscriptions[spec_id])
@@ -104,7 +110,7 @@ class ConnectionManager:
             return
 
         message = event.model_dump(mode="json")
-        logger.debug(f"Broadcasting to {len(subscribers)} subscribers of spec {spec_id}: {event.event_type}")
+        logger.debug(f"Broadcasting to {len(subscribers)} subscribers of spec {_sanitize_log(spec_id)}: {event.event_type}")
 
         disconnected = []
         for websocket in subscribers:

@@ -13,6 +13,12 @@ from services.usage_tracker import UsageTracker
 
 logger = logging.getLogger(__name__)
 
+
+def _sanitize_log(value: str) -> str:
+    """Sanitize value for safe logging (prevent log injection)."""
+    return str(value).replace("\n", "\\n").replace("\r", "\\r")
+
+
 # Create router for usage endpoints
 router = APIRouter(prefix="/api/usage", tags=["usage"])
 
