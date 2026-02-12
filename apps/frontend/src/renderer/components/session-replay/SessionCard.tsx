@@ -11,7 +11,7 @@ import { Clock, CheckCircle2, Loader2 } from 'lucide-react';
 import { Card, CardContent } from '../ui/card';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
-import { cn, formatRelativeTime } from '../lib/utils';
+import { cn, formatRelativeTime } from '../../lib/utils';
 import type { SessionMetadata } from '../../../shared/types';
 
 interface SessionCardProps {

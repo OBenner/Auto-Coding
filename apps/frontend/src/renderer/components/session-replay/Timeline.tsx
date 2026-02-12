@@ -9,7 +9,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useTranslation } from 'react-i18next';
 import { memo, useRef, useState, useEffect, useCallback } from 'react';
 import { Star, Circle } from 'lucide-react';
-import { cn } from '../lib/utils';
+import { cn } from '../../lib/utils';
 
 // LogEntry interface matching SessionPlayer
 export interface TimelineEntry {

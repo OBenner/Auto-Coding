@@ -18,7 +18,8 @@
     "plugins": "Plugins",
     "worktrees": "Worktrees",
     "agentTools": "MCP Overview",
-    "mergeAnalytics": "Merge Analytics"
+    "mergeAnalytics": "Merge Analytics",
+    "sessions": "Session Replay"
   },
   "actions": {
     "settings": "Settings",

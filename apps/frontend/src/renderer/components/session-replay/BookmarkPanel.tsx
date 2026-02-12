@@ -10,7 +10,7 @@ import { useTranslation } from 'react-i18next';
 import { Bookmark, X, Clock, Tag, FileText } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
-import { cn } from '../lib/utils';
+import { cn } from '../../lib/utils';
 import type { Bookmark as BookmarkType } from '../../../shared/types';
 
 interface BookmarkPanelProps {

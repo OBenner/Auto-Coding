@@ -27,7 +27,7 @@ import {
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
 } from '../ui/dropdown-menu';
-import { cn } from '../lib/utils';
+import { cn } from '../../lib/utils';
 import type { SessionMetadata } from '../../../shared/types';
 
 // Mock LogEntry type based on backend model

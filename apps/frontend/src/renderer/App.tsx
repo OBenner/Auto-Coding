@@ -44,6 +44,7 @@ import { GitHubPRs } from './components/github-prs';
 import { GitLabMergeRequests } from './components/gitlab-merge-requests';
 import { Changelog } from './components/Changelog';
 import { Worktrees } from './components/Worktrees';
+import { SessionList } from './components/session-replay/SessionList';
 import { AgentTools } from './components/AgentTools';
 import { WelcomeScreen } from './components/WelcomeScreen';
 import { RateLimitModal } from './components/RateLimitModal';
@@ -932,6 +933,7 @@ export function App() {
                   <Worktrees projectId={activeProjectId || selectedProjectId!} />
                 )}
                 {activeView === 'agent-tools' && <AgentTools />}
+                {activeView === 'sessions' && <SessionList projectId={activeProjectId || selectedProjectId!} />}
               </>
             ) : (
               <WelcomeScreen

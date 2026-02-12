@@ -18,7 +18,7 @@ import {
   DropdownMenuTrigger,
   DropdownMenuItem,
 } from '../ui/dropdown-menu';
-import { cn } from '../lib/utils';
+import { cn } from '../../lib/utils';
 import { SessionCard } from './SessionCard';
 import type {
   SessionMetadata,

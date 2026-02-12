@@ -9,7 +9,7 @@ import { useState, useCallback, memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ChevronDown, ChevronUp, Lightbulb, CheckCircle2 } from 'lucide-react';
 import { Badge } from '../ui/badge';
-import { cn } from '../lib/utils';
+import { cn } from '../../lib/utils';
 import type { DecisionPoint } from '../../../shared/types/session-replay';
 
 interface DecisionPointProps {
