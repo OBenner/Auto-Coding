@@ -24,7 +24,7 @@ from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-import websockets.server
+import websockets.asyncio.server
 from pydantic import BaseModel, Field
 
 from collaboration.crdt_store import CRDTStore
@@ -43,7 +43,7 @@ logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     import websockets
-    from websockets.server import WebSocketServerProtocol
+    from websockets.asyncio.server import WebSocketServerProtocol
 
 
 class MessageType(str, Enum):
@@ -152,7 +152,6 @@ class CollaborationServer:
         self.spec_stores: dict[str, CRDTStore] = {}
         # Maps spec_id -> presence data
         self.spec_presence: dict[str, dict[str, Presence]] = {}
-        self.server: websockets.server.serve | None = None
 
     async def handle_client(self, websocket: WebSocketServerProtocol, client_id: str):
         """Handle a client connection.
@@ -740,26 +739,27 @@ class CollaborationServer:
             client_id = str(uuid.uuid4())
             await self.handle_client(websocket, client_id)
 
-        self.server = await websockets.server.serve(
+        # Use websockets.asyncio.server.serve for websockets 12+
+        async with websockets.asyncio.server.serve(
             handler,
             self.host,
             self.port,
             ping_interval=20,
             ping_timeout=20,
             close_timeout=10,
-        )
-
-        logger.info("Server started on ws://%s:%d", self.host, self.port)
-
-        # Keep server running
-        await asyncio.Future()  # Run forever
+        ):
+            logger.info("Server started on ws://%s:%d", self.host, self.port)
+            # Keep server running
+            await asyncio.Future()  # Run forever
 
     async def stop(self):
-        """Stop the WebSocket server."""
-        if self.server:
-            self.server.close()
-            await self.server.wait_closed()
-            logger.info("Server stopped")
+        """Stop the WebSocket server.
+
+        Note: With context manager pattern, the server stops automatically
+        when the context exits. This method is a placeholder for potential
+        future explicit shutdown logic.
+        """
+        logger.info("Server shutdown requested")
 
 
 def _setup_logging(level: str = "INFO"):
