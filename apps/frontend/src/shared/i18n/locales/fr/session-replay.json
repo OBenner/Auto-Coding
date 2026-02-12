@@ -58,7 +58,9 @@
     "save": "Enregistrer",
     "cancel": "Annuler",
     "bookmarkCreated": "Signet créé",
-    "bookmarkRemoved": "Signet supprimé"
+    "bookmarkRemoved": "Signet supprimé",
+    "expandDetails": "Développer les détails de la décision",
+    "collapseDetails": "Réduire les détails de la décision"
   },
   "sessionComparison": {
     "title": "Comparer les Sessions",
