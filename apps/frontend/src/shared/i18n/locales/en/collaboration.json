@@ -78,5 +78,24 @@
       "createFailed": "Failed to create suggestion",
       "unknown": "An unknown error occurred"
     }
+  },
+  "versionHistory": {
+    "title": "Version History",
+    "noVersions": "No versions yet",
+    "version": "Version",
+    "latest": "Latest",
+    "approved": "Approved",
+    "approve": "Approve",
+    "viewDiff": "View Diff",
+    "vsPrevious": "vs previous",
+    "comparingVersions": "Comparing versions",
+    "noChanges": "No changes between these versions",
+    "approvedBy": "Approved by",
+    "errors": {
+      "loadFailed": "Failed to load version history",
+      "diffFailed": "Failed to load diff",
+      "approveFailed": "Failed to approve version",
+      "unknown": "An unknown error occurred"
+    }
   }
 }

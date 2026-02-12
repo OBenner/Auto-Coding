@@ -78,5 +78,24 @@
       "createFailed": "Échec de la création de la suggestion",
       "unknown": "Une erreur inconnue s'est produite"
     }
+  },
+  "versionHistory": {
+    "title": "Historique des Versions",
+    "noVersions": "Aucune version pour le moment",
+    "version": "Version",
+    "latest": "Dernière",
+    "approved": "Approuvé",
+    "approve": "Approuver",
+    "viewDiff": "Voir Diff",
+    "vsPrevious": "vs précédente",
+    "comparingVersions": "Comparaison des versions",
+    "noChanges": "Aucun changement entre ces versions",
+    "approvedBy": "Approuvé par",
+    "errors": {
+      "loadFailed": "Échec du chargement de l'historique des versions",
+      "diffFailed": "Échec du chargement du diff",
+      "approveFailed": "Échec de l'approbation de la version",
+      "unknown": "Une erreur inconnue s'est produite"
+    }
   }
 }
