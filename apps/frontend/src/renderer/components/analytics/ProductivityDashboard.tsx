@@ -3,11 +3,13 @@ import { Download, Loader2, RefreshCw, BarChart3, FileText, Calendar } from 'luc
 import { Button } from '../ui/button';
 import { ScrollArea } from '../ui/scroll-area';
 import { useToast } from '../../hooks/use-toast';
+import { FailureAnalysisDashboard } from './FailureAnalysisDashboard';
 import type {
   ProductivitySummary,
   ProductivityTrendPoint,
   ProductivityAnalyticsExportOptions,
-  ProductivityAnalyticsFilter
+  ProductivityAnalyticsFilter,
+  FailureMetrics
 } from '../../../shared/types/productivity-analytics';
 
 interface ProductivityDashboardProps {
@@ -22,6 +24,7 @@ export function ProductivityDashboard({ projectId }: ProductivityDashboardProps)
   // State
   const [summary, setSummary] = useState<ProductivitySummary | null>(null);
   const [trends, setTrends] = useState<ProductivityTrendPoint[]>([]);
+  const [failureMetrics, setFailureMetrics] = useState<FailureMetrics | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
@@ -333,6 +336,12 @@ export function ProductivityDashboard({ projectId }: ProductivityDashboardProps)
               </div>
             </div>
           )}
+
+          {/* Failure Analysis Dashboard */}
+          <FailureAnalysisDashboard
+            failureMetrics={failureMetrics}
+            isLoading={isLoading}
+          />
 
           {/* Spec Details Table Placeholder - Will be replaced with SpecBreakdownTable component */}
           {summary && summary.specs.length > 0 && (
