@@ -1,0 +1,18 @@
+{
+  "title": "Spec Editor",
+  "status": {
+    "connected": "Connected",
+    "connecting": "Connecting...",
+    "disconnected": "Disconnected",
+    "error": "Connection Error"
+  },
+  "errors": {
+    "connectionFailed": "Failed to connect to collaboration server",
+    "unknown": "An unknown error occurred"
+  },
+  "actions": {
+    "reconnect": "Reconnect"
+  },
+  "connecting": "Connecting to collaboration server...",
+  "characters": "characters"
+}
