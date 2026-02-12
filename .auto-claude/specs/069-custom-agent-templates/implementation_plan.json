@@ -321,7 +321,7 @@
             "command": "python -c \"from agents.templates.models import AgentTemplate; t = AgentTemplate(version='1.0.0'); print('OK')\"",
             "expected": "OK"
           },
-          "status": "pending"
+          "status": "completed"
         },
         {
           "id": "subtask-5-2",
@@ -339,7 +339,7 @@
             "command": "python -c \"from agents.templates.versioning import compare_versions; print('OK')\"",
             "expected": "OK"
           },
-          "status": "pending"
+          "status": "completed"
         },
         {
           "id": "subtask-5-3",
@@ -654,6 +654,6 @@
   "qa_signoff": null,
   "status": "in_progress",
   "planStatus": "in_progress",
-  "updated_at": "2026-02-12T16:32:08.758Z",
+  "updated_at": "2026-02-12T16:39:47.327Z",
   "recoveryNote": "Task recovered from stuck state at 2026-02-12T11:14:58.225Z"
 }

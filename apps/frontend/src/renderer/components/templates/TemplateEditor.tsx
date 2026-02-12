@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Save, X, TestTube } from 'lucide-react';
+import { Save, X, TestTube, Badge as BadgeIcon } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { SettingsSection } from '../settings/SettingsSection';
 import { Label } from '../ui/label';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Textarea } from '../ui/textarea';
+import { Badge } from '../ui/badge';
 import {
   Select,
   SelectContent,
@@ -49,6 +50,8 @@ interface TemplateEditorProps {
   onSave?: (data: AgentTemplateData) => Promise<void>;
   onTest?: (data: AgentTemplateData) => Promise<void>;
   onCancel?: () => void;
+  updateAvailable?: boolean; // Show update indicator when newer version exists
+  latestVersion?: string; // Latest available version (if updateAvailable)
 }
 
 /**
@@ -60,7 +63,9 @@ export function TemplateEditor({
   initialData,
   onSave,
   onTest,
-  onCancel
+  onCancel,
+  updateAvailable = false,
+  latestVersion
 }: TemplateEditorProps) {
   const { t } = useTranslation('templates');
 
@@ -220,9 +225,20 @@ export function TemplateEditor({
 
           {/* Version */}
           <div className="space-y-2">
-            <Label htmlFor="template-version" className="text-sm font-medium text-foreground">
-              {t('editor.fields.version')}
-            </Label>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="template-version" className="text-sm font-medium text-foreground">
+                {t('editor.fields.version')}
+              </Label>
+              {updateAvailable && (
+                <Badge
+                  variant="outline"
+                  className="text-xs gap-1 bg-info/10 text-info border-info/30"
+                >
+                  <BadgeIcon className="h-3 w-3" />
+                  Update Available
+                </Badge>
+              )}
+            </div>
             <Input
               id="template-version"
               placeholder={t('editor.placeholders.version')}
@@ -232,11 +248,61 @@ export function TemplateEditor({
                 errors.version && 'border-destructive focus-visible:ring-destructive'
               )}
             />
-            {errors.version && (
-              <p className="text-xs text-destructive">{errors.version}</p>
-            )}
+            <div className="flex items-center justify-between">
+              {errors.version ? (
+                <p className="text-xs text-destructive">{errors.version}</p>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  {t('editor.hints.versionFormat', 'Semantic versioning (e.g., 1.0.0)')}
+                </p>
+              )}
+              {updateAvailable && latestVersion && (
+                <p className="text-xs text-muted-foreground">
+                  Latest: <span className="font-medium text-foreground">{latestVersion}</span>
+                </p>
+              )}
+            </div>
           </div>
         </div>
+
+        {/* Version Badge Section (when editing existing template) */}
+        {initialData?.version && (
+          <div className="rounded-lg border border-border bg-muted/50 p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">
+                  {t('editor.currentVersion', 'Current Version')}
+                </p>
+                <p className="text-base font-medium text-foreground">{formData.version}</p>
+                {updateAvailable && latestVersion && (
+                  <p className="text-xs text-info mt-1">
+                    {t('editor.newVersionAvailable', 'New version {{version}} available', {
+                      version: latestVersion
+                    })}
+                  </p>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                {updateAvailable ? (
+                  <Badge
+                    variant="outline"
+                    className="gap-1 bg-info/10 text-info border-info/30"
+                  >
+                    <BadgeIcon className="h-3 w-3" />
+                    Update
+                  </Badge>
+                ) : (
+                  <Badge
+                    variant="outline"
+                    className="bg-success/10 text-success border-success/30"
+                  >
+                    Up to Date
+                  </Badge>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Thinking Level */}
         <div className="space-y-2">
