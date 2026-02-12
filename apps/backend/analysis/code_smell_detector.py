@@ -231,15 +231,25 @@ class CodeSmellDetector:
 
         # Detect code smells
         for node in ast.walk(tree):
-            # Check function complexity
-            if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
-                func_issues = self._check_function_smells(node, source)
-                result.issues.extend(func_issues)
-
-            # Check class smells
-            elif isinstance(node, ast.ClassDef):
+            # Check class smells first (to get class context for methods)
+            if isinstance(node, ast.ClassDef):
                 class_issues = self._check_class_smells(node, source)
                 result.issues.extend(class_issues)
+
+                # Check methods with class context
+                for item in node.body:
+                    if isinstance(item, ast.FunctionDef | ast.AsyncFunctionDef):
+                        method_issues = self._check_function_smells(
+                            item, source, class_context=node
+                        )
+                        result.issues.extend(method_issues)
+
+            # Check standalone functions
+            elif isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+                # Only check top-level functions (not methods)
+                if self._is_top_level_function(node, tree):
+                    func_issues = self._check_function_smells(node, source)
+                    result.issues.extend(func_issues)
 
         # Detect code duplication
         result.duplications = self._detect_duplication(source)
@@ -276,6 +286,7 @@ class CodeSmellDetector:
         self,
         node: ast.FunctionDef | ast.AsyncFunctionDef,
         source: str,
+        class_context: ast.ClassDef | None = None,
     ) -> list[CodeSmellIssue]:
         """Check for function-level code smells."""
         issues = []
@@ -314,14 +325,14 @@ class CodeSmellDetector:
                 )
             )
 
-        # Check for long function
+        # Check for long function/method
         func_length = node.end_lineno - node.lineno + 1 if node.end_lineno else 0
         if func_length > self.MAX_FUNCTION_LENGTH_HIGH:
             issues.append(
                 CodeSmellIssue(
-                    smell_type="long_function",
+                    smell_type="long_method" if class_context else "long_function",
                     severity=self.SEVERITY_HIGH,
-                    message=f"Function '{node.name}' is too long: {func_length} lines",
+                    message=f"{'Method' if class_context else 'Function'} '{node.name}' is too long: {func_length} lines",
                     lineno=node.lineno,
                     code_snippet=self._get_code_snippet(source, node.lineno),
                     suggestion=(
@@ -334,9 +345,9 @@ class CodeSmellDetector:
         elif func_length > self.MAX_FUNCTION_LENGTH_MEDIUM:
             issues.append(
                 CodeSmellIssue(
-                    smell_type="long_function",
+                    smell_type="long_method" if class_context else "long_function",
                     severity=self.SEVERITY_MEDIUM,
-                    message=f"Function '{node.name}' is moderately long: {func_length} lines",
+                    message=f"{'Method' if class_context else 'Function'} '{node.name}' is moderately long: {func_length} lines",
                     lineno=node.lineno,
                     code_snippet=self._get_code_snippet(source, node.lineno),
                     suggestion=(
@@ -409,6 +420,12 @@ class CodeSmellDetector:
                     metrics={"parameter_count": param_count},
                 )
             )
+
+        # Check for feature envy (only for methods in classes)
+        if class_context:
+            feature_envy = self._check_feature_envy(node, class_context, source)
+            if feature_envy:
+                issues.append(feature_envy)
 
         return issues
 
@@ -492,6 +509,91 @@ class CodeSmellDetector:
             )
 
         return issues
+
+    def _is_top_level_function(
+        self, node: ast.FunctionDef | ast.AsyncFunctionDef, tree: ast.AST
+    ) -> bool:
+        """Check if a function is at module level (not a method)."""
+        for parent in ast.walk(tree):
+            if isinstance(parent, ast.ClassDef):
+                for item in parent.body:
+                    if item is node:
+                        return False
+        return True
+
+    def _check_feature_envy(
+        self,
+        node: ast.FunctionDef | ast.AsyncFunctionDef,
+        class_context: ast.ClassDef,
+        source: str,
+    ) -> CodeSmellIssue | None:
+        """
+        Check for feature envy anti-pattern.
+
+        Feature envy occurs when a method uses more methods of another class
+        than its own. This suggests the method might be in the wrong class.
+
+        Returns:
+            CodeSmellIssue if feature envy is detected, None otherwise
+        """
+        # Track accesses to self vs other objects
+        self_accesses = 0
+        other_accesses = []
+        external_objects = set()
+
+        # Track which objects are being accessed
+        for child in ast.walk(node):
+            # Attribute access like obj.attr or self.attr
+            if isinstance(child, ast.Attribute):
+                # Get the object being accessed
+                obj_name = None
+                if isinstance(child.value, ast.Name):
+                    obj_name = child.value.id
+                elif isinstance(child.value, ast.Attribute):
+                    # Handle chained attributes like obj.other.attr
+                    if isinstance(child.value.value, ast.Name):
+                        obj_name = child.value.value.id
+
+                if obj_name:
+                    if obj_name == "self":
+                        self_accesses += 1
+                    elif obj_name not in {"cls", "super"}:
+                        # Track access to external objects
+                        other_accesses.append(obj_name)
+                        external_objects.add(obj_name)
+
+        # Check if method heavily uses external objects
+        # Threshold: more external accesses than self accesses
+        if len(other_accesses) > self_accesses and len(other_accesses) > 3:
+            # Get the most accessed external object
+            from collections import Counter
+
+            access_counts = Counter(other_accesses)
+            target_obj, count = access_counts.most_common(1)[0]
+
+            return CodeSmellIssue(
+                smell_type="feature_envy",
+                severity=self.SEVERITY_MEDIUM,
+                message=(
+                    f"Method '{node.name}' in class '{class_context.name}' "
+                    f"shows feature envy toward '{target_obj}' "
+                    f"({count} external vs {self_accesses} self accesses)"
+                ),
+                lineno=node.lineno,
+                code_snippet=self._get_code_snippet(source, node.lineno),
+                suggestion=(
+                    f"Consider moving '{node.name}' to '{target_obj}' class. "
+                    f"The method seems more interested in {target_obj} than its own class."
+                ),
+                metrics={
+                    "self_accesses": self_accesses,
+                    "external_accesses": len(other_accesses),
+                    "target_object": target_obj,
+                    "target_access_count": count,
+                },
+            )
+
+        return None
 
     def _calculate_complexity(
         self,
@@ -629,3 +731,114 @@ class CodeSmellDetector:
             "max_nesting_level": result.max_nesting_level,
             "duplication_count": result.duplication_count,
         }
+
+
+# =============================================================================
+# CLI ENTRY POINT
+# =============================================================================
+
+
+if __name__ == "__main__":
+    import argparse
+    import sys
+    from pathlib import Path
+
+    parser = argparse.ArgumentParser(
+        description="Analyze Python code for code smells and anti-patterns"
+    )
+    parser.add_argument(
+        "path",
+        help="Path to Python file or directory to analyze",
+    )
+    parser.add_argument(
+        "--detect-anti-patterns",
+        action="store_true",
+        help="Detect anti-patterns (god classes, long methods, feature envy)",
+    )
+    parser.add_argument(
+        "--verbose",
+        "-v",
+        action="store_true",
+        help="Show detailed output with code snippets",
+    )
+
+    args = parser.parse_args()
+
+    detector = CodeSmellDetector()
+    path = Path(args.path)
+
+    if not path.exists():
+        print(f"Error: Path not found: {args.path}", file=sys.stderr)
+        sys.exit(1)
+
+    # Collect Python files
+    if path.is_file():
+        files = [path]
+    else:
+        files = list(path.rglob("*.py"))
+
+    if not files:
+        print(f"No Python files found in {args.path}")
+        sys.exit(0)
+
+    # Analyze files
+    total_issues = 0
+    for file in files:
+        try:
+            result = detector.analyze_file(file)
+
+            # Print results
+            if args.detect_anti_patterns:
+                # Filter for anti-patterns only
+                anti_patterns = [
+                    issue
+                    for issue in result["issues"]
+                    if issue["smell_type"]
+                    in ["god_class", "long_method", "feature_envy", "long_class"]
+                ]
+
+                if anti_patterns or args.verbose:
+                    print(f"\n{'='*60}")
+                    print(f"File: {file}")
+                    print(f"{'='*60}")
+
+                for issue in anti_patterns:
+                    total_issues += 1
+                    print(f"\n[{issue['severity'].upper()}] {issue['message']}")
+                    print(f"  Line: {issue['lineno']}")
+                    if issue.get("metrics"):
+                        print(f"  Metrics: {issue['metrics']}")
+                    if issue.get("suggestion"):
+                        print(f"  Suggestion: {issue['suggestion']}")
+                    if args.verbose and issue.get("code_snippet"):
+                        print(f"\n  Code:\n{issue['code_snippet']}")
+
+            else:
+                # Show all code smells
+                if result["issues"] or args.verbose:
+                    print(f"\n{'='*60}")
+                    print(f"File: {file}")
+                    print(f"{'='*60}")
+                    print(f"Total issues: {result['total_issues']}")
+                    print(f"  Critical: {result['critical_count']}")
+                    print(f"  High: {result['high_count']}")
+                    print(f"  Medium: {result['medium_count']}")
+                    print(f"  Low: {result['low_count']}")
+
+                for issue in result["issues"]:
+                    total_issues += 1
+                    print(f"\n[{issue['severity'].upper()}] {issue['message']}")
+                    print(f"  Line: {issue['lineno']}")
+                    if args.verbose and issue.get("code_snippet"):
+                        print(f"\n  Code:\n{issue['code_snippet']}")
+
+        except Exception as e:
+            print(f"Error analyzing {file}: {e}", file=sys.stderr)
+
+    # Print summary
+    print(f"\n{'='*60}")
+    if args.detect_anti_patterns:
+        print(f"Detection complete. Found {total_issues} anti-pattern(s).")
+    else:
+        print(f"Analysis complete. Found {total_issues} issue(s).")
+    print(f"{'='*60}")
