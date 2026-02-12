@@ -147,7 +147,7 @@
             "instructions": "Verify all agent types and workflow are documented"
           },
           "status": "completed",
-          "notes": "Created comprehensive 26KB documentation covering: Spec Creation Pipeline (3-8 phases with complexity adaptation), Implementation Pipeline (planner \u2192 coder \u2192 QA loop), All Agent Types (spec agents: gatherer, researcher, writer, critic, complexity assessor; implementation agents: planner, coder, qa_reviewer, qa_fixer, recovery), Memory System Integration, Data Flow, State Management, Security & Validation, Error Handling, Configuration, Performance Characteristics, Monitoring & Observability, Integration Points (Linear, GitHub, Electron MCP), Best Practices, and Troubleshooting. Follows ARCHITECTURE.md pattern with 50 sections, tables, diagrams, and code examples."
+          "notes": "Created comprehensive 26KB documentation covering: Spec Creation Pipeline (3-8 phases with complexity adaptation), Implementation Pipeline (planner → coder → QA loop), All Agent Types (spec agents: gatherer, researcher, writer, critic, complexity assessor; implementation agents: planner, coder, qa_reviewer, qa_fixer, recovery), Memory System Integration, Data Flow, State Management, Security & Validation, Error Handling, Configuration, Performance Characteristics, Monitoring & Observability, Integration Points (Linear, GitHub, Electron MCP), Best Practices, and Troubleshooting. Follows ARCHITECTURE.md pattern with 50 sections, tables, diagrams, and code examples."
         },
         {
           "id": "subtask-3-2",
@@ -250,7 +250,8 @@
             "type": "manual",
             "instructions": "Verify all CLI commands and parameters are documented"
           },
-          "status": "pending"
+          "status": "completed",
+          "notes": "Created comprehensive 907-line CLI API reference covering: run.py commands (all 50+ CLI options including build, workspace, QA, scheduler, analytics, and batch operations), spec_runner.py commands (all options including task, task-file, interactive, continue, complexity, model, thinking-level, project-dir, no-build, and no-ai-assessment), validate_spec.py commands (spec-dir, checkpoint, auto-fix, json), complexity tiers (simple, standard, complex with full pipeline descriptions), common workflows (first-time setup, daily development, debugging, multi-spec), environment configuration (required and optional variables), exit codes, troubleshooting, and examples throughout. All CLI commands from apps/backend/cli/main.py and apps/backend/runners/spec_runner.py are documented with options, descriptions, and practical usage examples. Follows backend-api.md pattern with tables, code blocks, clear organization, and comprehensive coverage."
         },
         {
           "id": "subtask-4-2",
@@ -267,7 +268,8 @@
             "type": "manual",
             "instructions": "Verify all IPC channels and payloads are documented"
           },
-          "status": "pending"
+          "status": "completed",
+          "notes": "Created comprehensive 1200+ line IPC API reference covering: ProjectAPI (project management, initialization, environment, memory infrastructure, git operations, Ollama management), TaskAPI (task operations, workspace management, event listeners, phase logs, token stats, merge analytics), TerminalAPI (terminal operations, session management, worktree operations, Claude profile management, account priority, usage monitoring), SettingsAPI (app settings, CLI tools detection, Sentry), FileAPI (file explorer operations), AgentAPI (aggregates Roadmap, Ideation, Insights, Changelog, Linear, GitHub, GitLab, Shell, SessionContext, ProductivityAnalytics), AppUpdateAPI (auto-update management), ProfileAPI (custom API endpoints), ScreenshotAPI (screen/window capture), QueueAPI (rate limit recovery), SchedulerAPI (build scheduling), PluginAPI (plugin management), FeedbackAPI (adaptive learning). Includes all IPC channel names, request/response payloads, event patterns, TypeScript types, security considerations, and usage examples. Follows CLI-API-REFERENCE.md pattern with tables, code examples, and comprehensive coverage."
         }
       ]
     },
@@ -466,5 +468,5 @@
   "qa_signoff": null,
   "status": "ai_review",
   "planStatus": "review",
-  "updated_at": "2026-02-12T16:27:45.538Z"
+  "updated_at": "2026-02-12T16:41:18.531Z"
 }
