@@ -368,7 +368,7 @@ def test_verdict_generation_logic():
 
     critical = [f for f in findings if f.severity == ReviewSeverity.CRITICAL]
     high = [f for f in findings if f.severity == ReviewSeverity.HIGH]
-    _security_critical = [f for f in critical if f.category == ReviewCategory.SECURITY]
+    # security_critical filtering available: [f for f in critical if f.category == ReviewCategory.SECURITY]
 
     blockers = []
     if not blockers and high:
