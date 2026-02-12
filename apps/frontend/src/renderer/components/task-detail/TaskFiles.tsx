@@ -8,13 +8,16 @@ import {
   FolderOpen,
   RefreshCw,
   ChevronRight,
-  ExternalLink
+  ExternalLink,
+  Users
 } from 'lucide-react';
 import { ScrollArea } from '../ui/scroll-area';
 import { Button } from '../ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip';
+import { Badge } from '../ui/badge';
 import { cn } from '../../lib/utils';
 import { useSettingsStore } from '../../stores/settings-store';
+import { CollaborativeSpecEditor } from '../collaboration/CollaborativeSpecEditor';
 import type { Task } from '../../../shared/types';
 import type { FileNode } from '../../../shared/types/project';
 
@@ -186,6 +189,9 @@ export function TaskFiles({ task }: TaskFilesProps) {
     );
   }
 
+  // Check if selected file is spec.md
+  const isSpecFile = selectedFile && selectedFile.endsWith('spec.md');
+
   // Render file content based on type
   const renderContent = () => {
     if (!selectedFile) {
@@ -228,6 +234,18 @@ export function TaskFiles({ task }: TaskFilesProps) {
 
     if (fileContent === null) return null;
 
+    // Render spec.md with collaborative editor
+    if (isSpecFile) {
+      return (
+        <CollaborativeSpecEditor
+          specId={task.specId}
+          initialContent={fileContent}
+          onContentChange={(content) => setFileContent(content)}
+          className="h-full"
+        />
+      );
+    }
+
     // Render JSON with formatting
     if (selectedFile.endsWith('.json')) {
       try {
@@ -247,7 +265,7 @@ export function TaskFiles({ task }: TaskFilesProps) {
       }
     }
 
-    // Render markdown/text files
+    // Render other markdown/text files
     return (
       <div className="prose prose-sm dark:prose-invert max-w-none p-4">
         <pre className="text-xs font-mono text-foreground whitespace-pre-wrap break-words bg-transparent border-0 p-0">
@@ -346,6 +364,12 @@ export function TaskFiles({ task }: TaskFilesProps) {
           <div className="px-4 py-2 border-b border-border flex items-center gap-2 shrink-0 bg-muted/30">
             {getFileIcon(selectedFileName)}
             <span className="text-sm font-medium flex-1">{selectedFileName}</span>
+            {isSpecFile && (
+              <Badge variant="outline" className="gap-1.5 border-primary/50 text-primary">
+                <Users className="h-3 w-3" aria-hidden="true" />
+                {t('tasks:files.collaborative')}
+              </Badge>
+            )}
             {settings.preferredIDE && (
               <Tooltip>
                 <TooltipTrigger asChild>
