@@ -106,5 +106,19 @@
       "title": "Aucun contenu de spécification",
       "description": "Générez une spécification pour voir l'aperçu"
     }
+  },
+  "testDialog": {
+    "title": "Tester le modèle",
+    "description": "Exécuter un test à blanc du modèle {{name}} avec un exemple d'entrée",
+    "templateName": "Modèle",
+    "category": "Catégorie",
+    "testInput": "Entrée de test",
+    "inputPlaceholder": "Entrez une description de tâche exemple pour tester le modèle...",
+    "inputHint": "Décrivez une tâche pour laquelle vous utiliseriez ce modèle. Le modèle générera une spécification sans apporter de modifications.",
+    "inputRequired": "L'entrée de test est requise",
+    "runTest": "Exécuter le test",
+    "running": "Test en cours...",
+    "testFailed": "Le test du modèle a échoué. Vérifiez la configuration du modèle et réessayez.",
+    "testSuccess": "Test réussi ! Le modèle a généré le contenu suivant :"
   }
 }

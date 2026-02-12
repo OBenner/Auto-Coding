@@ -106,5 +106,19 @@
     "deselectAll": "Deselect All",
     "noToolsSelected": "At least one tool must be selected",
     "autoClaudeRequired": "Auto-Code MCP is required and always enabled"
+  },
+  "testDialog": {
+    "title": "Test Template",
+    "description": "Run a dry-run test of {{name}} template with sample input",
+    "templateName": "Template",
+    "category": "Category",
+    "testInput": "Test Input",
+    "inputPlaceholder": "Enter a sample task description to test the template...",
+    "inputHint": "Describe a task you would use this template for. The template will generate a spec without making any changes.",
+    "inputRequired": "Test input is required",
+    "runTest": "Run Test",
+    "running": "Running test...",
+    "testFailed": "Template test failed. Please check the template configuration and try again.",
+    "testSuccess": "Test completed successfully! The template generated the following:"
   }
 }
