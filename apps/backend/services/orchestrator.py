@@ -200,8 +200,8 @@ class ServiceOrchestrator:
                         health_check_url=health_url,
                     )
                 )
-        except Exception:
-            pass
+        except (OSError, ValueError, KeyError, TypeError):
+            pass  # Docker compose parsing failed
 
     def _discover_monorepo_services(self) -> None:
         """Discover services in a monorepo structure."""
@@ -281,7 +281,7 @@ class ServiceOrchestrator:
         Returns:
             OrchestrationResult with status
         """
-        result = OrchestrationResult()
+        OrchestrationResult()
 
         if self._compose_file:
             return self._start_docker_compose(timeout)
@@ -380,8 +380,8 @@ class ServiceOrchestrator:
                     capture_output=True,
                     timeout=60,
                 )
-        except Exception:
-            pass
+        except (subprocess.SubprocessError, OSError):
+            pass  # Docker stop is best-effort during cleanup
 
     def _stop_local_services(self) -> None:
         """Stop local services."""
@@ -389,11 +389,11 @@ class ServiceOrchestrator:
             try:
                 proc.terminate()
                 proc.wait(timeout=10)
-            except Exception:
+            except (subprocess.SubprocessError, OSError):
                 try:
                     proc.kill()
-                except Exception:
-                    pass
+                except OSError:
+                    pass  # Process already exited
         self._processes.clear()
 
     def _get_docker_compose_cmd(self) -> list[str] | None:
@@ -407,8 +407,8 @@ class ServiceOrchestrator:
             )
             if proc.returncode == 0:
                 return ["docker", "compose", "-f", str(self._compose_file)]
-        except Exception:
-            pass
+        except (subprocess.SubprocessError, OSError):
+            pass  # Docker compose v2 not available
 
         # Try docker-compose v1
         try:
@@ -419,8 +419,8 @@ class ServiceOrchestrator:
             )
             if proc.returncode == 0:
                 return ["docker-compose", "-f", str(self._compose_file)]
-        except Exception:
-            pass
+        except (subprocess.SubprocessError, OSError):
+            pass  # Docker compose v1 not available
 
         return None
 

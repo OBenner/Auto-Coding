@@ -10,7 +10,6 @@ Tests the scan_secrets.py module functionality including:
 - Secret masking
 """
 
-import pytest
 from pathlib import Path
 
 from scan_secrets import (
@@ -20,11 +19,7 @@ from scan_secrets import (
     should_skip_file,
     mask_secret,
     load_secretsignore,
-    get_staged_files,
     SecretMatch,
-    ALL_PATTERNS,
-    DEFAULT_IGNORE_PATTERNS,
-    BINARY_EXTENSIONS,
 )
 
 
@@ -323,7 +318,6 @@ class TestIntegration:
 
     def test_end_to_end_scan(self, temp_git_repo: Path, stage_files):
         """Full scan workflow with staged files."""
-        import subprocess
 
         # Create files with potential secrets
         stage_files({

@@ -15,11 +15,8 @@ Usage:
 """
 
 import asyncio
-import hashlib
-import json
 import logging
 import sys
-from datetime import datetime, timezone
 from pathlib import Path
 
 # Add backend to path

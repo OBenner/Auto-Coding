@@ -249,8 +249,8 @@ def atomic_write(filepath: str | Path, mode: str = "w", encoding: str = "utf-8")
         # Clean up temp file on error
         try:
             os.unlink(tmp_path)
-        except Exception:
-            pass
+        except OSError:
+            pass  # Temp file already removed or inaccessible
         raise
 
 
@@ -315,8 +315,8 @@ async def locked_write(
                 await asyncio.get_running_loop().run_in_executor(
                     None, os.unlink, tmp_path
                 )
-            except Exception:
-                pass
+            except OSError:
+                pass  # Temp file already removed or inaccessible
             raise
 
     finally:
@@ -478,8 +478,8 @@ async def locked_json_update(
                 await asyncio.get_running_loop().run_in_executor(
                     None, os.unlink, tmp_path
                 )
-            except Exception:
-                pass
+            except OSError:
+                pass  # Temp file already removed or inaccessible
             raise
 
         return updated_data

@@ -316,7 +316,7 @@ def validate_test_quality(test_files: list[Path], project_dir: Path) -> dict[str
         - score: Quality score (0-100)
         - metrics: Dictionary with detailed metrics
     """
-    from dataclasses import dataclass, field
+    from dataclasses import dataclass
 
     @dataclass
     class QualityIssue:

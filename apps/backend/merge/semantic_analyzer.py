@@ -39,7 +39,7 @@ except ImportError:
         """No-op fallback when debug module is unavailable."""
 
 
-logger = logging.getLogger(__name__)
+_logger = logging.getLogger(__name__)
 MODULE = "merge.semantic_analyzer"
 
 # Import regex-based analyzer

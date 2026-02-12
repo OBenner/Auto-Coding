@@ -237,7 +237,7 @@ class GitHubMemoryIntegration:
                 # Initialize
                 await self._graphiti.initialize()
 
-            except Exception as e:
+            except Exception:
                 self._graphiti = None
                 return None
 
@@ -466,8 +466,8 @@ class GitHubMemoryIntegration:
                         "notes": notes,
                     },
                 )
-            except Exception:
-                pass
+            except (OSError, ValueError, TypeError, RuntimeError):
+                pass  # Memory save is best-effort, non-critical
 
     async def get_codebase_patterns(
         self,
@@ -508,8 +508,8 @@ class GitHubMemoryIntegration:
                                 source="graphiti",
                             )
                         )
-            except Exception:
-                pass
+            except (OSError, ValueError, TypeError, RuntimeError, KeyError):
+                pass  # Memory retrieval is best-effort
 
         # Add local patterns
         for insight in self._local_insights:
@@ -566,8 +566,8 @@ class GitHubMemoryIntegration:
                 if explanations:
                     return "Historical context:\n" + "\n".join(explanations)
 
-        except Exception:
-            pass
+        except (OSError, ValueError, TypeError, RuntimeError, KeyError):
+            pass  # Memory retrieval is best-effort
 
         return None
 
@@ -576,8 +576,8 @@ class GitHubMemoryIntegration:
         if self._graphiti:
             try:
                 await self._graphiti.close()
-            except Exception:
-                pass
+            except (OSError, RuntimeError):
+                pass  # Connection cleanup is best-effort
             self._graphiti = None
 
     def get_summary(self) -> dict[str, Any]:

@@ -170,7 +170,7 @@ async def get_usage_stats(
         total_requests = sum(item.total_requests for item in usage_periods)
 
         logger.info(
-            f"Retrieved usage stats for user {user_id}: "
+            f"Retrieved usage stats for user {_sanitize_log(str(user_id))}: "
             f"{total_requests} total requests over {len(usage_periods)} periods"
         )
 
@@ -243,7 +243,7 @@ async def get_usage_dashboard(
         total_requests_this_month = monthly_usage[0]["total_requests"] if monthly_usage else 0
 
         logger.info(
-            f"Dashboard stats for user {user_id}: "
+            f"Dashboard stats for user {_sanitize_log(str(user_id))}: "
             f"{total_requests_today} today, {total_requests_this_month} this month"
         )
 
@@ -293,5 +293,4 @@ async def usage_health_check(
             "status": "unhealthy",
             "redis": "error",
             "service": "usage-tracking",
-            "error": str(e)
         }

@@ -7,7 +7,6 @@ including time tracking, completion velocity, session counts, and QA iterations.
 """
 
 import json
-import os
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -279,7 +278,7 @@ class TestPhaseDurationCalculation:
         """Should use updated_at when started_at/completed_at missing."""
         from agents.tools_pkg.tools.statistics import _calculate_phase_durations
 
-        start_time = datetime(2026, 1, 26, 10, 0, 0, tzinfo=timezone.utc)
+        datetime(2026, 1, 26, 10, 0, 0, tzinfo=timezone.utc)
         end_time = datetime(2026, 1, 26, 11, 0, 0, tzinfo=timezone.utc)
 
         phases = [

@@ -11,6 +11,7 @@ Falls back to generic "uncategorized" if classification fails (never blocks the 
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -375,8 +376,6 @@ def categorize_pattern_sync(pattern: str, project_dir: Path | None = None) -> di
     Returns:
         Dict with category, confidence, and reasoning
     """
-    import asyncio
-
     try:
         return asyncio.run(categorize_pattern(pattern, project_dir))
     except Exception as e:
@@ -390,7 +389,6 @@ def categorize_pattern_sync(pattern: str, project_dir: Path | None = None) -> di
 
 if __name__ == "__main__":
     import argparse
-    import asyncio
 
     parser = argparse.ArgumentParser(description="Test pattern categorization")
     parser.add_argument(

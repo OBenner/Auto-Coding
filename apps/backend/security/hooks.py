@@ -122,9 +122,9 @@ async def bash_security_hook(
                 cmd_segment = command
 
             validator = VALIDATORS[cmd]
-            allowed, reason = validator(cmd_segment)
-            if not allowed:
-                return {"decision": "block", "reason": reason}
+            validation_ok, validation_reason = validator(cmd_segment)
+            if not validation_ok:
+                return {"decision": "block", "reason": validation_reason}
 
     return {}
 
@@ -165,8 +165,8 @@ def validate_command(
                 cmd_segment = command
 
             validator = VALIDATORS[cmd]
-            allowed, reason = validator(cmd_segment)
-            if not allowed:
-                return False, reason
+            validation_ok, validation_reason = validator(cmd_segment)
+            if not validation_ok:
+                return False, validation_reason
 
     return True, ""

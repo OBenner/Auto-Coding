@@ -763,7 +763,6 @@ class TestSubtaskCompletionDetection:
 
     def test_subtask_status_transition_through_in_progress(self, test_env):
         """Test detecting subtask transition through in_progress state."""
-        from agents.utils import load_implementation_plan, find_subtask_in_plan
         from progress import count_subtasks_detailed
 
         temp_dir, spec_dir, project_dir = test_env
@@ -1256,7 +1255,6 @@ class TestQALoopWorkflow:
     def test_full_qa_workflow_with_one_rejection(self, test_env):
         """Test QA workflow with one rejection followed by approval."""
         from qa_loop import (
-            should_run_qa,
             should_run_fixes,
             is_qa_approved,
             is_qa_rejected,

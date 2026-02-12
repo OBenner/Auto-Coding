@@ -88,7 +88,8 @@ export class WebSocketClient {
 
   private log(message: string, ...args: unknown[]): void {
     if (this.config.debug) {
-      console.log(`[WebSocketClient] ${WebSocketClient.sanitize(message)}`, ...args);
+      const sanitizedArgs = args.map(a => WebSocketClient.sanitize(a));
+      console.log(`[WebSocketClient] ${WebSocketClient.sanitize(message)}`, ...sanitizedArgs);
     }
   }
 

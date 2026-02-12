@@ -125,6 +125,8 @@ console.error = (...args: unknown[]) => {
   // biome-ignore lint/suspicious/noControlCharactersInRegex: Sanitizing for log injection
   const message = String(args[0] ?? '').replace(/[\x00-\x1f\x7f]/g, '');
   if (message.includes('[TEST]')) {
-    originalConsoleError(...args);
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: Sanitizing for log injection
+    const sanitizedArgs = args.map(a => String(a).replace(/[\x00-\x1f\x7f]/g, '').slice(0, 500));
+    originalConsoleError(...sanitizedArgs);
   }
 };

@@ -174,8 +174,8 @@ class TimelineGitHelper:
                     else None
                 )
 
-        except Exception:
-            pass
+        except (subprocess.SubprocessError, OSError, ValueError):
+            pass  # Git command failed, return partial info
 
         return info
 
@@ -306,8 +306,8 @@ class TimelineGitHelper:
                 if "/" in upstream:
                     return upstream.split("/", 1)[1]
                 return upstream
-        except Exception:
-            pass
+        except (subprocess.SubprocessError, OSError):
+            pass  # No upstream tracking branch found
 
         for branch in ["main", "master", "develop"]:
             try:

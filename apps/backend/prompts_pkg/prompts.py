@@ -267,8 +267,6 @@ def _get_recovery_context(spec_dir: Path) -> str:
     Returns:
         Recovery context string or empty string
     """
-    import json
-
     attempt_history_file = spec_dir / "memory" / "attempt_history.json"
 
     if not attempt_history_file.exists():

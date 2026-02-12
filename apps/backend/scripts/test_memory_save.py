@@ -280,8 +280,8 @@ async def test_memory_save_flow():
                         context="verification_script",
                     )
                     print("[INFO] Exception captured to Sentry")
-            except Exception:
-                pass
+            except (OSError, RuntimeError, ValueError):
+                pass  # Sentry capture is optional
 
             return False
 

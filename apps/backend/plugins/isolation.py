@@ -42,43 +42,47 @@ try:
     from debug import (
         debug_warning as _raw_debug_warning,
     )
-
-    def debug(msg: str, **kwargs) -> None:
-        """Debug log with source module."""
-        _raw_debug(_SOURCE, msg, **kwargs)
-
-    def debug_verbose(msg: str, **kwargs) -> None:
-        """Verbose debug log with source module."""
-        _raw_debug_verbose(_SOURCE, msg, **kwargs)
-
-    def debug_success(msg: str, **kwargs) -> None:
-        """Success debug log with source module."""
-        _raw_debug_success(_SOURCE, msg, **kwargs)
-
-    def debug_error(msg: str, **kwargs) -> None:
-        """Error debug log with source module."""
-        _raw_debug_error(_SOURCE, msg, **kwargs)
-
-    def debug_warning(msg: str, **kwargs) -> None:
-        """Warning debug log with source module."""
-        _raw_debug_warning(_SOURCE, msg, **kwargs)
-
 except ImportError:
 
-    def debug(*args, **kwargs):
+    def _raw_debug(*_args, **_kwargs):
         """No-op fallback when debug module is unavailable."""
 
-    def debug_verbose(*args, **kwargs):
+    def _raw_debug_error(*_args, **_kwargs):
         """No-op fallback when debug module is unavailable."""
 
-    def debug_success(*args, **kwargs):
+    def _raw_debug_success(*_args, **_kwargs):
         """No-op fallback when debug module is unavailable."""
 
-    def debug_error(*args, **kwargs):
+    def _raw_debug_verbose(*_args, **_kwargs):
         """No-op fallback when debug module is unavailable."""
 
-    def debug_warning(*args, **kwargs):
+    def _raw_debug_warning(*_args, **_kwargs):
         """No-op fallback when debug module is unavailable."""
+
+
+def _debug(msg: str, **kwargs) -> None:
+    """Debug log with source module."""
+    _raw_debug(_SOURCE, msg, **kwargs)
+
+
+def _debug_verbose(msg: str, **kwargs) -> None:
+    """Verbose debug log with source module."""
+    _raw_debug_verbose(_SOURCE, msg, **kwargs)
+
+
+def _debug_success(msg: str, **kwargs) -> None:
+    """Success debug log with source module."""
+    _raw_debug_success(_SOURCE, msg, **kwargs)
+
+
+def _debug_error(msg: str, **kwargs) -> None:
+    """Error debug log with source module."""
+    _raw_debug_error(_SOURCE, msg, **kwargs)
+
+
+def _debug_warning(msg: str, **kwargs) -> None:
+    """Warning debug log with source module."""
+    _raw_debug_warning(_SOURCE, msg, **kwargs)
 
 
 @dataclass
@@ -243,8 +247,8 @@ class PluginSandbox:
         self._start_time: float = 0.0
 
         logger.debug(f"Initialized sandbox for plugin at: {self.plugin_dir}")
-        debug_verbose(f"Allowed directories: {[str(d) for d in self.allowed_dirs]}")
-        debug_verbose(f"Resource limits: {self.limits.to_dict()}")
+        _debug_verbose(f"Allowed directories: {[str(d) for d in self.allowed_dirs]}")
+        _debug_verbose(f"Resource limits: {self.limits.to_dict()}")
 
     def _validate_path(self, path: Path) -> None:
         """
@@ -344,9 +348,9 @@ class PluginSandbox:
         if args:
             cmd.extend(args)
 
-        debug(f"Executing plugin script: {script}")
-        debug_verbose(f"Command: {' '.join(cmd)}")
-        debug_verbose(f"Working dir: {working_dir}")
+        _debug(f"Executing plugin script: {script}")
+        _debug_verbose(f"Command: {' '.join(cmd)}")
+        _debug_verbose(f"Working dir: {working_dir}")
 
         return self._execute_subprocess(cmd, working_dir)
 
@@ -398,11 +402,11 @@ class PluginSandbox:
                 result.success = self._process.returncode == 0
 
                 if result.success:
-                    debug_success(
+                    _debug_success(
                         f"Plugin executed successfully in {result.execution_time:.2f}s"
                     )
                 else:
-                    debug_warning(
+                    _debug_warning(
                         f"Plugin exited with code {result.return_code}: {stderr[:200]}"
                     )
 
@@ -412,16 +416,16 @@ class PluginSandbox:
                     f"Execution timeout ({self.limits.max_execution_seconds}s exceeded)"
                 )
                 result.violated_limits.append("max_execution_seconds")
-                debug_error(f"Plugin execution timeout: {result.error}")
+                _debug_error(f"Plugin execution timeout: {result.error}")
 
         except Exception as e:
             result.error = f"Execution failed: {str(e)}"
-            debug_error(f"Plugin execution error: {result.error}")
+            _debug_error(f"Plugin execution error: {result.error}")
             if self._process:
                 try:
                     self._process.kill()
-                except Exception:
-                    pass
+                except OSError:
+                    pass  # Process already exited
 
         finally:
             self._process = None
@@ -449,7 +453,7 @@ class PluginSandbox:
 
                 process = psutil.Process(self._process.pid)
             except ImportError:
-                debug_warning(
+                _debug_warning(
                     "psutil not available, resource monitoring disabled. "
                     "Install psutil for CPU/memory limit enforcement."
                 )
@@ -460,7 +464,7 @@ class PluginSandbox:
                     # Check memory usage
                     memory_mb = process.memory_info().rss / (1024 * 1024)
                     if memory_mb > self.limits.max_memory_mb:
-                        debug_error(
+                        _debug_error(
                             f"Plugin exceeded memory limit: {memory_mb:.0f}MB > {self.limits.max_memory_mb}MB"
                         )
                         self._process.kill()
@@ -469,7 +473,7 @@ class PluginSandbox:
                     # Check CPU usage (averaged over 1 second)
                     cpu_percent = process.cpu_percent(interval=1.0)
                     if cpu_percent > self.limits.max_cpu_percent:
-                        debug_warning(
+                        _debug_warning(
                             f"Plugin high CPU usage: {cpu_percent:.0f}% > {self.limits.max_cpu_percent}%"
                         )
                         # Note: We warn but don't kill on CPU - it's often bursty
@@ -480,7 +484,7 @@ class PluginSandbox:
                     break
 
         except Exception as e:
-            debug_error(f"Resource monitoring error: {e}")
+            _debug_error(f"Resource monitoring error: {e}")
 
     def cleanup(self) -> None:
         """
@@ -493,11 +497,11 @@ class PluginSandbox:
                 self._process.kill()
                 self._process.wait(timeout=5)
             except Exception as e:
-                debug_error(f"Error during sandbox cleanup: {e}")
+                _debug_error(f"Error during sandbox cleanup: {e}")
             finally:
                 self._process = None
 
-        debug_verbose("Sandbox cleanup complete")
+        _debug_verbose("Sandbox cleanup complete")
 
     def __enter__(self) -> PluginSandbox:
         """Context manager entry."""

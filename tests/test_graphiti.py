@@ -2,7 +2,7 @@
 import os
 import pytest
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 # Add auto-claude to path
 import sys
@@ -407,7 +407,7 @@ class TestGraphitiProviders:
 
     def test_embedding_dimensions_lookup(self):
         """get_expected_embedding_dim returns correct dimensions."""
-        from graphiti_providers import get_expected_embedding_dim, EMBEDDING_DIMENSIONS
+        from graphiti_providers import get_expected_embedding_dim
 
         # Test known models
         assert get_expected_embedding_dim("text-embedding-3-small") == 1536

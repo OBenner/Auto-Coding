@@ -70,8 +70,8 @@ def load_project_context(project_dir: str) -> str:
             context_parts.append(
                 f"## Project Structure\n```json\n{json.dumps(summary, indent=2)}\n```"
             )
-        except Exception:
-            pass
+        except (OSError, json.JSONDecodeError, KeyError, ValueError):
+            pass  # Project index unavailable or malformed
 
     # Load roadmap if available
     roadmap_path = Path(project_dir) / ".auto-claude" / "roadmap" / "roadmap.json"
@@ -88,8 +88,8 @@ def load_project_context(project_dir: str) -> str:
             context_parts.append(
                 f"## Roadmap Features\n```json\n{json.dumps(feature_summary, indent=2)}\n```"
             )
-        except Exception:
-            pass
+        except (OSError, json.JSONDecodeError, KeyError, ValueError):
+            pass  # Roadmap unavailable or malformed
 
     # Load existing tasks
     tasks_path = Path(project_dir) / ".auto-claude" / "specs"
@@ -101,8 +101,8 @@ def load_project_context(project_dir: str) -> str:
                 context_parts.append(
                     "## Existing Tasks/Specs\n- " + "\n- ".join(task_names)
                 )
-        except Exception:
-            pass
+        except OSError:
+            pass  # Specs directory inaccessible
 
     return (
         "\n\n".join(context_parts)

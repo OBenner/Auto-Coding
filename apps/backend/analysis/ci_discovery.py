@@ -299,8 +299,8 @@ class CIDiscovery:
             if isinstance(variables, dict):
                 result.environment_variables.extend(variables.keys())
 
-        except Exception:
-            pass
+        except (ValueError, KeyError, TypeError, OSError):
+            pass  # Config parsing failed, return partial result
 
         return result
 
@@ -357,8 +357,8 @@ class CIDiscovery:
                     )
                 )
 
-        except Exception:
-            pass
+        except (ValueError, KeyError, TypeError, OSError):
+            pass  # Config parsing failed, return partial result
 
         return result
 
@@ -377,7 +377,6 @@ class CIDiscovery:
             matches = sh_pattern.findall(content)
 
             steps = []
-            test_related = False
 
             for cmd in matches:
                 steps.append(cmd)
@@ -386,7 +385,7 @@ class CIDiscovery:
                 if any(
                     kw in cmd.lower() for kw in ["test", "pytest", "jest", "coverage"]
                 ):
-                    test_related = True
+                    pass
 
             # Extract stage names
             stage_pattern = re.compile(r'stage\s*\([\'"]([^\'"]+)[\'"]\)')
@@ -402,8 +401,8 @@ class CIDiscovery:
                     )
                 )
 
-        except Exception:
-            pass
+        except (ValueError, KeyError, TypeError, OSError):
+            pass  # Config parsing failed, return partial result
 
         return result
 
@@ -412,7 +411,7 @@ class CIDiscovery:
         if HAS_YAML:
             try:
                 return yaml.safe_load(content)
-            except Exception:
+            except (ValueError, TypeError):
                 return None
 
         # Basic fallback for simple YAML (very limited)

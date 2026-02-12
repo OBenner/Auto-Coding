@@ -2,6 +2,7 @@ import { spawn, ChildProcess } from 'child_process';
 import { existsSync, writeFileSync, unlinkSync } from 'fs';
 import path from 'path';
 import os from 'os';
+import crypto from 'crypto';
 import { EventEmitter } from 'events';
 import type {
   InsightsChatMessage,
@@ -88,9 +89,10 @@ export class InsightsExecutor extends EventEmitter {
     const processEnv = await this.config.getProcessEnv();
 
     // Write conversation history to temp file to avoid Windows command-line length limit
+    // Use crypto.randomUUID() to prevent predictable temp file paths
     const historyFile = path.join(
       os.tmpdir(),
-      `insights-history-${projectId}-${Date.now()}.json`
+      `insights-history-${projectId}-${Date.now()}-${crypto.randomUUID()}.json`
     );
 
     let historyFileCreated = false;

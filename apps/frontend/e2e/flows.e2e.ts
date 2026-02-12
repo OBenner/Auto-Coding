@@ -11,9 +11,11 @@
 import { test, expect, _electron as electron, ElectronApplication, Page } from '@playwright/test';
 import { mkdirSync, rmSync, existsSync, writeFileSync, readFileSync } from 'fs';
 import path from 'path';
+import os from 'os';
+import crypto from 'crypto';
 
-// Test data directory
-const TEST_DATA_DIR = '/tmp/auto-code-ui-e2e';
+// Test data directory - use os.tmpdir() + random suffix to avoid predictable temp paths
+const TEST_DATA_DIR = path.join(os.tmpdir(), `auto-code-ui-e2e-${crypto.randomUUID()}`);
 const TEST_PROJECT_DIR = path.join(TEST_DATA_DIR, 'test-project');
 
 // Setup test environment
@@ -120,12 +122,13 @@ test.describe('Add Project Flow', () => {
     test.skip(!app, 'App not launched');
 
     // Mock the dialog to return test project path
-    await app.evaluate(({ dialog }) => {
+    const testDir = TEST_PROJECT_DIR;
+    await app.evaluate(({ dialog }, dir) => {
       dialog.showOpenDialog = async () => ({
         canceled: false,
-        filePaths: ['/tmp/auto-code-ui-e2e/test-project']
+        filePaths: [dir]
       });
-    });
+    }, testDir);
 
     // Click add project
     const addButton = await page.locator(

@@ -8,7 +8,6 @@ Verifies that:
 3. Complete workflow integration functions properly
 """
 
-import json
 import sys
 from pathlib import Path
 
@@ -22,7 +21,7 @@ from critique import (
     format_critique_summary,
     CritiqueResult,
 )
-from implementation_plan import Subtask, SubtaskStatus, Verification, VerificationType
+from implementation_plan import Subtask, SubtaskStatus
 
 
 def test_critique_data_structures():

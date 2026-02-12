@@ -13,7 +13,6 @@ These tests validate:
 
 import json
 import sys
-from dataclasses import asdict
 
 from context_gatherer import AI_BOT_PATTERNS, AIBotComment
 

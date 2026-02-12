@@ -396,8 +396,8 @@ class SecurityScanner:
             pass  # pip-audit not available
         except subprocess.TimeoutExpired:
             pass
-        except Exception:
-            pass
+        except (OSError, ValueError, KeyError):
+            pass  # pip-audit output parsing failed
 
     def _is_python_project(self, project_dir: Path) -> bool:
         """Check if this is a Python project."""
@@ -444,8 +444,7 @@ class SecurityScanner:
         """Convert result to dictionary for JSON serialization."""
         # Redact matched_text to prevent clear-text secret logging
         redacted_secrets = [
-            {**secret, "matched_text": "[redacted]"}
-            for secret in result.secrets
+            {**secret, "matched_text": "[redacted]"} for secret in result.secrets
         ]
         return {
             "secrets": redacted_secrets,

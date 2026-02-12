@@ -5,21 +5,15 @@ Provides WebSocket connections for clients to receive real-time agent progress u
 Clients can subscribe to specific spec IDs and receive execution, ideation, and roadmap events.
 """
 
-import asyncio
 import json
 import logging
 from datetime import datetime
 from typing import Dict, Set
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, status
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from api.models.agent_event import (
     AgentEvent,
-    ExecutionEvent,
-    IdeationEvent,
-    RoadmapEvent,
     LogEvent,
     ErrorEvent,
-    WebSocketMessage,
-    PhaseEvent,
 )
 
 logger = logging.getLogger(__name__)

@@ -5,10 +5,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mkdirSync, writeFileSync, rmSync, existsSync } from 'fs';
 import path from 'path';
+import os from 'os';
+import crypto from 'crypto';
 import { EventEmitter } from 'events';
 
-// Test directories
-const TEST_DIR = '/tmp/file-watcher-test';
+// Test directories - use os.tmpdir() + random suffix to avoid predictable temp paths
+const TEST_DIR = path.join(os.tmpdir(), `file-watcher-test-${crypto.randomUUID()}`);
 const TEST_SPEC_DIR = path.join(TEST_DIR, 'test-spec');
 
 // Mock chokidar watcher

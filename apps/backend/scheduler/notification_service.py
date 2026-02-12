@@ -320,7 +320,7 @@ async def send_desktop_notification(
             await proc.communicate()
             return proc.returncode == 0
 
-    except Exception as e:
+    except Exception:
         # Silent failure - notifications shouldn't break the build
         pass
 

@@ -18,11 +18,8 @@ Usage:
 import asyncio
 import json
 import sys
-import time
 from datetime import datetime
-from pathlib import Path
 import websockets
-from websockets.exceptions import ConnectionClosed
 
 # Test configuration
 BACKEND_URL = "http://localhost:8000"
@@ -293,7 +290,7 @@ async def test_unsubscribe():
                 "action": "subscribe",
                 "spec_id": TEST_SPEC_ID
             }))
-            sub_response = await asyncio.wait_for(websocket.recv(), timeout=5.0)
+            await asyncio.wait_for(websocket.recv(), timeout=5.0)
             print_info("Subscribed")
 
             # Unsubscribe
@@ -360,8 +357,8 @@ async def test_multiple_clients():
                         event = json.loads(msg)
                         if event.get("event_type") == "log":
                             received_by_client1.append(event)
-                except Exception:
-                    pass
+                except (asyncio.TimeoutError, OSError, json.JSONDecodeError):
+                    pass  # Listener timeout or connection closed
 
             async def listen_client2():
                 try:
@@ -370,8 +367,8 @@ async def test_multiple_clients():
                         event = json.loads(msg)
                         if event.get("event_type") == "log":
                             received_by_client2.append(event)
-                except Exception:
-                    pass
+                except (asyncio.TimeoutError, OSError, json.JSONDecodeError):
+                    pass  # Listener timeout or connection closed
 
             async def broadcast():
                 await asyncio.sleep(0.5)

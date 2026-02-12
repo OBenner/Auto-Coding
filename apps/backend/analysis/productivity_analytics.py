@@ -396,7 +396,7 @@ def _extract_spec_metrics(spec_dir: Path) -> SpecMetrics | None:
             unique_sessions=unique_sessions,
         )
 
-    except (OSError, json.JSONDecodeError, UnicodeDecodeError) as e:
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError):
         return None
 
 
