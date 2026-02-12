@@ -1,13 +1,14 @@
 {
-  "title": "Spec Editor",
+  "title": "Collaborative Editor",
   "status": {
     "connected": "Connected",
     "connecting": "Connecting...",
     "disconnected": "Disconnected",
-    "error": "Connection Error"
+    "error": "Error"
   },
   "errors": {
     "connectionFailed": "Failed to connect to collaboration server",
+    "addCommentFailed": "Failed to add comment",
     "unknown": "An unknown error occurred"
   },
   "actions": {
@@ -19,7 +20,63 @@
     "viewing": "Viewing",
     "editing": "Editing",
     "idle": "Idle",
-    "activeUsers": "active",
-    "additionalUsers": "and {{count}} more"
+    "activeUsers": "active users",
+    "additionalUsers": "+{{count}} more"
+  },
+  "comments": {
+    "addComment": "Add Comment",
+    "noComments": "No comments yet",
+    "resolved": "Resolved",
+    "reply": "Reply",
+    "reopen": "Reopen",
+    "resolve": "Resolve",
+    "hideReplies": "Hide {{count}} replies",
+    "showReplies": "Show {{count}} replies",
+    "resolvedBy": "Resolved by {{user}} {{when}}",
+    "replyingTo": "Replying to comment",
+    "replyPlaceholder": "Write a reply...",
+    "newCommentPlaceholder": "Write a comment...",
+    "keyboardHint": "Ctrl+Enter to submit",
+    "submit": "Submit",
+    "submitReply": "Submit Reply",
+    "posting": "Posting..."
+  },
+  "suggestions": {
+    "title": "Suggestions",
+    "add": "Add Suggestion",
+    "total": "total",
+    "noSuggestions": "No suggestions yet",
+    "noSuggestionsHint": "Propose changes without directly editing the spec",
+    "create": "Create",
+    "creating": "Creating...",
+    "createTitle": "Create Suggestion",
+    "createDescription": "Propose a change to the spec with an explanation",
+    "originalText": "Original Text",
+    "originalTextPlaceholder": "Paste the current text from the spec...",
+    "suggestedText": "Suggested Text",
+    "suggestedTextPlaceholder": "Enter your proposed change...",
+    "reason": "Reason",
+    "reasonOptional": "Reason (optional)",
+    "reasonPlaceholder": "Explain why this change should be made (optional)...",
+    "original": "Original",
+    "suggested": "Suggested",
+    "toggleView": "Toggle view mode",
+    "accept": "Accept suggestion",
+    "reject": "Reject suggestion",
+    "delete": "Delete suggestion",
+    "confirmDelete": "Are you sure you want to delete this suggestion?",
+    "reviewCommentPlaceholder": "Add a comment explaining your decision (required for rejection)...",
+    "submitReject": "Submit Rejection",
+    "reviewedBy": "{{status}} by {{user}} {{when}}",
+    "status": {
+      "pending": "Pending",
+      "accepted": "Accepted",
+      "rejected": "Rejected"
+    },
+    "errors": {
+      "missingFields": "Please fill in both original and suggested text",
+      "createFailed": "Failed to create suggestion",
+      "unknown": "An unknown error occurred"
+    }
   }
 }

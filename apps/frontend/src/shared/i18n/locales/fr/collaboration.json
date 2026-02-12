@@ -1,13 +1,14 @@
 {
-  "title": "Éditeur de Spécification",
+  "title": "Éditeur Collaboratif",
   "status": {
     "connected": "Connecté",
     "connecting": "Connexion...",
     "disconnected": "Déconnecté",
-    "error": "Erreur de Connexion"
+    "error": "Erreur"
   },
   "errors": {
     "connectionFailed": "Échec de la connexion au serveur de collaboration",
+    "addCommentFailed": "Échec de l'ajout du commentaire",
     "unknown": "Une erreur inconnue s'est produite"
   },
   "actions": {
@@ -17,9 +18,65 @@
   "characters": "caractères",
   "presence": {
     "viewing": "En consultation",
-    "editing": "En édition",
+    "editing": "En cours d'édition",
     "idle": "Inactif",
-    "activeUsers": "actifs",
-    "additionalUsers": "et {{count}} autres"
+    "activeUsers": "utilisateurs actifs",
+    "additionalUsers": "+{{count}} autres"
+  },
+  "comments": {
+    "addComment": "Ajouter un Commentaire",
+    "noComments": "Aucun commentaire pour le moment",
+    "resolved": "Résolu",
+    "reply": "Répondre",
+    "reopen": "Rouvrir",
+    "resolve": "Résoudre",
+    "hideReplies": "Masquer {{count}} réponses",
+    "showReplies": "Afficher {{count}} réponses",
+    "resolvedBy": "Résolu par {{user}} {{when}}",
+    "replyingTo": "Réponse au commentaire",
+    "replyPlaceholder": "Écrire une réponse...",
+    "newCommentPlaceholder": "Écrire un commentaire...",
+    "keyboardHint": "Ctrl+Entrée pour envoyer",
+    "submit": "Envoyer",
+    "submitReply": "Envoyer la Réponse",
+    "posting": "Publication..."
+  },
+  "suggestions": {
+    "title": "Suggestions",
+    "add": "Ajouter une Suggestion",
+    "total": "total",
+    "noSuggestions": "Aucune suggestion pour le moment",
+    "noSuggestionsHint": "Proposez des modifications sans modifier directement la spec",
+    "create": "Créer",
+    "creating": "Création...",
+    "createTitle": "Créer une Suggestion",
+    "createDescription": "Proposez un changement à la spec avec une explication",
+    "originalText": "Texte Original",
+    "originalTextPlaceholder": "Collez le texte actuel de la spec...",
+    "suggestedText": "Texte Suggéré",
+    "suggestedTextPlaceholder": "Entrez votre changement proposé...",
+    "reason": "Raison",
+    "reasonOptional": "Raison (facultatif)",
+    "reasonPlaceholder": "Expliquez pourquoi ce changement devrait être fait (facultatif)...",
+    "original": "Original",
+    "suggested": "Suggéré",
+    "toggleView": "Changer le mode d'affichage",
+    "accept": "Accepter la suggestion",
+    "reject": "Rejeter la suggestion",
+    "delete": "Supprimer la suggestion",
+    "confirmDelete": "Êtes-vous sûr de vouloir supprimer cette suggestion ?",
+    "reviewCommentPlaceholder": "Ajoutez un commentaire expliquant votre décision (requis pour le rejet)...",
+    "submitReject": "Soumettre le Rejet",
+    "reviewedBy": "{{status}} par {{user}} {{when}}",
+    "status": {
+      "pending": "En attente",
+      "accepted": "Accepté",
+      "rejected": "Rejeté"
+    },
+    "errors": {
+      "missingFields": "Veuillez remplir le texte original et suggéré",
+      "createFailed": "Échec de la création de la suggestion",
+      "unknown": "Une erreur inconnue s'est produite"
+    }
   }
 }
