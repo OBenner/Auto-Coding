@@ -149,3 +149,40 @@ Subtask subtask-3-2 (Anti-pattern detection): COMPLETED
 - Commit: 5b9ae47f
 
 === END SESSION 5 ===
+
+=== SESSION 6 (Coder) ===
+
+Subtask subtask-5-3 (Predictive scan CLI): COMPLETED
+- Created apps/backend/cli/predictive_scan_commands.py
+- Implemented three CLI commands:
+  * scan: Run comprehensive predictive scan with configurable detection options
+    - Supports bug/performance/code_smell detection toggles
+    - Optional LLM analysis (--no-llm flag for faster scans)
+    - JSON output support (--json flag)
+    - File pattern filtering (--file-patterns)
+    - Returns exit code 1 if critical issues found, 0 if safe
+  * status: Display historical trends and prevention effectiveness
+    - Shows issue summary (total, resolved, active)
+    - Trends over configurable time period (--days, default 30)
+    - Prevention rate calculation
+    - Top issue categories
+  * check: CI/CD blocking check for deployment pipelines
+    - Fast scan without LLM analysis
+    - Configurable severity thresholds (--fail-on-high for high+critical)
+    - Returns exit codes: 0=pass, 1=fail, 2=error
+    - Suitable for GitHub Actions, GitLab CI, Jenkins, etc.
+- Following patterns from qa_commands.py:
+  - print_banner() for consistent branding
+  - Icon usage from ui module (Icons, icon, success, warning, info, muted)
+  - Error handling with try/except blocks
+  - Proper exit codes for automation
+  - Helper function _print_scan_result() for formatted output
+- CLI features:
+  - Comprehensive help text with examples
+  - Flexible project directory detection (--project-dir, default: cwd)
+  - Optional spec directory for historical tracking (--spec-dir)
+  - All commands handle missing predictive scanner gracefully
+- Verification: PASSED (help command displays correctly)
+- Commit: 233468f0
+
+=== END SESSION 6 ===

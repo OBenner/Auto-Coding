@@ -24,6 +24,11 @@ from .batch_commands import (
 )
 from .build_commands import handle_build_command
 from .followup_commands import handle_followup_command
+from .predictive_scan_commands import (
+    handle_predictive_scan_check_command,
+    handle_predictive_scan_command,
+    handle_predictive_scan_status_command,
+)
 from .qa_commands import (
     handle_qa_command,
     handle_qa_status_command,
@@ -419,6 +424,65 @@ Environment Variables:
         help="Export analytics to file (with --analytics)",
     )
 
+    # Predictive scan commands
+    parser.add_argument(
+        "--predictive-scan",
+        action="store_true",
+        help="Run predictive issue scan on project",
+    )
+    parser.add_argument(
+        "--predictive-status",
+        action="store_true",
+        help="Show predictive scan status and trends",
+    )
+    parser.add_argument(
+        "--predictive-check",
+        action="store_true",
+        help="CI/CD blocking check (exits 1 if critical issues found)",
+    )
+    parser.add_argument(
+        "--scan-file-patterns",
+        nargs="+",
+        metavar="PATTERN",
+        help="Glob patterns to scan (e.g., '**/*.py')",
+    )
+    parser.add_argument(
+        "--no-scan-llm",
+        action="store_true",
+        help="Disable LLM analysis for faster scan",
+    )
+    parser.add_argument(
+        "--scan-json",
+        action="store_true",
+        help="Output scan results as JSON",
+    )
+    parser.add_argument(
+        "--scan-no-bug",
+        action="store_true",
+        help="Disable bug detection",
+    )
+    parser.add_argument(
+        "--scan-no-performance",
+        action="store_true",
+        help="Disable performance analysis",
+    )
+    parser.add_argument(
+        "--scan-no-code-smell",
+        action="store_true",
+        help="Disable code smell detection",
+    )
+    parser.add_argument(
+        "--scan-days",
+        type=int,
+        default=30,
+        help="Number of days for trend analysis (default: 30)",
+    )
+    parser.add_argument(
+        "--scan-fail-on-high",
+        action="store_true",
+        help="Fail CI/CD check on high severity (default: critical only)",
+    )
+
     return parser.parse_args()
 
 
@@ -560,6 +624,62 @@ def _run_cli() -> None:
             export_format=args.analytics_format,
         )
         return
+
+    # Handle predictive scan commands
+    if args.predictive_scan:
+        exit_code = handle_predictive_scan_command(
+            project_dir=project_dir,
+            spec_dir=None,  # Will use spec_dir if provided with --spec
+            file_patterns=args.scan_file_patterns,
+            run_llm=not args.no_scan_llm,
+            output_json=args.scan_json,
+            detect_bug=not args.scan_no_bug,
+            detect_performance=not args.scan_no_performance,
+            detect_code_smell=not args.scan_no_code_smell,
+        )
+        sys.exit(exit_code)
+
+    if args.predictive_status:
+        if not args.spec:
+            print(
+                warning(
+                    f"{icon(Icons.WARNING)} --spec required for --predictive-status"
+                )
+            )
+            sys.exit(1)
+
+        spec_dir = find_spec(project_dir, args.spec)
+        if not spec_dir:
+            print_banner()
+            print(f"\nError: Spec '{args.spec}' not found")
+            print("\nAvailable specs:")
+            print_specs_list(project_dir)
+            sys.exit(1)
+
+        handle_predictive_scan_status_command(
+            project_dir=project_dir,
+            spec_dir=spec_dir,
+            days=args.scan_days,
+        )
+        return
+
+    if args.predictive_check:
+        spec_dir = None
+        if args.spec:
+            spec_dir = find_spec(project_dir, args.spec)
+            if not spec_dir:
+                print_banner()
+                print(f"\nError: Spec '{args.spec}' not found")
+                print("\nAvailable specs:")
+                print_specs_list(project_dir)
+                sys.exit(1)
+
+        exit_code = handle_predictive_scan_check_command(
+            project_dir=project_dir,
+            spec_dir=spec_dir,
+            fail_on_high=args.scan_fail_on_high,
+        )
+        sys.exit(exit_code)
 
     # Require --spec if not listing
     if not args.spec:
