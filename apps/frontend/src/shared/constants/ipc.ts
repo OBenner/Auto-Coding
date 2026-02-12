@@ -595,5 +595,14 @@ export const IPC_CHANNELS = {
   TEMPLATE_SEARCH: 'template:search',
   TEMPLATE_PREVIEW: 'template:preview',
   TEMPLATE_CREATE_SPEC: 'template:createSpec',
-  TEMPLATE_SUGGEST: 'template:suggest'
+  TEMPLATE_SUGGEST: 'template:suggest',
+
+  // Custom template operations (user-created)
+  TEMPLATE_CUSTOM_LIST: 'template:custom:list',
+  TEMPLATE_CUSTOM_SAVE: 'template:custom:save',
+  TEMPLATE_CUSTOM_UPDATE: 'template:custom:update',
+  TEMPLATE_CUSTOM_DELETE: 'template:custom:delete',
+  TEMPLATE_CUSTOM_EXPORT: 'template:custom:export',
+  TEMPLATE_CUSTOM_IMPORT: 'template:custom:import',
+  TEMPLATE_CUSTOM_TEST: 'template:custom:test'
 } as const;
