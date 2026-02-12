@@ -286,7 +286,7 @@ export class WebSocketClient {
         try {
           handler(event);
         } catch (error) {
-          console.error(`Error in ${WebSocketClient.sanitize(event.event_type, 50)} event handler:`, error);
+          console.error("Error in event handler for type:", WebSocketClient.sanitize(event.event_type, 50), error);
         }
       }
     }

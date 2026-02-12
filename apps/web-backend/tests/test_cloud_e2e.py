@@ -166,7 +166,7 @@ class CloudE2ETest:
 
             if response.status_code == 302:
                 redirect_url = response.headers.get("Location", "")
-                if "github.com" in redirect_url:
+                if redirect_url.startswith("https://github.com/"):
                     self.log(f"GitHub OAuth redirect working: {redirect_url[:100]}...", "SUCCESS")
                     return True
                 else:

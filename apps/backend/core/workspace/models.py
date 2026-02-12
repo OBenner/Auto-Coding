@@ -88,7 +88,7 @@ class MergeLock:
                 fd = os.open(
                     str(self.lock_file),
                     os.O_CREAT | os.O_EXCL | os.O_WRONLY,
-                    0o644,
+                    0o600,
                 )
                 os.close(fd)
 
@@ -178,7 +178,7 @@ class SpecNumberLock:
                 fd = os.open(
                     str(self.lock_file),
                     os.O_CREAT | os.O_EXCL | os.O_WRONLY,
-                    0o644,
+                    0o600,
                 )
                 os.close(fd)
 
