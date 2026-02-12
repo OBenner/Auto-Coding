@@ -124,3 +124,28 @@ Detection Examples:
 - sorted()/sort() inside loop → Low severity slow algorithm
 
 === END SESSION 4 ===
+
+=== SESSION 5 (Coder) ===
+
+Subtask subtask-3-2 (Anti-pattern detection): COMPLETED
+- Modified apps/backend/analysis/code_smell_detector.py
+- Implemented anti-pattern detection for:
+  * Feature envy - methods that heavily use other classes' data/methods
+  * Long methods - distinguished from long functions for class methods
+  * God classes - enhanced detection with more metrics
+- Key improvements:
+  - Added _check_feature_envy method to detect when methods access external objects more than self (threshold: >3 external accesses)
+  - Added _is_top_level_function helper to avoid duplicate function/method analysis
+  - Modified _check_function_smells to accept class_context parameter
+  - Updated analysis loop to pass class context to methods
+  - Added CLI entry point with --detect-anti-patterns flag
+- Detection examples:
+  * SessionContext at 833 lines → HIGH severity god class
+  * save_conversation_round at 80 lines → HIGH severity long method
+  * _update_learned_preferences with 8 external vs 8 self accesses → MEDIUM severity feature envy
+  * from_dict with 11 external vs 0 self accesses → MEDIUM severity feature envy
+- CLI Usage: python -m analysis.code_smell_detector <path> --detect-anti-patterns
+- Verification: PASSED (detected 17 anti-patterns in test run)
+- Commit: 5b9ae47f
+
+=== END SESSION 5 ===
