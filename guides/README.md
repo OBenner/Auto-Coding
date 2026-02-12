@@ -6,6 +6,7 @@ Detailed documentation for Auto Code setup and usage.
 
 **Looking for something specific?**
 
+- **[📖 Documentation Portal](DOCUMENTATION-PORTAL.md)** - Comprehensive guide to all documentation
 - **[📖 Search Index](../docs/search/INDEX.md)** - Comprehensive searchable index with keywords
 - **[🔍 Search Guide](../docs/search/SEARCH-GUIDE.md)** - Learn effective search strategies
 
@@ -18,6 +19,7 @@ Detailed documentation for Auto Code setup and usage.
 
 | Guide | Description |
 |-------|-------------|
+| **[DOCUMENTATION-PORTAL.md](DOCUMENTATION-PORTAL.md)** | **NEW:** Comprehensive guide to navigating, searching, and contributing to Auto Code's documentation |
 | **[QUICK-START.md](QUICK-START.md)** | Get started with Auto Code in 15 minutes |
 | **[CLI-USAGE.md](CLI-USAGE.md)** | Terminal-only usage for power users, headless servers, and CI/CD |
 | **[ADVANCED-USAGE.md](ADVANCED-USAGE.md)** | Advanced patterns: parallel execution, customization, integrations, and optimization |
