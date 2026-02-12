@@ -7,6 +7,7 @@ import {
 	useParams,
 } from "react-router-dom";
 import { getCloudConfig, getCloudStatus } from "./config/cloud";
+import { Changelog } from "./pages/Changelog";
 import { Kanban } from "./pages/Kanban";
 import { Login } from "./pages/Login";
 import { Roadmap } from "./pages/Roadmap";
@@ -116,6 +117,12 @@ function HomePage() {
 							Roadmap
 						</a>
 						<a
+							href="/changelog"
+							className="px-6 py-2 text-blue-600 hover:text-blue-700 font-medium"
+						>
+							Changelog
+						</a>
+						<a
 							href="/tasks/create"
 							className="px-6 py-2 bg-gradient-to-br from-blue-500 to-purple-600 text-white rounded-md hover:opacity-90 font-medium"
 						>
@@ -223,6 +230,7 @@ function App() {
 				<Route path="/tasks/:id" element={<TaskDetailWrapper />} />
 				<Route path="/kanban" element={<KanbanWrapper />} />
 				<Route path="/roadmap" element={<Roadmap />} />
+				<Route path="/changelog" element={<Changelog />} />
 			</Routes>
 		</BrowserRouter>
 	);
