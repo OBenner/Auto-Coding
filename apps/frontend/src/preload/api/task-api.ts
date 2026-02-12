@@ -74,6 +74,7 @@ export interface TaskAPI {
   archiveTasks: (projectId: string, taskIds: string[], version?: string) => Promise<IPCResult<boolean>>;
   unarchiveTasks: (projectId: string, taskIds: string[]) => Promise<IPCResult<boolean>>;
   createWorktreePR: (taskId: string, options?: WorktreeCreatePROptions) => Promise<IPCResult<WorktreeCreatePRResult>>;
+  batchRunQA: (taskId: string) => Promise<IPCResult<{ success: boolean; issues?: Array<{ message: string; file?: string }> }>>;
 
   // Task Event Listeners
   // Note: projectId is optional for backward compatibility - events without projectId will still work
@@ -203,6 +204,9 @@ export const createTaskAPI = (): TaskAPI => ({
 
   createWorktreePR: (taskId: string, options?: WorktreeCreatePROptions): Promise<IPCResult<WorktreeCreatePRResult>> =>
     ipcRenderer.invoke(IPC_CHANNELS.TASK_WORKTREE_CREATE_PR, taskId, options),
+
+  batchRunQA: (taskId: string): Promise<IPCResult<{ success: boolean; issues?: Array<{ message: string; file?: string }> }>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.TASK_BATCH_RUN_QA, taskId),
 
   // Task Event Listeners
   onTaskProgress: (

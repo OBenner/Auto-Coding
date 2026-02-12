@@ -44,6 +44,10 @@
     "debug": {
       "title": "Debug & Logs",
       "description": "Troubleshooting tools"
+    },
+    "keyboardShortcuts": {
+      "title": "Keyboard Shortcuts",
+      "description": "Customize keyboard shortcuts for common actions"
     }
   },
   "apiProfiles": {
@@ -769,6 +773,50 @@
       "createAnthropicKey": "Create Anthropic API Key",
       "openai": "This looks like an OpenAI API. You'll need an API key.",
       "createOpenaiKey": "Create OpenAI API Key"
+    }
+  },
+  "keyboardShortcuts": {
+    "title": "Keyboard Shortcuts",
+    "description": "Customize keyboard shortcuts for common actions",
+    "infoBanner": "Click on a shortcut to record a new key combination. Press Escape to cancel recording.",
+    "unsavedChanges": "You have unsaved changes",
+    "actions": {
+      "change": "Change",
+      "resetToDefaults": "Reset to Defaults",
+      "save": "Save Changes",
+      "saving": "Saving...",
+      "commandPalette": {
+        "label": "Open Command Palette",
+        "description": "Quickly search and execute commands"
+      },
+      "quickActions": {
+        "label": "Quick Actions",
+        "description": "Access recent actions and quick tasks"
+      },
+      "createTask": {
+        "label": "Create New Task",
+        "description": "Create a new task or spec"
+      },
+      "batchQA": {
+        "label": "Batch QA",
+        "description": "Run QA on multiple tasks at once"
+      },
+      "batchStatusUpdate": {
+        "label": "Batch Status Update",
+        "description": "Update status of multiple tasks"
+      }
+    },
+    "recording": {
+      "pressKeys": "Press keys...",
+      "cancel": "Cancel"
+    },
+    "toast": {
+      "resetTitle": "Shortcuts Reset",
+      "resetDescription": "All keyboard shortcuts have been reset to default values",
+      "savedTitle": "Shortcuts Saved",
+      "savedDescription": "Your keyboard shortcuts have been saved successfully",
+      "saveFailedTitle": "Save Failed",
+      "saveFailedDescription": "Failed to save keyboard shortcuts. Please try again."
     }
   }
 }

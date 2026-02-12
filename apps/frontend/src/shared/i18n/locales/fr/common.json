@@ -705,6 +705,22 @@
     "deleteMemory": "Supprimer la mémoire",
     "exportMemories": "Exporter les mémoires"
   },
+  "commands": {
+    "newTask": "Nouvelle Tâche",
+    "newTaskDescription": "Créer une nouvelle tâche ou spec",
+    "openSettings": "Ouvrir les Paramètres",
+    "openSettingsDescription": "Ouvrir les paramètres de l'application",
+    "viewKanban": "Voir le Tableau Kanban",
+    "viewKanbanDescription": "Basculer vers la vue tableau kanban",
+    "viewTerminals": "Voir les Terminaux",
+    "viewTerminalsDescription": "Basculer vers la vue terminaux",
+    "viewRoadmap": "Voir la Roadmap",
+    "viewRoadmapDescription": "Basculer vers la vue roadmap",
+    "viewContext": "Voir le Contexte",
+    "viewContextDescription": "Basculer vers la vue contexte/mémoire",
+    "addProject": "Ajouter un Projet",
+    "addProjectDescription": "Ajouter un nouveau projet"
+  },
   "sessionContext": {
     "description": "Voir et gérer le contexte de session de l'agent et l'historique de conversation",
     "conversationRounds": "Tours de conversation",

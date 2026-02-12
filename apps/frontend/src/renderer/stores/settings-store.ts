@@ -4,6 +4,7 @@ import type { APIProfile, ProfileFormData, TestConnectionResult, ModelInfo } fro
 import { DEFAULT_APP_SETTINGS } from '../../shared/constants';
 import { toast } from '../hooks/use-toast';
 import { markSettingsLoaded } from '../lib/sentry';
+import { initializeKeyboardShortcuts } from './keyboard-shortcuts-store';
 
 interface SettingsState {
   settings: AppSettings;
@@ -346,6 +347,9 @@ export async function loadSettings(): Promise<void> {
         });
       }
 
+      // Initialize keyboard shortcuts from localStorage
+      initializeKeyboardShortcuts();
+
       // Only mark settings as loaded on SUCCESS
       // This ensures Sentry respects user's opt-out preference even if settings fail to load
       // (If settings fail to load, Sentry's beforeSend drops all events until successful load)
@@ -396,5 +400,32 @@ export async function loadProfiles(): Promise<void> {
     store.setProfilesError(error instanceof Error ? error.message : 'Failed to load profiles');
   } finally {
     store.setProfilesLoading(false);
+  }
+}
+
+/**
+ * Get recent actions from settings
+ * Returns the recentActions array from current settings
+ */
+export function getRecentActions(): import('../../shared/types/settings').RecentAction[] {
+  const store = useSettingsStore.getState();
+  return store.settings.recentActions || [];
+}
+
+/**
+ * Save recent actions to settings
+ * Updates the recentActions array in settings and persists to disk
+ */
+export async function saveRecentActions(actions: import('../../shared/types/settings').RecentAction[]): Promise<boolean> {
+  const store = useSettingsStore.getState();
+  try {
+    const result = await window.electronAPI.saveSettings({ recentActions: actions });
+    if (result.success) {
+      store.updateSettings({ recentActions: actions });
+      return true;
+    }
+    return false;
+  } catch {
+    return false;
   }
 }

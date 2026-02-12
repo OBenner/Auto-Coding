@@ -44,6 +44,10 @@
     "debug": {
       "title": "Debug & Logs",
       "description": "Outils de dépannage"
+    },
+    "keyboardShortcuts": {
+      "title": "Raccourcis clavier",
+      "description": "Personnaliser les raccourcis clavier pour les actions courantes"
     }
   },
   "apiProfiles": {
@@ -773,6 +777,50 @@
       "createAnthropicKey": "Créer une clé API Anthropic",
       "openai": "Ceci ressemble à une API OpenAI. Vous aurez besoin d'une clé API.",
       "createOpenaiKey": "Créer une clé API OpenAI"
+    }
+  },
+  "keyboardShortcuts": {
+    "title": "Raccourcis clavier",
+    "description": "Personnaliser les raccourcis clavier pour les actions courantes",
+    "infoBanner": "Cliquez sur un raccourci pour enregistrer une nouvelle combinaison de touches. Appuyez sur Échap pour annuler l'enregistrement.",
+    "unsavedChanges": "Vous avez des modifications non enregistrées",
+    "actions": {
+      "change": "Modifier",
+      "resetToDefaults": "Réinitialiser par défaut",
+      "save": "Enregistrer les modifications",
+      "saving": "Enregistrement...",
+      "commandPalette": {
+        "label": "Ouvrir la palette de commandes",
+        "description": "Rechercher et exécuter des commandes rapidement"
+      },
+      "quickActions": {
+        "label": "Actions rapides",
+        "description": "Accéder aux actions récentes et aux tâches rapides"
+      },
+      "createTask": {
+        "label": "Créer une nouvelle tâche",
+        "description": "Créer une nouvelle tâche ou spec"
+      },
+      "batchQA": {
+        "label": "QA par lot",
+        "description": "Exécuter la QA sur plusieurs tâches à la fois"
+      },
+      "batchStatusUpdate": {
+        "label": "Mise à jour de statut par lot",
+        "description": "Mettre à jour le statut de plusieurs tâches"
+      }
+    },
+    "recording": {
+      "pressKeys": "Appuyez sur les touches...",
+      "cancel": "Annuler"
+    },
+    "toast": {
+      "resetTitle": "Raccourcis réinitialisés",
+      "resetDescription": "Tous les raccourcis clavier ont été réinitialisés aux valeurs par défaut",
+      "savedTitle": "Raccourcis enregistrés",
+      "savedDescription": "Vos raccourcis clavier ont été enregistrés avec succès",
+      "saveFailedTitle": "Échec de l'enregistrement",
+      "saveFailedDescription": "Échec de l'enregistrement des raccourcis clavier. Veuillez réessayer."
     }
   }
 }

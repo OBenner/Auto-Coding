@@ -6,6 +6,30 @@ import type { NotificationSettings, GraphitiEmbeddingProvider } from './project'
 import type { ChangelogFormat, ChangelogAudience, ChangelogEmojiLevel } from './changelog';
 import type { SupportedLanguage } from '../constants/i18n';
 
+// ============================================
+// Recent Actions Types
+// ============================================
+
+/**
+ * Recent action entry for quick actions menu
+ */
+export interface RecentAction {
+  /** Unique identifier for this action instance */
+  id: string;
+  /** Type of action performed */
+  type: 'batch_qa' | 'batch_status_update' | 'create_task' | 'start_task' | 'stop_task';
+  /** Display label for the action */
+  label: string;
+  /** Timestamp when the action was performed */
+  timestamp: Date;
+  /** Number of items affected (for batch operations) */
+  itemCount?: number;
+  /** Target status (for status updates) */
+  targetStatus?: string;
+  /** Project ID where the action was performed */
+  projectId?: string;
+}
+
 // Color theme types for multi-theme support
 export type ColorTheme = 'default' | 'dusk' | 'lime' | 'ocean' | 'retro' | 'neo' | 'forest';
 
@@ -290,6 +314,10 @@ export interface AppSettings {
   seenVersionWarnings?: string[];
   // Sidebar collapsed state (icons only when true)
   sidebarCollapsed?: boolean;
+  // Keyboard shortcuts customization
+  keyboardShortcuts?: Record<KeyboardShortcutAction, KeyCombination>;
+  // Recent actions for quick actions menu (persisted between sessions)
+  recentActions?: RecentAction[];
 }
 
 // Auto-Code Source Environment Configuration (for auto-claude repo .env)
@@ -308,3 +336,53 @@ export interface SourceEnvCheckResult {
   sourcePath?: string;
   error?: string;
 }
+
+// ============================================
+// Keyboard Shortcuts Types
+// ============================================
+
+/**
+ * Keyboard shortcut action identifiers
+ * Maps to specific commands in the application
+ */
+export type KeyboardShortcutAction =
+  | 'commandPalette'      // Open command palette
+  | 'quickActions'        // Open quick actions menu
+  | 'createTask'          // Create new task
+  | 'batchQA'             // Batch QA operation
+  | 'batchStatusUpdate';  // Batch status update
+
+/**
+ * Keyboard key combination format
+ * Examples: "Cmd+K", "Ctrl+K", "Cmd+Shift+P"
+ */
+export type KeyCombination = string;
+
+/**
+ * Keyboard shortcut definition
+ * Maps an action to its key combination
+ */
+export interface KeyboardShortcut {
+  action: KeyboardShortcutAction;
+  keyCombination: KeyCombination;
+  description: string;
+}
+
+/**
+ * Map of all keyboard shortcuts by action ID
+ */
+export interface KeyboardShortcuts {
+  shortcuts: Record<KeyboardShortcutAction, KeyCombination>;
+}
+
+/**
+ * Default keyboard shortcuts
+ * Can be customized by users in settings
+ */
+export const DEFAULT_KEYBOARD_SHORTCUTS: Record<KeyboardShortcutAction, KeyCombination> = {
+  commandPalette: 'Cmd+K',
+  quickActions: 'Cmd+.',
+  createTask: 'Cmd+N',
+  batchQA: 'Cmd+Shift+Q',
+  batchStatusUpdate: 'Cmd+Shift+S'
+};

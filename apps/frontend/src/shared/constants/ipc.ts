@@ -48,6 +48,9 @@ export const IPC_CHANNELS = {
   // Task token statistics
   TASK_TOKEN_STATS_GET: 'task:tokenStats:get',
 
+  // Batch operations
+  TASK_BATCH_RUN_QA: 'task:batchRunQA',
+
   // Task events (main -> renderer)
   TASK_PROGRESS: 'task:progress',
   TASK_ERROR: 'task:error',
