@@ -177,7 +177,7 @@ async def get_learned_patterns(
             if memory:
                 try:
                     await memory.close()
-                except Exception:
+                except (OSError, RuntimeError):
                     pass
 
     return patterns_by_category

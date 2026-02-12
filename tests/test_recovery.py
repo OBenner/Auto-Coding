@@ -52,7 +52,7 @@ def test_initialization(test_env):
     temp_dir, spec_dir, project_dir = test_env
 
     # Initialize manager to trigger directory creation (manager instance not needed)
-    _manager = RecoveryManager(spec_dir, project_dir)
+    RecoveryManager(spec_dir, project_dir)
 
     # Check that memory directory was created
     assert (spec_dir / "memory").exists(), "Memory directory not created"
@@ -127,11 +127,9 @@ def test_circular_fix_detection(test_env):
 
     assert is_circular, "Circular fix not detected"
 
-    # Test with different approach
-    is_circular = manager.is_circular_fix("subtask-1", "Using completely different callback-based approach")
-
-    # This might be detected as circular if word overlap is high
-    # But "callback-based" is sufficiently different from "async await"
+    # Test with different approach - result intentionally not asserted as the
+    # behavior depends on word overlap heuristics ("callback-based" vs "async await")
+    manager.is_circular_fix("subtask-1", "Using completely different callback-based approach")
 
 
 def test_failure_classification(test_env):

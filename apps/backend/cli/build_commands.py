@@ -290,7 +290,6 @@ def handle_build_command(
             except KeyboardInterrupt:
                 print("\n\nQA validation paused.")
                 print(f"Resume: python auto-claude/run.py --spec {spec_dir.name} --qa")
-                qa_approved = False
 
         # Post-build finalization (only for isolated sequential mode)
         # This happens AFTER QA validation so the worktree still exists
