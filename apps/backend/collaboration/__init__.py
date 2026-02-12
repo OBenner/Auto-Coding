@@ -6,6 +6,7 @@ Real-time collaborative spec editing with comments, suggestions,
 presence indicators, and version tracking.
 """
 
+from collaboration.comments import CommentManager
 from collaboration.crdt_store import (
     CRDTStore,
     CrdtOperation,
@@ -26,12 +27,15 @@ from collaboration.models import (
     save_suggestions,
     save_versions,
 )
+from collaboration.suggestions import SuggestionManager
 
 __all__ = [
     "Comment",
     "CommentStatus",
+    "CommentManager",
     "Suggestion",
     "SuggestionStatus",
+    "SuggestionManager",
     "Presence",
     "PresenceType",
     "Version",
