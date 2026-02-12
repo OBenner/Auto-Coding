@@ -5,8 +5,10 @@ Provides WebSocket connections for clients to receive real-time agent progress u
 Clients can subscribe to specific spec IDs and receive execution, ideation, and roadmap events.
 """
 
+import asyncio
 import json
 import logging
+import os
 from datetime import datetime
 from typing import Dict, Optional, Set
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, status
@@ -383,6 +385,209 @@ async def broadcast_error_event(
         data=None
     )
     await manager.broadcast_to_spec(spec_id, event)
+
+
+@router.websocket("/ws/terminal")
+async def terminal_websocket(websocket: WebSocket):
+    """
+    WebSocket endpoint for interactive PTY terminal sessions.
+
+    Authentication:
+        Clients must provide a valid JWT token via query parameter.
+        Example: ws://localhost:8000/ws/terminal?token=<your-jwt-token>&session_id=<session-id>
+
+    Protocol:
+        Client -> Server:
+            {"type": "input", "data": "<keystrokes>"}
+            {"type": "resize", "rows": 24, "cols": 80}
+            {"type": "ping"}
+
+        Server -> Client:
+            {"type": "output", "data": "<terminal output>"}
+            {"type": "error", "message": "<error message>"}
+            {"type": "status", "status": "connected|closed"}
+            {"type": "pong"}
+
+    Terminal Features:
+        - Full shell access with PTY (supports colors, formatting, interactive apps)
+        - ANSI escape sequence support (xterm-256color)
+        - Dynamic terminal resize
+        - Automatic cleanup on disconnect
+        - Session isolation per connection
+
+    Example:
+        // Connect to terminal with authentication
+        const token = localStorage.getItem('auth_token');
+        const sessionId = 'my-terminal-session';
+        const ws = new WebSocket(
+            `ws://localhost:8000/ws/terminal?token=${token}&session_id=${sessionId}`
+        );
+
+        // Send input
+        ws.send(JSON.stringify({type: "input", data: "ls -la\\n"}));
+
+        // Receive output and write to xterm.js
+        ws.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            if (data.type === "output") {
+                term.write(data.data);
+            }
+        };
+
+        // Resize terminal
+        const resize = {type: "resize", rows: 40, cols: 120};
+        ws.send(JSON.stringify(resize));
+    """
+    # Extract and validate token from query parameters
+    token = websocket.query_params.get("token")
+    session_id = websocket.query_params.get("session_id", "default")
+
+    try:
+        user_claims = verify_websocket_token(token)
+    except Exception as e:
+        await websocket.accept()
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        logger.warning(f"Terminal WebSocket authentication failed: {e}")
+        return
+
+    # Import terminal manager here to avoid circular imports
+    from services.terminal_manager import terminal_manager
+
+    # Accept the WebSocket connection
+    await websocket.accept()
+
+    # Get or create terminal session
+    session = terminal_manager.get_session(session_id)
+    if not session:
+        # Create new session with user's home directory or default project directory
+        working_dir = user_claims.get("working_dir", os.getcwd())
+        session = terminal_manager.create_session(
+            session_id=session_id,
+            working_dir=working_dir,
+            shell=os.environ.get("SHELL", "/bin/bash"),
+            rows=24,
+            cols=80
+        )
+
+        if not session:
+            await websocket.send_json({
+                "type": "error",
+                "message": "Failed to create terminal session"
+            })
+            await websocket.close(code=status.WS_1011_INTERNAL_ERROR)
+            return
+
+    # Send connection confirmation
+    user_id = user_claims.get("sub", "unknown")
+    await websocket.send_json({
+        "type": "status",
+        "status": "connected",
+        "session_id": session_id,
+        "timestamp": datetime.now().isoformat()
+    })
+    logger.info(f"Terminal WebSocket connected: session={_sanitize_log(session_id)} user={_sanitize_log(user_id)}")
+
+    # Start output reader task
+    read_task = asyncio.create_task(_read_terminal_output(session, websocket))
+
+    try:
+        while True:
+            # Receive message from client
+            data = await websocket.receive_text()
+
+            try:
+                message = json.loads(data)
+                msg_type = message.get("type")
+
+                if msg_type == "input":
+                    # Write input to terminal
+                    input_data = message.get("data", "")
+                    session.write_input(input_data)
+
+                elif msg_type == "resize":
+                    # Resize terminal
+                    rows = message.get("rows", 24)
+                    cols = message.get("cols", 80)
+                    session.resize(rows, cols)
+                    logger.debug(
+                        f"Terminal resized: session={_sanitize_log(session_id)} "
+                        f"size={rows}x{cols}"
+                    )
+
+                elif msg_type == "ping":
+                    await websocket.send_json({
+                        "type": "pong",
+                        "timestamp": datetime.now().isoformat()
+                    })
+
+                else:
+                    await websocket.send_json({
+                        "type": "error",
+                        "message": f"Unknown message type: {msg_type}"
+                    })
+
+            except json.JSONDecodeError:
+                await websocket.send_json({
+                    "type": "error",
+                    "message": "Invalid JSON"
+                })
+            except Exception as e:
+                logger.error(f"Error processing terminal message: {e}")
+                await websocket.send_json({
+                    "type": "error",
+                    "message": str(e)
+                })
+
+    except WebSocketDisconnect:
+        logger.info(f"Terminal WebSocket disconnected: session={_sanitize_log(session_id)}")
+    except Exception as e:
+        logger.error(f"Terminal WebSocket error: {e}")
+    finally:
+        # Cancel read task
+        read_task.cancel()
+        try:
+            await read_task
+        except asyncio.CancelledError:
+            pass
+
+        # Send close status
+        try:
+            await websocket.send_json({
+                "type": "status",
+                "status": "closed",
+                "session_id": session_id,
+                "timestamp": datetime.now().isoformat()
+            })
+        except Exception:
+            pass
+
+        # Clean up session
+        terminal_manager.close_session(session_id)
+
+
+async def _read_terminal_output(session, websocket: WebSocket):
+    """
+    Continuously read output from terminal PTY and send to WebSocket.
+
+    Args:
+        session: TerminalSession object
+        websocket: WebSocket connection to send output to
+    """
+    try:
+        while session.is_alive():
+            output = await session.read_output()
+            if output:
+                await websocket.send_json({
+                    "type": "output",
+                    "data": output
+                })
+            else:
+                # Small delay to avoid busy waiting
+                await asyncio.sleep(0.01)
+    except asyncio.CancelledError:
+        logger.debug(f"Terminal output reader cancelled for session {_sanitize_log(session.session_id)}")
+    except Exception as e:
+        logger.error(f"Error reading terminal output: {e}")
 
 
 # Export the manager for use in other modules
