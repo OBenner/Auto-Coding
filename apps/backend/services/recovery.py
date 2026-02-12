@@ -183,6 +183,121 @@ class RecoveryManager:
 
         return FailureType.UNKNOWN
 
+    def should_escalate_early(
+        self, subtask_id: str, failure_type: FailureType, error: str
+    ) -> tuple[bool, str]:
+        """
+        Determine if a subtask should be escalated before normal retry limits.
+
+        Proactively identifies high-risk situations that warrant early escalation:
+        - Multiple different failure types (indicates complexity)
+        - Repeated circular fix patterns
+        - Context exhaustion with high attempt count
+        - Error patterns indicating fundamental architectural issues
+
+        Args:
+            subtask_id: ID of the subtask to evaluate
+            failure_type: Current failure type
+            error: Current error message
+
+        Returns:
+            Tuple of (should_escalate: bool, reason: str)
+        """
+        history = self._load_attempt_history()
+        subtask_data = history["subtasks"].get(subtask_id, {})
+        attempts = subtask_data.get("attempts", [])
+
+        # No history yet, don't escalate
+        if not attempts:
+            return False, ""
+
+        attempt_count = len(attempts)
+
+        # Check for multiple different failure types
+        failure_types_seen = set()
+        for attempt in attempts:
+            if attempt.get("error"):
+                attempt_failure = self.classify_failure(attempt["error"], subtask_id)
+                failure_types_seen.add(attempt_failure)
+
+        # Add current failure type
+        failure_types_seen.add(failure_type)
+
+        # If we've seen 3+ different failure types, escalate early
+        # This indicates the problem is complex and not a simple retry scenario
+        if len(failure_types_seen) >= 3:
+            return (
+                True,
+                f"Multiple failure types encountered ({len(failure_types_seen)} unique types): "
+                f"{', '.join(ft.value for ft in failure_types_seen)}. "
+                f"This suggests a complex issue requiring human intervention.",
+            )
+
+        # Check for repeated circular fix patterns across attempts
+        circular_count = 0
+        for i, attempt in enumerate(attempts):
+            if attempt.get("error") and self.is_circular_fix(
+                subtask_id, attempt.get("approach", "")
+            ):
+                circular_count += 1
+
+        # If 2+ attempts show circular patterns, escalate immediately
+        if circular_count >= 2:
+            return (
+                True,
+                f"Repeated circular fix patterns detected in {circular_count} attempts. "
+                f"The agent is stuck in a loop and needs human guidance to break the cycle.",
+            )
+
+        # Context exhaustion with moderate attempt count warrants early escalation
+        if (
+            failure_type == FailureType.CONTEXT_EXHAUSTED
+            and attempt_count >= 2
+        ):
+            return (
+                True,
+                f"Context exhausted after {attempt_count} attempts. "
+                f"The task may be too complex for current context limits.",
+            )
+
+        # Broken build after 3+ attempts with different approaches
+        if failure_type == FailureType.BROKEN_BUILD and attempt_count >= 3:
+            # Check if approaches were actually different
+            approaches = [a.get("approach", "") for a in attempts]
+            unique_approaches = set(approaches)
+
+            if len(unique_approaches) >= 2:
+                return (
+                    True,
+                    f"Build remains broken after {attempt_count} attempts with {len(unique_approaches)} "
+                    f"different approaches. This may indicate a fundamental architectural issue.",
+                )
+
+        # Check for error patterns indicating deeper issues
+        deep_issue_keywords = [
+            "permission denied",
+            "access denied",
+            "authentication",
+            "authorization",
+            "network",
+            "timeout",
+            "deadlock",
+            "race condition",
+            "corruption",
+            "incompatible",
+        ]
+
+        error_lower = error.lower()
+        if any(keyword in error_lower for keyword in deep_issue_keywords):
+            if attempt_count >= 2:
+                return (
+                    True,
+                    f"Error suggests infrastructure or configuration issue: '{error[:100]}'. "
+                    f"Requires human investigation after {attempt_count} attempts.",
+                )
+
+        return False, ""
+
     def get_attempt_count(self, subtask_id: str) -> int:
         """
         Get how many times this subtask has been attempted.
