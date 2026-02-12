@@ -8,6 +8,7 @@ import {
 } from "react-router-dom";
 import { getCloudConfig, getCloudStatus } from "./config/cloud";
 import { Changelog } from "./pages/Changelog";
+import { FilesPage } from "./pages/FilesPage";
 import { Insights } from "./pages/Insights";
 import { Kanban } from "./pages/Kanban";
 import { Login } from "./pages/Login";
@@ -239,6 +240,7 @@ function App() {
 				<Route path="/kanban" element={<KanbanWrapper />} />
 				<Route path="/roadmap" element={<Roadmap />} />
 				<Route path="/changelog" element={<Changelog />} />
+				<Route path="/files" element={<FilesPage />} />
 			</Routes>
 		</BrowserRouter>
 	);
