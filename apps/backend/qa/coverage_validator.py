@@ -10,11 +10,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
 
-from analysis.coverage_analyzer import CoverageResult, FileCoverage
-from spec.coverage_config import CoverageConfig, CriticalPath, get_minimum_coverage_for_file
-
+from analysis.coverage_analyzer import CoverageResult
+from spec.coverage_config import (
+    CoverageConfig,
+    CriticalPath,
+    get_minimum_coverage_for_file,
+)
 
 # =============================================================================
 # DATA CLASSES
@@ -151,7 +153,10 @@ def validate_coverage(
             )
 
     # Validate branch coverage if specified
-    if config.minimum_branch_coverage is not None and coverage_result.branches_total > 0:
+    if (
+        config.minimum_branch_coverage is not None
+        and coverage_result.branches_total > 0
+    ):
         branch_coverage_percent = (
             coverage_result.branches_covered / coverage_result.branches_total * 100
         )
@@ -167,9 +172,7 @@ def validate_coverage(
             )
 
     # Validate critical path coverage
-    critical_path_failures = _validate_critical_paths(
-        coverage_result, config, issues
-    )
+    critical_path_failures = _validate_critical_paths(coverage_result, config, issues)
 
     # Determine overall pass/fail
     passed = len(issues) == 0 and config.fail_under_threshold
@@ -278,7 +281,9 @@ def format_validation_summary(result: ValidationResult) -> str:
     # Header
     status = "✓ PASSED" if result.passed else "✗ FAILED"
     lines.append(f"Coverage Validation: {status}")
-    lines.append(f"Overall Coverage: {result.overall_coverage:.1f}% (required: {result.required_coverage:.1f}%)")
+    lines.append(
+        f"Overall Coverage: {result.overall_coverage:.1f}% (required: {result.required_coverage:.1f}%)"
+    )
     lines.append(f"Files Checked: {result.files_checked}")
     lines.append("")
 
@@ -287,7 +292,9 @@ def format_validation_summary(result: ValidationResult) -> str:
         lines.append(f"Issues Found: {len(result.issues)}")
 
         # Group by type
-        overall_issues = [i for i in result.issues if i.issue_type in ("overall", "line", "branch")]
+        overall_issues = [
+            i for i in result.issues if i.issue_type in ("overall", "line", "branch")
+        ]
         critical_issues = [i for i in result.issues if i.issue_type == "critical_path"]
         error_issues = [i for i in result.issues if i.issue_type == "error"]
 
@@ -306,7 +313,9 @@ def format_validation_summary(result: ValidationResult) -> str:
             for issue in critical_issues[:5]:  # Show first 5
                 lines.append(f"  - {issue.message}")
                 if issue.missing_lines:
-                    lines.append(f"    Missing lines: {_format_line_ranges(issue.missing_lines[:10])}")
+                    lines.append(
+                        f"    Missing lines: {_format_line_ranges(issue.missing_lines[:10])}"
+                    )
             if len(critical_issues) > 5:
                 lines.append(f"  ... and {len(critical_issues) - 5} more")
     else:
@@ -433,7 +442,9 @@ def format_coverage_report(
     # Overall statistics
     status = "✓ PASSED" if result.passed else "✗ FAILED"
     lines.append(f"Status: {status}")
-    lines.append(f"Overall Coverage: {result.overall_coverage:.1f}% (required: {result.required_coverage:.1f}%)")
+    lines.append(
+        f"Overall Coverage: {result.overall_coverage:.1f}% (required: {result.required_coverage:.1f}%)"
+    )
     lines.append(f"Files Checked: {result.files_checked}")
     lines.append(f"Issues Found: {len(result.issues)}")
     if result.critical_path_failures > 0:
@@ -441,7 +452,11 @@ def format_coverage_report(
     lines.append("")
 
     # Overall coverage issues (not file-specific)
-    overall_issues = [i for i in result.issues if i.issue_type in ("overall", "line", "branch", "error")]
+    overall_issues = [
+        i
+        for i in result.issues
+        if i.issue_type in ("overall", "line", "branch", "error")
+    ]
     if overall_issues:
         lines.append("-" * 80)
         lines.append("OVERALL ISSUES")
@@ -466,19 +481,25 @@ def format_coverage_report(
             issue_type_label = issue.issue_type.replace("_", " ").title()
             lines.append(f"File: {issue.file_path}")
             lines.append(f"  Type: {issue_type_label}")
-            lines.append(f"  Coverage: {issue.actual_coverage:.1f}% (required: {issue.required_coverage:.1f}%)")
+            lines.append(
+                f"  Coverage: {issue.actual_coverage:.1f}% (required: {issue.required_coverage:.1f}%)"
+            )
 
             # Missing lines
             if issue.missing_lines:
                 total_missing = len(issue.missing_lines)
                 lines_to_show = issue.missing_lines[:max_missing_lines]
                 formatted_lines = _format_line_ranges(lines_to_show)
-                lines.append(f"  Missing Lines ({total_missing} total): {formatted_lines}")
+                lines.append(
+                    f"  Missing Lines ({total_missing} total): {formatted_lines}"
+                )
 
                 if total_missing > max_missing_lines:
-                    lines.append(f"    ... and {total_missing - max_missing_lines} more")
+                    lines.append(
+                        f"    ... and {total_missing - max_missing_lines} more"
+                    )
             else:
-                lines.append(f"  Missing Lines: (line information not available)")
+                lines.append("  Missing Lines: (line information not available)")
 
             lines.append("")
 
@@ -503,14 +524,20 @@ def format_coverage_report(
             lines.append(f"  Coverage: {file_cov.coverage_percent:.1f}%")
             lines.append(f"  Lines: {file_cov.lines_covered}/{file_cov.lines_total}")
             if file_cov.branches_total > 0:
-                lines.append(f"  Branches: {file_cov.branches_covered}/{file_cov.branches_total}")
+                lines.append(
+                    f"  Branches: {file_cov.branches_covered}/{file_cov.branches_total}"
+                )
             if file_cov.lines_missing:
                 missing_count = len(file_cov.lines_missing)
                 lines_to_show = file_cov.lines_missing[:max_missing_lines]
                 formatted_lines = _format_line_ranges(lines_to_show)
-                lines.append(f"  Missing Lines ({missing_count} total): {formatted_lines}")
+                lines.append(
+                    f"  Missing Lines ({missing_count} total): {formatted_lines}"
+                )
                 if missing_count > max_missing_lines:
-                    lines.append(f"    ... and {missing_count - max_missing_lines} more")
+                    lines.append(
+                        f"    ... and {missing_count - max_missing_lines} more"
+                    )
             lines.append("")
 
     # Summary footer
@@ -518,7 +545,9 @@ def format_coverage_report(
     if result.passed:
         lines.append("✓ All coverage thresholds met!")
     else:
-        lines.append("✗ Coverage validation failed. Please add tests to address the issues above.")
+        lines.append(
+            "✗ Coverage validation failed. Please add tests to address the issues above."
+        )
     lines.append("-" * 80)
 
     return "\n".join(lines)

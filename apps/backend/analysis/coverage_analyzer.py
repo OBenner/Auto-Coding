@@ -30,8 +30,6 @@ import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any
-
 
 # =============================================================================
 # DATA CLASSES
@@ -347,7 +345,7 @@ def parse_coverage_json(json_path: str | Path) -> CoverageResult:
         raise FileNotFoundError(f"Coverage JSON file not found: {json_path}")
 
     try:
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             data = json.load(f)
     except json.JSONDecodeError as e:
         raise ValueError(f"Invalid JSON in coverage report: {e}")
@@ -444,9 +442,7 @@ def parse_coverage_xml(xml_path: str | Path) -> CoverageResult:
     except Exception as e:
         raise ValueError(f"Error reading coverage XML: {e}")
 
-    # Extract root-level coverage metrics
-    line_rate = float(root.get("line-rate", "0.0"))
-    branch_rate = float(root.get("branch-rate", "0.0"))
+    # Extract root-level coverage metrics (rates computed per-file below)
     timestamp_str = root.get("timestamp")
 
     # Convert timestamp if available
@@ -476,8 +472,6 @@ def parse_coverage_xml(xml_path: str | Path) -> CoverageResult:
             if classes is not None:
                 for cls in classes.findall("class"):
                     filename = cls.get("filename", "")
-                    class_line_rate = float(cls.get("line-rate", "0.0"))
-                    class_branch_rate = float(cls.get("branch-rate", "0.0"))
 
                     # Parse lines for this class
                     lines_elem = cls.find("lines")
@@ -505,7 +499,9 @@ def parse_coverage_xml(xml_path: str | Path) -> CoverageResult:
                                 if branch_cond:
                                     # Parse "50% (1/2)" format
                                     if "(" in branch_cond:
-                                        fraction = branch_cond.split("(")[1].split(")")[0]
+                                        fraction = branch_cond.split("(")[1].split(")")[
+                                            0
+                                        ]
                                         covered, _ = fraction.split("/")
                                         if int(covered) > 0:
                                             file_branches_covered += 1
@@ -534,11 +530,7 @@ def parse_coverage_xml(xml_path: str | Path) -> CoverageResult:
                             existing.branches_covered += file_branches_covered
                             # Recalculate percentage
                             existing.coverage_percent = (
-                                (
-                                    existing.lines_covered
-                                    / existing.lines_total
-                                    * 100
-                                )
+                                (existing.lines_covered / existing.lines_total * 100)
                                 if existing.lines_total > 0
                                 else 0.0
                             )
@@ -655,4 +647,7 @@ def validate_coverage_threshold(
             f"Coverage {result.total_coverage:.1f}% is below minimum {min_threshold:.1f}%",
         )
 
-    return True, f"Coverage {result.total_coverage:.1f}% meets minimum {min_threshold:.1f}%"
+    return (
+        True,
+        f"Coverage {result.total_coverage:.1f}% meets minimum {min_threshold:.1f}%",
+    )

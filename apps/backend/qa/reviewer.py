@@ -18,7 +18,6 @@ Coverage Integration:
 import logging
 from pathlib import Path
 
-# Memory integration for cross-session learning
 from agents.memory_manager import get_graphiti_context, save_session_memory
 from agents.session import save_token_stats
 from analysis.coverage_analyzer import CoverageAnalyzer, parse_coverage_json
@@ -39,7 +38,6 @@ from .coverage_validator import (
     format_validation_summary,
     validate_coverage,
 )
-from .criteria import get_qa_signoff_status, load_implementation_plan, save_implementation_plan
 
 logger = logging.getLogger(__name__)
 
@@ -91,7 +89,11 @@ def run_coverage_validation(
             "pytest-cov not available, skipping coverage validation",
             reason=version_or_error,
         )
-        return True, f"⚠️  Coverage validation skipped (pytest-cov not available: {version_or_error})", None
+        return (
+            True,
+            f"⚠️  Coverage validation skipped (pytest-cov not available: {version_or_error})",
+            None,
+        )
 
     debug_success("coverage_validator", f"pytest-cov is available: {version_or_error}")
 
@@ -112,7 +114,11 @@ def run_coverage_validation(
                 "Coverage analysis failed",
                 error=coverage_result.error_message,
             )
-            return False, f"❌ Coverage analysis failed: {coverage_result.error_message}", None
+            return (
+                False,
+                f"❌ Coverage analysis failed: {coverage_result.error_message}",
+                None,
+            )
 
         debug_success(
             "coverage_validator",
@@ -218,6 +224,9 @@ def update_qa_signoff_with_coverage(
         )
         return False
 
+    # Lazy import to avoid cyclic import (qa.criteria -> ... -> qa.reviewer)
+    from .criteria import load_implementation_plan, save_implementation_plan
+
     # Load implementation plan
     plan = load_implementation_plan(spec_dir)
     if not plan:
@@ -314,7 +323,9 @@ async def run_qa_agent_session(
     tool_count = 0
 
     # Run coverage validation before QA session
-    coverage_passed, coverage_summary, coverage_data = run_coverage_validation(project_dir, spec_dir)
+    coverage_passed, coverage_summary, coverage_data = run_coverage_validation(
+        project_dir, spec_dir
+    )
     debug(
         "qa_reviewer",
         "Coverage validation completed",
@@ -355,6 +366,7 @@ async def run_qa_agent_session(
     # Add coverage data to prompt instructions
     if coverage_data:
         import json
+
         coverage_json = json.dumps(coverage_data, indent=2)
         prompt += f"""
 ### Coverage Results (Include in qa_signoff)
@@ -478,6 +490,9 @@ This is attempt {previous_error.get("consecutive_errors", 1) + 1}. If you fail t
         )
 
     try:
+        # Lazy import to avoid cyclic import (qa.criteria -> ... -> qa.reviewer)
+        from .criteria import get_qa_signoff_status
+
         debug("qa_reviewer", "Sending query to Claude SDK...")
         await client.query(prompt)
         debug_success("qa_reviewer", "Query sent successfully")

@@ -15,14 +15,13 @@ from typing import Any
 
 from analysis.coverage_analyzer import (
     CoverageAnalyzer,
-    parse_coverage_json,
     CoverageResult,
-    FileCoverage,
+    parse_coverage_json,
 )
 from core.client import create_client
 from phase_config import get_phase_model, get_phase_thinking_budget
 from prompts_pkg.prompt_loader import get_agent_prompt
-from spec.coverage_config import load_coverage_config, CoverageConfig
+from spec.coverage_config import CoverageConfig, load_coverage_config
 from task_logger import LogEntryType, LogPhase, get_task_logger
 from ui import (
     Icons,
@@ -109,17 +108,10 @@ def analyze_coverage_gaps(
     for file_path, file_coverage in coverage_result.files.items():
         # Check if file is below threshold
         if file_coverage.coverage_percent < min_coverage:
-            gap_info = {
-                "file_path": file_path,
-                "coverage_percent": file_coverage.coverage_percent,
-                "required_coverage": min_coverage,
-                "gap_percent": min_coverage - file_coverage.coverage_percent,
-                "missing_lines": file_coverage.lines_missing,
-                "lines_total": file_coverage.lines_total,
-                "lines_covered": file_coverage.lines_covered,
-            }
             gaps_summary["files_with_gaps"].append(file_path)
-            gaps_summary["missing_lines_by_file"][file_path] = file_coverage.lines_missing
+            gaps_summary["missing_lines_by_file"][file_path] = (
+                file_coverage.lines_missing
+            )
 
             # Mark as critical gap if significantly below threshold
             if file_coverage.coverage_percent < min_coverage * 0.5:
@@ -185,10 +177,14 @@ def format_coverage_gaps_prompt(gaps_summary: dict[str, Any]) -> str:
             lines.append(f"- **{file_path}**")
 
     if len(gaps_summary["files_with_gaps"]) > 10:
-        lines.append(f"- ... and {len(gaps_summary['files_with_gaps']) - 10} more files")
+        lines.append(
+            f"- ... and {len(gaps_summary['files_with_gaps']) - 10} more files"
+        )
 
     lines.append("")
-    lines.append("**Action Required:** Generate additional tests to cover the missing lines above.")
+    lines.append(
+        "**Action Required:** Generate additional tests to cover the missing lines above."
+    )
     lines.append("Focus on the specific line numbers that are not covered.")
 
     return "\n".join(lines)
@@ -295,9 +291,7 @@ def validate_generated_tests(test_files: list[Path], project_dir: Path) -> bool:
     return True
 
 
-def validate_test_quality(
-    test_files: list[Path], project_dir: Path
-) -> dict[str, Any]:
+def validate_test_quality(test_files: list[Path], project_dir: Path) -> dict[str, Any]:
     """
     Validate test quality beyond syntax checks.
 
@@ -641,10 +635,7 @@ def _check_edge_case_coverage(node: ast.FunctionDef, source: str) -> dict[str, A
     for child in ast.walk(node):
         if isinstance(child, ast.With) or isinstance(child, ast.Try):
             # Check if using pytest.raises
-            if (
-                isinstance(child, ast.With)
-                or isinstance(child, ast.Try)
-            ):
+            if isinstance(child, ast.With) or isinstance(child, ast.Try):
                 has_edge_cases = True
                 break
 
@@ -756,9 +747,7 @@ def _calculate_quality_score(metrics: Any, issue_count: int) -> float:
     score = 0.0
 
     # Assertion coverage (40 points)
-    assertion_coverage = (
-        metrics.tests_with_assertions / metrics.total_tests
-    ) * 40
+    assertion_coverage = (metrics.tests_with_assertions / metrics.total_tests) * 40
     score += assertion_coverage
 
     # Naming conventions (15 points)
@@ -766,15 +755,11 @@ def _calculate_quality_score(metrics: Any, issue_count: int) -> float:
     score += naming_score
 
     # Docstring coverage (10 points)
-    docstring_score = (
-        metrics.tests_with_docstrings / metrics.total_tests
-    ) * 10
+    docstring_score = (metrics.tests_with_docstrings / metrics.total_tests) * 10
     score += docstring_score
 
     # Edge case coverage (15 points)
-    edge_case_score = (
-        metrics.tests_with_edge_cases / metrics.total_tests
-    ) * 15
+    edge_case_score = (metrics.tests_with_edge_cases / metrics.total_tests) * 15
     score += edge_case_score
 
     # Base score for having tests (20 points)
@@ -991,7 +976,6 @@ Begin by loading context (Phase 0 in your prompt).
     # Check if there are significant coverage gaps
     needs_improvement = False
     if coverage_result and coverage_result.success:
-        gap_count = len(gaps_summary.get("files_with_gaps", []))
         # If coverage is below threshold or there are critical gaps, improve tests
         min_threshold = coverage_config.minimum_coverage if coverage_config else 80.0
         if (
@@ -1001,7 +985,9 @@ Begin by loading context (Phase 0 in your prompt).
             needs_improvement = True
 
             print()
-            print_status("Coverage gaps detected - running improvement iteration...", "warning")
+            print_status(
+                "Coverage gaps detected - running improvement iteration...", "warning"
+            )
             print()
 
             # Format coverage gaps for AI agent
@@ -1026,7 +1012,9 @@ Generate additional test cases to improve coverage to at least {min_threshold:.0
 
             # Run improvement iteration
             try:
-                print_status("Running Test Generator Agent improvement iteration...", "progress")
+                print_status(
+                    "Running Test Generator Agent improvement iteration...", "progress"
+                )
                 response = await client.create_agent_session(
                     name="test-generator-improvement",
                     starting_message=improvement_message,
@@ -1040,7 +1028,7 @@ Generate additional test cases to improve coverage to at least {min_threshold:.0
                 if task_logger:
                     task_logger.log_entry(
                         LogEntryType.INFO,
-                        f"Test improvement iteration completed",
+                        "Test improvement iteration completed",
                     )
 
                 # Re-scan for new/updated test files
@@ -1067,7 +1055,9 @@ Generate additional test cases to improve coverage to at least {min_threshold:.0
 
                     # Re-run coverage analysis
                     print()
-                    print_status("Re-analyzing coverage after improvement...", "progress")
+                    print_status(
+                        "Re-analyzing coverage after improvement...", "progress"
+                    )
                     coverage_result, gaps_summary = analyze_coverage_gaps(
                         project_dir=project_dir,
                         config=coverage_config,
@@ -1107,5 +1097,7 @@ Generate additional test cases to improve coverage to at least {min_threshold:.0
         "error": None if validation_success else "Test validation failed",
         "coverage_analyzed": coverage_result is not None and coverage_result.success,
         "coverage_percent": coverage_result.total_coverage if coverage_result else None,
-        "coverage_gaps": len(gaps_summary.get("files_with_gaps", [])) if gaps_summary else 0,
+        "coverage_gaps": len(gaps_summary.get("files_with_gaps", []))
+        if gaps_summary
+        else 0,
     }

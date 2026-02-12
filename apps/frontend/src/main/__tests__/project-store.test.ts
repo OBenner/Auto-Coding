@@ -948,6 +948,7 @@ describe('ProjectStore', () => {
 
       const { ProjectStore } = await import('../project-store');
       const store = new ProjectStore();
+      await waitForStoreInit();
 
       const project = store.addProject(TEST_PROJECT_PATH);
 
@@ -982,11 +983,13 @@ describe('ProjectStore', () => {
 
       const { ProjectStore } = await import('../project-store');
       const store = new ProjectStore();
+      await waitForStoreInit();
 
       const project = store.addProject(TEST_PROJECT_PATH);
 
       // First call should populate cache
       const tasksBefore = await store.getTasks(project.id);
+      expect(tasksBefore).toHaveLength(1);
       expect(tasksBefore[0].title).toBe('Initial Feature');
 
       // Modify the file directly (simulating external change)
@@ -995,6 +998,7 @@ describe('ProjectStore', () => {
 
       // Without invalidation, should still return cached data
       const tasksCached = await store.getTasks(project.id);
+      expect(tasksCached).toHaveLength(1);
       expect(tasksCached[0].title).toBe('Initial Feature');
 
       // Invalidate cache
@@ -1002,6 +1006,7 @@ describe('ProjectStore', () => {
 
       // Now should return fresh data
       const tasksAfterInvalidation = await store.getTasks(project.id);
+      expect(tasksAfterInvalidation).toHaveLength(1);
       expect(tasksAfterInvalidation[0].title).toBe('Updated Feature');
     });
   });

@@ -26,8 +26,6 @@ import json
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
-
 
 # =============================================================================
 # DATA CLASSES
@@ -223,7 +221,9 @@ def _extract_critical_paths_from_criteria(plan: dict) -> list[CriticalPath]:
 
         # Check if it mentions 100% coverage requirement
         requires_full_coverage = (
-            "100%" in criterion or "full" in criterion_lower or "complete" in criterion_lower
+            "100%" in criterion
+            or "full" in criterion_lower
+            or "complete" in criterion_lower
         )
 
         if not requires_full_coverage:
@@ -281,7 +281,7 @@ def _extract_path_examples(criterion: str) -> list[str]:
     examples = []
 
     # Extract from parentheses
-    paren_pattern = r'\(([^)]+)\)'
+    paren_pattern = r"\(([^)]+)\)"
     paren_matches = re.findall(paren_pattern, criterion)
 
     for match in paren_matches:
@@ -289,12 +289,16 @@ def _extract_path_examples(criterion: str) -> list[str]:
         parts = [p.strip() for p in match.split(",")]
         # Filter out non-path-like items (like "etc.", numbers, etc.)
         for part in parts:
-            if part and not part.lower() in ("etc", "etc.", "e.g.", "i.e.") and len(part) > 2:
+            if (
+                part
+                and part.lower() not in ("etc", "etc.", "e.g.", "i.e.")
+                and len(part) > 2
+            ):
                 examples.append(part)
 
     # Extract from colon-separated lists if no parenthetical examples
     if not examples:
-        colon_pattern = r'critical[^:]*:\s*([^.]+)'
+        colon_pattern = r"critical[^:]*:\s*([^.]+)"
         colon_matches = re.findall(colon_pattern, criterion, re.IGNORECASE)
 
         for match in colon_matches:
@@ -385,7 +389,7 @@ def _load_from_pytest_config(project_dir: Path) -> CoverageConfig | None:
                     config_source="pytest.ini",
                 )
         except (OSError, UnicodeDecodeError):
-            pass
+            pass  # Gracefully ignore unreadable pytest.ini files
 
     # Check setup.cfg
     setup_cfg = project_dir / "setup.cfg"
@@ -399,7 +403,7 @@ def _load_from_pytest_config(project_dir: Path) -> CoverageConfig | None:
                     config_source="setup.cfg",
                 )
         except (OSError, UnicodeDecodeError):
-            pass
+            pass  # Gracefully ignore unreadable setup.cfg files
 
     return None
 
@@ -465,7 +469,7 @@ def _load_from_coveragerc(project_dir: Path) -> CoverageConfig | None:
                     try:
                         min_cov = float(parts[1].strip())
                     except ValueError:
-                        pass
+                        pass  # Ignore non-numeric fail_under values
 
         if min_cov is not None:
             return CoverageConfig(
@@ -474,7 +478,7 @@ def _load_from_coveragerc(project_dir: Path) -> CoverageConfig | None:
             )
 
     except (OSError, UnicodeDecodeError):
-        pass
+        pass  # Gracefully ignore unreadable .coveragerc files
 
     return None
 
@@ -502,7 +506,7 @@ def _load_from_pyproject(project_dir: Path) -> CoverageConfig | None:
 
         # Simple regex-based parsing (avoid dependency on toml library)
         # Look for fail_under in [tool.coverage.report] section
-        pattern = r'\[tool\.coverage\.report\].*?fail_under\s*=\s*(\d+(?:\.\d+)?)'
+        pattern = r"\[tool\.coverage\.report\].*?fail_under\s*=\s*(\d+(?:\.\d+)?)"
         match = re.search(pattern, content, re.DOTALL)
 
         if match:
@@ -513,7 +517,7 @@ def _load_from_pyproject(project_dir: Path) -> CoverageConfig | None:
             )
 
     except (OSError, UnicodeDecodeError):
-        pass
+        pass  # Gracefully ignore unreadable pyproject.toml files
 
     return None
 
@@ -693,9 +697,12 @@ def merge_coverage_configs(
         merged = merge_coverage_configs(default, custom)
     """
     return CoverageConfig(
-        minimum_coverage=override_config.minimum_coverage or base_config.minimum_coverage,
-        minimum_line_coverage=override_config.minimum_line_coverage or base_config.minimum_line_coverage,
-        minimum_branch_coverage=override_config.minimum_branch_coverage or base_config.minimum_branch_coverage,
+        minimum_coverage=override_config.minimum_coverage
+        or base_config.minimum_coverage,
+        minimum_line_coverage=override_config.minimum_line_coverage
+        or base_config.minimum_line_coverage,
+        minimum_branch_coverage=override_config.minimum_branch_coverage
+        or base_config.minimum_branch_coverage,
         critical_paths=override_config.critical_paths or base_config.critical_paths,
         excluded_paths=override_config.excluded_paths or base_config.excluded_paths,
         enforce_on_modified_files=override_config.enforce_on_modified_files,
