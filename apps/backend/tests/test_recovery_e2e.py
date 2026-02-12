@@ -22,11 +22,43 @@ from pathlib import Path
 # Add apps/backend to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+import pytest
 from core.progress import get_recovery_metrics_summary
 from notifications import notify_stuck_subtask
 from prompt_generator import get_recovery_context
 from recovery import RecoveryManager
 from ui import Icons, bold
+
+
+@pytest.fixture(autouse=True)
+def cleanup_recovery_state():
+    """Cleanup test data before and after each test."""
+    spec_dir = Path(__file__).parent.parent / ".auto-claude" / "specs" / "064-intelligent-error-recovery"
+    project_dir = Path(__file__).parent.parent
+    recovery_manager = RecoveryManager(spec_dir, project_dir)
+
+    test_subtasks = [
+        "test-subtask-e2e-1",
+        "test-subtask-e2e-2",
+        "test-subtask-e2e-3",
+        "test-subtask-e2e-circular"
+    ]
+
+    # Cleanup before test
+    for subtask_id in test_subtasks:
+        try:
+            recovery_manager.reset_subtask(subtask_id)
+        except Exception:
+            pass
+
+    yield  # Run test
+
+    # Cleanup after test
+    for subtask_id in test_subtasks:
+        try:
+            recovery_manager.reset_subtask(subtask_id)
+        except Exception:
+            pass
 
 
 def test_first_attempt():
