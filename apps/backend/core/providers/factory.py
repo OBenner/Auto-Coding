@@ -76,6 +76,31 @@ def _create_openai_provider(config: "ProviderConfig") -> "AIEngineProvider":
     return OpenAIProvider(config)
 
 
+def _create_google_provider(config: "ProviderConfig") -> "AIEngineProvider":
+    """
+    Create a Google Gemini provider.
+
+    Args:
+        config: ProviderConfig with Google settings
+
+    Returns:
+        GoogleProvider instance
+
+    Raises:
+        ProviderNotInstalled: If google-generativeai package is not installed
+        ProviderError: If provider creation fails
+    """
+    try:
+        from core.providers.adapters.google import GoogleProvider
+    except ImportError as e:
+        raise ProviderNotInstalled(
+            "Google adapter not installed. Install with: pip install google-generativeai"
+        ) from e
+
+    logger.debug(f"Creating Google provider with model: {config.google_model}")
+    return GoogleProvider(config)
+
+
 def _create_litellm_provider(config: "ProviderConfig") -> "AIEngineProvider":
     """
     Create a LiteLLM provider.
@@ -162,6 +187,8 @@ def create_engine_provider(config: "ProviderConfig") -> "AIEngineProvider":
         return _create_claude_provider(config)
     elif provider == "openai":
         return _create_openai_provider(config)
+    elif provider == "google":
+        return _create_google_provider(config)
     elif provider == "litellm":
         return _create_litellm_provider(config)
     elif provider == "openrouter":
@@ -169,7 +196,7 @@ def create_engine_provider(config: "ProviderConfig") -> "AIEngineProvider":
     else:
         raise ProviderError(
             f"Unknown AI engine provider: {provider}. "
-            f"Supported providers: claude, openai, litellm, openrouter"
+            f"Supported providers: claude, openai, google, litellm, openrouter"
         )
 
 
@@ -180,4 +207,4 @@ def get_available_provider_names() -> list[str]:
     Returns:
         List of provider name strings
     """
-    return ["claude", "openai", "litellm", "openrouter"]
+    return ["claude", "openai", "google", "litellm", "openrouter"]
