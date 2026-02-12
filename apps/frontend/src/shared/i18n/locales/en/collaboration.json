@@ -14,5 +14,12 @@
     "reconnect": "Reconnect"
   },
   "connecting": "Connecting to collaboration server...",
-  "characters": "characters"
+  "characters": "characters",
+  "presence": {
+    "viewing": "Viewing",
+    "editing": "Editing",
+    "idle": "Idle",
+    "activeUsers": "active",
+    "additionalUsers": "and {{count}} more"
+  }
 }

@@ -5,3 +5,4 @@
  */
 
 export { CollaborativeSpecEditor } from './CollaborativeSpecEditor';
+export { PresenceIndicators } from './PresenceIndicators';
