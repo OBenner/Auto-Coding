@@ -1300,14 +1300,21 @@ export class UsageMonitor extends EventEmitter {
     // Per-profile tracking: if API fails for one profile, it only affects that profile
     if (this.shouldUseApiMethod(profileId) && credential) {
       this.debugLog('[UsageMonitor:FETCH] Attempting API fetch method');
-      const apiUsage = await this.fetchUsageViaAPI(credential, profileId, profileName, profileEmail, activeProfile);
-      if (apiUsage) {
-        this.debugLog('[UsageMonitor] Successfully fetched via API');
-        this.debugLog('[UsageMonitor:FETCH] API fetch successful:', {
-          sessionPercent: apiUsage.sessionPercent,
-          weeklyPercent: apiUsage.weeklyPercent
-        });
-        return apiUsage;
+      try {
+        const apiUsage = await this.fetchUsageViaAPI(credential, profileId, profileName, profileEmail, activeProfile);
+        if (apiUsage) {
+          this.debugLog('[UsageMonitor] Successfully fetched via API');
+          this.debugLog('[UsageMonitor:FETCH] API fetch successful:', {
+            sessionPercent: apiUsage.sessionPercent,
+            weeklyPercent: apiUsage.weeklyPercent
+          });
+          return apiUsage;
+        }
+      } catch (apiError) {
+        // Auth failures (401/403) and network errors should not prevent CLI fallback.
+        // The usage API is non-critical - gracefully degrade instead of triggering
+        // auth failure recovery (token refresh, profile marking, swap attempts).
+        this.debugLog('[UsageMonitor:FETCH] API fetch error, falling through to CLI fallback:', apiError);
       }
 
       // API failed - record timestamp for cooldown-based retry
@@ -1460,7 +1467,7 @@ export class UsageMonitor extends EventEmitter {
       });
 
       if (!response.ok) {
-        console.error('[UsageMonitor] API error:', response.status, response.statusText, {
+        console.warn('[UsageMonitor] API error:', response.status, response.statusText, {
           provider,
           endpoint: usageEndpoint
         });

@@ -740,7 +740,7 @@ describe('usage-monitor', () => {
       } as unknown as Response);
 
       const monitor = getUsageMonitor();
-      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
       // 401 errors should throw
       await expect(
@@ -771,7 +771,7 @@ describe('usage-monitor', () => {
       } as unknown as Response);
 
       const monitor = getUsageMonitor();
-      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
       // 403 errors should throw
       await expect(
@@ -793,7 +793,7 @@ describe('usage-monitor', () => {
       } as unknown as Response);
 
       const monitor = getUsageMonitor();
-      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
       const usage = await monitor['fetchUsageViaAPI']('valid-token', 'test-profile-1', 'Test Profile', undefined);
 
@@ -851,7 +851,7 @@ describe('usage-monitor', () => {
       } as unknown as Response);
 
       const monitor = getUsageMonitor();
-      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
       // 401 errors should throw with proper message
       await expect(
@@ -958,7 +958,7 @@ describe('usage-monitor', () => {
       });
 
       const monitor = getUsageMonitor();
-      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
       const usage = await monitor['fetchUsageViaAPI']('zai-api-key', 'zai-profile-1', 'z.ai Profile', undefined);
 
@@ -990,7 +990,7 @@ describe('usage-monitor', () => {
       });
 
       const monitor = getUsageMonitor();
-      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
       const usage = await monitor['fetchUsageViaAPI']('zhipu-api-key', 'zhipu-profile-1', 'ZHIPU Profile', undefined);
 
