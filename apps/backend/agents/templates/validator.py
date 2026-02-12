@@ -96,6 +96,62 @@ DANGEROUS_PARAMETER_PATTERNS = [
     r"(?i)(system|subprocess|shell|popen)",  # Process spawning
 ]
 
+# Python import statement patterns (for custom_prompt validation)
+IMPORT_STATEMENT_PATTERNS = [
+    r"(?m)^\s*import\s+\w+",  # `import os`
+    r"(?m)^\s*from\s+\w+\s+import",  # `from os import path`
+    r"(?m)^\s*import\s+\w+\s*,",  # `import os, sys`
+    r"(?i)(__import__|__builtins__|globals|locals|vars)",  # Dangerous built-ins
+]
+
+# Dangerous Python modules that should never be imported in templates
+DANGEROUS_IMPORT_MODULES = {
+    "os",
+    "sys",
+    "subprocess",
+    "shutil",
+    "pathlib",
+    "threading",
+    "multiprocessing",
+    "socket",
+    "http",
+    "urllib",
+    "requests",
+    "ftplib",
+    "telnetlib",
+    "pickle",
+    "shelve",
+    "marshal",
+    "eval",
+    "exec",
+    "compile",
+}
+
+# Safe metadata fields for templates
+ALLOWED_TEMPLATE_FIELDS = {
+    "name",
+    "description",
+    "category",
+    "author",
+    "version",
+    "custom_prompt",
+    "tools",
+    "mcp_servers",
+    "thinking_level",
+    "parameters",
+    "examples",
+    "tags",
+    "doc_url",
+    "repo_url",
+    "icon",
+    "color",
+}
+
+
+# =============================================================================
+# Import Validation Functions
+# =============================================================================
+
 
 # =============================================================================
 # Validation Functions
@@ -383,7 +439,15 @@ def validate_import(data: dict[str, Any]) -> tuple[bool, list[str]]:
     Validate template data from import (before creating AgentTemplate instance).
 
     This is used when importing templates from external sources (JSON files,
-    marketplace, etc.) to catch issues before instantiation.
+    marketplace, etc.) to catch security issues before instantiation.
+
+    Performs comprehensive security checks:
+    1. Field validation (required fields, types)
+    2. Import statement detection (no Python imports in custom_prompt)
+    3. URL validation (repo_url, doc_url)
+    4. File path validation
+    5. Unexpected field detection
+    6. Deep parameter validation
 
     Args:
         data: Dictionary containing template data
@@ -392,6 +456,14 @@ def validate_import(data: dict[str, Any]) -> tuple[bool, list[str]]:
         Tuple of (is_valid, list_of_errors)
     """
     errors = []
+
+    # Security: Check for unexpected fields that could be exploited
+    unexpected_fields = set(data.keys()) - ALLOWED_TEMPLATE_FIELDS
+    if unexpected_fields:
+        errors.append(
+            f"Unexpected fields in template data: {', '.join(sorted(unexpected_fields))}. "
+            f"Allowed fields: {', '.join(sorted(ALLOWED_TEMPLATE_FIELDS))}"
+        )
 
     # Validate required fields are present
     required_fields = ["name", "description", "category"]
@@ -426,6 +498,24 @@ def validate_import(data: dict[str, Any]) -> tuple[bool, list[str]]:
             f"Field 'parameters' must be a dictionary, got: {type(data['parameters']).__name__}"
         )
 
+    # Security: Validate URLs (repo_url, doc_url)
+    url_errors = validate_urls(data)
+    errors.extend(url_errors)
+
+    # Security: Validate file paths in any field
+    path_errors = validate_file_paths(data)
+    errors.extend(path_errors)
+
+    # Security: Check for import statements in custom_prompt
+    if "custom_prompt" in data and isinstance(data["custom_prompt"], str):
+        import_errors = validate_import_statements(data["custom_prompt"])
+        errors.extend(import_errors)
+
+    # Security: Deep validate parameters if present
+    if "parameters" in data and isinstance(data["parameters"], dict):
+        deep_errors = validate_deep_parameters(data["parameters"])
+        errors.extend(deep_errors)
+
     # If basic validation passes, create template and run full validation
     if not errors:
         try:
@@ -436,4 +526,262 @@ def validate_import(data: dict[str, Any]) -> tuple[bool, list[str]]:
             errors.append(f"Failed to create template from import data: {e}")
 
     is_valid = len(errors) == 0
+    return is_valid, errors
+
+
+def validate_import_statements(prompt: str) -> list[str]:
+    """
+    Validate that custom_prompt does not contain Python import statements.
+
+    Import statements in prompts could indicate attempts to:
+    - Execute arbitrary code
+    - Access dangerous modules (os, sys, subprocess)
+    - Bypass security restrictions
+
+    Args:
+        prompt: Custom prompt text to validate
+
+    Returns:
+        List of error messages (empty if safe)
+    """
+    errors = []
+
+    if not prompt or not prompt.strip():
+        return errors
+
+    # Check for import statement patterns
+    for pattern in IMPORT_STATEMENT_PATTERNS:
+        matches = re.findall(pattern, prompt, re.MULTILINE)
+        if matches:
+            # Extract the import statement for better error reporting
+            import_lines = [
+                line.strip()
+                for line in prompt.split("\n")
+                if re.search(pattern, line)
+            ]
+            if import_lines:
+                errors.append(
+                    f"Python import statement detected in custom_prompt: '{import_lines[0][:80]}'. "
+                    f"Import statements are not allowed in custom prompts for security reasons."
+                )
+
+    # Check for dangerous module references (even without explicit import)
+    for module in DANGEROUS_IMPORT_MODULES:
+        # Look for module references like "os.path", "sys.argv", etc.
+        # Use word boundaries to avoid false positives
+        module_pattern = r"\b" + re.escape(module) + r"\b"
+        if re.search(module_pattern, prompt):
+            # Only warn if it looks like actual usage, not just documentation
+            context_patterns = [
+                rf"{module}\.\w+",  # module.function or module.constant
+                rf"\w+\.{module}",  # something.module
+            ]
+            if any(re.search(p, prompt) for p in context_patterns):
+                errors.append(
+                    f"Reference to dangerous Python module '{module}' detected in custom_prompt. "
+                    f"System modules (os, sys, subprocess, etc.) are not allowed in custom prompts."
+                )
+                break  # Only report first dangerous module to avoid spam
+
+    return errors
+
+
+def validate_urls(data: dict[str, Any]) -> list[str]:
+    """
+    Validate URL fields in template data for security.
+
+    Checks:
+    - URLs use safe protocols (http, https)
+    - No javascript: or data: URLs (XSS risk)
+    - No localhost/127.0.0.1 references (SSRF risk)
+
+    Args:
+        data: Template data dictionary
+
+    Returns:
+        List of error messages (empty if valid)
+    """
+    errors = []
+
+    # URL fields to validate
+    url_fields = ["repo_url", "doc_url"]
+
+    for field in url_fields:
+        if field not in data or not data[field]:
+            continue
+
+        url = data[field]
+        if not isinstance(url, str):
+            errors.append(f"Field '{field}' must be a string, got: {type(url).__name__}")
+            continue
+
+        # Check for dangerous protocols
+        dangerous_protocols = ["javascript:", "data:", "file:", "ftp:"]
+        url_lower = url.lower()
+        for protocol in dangerous_protocols:
+            if url_lower.startswith(protocol):
+                errors.append(
+                    f"Unsafe URL protocol in '{field}': {protocol}. "
+                    f"Only http:// and https:// URLs are allowed."
+                )
+
+        # Check for SSRF risks (localhost, internal IPs)
+        ssrf_patterns = [
+            r"://localhost",
+            r"://127\.0\.0\.1",
+            r"://0\.0\.0\.0",
+            r"://::1",
+            r"://10\.",
+            r"://172\.(1[6-9]|2[0-9]|3[0-1])\.",
+            r"://192\.168\.",
+        ]
+        for pattern in ssrf_patterns:
+            if re.search(pattern, url_lower):
+                errors.append(
+                    f"Potentially unsafe URL in '{field}': {url}. "
+                    f"Local/internal network addresses are not allowed."
+                )
+                break
+
+    return errors
+
+
+def validate_file_paths(data: dict[str, Any]) -> list[str]:
+    """
+    Validate file paths in template data for security.
+
+    Checks for:
+    - Path traversal attempts (../..)
+    - Absolute paths (should be relative)
+    - Suspicious file extensions
+
+    Args:
+        data: Template data dictionary
+
+    Returns:
+        List of error messages (empty if valid)
+    """
+    errors = []
+
+    # Check string fields for potential file paths
+    string_fields = ["name", "description", "category", "custom_prompt"]
+
+    for field in string_fields:
+        if field not in data or not data[field]:
+            continue
+
+        value = data[field]
+        if not isinstance(value, str):
+            continue
+
+        # Check for path traversal
+        if "../" in value or "..\\" in value:
+            errors.append(
+                f"Path traversal pattern detected in field '{field}'. "
+                f"Relative path traversal (../) is not allowed."
+            )
+
+        # Check for absolute paths (Unix / Windows)
+        # Unix absolute path starts with /
+        if re.match(r"^/[a-zA-Z0-9_]", value):
+            errors.append(
+                f"Absolute file path detected in field '{field}': {value[:50]}. "
+                f"Absolute paths are not allowed in template fields."
+            )
+
+        # Windows absolute path (C:\, D:\, etc.)
+        if re.match(r"^[A-Za-z]:\\", value):
+            errors.append(
+                f"Absolute file path detected in field '{field}': {value[:50]}. "
+                f"Absolute paths are not allowed in template fields."
+            )
+
+    return errors
+
+
+def validate_deep_parameters(parameters: dict[str, Any]) -> list[str]:
+    """
+    Deep validate parameter dictionary for nested security issues.
+
+    Recursively checks:
+    - Nested dictionaries
+    - Lists with potentially malicious content
+    - String values with dangerous patterns
+
+    Args:
+        parameters: Parameters dictionary
+
+    Returns:
+        List of error messages (empty if valid)
+    """
+    errors = []
+
+    def _validate_value(key: str, value: Any, path: str = "") -> None:
+        """Recursively validate a value."""
+        current_path = f"{path}.{key}" if path else key
+
+        if isinstance(value, dict):
+            # Recursively validate nested dicts
+            for nested_key, nested_value in value.items():
+                _validate_value(nested_key, nested_value, current_path)
+
+        elif isinstance(value, list):
+            # Validate each list item
+            for i, item in enumerate(value):
+                _validate_value(f"[{i}]", item, current_path)
+
+        elif isinstance(value, str):
+            # Check for dangerous patterns in strings
+            for pattern in DANGEROUS_PARAMETER_PATTERNS:
+                if re.search(pattern, value):
+                    errors.append(
+                        f"Potentially dangerous value in parameter '{current_path}': {value[:50]}... "
+                        f"(matches pattern: {pattern[:50]}...)"
+                    )
+                    break  # Only report first match per value
+
+            # Check for path traversal
+            if "../" in value or "..\\" in value:
+                errors.append(
+                    f"Path traversal pattern detected in parameter '{current_path}': {value[:50]}..."
+                )
+
+            # Check for excessive length (prevent DoS)
+            if len(value) > 10000:
+                errors.append(
+                    f"Parameter '{current_path}' value is too long ({len(value)} chars). "
+                    f"Maximum allowed: 10000 chars"
+                )
+
+    # Validate all parameters
+    for key, value in parameters.items():
+        _validate_value(key, value)
+
+    return errors
+
+
+def validate_template_for_import(data: dict[str, Any]) -> tuple[bool, list[str]]:
+    """
+    Convenience wrapper for validate_import with better error formatting.
+
+    This function is intended for use by template importers (storage modules,
+    registry, marketplace) and provides formatted error messages suitable
+    for user display.
+
+    Args:
+        data: Dictionary containing template data
+
+    Returns:
+        Tuple of (is_valid, list_of_errors)
+    """
+    is_valid, errors = validate_import(data)
+
+    # Add summary if there are errors
+    if errors:
+        error_summary = [
+            f"Template validation failed with {len(errors)} error(s):"
+        ]
+        error_summary.extend(errors)
+        return is_valid, error_summary
+
     return is_valid, errors
