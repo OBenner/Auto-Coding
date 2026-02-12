@@ -12,6 +12,7 @@ from core.sentry import capture_exception
 
 from .schema import (
     EPISODE_TYPE_CODEBASE_DISCOVERY,
+    EPISODE_TYPE_ERROR_PATTERN,
     EPISODE_TYPE_GOTCHA,
     EPISODE_TYPE_PATTERN,
     EPISODE_TYPE_PREFERENCE_PROFILE,
@@ -242,6 +243,71 @@ class GraphitiQueries:
                 group_id=self.group_id,
                 spec_id=self.spec_context_id,
                 content_summary=gotcha[:100] if gotcha else "",
+            )
+            return False
+
+    async def add_error_pattern(
+        self,
+        error_type: str,
+        error_message: str,
+        file_path: str,
+        solution: str,
+        context: str | None = None,
+    ) -> bool:
+        """
+        Save an error pattern to the knowledge graph for future debugging reference.
+
+        Args:
+            error_type: Type of error (e.g., "ImportError", "TypeError")
+            error_message: The error message or pattern
+            file_path: File where the error occurred
+            solution: How the error was resolved
+            context: Optional additional context about the error scenario
+
+        Returns:
+            True if saved successfully
+        """
+        try:
+            from graphiti_core.nodes import EpisodeType
+
+            episode_content = {
+                "type": EPISODE_TYPE_ERROR_PATTERN,
+                "spec_id": self.spec_context_id,
+                "timestamp": datetime.now(UTC).isoformat(),
+                "error_type": error_type,
+                "error_message": error_message,
+                "file_path": file_path,
+                "solution": solution,
+            }
+
+            # Add optional context if provided
+            if context:
+                episode_content["context"] = context
+
+            await self.client.graphiti.add_episode(
+                name=f"error_pattern_{error_type}_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}",
+                episode_body=json.dumps(episode_content),
+                source=EpisodeType.text,
+                source_description=f"Error pattern: {error_type} in {file_path}",
+                reference_time=datetime.now(UTC),
+                group_id=self.group_id,
+            )
+
+            logger.info(
+                f"Saved error pattern to Graphiti: {error_type} in {file_path}"
+            )
+            return True
+
+        except Exception as e:
+            logger.warning(f"Failed to save error pattern: {e}")
+            capture_exception(
+                e,
+                operation="add_error_pattern",
+                group_id=self.group_id,
+                spec_id=self.spec_context_id,
+                error_type=error_type,
+                file_path=file_path,
+                content_summary=error_message[:100] if error_message else "",
             )
             return False
 
