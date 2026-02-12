@@ -1,10 +1,11 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { Signup } from './pages/Signup'
 import { Login } from './pages/Login'
 import { Settings } from './pages/Settings'
 import { UsageDashboard } from './pages/UsageDashboard'
 import { TerminalPage } from './pages/TerminalPage'
+import { TaskList } from './pages/TaskList'
 import { getCloudConfig, getCloudStatus } from './config/cloud'
 
 function HomePage() {
@@ -85,6 +86,12 @@ function HomePage() {
           {/* Auth Links */}
           <div className="pt-6 flex gap-4 justify-center border-t border-gray-200">
             <a
+              href="/tasks"
+              className="px-6 py-2 text-blue-600 hover:text-blue-700 font-medium"
+            >
+              View Tasks
+            </a>
+            <a
               href="/login"
               className="px-6 py-2 text-blue-600 hover:text-blue-700 font-medium"
             >
@@ -104,6 +111,14 @@ function HomePage() {
 }
 
 function App() {
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null)
+
+  const handleTaskClick = (taskId: string) => {
+    setSelectedTaskId(taskId)
+    // TODO: Navigate to task detail page when implemented
+    console.log('Task clicked:', taskId)
+  }
+
   return (
     <BrowserRouter>
       <Routes>
@@ -113,6 +128,7 @@ function App() {
         <Route path="/settings/*" element={<Settings />} />
         <Route path="/usage" element={<UsageDashboard />} />
         <Route path="/terminal" element={<TerminalPage />} />
+        <Route path="/tasks" element={<TaskList onTaskClick={handleTaskClick} />} />
       </Routes>
     </BrowserRouter>
   )
