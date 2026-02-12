@@ -297,6 +297,8 @@ export interface AppSettings {
   graphitiMcpUrl?: string;
   // Onboarding wizard completion state
   onboardingCompleted?: boolean;
+  // Selected AI provider (anthropic, openrouter, groq, etc.)
+  selectedProviderId?: string;
   // Selected agent profile for preset model/thinking configurations
   selectedAgentProfile?: string;
   // Custom phase configuration for Auto profile (overrides defaults)

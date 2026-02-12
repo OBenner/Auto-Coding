@@ -53,6 +53,7 @@ import { DevToolsSettings } from './DevToolsSettings';
 import { DebugSettings } from './DebugSettings';
 import { AccountSettings } from './AccountSettings';
 import { KeyboardShortcutsSettings } from './KeyboardShortcutsSettings';
+import { ProviderSettings } from './ProviderSettings';
 import { ProjectSelector } from './ProjectSelector';
 import { ProjectSettingsContent, ProjectSettingsSection } from './ProjectSettingsContent';
 import { useProjectStore } from '../../stores/project-store';
@@ -67,7 +68,7 @@ interface AppSettingsDialogProps {
 }
 
 // App-level settings sections
-export type AppSection = 'appearance' | 'display' | 'language' | 'devtools' | 'agent' | 'paths' | 'accounts' | 'updates' | 'notifications' | 'keyboardShortcuts' | 'debug';
+export type AppSection = 'appearance' | 'display' | 'language' | 'devtools' | 'provider' | 'agent' | 'paths' | 'accounts' | 'updates' | 'notifications' | 'keyboardShortcuts' | 'debug';
 
 interface NavItemConfig<T extends string> {
   id: T;
@@ -79,6 +80,7 @@ const appNavItemsConfig: NavItemConfig<AppSection>[] = [
   { id: 'display', icon: Monitor },
   { id: 'language', icon: Globe },
   { id: 'devtools', icon: Code },
+  { id: 'provider', icon: Sparkles },
   { id: 'agent', icon: Bot },
   { id: 'paths', icon: FolderOpen },
   { id: 'accounts', icon: Users },
@@ -188,6 +190,8 @@ export function AppSettingsDialog({ open, onOpenChange, initialSection, initialP
         return <LanguageSettings settings={settings} onSettingsChange={setSettings} />;
       case 'devtools':
         return <DevToolsSettings settings={settings} onSettingsChange={setSettings} />;
+      case 'provider':
+        return <ProviderSettings />;
       case 'agent':
         return <GeneralSettings settings={settings} onSettingsChange={setSettings} section="agent" />;
       case 'paths':

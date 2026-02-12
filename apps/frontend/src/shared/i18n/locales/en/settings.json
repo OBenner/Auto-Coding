@@ -21,6 +21,10 @@
       "title": "Developer Tools",
       "description": "IDE and terminal preferences"
     },
+    "provider": {
+      "title": "AI Provider",
+      "description": "Select your AI provider and models"
+    },
     "agent": {
       "title": "Agent Settings",
       "description": "Default model and framework"
@@ -356,6 +360,22 @@
       "integrationDescription": "Configure persistent cross-session memory for agents",
       "syncDescription": "Configure persistent memory"
     }
+  },
+  "provider": {
+    "title": "AI Provider",
+    "description": "Select your AI provider and available models",
+    "selectProvider": "Select Provider",
+    "selectProviderPlaceholder": "Choose an AI provider",
+    "availableProviders": "Available Providers",
+    "selectedProvider": "Selected Provider",
+    "name": "Name",
+    "endpoint": "Endpoint",
+    "model": "model",
+    "models": "models",
+    "modelsAvailable": "Models available",
+    "autoDiscovery": "Auto-discovery",
+    "showModels": "Show available models",
+    "hideModels": "Hide models"
   },
   "agentProfile": {
     "label": "Agent Profile",

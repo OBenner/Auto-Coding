@@ -21,6 +21,10 @@
       "title": "Outils de développement",
       "description": "Préférences IDE et terminal"
     },
+    "provider": {
+      "title": "Fournisseur IA",
+      "description": "Sélectionnez votre fournisseur IA et vos modèles"
+    },
     "agent": {
       "title": "Paramètres de l'agent",
       "description": "Modèle par défaut et framework"
@@ -356,6 +360,22 @@
       "integrationDescription": "Configurer la mémoire persistante inter-sessions pour les agents",
       "syncDescription": "Configurer la mémoire persistante"
     }
+  },
+  "provider": {
+    "title": "Fournisseur IA",
+    "description": "Sélectionnez votre fournisseur IA et les modèles disponibles",
+    "selectProvider": "Sélectionner le fournisseur",
+    "selectProviderPlaceholder": "Choisir un fournisseur IA",
+    "availableProviders": "Fournisseurs disponibles",
+    "selectedProvider": "Fournisseur sélectionné",
+    "name": "Nom",
+    "endpoint": "Point de terminaison",
+    "model": "modèle",
+    "models": "modèles",
+    "modelsAvailable": "Modèles disponibles",
+    "autoDiscovery": "Découverte automatique",
+    "showModels": "Afficher les modèles disponibles",
+    "hideModels": "Masquer les modèles"
   },
   "agentProfile": {
     "label": "Profil d'agent",
