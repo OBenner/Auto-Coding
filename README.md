@@ -98,6 +98,20 @@ Native desktop apps for Windows, macOS, and Linux. Cloud-hosted option also avai
 
 ---
 
+## Search & Navigation
+
+**Looking for something specific?**
+
+- **[📖 Search Index](docs/search/INDEX.md)** - Comprehensive searchable index with keywords
+- **[🔍 Search Guide](docs/search/SEARCH-GUIDE.md)** - Learn effective search strategies
+
+**Quick links:**
+- [Quick Start Guide](guides/QUICK-START.md) - Get started in 15 minutes
+- [CLI Usage Guide](guides/CLI-USAGE.md) - Terminal-only usage
+- [Troubleshooting Guide](guides/TROUBLESHOOTING.md) - Having issues?
+
+---
+
 ## Quick Start
 
 Get started in under 15 minutes with our comprehensive [Quick Start Guide](guides/QUICK-START.md).
