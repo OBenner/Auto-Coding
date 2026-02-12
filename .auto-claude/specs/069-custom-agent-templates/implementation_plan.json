@@ -1,0 +1,659 @@
+{
+  "feature": "Custom Agent Templates",
+  "workflow_type": "feature",
+  "workflow_rationale": "Multi-service feature requiring backend registry, frontend UI, and file-based storage. Backend handles template validation/storage, frontend provides editor/marketplace UI.",
+  "phases": [
+    {
+      "id": "phase-1-backend-core",
+      "name": "Backend Template System",
+      "type": "implementation",
+      "description": "Build agent template registry, storage, and validation in backend",
+      "depends_on": [],
+      "parallel_safe": true,
+      "subtasks": [
+        {
+          "id": "subtask-1-1",
+          "description": "Create AgentTemplate model and schema",
+          "service": "backend",
+          "files_to_modify": [],
+          "files_to_create": [
+            "apps/backend/agents/templates/models.py"
+          ],
+          "patterns_from": [
+            "apps/backend/spec/templates/registry.py"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "python -c \"from agents.templates.models import AgentTemplate; print('OK')\"",
+            "expected": "OK"
+          },
+          "status": "completed"
+        },
+        {
+          "id": "subtask-1-2",
+          "description": "Create AgentTemplateRegistry for template management",
+          "service": "backend",
+          "files_to_modify": [],
+          "files_to_create": [
+            "apps/backend/agents/templates/registry.py"
+          ],
+          "patterns_from": [
+            "apps/backend/spec/templates/registry.py"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "python -c \"from agents.templates.registry import AgentTemplateRegistry; r = AgentTemplateRegistry(); print('OK')\"",
+            "expected": "OK"
+          },
+          "status": "completed"
+        },
+        {
+          "id": "subtask-1-3",
+          "description": "Create template storage layer (file-based in .auto-claude/templates)",
+          "service": "backend",
+          "files_to_modify": [],
+          "files_to_create": [
+            "apps/backend/agents/templates/storage.py"
+          ],
+          "patterns_from": [
+            "apps/backend/prompts_pkg/project_context.py"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "python -c \"from agents.templates.storage import save_template, load_templates; print('OK')\"",
+            "expected": "OK"
+          },
+          "status": "completed"
+        },
+        {
+          "id": "subtask-1-4",
+          "description": "Add template validation (prompt safety, tool permissions)",
+          "service": "backend",
+          "files_to_modify": [],
+          "files_to_create": [
+            "apps/backend/agents/templates/validator.py"
+          ],
+          "patterns_from": [
+            "apps/backend/core/client.py"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "python -c \"from agents.templates.validator import validate_template; print('OK')\"",
+            "expected": "OK"
+          },
+          "status": "completed"
+        }
+      ]
+    },
+    {
+      "id": "phase-2-backend-integration",
+      "name": "Integrate Templates into Agent System",
+      "type": "implementation",
+      "description": "Connect custom templates to create_client() and agent execution",
+      "depends_on": [
+        "phase-1-backend-core"
+      ],
+      "parallel_safe": false,
+      "subtasks": [
+        {
+          "id": "subtask-2-1",
+          "description": "Extend create_client() to accept custom template configurations",
+          "service": "backend",
+          "files_to_modify": [
+            "apps/backend/core/client.py"
+          ],
+          "files_to_create": [],
+          "patterns_from": [
+            "apps/backend/agents/tools_pkg/models.py"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "python -c \"from core.client import create_client; from pathlib import Path; print('OK')\"",
+            "expected": "OK"
+          },
+          "status": "completed"
+        },
+        {
+          "id": "subtask-2-2",
+          "description": "Add prompt loader for custom templates",
+          "service": "backend",
+          "files_to_modify": [
+            "apps/backend/prompts_pkg/prompts.py"
+          ],
+          "files_to_create": [],
+          "patterns_from": [
+            "apps/backend/prompts_pkg/prompt_loader.py"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "python -c \"from prompts_pkg.prompts import load_custom_template_prompt; print('OK')\"",
+            "expected": "OK"
+          },
+          "status": "completed"
+        },
+        {
+          "id": "subtask-2-3",
+          "description": "Create template CLI commands (list, test, validate)",
+          "service": "backend",
+          "files_to_modify": [],
+          "files_to_create": [
+            "apps/backend/cli/template_commands.py"
+          ],
+          "patterns_from": [
+            "apps/backend/cli/worktree.py"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "python apps/backend/cli/template_commands.py --help",
+            "expected": "usage"
+          },
+          "status": "completed"
+        }
+      ]
+    },
+    {
+      "id": "phase-3-frontend-editor",
+      "name": "Template Editor UI",
+      "type": "implementation",
+      "description": "Build template creation/editing interface in frontend",
+      "depends_on": [
+        "phase-1-backend-core"
+      ],
+      "parallel_safe": true,
+      "subtasks": [
+        {
+          "id": "subtask-3-1",
+          "description": "Create TemplateEditor component with prompt configuration",
+          "service": "frontend",
+          "files_to_modify": [],
+          "files_to_create": [
+            "apps/frontend/src/renderer/components/templates/TemplateEditor.tsx"
+          ],
+          "patterns_from": [
+            "apps/frontend/src/renderer/components/settings/AgentProfileSettings.tsx"
+          ],
+          "verification": {
+            "type": "browser",
+            "url": "http://localhost:5173/#/settings/templates",
+            "checks": [
+              "TemplateEditor renders",
+              "Prompt field exists"
+            ]
+          },
+          "status": "completed"
+        },
+        {
+          "id": "subtask-3-2",
+          "description": "Add tool selection UI for custom tool sets",
+          "service": "frontend",
+          "files_to_modify": [],
+          "files_to_create": [
+            "apps/frontend/src/renderer/components/templates/ToolSelector.tsx"
+          ],
+          "patterns_from": [
+            "apps/frontend/src/renderer/components/AgentTools.tsx"
+          ],
+          "verification": {
+            "type": "browser",
+            "url": "http://localhost:5173/#/settings/templates",
+            "checks": [
+              "Tool checkboxes render",
+              "MCP server selection works"
+            ]
+          },
+          "status": "completed"
+        },
+        {
+          "id": "subtask-3-3",
+          "description": "Create template store for state management",
+          "service": "frontend",
+          "files_to_modify": [],
+          "files_to_create": [
+            "apps/frontend/src/renderer/stores/template-store.ts"
+          ],
+          "patterns_from": [
+            "apps/frontend/src/renderer/stores/settings-store.ts"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "npm run type-check",
+            "expected": "no errors"
+          },
+          "status": "completed"
+        },
+        {
+          "id": "subtask-3-4",
+          "description": "Add IPC handlers for template CRUD operations",
+          "service": "frontend",
+          "files_to_modify": [
+            "apps/frontend/src/shared/constants/ipc.ts",
+            "apps/frontend/src/main/ipc-handlers/template-handlers.ts",
+            "apps/frontend/src/preload/api/index.ts"
+          ],
+          "files_to_create": [
+            "apps/frontend/src/preload/api/template-api.ts"
+          ],
+          "patterns_from": [
+            "apps/frontend/src/main/ipc-handlers/template-handlers.ts"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "npm run typecheck",
+            "expected": "no errors"
+          },
+          "status": "completed"
+        }
+      ]
+    },
+    {
+      "id": "phase-4-template-testing",
+      "name": "Template Testing & Validation",
+      "type": "implementation",
+      "description": "Add test mode for templates before publishing",
+      "depends_on": [
+        "phase-2-backend-integration",
+        "phase-3-frontend-editor"
+      ],
+      "parallel_safe": false,
+      "subtasks": [
+        {
+          "id": "subtask-4-1",
+          "description": "Create template test runner in backend",
+          "service": "backend",
+          "files_to_modify": [],
+          "files_to_create": [
+            "apps/backend/agents/templates/test_runner.py"
+          ],
+          "patterns_from": [
+            "apps/backend/agents/session.py"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "python -c \"from agents.templates.test_runner import run_template_test; print('OK')\"",
+            "expected": "OK"
+          },
+          "status": "completed"
+        },
+        {
+          "id": "subtask-4-2",
+          "description": "Add test dialog in frontend with dry-run capability",
+          "service": "frontend",
+          "files_to_modify": [],
+          "files_to_create": [
+            "apps/frontend/src/renderer/components/templates/TemplateTestDialog.tsx"
+          ],
+          "patterns_from": [
+            "apps/frontend/src/renderer/components/AddFeatureDialog.tsx"
+          ],
+          "verification": {
+            "type": "browser",
+            "url": "http://localhost:5173/#/settings/templates",
+            "checks": [
+              "Test button exists",
+              "Dialog opens with test input"
+            ]
+          },
+          "status": "completed"
+        }
+      ]
+    },
+    {
+      "id": "phase-5-versioning",
+      "name": "Template Versioning System",
+      "type": "implementation",
+      "description": "Add version tracking and update mechanism for templates",
+      "depends_on": [
+        "phase-2-backend-integration"
+      ],
+      "parallel_safe": true,
+      "subtasks": [
+        {
+          "id": "subtask-5-1",
+          "description": "Add versioning metadata to template schema",
+          "service": "backend",
+          "files_to_modify": [
+            "apps/backend/agents/templates/models.py"
+          ],
+          "files_to_create": [],
+          "patterns_from": [],
+          "verification": {
+            "type": "command",
+            "command": "python -c \"from agents.templates.models import AgentTemplate; t = AgentTemplate(version='1.0.0'); print('OK')\"",
+            "expected": "OK"
+          },
+          "status": "pending"
+        },
+        {
+          "id": "subtask-5-2",
+          "description": "Create version comparison and update logic",
+          "service": "backend",
+          "files_to_modify": [],
+          "files_to_create": [
+            "apps/backend/agents/templates/versioning.py"
+          ],
+          "patterns_from": [
+            "apps/backend/spec/templates/registry.py"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "python -c \"from agents.templates.versioning import compare_versions; print('OK')\"",
+            "expected": "OK"
+          },
+          "status": "pending"
+        },
+        {
+          "id": "subtask-5-3",
+          "description": "Add version UI and update notifications in frontend",
+          "service": "frontend",
+          "files_to_modify": [
+            "apps/frontend/src/renderer/components/templates/TemplateEditor.tsx"
+          ],
+          "files_to_create": [],
+          "patterns_from": [
+            "apps/frontend/src/renderer/components/AppUpdateNotification.tsx"
+          ],
+          "verification": {
+            "type": "browser",
+            "url": "http://localhost:5173/#/settings/templates",
+            "checks": [
+              "Version badge displays",
+              "Update available indicator shows"
+            ]
+          },
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": "phase-6-marketplace",
+      "name": "Community Template Marketplace",
+      "type": "implementation",
+      "description": "Add template import/export and marketplace browser",
+      "depends_on": [
+        "phase-4-template-testing",
+        "phase-5-versioning"
+      ],
+      "parallel_safe": false,
+      "subtasks": [
+        {
+          "id": "subtask-6-1",
+          "description": "Create template export to JSON format",
+          "service": "backend",
+          "files_to_modify": [
+            "apps/backend/agents/templates/storage.py"
+          ],
+          "files_to_create": [],
+          "patterns_from": [],
+          "verification": {
+            "type": "command",
+            "command": "python -c \"from agents.templates.storage import export_template; print('OK')\"",
+            "expected": "OK"
+          },
+          "status": "pending"
+        },
+        {
+          "id": "subtask-6-2",
+          "description": "Add import validation and security checks",
+          "service": "backend",
+          "files_to_modify": [
+            "apps/backend/agents/templates/validator.py"
+          ],
+          "files_to_create": [],
+          "patterns_from": [
+            "apps/backend/core/client.py"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "python -c \"from agents.templates.validator import validate_import; print('OK')\"",
+            "expected": "OK"
+          },
+          "status": "pending"
+        },
+        {
+          "id": "subtask-6-3",
+          "description": "Create marketplace browser UI component",
+          "service": "frontend",
+          "files_to_modify": [],
+          "files_to_create": [
+            "apps/frontend/src/renderer/components/templates/TemplateMarketplace.tsx"
+          ],
+          "patterns_from": [
+            "apps/frontend/src/renderer/components/AgentTools.tsx"
+          ],
+          "verification": {
+            "type": "browser",
+            "url": "http://localhost:5173/#/settings/templates/marketplace",
+            "checks": [
+              "Marketplace grid displays",
+              "Search box exists"
+            ]
+          },
+          "status": "pending"
+        },
+        {
+          "id": "subtask-6-4",
+          "description": "Add import/export buttons and file handling",
+          "service": "frontend",
+          "files_to_modify": [
+            "apps/frontend/src/renderer/components/templates/TemplateEditor.tsx"
+          ],
+          "files_to_create": [],
+          "patterns_from": [
+            "apps/frontend/src/renderer/components/EnvConfigModal.tsx"
+          ],
+          "verification": {
+            "type": "browser",
+            "url": "http://localhost:5173/#/settings/templates",
+            "checks": [
+              "Export button works",
+              "Import dialog opens"
+            ]
+          },
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": "phase-7-integration",
+      "name": "End-to-End Integration",
+      "type": "integration",
+      "description": "Wire template system into task creation and agent execution",
+      "depends_on": [
+        "phase-6-marketplace"
+      ],
+      "parallel_safe": false,
+      "subtasks": [
+        {
+          "id": "subtask-7-1",
+          "description": "Add custom template selector to task creation wizard",
+          "service": "frontend",
+          "files_to_modify": [
+            "apps/frontend/src/renderer/components/TaskCreationWizard.tsx"
+          ],
+          "files_to_create": [],
+          "patterns_from": [
+            "apps/frontend/src/renderer/components/AgentProfileSelector.tsx"
+          ],
+          "verification": {
+            "type": "browser",
+            "url": "http://localhost:5173/#/create",
+            "checks": [
+              "Template dropdown shows custom templates",
+              "Can select custom agent"
+            ]
+          },
+          "status": "pending"
+        },
+        {
+          "id": "subtask-7-2",
+          "description": "End-to-end test: create, test, export, import template",
+          "all_services": true,
+          "files_to_modify": [],
+          "files_to_create": [],
+          "patterns_from": [],
+          "verification": {
+            "type": "e2e",
+            "steps": [
+              "Create custom template in editor",
+              "Test template with dry-run",
+              "Export template to JSON",
+              "Import template in clean install",
+              "Run task with custom template",
+              "Verify custom prompt and tools used"
+            ]
+          },
+          "status": "pending"
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "total_phases": 7,
+    "total_subtasks": 21,
+    "services_involved": [
+      "backend",
+      "frontend"
+    ],
+    "parallelism": {
+      "max_parallel_phases": 2,
+      "parallel_groups": [
+        {
+          "phases": [
+            "phase-1-backend-core",
+            "phase-3-frontend-editor"
+          ],
+          "reason": "Backend registry and frontend UI can be built independently"
+        },
+        {
+          "phases": [
+            "phase-2-backend-integration",
+            "phase-5-versioning"
+          ],
+          "reason": "Backend integration and versioning system are separate concerns"
+        }
+      ],
+      "recommended_workers": 2,
+      "speedup_estimate": "1.3x faster than sequential"
+    }
+  },
+  "verification_strategy": {
+    "risk_level": "high",
+    "skip_validation": false,
+    "test_creation_phase": "post_implementation",
+    "test_types_required": [
+      "unit",
+      "integration",
+      "e2e"
+    ],
+    "security_scanning_required": true,
+    "staging_deployment_required": false,
+    "acceptance_criteria": [
+      "Users can create custom agent templates with prompt and tool configuration",
+      "Templates can be tested before publishing",
+      "Templates support versioning with update notifications",
+      "Templates can be exported/imported as JSON files",
+      "Community marketplace UI allows browsing templates",
+      "Custom templates integrate into task creation flow",
+      "All imported templates pass security validation"
+    ],
+    "verification_steps": [
+      {
+        "name": "Backend Unit Tests",
+        "command": "pytest apps/backend/tests/agents/templates/ -v",
+        "expected_outcome": "All template system tests pass",
+        "type": "test",
+        "required": true,
+        "blocking": true
+      },
+      {
+        "name": "Frontend Unit Tests",
+        "command": "npm test -- templates",
+        "expected_outcome": "All template component tests pass",
+        "type": "test",
+        "required": true,
+        "blocking": true
+      },
+      {
+        "name": "Security Scan",
+        "command": "python apps/backend/scan_secrets.py --all-files --json",
+        "expected_outcome": "No secrets detected",
+        "type": "security",
+        "required": true,
+        "blocking": true
+      },
+      {
+        "name": "Integration Tests",
+        "command": "pytest apps/backend/tests/integration/test_templates.py -v",
+        "expected_outcome": "Template import/export and execution tests pass",
+        "type": "test",
+        "required": true,
+        "blocking": true
+      }
+    ],
+    "reasoning": "High risk: new agent execution path with user-provided prompts and custom tool permissions requires thorough validation"
+  },
+  "qa_acceptance": {
+    "unit_tests": {
+      "required": true,
+      "commands": [
+        "pytest apps/backend/tests/agents/templates/ -v",
+        "npm test -- templates"
+      ],
+      "minimum_coverage": null
+    },
+    "integration_tests": {
+      "required": true,
+      "commands": [
+        "pytest apps/backend/tests/integration/test_templates.py -v"
+      ],
+      "services_to_test": [
+        "backend",
+        "frontend"
+      ]
+    },
+    "e2e_tests": {
+      "required": true,
+      "commands": [],
+      "flows": [
+        "create-template",
+        "test-template",
+        "export-import-template",
+        "run-task-with-custom-template"
+      ]
+    },
+    "browser_verification": {
+      "required": true,
+      "pages": [
+        {
+          "url": "http://localhost:5173/#/settings/templates",
+          "checks": [
+            "template-editor-renders",
+            "tool-selector-works"
+          ]
+        },
+        {
+          "url": "http://localhost:5173/#/settings/templates/marketplace",
+          "checks": [
+            "marketplace-displays",
+            "search-works"
+          ]
+        },
+        {
+          "url": "http://localhost:5173/#/create",
+          "checks": [
+            "custom-template-dropdown-shows",
+            "can-select-custom-agent"
+          ]
+        }
+      ]
+    },
+    "database_verification": {
+      "required": false
+    }
+  },
+  "qa_signoff": null,
+  "status": "in_progress",
+  "planStatus": "in_progress",
+  "updated_at": "2026-02-12T16:32:08.758Z",
+  "recoveryNote": "Task recovered from stuck state at 2026-02-12T11:14:58.225Z"
+}
