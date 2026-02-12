@@ -389,7 +389,7 @@
             "command": "python -c \"from agents.templates.storage import export_template; print('OK')\"",
             "expected": "OK"
           },
-          "status": "pending"
+          "status": "completed"
         },
         {
           "id": "subtask-6-2",
@@ -407,7 +407,7 @@
             "command": "python -c \"from agents.templates.validator import validate_import; print('OK')\"",
             "expected": "OK"
           },
-          "status": "pending"
+          "status": "completed"
         },
         {
           "id": "subtask-6-3",
@@ -654,6 +654,6 @@
   "qa_signoff": null,
   "status": "in_progress",
   "planStatus": "in_progress",
-  "updated_at": "2026-02-12T16:42:55.087Z",
+  "updated_at": "2026-02-12T16:47:54.095Z",
   "recoveryNote": "Task recovered from stuck state at 2026-02-12T11:14:58.225Z"
 }
