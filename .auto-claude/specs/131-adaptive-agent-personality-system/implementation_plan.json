@@ -402,9 +402,9 @@
     }
   },
   "qa_signoff": null,
-  "status": "in_progress",
-  "planStatus": "in_progress",
-  "updated_at": "2026-02-08T09:52:48.045Z",
+  "status": "human_review",
+  "planStatus": "review",
+  "updated_at": "2026-02-12T11:14:51.734Z",
   "last_updated": "2026-02-08T07:52:24.927518+00:00",
-  "recoveryNote": "Task recovered from stuck state at 2026-02-08T09:29:45.760Z"
+  "recoveryNote": "Task recovered from stuck state at 2026-02-12T11:14:51.734Z"
 }

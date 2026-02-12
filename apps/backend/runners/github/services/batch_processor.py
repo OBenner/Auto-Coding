@@ -113,7 +113,7 @@ class BatchProcessor:
                             AutoFixStatus.COMPLETED,
                         ]:
                             existing_states.append(issue_num)
-                    except (ValueError, json.JSONDecodeError):
+                    except ValueError:
                         continue
 
             exclude_issues = set(existing_states)

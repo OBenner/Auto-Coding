@@ -157,7 +157,7 @@ class FileLock:
                 # Non-blocking lock attempt
                 _try_lock(self._fd, self.exclusive)
                 return  # Lock acquired
-            except (BlockingIOError, OSError):
+            except OSError:
                 # Lock held by another process
                 elapsed = time.time() - start_time
                 if elapsed >= self.timeout:

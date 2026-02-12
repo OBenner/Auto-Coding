@@ -117,11 +117,12 @@ def find_spec(project_dir: Path, spec_identifier: str) -> Path | None:
 
         # Try matching by number prefix
         for spec_folder in specs_dir.iterdir():
-            if spec_folder.is_dir() and spec_folder.name.startswith(
-                spec_identifier + "-"
+            if (
+                spec_folder.is_dir()
+                and spec_folder.name.startswith(spec_identifier + "-")
+                and (spec_folder / "spec.md").exists()
             ):
-                if (spec_folder / "spec.md").exists():
-                    return spec_folder
+                return spec_folder
 
     # Check worktree specs (for merge-preview, merge, review, discard operations)
     worktree_base = project_dir / ".auto-claude" / "worktrees" / "tasks"

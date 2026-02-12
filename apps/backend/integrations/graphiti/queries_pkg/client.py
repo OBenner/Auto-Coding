@@ -199,7 +199,7 @@ class GraphitiClient:
                 db_path = self.config.get_db_path()
                 try:
                     self._driver = create_patched_kuzu_driver(db=str(db_path))
-                except (OSError, PermissionError) as e:
+                except OSError as e:
                     logger.warning(
                         f"Failed to initialize LadybugDB driver at {db_path}: {e}"
                     )

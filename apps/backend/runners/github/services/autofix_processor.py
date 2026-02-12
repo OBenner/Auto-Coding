@@ -163,7 +163,7 @@ class AutoFixProcessor:
                 state = AutoFixState.load(self.github_dir, issue_number)
                 if state:
                     queue.append(state)
-            except (ValueError, json.JSONDecodeError):
+            except ValueError:
                 continue
 
         return sorted(queue, key=lambda s: s.created_at, reverse=True)
