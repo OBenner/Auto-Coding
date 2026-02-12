@@ -143,6 +143,7 @@ from core.auth import (
     require_auth_token,
     validate_token_not_encrypted,
 )
+from core.providers.config import ProviderConfig, get_provider_config
 from linear_updater import is_linear_enabled
 from prompts_pkg.project_context import detect_project_capabilities, load_project_index
 from security import bash_security_hook
@@ -622,6 +623,10 @@ def create_client(
     Only starts MCP servers that the agent actually needs, reducing context
     window bloat and startup latency.
 
+    **NOTE:** This function creates Claude-specific clients only. For other
+    AI providers (OpenAI, Google Gemini, Ollama, etc.), use the provider factory:
+    `create_engine_provider()` from `core.providers.factory`.
+
     Args:
         project_dir: Root directory for the project (working directory)
         spec_dir: Directory containing the spec (for settings file)
@@ -654,6 +659,28 @@ def create_client(
        (see security.py for ALLOWED_COMMANDS)
     4. Tool filtering - Each agent type only sees relevant tools (prevents misuse)
     """
+    # Check configured AI provider and log it
+    provider_config = get_provider_config()
+    configured_provider = provider_config.provider
+    provider_summary = provider_config.get_provider_summary()
+
+    # Log provider information
+    logger.info(f"AI Engine Provider: {provider_summary}")
+    print(f"AI Engine Provider: {provider_summary}")
+
+    # Warn if non-Claude provider is configured
+    if configured_provider != "claude":
+        logger.warning(
+            f"Non-Claude provider configured ({configured_provider}), but create_client() "
+            f"only supports Claude Agent SDK. For {configured_provider}, use create_engine_provider() "
+            f"from core.providers.factory instead."
+        )
+        print(
+            f"⚠️  Note: create_client() is Claude-specific. "
+            f"Configured provider is '{configured_provider}'. "
+            f"Proceeding with Claude Agent SDK."
+        )
+
     # Get OAuth token - Claude CLI handles token lifecycle internally
     oauth_token = require_auth_token()
 
