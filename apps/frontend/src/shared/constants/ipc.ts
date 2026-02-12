@@ -149,6 +149,11 @@ export const IPC_CHANNELS = {
   SETTINGS_SAVE: 'settings:save',
   SETTINGS_GET_CLI_TOOLS_INFO: 'settings:getCliToolsInfo',
 
+  // AI Provider Configuration (backend .env sync)
+  PROVIDER_CONFIG_GET: 'provider:config:get',
+  PROVIDER_CONFIG_UPDATE: 'provider:config:update',
+  PROVIDER_CONFIG_VALIDATE: 'provider:config:validate',
+
   // API Profile management (custom Anthropic-compatible endpoints)
   PROFILES_GET: 'profiles:get',
   PROFILES_SAVE: 'profiles:save',
