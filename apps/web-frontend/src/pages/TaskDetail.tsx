@@ -7,14 +7,27 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ArrowLeft, RefreshCw, AlertCircle, CheckCircle2, Circle, Loader2 } from 'lucide-react';
+import {
+  ArrowLeft,
+  RefreshCw,
+  AlertCircle,
+  CheckCircle2,
+  Circle,
+  Loader2,
+  Play,
+  Square,
+  Brain,
+  Code,
+  Search,
+  Wrench,
+} from 'lucide-react';
 import { Button } from '../components/ui/button';
-import { Card, CardContent } from '../components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { ScrollArea } from '../components/ui/scroll-area';
 import { Separator } from '../components/ui/separator';
 import { apiClient } from '../api/client';
-import type { TaskDetail as TaskDetailType } from '../api/types';
+import type { TaskDetail as TaskDetailType, AgentType, AgentStatusResponse } from '../api/types';
 
 interface TaskDetailProps {
   taskId: string;
@@ -27,6 +40,47 @@ export function TaskDetail({ taskId, onBack }: TaskDetailProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Agent control state
+  const [agentStatus, setAgentStatus] = useState<AgentStatusResponse | null>(null);
+  const [isStartingAgent, setIsStartingAgent] = useState(false);
+  const [isCancellingAgent, setIsCancellingAgent] = useState(false);
+  const [selectedAgentType, setSelectedAgentType] = useState<AgentType | null>(null);
+
+  /**
+   * Agent type configuration
+   */
+  const agentTypes: Array<{
+    type: AgentType;
+    label: string;
+    description: string;
+    icon: React.ReactNode;
+  }> = [
+    {
+      type: 'planner',
+      label: 'Planner',
+      description: 'Create implementation plan with subtasks',
+      icon: <Brain className="h-4 w-4" />,
+    },
+    {
+      type: 'coder',
+      label: 'Coder',
+      description: 'Implement individual subtasks',
+      icon: <Code className="h-4 w-4" />,
+    },
+    {
+      type: 'qa_reviewer',
+      label: 'QA Reviewer',
+      description: 'Validate acceptance criteria',
+      icon: <Search className="h-4 w-4" />,
+    },
+    {
+      type: 'qa_fixer',
+      label: 'QA Fixer',
+      description: 'Fix QA-reported issues',
+      icon: <Wrench className="h-4 w-4" />,
+    },
+  ];
 
   /**
    * Fetch task details from the API
@@ -60,6 +114,81 @@ export function TaskDetail({ taskId, onBack }: TaskDetailProps) {
   const handleRefresh = useCallback(() => {
     fetchTaskDetail(true);
   }, [fetchTaskDetail]);
+
+  /**
+   * Start an agent
+   */
+  const handleStartAgent = useCallback(async (agentType: AgentType) => {
+    try {
+      setIsStartingAgent(true);
+      setError(null);
+      setSelectedAgentType(agentType);
+
+      const response = await apiClient.runAgent({
+        spec_id: taskId,
+        agent_type: agentType,
+      });
+
+      if (response.status === 'started') {
+        // Poll for status
+        pollAgentStatus(response.task_id);
+      } else {
+        setError(response.message || 'Failed to start agent');
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to start agent';
+      setError(message);
+    } finally {
+      setIsStartingAgent(false);
+    }
+  }, [taskId]);
+
+  /**
+   * Poll agent status
+   */
+  const pollAgentStatus = useCallback(async (agentTaskId: string) => {
+    const poll = async () => {
+      try {
+        const status = await apiClient.getAgentStatus(agentTaskId);
+        setAgentStatus(status);
+
+        // Continue polling if still running
+        if (status.status === 'running') {
+          setTimeout(() => poll(), 2000); // Poll every 2 seconds
+        }
+      } catch (err) {
+        console.error('Failed to poll agent status:', err);
+      }
+    };
+
+    poll();
+  }, []);
+
+  /**
+   * Cancel running agent
+   */
+  const handleCancelAgent = useCallback(async () => {
+    if (!agentStatus || agentStatus.status !== 'running') {
+      return;
+    }
+
+    try {
+      setIsCancellingAgent(true);
+      const response = await apiClient.cancelAgent(agentStatus.task_id);
+
+      if (response.cancelled) {
+        setAgentStatus(null);
+        setSelectedAgentType(null);
+      } else {
+        setError(response.message || 'Failed to cancel agent');
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to cancel agent';
+      setError(message);
+    } finally {
+      setIsCancellingAgent(false);
+    }
+  }, [agentStatus]);
 
   // Loading state
   if (isLoading) {
@@ -182,6 +311,74 @@ export function TaskDetail({ taskId, onBack }: TaskDetailProps) {
                   </div>
                 </div>
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Agent Controls Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg font-semibold">Agent Controls</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {agentStatus && agentStatus.status === 'running' ? (
+                // Agent Running State
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <Loader2 className="h-5 w-5 text-blue-600 animate-spin" />
+                      <div>
+                        <p className="font-semibold text-blue-900">
+                          {selectedAgentType === 'planner' && 'Planner Agent'}
+                          {selectedAgentType === 'coder' && 'Coder Agent'}
+                          {selectedAgentType === 'qa_reviewer' && 'QA Reviewer Agent'}
+                          {selectedAgentType === 'qa_fixer' && 'QA Fixer Agent'}
+                        </p>
+                        <p className="text-sm text-blue-700">Running...</p>
+                      </div>
+                    </div>
+                    <Button
+                      onClick={handleCancelAgent}
+                      disabled={isCancellingAgent}
+                      variant="destructive"
+                      size="sm"
+                    >
+                      <Square className="h-4 w-4 mr-2" />
+                      {isCancellingAgent ? 'Cancelling...' : 'Cancel'}
+                    </Button>
+                  </div>
+                  <div className="text-xs text-gray-500">
+                    Task ID: {agentStatus.task_id}
+                  </div>
+                </div>
+              ) : (
+                // Agent Selection Grid
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {agentTypes.map((agentType) => (
+                    <div
+                      key={agentType.type}
+                      className="p-4 border rounded-lg hover:bg-gray-50 transition-colors"
+                    >
+                      <div className="flex items-center gap-2 mb-2">
+                        {agentType.icon}
+                        <h4 className="font-semibold text-sm">{agentType.label}</h4>
+                      </div>
+                      <p className="text-xs text-gray-600 mb-3">{agentType.description}</p>
+                      <Button
+                        onClick={() => handleStartAgent(agentType.type)}
+                        disabled={isStartingAgent || agentStatus?.status === 'running'}
+                        variant="outline"
+                        size="sm"
+                        className="w-full"
+                      >
+                        <Play className="h-3 w-3 mr-1" />
+                        {isStartingAgent && selectedAgentType === agentType.type
+                          ? 'Starting...'
+                          : 'Start'}
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
 

@@ -1,11 +1,12 @@
-import React, { useState } from 'react'
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import React from 'react'
+import { BrowserRouter, Routes, Route, NavigateFunction, useParams } from 'react-router-dom'
 import { Signup } from './pages/Signup'
 import { Login } from './pages/Login'
 import { Settings } from './pages/Settings'
 import { UsageDashboard } from './pages/UsageDashboard'
 import { TerminalPage } from './pages/TerminalPage'
 import { TaskList } from './pages/TaskList'
+import { TaskDetail } from './pages/TaskDetail'
 import { getCloudConfig, getCloudStatus } from './config/cloud'
 
 function HomePage() {
@@ -110,15 +111,44 @@ function HomePage() {
   )
 }
 
-function App() {
-  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null)
+// Wrapper component for TaskList with navigation
+function TaskListWrapper() {
+  const navigate = React.useCallback((path: string) => {
+    window.location.href = path;
+  }, []);
 
-  const handleTaskClick = (taskId: string) => {
-    setSelectedTaskId(taskId)
-    // TODO: Navigate to task detail page when implemented
-    console.log('Task clicked:', taskId)
+  const handleTaskClick = React.useCallback((taskId: string) => {
+    navigate(`/tasks/${taskId}`);
+  }, [navigate]);
+
+  return <TaskList onTaskClick={handleTaskClick} />;
+}
+
+// Wrapper component for TaskDetail with useParams
+function TaskDetailWrapper() {
+  const navigate = React.useCallback((path: string) => {
+    window.location.href = path;
+  }, []);
+  const { id } = useParams<{ id: string }>();
+
+  const handleBack = React.useCallback(() => {
+    navigate('/tasks');
+  }, [navigate]);
+
+  if (!id) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-gray-600">Task ID not found</p>
+        </div>
+      </div>
+    );
   }
 
+  return <TaskDetail taskId={id} onBack={handleBack} />;
+}
+
+function App() {
   return (
     <BrowserRouter>
       <Routes>
@@ -128,10 +158,11 @@ function App() {
         <Route path="/settings/*" element={<Settings />} />
         <Route path="/usage" element={<UsageDashboard />} />
         <Route path="/terminal" element={<TerminalPage />} />
-        <Route path="/tasks" element={<TaskList onTaskClick={handleTaskClick} />} />
+        <Route path="/tasks" element={<TaskListWrapper />} />
+        <Route path="/tasks/:id" element={<TaskDetailWrapper />} />
       </Routes>
     </BrowserRouter>
-  )
+  );
 }
 
 export default App
