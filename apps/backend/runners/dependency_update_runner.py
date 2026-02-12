@@ -29,6 +29,8 @@ Usage:
     python dependency_update_runner.py --project . --ecosystems python,node
 """
 
+import asyncio
+import json
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -50,6 +52,81 @@ load_dotenv = import_dotenv()
 env_file = Path(__file__).parent.parent / ".env"
 if env_file.exists():
     load_dotenv(env_file)
+
+from phase_config import resolve_model_id
+from review import ReviewState
+
+
+def _generate_task_description(
+    scan_result: any,
+    batches: list,
+    batch_id: str | None = None,
+) -> str:
+    """
+    Generate a task description from scan results and batches.
+
+    Args:
+        scan_result: Scan result from DependencyScanner
+        batches: List of UpdateBatch objects
+        batch_id: Optional specific batch ID to generate spec for
+
+    Returns:
+        Formatted task description string
+    """
+    from analysis.dependency_scanner import DependencyUpdate
+
+    # Filter batches if specific batch_id requested
+    if batch_id:
+        target_batches = [b for b in batches if b.batch_id == batch_id]
+        if not target_batches:
+            raise ValueError(f"Batch {batch_id} not found")
+        batches = target_batches
+
+    # Build task description
+    lines = ["Update dependencies for the following packages:", ""]
+
+    # Security updates first
+    if scan_result.security_updates:
+        sec_updates_in_batches = []
+        for batch in batches:
+            for pkg_name in batch.packages:
+                if any(u.name == pkg_name and u.is_security for u in scan_result.security_updates):
+                    sec_updates_in_batches.append(pkg_name)
+
+        if sec_updates_in_batches:
+            lines.append("**Security Updates (Priority)**:")
+            for pkg_name in sec_updates_in_batches[:5]:
+                update = next((u for u in scan_result.updates_available if u.name == pkg_name), None)
+                if update:
+                    cve_info = f" (CVEs: {', '.join(update.cve_ids)})" if update.cve_ids else ""
+                    lines.append(f"- {pkg_name}: {update.current_version} → {update.latest_version}{cve_info}")
+            if len(sec_updates_in_batches) > 5:
+                lines.append(f"- ... and {len(sec_updates_in_batches) - 5} more security updates")
+            lines.append("")
+
+    # All updates in batches
+    lines.append("**Packages to Update**:")
+    for i, batch in enumerate(batches, 1):
+        lines.append(f"\nBatch {i}: {batch.batch_id}")
+        lines.append(f"- Risk Level: {batch.risk_level}")
+        lines.append(f"- Packages ({len(batch.packages)}):")
+
+        for pkg_name in batch.packages[:5]:
+            update = next((u for u in scan_result.updates_available if u.name == pkg_name), None)
+            if update:
+                lines.append(f"  - {pkg_name}: {update.current_version} → {update.latest_version} ({update.update_type})")
+
+        if len(batch.packages) > 5:
+            lines.append(f"  - ... and {len(batch.packages) - 5} more packages")
+
+    lines.append("")
+    lines.append("**Requirements**:")
+    lines.append("- Update specified packages to target versions")
+    lines.append("- Run full test suite to verify no regressions")
+    lines.append("- Check for breaking changes in updated APIs")
+    lines.append("- Update documentation if needed")
+
+    return "\n".join(lines)
 
 
 def _generate_markdown_report(
@@ -494,9 +571,53 @@ Examples:
         markdown_file.write_text(markdown_content, encoding="utf-8")
         print(f"   Saved to: {markdown_file}")
 
-    # Spec generation (will be implemented in subtask-4-2)
+    # Spec generation
     if args.generate_spec:
-        print("\n⚠️  Spec generation will be implemented in subtask-4-2")
+        print("\n📝 Generating update spec...")
+
+        # Import spec orchestrator
+        from spec import SpecOrchestrator
+
+        # Generate task description from scan results
+        task_description = _generate_task_description(
+            scan_result=scan_result,
+            batches=batches,
+            batch_id=args.batch,
+        )
+
+        # Resolve model shorthand to full model ID
+        resolved_model = resolve_model_id(args.model)
+
+        # Create spec orchestrator
+        print("📋 Creating spec for dependency update...")
+        orchestrator = SpecOrchestrator(
+            project_dir=project_dir,
+            task_description=task_description,
+            model=resolved_model,
+            thinking_level=args.thinking_level,
+            complexity_override="simple",  # Dependency updates are typically simple
+            use_ai_assessment=False,  # Skip AI assessment, use simple complexity
+        )
+
+        # Run spec creation
+        try:
+            success = asyncio.run(orchestrator.run(interactive=False, auto_approve=True))
+
+            if not success:
+                print("✗ Spec creation failed")
+                return 1
+
+            print(f"\n✓ Spec created successfully: {orchestrator.spec_dir}")
+            print(f"\nNext steps:")
+            print(f"  1. Review the spec at: {orchestrator.spec_dir / 'spec.md'}")
+            print(f"  2. Start the build: python run.py --spec {orchestrator.spec_dir.name}")
+
+        except KeyboardInterrupt:
+            print("\n\nSpec creation interrupted.")
+            return 1
+        except Exception as e:
+            print(f"\n\nError during spec creation: {e}")
+            return 1
 
     print("\n✓ Dependency scan complete!")
     if not args.dry_run:
