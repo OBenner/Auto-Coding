@@ -189,6 +189,7 @@ export interface TaskDraft {
   referencedFiles: ReferencedFile[];
   requireReviewBeforeCoding?: boolean;
   agentModels?: Record<string, string>;  // Agent-specific model overrides
+  customTemplateId?: string;  // Custom agent template ID
   savedAt: Date;
 }
 
@@ -226,6 +227,7 @@ export interface TaskMetadata {
   gitlabIssueIid?: number;  // Reference to GitLab issue IID if from GitLab
   gitlabUrl?: string;  // GitLab issue URL
   templateName?: string;  // Template name if created from template
+  customTemplateId?: string;  // Custom agent template ID if using custom template
 
   // Classification
   category?: TaskCategory;
