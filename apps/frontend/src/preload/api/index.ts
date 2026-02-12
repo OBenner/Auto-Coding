@@ -4,6 +4,7 @@ import { TaskAPI, createTaskAPI } from './task-api';
 import { SettingsAPI, createSettingsAPI } from './settings-api';
 import { FileAPI, createFileAPI } from './file-api';
 import { AgentAPI, createAgentAPI } from './agent-api';
+import { CollaborationAPI, createCollaborationAPI } from './collaboration-api';
 import type { IdeationAPI } from './modules/ideation-api';
 import type { InsightsAPI } from './modules/insights-api';
 import { AppUpdateAPI, createAppUpdateAPI } from './app-update-api';
@@ -26,6 +27,7 @@ export interface ElectronAPI extends
   SettingsAPI,
   FileAPI,
   AgentAPI,
+  CollaborationAPI,
   IdeationAPI,
   InsightsAPI,
   AppUpdateAPI,
@@ -51,6 +53,7 @@ export const createElectronAPI = (): ElectronAPI => ({
   ...createSettingsAPI(),
   ...createFileAPI(),
   ...createAgentAPI(),  // Includes: Roadmap, Ideation, Insights, Changelog, Linear, GitHub, GitLab, Shell, SessionContext
+  ...createCollaborationAPI(),
   ...createAppUpdateAPI(),
   ...createDebugAPI(),
   ...createClaudeCodeAPI(),
@@ -73,6 +76,7 @@ export {
   createSettingsAPI,
   createFileAPI,
   createAgentAPI,
+  createCollaborationAPI,
   createAppUpdateAPI,
   createProfileAPI,
   createGitHubAPI,
@@ -93,6 +97,7 @@ export type {
   SettingsAPI,
   FileAPI,
   AgentAPI,
+  CollaborationAPI,
   IdeationAPI,
   InsightsAPI,
   AppUpdateAPI,
