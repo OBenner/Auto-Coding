@@ -259,34 +259,15 @@ class CoverageAnalyzer:
             if not installed:
                 print(f"Please install pytest-cov: {message}")
         """
+        import importlib.metadata
+
         try:
-            result = subprocess.run(
-                ["pytest", "--version"],
-                capture_output=True,
-                text=True,
-                timeout=10,
-            )
-
-            if result.returncode == 0:
-                # Check if pytest-cov is available
-                cov_result = subprocess.run(
-                    ["pytest", "--co", "--cov=."],
-                    capture_output=True,
-                    text=True,
-                    timeout=10,
-                )
-
-                if "unrecognized arguments: --cov" in cov_result.stderr:
-                    return False, "pytest-cov plugin not installed"
-
-                return True, result.stdout.strip()
-            else:
-                return False, "pytest not found"
-
-        except FileNotFoundError:
-            return False, "pytest not installed"
+            version = importlib.metadata.version("pytest-cov")
+            return True, f"pytest-cov {version}"
+        except importlib.metadata.PackageNotFoundError:
+            return False, "pytest-cov plugin not installed"
         except Exception as e:
-            return False, f"Error checking pytest-cov: {str(e)}"
+            return False, f"Error checking pytest-cov: {e}"
 
 
 # =============================================================================

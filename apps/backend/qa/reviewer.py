@@ -162,6 +162,7 @@ def run_coverage_validation(
 
         # Save detailed report to file
         report_file = spec_dir / "coverage_report.txt"
+        report_file.parent.mkdir(parents=True, exist_ok=True)
         report_file.write_text(detailed_report, encoding="utf-8")
         debug_success(
             "coverage_validator",

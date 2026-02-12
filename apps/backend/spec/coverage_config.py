@@ -666,6 +666,9 @@ def _matches_pattern(file_path: str, pattern: str) -> bool:
     Returns:
         True if file matches pattern
     """
+    # Normalize to POSIX-style paths for cross-platform matching
+    normalized_path = Path(file_path).as_posix()
+
     # Convert pattern to regex
     # Replace ** with .* (match any characters including /)
     # Replace * with [^/]* (match any characters except /)
@@ -674,7 +677,15 @@ def _matches_pattern(file_path: str, pattern: str) -> bool:
     regex_pattern = regex_pattern.replace("__DOUBLE_STAR__", ".*")
     regex_pattern = f"^{regex_pattern}$"
 
-    return bool(re.match(regex_pattern, file_path))
+    return bool(re.match(regex_pattern, normalized_path))
+
+
+def matches_pattern(file_path: str, pattern: str) -> bool:
+    """Public API for checking if a file path matches a glob-like pattern.
+
+    See _matches_pattern for details.
+    """
+    return _matches_pattern(file_path, pattern)
 
 
 def merge_coverage_configs(
@@ -697,14 +708,31 @@ def merge_coverage_configs(
         merged = merge_coverage_configs(default, custom)
     """
     return CoverageConfig(
-        minimum_coverage=override_config.minimum_coverage
-        or base_config.minimum_coverage,
-        minimum_line_coverage=override_config.minimum_line_coverage
-        or base_config.minimum_line_coverage,
-        minimum_branch_coverage=override_config.minimum_branch_coverage
-        or base_config.minimum_branch_coverage,
-        critical_paths=override_config.critical_paths or base_config.critical_paths,
-        excluded_paths=override_config.excluded_paths or base_config.excluded_paths,
+        minimum_coverage=(
+            override_config.minimum_coverage
+            if override_config.minimum_coverage is not None
+            else base_config.minimum_coverage
+        ),
+        minimum_line_coverage=(
+            override_config.minimum_line_coverage
+            if override_config.minimum_line_coverage is not None
+            else base_config.minimum_line_coverage
+        ),
+        minimum_branch_coverage=(
+            override_config.minimum_branch_coverage
+            if override_config.minimum_branch_coverage is not None
+            else base_config.minimum_branch_coverage
+        ),
+        critical_paths=(
+            override_config.critical_paths
+            if override_config.critical_paths is not None
+            else base_config.critical_paths
+        ),
+        excluded_paths=(
+            override_config.excluded_paths
+            if override_config.excluded_paths is not None
+            else base_config.excluded_paths
+        ),
         enforce_on_modified_files=override_config.enforce_on_modified_files,
         fail_under_threshold=override_config.fail_under_threshold,
         config_source=f"{base_config.config_source} + {override_config.config_source}",

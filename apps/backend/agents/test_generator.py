@@ -1039,9 +1039,10 @@ Generate additional test cases to improve coverage to at least {min_threshold:.0
                 print()
                 print_status("Re-scanning for updated test files...", "progress")
                 updated_test_files = []
+                existing_paths = {f for f in test_files}
                 for test_file in tests_dir.glob("test_*.py"):
                     relative_path = test_file.relative_to(project_dir)
-                    if relative_path not in [str(f) for f in test_files]:
+                    if relative_path not in existing_paths:
                         updated_test_files.append(relative_path)
 
                 if updated_test_files:
@@ -1082,17 +1083,23 @@ Generate additional test cases to improve coverage to at least {min_threshold:.0
 
     # Log results
     if task_logger:
-        if coverage_result and coverage_result.success:
-            task_logger.log_entry(
-                LogEntryType.SUCCESS,
-                f"Generated {len(test_files)} test files, "
-                f"coverage: {coverage_result.total_coverage:.1f}%, "
-                f"gaps improved: {needs_improvement}",
-            )
+        if validation_success:
+            if coverage_result and coverage_result.success:
+                task_logger.log_entry(
+                    LogEntryType.SUCCESS,
+                    f"Generated {len(test_files)} test files, "
+                    f"coverage: {coverage_result.total_coverage:.1f}%, "
+                    f"gaps improved: {needs_improvement}",
+                )
+            else:
+                task_logger.log_entry(
+                    LogEntryType.SUCCESS,
+                    f"Generated and validated {len(test_files)} test files",
+                )
         else:
             task_logger.log_entry(
-                LogEntryType.SUCCESS,
-                f"Generated and validated {len(test_files)} test files",
+                LogEntryType.WARNING,
+                f"Generated {len(test_files)} test files but validation failed",
             )
 
     return {

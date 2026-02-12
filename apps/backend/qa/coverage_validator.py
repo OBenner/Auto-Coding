@@ -16,6 +16,7 @@ from spec.coverage_config import (
     CoverageConfig,
     CriticalPath,
     get_minimum_coverage_for_file,
+    matches_pattern,
 )
 
 # =============================================================================
@@ -175,7 +176,8 @@ def validate_coverage(
     critical_path_failures = _validate_critical_paths(coverage_result, config, issues)
 
     # Determine overall pass/fail
-    passed = len(issues) == 0 and config.fail_under_threshold
+    # When fail_under_threshold is False, don't enforce thresholds (always pass)
+    passed = len(issues) == 0 if config.fail_under_threshold else True
 
     return ValidationResult(
         passed=passed,
@@ -206,9 +208,12 @@ def _validate_critical_paths(
     """
     critical_path_failures = 0
 
-    for file_path, file_coverage in coverage_result.files.items():
+    for raw_path, file_coverage in coverage_result.files.items():
+        # Normalize to POSIX-style paths for cross-platform matching
+        normalized = Path(raw_path).as_posix()
+
         # Get minimum coverage for this file (100% if critical path)
-        required = get_minimum_coverage_for_file(file_path, config)
+        required = get_minimum_coverage_for_file(normalized, config)
 
         # Skip if file doesn't require elevated coverage
         if required <= config.minimum_coverage:
@@ -219,16 +224,16 @@ def _validate_critical_paths(
             critical_path_failures += 1
 
             # Find which critical path this matches
-            matching_path = _find_matching_critical_path(file_path, config)
+            matching_path = _find_matching_critical_path(normalized, config)
             path_name = matching_path.name if matching_path else "Critical path"
 
             issues.append(
                 CoverageIssue(
-                    file_path=file_path,
+                    file_path=normalized,
                     actual_coverage=file_coverage.coverage_percent,
                     required_coverage=required,
                     issue_type="critical_path",
-                    message=f"{path_name} file '{file_path}' has {file_coverage.coverage_percent:.1f}% coverage, requires {required:.1f}%",
+                    message=f"{path_name} file '{normalized}' has {file_coverage.coverage_percent:.1f}% coverage, requires {required:.1f}%",
                     missing_lines=file_coverage.lines_missing,
                 )
             )
@@ -249,10 +254,8 @@ def _find_matching_critical_path(
     Returns:
         Matching CriticalPath or None
     """
-    from spec.coverage_config import _matches_pattern
-
     for critical_path in config.critical_paths:
-        if _matches_pattern(file_path, critical_path.pattern):
+        if matches_pattern(file_path, critical_path.pattern):
             return critical_path
     return None
 
