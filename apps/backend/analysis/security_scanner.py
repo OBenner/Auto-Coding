@@ -40,6 +40,14 @@ try:
 except ImportError:
     HAS_SECRETS_SCANNER = False
 
+# Import predictive scanner
+try:
+    from analysis.predictive_scanner import PredictiveScanner, PredictiveScanResult
+
+    HAS_PREDICTIVE_SCANNER = True
+except ImportError:
+    HAS_PREDICTIVE_SCANNER = False
+
 
 # =============================================================================
 # DATA CLASSES
@@ -81,6 +89,7 @@ class SecurityScanResult:
         scan_errors: List of errors during scanning
         has_critical_issues: Whether any critical issues were found
         should_block_qa: Whether these results should block QA approval
+        predictive_scan: Predictive scan results (bug, performance, code smell)
     """
 
     secrets: list[dict[str, Any]] = field(default_factory=list)
@@ -88,6 +97,7 @@ class SecurityScanResult:
     scan_errors: list[str] = field(default_factory=list)
     has_critical_issues: bool = False
     should_block_qa: bool = False
+    predictive_scan: dict[str, Any] | None = None
 
 
 # =============================================================================
@@ -103,12 +113,26 @@ class SecurityScanner:
     - scan_secrets.py for secrets detection
     - Bandit for Python SAST (if available)
     - npm audit for JavaScript vulnerabilities (if applicable)
+    - PredictiveScanner for bug, performance, and code smell detection (if available)
     """
 
-    def __init__(self) -> None:
-        """Initialize the security scanner."""
+    def __init__(self, spec_dir: Path | None = None) -> None:
+        """
+        Initialize the security scanner.
+
+        Args:
+            spec_dir: Optional spec directory for predictive scanner historical tracking
+        """
         self._bandit_available: bool | None = None
         self._npm_available: bool | None = None
+        self._predictive_scanner: PredictiveScanner | None = None
+
+        # Initialize predictive scanner if available
+        if HAS_PREDICTIVE_SCANNER and spec_dir:
+            try:
+                self._predictive_scanner = PredictiveScanner(spec_dir)
+            except Exception as e:
+                logger.warning(f"Failed to initialize PredictiveScanner: {e}")
 
     def scan(
         self,
@@ -118,6 +142,7 @@ class SecurityScanner:
         run_secrets: bool = True,
         run_sast: bool = True,
         run_dependency_audit: bool = True,
+        run_predictive_scan: bool = False,
     ) -> SecurityScanResult:
         """
         Run all applicable security scans.
@@ -129,6 +154,7 @@ class SecurityScanner:
             run_secrets: Whether to run secrets scanning
             run_sast: Whether to run SAST tools
             run_dependency_audit: Whether to run dependency audits
+            run_predictive_scan: Whether to run predictive bug/performance/code smell scans
 
         Returns:
             SecurityScanResult with all findings
@@ -148,16 +174,34 @@ class SecurityScanner:
         if run_dependency_audit:
             self._run_dependency_audits(project_dir, result)
 
+        # Run predictive scan if enabled
+        if run_predictive_scan:
+            self._run_predictive_scan(project_dir, result)
+
         # Determine if should block QA
         result.has_critical_issues = (
             any(v.severity in ["critical", "high"] for v in result.vulnerabilities)
             or len(result.secrets) > 0
         )
 
+        # Also check predictive scan for critical issues
+        if result.predictive_scan:
+            predictive_has_critical = result.predictive_scan.get(
+                "summary", {}
+            ).get("has_critical_issues", False)
+            result.has_critical_issues = result.has_critical_issues or predictive_has_critical
+
         # Any secrets always block, critical vulnerabilities block
         result.should_block_qa = len(result.secrets) > 0 or any(
             v.severity == "critical" for v in result.vulnerabilities
         )
+
+        # Also block on critical predictive issues
+        if result.predictive_scan:
+            predictive_should_block = result.predictive_scan.get(
+                "summary", {}
+            ).get("should_block_deployment", False)
+            result.should_block_qa = result.should_block_qa or predictive_should_block
 
         # Save results if spec_dir provided
         if spec_dir:
@@ -401,6 +445,63 @@ class SecurityScanner:
         except (OSError, ValueError, KeyError):
             logger.debug("pip-audit output parsing failed")
 
+    def _run_predictive_scan(
+        self, project_dir: Path, result: SecurityScanResult
+    ) -> None:
+        """Run predictive scan for bugs, performance, and code smells."""
+        if not HAS_PREDICTIVE_SCANNER:
+            result.scan_errors.append("Predictive scanner not available")
+            return
+
+        try:
+            # Use instance scanner if available, otherwise create new one
+            scanner = self._predictive_scanner
+            if not scanner:
+                scanner = PredictiveScanner()
+
+            # Run predictive scan
+            predictive_result = scanner.scan(
+                project_dir,
+                run_llm_analysis=False,  # Skip LLM for faster security scans
+                record_history=False,  # Don't record during security scans
+            )
+
+            # Convert to dict format for storage
+            if hasattr(scanner, "to_dict"):
+                result.predictive_scan = scanner.to_dict(predictive_result)
+            else:
+                # Fallback: basic conversion
+                result.predictive_scan = {
+                    "issues": [
+                        {
+                            "issue_type": i.issue_type,
+                            "severity": i.severity,
+                            "category": i.category,
+                            "title": i.title,
+                            "description": i.description,
+                            "file": i.file,
+                            "line": i.line,
+                        }
+                        for i in predictive_result.issues
+                    ],
+                    "summary": {
+                        "total_issues": predictive_result.summary.total_issues,
+                        "critical_count": predictive_result.summary.critical_count,
+                        "high_count": predictive_result.summary.high_count,
+                        "medium_count": predictive_result.summary.medium_count,
+                        "low_count": predictive_result.summary.low_count,
+                        "has_critical_issues": predictive_result.summary.has_critical_issues,
+                        "should_block_deployment": predictive_result.summary.should_block_deployment,
+                    },
+                }
+
+            # Add any predictive scan errors
+            for error in predictive_result.scan_errors:
+                result.scan_errors.append(f"Predictive scan: {error}")
+
+        except Exception as e:
+            result.scan_errors.append(f"Predictive scan error: {str(e)}")
+
     def _is_python_project(self, project_dir: Path) -> bool:
         """Check if this is a Python project."""
         indicators = [
@@ -465,6 +566,7 @@ class SecurityScanner:
             "scan_errors": result.scan_errors,
             "has_critical_issues": result.has_critical_issues,
             "should_block_qa": result.should_block_qa,
+            "predictive_scan": result.predictive_scan,
             "summary": {
                 "total_secrets": len(result.secrets),
                 "total_vulnerabilities": len(result.vulnerabilities),
@@ -480,6 +582,16 @@ class SecurityScanner:
                 "low_count": sum(
                     1 for v in result.vulnerabilities if v.severity == "low"
                 ),
+                "predictive_issues": (
+                    result.predictive_scan.get("summary", {}).get("total_issues", 0)
+                    if result.predictive_scan
+                    else 0
+                ),
+                "predictive_critical": (
+                    result.predictive_scan.get("summary", {}).get("critical_count", 0)
+                    if result.predictive_scan
+                    else 0
+                ),
             },
         }
 
@@ -493,6 +605,7 @@ def scan_for_security_issues(
     project_dir: Path,
     spec_dir: Path | None = None,
     changed_files: list[str] | None = None,
+    run_predictive_scan: bool = False,
 ) -> SecurityScanResult:
     """
     Convenience function to run security scan.
@@ -501,26 +614,33 @@ def scan_for_security_issues(
         project_dir: Path to project root
         spec_dir: Optional spec directory to save results
         changed_files: Optional list of files to scan
+        run_predictive_scan: Whether to run predictive bug/performance/code smell scans
 
     Returns:
         SecurityScanResult with all findings
     """
-    scanner = SecurityScanner()
-    return scanner.scan(project_dir, spec_dir, changed_files)
+    scanner = SecurityScanner(spec_dir)
+    return scanner.scan(project_dir, spec_dir, changed_files, run_predictive_scan=run_predictive_scan)
 
 
-def has_security_issues(project_dir: Path) -> bool:
+def has_security_issues(project_dir: Path, include_predictive: bool = False) -> bool:
     """
     Quick check if project has security issues.
 
     Args:
         project_dir: Path to project root
+        include_predictive: Whether to include predictive issues in check
 
     Returns:
         True if any critical/high issues found
     """
     scanner = SecurityScanner()
-    result = scanner.scan(project_dir, run_sast=False, run_dependency_audit=False)
+    result = scanner.scan(
+        project_dir,
+        run_sast=False,
+        run_dependency_audit=False,
+        run_predictive_scan=include_predictive,
+    )
     return result.has_critical_issues
 
 
@@ -563,16 +683,20 @@ def main() -> None:
     parser.add_argument(
         "--secrets-only", action="store_true", help="Only scan for secrets"
     )
+    parser.add_argument(
+        "--predictive", action="store_true", help="Include predictive bug/performance/code smell scans"
+    )
     parser.add_argument("--json", action="store_true", help="Output as JSON")
 
     args = parser.parse_args()
 
-    scanner = SecurityScanner()
+    scanner = SecurityScanner(args.spec_dir)
     result = scanner.scan(
         args.project_dir,
         spec_dir=args.spec_dir,
         run_sast=not args.secrets_only,
         run_dependency_audit=not args.secrets_only,
+        run_predictive_scan=args.predictive,
     )
 
     if args.json:
@@ -580,6 +704,9 @@ def main() -> None:
     else:
         print(f"Secrets Found: {len(result.secrets)}")
         print(f"Vulnerabilities: {len(result.vulnerabilities)}")
+        if result.predictive_scan:
+            predictive_issues = result.predictive_scan.get("summary", {}).get("total_issues", 0)
+            print(f"Predictive Issues: {predictive_issues}")
         print(f"Has Critical Issues: {result.has_critical_issues}")
         print(f"Should Block QA: {result.should_block_qa}")
 
@@ -598,6 +725,27 @@ def main() -> None:
                 print(f"  [{v.severity.upper()}] {v.title}")
                 if v.file:
                     print(f"    File: {v.file}:{v.line or ''}")
+
+        if result.predictive_scan:
+            predictive_summary = result.predictive_scan.get("summary", {})
+            print(f"\nPredictive Scan Results:")
+            print(f"  Total Issues: {predictive_summary.get('total_issues', 0)}")
+            print(f"  Critical: {predictive_summary.get('critical_count', 0)}")
+            print(f"  High: {predictive_summary.get('high_count', 0)}")
+            print(f"  Medium: {predictive_summary.get('medium_count', 0)}")
+            print(f"  Low: {predictive_summary.get('low_count', 0)}")
+
+            # Show top predictive issues
+            predictive_issues = result.predictive_scan.get("issues", [])
+            if predictive_issues:
+                print(f"\n  Top Issues:")
+                for issue in predictive_issues[:10]:
+                    severity = issue.get("severity", "unknown").upper()
+                    category = issue.get("category", "unknown")
+                    title = issue.get("title", "No title")
+                    file_loc = f"{issue.get('file', 'unknown')}:{issue.get('line', '')}"
+                    print(f"    [{severity}] {category}: {title}")
+                    print(f"      Location: {file_loc}")
 
         if result.scan_errors:
             print(f"\nScan Errors ({len(result.scan_errors)}):")
