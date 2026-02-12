@@ -9,6 +9,7 @@ import {
 import { getCloudConfig, getCloudStatus } from "./config/cloud";
 import { Kanban } from "./pages/Kanban";
 import { Login } from "./pages/Login";
+import { Roadmap } from "./pages/Roadmap";
 import { Settings } from "./pages/Settings";
 import { Signup } from "./pages/Signup";
 import { TaskCreate } from "./pages/TaskCreate";
@@ -107,6 +108,12 @@ function HomePage() {
 							className="px-6 py-2 text-blue-600 hover:text-blue-700 font-medium"
 						>
 							Kanban Board
+						</a>
+						<a
+							href="/roadmap"
+							className="px-6 py-2 text-blue-600 hover:text-blue-700 font-medium"
+						>
+							Roadmap
 						</a>
 						<a
 							href="/tasks/create"
@@ -215,6 +222,7 @@ function App() {
 				<Route path="/tasks/create" element={<TaskCreate />} />
 				<Route path="/tasks/:id" element={<TaskDetailWrapper />} />
 				<Route path="/kanban" element={<KanbanWrapper />} />
+				<Route path="/roadmap" element={<Roadmap />} />
 			</Routes>
 		</BrowserRouter>
 	);
