@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import logging
+import subprocess
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -219,22 +220,31 @@ class LearningTracker:
     - Provide insights for prediction improvement
     """
 
-    def __init__(self, storage_dir: Path | str):
+    def __init__(self, storage_dir: Path | str | None):
         """
         Initialize the learning tracker.
 
         Args:
             storage_dir: Directory for learning data (e.g., .auto-claude/specs/XXX/)
+                        Can be None for testing purposes.
         """
-        self.storage_dir = Path(storage_dir).resolve()
-        self.learning_dir = self.storage_dir / "learning"
-        self.outcomes_file = self.learning_dir / "prediction_outcomes.json"
-        self.metrics_file = self.learning_dir / "metrics.json"
+        if storage_dir is None:
+            # For testing/initialization without storage
+            self.storage_dir = None
+            self.learning_dir = None
+            self.outcomes_file = None
+            self.metrics_file = None
+            logger.debug("Learning tracker initialized without storage (test mode)")
+        else:
+            self.storage_dir = Path(storage_dir).resolve()
+            self.learning_dir = self.storage_dir / "learning"
+            self.outcomes_file = self.learning_dir / "prediction_outcomes.json"
+            self.metrics_file = self.learning_dir / "metrics.json"
 
-        # Ensure directories exist
-        self.learning_dir.mkdir(parents=True, exist_ok=True)
+            # Ensure directories exist
+            self.learning_dir.mkdir(parents=True, exist_ok=True)
 
-        logger.debug(f"Learning tracker initialized at {self.learning_dir}")
+            logger.debug(f"Learning tracker initialized at {self.learning_dir}")
 
     def record_prediction(
         self,
@@ -299,6 +309,96 @@ class LearningTracker:
         except Exception as e:
             logger.error(f"Failed to record prediction outcomes: {e}")
 
+    def get_modified_files(
+        self, worktree_path: Path | str, base_branch: str = "main"
+    ) -> list[str]:
+        """
+        Get list of files modified in a worktree compared to base branch.
+
+        Uses git diff to detect actual file modifications during task execution.
+
+        Args:
+            worktree_path: Path to the worktree directory
+            base_branch: Base branch to compare against (default: "main")
+
+        Returns:
+            List of file paths that were modified
+        """
+        try:
+            worktree_path = Path(worktree_path)
+
+            # Get merge-base to find common ancestor
+            merge_base_result = subprocess.run(
+                ["git", "merge-base", base_branch, "HEAD"],
+                cwd=worktree_path,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            merge_base = merge_base_result.stdout.strip()
+
+            # Get list of modified files since merge-base
+            result = subprocess.run(
+                ["git", "diff", "--name-only", f"{merge_base}..HEAD"],
+                cwd=worktree_path,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+
+            modified_files = [f for f in result.stdout.strip().split("\n") if f]
+
+            logger.debug(
+                f"Found {len(modified_files)} modified files in {worktree_path}"
+            )
+            return modified_files
+
+        except subprocess.CalledProcessError as e:
+            logger.error(f"Failed to get modified files from git: {e}")
+            return []
+        except Exception as e:
+            logger.error(f"Unexpected error getting modified files: {e}")
+            return []
+
+    def record_task_outcome(
+        self,
+        predicted_files: list[dict],
+        worktree_path: Path | str,
+        task_description: str = "",
+        base_branch: str = "main",
+    ) -> None:
+        """
+        Record prediction accuracy by comparing predictions with actual modifications.
+
+        This is a convenience method that automatically detects which files were
+        modified using git and records the prediction outcomes.
+
+        Args:
+            predicted_files: List of predictions with format:
+                [{"file_path": str, "score": float, "confidence": str, "match_factors": list}, ...]
+            worktree_path: Path to the worktree where task was executed
+            task_description: Description of the task
+            base_branch: Base branch to compare against (default: "main")
+        """
+        try:
+            # Get actually modified files from git
+            actually_modified = self.get_modified_files(worktree_path, base_branch)
+
+            # Record the prediction outcomes
+            self.record_prediction(
+                predicted_files=predicted_files,
+                actually_used_files=actually_modified,
+                task_description=task_description,
+            )
+
+            logger.info(
+                f"Recorded task outcome: {len(predicted_files)} predicted, "
+                f"{len(actually_modified)} actually modified"
+            )
+
+        except Exception as e:
+            logger.error(f"Failed to record task outcome: {e}")
+
     def get_metrics(self) -> PredictionMetrics:
         """
         Get current prediction accuracy metrics.
@@ -307,7 +407,7 @@ class LearningTracker:
             Aggregated metrics for all recorded predictions
         """
         try:
-            if not self.metrics_file.exists():
+            if self.metrics_file is None or not self.metrics_file.exists():
                 return PredictionMetrics()
 
             with open(self.metrics_file, encoding="utf-8") as f:
@@ -374,7 +474,7 @@ class LearningTracker:
 
     def _load_outcomes(self) -> list[PredictionOutcome]:
         """Load prediction outcomes from disk."""
-        if not self.outcomes_file.exists():
+        if self.outcomes_file is None or not self.outcomes_file.exists():
             return []
 
         try:
@@ -391,6 +491,10 @@ class LearningTracker:
 
     def _save_outcomes(self, outcomes: list[PredictionOutcome]) -> None:
         """Save prediction outcomes to disk."""
+        if self.outcomes_file is None:
+            logger.debug("Skipping save outcomes (no storage configured)")
+            return
+
         try:
             data = [o.to_dict() for o in outcomes]
 
@@ -404,6 +508,10 @@ class LearningTracker:
 
     def _update_metrics(self) -> None:
         """Update aggregated metrics from outcomes."""
+        if self.metrics_file is None:
+            logger.debug("Skipping update metrics (no storage configured)")
+            return
+
         try:
             outcomes = self._load_outcomes()
 
