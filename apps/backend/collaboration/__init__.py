@@ -27,7 +27,9 @@ from collaboration.models import (
     save_suggestions,
     save_versions,
 )
+from collaboration.presence import PresenceManager
 from collaboration.suggestions import SuggestionManager
+from collaboration.version_history import DiffResult, VersionManager
 
 __all__ = [
     "Comment",
@@ -37,6 +39,7 @@ __all__ = [
     "SuggestionStatus",
     "SuggestionManager",
     "Presence",
+    "PresenceManager",
     "PresenceType",
     "Version",
     "load_comments",
@@ -48,4 +51,6 @@ __all__ = [
     "CRDTStore",
     "CrdtOperation",
     "OpType",
+    "VersionManager",
+    "DiffResult",
 ]
