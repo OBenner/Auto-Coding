@@ -187,7 +187,7 @@ async def get_pattern_suggestions(
     memory = None
     try:
         # Get GraphitiMemory instance
-        memory = get_graphiti_memory(spec_dir, project_dir)
+        memory = await get_graphiti_memory(spec_dir, project_dir)
         if memory is None:
             if is_debug_enabled():
                 debug_warning(
@@ -344,7 +344,7 @@ async def get_failure_patterns(
     memory = None
     try:
         # Get GraphitiMemory instance
-        memory = get_graphiti_memory(spec_dir, project_dir)
+        memory = await get_graphiti_memory(spec_dir, project_dir)
         if memory is None:
             if is_debug_enabled():
                 debug_warning(
@@ -579,7 +579,7 @@ async def get_graphiti_context(
     memory = None
     try:
         # Use centralized helper for GraphitiMemory instantiation (async)
-        memory = get_graphiti_memory(spec_dir, project_dir)
+        memory = await get_graphiti_memory(spec_dir, project_dir)
         if memory is None:
             if is_debug_enabled():
                 debug_warning(
@@ -799,7 +799,7 @@ async def save_session_memory(
         memory = None
         try:
             # Use centralized helper for GraphitiMemory instantiation (async)
-            memory = get_graphiti_memory(spec_dir, project_dir)
+            memory = await get_graphiti_memory(spec_dir, project_dir)
             if memory is None:
                 if is_debug_enabled():
                     debug_warning("memory", "GraphitiMemory not available")
@@ -967,7 +967,7 @@ async def save_feedback(
 
     memory = None
     try:
-        memory = get_graphiti_memory(spec_dir, project_dir)
+        memory = await get_graphiti_memory(spec_dir, project_dir)
         if memory is None:
             if is_debug_enabled():
                 debug_warning("memory", "GraphitiMemory not available for feedback")
@@ -1145,7 +1145,7 @@ async def save_user_correction(
 
     memory = None
     try:
-        memory = get_graphiti_memory(spec_dir, project_dir)
+        memory = await get_graphiti_memory(spec_dir, project_dir)
         if memory is None:
             if is_debug_enabled():
                 debug_warning(
