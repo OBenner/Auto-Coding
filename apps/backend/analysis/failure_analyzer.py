@@ -300,15 +300,57 @@ def _analyze_failure_heuristics(failure_data: dict[str, Any]) -> dict[str, Any]:
 
     elif any(
         pattern in error_text
-        for pattern in ["test failed", "assertion", "expected", "actual"]
+        for pattern in [
+            "test failed",
+            "assertion",
+            "expected",
+            "actual",
+            "test error",
+            "mock error",
+            "stub error",
+            "beforeeach failed",
+            "aftereach failed",
+            "test setup failed",
+            "test teardown failed",
+            "coverage threshold",
+        ]
     ):
         root_cause["category"] = "test_failure"
-        root_cause["description"] = "Test assertion failed"
+        root_cause["description"] = "Test assertion or setup failed"
         root_cause["confidence"] = 0.9
         root_cause["recommendations"] = [
             "Review test expectations vs actual behavior",
             "Check if implementation matches test requirements",
             "Verify test setup and mocks are correct",
+            "Check test lifecycle hooks (setup/teardown)",
+        ]
+
+    elif any(
+        pattern in error_text
+        for pattern in [
+            "compilation error",
+            "compile error",
+            "typescript error",
+            "type error:",
+            "type mismatch",
+            "build failed",
+            "webpack error",
+            "rollup error",
+            "vite error",
+            "bundler error",
+            "eslint",
+            "pylint",
+            "linting error",
+        ]
+    ):
+        root_cause["category"] = "build_error"
+        root_cause["description"] = "Build or compilation error"
+        root_cause["confidence"] = 0.85
+        root_cause["recommendations"] = [
+            "Check for type errors and mismatches",
+            "Review linting errors and code style issues",
+            "Verify build configuration is correct",
+            "Check for missing or incorrect imports",
         ]
 
     elif any(pattern in error_text for pattern in ["timeout", "timed out", "deadline"]):
