@@ -464,7 +464,7 @@ async def terminal_websocket(websocket: WebSocket):
         session = terminal_manager.create_session(
             session_id=session_id,
             working_dir=working_dir,
-            shell=os.environ.get("SHELL", "/bin/bash"),
+            shell=os.environ.get("SHELL", "/bin/bash"),  # nosec B604 - Intentional: terminal feature requires shell
             rows=24,
             cols=80
         )
@@ -558,7 +558,7 @@ async def terminal_websocket(websocket: WebSocket):
                 "session_id": session_id,
                 "timestamp": datetime.now().isoformat()
             })
-        except Exception:
+        except Exception:  # nosec B110 - Cleanup handler: ignore send errors on disconnect
             pass
 
         # Clean up session
