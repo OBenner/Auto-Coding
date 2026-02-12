@@ -9,6 +9,7 @@ import {
 import { getCloudConfig, getCloudStatus } from "./config/cloud";
 import { Changelog } from "./pages/Changelog";
 import { FilesPage } from "./pages/FilesPage";
+import { GitOperations } from "./pages/GitOperations";
 import { Insights } from "./pages/Insights";
 import { Kanban } from "./pages/Kanban";
 import { Login } from "./pages/Login";
@@ -241,6 +242,7 @@ function App() {
 				<Route path="/roadmap" element={<Roadmap />} />
 				<Route path="/changelog" element={<Changelog />} />
 				<Route path="/files" element={<FilesPage />} />
+				<Route path="/git" element={<GitOperations />} />
 			</Routes>
 		</BrowserRouter>
 	);
