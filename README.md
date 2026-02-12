@@ -104,6 +104,7 @@ Native desktop apps for Windows, macOS, and Linux. Cloud-hosted option also avai
 
 - **[📖 Search Index](docs/search/INDEX.md)** - Comprehensive searchable index with keywords
 - **[🔍 Search Guide](docs/search/SEARCH-GUIDE.md)** - Learn effective search strategies
+- **[✅ Verification Checklist](docs/VERIFICATION-CHECKLIST.md)** - Documentation quality verification
 
 **Quick links:**
 - [Quick Start Guide](guides/QUICK-START.md) - Get started in 15 minutes

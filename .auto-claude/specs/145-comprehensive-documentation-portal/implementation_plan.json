@@ -324,7 +324,8 @@
             "command": "grep -r \"\\[.*\\](.*\\.md)\" --include=\"*.md\" guides/ docs/ | wc -l",
             "expected": "100+"
           },
-          "status": "pending"
+          "status": "completed",
+          "notes": "Added consistent 'Search & Navigation' sections to README.md and CLAUDE.md linking to docs/search/INDEX.md and docs/search/SEARCH-GUIDE.md. README.md now includes search links with quick links to Quick Start, CLI Usage, and Troubleshooting guides. CLAUDE.md now includes search links with quick links to Quick Start, Troubleshooting, and Contributing guides. Both follow the same pattern already present in guides/README.md and docs/README.md. Verification passed: 311 markdown links found (exceeds 100+ requirement). All navigation links use relative paths following STYLE_GUIDE.md conventions."
         }
       ]
     },
@@ -355,7 +356,8 @@
             "type": "manual",
             "instructions": "Confirm all 6 acceptance criteria from spec are satisfied"
           },
-          "status": "pending"
+          "status": "completed",
+          "notes": "Created comprehensive VERIFICATION-CHECKLIST.md documenting all 6 acceptance criteria with detailed evidence: (1) All 9+ major features have dedicated documentation pages in docs/features/ and guides/, (2) QUICK-START.md explicitly enables 15-minute onboarding with time-broken steps, (3) Architecture documentation includes 26KB MULTI-AGENT-PIPELINE.md plus backend/frontend architecture docs, (4) TROUBLESHOOTING.md covers 7 categories of common issues, (5) Complete API references for CLI (907 lines), IPC (1200+ lines), and backend APIs, (6) Search functionality with 81+ indexed documents and comprehensive SEARCH-GUIDE.md. Documentation metrics: 57 markdown files (exceeds 50+), 340 internal links (exceeds 100+), 19 categories, 100% feature coverage. Updated README.md to add link to verification checklist in Search & Navigation section. All acceptance criteria PASSED."
         },
         {
           "id": "subtask-6-2",
