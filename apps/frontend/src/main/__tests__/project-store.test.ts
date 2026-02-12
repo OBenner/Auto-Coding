@@ -1006,6 +1006,7 @@ describe('ProjectStore', () => {
 
       // Without invalidation, should still return cached data
       const tasksCached = await store.getTasks(project.id);
+      expect(tasksCached).toHaveLength(1);
       expect(tasksCached[0].title).toBe('Initial Feature');
 
       // Invalidate cache
