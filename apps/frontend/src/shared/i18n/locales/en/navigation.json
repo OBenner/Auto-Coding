@@ -10,7 +10,9 @@
     "roadmap": "Roadmap",
     "ideation": "Ideation",
     "changelog": "Changelog",
+    "scheduler": "Scheduler",
     "context": "Context",
+    "sessionContext": "Session Context",
     "githubIssues": "GitHub Issues",
     "githubPRs": "GitHub PRs",
     "gitlabIssues": "GitLab Issues",
@@ -18,6 +20,7 @@
     "plugins": "Plugins",
     "worktrees": "Worktrees",
     "agentTools": "MCP Overview",
+    "analytics": "Analytics",
     "mergeAnalytics": "Merge Analytics"
   },
   "actions": {

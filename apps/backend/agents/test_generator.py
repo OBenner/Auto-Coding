@@ -20,6 +20,7 @@ from analysis.coverage_analyzer import (
 )
 from core.client import create_client
 from phase_config import get_phase_model, get_phase_thinking_budget
+from phase_event import ExecutionPhase, emit_phase
 from prompts_pkg.prompt_loader import get_agent_prompt
 from spec.coverage_config import CoverageConfig, load_coverage_config
 from task_logger import LogEntryType, LogPhase, get_task_logger
@@ -810,6 +811,9 @@ async def run_test_generator_session(
     print()
     print(box(content, width=70, style="heavy"))
     print()
+
+    # Emit TEST_GENERATION phase
+    emit_phase(ExecutionPhase.TEST_GENERATION, "Generating pytest tests")
 
     # Determine model and thinking budget
     if model is None:

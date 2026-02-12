@@ -180,5 +180,24 @@
     "step3": "Cliquez sur « Réauthentifier » sur votre profil",
     "gotIt": "Compris",
     "goToSettings": "Aller aux paramètres"
+  },
+  "scheduler": {
+    "title": "Planifier la construction",
+    "description": "Planifiez une tâche à construire à un moment précis. Définissez la priorité et les dépendances pour contrôler l'ordre d'exécution.",
+    "taskLabel": "Tâche",
+    "selectTask": "Sélectionner une tâche à planifier",
+    "taskRequired": "Veuillez sélectionner une tâche à planifier",
+    "scheduledTime": "Heure planifiée",
+    "timePlaceholder": "ex: 2024-02-15T14:30:00 ou ce soir 22h",
+    "timeHelp": "Utilisez le format ISO (2024-02-15T14:30:00) ou en langage naturel (ce soir 22h, demain 9h). Laissez vide ou utilisez 'maintenant' pour une exécution immédiate.",
+    "priorityLabel": "Priorité",
+    "selectPriority": "Sélectionner la priorité",
+    "dependenciesLabel": "Dépendances",
+    "optional": "optionnel",
+    "dependenciesHelp": "Sélectionnez les tâches qui doivent être terminées avant que cette construction ne commence.",
+    "dependenciesSelected": "{{count}} dépendanc{{count, plural, one {e} other {es}}} sélectionné{{count, plural, one {e} other {es}}}",
+    "scheduling": "Planification...",
+    "scheduleBuild": "Planifier la construction",
+    "failedToSchedule": "Échec de la planification de la construction. Veuillez réessayer."
   }
 }

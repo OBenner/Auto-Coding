@@ -1,64 +1,96 @@
 {
   "files_to_modify": {
     "frontend": [
-      "apps/frontend/src/main/project-store.ts",
-      "apps/frontend/src/main/ipc-handlers/agent-events-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/changelog-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/env-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/insights-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/linear-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/project-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/roadmap-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/terminal-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/context/memory-data-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/context/memory-status-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/context/project-context-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/github/import-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/github/investigation-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/github/issue-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/github/release-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/github/repository-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/gitlab/import-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/gitlab/investigation-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/gitlab/issue-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/gitlab/merge-request-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/gitlab/release-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/gitlab/repository-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/ideation/generation-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/ideation/idea-manager.ts",
-      "apps/frontend/src/main/ipc-handlers/ideation/session-manager.ts",
-      "apps/frontend/src/main/ipc-handlers/ideation/task-converter.ts",
-      "apps/frontend/src/main/ipc-handlers/task/archive-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/task/crud-handlers.ts",
-      "apps/frontend/src/main/agent/agent-process.ts"
+      "apps/frontend/src/renderer/App.tsx",
+      "apps/frontend/src/renderer/components/KanbanBoard.tsx",
+      "apps/frontend/src/renderer/components/GitHubIssues.tsx",
+      "apps/frontend/src/renderer/components/GitLabIssues.tsx",
+      "apps/frontend/src/renderer/components/settings/AppSettings.tsx",
+      "apps/frontend/src/renderer/stores/settings-store.ts",
+      "apps/frontend/src/preload/api/task-api.ts",
+      "apps/frontend/src/main/ipc-handlers/task/execution-handlers.ts",
+      "apps/frontend/src/shared/i18n/locales/en/common.json",
+      "apps/frontend/src/shared/i18n/locales/en/dialogs.json",
+      "apps/frontend/src/shared/i18n/locales/en/tasks.json",
+      "apps/frontend/src/shared/i18n/locales/fr/common.json",
+      "apps/frontend/src/shared/i18n/locales/fr/dialogs.json",
+      "apps/frontend/src/shared/i18n/locales/fr/tasks.json",
+      "package.json"
+    ]
+  },
+  "files_to_create": {
+    "frontend": [
+      "apps/frontend/src/renderer/stores/keyboard-shortcuts-store.ts",
+      "apps/frontend/src/renderer/stores/quick-actions-store.ts",
+      "apps/frontend/src/renderer/components/CommandPalette.tsx",
+      "apps/frontend/src/renderer/components/BatchQADialog.tsx",
+      "apps/frontend/src/renderer/components/BatchStatusUpdateDialog.tsx",
+      "apps/frontend/src/renderer/components/QuickActionsMenu.tsx",
+      "apps/frontend/src/renderer/components/settings/KeyboardShortcutsSettings.tsx",
+      "apps/frontend/src/shared/i18n/locales/en/quickActions.json",
+      "apps/frontend/src/shared/i18n/locales/fr/quickActions.json"
     ]
   },
   "files_to_reference": [
-    "apps/frontend/src/main/terminal-session-store.ts",
-    "apps/frontend/src/main/agent/agent-queue.ts",
-    "apps/frontend/src/main/ipc-handlers/gitlab/spec-utils.ts"
+    "apps/frontend/src/renderer/components/BulkPRDialog.tsx",
+    "apps/frontend/src/renderer/components/github-issues/components/BatchReviewWizard.tsx",
+    "apps/frontend/src/renderer/components/ui/combobox.tsx",
+    "apps/frontend/src/renderer/components/ui/dialog.tsx",
+    "apps/frontend/src/renderer/components/ui/dropdown-menu.tsx",
+    "apps/frontend/src/renderer/stores/task-store.ts",
+    "apps/frontend/src/renderer/components/settings/AccountSettings.tsx",
+    "apps/frontend/src/shared/i18n/locales/en/tasks.json",
+    "apps/frontend/src/shared/i18n/locales/fr/tasks.json"
   ],
   "patterns": {
-    "async_fs_pattern": "Use 'import { promises as fsPromises } from 'fs'' and await fsPromises.readFile/writeFile",
-    "ipc_pattern": "IPC handlers already use async/await, just need to add await before projectStore method calls",
-    "error_handling": "Use try-catch blocks around file operations, fallback to empty data on errors"
+    "batch_dialog_pattern": "Multi-step dialog with progress tracking, using BulkPRDialog as pattern. Steps: options -> creating -> results. Use ScrollArea for lists, Progress for tracking, Badge for status.",
+    "keyboard_shortcut_pattern": "App.tsx has keyboard listener pattern (lines 375-411). Use useEffect with addEventListener 'keydown', check e.ctrlKey/e.metaKey + e.key, skip if in input fields.",
+    "dialog_system": "Use shadcn/ui Dialog components (Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter). All dialogs have onOpenChange callback for state management.",
+    "i18n_pattern": "Use react-i18next with namespaces. Import useTranslation, const { t } = useTranslation(['namespace', 'common']). All user-facing text must use translation keys, not hardcoded strings.",
+    "store_pattern": "Zustand stores follow pattern: create() with state interface + actions. Use slice pattern for updates to avoid re-renders. Stores persist to filesystem via settings-store.",
+    "ipc_pattern": "IPC handlers in main/ipc-handlers/, preload API in preload/api/. Task operations: getTasks, startTask, updateTaskStatus, submitReview all follow same pattern."
   },
   "existing_implementations": {
-    "description": "TerminalSessionStore already implements async save pattern with write serialization to prevent concurrent writes",
-    "relevant_files": [
-      "apps/frontend/src/main/terminal-session-store.ts",
-      "apps/frontend/src/main/agent/agent-queue.ts"
-    ]
+    "description": "Found existing batch operations and keyboard shortcut patterns in codebase",
+    "batch_operations": {
+      "BulkPRDialog": "apps/frontend/src/renderer/components/BulkPRDialog.tsx - Creates PRs for multiple tasks with progress tracking",
+      "BatchReviewWizard": "apps/frontend/src/renderer/components/github-issues/components/BatchReviewWizard.tsx - Multi-step wizard for issue batching"
+    },
+    "keyboard_shortcuts": {
+      "location": "apps/frontend/src/renderer/App.tsx lines 375-411",
+      "pattern": "useEffect with keydown listener, Cmd/Ctrl+T for add project",
+      "note": "Checks if target is input field to avoid interfering with typing"
+    },
+    "command_palette": {
+      "status": "Not implemented yet",
+      "recommended_package": "cmdk",
+      "integration_point": "App.tsx with Cmd/Ctrl+K trigger"
+    },
+    "task_api": {
+      "location": "apps/frontend/src/preload/api/task-api.ts",
+      "relevant_methods": ["startTask", "updateTaskStatus", "submitReview", "getTasks"],
+      "note": "All return Promise<IPCResult<T>> with success/error properties"
+    },
+    "ui_components": {
+      "shadcn_ui": "26 components in apps/frontend/src/renderer/components/ui/",
+      "available": ["dialog", "dropdown-menu", "combobox", "checkbox", "badge", "progress", "scroll-area"],
+      "note": "All components follow consistent API and styling patterns"
+    }
   },
-  "sync_operations_count": {
-    "readFileSync": 9,
-    "writeFileSync": 3,
-    "existsSync": 15,
-    "mkdirSync": 1,
-    "readdirSync": 2
-  },
-  "affected_handlers": {
-    "count": 28,
-    "pattern": "All handlers already use async/await, just need to add await before projectStore calls"
+  "tech_stack": {
+    "frontend": {
+      "framework": "Electron + React + TypeScript",
+      "state_management": "Zustand",
+      "ui_library": "shadcn/ui (Radix UI primitives)",
+      "i18n": "react-i18next",
+      "testing": "Vitest + Testing Library",
+      "build": "Vite"
+    },
+    "component_conventions": {
+      "naming": "PascalCase for components, camelCase for utilities",
+      "structure": "Co-locate components with hooks and stores",
+      "styling": "Tailwind CSS with cn() utility for class merging",
+      "types": "Shared types in apps/frontend/src/shared/types/"
+    }
   }
 }

@@ -1222,4 +1222,57 @@ export function registerTaskExecutionHandlers(
       }
     }
   );
+
+  /**
+   * Batch run QA on a single task (called by BatchQADialog for each task)
+   */
+  ipcMain.handle(
+    IPC_CHANNELS.TASK_BATCH_RUN_QA,
+    async (_, taskId: string): Promise<IPCResult<{ success: boolean; issues?: Array<{ message: string; file?: string }> }>> => {
+      try {
+        // Find task and project
+        const { task, project } = await findTaskAndProject(taskId);
+
+        if (!task || !project) {
+          return {
+            success: false,
+            error: 'Task or project not found'
+          };
+        }
+
+        // Check if task is in a valid state for QA
+        if (task.status === 'backlog') {
+          return {
+            success: false,
+            error: 'Task not started. Cannot run QA on a task that has not been started yet.'
+          };
+        }
+
+        // Find worktree path if it exists
+        const worktreePath = await findTaskWorktree(project.path, task.specId);
+        const hasWorktree = worktreePath !== null;
+
+        // Determine project path for QA (worktree if exists, otherwise main project)
+        const qaProjectPath = hasWorktree ? worktreePath : project.path;
+
+        // Start QA process
+        await agentManager.startQAProcess(taskId, qaProjectPath, task.specId);
+
+        // Return success - the actual QA results will be sent via events
+        return {
+          success: true,
+          data: {
+            success: true,
+            issues: [] // Issues will be reported via QA events
+          }
+        };
+      } catch (error) {
+        console.error('[TASK_BATCH_RUN_QA] Failed to run QA:', error);
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Failed to run QA'
+        };
+      }
+    }
+  );
 }

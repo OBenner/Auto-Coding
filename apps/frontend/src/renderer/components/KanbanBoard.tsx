@@ -36,6 +36,8 @@ import { useKanbanSettingsStore, COLLAPSED_COLUMN_WIDTH, DEFAULT_COLUMN_WIDTH, M
 import { useToast } from '../hooks/use-toast';
 import { WorktreeCleanupDialog } from './WorktreeCleanupDialog';
 import { BulkPRDialog } from './BulkPRDialog';
+import { BatchQADialog } from './BatchQADialog';
+import { BatchStatusUpdateDialog } from './BatchStatusUpdateDialog';
 import type { Task, TaskStatus, TaskOrderState } from '../../shared/types';
 
 // Type guard for valid drop column targets - preserves literal type from TASK_STATUS_COLUMNS
@@ -704,6 +706,12 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
   // Bulk PR dialog state
   const [bulkPRDialogOpen, setBulkPRDialogOpen] = useState(false);
 
+  // Batch QA dialog state
+  const [batchQADialogOpen, setBatchQADialogOpen] = useState(false);
+
+  // Batch status update dialog state
+  const [batchStatusUpdateDialogOpen, setBatchStatusUpdateDialogOpen] = useState(false);
+
   // Worktree cleanup dialog state
   const [worktreeCleanupDialog, setWorktreeCleanupDialog] = useState<{
     open: boolean;
@@ -867,8 +875,32 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
     }
   }, [selectedTaskIds.size]);
 
+  // Handle opening the batch QA dialog
+  const handleOpenBatchQADialog = useCallback(() => {
+    if (selectedTaskIds.size > 0) {
+      setBatchQADialogOpen(true);
+    }
+  }, [selectedTaskIds.size]);
+
+  // Handle opening the batch status update dialog
+  const handleOpenBatchStatusUpdateDialog = useCallback(() => {
+    if (selectedTaskIds.size > 0) {
+      setBatchStatusUpdateDialogOpen(true);
+    }
+  }, [selectedTaskIds.size]);
+
   // Handle bulk PR dialog completion - clear selection
   const handleBulkPRComplete = useCallback(() => {
+    deselectAllTasks();
+  }, [deselectAllTasks]);
+
+  // Handle batch QA dialog completion - clear selection
+  const handleBatchQAComplete = useCallback(() => {
+    deselectAllTasks();
+  }, [deselectAllTasks]);
+
+  // Handle batch status update dialog completion - clear selection
+  const handleBatchStatusUpdateComplete = useCallback(() => {
     deselectAllTasks();
   }, [deselectAllTasks]);
 
@@ -1416,10 +1448,35 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
 
   return (
     <div className="flex h-full flex-col">
-      {/* Kanban header with refresh button and expand all */}
-      {(onRefresh || collapsedColumnCount >= 3) && (
+      {/* Kanban header with batch operations, refresh button and expand all */}
+      {(onRefresh || collapsedColumnCount >= 3 || selectedTaskIds.size > 0) && (
         <div className="flex items-center justify-between px-6 pt-4 pb-2">
           <div className="flex items-center gap-2">
+            {/* Batch operation buttons - appear when tasks are selected */}
+            {selectedTaskIds.size > 0 && (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleOpenBatchQADialog}
+                  className="gap-2 text-muted-foreground hover:text-foreground"
+                  aria-label={t('ariaLabels.batchQA')}
+                >
+                  <CheckCircle2 className="h-4 w-4" />
+                  {t('kanban.batchQA')}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleOpenBatchStatusUpdateDialog}
+                  className="gap-2 text-muted-foreground hover:text-foreground"
+                  aria-label={t('ariaLabels.batchStatusUpdate')}
+                >
+                  <RefreshCw className="h-4 w-4" />
+                  {t('kanban.batchStatusUpdate')}
+                </Button>
+              </>
+            )}
             {/* Expand All button - appears when 3+ columns are collapsed */}
             {collapsedColumnCount >= 3 && (
               <Button
@@ -1574,6 +1631,22 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
         tasks={selectedTasks}
         onOpenChange={setBulkPRDialogOpen}
         onComplete={handleBulkPRComplete}
+      />
+
+      {/* Batch QA dialog */}
+      <BatchQADialog
+        open={batchQADialogOpen}
+        tasks={selectedTasks}
+        onOpenChange={setBatchQADialogOpen}
+        onComplete={handleBatchQAComplete}
+      />
+
+      {/* Batch status update dialog */}
+      <BatchStatusUpdateDialog
+        open={batchStatusUpdateDialogOpen}
+        tasks={selectedTasks}
+        onOpenChange={setBatchStatusUpdateDialogOpen}
+        onComplete={handleBatchStatusUpdateComplete}
       />
     </div>
   );

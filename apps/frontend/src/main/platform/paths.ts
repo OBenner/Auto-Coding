@@ -16,6 +16,72 @@ import { isWindows, isMacOS, getHomebrewPath, joinPaths, getExecutableExtension 
 const execFileAsync = promisify(execFile);
 
 /**
+ * Validation result for a Python installation.
+ */
+export interface PythonValidation {
+  valid: boolean;
+  version?: string;
+  message: string;
+}
+
+/**
+ * Find the first valid Homebrew Python installation.
+ * Checks common Homebrew paths for Python 3, including versioned installations.
+ * Prioritizes newer Python versions (3.14, 3.13, 3.12, 3.11, 3.10).
+ *
+ * Note: This list should be updated when new Python versions are released.
+ * Check for specific versions first to ensure we find the latest available version.
+ *
+ * @param validateFn - Function to validate a Python path and return validation result
+ * @param logPrefix - Prefix for log messages (e.g., '[Python]', '[CLI Tools]')
+ * @returns The path to Homebrew Python, or null if not found
+ */
+export function findHomebrewPython(
+  validateFn: (pythonPath: string) => PythonValidation,
+  logPrefix: string
+): string | null {
+  const homebrewDirs = [
+    '/opt/homebrew/bin',  // Apple Silicon (M1/M2/M3)
+    '/usr/local/bin'      // Intel Mac
+  ];
+
+  // Check for specific Python versions first (newest to oldest), then fall back to generic python3.
+  // This ensures we find the latest available version that meets our requirements.
+  const pythonNames = [
+    'python3.14',
+    'python3.13',
+    'python3.12',
+    'python3.11',
+    'python3.10',
+    'python3',
+  ];
+
+  for (const dir of homebrewDirs) {
+    for (const name of pythonNames) {
+      const pythonPath = path.join(dir, name);
+      if (existsSync(pythonPath)) {
+        try {
+          // Validate that this Python meets version requirements
+          const validation = validateFn(pythonPath);
+          if (validation.valid) {
+            console.log(`${logPrefix} Found valid Homebrew Python: ${pythonPath} (${validation.version})`);
+            return pythonPath;
+          } else {
+            console.warn(`${logPrefix} ${pythonPath} rejected: ${validation.message}`);
+          }
+        } catch (error) {
+          // Version check failed (e.g., timeout, permission issue), try next candidate
+          console.warn(`${logPrefix} Failed to validate ${pythonPath}: ${error}`);
+        }
+      }
+    }
+  }
+
+  console.log(`${logPrefix} No valid Homebrew Python found in ${homebrewDirs.join(', ')}`);
+  return null;
+}
+
+/**
  * Resolve Claude CLI executable path
  *
  * Searches in platform-specific installation directories:
@@ -53,6 +119,100 @@ export function getClaudeExecutablePath(): string[] {
   }
 
   return paths;
+}
+
+/**
+ * Configuration for Claude CLI detection paths
+ */
+export interface ClaudeDetectionPaths {
+  /** Homebrew paths for macOS (Apple Silicon and Intel) */
+  homebrewPaths: string[];
+  /** Platform-specific standard installation paths */
+  platformPaths: string[];
+  /** Path to NVM versions directory for Node.js-installed Claude */
+  nvmVersionsDir: string;
+}
+
+/**
+ * Get all candidate paths for Claude CLI detection.
+ *
+ * Returns platform-specific paths where Claude CLI might be installed.
+ * This pure function consolidates path configuration used by both sync
+ * and async detection methods.
+ *
+ * Note: This is the single source of truth for CLI detection paths.
+ * The Python backend relies on the Claude Agent SDK's bundled CLI,
+ * so it no longer needs its own path detection logic.
+ *
+ * @param homeDir - User's home directory (from os.homedir())
+ * @returns Object containing homebrew, platform, and NVM paths
+ *
+ * @example
+ * const paths = getClaudeDetectionPaths('/Users/john');
+ * // On macOS: { homebrewPaths: ['/opt/homebrew/bin/claude', ...], ... }
+ */
+export function getClaudeDetectionPaths(homeDir: string): ClaudeDetectionPaths {
+  const homebrewPaths = [
+    '/opt/homebrew/bin/claude', // Apple Silicon
+    '/usr/local/bin/claude',    // Intel Mac
+  ];
+
+  const platformPaths = isWindows()
+    ? [
+        joinPaths(homeDir, 'AppData', 'Local', 'Programs', 'claude', `claude${getExecutableExtension()}`),
+        joinPaths(homeDir, 'AppData', 'Roaming', 'npm', 'claude.cmd'),
+        joinPaths(homeDir, '.local', 'bin', `claude${getExecutableExtension()}`),
+        'C:\\Program Files\\Claude\\claude.exe',
+        'C:\\Program Files (x86)\\Claude\\claude.exe',
+      ]
+    : [
+        joinPaths(homeDir, '.local', 'bin', 'claude'),
+        joinPaths(homeDir, 'bin', 'claude'),
+      ];
+
+  const nvmVersionsDir = joinPaths(homeDir, '.nvm', 'versions', 'node');
+
+  return { homebrewPaths, platformPaths, nvmVersionsDir };
+}
+
+/**
+ * Sort NVM version directories by semantic version (newest first).
+ *
+ * Filters entries to only include directories starting with 'v' (version directories)
+ * and sorts them in descending order so the newest Node.js version is checked first.
+ *
+ * @param entries - Directory entries from readdir with { name, isDirectory() }
+ * @returns Array of version directory names sorted newest first
+ *
+ * @example
+ * const entries = [
+ *   { name: 'v18.0.0', isDirectory: () => true },
+ *   { name: 'v20.0.0', isDirectory: () => true },
+ *   { name: '.DS_Store', isDirectory: () => false },
+ * ];
+ * sortNvmVersionDirs(entries); // ['v20.0.0', 'v18.0.0']
+ */
+export function sortNvmVersionDirs(
+  entries: Array<{ name: string; isDirectory(): boolean }>
+): string[] {
+  // Regex to match valid semver directories: v20.0.0, v18.17.1, etc.
+  // This prevents NaN from malformed versions (e.g., v20.abc.1) breaking sort
+  const semverRegex = /^v\d+\.\d+\.\d+$/;
+
+  return entries
+    .filter((entry) => entry.isDirectory() && semverRegex.test(entry.name))
+    .sort((a, b) => {
+      // Parse version numbers: v20.0.0 -> [20, 0, 0]
+      const vA = a.name.slice(1).split('.').map(Number);
+      const vB = b.name.slice(1).split('.').map(Number);
+      // Compare major, minor, patch in order (descending)
+      for (let i = 0; i < 3; i++) {
+        const diff = (vB[i] ?? 0) - (vA[i] ?? 0);
+        if (diff !== 0) return diff;
+      }
+      return 0;
+    })
+    .map((entry) => entry.name);
 }
 
 /**
@@ -198,6 +358,14 @@ export function getWindowsShellPaths(): Record<string, string[]> {
       path.join('C:\\Program Files', 'Git', 'bin', 'bash.exe'),
       path.join('C:\\Program Files (x86)', 'Git', 'bin', 'bash.exe')
     ],
+    gitbashLauncher: [
+      path.join('C:\\Program Files', 'Git', 'git-bash.exe'),
+      path.join('C:\\Program Files (x86)', 'Git', 'git-bash.exe')
+    ],
+    conemu: [
+      path.join('C:\\Program Files', 'ConEmu', 'ConEmu64.exe'),
+      path.join('C:\\Program Files (x86)', 'ConEmu', 'ConEmu.exe')
+    ],
     cygwin: [
       path.join('C:\\cygwin64', 'bin', 'bash.exe')
     ],
@@ -207,6 +375,398 @@ export function getWindowsShellPaths(): Record<string, string[]> {
     wsl: [
       path.join(systemRoot, 'System32', 'wsl.exe')
     ]
+  };
+}
+
+/**
+ * Get PowerShell executable path for Windows
+ *
+ * Searches for PowerShell installations in order of preference:
+ * 1. PowerShell 7+ (pwsh.exe) - Modern cross-platform PowerShell
+ * 2. Windows PowerShell (powershell.exe) - Built-in legacy version
+ *
+ * @returns Array of candidate PowerShell paths to check
+ */
+export function getPowerShellExecutablePath(): string[] {
+  if (!isWindows()) {
+    return [];
+  }
+
+  const homeDir = os.homedir();
+  const programFiles = process.env.ProgramFiles || 'C:\\Program Files';
+  const systemRoot = process.env.SystemRoot || 'C:\\Windows';
+
+  return [
+    path.join(programFiles, 'PowerShell', '7', 'pwsh.exe'),
+    path.join(homeDir, 'AppData', 'Local', 'Microsoft', 'WindowsApps', 'pwsh.exe'),
+    path.join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'),
+  ];
+}
+
+/**
+ * Editor/IDE configuration type for detection
+ */
+export interface EditorConfig {
+  name: string;
+  paths: Record<string, string[]>;
+  commands: Record<string, string>;
+}
+
+/**
+ * Get editor and IDE detection configuration
+ *
+ * Returns comprehensive path mappings for 40+ IDEs and text editors across
+ * all platforms. This centralizes all hardcoded editor paths into a single
+ * source of truth for the platform abstraction layer.
+ *
+ * @returns Record mapping editor IDs to their detection configuration
+ */
+export function getEditorDetectionConfig(): Record<string, EditorConfig> {
+  return {
+    // Microsoft/VS Code Ecosystem
+    vscode: {
+      name: 'Visual Studio Code',
+      paths: {
+        darwin: ['/Applications/Visual Studio Code.app'],
+        win32: [
+          'C:\\Program Files\\Microsoft VS Code\\Code.exe',
+          'C:\\Users\\%USERNAME%\\AppData\\Local\\Programs\\Microsoft VS Code\\Code.exe'
+        ],
+        linux: ['/usr/share/code', '/snap/bin/code', '/usr/bin/code']
+      },
+      commands: { darwin: 'code', win32: 'code.cmd', linux: 'code' }
+    },
+    visualstudio: {
+      name: 'Visual Studio',
+      paths: {
+        darwin: [],
+        win32: [
+          'C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\Common7\\IDE\\devenv.exe',
+          'C:\\Program Files\\Microsoft Visual Studio\\2022\\Professional\\Common7\\IDE\\devenv.exe',
+          'C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\Common7\\IDE\\devenv.exe'
+        ],
+        linux: []
+      },
+      commands: { darwin: '', win32: 'devenv', linux: '' }
+    },
+    vscodium: {
+      name: 'VSCodium',
+      paths: {
+        darwin: ['/Applications/VSCodium.app'],
+        win32: ['C:\\Program Files\\VSCodium\\VSCodium.exe', 'C:\\Users\\%USERNAME%\\AppData\\Local\\Programs\\VSCodium\\VSCodium.exe'],
+        linux: ['/usr/bin/codium', '/snap/bin/codium']
+      },
+      commands: { darwin: 'codium', win32: 'codium', linux: 'codium' }
+    },
+    // AI-Powered Editors
+    cursor: {
+      name: 'Cursor',
+      paths: {
+        darwin: ['/Applications/Cursor.app'],
+        win32: ['C:\\Users\\%USERNAME%\\AppData\\Local\\Programs\\cursor\\Cursor.exe'],
+        linux: ['/usr/bin/cursor', '/opt/Cursor/cursor']
+      },
+      commands: { darwin: 'cursor', win32: 'cursor.cmd', linux: 'cursor' }
+    },
+    windsurf: {
+      name: 'Windsurf',
+      paths: {
+        darwin: ['/Applications/Windsurf.app'],
+        win32: ['C:\\Users\\%USERNAME%\\AppData\\Local\\Programs\\Windsurf\\Windsurf.exe'],
+        linux: ['/usr/bin/windsurf', '/opt/Windsurf/windsurf']
+      },
+      commands: { darwin: 'windsurf', win32: 'windsurf.cmd', linux: 'windsurf' }
+    },
+    zed: {
+      name: 'Zed',
+      paths: {
+        darwin: ['/Applications/Zed.app'],
+        win32: [],
+        linux: ['/usr/bin/zed', '~/.local/bin/zed']
+      },
+      commands: { darwin: 'zed', win32: '', linux: 'zed' }
+    },
+    void: {
+      name: 'Void',
+      paths: {
+        darwin: ['/Applications/Void.app'],
+        win32: ['C:\\Users\\%USERNAME%\\AppData\\Local\\Programs\\Void\\Void.exe'],
+        linux: ['/usr/bin/void']
+      },
+      commands: { darwin: 'void', win32: 'void', linux: 'void' }
+    },
+    // JetBrains IDEs
+    intellij: {
+      name: 'IntelliJ IDEA',
+      paths: {
+        darwin: ['/Applications/IntelliJ IDEA.app', '/Applications/IntelliJ IDEA CE.app'],
+        win32: ['C:\\Program Files\\JetBrains\\IntelliJ IDEA*\\bin\\idea64.exe'],
+        linux: ['/usr/bin/idea', '/snap/bin/intellij-idea-ultimate', '/snap/bin/intellij-idea-community']
+      },
+      commands: { darwin: 'idea', win32: 'idea64.exe', linux: 'idea' }
+    },
+    pycharm: {
+      name: 'PyCharm',
+      paths: {
+        darwin: ['/Applications/PyCharm.app', '/Applications/PyCharm CE.app'],
+        win32: ['C:\\Program Files\\JetBrains\\PyCharm*\\bin\\pycharm64.exe'],
+        linux: ['/usr/bin/pycharm', '/snap/bin/pycharm-professional', '/snap/bin/pycharm-community']
+      },
+      commands: { darwin: 'pycharm', win32: 'pycharm64.exe', linux: 'pycharm' }
+    },
+    webstorm: {
+      name: 'WebStorm',
+      paths: {
+        darwin: ['/Applications/WebStorm.app'],
+        win32: ['C:\\Program Files\\JetBrains\\WebStorm*\\bin\\webstorm64.exe'],
+        linux: ['/usr/bin/webstorm', '/snap/bin/webstorm']
+      },
+      commands: { darwin: 'webstorm', win32: 'webstorm64.exe', linux: 'webstorm' }
+    },
+    phpstorm: {
+      name: 'PhpStorm',
+      paths: {
+        darwin: ['/Applications/PhpStorm.app'],
+        win32: ['C:\\Program Files\\JetBrains\\PhpStorm*\\bin\\phpstorm64.exe'],
+        linux: ['/usr/bin/phpstorm', '/snap/bin/phpstorm']
+      },
+      commands: { darwin: 'phpstorm', win32: 'phpstorm64.exe', linux: 'phpstorm' }
+    },
+    rubymine: {
+      name: 'RubyMine',
+      paths: {
+        darwin: ['/Applications/RubyMine.app'],
+        win32: ['C:\\Program Files\\JetBrains\\RubyMine*\\bin\\rubymine64.exe'],
+        linux: ['/usr/bin/rubymine', '/snap/bin/rubymine']
+      },
+      commands: { darwin: 'rubymine', win32: 'rubymine64.exe', linux: 'rubymine' }
+    },
+    goland: {
+      name: 'GoLand',
+      paths: {
+        darwin: ['/Applications/GoLand.app'],
+        win32: ['C:\\Program Files\\JetBrains\\GoLand*\\bin\\goland64.exe'],
+        linux: ['/usr/bin/goland', '/snap/bin/goland']
+      },
+      commands: { darwin: 'goland', win32: 'goland64.exe', linux: 'goland' }
+    },
+    clion: {
+      name: 'CLion',
+      paths: {
+        darwin: ['/Applications/CLion.app'],
+        win32: ['C:\\Program Files\\JetBrains\\CLion*\\bin\\clion64.exe'],
+        linux: ['/usr/bin/clion', '/snap/bin/clion']
+      },
+      commands: { darwin: 'clion', win32: 'clion64.exe', linux: 'clion' }
+    },
+    rider: {
+      name: 'Rider',
+      paths: {
+        darwin: ['/Applications/Rider.app'],
+        win32: ['C:\\Program Files\\JetBrains\\Rider*\\bin\\rider64.exe'],
+        linux: ['/usr/bin/rider', '/snap/bin/rider']
+      },
+      commands: { darwin: 'rider', win32: 'rider64.exe', linux: 'rider' }
+    },
+    datagrip: {
+      name: 'DataGrip',
+      paths: {
+        darwin: ['/Applications/DataGrip.app'],
+        win32: ['C:\\Program Files\\JetBrains\\DataGrip*\\bin\\datagrip64.exe'],
+        linux: ['/usr/bin/datagrip', '/snap/bin/datagrip']
+      },
+      commands: { darwin: 'datagrip', win32: 'datagrip64.exe', linux: 'datagrip' }
+    },
+    fleet: {
+      name: 'Fleet',
+      paths: {
+        darwin: ['/Applications/Fleet.app'],
+        win32: ['C:\\Users\\%USERNAME%\\AppData\\Local\\JetBrains\\Toolbox\\apps\\Fleet\\ch-0\\*\\Fleet.exe'],
+        linux: ['~/.local/share/JetBrains/Toolbox/apps/Fleet/ch-0/*/fleet']
+      },
+      commands: { darwin: 'fleet', win32: 'fleet', linux: 'fleet' }
+    },
+    androidstudio: {
+      name: 'Android Studio',
+      paths: {
+        darwin: ['/Applications/Android Studio.app'],
+        win32: ['C:\\Program Files\\Android\\Android Studio\\bin\\studio64.exe'],
+        linux: ['/usr/bin/android-studio', '/snap/bin/android-studio', '/opt/android-studio/bin/studio.sh']
+      },
+      commands: { darwin: 'studio', win32: 'studio64.exe', linux: 'android-studio' }
+    },
+    rustrover: {
+      name: 'RustRover',
+      paths: {
+        darwin: ['/Applications/RustRover.app'],
+        win32: ['C:\\Program Files\\JetBrains\\RustRover*\\bin\\rustrover64.exe'],
+        linux: ['/usr/bin/rustrover', '/snap/bin/rustrover']
+      },
+      commands: { darwin: 'rustrover', win32: 'rustrover64.exe', linux: 'rustrover' }
+    },
+    // Classic Text Editors
+    sublime: {
+      name: 'Sublime Text',
+      paths: {
+        darwin: ['/Applications/Sublime Text.app'],
+        win32: ['C:\\Program Files\\Sublime Text\\subl.exe', 'C:\\Program Files\\Sublime Text 3\\subl.exe'],
+        linux: ['/usr/bin/subl', '/snap/bin/subl']
+      },
+      commands: { darwin: 'subl', win32: 'subl.exe', linux: 'subl' }
+    },
+    vim: {
+      name: 'Vim',
+      paths: {
+        darwin: ['/usr/bin/vim'],
+        win32: ['C:\\Program Files\\Vim\\vim*\\vim.exe'],
+        linux: ['/usr/bin/vim']
+      },
+      commands: { darwin: 'vim', win32: 'vim', linux: 'vim' }
+    },
+    neovim: {
+      name: 'Neovim',
+      paths: {
+        darwin: ['/usr/local/bin/nvim', '/opt/homebrew/bin/nvim'],
+        win32: ['C:\\Program Files\\Neovim\\bin\\nvim.exe'],
+        linux: ['/usr/bin/nvim', '/snap/bin/nvim']
+      },
+      commands: { darwin: 'nvim', win32: 'nvim', linux: 'nvim' }
+    },
+    emacs: {
+      name: 'Emacs',
+      paths: {
+        darwin: ['/Applications/Emacs.app', '/usr/local/bin/emacs', '/opt/homebrew/bin/emacs'],
+        win32: ['C:\\Program Files\\Emacs\\bin\\emacs.exe'],
+        linux: ['/usr/bin/emacs', '/snap/bin/emacs']
+      },
+      commands: { darwin: 'emacs', win32: 'emacs', linux: 'emacs' }
+    },
+    nano: {
+      name: 'GNU Nano',
+      paths: {
+        darwin: ['/usr/bin/nano'],
+        win32: [],
+        linux: ['/usr/bin/nano']
+      },
+      commands: { darwin: 'nano', win32: '', linux: 'nano' }
+    },
+    helix: {
+      name: 'Helix',
+      paths: {
+        darwin: ['/opt/homebrew/bin/hx', '/usr/local/bin/hx'],
+        win32: ['C:\\Program Files\\Helix\\hx.exe'],
+        linux: ['/usr/bin/hx', '~/.cargo/bin/hx']
+      },
+      commands: { darwin: 'hx', win32: 'hx', linux: 'hx' }
+    },
+    // Platform-Specific IDEs
+    xcode: {
+      name: 'Xcode',
+      paths: {
+        darwin: ['/Applications/Xcode.app'],
+        win32: [],
+        linux: []
+      },
+      commands: { darwin: 'xcode', win32: '', linux: '' }
+    },
+    eclipse: {
+      name: 'Eclipse',
+      paths: {
+        darwin: ['/Applications/Eclipse.app'],
+        win32: ['C:\\eclipse\\eclipse.exe', 'C:\\Program Files\\Eclipse\\eclipse.exe'],
+        linux: ['/usr/bin/eclipse', '/snap/bin/eclipse']
+      },
+      commands: { darwin: 'eclipse', win32: 'eclipse', linux: 'eclipse' }
+    },
+    netbeans: {
+      name: 'NetBeans',
+      paths: {
+        darwin: ['/Applications/NetBeans.app', '/Applications/Apache NetBeans.app'],
+        win32: ['C:\\Program Files\\NetBeans*\\bin\\netbeans64.exe'],
+        linux: ['/usr/bin/netbeans', '/snap/bin/netbeans']
+      },
+      commands: { darwin: 'netbeans', win32: 'netbeans64.exe', linux: 'netbeans' }
+    },
+    // macOS Editors
+    nova: {
+      name: 'Nova',
+      paths: {
+        darwin: ['/Applications/Nova.app'],
+        win32: [],
+        linux: []
+      },
+      commands: { darwin: 'nova', win32: '', linux: '' }
+    },
+    bbedit: {
+      name: 'BBEdit',
+      paths: {
+        darwin: ['/Applications/BBEdit.app'],
+        win32: [],
+        linux: []
+      },
+      commands: { darwin: 'bbedit', win32: '', linux: '' }
+    },
+    textmate: {
+      name: 'TextMate',
+      paths: {
+        darwin: ['/Applications/TextMate.app'],
+        win32: [],
+        linux: []
+      },
+      commands: { darwin: 'mate', win32: '', linux: '' }
+    },
+    // Windows Editors
+    notepadpp: {
+      name: 'Notepad++',
+      paths: {
+        darwin: [],
+        win32: ['C:\\Program Files\\Notepad++\\notepad++.exe', 'C:\\Program Files (x86)\\Notepad++\\notepad++.exe'],
+        linux: []
+      },
+      commands: { darwin: '', win32: 'notepad++', linux: '' }
+    },
+    // Linux Editors
+    kate: {
+      name: 'Kate',
+      paths: {
+        darwin: [],
+        win32: [],
+        linux: ['/usr/bin/kate', '/snap/bin/kate']
+      },
+      commands: { darwin: '', win32: '', linux: 'kate' }
+    },
+    gedit: {
+      name: 'gedit',
+      paths: {
+        darwin: [],
+        win32: [],
+        linux: ['/usr/bin/gedit', '/snap/bin/gedit']
+      },
+      commands: { darwin: '', win32: '', linux: 'gedit' }
+    },
+    geany: {
+      name: 'Geany',
+      paths: {
+        darwin: [],
+        win32: [],
+        linux: ['/usr/bin/geany']
+      },
+      commands: { darwin: '', win32: '', linux: 'geany' }
+    },
+    lapce: {
+      name: 'Lapce',
+      paths: {
+        darwin: ['/Applications/Lapce.app'],
+        win32: ['C:\\Users\\%USERNAME%\\AppData\\Local\\lapce\\Lapce.exe'],
+        linux: ['/usr/bin/lapce', '~/.cargo/bin/lapce']
+      },
+      commands: { darwin: 'lapce', win32: 'lapce', linux: 'lapce' }
+    },
+    custom: {
+      name: 'Custom IDE',
+      paths: { darwin: [], win32: [], linux: [] },
+      commands: { darwin: '', win32: '', linux: '' }
+    }
   };
 }
 
@@ -380,27 +940,38 @@ export const WINDOWS_GIT_PATHS: WindowsToolPaths = {
 };
 
 /**
- * Validate path for security
+ * Validate path for security (canonical implementation)
  *
  * Rejects paths containing shell metacharacters, environment variables,
- * or directory traversal patterns that could be exploited.
+ * directory traversal patterns, or control characters that could be exploited.
  *
  * @param pathStr - Path to validate
  * @returns true if path is safe, false otherwise
  */
 export function isSecurePath(pathStr: string): boolean {
+  // Reject empty or whitespace-only strings
+  if (!pathStr || !pathStr.trim()) return false;
+
   const dangerousPatterns = [
-    /[;&|`${}[\]<>!"^]/,  // Shell metacharacters (parentheses removed - safe when quoted)
+    /[;&|`${}[\]<>!"^]/,   // Shell metacharacters (parentheses removed - safe when quoted)
     /%[^%]+%/,              // Windows environment variable expansion (e.g., %PATH%)
     /\.\.\//,               // Unix directory traversal
     /\.\.\\/,               // Windows directory traversal
-    /[\r\n]/,               // Newlines (command injection)
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: Intentionally matching control characters for security validation
+    /[\r\n\x00]/,           // Newlines (command injection), null bytes (path truncation)
   ];
 
   for (const pattern of dangerousPatterns) {
     if (pattern.test(pathStr)) {
       return false;
     }
+  }
+
+  // On Windows, validate executable names additionally
+  if (isWindows()) {
+    const basename = path.basename(pathStr, getExecutableExtension());
+    // Allow only alphanumeric, dots, hyphens, and underscores in the name
+    return /^[\w.-]+$/.test(basename);
   }
 
   return true;
@@ -530,6 +1101,44 @@ export async function getWindowsExecutablePathsAsync(
   }
 
   return validPaths;
+}
+
+/**
+ * Get Git detection paths for macOS Homebrew installations
+ *
+ * Returns paths where Git might be installed via Homebrew on macOS.
+ * For Windows/Linux, use standard PATH or findExecutable instead.
+ *
+ * @returns Array of Git executable paths to check
+ */
+export function getGitDetectionPaths(): string[] {
+  if (!isMacOS()) {
+    return [];
+  }
+
+  return [
+    '/opt/homebrew/bin/git', // Apple Silicon
+    '/usr/local/bin/git',    // Intel Mac
+  ];
+}
+
+/**
+ * Get GitHub CLI detection paths for macOS Homebrew installations
+ *
+ * Returns paths where GitHub CLI (gh) might be installed via Homebrew on macOS.
+ * For Windows/Linux, use standard PATH or findExecutable instead.
+ *
+ * @returns Array of gh executable paths to check
+ */
+export function getGitHubCLIDetectionPaths(): string[] {
+  if (!isMacOS()) {
+    return [];
+  }
+
+  return [
+    '/opt/homebrew/bin/gh', // Apple Silicon
+    '/usr/local/bin/gh',    // Intel Mac
+  ];
 }
 
 /**

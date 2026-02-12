@@ -114,7 +114,7 @@ export function estimateLogItemHeight(item: FlattenedLogItem): number {
     return ESTIMATED_HEIGHTS.LOG_ENTRY_SIMPLE;
   }
 
-  let baseHeight: number = ESTIMATED_HEIGHTS.LOG_ENTRY_SIMPLE;
+  let baseHeight: number;
 
   // Adjust base height by entry type
   switch (entry.type) {
