@@ -7,15 +7,21 @@ Follows the same patterns as integrations/graphiti/config.py for consistency.
 
 Supported Providers:
 - claude: Claude Agent SDK (default, recommended) - Full agentic capabilities
+- openai: OpenAI direct API - GPT-4, GPT-4o, o1, o3 models
 - litellm: LiteLLM unified API - 100+ LLMs via single interface
 - openrouter: OpenRouter cloud routing - 400+ models with pay-per-use
 
 Environment Variables:
     # Core
-    AI_ENGINE_PROVIDER: Provider selection (claude|litellm|openrouter, default: claude)
+    AI_ENGINE_PROVIDER: Provider selection (claude|openai|litellm|openrouter, default: claude)
 
     # Claude Agent SDK (default)
     ANTHROPIC_API_KEY: Required for Claude provider
+
+    # OpenAI
+    OPENAI_API_KEY: Required for OpenAI provider
+    OPENAI_MODEL: Model identifier (default: gpt-4o)
+    OPENAI_BASE_URL: Optional custom API base URL
 
     # LiteLLM
     LITELLM_MODEL: Model identifier (e.g., gpt-4, claude-3-opus)
@@ -37,6 +43,7 @@ class AIEngineProvider(str, Enum):
     """Supported AI engine providers."""
 
     CLAUDE = "claude"
+    OPENAI = "openai"
     LITELLM = "litellm"
     OPENROUTER = "openrouter"
 
@@ -61,6 +68,11 @@ class ProviderConfig:
     # Claude Agent SDK settings
     anthropic_api_key: str = ""
     claude_model: str = "claude-sonnet-4-5-20250929"
+
+    # OpenAI settings
+    openai_api_key: str = ""
+    openai_model: str = "gpt-4o"
+    openai_base_url: str = ""
 
     # LiteLLM settings
     litellm_model: str = ""
@@ -88,6 +100,11 @@ class ProviderConfig:
         anthropic_api_key = os.environ.get("ANTHROPIC_API_KEY", "")
         claude_model = os.environ.get("CLAUDE_MODEL", "claude-sonnet-4-5-20250929")
 
+        # OpenAI settings
+        openai_api_key = os.environ.get("OPENAI_API_KEY", "")
+        openai_model = os.environ.get("OPENAI_MODEL", "gpt-4o")
+        openai_base_url = os.environ.get("OPENAI_BASE_URL", "")
+
         # LiteLLM settings
         litellm_model = os.environ.get("LITELLM_MODEL", "")
         litellm_api_base = os.environ.get("LITELLM_API_BASE", "")
@@ -104,6 +121,9 @@ class ProviderConfig:
             provider=provider,
             anthropic_api_key=anthropic_api_key,
             claude_model=claude_model,
+            openai_api_key=openai_api_key,
+            openai_model=openai_model,
+            openai_base_url=openai_base_url,
             litellm_model=litellm_model,
             litellm_api_base=litellm_api_base,
             litellm_api_key=litellm_api_key,
@@ -120,6 +140,8 @@ class ProviderConfig:
         """
         if self.provider == AIEngineProvider.CLAUDE.value:
             return bool(self.anthropic_api_key)
+        elif self.provider == AIEngineProvider.OPENAI.value:
+            return bool(self.openai_api_key)
         elif self.provider == AIEngineProvider.LITELLM.value:
             # LiteLLM can work with various providers, model is required
             return bool(self.litellm_model)
@@ -135,6 +157,11 @@ class ProviderConfig:
             if not self.anthropic_api_key:
                 errors.append(
                     "Claude provider requires ANTHROPIC_API_KEY environment variable"
+                )
+        elif self.provider == AIEngineProvider.OPENAI.value:
+            if not self.openai_api_key:
+                errors.append(
+                    "OpenAI provider requires OPENAI_API_KEY environment variable"
                 )
         elif self.provider == AIEngineProvider.LITELLM.value:
             if not self.litellm_model:
@@ -155,6 +182,8 @@ class ProviderConfig:
         """Get a summary of configured provider."""
         if self.provider == AIEngineProvider.CLAUDE.value:
             return f"Claude Agent SDK ({self.claude_model})"
+        elif self.provider == AIEngineProvider.OPENAI.value:
+            return f"OpenAI ({self.openai_model})"
         elif self.provider == AIEngineProvider.LITELLM.value:
             return f"LiteLLM ({self.litellm_model or 'no model configured'})"
         elif self.provider == AIEngineProvider.OPENROUTER.value:
@@ -165,6 +194,8 @@ class ProviderConfig:
         """Get the configured model for the current provider."""
         if self.provider == AIEngineProvider.CLAUDE.value:
             return self.claude_model
+        elif self.provider == AIEngineProvider.OPENAI.value:
+            return self.openai_model
         elif self.provider == AIEngineProvider.LITELLM.value:
             return self.litellm_model or None
         elif self.provider == AIEngineProvider.OPENROUTER.value:
@@ -195,6 +226,9 @@ def get_available_providers() -> list[str]:
     # Check each provider's credentials
     if config.anthropic_api_key:
         available.append(AIEngineProvider.CLAUDE.value)
+
+    if config.openai_api_key:
+        available.append(AIEngineProvider.OPENAI.value)
 
     if config.litellm_model:
         available.append(AIEngineProvider.LITELLM.value)

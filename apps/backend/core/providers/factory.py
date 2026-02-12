@@ -51,6 +51,31 @@ def _create_claude_provider(config: "ProviderConfig") -> "AIEngineProvider":
     return ClaudeAgentProvider(config)
 
 
+def _create_openai_provider(config: "ProviderConfig") -> "AIEngineProvider":
+    """
+    Create an OpenAI direct provider.
+
+    Args:
+        config: ProviderConfig with OpenAI settings
+
+    Returns:
+        OpenAIProvider instance
+
+    Raises:
+        ProviderNotInstalled: If openai package is not installed
+        ProviderError: If provider creation fails
+    """
+    try:
+        from core.providers.adapters.openai import OpenAIProvider
+    except ImportError as e:
+        raise ProviderNotInstalled(
+            "OpenAI adapter not installed. Install with: pip install openai"
+        ) from e
+
+    logger.debug(f"Creating OpenAI provider with model: {config.openai_model}")
+    return OpenAIProvider(config)
+
+
 def _create_litellm_provider(config: "ProviderConfig") -> "AIEngineProvider":
     """
     Create a LiteLLM provider.
@@ -135,6 +160,8 @@ def create_engine_provider(config: "ProviderConfig") -> "AIEngineProvider":
 
     if provider == "claude":
         return _create_claude_provider(config)
+    elif provider == "openai":
+        return _create_openai_provider(config)
     elif provider == "litellm":
         return _create_litellm_provider(config)
     elif provider == "openrouter":
@@ -142,7 +169,7 @@ def create_engine_provider(config: "ProviderConfig") -> "AIEngineProvider":
     else:
         raise ProviderError(
             f"Unknown AI engine provider: {provider}. "
-            f"Supported providers: claude, litellm, openrouter"
+            f"Supported providers: claude, openai, litellm, openrouter"
         )
 
 
@@ -153,4 +180,4 @@ def get_available_provider_names() -> list[str]:
     Returns:
         List of provider name strings
     """
-    return ["claude", "litellm", "openrouter"]
+    return ["claude", "openai", "litellm", "openrouter"]
