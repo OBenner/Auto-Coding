@@ -12,6 +12,7 @@ export * from './terminal';
 export * from './agent';
 export * from './settings';
 export * from './changelog';
+export * from './collaboration';
 export * from './insights';
 export * from './roadmap';
 export * from './integrations';
