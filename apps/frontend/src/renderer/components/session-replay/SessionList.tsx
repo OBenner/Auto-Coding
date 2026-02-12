@@ -5,7 +5,7 @@
  * Displays sessions with metadata and allows filtering by status and search query.
  */
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Search, CheckCircle2, Loader2, X, Filter } from 'lucide-react';
 import { Input } from '../ui/input';
@@ -20,6 +20,7 @@ import {
 } from '../ui/dropdown-menu';
 import { cn } from '../../lib/utils';
 import { SessionCard } from './SessionCard';
+import { useProjectStore } from '../../stores/project-store';
 import type {
   SessionMetadata,
   SessionFilterState,
@@ -27,14 +28,12 @@ import type {
 } from '../../../shared/types';
 
 interface SessionListProps {
-  /** Array of sessions to display */
-  sessions: SessionMetadata[];
-  /** Whether sessions are being loaded */
-  isLoading?: boolean;
+  /** Project ID to load sessions for */
+  projectId: string;
+  /** Optional spec ID to filter sessions by task */
+  specId?: string;
   /** Callback when a session is clicked */
   onSessionClick?: (session: SessionMetadata) => void;
-  /** Callback when filters change */
-  onFiltersChange?: (filters: SessionFilterState) => void;
 }
 
 /**
@@ -147,12 +146,18 @@ function FilterDropdown<T extends string>({
  * Main SessionList component
  */
 export function SessionList({
-  sessions,
-  isLoading = false,
+  projectId,
+  specId,
   onSessionClick,
-  onFiltersChange,
 }: SessionListProps) {
   const { t } = useTranslation('session-replay');
+  const project = useProjectStore((state) =>
+    state.projects.find((p) => p.id === projectId)
+  );
+
+  // Session state
+  const [sessions, setSessions] = useState<SessionMetadata[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   // Filter state
   const [filters, setFilters] = useState<SessionFilterState>({
@@ -160,11 +165,43 @@ export function SessionList({
     status: [],
   });
 
-  // Update filters when they change
+  // Load sessions when project or specId changes
+  useEffect(() => {
+    const loadSessions = async () => {
+      if (!project) {
+        setSessions([]);
+        setIsLoading(false);
+        return;
+      }
+
+      setIsLoading(true);
+      try {
+        const result = await window.electronAPI.sessionReplay.listSessions(
+          project.path,
+          specId || '',
+          filters
+        );
+        if (result.success && result.data) {
+          setSessions(result.data);
+        } else {
+          console.error('Failed to load sessions:', result.error);
+          setSessions([]);
+        }
+      } catch (error) {
+        console.error('Error loading sessions:', error);
+        setSessions([]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadSessions();
+  }, [project, specId]);
+
+  // Update filters
   const updateFilters = useCallback((newFilters: SessionFilterState) => {
     setFilters(newFilters);
-    onFiltersChange?.(newFilters);
-  }, [onFiltersChange]);
+  }, []);
 
   // Handle search query change
   const handleSearchChange = useCallback((query: string) => {

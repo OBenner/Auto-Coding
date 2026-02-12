@@ -28,7 +28,8 @@ import {
   AlertTriangle,
   Pencil,
   X,
-  GitPullRequest
+  GitPullRequest,
+  Eye
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { calculateProgress } from '../../lib/utils';
@@ -51,9 +52,10 @@ interface TaskDetailModalProps {
   onOpenChange: (open: boolean) => void;
   onSwitchToTerminals?: () => void;
   onOpenInbuiltTerminal?: (id: string, cwd: string) => void;
+  onViewSessions?: () => void;
 }
 
-export function TaskDetailModal({ open, task, onOpenChange, onSwitchToTerminals, onOpenInbuiltTerminal }: TaskDetailModalProps) {
+export function TaskDetailModal({ open, task, onOpenChange, onSwitchToTerminals, onOpenInbuiltTerminal, onViewSessions }: TaskDetailModalProps) {
   // Don't render anything if no task
   if (!task) {
     return null;
@@ -66,6 +68,7 @@ export function TaskDetailModal({ open, task, onOpenChange, onSwitchToTerminals,
       onOpenChange={onOpenChange}
       onSwitchToTerminals={onSwitchToTerminals}
       onOpenInbuiltTerminal={onOpenInbuiltTerminal}
+      onViewSessions={onViewSessions}
     />
   );
 }
@@ -77,7 +80,7 @@ const isFilesTabEnabled = () => {
 };
 
 // Separate component to use hooks only when task exists
-function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals, onOpenInbuiltTerminal }: { open: boolean; task: Task; onOpenChange: (open: boolean) => void; onSwitchToTerminals?: () => void; onOpenInbuiltTerminal?: (id: string, cwd: string) => void }) {
+function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals, onOpenInbuiltTerminal, onViewSessions }: { open: boolean; task: Task; onOpenChange: (open: boolean) => void; onSwitchToTerminals?: () => void; onOpenInbuiltTerminal?: (id: string, cwd: string) => void; onViewSessions?: () => void }) {
   const { t } = useTranslation(['tasks']);
   const { toast } = useToast();
   const state = useTaskDetail({ task });
@@ -585,6 +588,16 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
 
             {/* Footer - Actions */}
             <div className="flex items-center gap-3 px-5 py-3 border-t border-border shrink-0">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-muted-foreground hover:text-primary hover:bg-primary/10"
+                onClick={onViewSessions}
+                disabled={state.isRunning && !state.isStuck}
+              >
+                <Eye className="mr-2 h-4 w-4" />
+                {t('tasks:taskDetail.viewSessionReplay')}
+              </Button>
               <Button
                 variant="ghost"
                 size="sm"
