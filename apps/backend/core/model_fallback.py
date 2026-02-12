@@ -6,10 +6,17 @@ Defines the model degradation path for handling API failures or rate limits.
 When a model fails, the system will automatically retry with the next model
 in the fallback chain.
 
-Fallback Strategy:
-- opus -> sonnet -> haiku (highest capability to lowest cost)
-- sonnet -> haiku
-- haiku -> (no fallback, final attempt)
+Multi-Provider Fallback Strategy:
+- Each provider has internal fallbacks (expensive/capable → cheaper/faster)
+- Cross-provider fallback available for maximum reliability
+- Ollama (local) models used as final fallback (free)
+
+Provider Fallback Chains:
+- Anthropic Claude: opus → sonnet → haiku
+- OpenAI: gpt-4 → gpt-4-turbo → gpt-4o → gpt-4o-mini → gpt-3.5-turbo
+- OpenAI Reasoning: o1 → o1-mini → o3-mini
+- Google Gemini: gemini-2.0-flash-thinking → gemini-2.0-flash → gemini-1.5-pro → gemini-1.5-flash
+- Ollama: No fallback (local execution, use available model)
 """
 
 import logging
@@ -18,16 +25,106 @@ from typing import TypeVar
 
 logger = logging.getLogger(__name__)
 
-# Model fallback chain mapping
-# Maps each model shorthand to its fallback sequence
+# Comprehensive model fallback chain mapping
+# Maps each model identifier to its fallback sequence
 MODEL_FALLBACK_CHAIN: dict[str, list[str]] = {
-    "opus": ["sonnet", "haiku"],  # If opus fails, try sonnet, then haiku
-    "sonnet": ["haiku"],  # If sonnet fails, try haiku
-    "haiku": [],  # No fallback for haiku (final attempt)
+    # ==================== ANTHROPIC (CLAUDE) ====================
+    # Claude models (existing fallback chain)
+    "opus": ["sonnet", "haiku"],
+    "sonnet": ["haiku"],
+    "haiku": [],
+    # Full model IDs (for exact matching)
+    "claude-opus-4-5-20251101": [
+        "claude-sonnet-4-5-20250929",
+        "claude-haiku-4-5-20251001",
+    ],
+    "claude-opus-4-5-20251101-thinking": [
+        "claude-sonnet-4-5-20250929-thinking",
+        "claude-sonnet-4-5-20250929",
+        "claude-haiku-4-5-20251001",
+    ],
+    "claude-sonnet-4-5-20250929": ["claude-haiku-4-5-20251001"],
+    "claude-sonnet-4-5-20250929-thinking": [
+        "claude-sonnet-4-5-20250929",
+        "claude-haiku-4-5-20251001",
+    ],
+    "claude-haiku-4-5-20251001": [],
+    # ==================== OPENAI ====================
+    # Standard GPT models (most capable to most economical)
+    "gpt-4": ["gpt-4-turbo", "gpt-4o", "gpt-4o-mini", "gpt-3.5-turbo"],
+    "gpt-4-turbo": ["gpt-4o", "gpt-4o-mini", "gpt-3.5-turbo"],
+    "gpt-4o": ["gpt-4o-mini", "gpt-3.5-turbo"],
+    "gpt-4o-mini": ["gpt-3.5-turbo"],
+    "gpt-3.5-turbo": [],
+    # Reasoning models (specialized fallback chain)
+    "o1": ["o1-mini", "o3-mini"],
+    "o1-mini": ["o3-mini"],
+    "o3-mini": [],
+    # ==================== GOOGLE GEMINI ====================
+    # Gemini models (capability to cost)
+    "gemini-2.0-flash-thinking": [
+        "gemini-2.0-flash",
+        "gemini-1.5-pro",
+        "gemini-1.5-flash",
+    ],
+    "gemini-2.0-flash": ["gemini-1.5-pro", "gemini-1.5-flash"],
+    "gemini-1.5-pro": ["gemini-1.5-flash"],
+    "gemini-1.5-flash": [],
+    # ==================== OLLAMA (LOCAL) ====================
+    # Local models - no fallback (use what's available)
+    "llama2": [],
+    "llama3": [],
+    "mistral": [],
+    "codellama": [],
+    "phi": [],
+    "gemma": [],
+    "qwen": [],
+    "deepseek-coder": [],
 }
 
 # Type variable for return value
 T = TypeVar("T")
+
+
+def get_fallback_model(model: str) -> str | None:
+    """
+    Get the next fallback model in the chain for a given model.
+
+    This function looks up the fallback chain for the specified model
+    and returns the first fallback model, or None if no fallback exists.
+
+    Args:
+        model: Model identifier (e.g., "opus", "gpt-4o", "gemini-2.0-flash")
+
+    Returns:
+        Next fallback model identifier, or None if no fallback exists
+
+    Examples:
+        >>> get_fallback_model("opus")
+        'sonnet'
+
+        >>> get_fallback_model("gpt-4o")
+        'gpt-4o-mini'
+
+        >>> get_fallback_model("gemini-2.0-flash-thinking")
+        'gemini-2.0-flash'
+
+        >>> get_fallback_model("haiku")
+        None
+
+        >>> get_fallback_model("unknown-model")
+        None
+    """
+    # Normalize model name (extract shorthand if needed)
+    model_shorthand = _extract_model_shorthand(model)
+
+    # Get fallback chain
+    fallback_chain = MODEL_FALLBACK_CHAIN.get(model_shorthand, [])
+
+    # Return first fallback, or None if chain is empty
+    if fallback_chain:
+        return fallback_chain[0]
+    return None
 
 
 def retry_with_fallback[T](
@@ -157,24 +254,50 @@ def retry_with_fallback[T](
 
 def _extract_model_shorthand(model: str) -> str:
     """
-    Extract model shorthand from full model ID.
+    Extract model shorthand or return exact model ID for fallback lookup.
+
+    This function handles both shorthand notation (opus, sonnet, haiku) and
+    full model IDs across all providers (Claude, OpenAI, Google, Ollama).
+
+    Args:
+        model: Model identifier (shorthand or full ID)
+
+    Returns:
+        Model identifier to use for fallback chain lookup
 
     Examples:
+        # Claude models
         "claude-opus-4-20250514" -> "opus"
-        "claude-sonnet-4-5-20250929" -> "sonnet"
-        "claude-haiku-4-20250514" -> "haiku"
+        "claude-sonnet-4-5-20250929" -> "claude-sonnet-4-5-20250929"
         "opus" -> "opus"
+
+        # OpenAI models
+        "gpt-4o" -> "gpt-4o"
+        "gpt-4-turbo" -> "gpt-4-turbo"
+
+        # Google models
+        "gemini-2.0-flash-thinking" -> "gemini-2.0-flash-thinking"
+
+        # Ollama models
+        "llama3" -> "llama3"
     """
     model_lower = model.lower()
+
+    # First, try exact match in fallback chain (for full model IDs)
+    if model in MODEL_FALLBACK_CHAIN:
+        return model
+
+    # Claude shorthand extraction (for backward compatibility)
     if "opus" in model_lower:
         return "opus"
     elif "sonnet" in model_lower:
         return "sonnet"
     elif "haiku" in model_lower:
         return "haiku"
-    else:
-        # Unknown model - no fallback
-        return model
+
+    # For all other models (OpenAI, Google, Ollama), return as-is
+    # and let fallback chain lookup handle it
+    return model
 
 
 def _is_retryable_error(exception: Exception) -> bool:
