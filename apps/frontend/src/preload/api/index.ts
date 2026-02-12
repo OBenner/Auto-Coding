@@ -16,6 +16,8 @@ import { ProfileAPI, createProfileAPI } from './profile-api';
 import { ScreenshotAPI, createScreenshotAPI } from './screenshot-api';
 import { QueueAPI, createQueueAPI } from './queue-api';
 import { PluginAPI, createPluginAPI } from './plugin-api';
+import type { SessionReplayAPI } from './modules/session-replay-api';
+import { createSessionReplayAPI } from './modules/session-replay-api';
 
 export interface ElectronAPI extends
   ProjectAPI,
@@ -37,6 +39,8 @@ export interface ElectronAPI extends
   github: GitHubAPI;
   /** Queue routing API for rate limit recovery */
   queue: QueueAPI;
+  /** Session replay API for learning and review */
+  sessionReplay: SessionReplayAPI;
 }
 
 export const createElectronAPI = (): ElectronAPI => ({
@@ -54,7 +58,8 @@ export const createElectronAPI = (): ElectronAPI => ({
   ...createScreenshotAPI(),
   ...createPluginAPI(),
   github: createGitHubAPI(),
-  queue: createQueueAPI()  // Queue routing for rate limit recovery
+  queue: createQueueAPI(),  // Queue routing for rate limit recovery
+  sessionReplay: createSessionReplayAPI()
 });
 
 // Export individual API creators for potential use in tests or specialized contexts
@@ -95,5 +100,6 @@ export type {
   McpAPI,
   ScreenshotAPI,
   QueueAPI,
-  PluginAPI
+  PluginAPI,
+  SessionReplayAPI
 };
