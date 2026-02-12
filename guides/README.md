@@ -2,6 +2,18 @@
 
 Detailed documentation for Auto Code setup and usage.
 
+## Search & Navigation
+
+**Looking for something specific?**
+
+- **[📖 Search Index](../docs/search/INDEX.md)** - Comprehensive searchable index with keywords
+- **[🔍 Search Guide](../docs/search/SEARCH-GUIDE.md)** - Learn effective search strategies
+
+**Quick links:**
+- [Quick Start](QUICK-START.md) - Get started in 15 minutes
+- [CLI Usage](CLI-USAGE.md) - Terminal-only usage
+- [Troubleshooting](TROUBLESHOOTING.md) - Having issues?
+
 ## Available Guides
 
 | Guide | Description |
