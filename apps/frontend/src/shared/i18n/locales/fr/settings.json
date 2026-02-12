@@ -25,6 +25,10 @@
       "title": "Fournisseur IA",
       "description": "Sélectionnez votre fournisseur IA et vos modèles"
     },
+    "cost": {
+      "title": "Comparaison des coûts",
+      "description": "Comparer les prix des modèles entre fournisseurs"
+    },
     "agent": {
       "title": "Paramètres de l'agent",
       "description": "Modèle par défaut et framework"
@@ -175,6 +179,29 @@
     "searchPlaceholder": "Rechercher des modèles...",
     "noResults": "Aucun modèle ne correspond à votre recherche",
     "discoveryNotAvailable": "Découverte de modèles indisponible. Saisissez le nom du modèle manuellement."
+  },
+  "costComparison": {
+    "title": "Comparaison des coûts",
+    "description": "Comparer les prix entre les modèles et fournisseurs IA",
+    "providers": {
+      "anthropic": "Anthropic (Claude)",
+      "openai": "OpenAI",
+      "google": "Google Gemini",
+      "ollama": "Ollama (Local)"
+    },
+    "input": "Entrée",
+    "output": "Sortie",
+    "model": "modèle",
+    "models": "modèles",
+    "free": "GRATUIT",
+    "cheapest": "Moins cher",
+    "localFree": "Local",
+    "infoTitle": "Informations sur les prix",
+    "infoDescription": "Tous les prix indiqués sont par million de tokens (USD). Les modèles locaux via Ollama sont gratuits.",
+    "notesTitle": "Notes importantes",
+    "note1": "Les prix sont par million de tokens et peuvent varier selon le fournisseur",
+    "note2": "Les modèles locaux (Ollama) s'exécutent sur votre machine et n'ont pas de coûts d'API",
+    "note3": "Les coûts réels dépendent de l'utilisation des tokens d'entrée et de sortie"
   },
   "language": {
     "label": "Langue de l'interface",

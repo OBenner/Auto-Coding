@@ -19,7 +19,8 @@ import {
   Code,
   Bug,
   Users,
-  Keyboard
+  Keyboard,
+  DollarSign
 } from 'lucide-react';
 
 // GitLab icon component (lucide-react doesn't have one)
@@ -54,6 +55,7 @@ import { DebugSettings } from './DebugSettings';
 import { AccountSettings } from './AccountSettings';
 import { KeyboardShortcutsSettings } from './KeyboardShortcutsSettings';
 import { ProviderSettings } from './ProviderSettings';
+import { CostComparison } from './CostComparison';
 import { ProjectSelector } from './ProjectSelector';
 import { ProjectSettingsContent, ProjectSettingsSection } from './ProjectSettingsContent';
 import { useProjectStore } from '../../stores/project-store';
@@ -68,7 +70,7 @@ interface AppSettingsDialogProps {
 }
 
 // App-level settings sections
-export type AppSection = 'appearance' | 'display' | 'language' | 'devtools' | 'provider' | 'agent' | 'paths' | 'accounts' | 'updates' | 'notifications' | 'keyboardShortcuts' | 'debug';
+export type AppSection = 'appearance' | 'display' | 'language' | 'devtools' | 'provider' | 'cost' | 'agent' | 'paths' | 'accounts' | 'updates' | 'notifications' | 'keyboardShortcuts' | 'debug';
 
 interface NavItemConfig<T extends string> {
   id: T;
@@ -81,6 +83,7 @@ const appNavItemsConfig: NavItemConfig<AppSection>[] = [
   { id: 'language', icon: Globe },
   { id: 'devtools', icon: Code },
   { id: 'provider', icon: Sparkles },
+  { id: 'cost', icon: DollarSign },
   { id: 'agent', icon: Bot },
   { id: 'paths', icon: FolderOpen },
   { id: 'accounts', icon: Users },
@@ -192,6 +195,8 @@ export function AppSettingsDialog({ open, onOpenChange, initialSection, initialP
         return <DevToolsSettings settings={settings} onSettingsChange={setSettings} />;
       case 'provider':
         return <ProviderSettings />;
+      case 'cost':
+        return <CostComparison />;
       case 'agent':
         return <GeneralSettings settings={settings} onSettingsChange={setSettings} section="agent" />;
       case 'paths':
