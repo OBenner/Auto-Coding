@@ -611,6 +611,9 @@ export const IPC_CHANNELS = {
   TEMPLATE_CREATE_SPEC: 'template:createSpec',
   TEMPLATE_SUGGEST: 'template:suggest',
 
+  // Feedback submission (adaptive agent learning)
+  FEEDBACK_SUBMIT: 'feedback:submit',
+
   // Scheduler operations
   SCHEDULER_SCHEDULE_BUILD: 'scheduler:scheduleBuild',
   SCHEDULER_GET_STATUS: 'scheduler:getStatus',

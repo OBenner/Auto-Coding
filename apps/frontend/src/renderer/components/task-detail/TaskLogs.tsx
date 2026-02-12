@@ -25,6 +25,7 @@ import { cn } from '../../lib/utils';
 import type { Task, TaskLogs, TaskLogPhase, TaskPhaseLog, TaskLogEntry, TaskMetadata } from '../../../shared/types';
 import type { PhaseModelConfig, PhaseThinkingConfig, ThinkingLevel, ModelTypeShort } from '../../../shared/types/settings';
 import { useVirtualizedLogs } from '../../hooks/useVirtualizedLogs';
+import { FeedbackButtons } from '../feedback/FeedbackButtons';
 
 interface TaskLogsProps {
   task: Task;
@@ -418,6 +419,7 @@ export function TaskLogs({
                             onToggle={createPhaseToggleHandler(item.phase)}
                             isTaskStuck={isStuck}
                             phaseConfig={getPhaseConfig(task.metadata, item.phase)}
+                            taskId={task.id}
                           />
                         </div>
                       ) : (
@@ -452,9 +454,10 @@ interface PhaseLogSectionProps {
   onToggle: () => void;
   isTaskStuck?: boolean;
   phaseConfig?: { model: string; thinking: string } | null;
+  taskId?: string;
 }
 
-function PhaseLogSection({ phase, phaseLog, isExpanded, onToggle, isTaskStuck, phaseConfig }: PhaseLogSectionProps) {
+function PhaseLogSection({ phase, phaseLog, isExpanded, onToggle, isTaskStuck, phaseConfig, taskId }: PhaseLogSectionProps) {
   const Icon = PHASE_ICONS[phase];
   const status = phaseLog?.status || 'pending';
   const hasEntries = (phaseLog?.entries.length || 0) > 0;
@@ -502,50 +505,64 @@ function PhaseLogSection({ phase, phaseLog, isExpanded, onToggle, isTaskStuck, p
   const isInterrupted = isTaskStuck && status === 'active';
 
   return (
-    <button
-      onClick={onToggle}
-      className={cn(
-        'w-full flex items-center justify-between p-3 rounded-lg border transition-colors',
-        'hover:bg-secondary/50',
-        status === 'active' && !isInterrupted && PHASE_COLORS[phase],
-        isInterrupted && 'border-warning/30 bg-warning/5',
-        status === 'completed' && 'border-success/30 bg-success/5',
-        status === 'failed' && 'border-destructive/30 bg-destructive/5',
-        status === 'pending' && 'border-border bg-secondary/30'
+    <div className="pb-2">
+      <button
+        onClick={onToggle}
+        className={cn(
+          'w-full flex items-center justify-between p-3 rounded-lg border transition-colors',
+          'hover:bg-secondary/50',
+          status === 'active' && !isInterrupted && PHASE_COLORS[phase],
+          isInterrupted && 'border-warning/30 bg-warning/5',
+          status === 'completed' && 'border-success/30 bg-success/5',
+          status === 'failed' && 'border-destructive/30 bg-destructive/5',
+          status === 'pending' && 'border-border bg-secondary/30'
+        )}
+      >
+        <div className="flex items-center gap-2">
+          {isExpanded ? (
+            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+          ) : (
+            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+          )}
+          <Icon className={cn('h-4 w-4', isInterrupted ? 'text-warning' : status === 'active' ? PHASE_COLORS[phase].split(' ')[0] : 'text-muted-foreground')} />
+          <span className="font-medium text-sm">{PHASE_LABELS[phase]}</span>
+          {hasEntries && (
+            <span className="text-xs text-muted-foreground">
+              ({phaseLog?.entries.length} entries)
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          {/* Model and thinking level indicator */}
+          {phaseConfig && (
+            <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+              <div className="flex items-center gap-0.5" title={`Model: ${phaseConfig.model}`}>
+                <Cpu className="h-3 w-3" />
+                <span>{phaseConfig.model}</span>
+              </div>
+              <span className="text-muted-foreground/50">|</span>
+              <div className="flex items-center gap-0.5" title={`Thinking: ${phaseConfig.thinking}`}>
+                <Brain className="h-3 w-3" />
+                <span>{phaseConfig.thinking}</span>
+              </div>
+            </div>
+          )}
+          {getStatusBadge()}
+        </div>
+      </button>
+      {/* Feedback buttons for completed phases */}
+      {status === 'completed' && (
+        <div className="mt-2 ml-3">
+          <FeedbackButtons
+            taskId={taskId}
+            agentType={phase}
+            outputDescription={`${PHASE_LABELS[phase]} phase output`}
+            context={`Phase: ${PHASE_LABELS[phase]}`}
+            size="sm"
+          />
+        </div>
       )}
-    >
-      <div className="flex items-center gap-2">
-        {isExpanded ? (
-          <ChevronDown className="h-4 w-4 text-muted-foreground" />
-        ) : (
-          <ChevronRight className="h-4 w-4 text-muted-foreground" />
-        )}
-        <Icon className={cn('h-4 w-4', isInterrupted ? 'text-warning' : status === 'active' ? PHASE_COLORS[phase].split(' ')[0] : 'text-muted-foreground')} />
-        <span className="font-medium text-sm">{PHASE_LABELS[phase]}</span>
-        {hasEntries && (
-          <span className="text-xs text-muted-foreground">
-            ({phaseLog?.entries.length} entries)
-          </span>
-        )}
-      </div>
-      <div className="flex items-center gap-2">
-        {/* Model and thinking level indicator */}
-        {phaseConfig && (
-          <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-            <div className="flex items-center gap-0.5" title={`Model: ${phaseConfig.model}`}>
-              <Cpu className="h-3 w-3" />
-              <span>{phaseConfig.model}</span>
-            </div>
-            <span className="text-muted-foreground/50">|</span>
-            <div className="flex items-center gap-0.5" title={`Thinking: ${phaseConfig.thinking}`}>
-              <Brain className="h-3 w-3" />
-              <span>{phaseConfig.thinking}</span>
-            </div>
-          </div>
-        )}
-        {getStatusBadge()}
-      </div>
-    </button>
+    </div>
   );
 }
 

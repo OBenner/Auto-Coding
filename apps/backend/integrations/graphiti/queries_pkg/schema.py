@@ -19,6 +19,7 @@ EPISODE_TYPE_FUNCTION_CALL = "function_call"
 EPISODE_TYPE_IMPORT_DEPENDENCY = "import_dependency"
 EPISODE_TYPE_CLASS_INHERITANCE = "class_inheritance"
 EPISODE_TYPE_CODE_PURPOSE = "code_purpose"
+EPISODE_TYPE_PREFERENCE_PROFILE = "preference_profile"
 
 # Maximum results to return for context queries (avoid overwhelming agent context)
 MAX_CONTEXT_RESULTS = 10

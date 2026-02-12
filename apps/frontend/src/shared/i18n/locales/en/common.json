@@ -749,5 +749,17 @@
     "recentSessions": "Recent Sessions",
     "lastChecked": "Last checked: {{time}}",
     "summary": "{{sessions}} sessions, {{rounds}} rounds, {{codeRefs}} code references"
+  },
+  "feedback": {
+    "accept": "Accept",
+    "reject": "Reject",
+    "modified": "Modified",
+    "acceptTooltip": "Accept this agent output",
+    "rejectTooltip": "Reject this agent output",
+    "modifiedTooltip": "Accepted with modifications",
+    "submitted": "Feedback submitted successfully",
+    "submitError": "Failed to submit feedback: {{error}}",
+    "notAvailable": "Feedback Not Available",
+    "notAvailableDescription": "Feedback system is not yet fully configured"
   }
 }

@@ -922,6 +922,15 @@ export interface ElectronAPI {
   ) => Promise<IPCResult<{ specId: string; specPath: string }>>;
   suggestTemplates: (projectId: string, taskDescription: string) => Promise<IPCResult<string[]>>;
 
+  // Feedback submission (adaptive agent learning)
+  submitFeedback?: (request: {
+    feedbackType: 'accepted' | 'rejected' | 'modified';
+    taskId?: string;
+    agentType?: string;
+    taskDescription?: string;
+    context?: string;
+  }) => Promise<IPCResult<{ recorded: boolean }>>;
+
   // Queue Routing API (rate limit recovery)
   queue: import('../../preload/api/queue-api').QueueAPI;
   // Scheduler API for build scheduling and queue management

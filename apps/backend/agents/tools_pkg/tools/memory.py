@@ -276,6 +276,83 @@ def create_memory_tools(spec_dir: Path, project_dir: Path) -> list:
     tools.append(record_gotcha)
 
     # -------------------------------------------------------------------------
+    # Tool: record_feedback
+    # -------------------------------------------------------------------------
+    @tool(
+        "record_feedback",
+        "Record user feedback (accept/reject/modify) for agent outputs. Use this to track user preferences and enable adaptive behavior.",
+        {
+            "feedback_type": str,
+            "task_description": str,
+            "agent_type": str,
+            "context": str,
+        },
+    )
+    async def record_feedback(args: dict[str, Any]) -> dict[str, Any]:
+        """Record user feedback to preference profile (Graphiti)."""
+        feedback_type = args["feedback_type"]
+        task_description = args["task_description"]
+        agent_type = args["agent_type"]
+        context_str = args.get("context", "{}")
+
+        # Validate feedback_type
+        valid_feedback_types = ["accepted", "rejected", "modified"]
+        if feedback_type not in valid_feedback_types:
+            return {
+                "content": [
+                    {
+                        "type": "text",
+                        "text": f"Error: Invalid feedback type '{feedback_type}'. Must be one of: {valid_feedback_types}",
+                    }
+                ]
+            }
+
+        try:
+            # Parse context JSON if provided
+            try:
+                context = json.loads(context_str) if context_str else {}
+            except json.JSONDecodeError:
+                context = {"raw": context_str} if context_str else {}
+
+            # Call save_feedback from memory_manager
+            from agents.memory_manager import save_feedback
+
+            result = await save_feedback(
+                spec_dir=spec_dir,
+                project_dir=project_dir,
+                feedback_type=feedback_type,
+                task_description=task_description,
+                agent_type=agent_type,
+                context=context,
+            )
+
+            if result:
+                return {
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": f"Recorded {feedback_type} feedback for {agent_type} task (preferences updated)",
+                        }
+                    ]
+                }
+            else:
+                return {
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": f"Recorded {feedback_type} feedback for {agent_type} task (Graphiti not available, using fallback)",
+                        }
+                    ]
+                }
+
+        except Exception as e:
+            return {
+                "content": [{"type": "text", "text": f"Error recording feedback: {e}"}]
+            }
+
+    tools.append(record_feedback)
+
+    # -------------------------------------------------------------------------
     # Tool: get_session_context
     # -------------------------------------------------------------------------
     @tool(

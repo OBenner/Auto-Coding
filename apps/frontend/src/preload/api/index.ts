@@ -17,6 +17,7 @@ import { ScreenshotAPI, createScreenshotAPI } from './screenshot-api';
 import { QueueAPI, createQueueAPI } from './queue-api';
 import { PluginAPI, createPluginAPI } from './plugin-api';
 import { SchedulerAPI, createSchedulerAPI } from './scheduler-api';
+import { FeedbackAPI, createFeedbackAPI } from './feedback-api';
 
 export interface ElectronAPI extends
   ProjectAPI,
@@ -34,7 +35,8 @@ export interface ElectronAPI extends
   McpAPI,
   ProfileAPI,
   ScreenshotAPI,
-  PluginAPI {
+  PluginAPI,
+  FeedbackAPI {
   github: GitHubAPI;
   /** Queue routing API for rate limit recovery */
   queue: QueueAPI;
@@ -56,6 +58,7 @@ export const createElectronAPI = (): ElectronAPI => ({
   ...createProfileAPI(),
   ...createScreenshotAPI(),
   ...createPluginAPI(),
+  ...createFeedbackAPI(),
   github: createGitHubAPI(),
   queue: createQueueAPI(),  // Queue routing for rate limit recovery
   scheduler: createSchedulerAPI()
@@ -79,7 +82,8 @@ export {
   createScreenshotAPI,
   createQueueAPI,
   createPluginAPI,
-  createSchedulerAPI
+  createSchedulerAPI,
+  createFeedbackAPI
 };
 
 export type {
@@ -101,5 +105,6 @@ export type {
   ScreenshotAPI,
   QueueAPI,
   PluginAPI,
-  SchedulerAPI
+  SchedulerAPI,
+  FeedbackAPI
 };
