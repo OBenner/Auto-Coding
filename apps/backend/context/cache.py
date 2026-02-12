@@ -66,6 +66,23 @@ class ContextCache:
         if hours_old >= self.CACHE_VALIDITY_HOURS:
             return None
 
+        # Check if file has been modified since caching
+        try:
+            file_obj = Path(file_path)
+            if not file_obj.exists():
+                # File no longer exists, invalidate cache
+                return None
+
+            current_mtime = file_obj.stat().st_mtime
+            cached_mtime = cached_entry.get("file_mtime", 0)
+
+            if current_mtime != cached_mtime:
+                # File has been modified, invalidate cache
+                return None
+        except (OSError, PermissionError):
+            # Can't access file, invalidate cache
+            return None
+
         return cached_entry
 
     def save_content(
