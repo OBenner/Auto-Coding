@@ -321,7 +321,7 @@ class BugDetector:
         self, node: ast.AST, safe_operations: set[int]
     ) -> list[BugReport]:
         """
-        Detect potential IndexError from list/dict subscript access.
+        Detect potential IndexError from list subscript access.
 
         Args:
             node: AST node to check
@@ -332,40 +332,67 @@ class BugDetector:
         """
         issues = []
 
-        # Check for subscript operations (list[index], dict[key])
+        # Check for subscript operations (list[index])
         if isinstance(node, ast.Subscript):
             if node.lineno not in safe_operations:
                 code = ast.unparse(node)
 
-                # Check if index is a literal (could be out of bounds)
-                if isinstance(node.slice, ast.Constant):
-                    if isinstance(node.slice.value, int):
-                        if node.slice.value < 0 or node.slice.value > 1000:  # Heuristic
-                            issues.append(
-                                BugReport(
-                                    bug_type="index_error",
-                                    severity=self.SEVERITY_MEDIUM,
-                                    message=f"Potential IndexError: hardcoded index {node.slice.value}",
-                                    lineno=node.lineno,
-                                    code_snippet=code,
-                                    suggestion=f"Check bounds before accessing: if len({ast.unparse(node.value)}) > {node.slice.value}",
-                                    confidence=0.5,
-                                )
-                            )
+                # Extract index value if it's a constant or unary operation
+                index_value = None
+                if isinstance(node.slice, ast.Constant) and isinstance(node.slice.value, int):
+                    index_value = node.slice.value
+                elif isinstance(node.slice, ast.UnaryOp):
+                    # Handle negative indices like -5
+                    if isinstance(node.slice.op, ast.USub):
+                        if isinstance(node.slice.operand, ast.Constant) and isinstance(node.slice.operand.value, int):
+                            index_value = -node.slice.operand.value
 
-                # Check for unsafe indexing without validation
-                elif not isinstance(node.slice, ast.Slice):  # Not a slice operation
+                # Check if index is a numeric literal
+                if index_value is not None:
+                    # Determine severity based on index value
+                    if index_value < 0:
+                        # Negative indices (except -1) are high risk
+                        severity = self.SEVERITY_HIGH if index_value < -1 else self.SEVERITY_LOW
+                        confidence = 0.7
+                        msg = f"Potential IndexError: negative index {index_value} may be out of bounds"
+                    elif index_value > 10:
+                        # Large positive indices are suspicious
+                        severity = self.SEVERITY_MEDIUM
+                        confidence = 0.6
+                        msg = f"Potential IndexError: hardcoded index {index_value} may be out of bounds"
+                    else:
+                        # Small positive indices could still fail on empty/small lists
+                        severity = self.SEVERITY_LOW
+                        confidence = 0.3
+                        msg = f"Potential IndexError: hardcoded index {index_value} - consider bounds check"
+
                     issues.append(
                         BugReport(
                             bug_type="index_error",
-                            severity=self.SEVERITY_LOW,
-                            message=f"Potential IndexError: subscript access without bounds check",
+                            severity=severity,
+                            message=msg,
                             lineno=node.lineno,
                             code_snippet=code,
-                            suggestion=f"Add bounds check: if len({ast.unparse(node.value)}) > index",
-                            confidence=0.4,
+                            suggestion=f"Check bounds before accessing: if len({ast.unparse(node.value)}) > {abs(index_value) if index_value < 0 else index_value}",
+                            confidence=confidence,
                         )
                     )
+
+                # Check for variable-based indexing without validation
+                elif isinstance(node.slice, (ast.Name, ast.Attribute, ast.BinOp, ast.UnaryOp)):
+                    # Variable or expression as index - could be out of bounds
+                    if not isinstance(node.slice, ast.Slice):  # Not a slice operation
+                        issues.append(
+                            BugReport(
+                                bug_type="index_error",
+                                severity=self.SEVERITY_LOW,
+                                message=f"Potential IndexError: variable index without bounds check",
+                                lineno=node.lineno,
+                                code_snippet=code,
+                                suggestion=f"Add bounds check: if len({ast.unparse(node.value)}) > index",
+                                confidence=0.4,
+                            )
+                        )
 
         return issues
 
@@ -389,17 +416,32 @@ class BugDetector:
             if node.lineno not in safe_operations:
                 code = ast.unparse(node)
 
-                # Check if this looks like dict access (not list slice)
-                if isinstance(node.slice, (ast.Constant, ast.Name, ast.Attribute)):
+                # Check if this looks like dict access (string key or variable, not numeric index)
+                if isinstance(node.slice, ast.Constant):
+                    # Only flag string constants as potential KeyError (numeric is IndexError)
+                    if isinstance(node.slice.value, str):
+                        issues.append(
+                            BugReport(
+                                bug_type="key_error",
+                                severity=self.SEVERITY_MEDIUM,
+                                message=f"Potential KeyError: dictionary key access without .get() or 'in' check",
+                                lineno=node.lineno,
+                                code_snippet=code,
+                                suggestion=f"Use .get() method or check key existence: if '{node.slice.value}' in dict",
+                                confidence=0.6,
+                            )
+                        )
+                elif isinstance(node.slice, (ast.Name, ast.Attribute)):
+                    # Variable/attribute access could be dict or list - flag as potential KeyError
                     issues.append(
                         BugReport(
                             bug_type="key_error",
-                            severity=self.SEVERITY_MEDIUM,
+                            severity=self.SEVERITY_LOW,
                             message=f"Potential KeyError: dictionary key access without .get() or 'in' check",
                             lineno=node.lineno,
                             code_snippet=code,
                             suggestion=f"Use .get() method or check key existence: if key in dict",
-                            confidence=0.5,
+                            confidence=0.4,
                         )
                     )
 
