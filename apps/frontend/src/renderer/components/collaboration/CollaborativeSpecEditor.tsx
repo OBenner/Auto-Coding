@@ -33,6 +33,7 @@ import {
   WifiOff,
   AlertCircle,
   Users,
+  CheckCircle2,
 } from 'lucide-react';
 import CodeMirror from '@uiw/react-codemirror';
 import { markdown } from '@codemirror/lang-markdown';
@@ -56,6 +57,10 @@ interface CollaborativeSpecEditorProps {
   readOnly?: boolean;
   /** Additional CSS classes */
   className?: string;
+  /** Current user ID for approval */
+  currentUserId?: string;
+  /** Whether to show approval controls */
+  showApproval?: boolean;
 }
 
 /**
@@ -76,6 +81,8 @@ export function CollaborativeSpecEditor({
   onContentChange,
   readOnly = false,
   className,
+  currentUserId,
+  showApproval = false,
 }: CollaborativeSpecEditorProps) {
   const { t } = useTranslation(['collaboration', 'common']);
 
@@ -88,11 +95,15 @@ export function CollaborativeSpecEditor({
   const setError = useCollaborationStore((state) => state.setError);
   const setLoading = useCollaborationStore((state) => state.setLoading);
   const setConnectionState = useCollaborationStore((state) => state.setConnectionState);
+  const versions = useCollaborationStore((state) => state.getVersions(specId));
+  const approveVersion = useCollaborationStore((state) => state.approveVersion);
 
   // Local component state
   const [content, setContentState] = useState(initialContent);
   const [isConnecting, setIsConnecting] = useState(false);
   const [activeUsers, setActiveUsers] = useState(0);
+  const [isApproving, setIsApproving] = useState(false);
+  const [approvalError, setApprovalError] = useState<string | null>(null);
 
   // Refs for timers and API
   const collaborationAPI = useMemo(() => createCollaborationAPI(), []);
@@ -248,6 +259,46 @@ export function CollaborativeSpecEditor({
     connectToCollaborationServer();
   }, [connectToCollaborationServer]);
 
+  /**
+   * Handle approval of current version
+   */
+  const handleApprove = useCallback(async () => {
+    if (!currentUserId || isApproving) return;
+
+    // Get latest version
+    const latestVersion = versions.length > 0 ? versions[0] : null;
+    if (!latestVersion) {
+      setApprovalError(t('collaboration:versionHistory.errors.loadFailed'));
+      return;
+    }
+
+    setIsApproving(true);
+    setApprovalError(null);
+
+    try {
+      const result = await collaborationAPI.approveVersion(latestVersion.id, currentUserId);
+      if (result.success && result.data) {
+        // Update in store
+        approveVersion(specId, latestVersion.id, currentUserId);
+      } else {
+        setApprovalError(result.error || t('collaboration:versionHistory.errors.approveFailed'));
+      }
+    } catch (err) {
+      setApprovalError(err instanceof Error ? err.message : t('collaboration:versionHistory.errors.unknown'));
+    } finally {
+      setIsApproving(false);
+    }
+  }, [currentUserId, isApproving, versions, collaborationAPI, specId, approveVersion, t]);
+
+  // Get latest version and approval status
+  const latestVersion = useMemo(() => {
+    return versions.length > 0 ? versions[0] : null;
+  }, [versions]);
+
+  const isApproved = useMemo(() => {
+    return latestVersion?.is_approved ?? false;
+  }, [latestVersion]);
+
   // Connect to server on mount
   useEffect(() => {
     connectToCollaborationServer();
@@ -392,10 +443,58 @@ export function CollaborativeSpecEditor({
         )}
       </div>
 
-      {/* Footer with stats */}
+      {/* Footer with stats and approval */}
       <div className="px-4 py-2 border-t border-border bg-card/50 shrink-0">
+        {/* Approval error display */}
+        {approvalError && (
+          <div className="mb-2 rounded-lg bg-destructive/10 border border-destructive/30 p-2 text-sm text-destructive flex items-start gap-2">
+            <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+            <span className="flex-1">{approvalError}</span>
+            <button
+              type="button"
+              className="shrink-0 hover:opacity-70 transition-opacity"
+              onClick={() => setApprovalError(null)}
+              aria-label={t('common:actions.dismiss', 'Dismiss')}
+            >
+              ×
+            </button>
+          </div>
+        )}
+
         <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <span>{specId}</span>
+          <div className="flex items-center gap-3">
+            <span>{specId}</span>
+            {showApproval && latestVersion && (
+              <div className="flex items-center gap-2">
+                {isApproved ? (
+                  <div className="flex items-center gap-1.5 text-green-500">
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    <span className="font-medium">{t('collaboration:versionHistory.approved')}</span>
+                  </div>
+                ) : (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs px-3"
+                    onClick={handleApprove}
+                    disabled={isApproving || !currentUserId}
+                  >
+                    {isApproving ? (
+                      <>
+                        <Loader2 className="h-3 w-3 mr-1.5 animate-spin" />
+                        {t('common:actions.processing', 'Processing...')}
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 className="h-3 w-3 mr-1.5" />
+                        {t('collaboration:versionHistory.approve')}
+                      </>
+                    )}
+                  </Button>
+                )}
+              </div>
+            )}
+          </div>
           <span>
             {content.length} {t('collaboration:characters')}
           </span>
