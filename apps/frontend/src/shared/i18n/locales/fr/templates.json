@@ -1,4 +1,63 @@
 {
+  "editor": {
+    "title": "Éditeur de modèle d'agent",
+    "description": "Créer et gérer des modèles d'agent personnalisés",
+    "fields": {
+      "name": "Nom du modèle",
+      "description": "Description",
+      "category": "Catégorie",
+      "version": "Version",
+      "customPrompt": "Invite système personnalisée",
+      "thinkingLevel": "Niveau de réflexion"
+    },
+    "placeholders": {
+      "name": "ex: agent-documentation",
+      "description": "Que fait ce modèle d'agent ?",
+      "category": "ex: documentation, tests, sécurité",
+      "version": "1.0.0",
+      "customPrompt": "Entrez l'invite système personnalisée pour cet agent..."
+    },
+    "validation": {
+      "nameRequired": "Le nom du modèle est requis",
+      "descriptionRequired": "La description est requise",
+      "categoryRequired": "La catégorie est requise",
+      "promptTooShort": "L'invite personnalisée doit contenir au moins 20 caractères",
+      "invalidVersion": "Format de version invalide (utilisez le versionnage sémantique comme 1.0.0)"
+    },
+    "actions": {
+      "save": "Enregistrer le modèle",
+      "cancel": "Annuler",
+      "test": "Tester le modèle"
+    }
+  },
+  "toolSelector": {
+    "title": "Configuration des outils",
+    "description": "Sélectionnez les outils et serveurs MCP que ce modèle d'agent peut utiliser",
+    "baseTools": "Outils de base",
+    "mcpServers": "Serveurs MCP",
+    "tools": {
+      "read": "Read - Lire le contenu des fichiers",
+      "glob": "Glob - Trouver des fichiers par motif",
+      "grep": "Grep - Rechercher dans les fichiers",
+      "write": "Write - Créer de nouveaux fichiers",
+      "edit": "Edit - Modifier des fichiers existants",
+      "bash": "Bash - Exécuter des commandes",
+      "webFetch": "WebFetch - Récupérer des pages web",
+      "webSearch": "WebSearch - Rechercher sur le web"
+    },
+    "mcp": {
+      "context7": "Context7 - Recherche de documentation",
+      "graphiti": "Graphiti Memory - Graphe de connaissances",
+      "linear": "Linear - Gestion de projet",
+      "electron": "Electron - Automation d'application de bureau",
+      "puppeteer": "Puppeteer - Automation de navigateur",
+      "autoClaude": "Auto-Code - Gestion des builds"
+    },
+    "selectAll": "Tout sélectionner",
+    "deselectAll": "Tout désélectionner",
+    "noToolsSelected": "Au moins un outil doit être sélectionné",
+    "autoClaudeRequired": "Le MCP Auto-Code est requis et toujours activé"
+  },
   "wizard": {
     "title": "Paramètres du modèle",
     "description": "Remplissez les paramètres pour générer votre spécification",

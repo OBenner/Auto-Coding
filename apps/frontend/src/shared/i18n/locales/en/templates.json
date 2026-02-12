@@ -78,5 +78,33 @@
       "title": "No spec content",
       "description": "Generate a spec to see preview content"
     }
+  },
+  "toolSelector": {
+    "title": "Tool Configuration",
+    "description": "Select which tools and MCP servers this agent template can use",
+    "baseTools": "Base Tools",
+    "mcpServers": "MCP Servers",
+    "tools": {
+      "read": "Read - Read file contents",
+      "glob": "Glob - Find files by pattern",
+      "grep": "Grep - Search file contents",
+      "write": "Write - Create new files",
+      "edit": "Edit - Modify existing files",
+      "bash": "Bash - Execute commands",
+      "webFetch": "WebFetch - Fetch web pages",
+      "webSearch": "WebSearch - Search the web"
+    },
+    "mcp": {
+      "context7": "Context7 - Documentation lookup",
+      "graphiti": "Graphiti Memory - Knowledge graph",
+      "linear": "Linear - Project management",
+      "electron": "Electron - Desktop app automation",
+      "puppeteer": "Puppeteer - Browser automation",
+      "autoClaude": "Auto-Code - Build management"
+    },
+    "selectAll": "Select All",
+    "deselectAll": "Deselect All",
+    "noToolsSelected": "At least one tool must be selected",
+    "autoClaudeRequired": "Auto-Code MCP is required and always enabled"
   }
 }
