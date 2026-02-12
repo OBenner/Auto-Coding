@@ -27,7 +27,11 @@
     "actions": {
       "save": "Enregistrer le modèle",
       "cancel": "Annuler",
-      "test": "Tester le modèle"
+      "test": "Tester le modèle",
+      "import": "Importer le modèle",
+      "export": "Exporter le modèle",
+      "importing": "Importation...",
+      "exporting": "Exportation..."
     }
   },
   "toolSelector": {

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Save, X, TestTube, Badge as BadgeIcon } from 'lucide-react';
+import { Save, X, TestTube, Badge as BadgeIcon, Download, Upload } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { SettingsSection } from '../settings/SettingsSection';
 import { Label } from '../ui/label';
@@ -50,6 +50,8 @@ interface TemplateEditorProps {
   onSave?: (data: AgentTemplateData) => Promise<void>;
   onTest?: (data: AgentTemplateData) => Promise<void>;
   onCancel?: () => void;
+  onExport?: () => Promise<void>;
+  onImport?: (file: File) => Promise<void>;
   updateAvailable?: boolean; // Show update indicator when newer version exists
   latestVersion?: string; // Latest available version (if updateAvailable)
 }
@@ -64,6 +66,8 @@ export function TemplateEditor({
   onSave,
   onTest,
   onCancel,
+  onExport,
+  onImport,
   updateAvailable = false,
   latestVersion
 }: TemplateEditorProps) {
@@ -81,6 +85,9 @@ export function TemplateEditor({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSaving, setIsSaving] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
 
   const handleChange = (field: keyof AgentTemplateData, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -144,6 +151,39 @@ export function TemplateEditor({
       await onTest?.(formData);
     } finally {
       setIsTesting(false);
+    }
+  };
+
+  const handleExport = async () => {
+    setIsExporting(true);
+    setImportError(null);
+    try {
+      await onExport?.();
+    } catch (err) {
+      setImportError(err instanceof Error ? err.message : 'Export failed');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleImportClick = () => {
+    document.getElementById('template-import-input')?.click();
+  };
+
+  const handleImportFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setIsImporting(true);
+    setImportError(null);
+    try {
+      await onImport?.(file);
+      // Reset the input so the same file can be selected again if needed
+      event.target.value = '';
+    } catch (err) {
+      setImportError(err instanceof Error ? err.message : 'Import failed');
+    } finally {
+      setIsImporting(false);
     }
   };
 
@@ -349,6 +389,53 @@ export function TemplateEditor({
             This prompt will override the default agent system prompt. Use clear instructions to define the agent's behavior and capabilities.
           </p>
         </div>
+
+        {/* Import/Export Buttons */}
+        {(onExport || onImport) && (
+          <div className="flex items-center gap-2 pt-4 border-t border-border">
+            {onImport && (
+              <>
+                <input
+                  id="template-import-input"
+                  type="file"
+                  accept=".json"
+                  className="hidden"
+                  onChange={handleImportFile}
+                  disabled={isImporting}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleImportClick}
+                  disabled={isImporting || isExporting || isSaving || isTesting}
+                >
+                  <Upload className="h-4 w-4 mr-2" />
+                  {isImporting ? t('editor.actions.importing', 'Importing...') : t('editor.actions.import', 'Import Template')}
+                </Button>
+              </>
+            )}
+            {onExport && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleExport}
+                disabled={isImporting || isExporting || isSaving || isTesting}
+              >
+                <Download className="h-4 w-4 mr-2" />
+                {isExporting ? t('editor.actions.exporting', 'Exporting...') : t('editor.actions.export', 'Export Template')}
+              </Button>
+            )}
+          </div>
+        )}
+
+        {/* Import Error */}
+        {importError && (
+          <div className="rounded-lg bg-destructive/10 border border-destructive/30 p-3">
+            <p className="text-sm text-destructive">{importError}</p>
+          </div>
+        )}
 
         {/* Action Buttons */}
         <div className="flex items-center justify-between pt-4 border-t border-border">

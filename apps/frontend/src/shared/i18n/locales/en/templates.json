@@ -27,7 +27,11 @@
     "actions": {
       "save": "Save Template",
       "cancel": "Cancel",
-      "test": "Test Template"
+      "test": "Test Template",
+      "import": "Import Template",
+      "export": "Export Template",
+      "importing": "Importing...",
+      "exporting": "Exporting..."
     }
   },
   "wizard": {
