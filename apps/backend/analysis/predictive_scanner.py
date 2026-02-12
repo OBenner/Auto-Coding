@@ -89,6 +89,7 @@ class PredictiveIssue:
         suggestion: Suggested fix or mitigation
         confidence: Confidence score (0.0 to 1.0)
         llm_analysis: Enhanced analysis from LLM (if available)
+        auto_fix: Auto-generated code fix (if available)
     """
 
     issue_type: str  # bug, performance, code_smell
@@ -103,6 +104,7 @@ class PredictiveIssue:
     suggestion: str | None = None
     confidence: float = 0.8
     llm_analysis: dict[str, Any] | None = None
+    auto_fix: dict[str, Any] | None = None
 
 
 @dataclass
@@ -266,6 +268,14 @@ class PredictiveScanner:
                 logger.warning(f"LLM analysis failed: {e}")
                 result.scan_errors.append(f"LLM analysis error: {str(e)}")
 
+        # Generate auto-fixes if enabled and available
+        if run_llm_analysis and self._is_llm_analysis_enabled():
+            try:
+                self._generate_auto_fixes(result)
+            except Exception as e:
+                logger.warning(f"Auto-fix generation failed: {e}")
+                result.scan_errors.append(f"Auto-fix generation error: {str(e)}")
+
         # Load historical trends if issue tracker available
         if self._issue_tracker:
             try:
@@ -406,7 +416,6 @@ class PredictiveScanner:
                             code_snippet=issue_dict.get("code_snippet"),
                             suggestion=issue_dict.get("suggestion"),
                             confidence=issue_dict.get("confidence", 0.8),
-                            metrics=issue_dict.get("metrics", {}),
                         )
                         result.issues.append(issue)
 
@@ -503,6 +512,72 @@ class PredictiveScanner:
         except Exception as e:
             logger.warning(f"LLM analysis execution failed: {e}")
 
+    def _generate_auto_fixes(self, result: PredictiveScanResult) -> None:
+        """
+        Generate auto-fix suggestions for issues.
+
+        Args:
+            result: Scan result to generate fixes for
+        """
+        if not SDK_AVAILABLE:
+            return
+
+        # Filter issues that should have auto-fixes
+        fixable_issues = [i for i in result.issues if self._should_generate_fix(i)]
+
+        if not fixable_issues:
+            logger.info("No fixable issues found for auto-fix generation")
+            return
+
+        # Run async fix generation synchronously
+        import asyncio
+
+        try:
+            asyncio.run(_generate_fixes_async(fixable_issues))
+            logger.info(f"Generated auto-fixes for {len(fixable_issues)} issues")
+        except Exception as e:
+            logger.warning(f"Auto-fix generation failed: {e}")
+            result.scan_errors.append(f"Auto-fix generation error: {str(e)}")
+
+    def _should_generate_fix(self, issue: PredictiveIssue) -> bool:
+        """
+        Determine if an issue should have an auto-fix generated.
+
+        Args:
+            issue: Issue to evaluate
+
+        Returns:
+            True if auto-fix should be generated
+        """
+        # Require code snippet to generate fix
+        if not issue.code_snippet:
+            return False
+
+        # Require file and line number
+        if not issue.file or not issue.line:
+            return False
+
+        # Focus on critical and high severity issues
+        if issue.severity not in ("critical", "high"):
+            return False
+
+        # Categories that are well-suited for auto-fixes
+        fixable_categories = {
+            # Bugs
+            "NoneType error",
+            "IndexError",
+            "KeyError",
+            "Division by zero",
+            "Missing error handling",
+            # Performance
+            "N+1 query",
+            # Code smells
+            "Long function",
+            "Deep nesting",
+        }
+
+        return issue.category in fixable_categories
+
     def _get_historical_trends(self) -> dict[str, Any]:
         """Get historical issue trends from IssueTracker."""
         if not self._issue_tracker:
@@ -580,6 +655,7 @@ class PredictiveScanner:
                     "suggestion": i.suggestion,
                     "confidence": i.confidence,
                     "llm_analysis": i.llm_analysis,
+                    "auto_fix": i.auto_fix,
                 }
                 for i in result.issues
             ],
@@ -733,6 +809,160 @@ def _merge_llm_insights(
 
 
 # =============================================================================
+# AUTO-FIX GENERATION (Async)
+# =============================================================================
+
+
+async def _generate_fixes_async(issues: list[PredictiveIssue]) -> None:
+    """
+    Generate auto-fixes for issues asynchronously.
+
+    Args:
+        issues: List of issues to generate fixes for
+    """
+    from core.auth import ensure_claude_code_oauth_token
+    from core.simple_client import create_simple_client
+
+    # Ensure SDK can find the token
+    ensure_claude_code_oauth_token()
+
+    model = os.environ.get("AUTO_FIX_MODEL", DEFAULT_ANALYSIS_MODEL)
+
+    # Generate fixes for each issue
+    for issue in issues:
+        try:
+            # Build prompt for this specific issue
+            prompt = _build_fix_prompt(issue)
+
+            client = create_simple_client(
+                agent_type="auto_fix_generator",
+                model=model,
+                system_prompt=(
+                    "You are a code fix generation expert. You analyze code quality issues "
+                    "and generate specific, ready-to-apply code fixes. "
+                    "Always respond with valid JSON only, no markdown formatting or explanations."
+                ),
+                cwd=None,
+            )
+
+            async with client:
+                await client.query(prompt)
+
+                # Collect the response
+                response_text = ""
+                async for msg in client.receive_response():
+                    msg_type = type(msg).__name__
+                    if msg_type == "AssistantMessage" and hasattr(msg, "content"):
+                        for block in msg.content:
+                            if type(block).__name__ == "TextBlock" and hasattr(block, "text"):
+                                if block.text:
+                                    response_text += block.text
+
+                if response_text.strip():
+                    fix_data = _parse_fix_response(response_text)
+                    if fix_data:
+                        issue.auto_fix = fix_data
+                        logger.debug(
+                            f"Generated auto-fix for {issue.category} at {issue.file}:{issue.line}"
+                        )
+
+        except Exception as e:
+            logger.warning(f"Auto-fix generation failed for {issue.file}:{issue.line}: {e}")
+
+
+def _build_fix_prompt(issue: PredictiveIssue) -> str:
+    """
+    Build the prompt for auto-fix generation.
+
+    Args:
+        issue: Issue to generate fix for
+
+    Returns:
+        Full prompt text
+    """
+    prompt_file = Path(__file__).parent / "prompts" / "auto_fix_generation.md"
+
+    if prompt_file.exists():
+        base_prompt = prompt_file.read_text(encoding="utf-8")
+    else:
+        base_prompt = "Generate a code fix for this issue."
+
+    # Format issue for prompt
+    issue_context = f"""
+## CODE ISSUE TO FIX
+
+Issue Type: {issue.issue_type}
+Severity: {issue.severity}
+Category: {issue.category}
+File: {issue.file}
+Line: {issue.line}
+Title: {issue.title}
+Description: {issue.description}
+Code Snippet:
+```
+{issue.code_snippet}
+```
+Current Suggestion: {issue.suggestion or 'None'}
+"""
+
+    return f"""{base_prompt}
+
+{issue_context}
+
+Now generate the auto-fix JSON for this issue.
+"""
+
+
+def _parse_fix_response(response_text: str) -> dict[str, Any] | None:
+    """
+    Parse the auto-fix response from LLM.
+
+    Args:
+        response_text: Raw LLM response
+
+    Returns:
+        Parsed fix dict or None if parsing failed
+    """
+    text = response_text.strip()
+
+    if not text:
+        return None
+
+    # Handle markdown code blocks
+    if text.startswith("```"):
+        lines = text.split("\n")
+        if lines[0].startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].strip() == "```":
+            lines = lines[:-1]
+        text = "\n".join(lines).strip()
+
+    try:
+        fix_data = json.loads(text)
+
+        # Validate required fields
+        required_fields = [
+            "fix_type",
+            "original_code",
+            "fixed_code",
+            "description",
+            "applies_to_line",
+            "scope",
+            "confidence",
+        ]
+        for field in required_fields:
+            if field not in fix_data:
+                logger.warning(f"Missing required field in auto-fix: {field}")
+                return None
+
+        return fix_data
+
+    except json.JSONDecodeError as e:
+        logger.warning(f"Failed to parse auto-fix JSON: {e}")
+        return None
+
+
+# =============================================================================
 # CONVENIENCE FUNCTIONS
 # =============================================================================
 
@@ -770,6 +1000,34 @@ def has_critical_issues(project_dir: Path) -> bool:
     scanner = PredictiveScanner()
     result = scanner.scan(project_dir, run_llm_analysis=False)
     return result.summary.has_critical_issues
+
+
+def generate_auto_fix(issue: PredictiveIssue) -> dict[str, Any] | None:
+    """
+    Generate auto-fix for a specific issue.
+
+    Args:
+        issue: Issue to generate fix for
+
+    Returns:
+        Auto-fix dict or None if generation failed
+    """
+    if not SDK_AVAILABLE:
+        logger.warning("Claude SDK not available for auto-fix generation")
+        return None
+
+    if not get_auth_token():
+        logger.warning("No authentication token for auto-fix generation")
+        return None
+
+    import asyncio
+
+    try:
+        asyncio.run(_generate_fixes_async([issue]))
+        return issue.auto_fix
+    except Exception as e:
+        logger.warning(f"Auto-fix generation failed: {e}")
+        return None
 
 
 # =============================================================================
@@ -831,6 +1089,8 @@ def main() -> None:
                     print(f"    File: {issue.file}:{issue.line or ''}")
                 if issue.llm_analysis:
                     print(f"    Priority: {issue.llm_analysis.get('priority', 'unknown')}")
+                if issue.auto_fix:
+                    print(f"    Auto-fix available: {issue.auto_fix.get('description', 'N/A')}")
 
         if result.scan_errors:
             print(f"\nScan Errors ({len(result.scan_errors)}):")
