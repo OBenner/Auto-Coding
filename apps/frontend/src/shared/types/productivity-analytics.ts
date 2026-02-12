@@ -100,3 +100,31 @@ export interface ProductivityAnalyticsExportOptions {
   output_path?: string;
   filter?: ProductivityAnalyticsFilter;
 }
+
+// ============================================
+// Failure Analysis Types
+// ============================================
+
+export interface FailureFileCount {
+  file: string;
+  count: number;
+}
+
+export interface FailureCategoryCount {
+  category: string;
+  count: number;
+}
+
+export interface FailureMetrics {
+  total_failures: number;
+  failure_types: Record<string, number>;  // Count by type (qa_rejection, build_error, etc.)
+  failure_categories: Record<string, number>;  // Count by category
+  root_causes_identified: number;
+  root_cause_rate: number;  // 0.0 - 1.0
+  recurring_failures: number;
+  recurrence_rate: number;  // 0.0 - 1.0
+  top_failure_files: FailureFileCount[];  // Top 5 files with most issues
+  top_failure_categories: FailureCategoryCount[];  // Top 5 categories
+  pattern_detection_rate: number;  // Issues with detected patterns / total
+  avg_occurrences_per_failure: number;
+}
