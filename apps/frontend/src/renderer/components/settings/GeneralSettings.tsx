@@ -60,6 +60,7 @@ function ToolDetectionDisplay({ info, isLoading, t }: ToolDetectionDisplayProps)
       'homebrew': t('general.sourceHomebrew'),
       'nvm': t('general.sourceNvm'),
       'system-path': t('general.sourceSystemPath'),
+      'windows-where': t('general.sourceWindowsWhere'),
       'bundled': t('general.sourceBundled'),
       'fallback': t('general.sourceFallback'),
     };

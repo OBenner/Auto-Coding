@@ -244,6 +244,7 @@ export function ScreenshotCapture({ open, onOpenChange, onCapture }: ScreenshotC
                 className="mt-4"
                 disabled={isLoading}
               >
+                {/* lgtm[js/trivial-conditional] isLoading is a useState variable toggled by fetchSources() */}
                 {isLoading ? (
                   <Loader2 className="h-4 w-4 animate-spin mr-2" />
                 ) : (

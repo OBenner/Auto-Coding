@@ -24,6 +24,7 @@ import type { BrowserWindow } from 'electron';
 import { IPC_CHANNELS } from '../shared/constants';
 import type { AppUpdateInfo } from '../shared/types';
 import { compareVersions } from './updater/version-manager';
+import { sanitizeForLog } from './log-utils';
 
 // GitHub repo info for API calls
 const GITHUB_OWNER = 'OBenner';
@@ -401,10 +402,7 @@ async function fetchLatestStableRelease(): Promise<AppUpdateInfo | null> {
           }
 
           const version = latestStable.tag_name.replace(/^v/, '');
-          // Sanitize version string for logging (remove control characters and limit length)
-          // biome-ignore lint/suspicious/noControlCharactersInRegex: Intentionally matching control characters for sanitization
-          const safeVersion = String(version).replace(/[\x00-\x1f\x7f]/g, '').slice(0, 50);
-          console.warn('[app-updater] Found latest stable release:', safeVersion);
+          console.warn(`[app-updater] Found latest stable release: ${sanitizeForLog(version, 50)}`);
 
           resolve({
             version,
@@ -421,9 +419,7 @@ async function fetchLatestStableRelease(): Promise<AppUpdateInfo | null> {
     });
 
     request.on('error', (error) => {
-      // Sanitize error message for logging (use only the message property)
-      const safeErrorMessage = error instanceof Error ? error.message : 'Unknown error';
-      console.error('[app-updater] Failed to fetch releases:', safeErrorMessage);
+      console.error(`[app-updater] Failed to fetch releases: ${sanitizeForLog(error instanceof Error ? error.message : 'Unknown error')}`);
       resolve(null);
     });
 

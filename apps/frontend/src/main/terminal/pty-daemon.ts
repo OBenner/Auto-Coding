@@ -12,6 +12,7 @@ import * as net from 'net';
 import * as fs from 'fs';
 import * as pty from '@lydell/node-pty';
 import { isWindows, isUnix } from '../platform';
+import { sanitizeForLog } from '../log-utils';
 
 const SOCKET_PATH = isWindows()
   ? `\\\\.\\pipe\\auto-claude-pty-${process.getuid?.() || 'default'}`
@@ -157,7 +158,7 @@ class PtyDaemon {
     });
 
     socket.on('error', (err) => {
-      console.error('[PTY Daemon] Socket error:', err);
+      console.error(`[PTY Daemon] Socket error: ${sanitizeForLog(err)}`);
     });
   }
 
@@ -227,7 +228,7 @@ class PtyDaemon {
       }
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
-      console.error('[PTY Daemon] Error handling message:', errorMsg);
+      console.error(`[PTY Daemon] Error handling message: ${sanitizeForLog(errorMsg)}`);
       this.sendError(socket, errorMsg, msg.requestId);
     }
   }
@@ -302,7 +303,7 @@ class PtyDaemon {
       });
 
       this.ptys.set(id, managed);
-      console.error(`[PTY Daemon] Created PTY ${id} (${config.shell})`);
+      console.error(`[PTY Daemon] Created PTY ${sanitizeForLog(id, 50)} (${sanitizeForLog(config.shell, 100)})`);
 
       return id;
     } catch (error) {
@@ -334,7 +335,7 @@ class PtyDaemon {
       throw new Error(`PTY ${id} not found`);
     }
     if (managed.isDead) {
-      console.warn(`[PTY Daemon] Cannot resize dead PTY ${id}`);
+      console.warn(`[PTY Daemon] Cannot resize dead PTY ${sanitizeForLog(id, 50)}`);
       return;
     }
     managed.process.resize(cols, rows);
@@ -348,7 +349,7 @@ class PtyDaemon {
   private killPty(id: string): void {
     const managed = this.ptys.get(id);
     if (!managed) {
-      console.warn(`[PTY Daemon] PTY ${id} not found for kill`);
+      console.warn(`[PTY Daemon] PTY ${sanitizeForLog(id, 50)} not found for kill`);
       return;
     }
 
@@ -356,12 +357,12 @@ class PtyDaemon {
       try {
         managed.process.kill();
       } catch (error) {
-        console.error(`[PTY Daemon] Error killing PTY ${id}:`, error);
+        console.error(`[PTY Daemon] Error killing PTY ${sanitizeForLog(id, 50)}: ${sanitizeForLog(error)}`);
       }
     }
 
     this.ptys.delete(id);
-    console.error(`[PTY Daemon] Removed PTY ${id}`);
+    console.error(`[PTY Daemon] Removed PTY ${sanitizeForLog(id, 50)}`);
   }
 
   /**
@@ -394,7 +395,7 @@ class PtyDaemon {
       throw new Error(`PTY ${id} not found`);
     }
     managed.clients.add(socket);
-    console.error(`[PTY Daemon] Client subscribed to PTY ${id}`);
+    console.error(`[PTY Daemon] Client subscribed to PTY ${sanitizeForLog(id, 50)}`);
   }
 
   /**
@@ -404,7 +405,7 @@ class PtyDaemon {
     const managed = this.ptys.get(id);
     if (managed) {
       managed.clients.delete(socket);
-      console.error(`[PTY Daemon] Client unsubscribed from PTY ${id}`);
+      console.error(`[PTY Daemon] Client unsubscribed from PTY ${sanitizeForLog(id, 50)}`);
     }
   }
 

@@ -195,12 +195,12 @@ describe('PRDetail Clean Review Functionality', () => {
         findings: [createTestFinding('low')]
       });
 
-      const selectedCount: number = 1; // Finding selected
+      const selectedCount: number = 1; // Finding selected — condition below should be false
       const hasPostedFindings = false;
       const cleanReviewPosted = false;
 
       const shouldShowButton =
-        selectedCount === 0 &&
+        selectedCount === 0 && // lgtm[js/useless-comparison-test] Intentional: verifying condition is false when findings are selected
         reviewResult.success &&
         !reviewResult.findings.some(f =>
           f.severity === 'critical' || f.severity === 'high' || f.severity === 'medium'
@@ -338,7 +338,7 @@ describe('PRDetail Clean Review Functionality', () => {
 
       // Post Clean Review button: selectedCount === 0 && other conditions
       const showPostCleanReview =
-        selectedCount === 0 &&
+        selectedCount === 0 && // lgtm[js/useless-comparison-test] Intentional: verifying condition is false when findings are selected
         reviewResult.success &&
         !reviewResult.findings.some(f =>
           f.severity === 'critical' || f.severity === 'high' || f.severity === 'medium'

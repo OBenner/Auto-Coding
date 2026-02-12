@@ -341,8 +341,6 @@ interface StatusResultRowProps {
 }
 
 function StatusResultRow({ result, index, showDetails }: StatusResultRowProps) {
-  const { t } = useTranslation(['tasks']);
-
   const getStatusIcon = () => {
     switch (result.status) {
       case 'pending':

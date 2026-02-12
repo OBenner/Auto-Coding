@@ -512,7 +512,8 @@ export class ChangelogService extends EventEmitter {
     } catch (error) {
       this.debug('Error in AI version suggestion, falling back to patch bump', error);
       // Fallback to patch bump if AI fails
-      const [major, minor, patch] = (currentVersion || '1.0.0').split('.').map(Number);
+      const version = currentVersion ?? '1.0.0';
+      const [major, minor, patch] = version.split('.').map(Number);
       return {
         version: `${major}.${minor}.${patch + 1}`,
         reason: 'Patch version bump (AI analysis failed)'

@@ -7,14 +7,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  Keyboard,
   RotateCcw,
   Save,
   Loader2,
   Info
 } from 'lucide-react';
 import { Button } from '../ui/button';
-import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { cn } from '../../lib/utils';
 import { SettingsSection } from './SettingsSection';
