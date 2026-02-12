@@ -603,6 +603,8 @@ export const IPC_CHANNELS = {
   SESSION_REPLAY_GET_TIMELINE: 'sessionReplay:getTimeline',
   SESSION_REPLAY_GET_DECISION_POINTS: 'sessionReplay:getDecisionPoints',
   SESSION_REPLAY_GET_BOOKMARKS: 'sessionReplay:getBookmarks',
+  SESSION_REPLAY_ADD_BOOKMARK: 'sessionReplay:addBookmark',
+  SESSION_REPLAY_REMOVE_BOOKMARK: 'sessionReplay:removeBookmark',
   SESSION_REPLAY_GET_ENTRIES: 'sessionReplay:getEntries',
   SESSION_REPLAY_SEARCH: 'sessionReplay:search',
   SESSION_REPLAY_EXPORT_SESSION: 'sessionReplay:exportSession',

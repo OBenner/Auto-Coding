@@ -53,6 +53,20 @@ export interface SessionReplayAPI {
     sessionId?: string
   ) => Promise<IPCResult<Bookmark[]>>;
 
+  /** Add a new bookmark */
+  addBookmark: (
+    projectPath: string,
+    specId: string,
+    bookmark: Omit<Bookmark, 'id'>
+  ) => Promise<IPCResult<Bookmark>>;
+
+  /** Remove a bookmark */
+  removeBookmark: (
+    projectPath: string,
+    specId: string,
+    bookmarkId: string
+  ) => Promise<IPCResult<void>>;
+
   /** Query entries with filters */
   getEntries: (
     projectPath: string,
@@ -105,6 +119,12 @@ export const createSessionReplayAPI = (): SessionReplayAPI => ({
 
   getBookmarks: (projectPath, specId, sessionId) =>
     ipcRenderer.invoke(IPC_CHANNELS.SESSION_REPLAY_GET_BOOKMARKS, projectPath, specId, sessionId),
+
+  addBookmark: (projectPath, specId, bookmark) =>
+    ipcRenderer.invoke(IPC_CHANNELS.SESSION_REPLAY_ADD_BOOKMARK, projectPath, specId, bookmark),
+
+  removeBookmark: (projectPath, specId, bookmarkId) =>
+    ipcRenderer.invoke(IPC_CHANNELS.SESSION_REPLAY_REMOVE_BOOKMARK, projectPath, specId, bookmarkId),
 
   getEntries: (projectPath, specId, filters) =>
     ipcRenderer.invoke(IPC_CHANNELS.SESSION_REPLAY_GET_ENTRIES, projectPath, specId, filters),

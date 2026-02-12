@@ -356,6 +356,106 @@ export function registerSessionReplayHandlers(): void {
     }
   );
 
+  ipcMain.handle(
+    IPC_CHANNELS.SESSION_REPLAY_ADD_BOOKMARK,
+    async (
+      _,
+      projectPath: string,
+      specId: string,
+      bookmark: Omit<Bookmark, 'id'>
+    ): Promise<IPCResult<Bookmark>> => {
+      try {
+        const specDir = path.join(
+          projectPath,
+          AUTO_BUILD_PATHS.SPECS_DIR,
+          specId
+        );
+
+        const logs = await loadTaskLogs(specDir);
+
+        if (!logs) {
+          return { success: false, error: 'No logs found' };
+        }
+
+        // Generate unique ID for bookmark
+        const newBookmark: Bookmark = {
+          ...bookmark,
+          id: `bookmark-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        };
+
+        // Add bookmark to logs
+        if (!logs.bookmarks) {
+          logs.bookmarks = [];
+        }
+        logs.bookmarks.push(newBookmark);
+
+        // Save updated logs
+        const logsPath = path.join(specDir, 'task_logs.json');
+        await fsPromises.writeFile(
+          logsPath,
+          JSON.stringify(logs, null, 2),
+          'utf-8'
+        );
+
+        return { success: true, data: newBookmark };
+      } catch (error) {
+        debugError('[Session Replay] Failed to add bookmark:', error);
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        };
+      }
+    }
+  );
+
+  ipcMain.handle(
+    IPC_CHANNELS.SESSION_REPLAY_REMOVE_BOOKMARK,
+    async (
+      _,
+      projectPath: string,
+      specId: string,
+      bookmarkId: string
+    ): Promise<IPCResult<void>> => {
+      try {
+        const specDir = path.join(
+          projectPath,
+          AUTO_BUILD_PATHS.SPECS_DIR,
+          specId
+        );
+
+        const logs = await loadTaskLogs(specDir);
+
+        if (!logs || !logs.bookmarks) {
+          return { success: false, error: 'No bookmarks found' };
+        }
+
+        // Remove bookmark
+        const index = logs.bookmarks.findIndex((b) => b.id === bookmarkId);
+        if (index === -1) {
+          return { success: false, error: 'Bookmark not found' };
+        }
+
+        logs.bookmarks.splice(index, 1);
+
+        // Save updated logs
+        const logsPath = path.join(specDir, 'task_logs.json');
+        await fsPromises.writeFile(
+          logsPath,
+          JSON.stringify(logs, null, 2),
+          'utf-8'
+        );
+
+        return { success: true, data: undefined };
+      } catch (error) {
+        debugError('[Session Replay] Failed to remove bookmark:', error);
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        };
+      }
+    }
+  );
+
   // ============================================
   // Entries Query Operations
   // ============================================
