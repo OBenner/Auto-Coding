@@ -4,6 +4,7 @@ import { Signup } from './pages/Signup'
 import { Login } from './pages/Login'
 import { Settings } from './pages/Settings'
 import { UsageDashboard } from './pages/UsageDashboard'
+import { TerminalPage } from './pages/TerminalPage'
 import { getCloudConfig, getCloudStatus } from './config/cloud'
 
 function HomePage() {
@@ -111,6 +112,7 @@ function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/settings/*" element={<Settings />} />
         <Route path="/usage" element={<UsageDashboard />} />
+        <Route path="/terminal" element={<TerminalPage />} />
       </Routes>
     </BrowserRouter>
   )
