@@ -8,7 +8,7 @@ their approach to match individual or team coding styles.
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Literal
 
@@ -103,8 +103,8 @@ class PreferenceProfile:
     team_profile_id: str | None = None
 
     # Metadata
-    created_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())
-    updated_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    created_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
+    updated_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
 
     def add_feedback(
         self,
@@ -127,14 +127,14 @@ class PreferenceProfile:
             feedback_type = FeedbackType(feedback_type)
 
         record = FeedbackRecord(
-            timestamp=datetime.utcnow().isoformat(),
+            timestamp=datetime.now(UTC).isoformat(),
             feedback_type=feedback_type,
             task_description=task_description,
             agent_type=agent_type,
             context=context or {},
         )
         self.feedback_history.append(record)
-        self.updated_at = datetime.utcnow().isoformat()
+        self.updated_at = datetime.now(UTC).isoformat()
 
         # Update learned adjustments based on feedback patterns
         self._update_learned_preferences()
@@ -319,8 +319,8 @@ class PreferenceProfile:
             learned_risk_adjustment=data.get("learned_risk_adjustment", 0),
             user_instructions=data.get("user_instructions", []),
             team_profile_id=data.get("team_profile_id"),
-            created_at=data.get("created_at", datetime.utcnow().isoformat()),
-            updated_at=data.get("updated_at", datetime.utcnow().isoformat()),
+            created_at=data.get("created_at", datetime.now(UTC).isoformat()),
+            updated_at=data.get("updated_at", datetime.now(UTC).isoformat()),
         )
 
 

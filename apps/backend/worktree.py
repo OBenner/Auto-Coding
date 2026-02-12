@@ -38,5 +38,12 @@ _worktree_module = importlib.util.module_from_spec(_spec)
 sys.modules["core.worktree"] = _worktree_module
 _spec.loader.exec_module(_worktree_module)
 
-# Re-export everything from core.worktree
-from core.worktree import *  # noqa: F401, F403
+# Re-export key classes and types from core.worktree for backward compatibility
+from core.worktree import (  # noqa: F401
+    PullRequestResult,
+    PushAndCreatePRResult,
+    PushBranchResult,
+    WorktreeError,
+    WorktreeInfo,
+    WorktreeManager,
+)

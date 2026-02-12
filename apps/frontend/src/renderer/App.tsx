@@ -477,9 +477,9 @@ export function App() {
       : 'default';
 
     if (colorTheme === 'default') {
-      root.removeAttribute('data-theme');
+      delete root.dataset.theme;
     } else {
-      root.setAttribute('data-theme', colorTheme);
+      root.dataset.theme = colorTheme;
     }
 
     applyTheme();
@@ -503,7 +503,7 @@ export function App() {
     const root = document.documentElement;
     const scale = settings.uiScale ?? UI_SCALE_DEFAULT;
     const clampedScale = Math.max(UI_SCALE_MIN, Math.min(UI_SCALE_MAX, scale));
-    root.setAttribute('data-ui-scale', clampedScale.toString());
+    root.dataset.uiScale = clampedScale.toString();
   }, [settings.uiScale]);
 
   // Update selected task when tasks change (for real-time updates)

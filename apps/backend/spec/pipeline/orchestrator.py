@@ -685,7 +685,7 @@ class SpecOrchestrator:
         except SystemExit as e:
             if e.code != 0:
                 return False
-            return False
+            raise
         except KeyboardInterrupt:
             print()
             print_status("Review interrupted. Run again to continue.", "info")

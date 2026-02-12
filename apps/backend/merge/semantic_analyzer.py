@@ -27,16 +27,16 @@ try:
 except ImportError:
     # Fallback if debug module not available
     def debug(*args, **kwargs):
-        pass
+        """No-op fallback when debug module is unavailable."""
 
     def debug_detailed(*args, **kwargs):
-        pass
+        """No-op fallback when debug module is unavailable."""
 
     def debug_verbose(*args, **kwargs):
-        pass
+        """No-op fallback when debug module is unavailable."""
 
     def debug_success(*args, **kwargs):
-        pass
+        """No-op fallback when debug module is unavailable."""
 
 
 logger = logging.getLogger(__name__)

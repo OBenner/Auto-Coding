@@ -195,10 +195,10 @@ export function CalendarView({
   /**
    * Handle build cancellation
    */
-  const handleCancelBuild = async (buildId: string) => {
+  const handleCancelBuild = (buildId: string) => {
     setCancellingBuilds((prev) => new Set(prev).add(buildId));
     try {
-      await onCancelBuild?.(buildId);
+      onCancelBuild?.(buildId);
     } finally {
       setCancellingBuilds((prev) => {
         const next = new Set(prev);
@@ -211,8 +211,8 @@ export function CalendarView({
   /**
    * Handle build retry
    */
-  const handleRetryBuild = async (buildId: string) => {
-    await onRetryBuild?.(buildId);
+  const handleRetryBuild = (buildId: string) => {
+    onRetryBuild?.(buildId);
   };
 
   /**

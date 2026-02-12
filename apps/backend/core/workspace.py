@@ -49,24 +49,25 @@ try:
 except ImportError:
 
     def debug(*args, **kwargs):
-        pass
+        """No-op fallback when debug module is unavailable."""
 
     def debug_detailed(*args, **kwargs):
-        pass
+        """No-op fallback when debug module is unavailable."""
 
     def debug_verbose(*args, **kwargs):
-        pass
+        """No-op fallback when debug module is unavailable."""
 
     def debug_success(*args, **kwargs):
-        pass
+        """No-op fallback when debug module is unavailable."""
 
     def debug_error(*args, **kwargs):
-        pass
+        """No-op fallback when debug module is unavailable."""
 
     def debug_warning(*args, **kwargs):
-        pass
+        """No-op fallback when debug module is unavailable."""
 
     def is_debug_enabled():
+        """No-op fallback when debug module is unavailable."""
         return False
 
 
