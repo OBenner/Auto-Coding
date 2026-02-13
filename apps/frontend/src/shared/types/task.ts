@@ -549,3 +549,42 @@ export interface TaskTokenStats {
   created_at: string;
   updated_at: string;
 }
+
+// Cost analytics types (from backend cost_tracker.py)
+export interface CostSummary {
+  total_cost: number;  // Total cost in USD
+  planning_cost: number;  // Cost for planning phase
+  coding_cost: number;  // Cost for coding phase
+  validation_cost: number;  // Cost for validation phase
+  input_cost: number;  // Cost for input tokens
+  output_cost: number;  // Cost for output tokens
+  total_input_tokens: number;  // Total input tokens used
+  total_output_tokens: number;  // Total output tokens used
+  total_tokens: number;  // Total tokens used
+  model_costs: ModelCostBreakdown[];  // Cost breakdown by model
+  updated_at: string;  // ISO timestamp
+}
+
+// Cost breakdown by model
+export interface ModelCostBreakdown {
+  model: string;  // Model name (e.g., 'claude-sonnet-4-5-20250929')
+  cost: number;  // Total cost for this model in USD
+  input_tokens: number;  // Input tokens used
+  output_tokens: number;  // Output tokens used
+  total_tokens: number;  // Total tokens used
+  phase_costs?: {  // Optional per-phase breakdown
+    planning: number;
+    coding: number;
+    validation: number;
+  };
+}
+
+// Single data point for cost trend chart
+export interface CostTrendPoint {
+  timestamp: string;  // ISO timestamp
+  cost: number;  // Cost at this point in time (cumulative or per-period)
+  input_tokens?: number;  // Input tokens at this point
+  output_tokens?: number;  // Output tokens at this point
+  phase?: 'planning' | 'coding' | 'validation';  // Optional phase filter
+  model?: string;  // Optional model filter
+}

@@ -1,0 +1,239 @@
+{
+  "title": "Cost Analytics",
+  "loading": "Loading cost data...",
+  "noData": "No cost data available",
+  "noDataHint": "Run tasks to see cost breakdown by model",
+  "totalCost": "Total Cost",
+  "averageCost": "Average Cost",
+  "requestCount": "Request Count",
+  "costPerRequest": "Cost per Request",
+  "today": "Today",
+  "yesterday": "Yesterday",
+  "last7Days": "Last 7 Days",
+  "last30Days": "Last 30 Days",
+  "last90Days": "Last 90 Days",
+  "custom": "Custom Range",
+  "summary": {
+    "title": "Cost Summary",
+    "totalCost": "Total Cost",
+    "planning": "Planning",
+    "coding": "Coding",
+    "validation": "Validation",
+    "totalTokens": "Total Tokens",
+    "models": "models"
+  },
+  "trends": {
+    "title": "Cost Trends Over Time",
+    "last7Days": "7 Days",
+    "last30Days": "30 Days",
+    "last90Days": "90 Days",
+    "allTime": "All Time",
+    "noData": "No cost trend data available",
+    "noDataHint": "Run more tasks to see cost trends over time"
+  },
+  "costByModel": {
+    "title": "Cost by Model",
+    "loading": "Loading model cost data...",
+    "noData": "No model cost data available",
+    "noDataHint": "Model cost breakdown will appear here after running tasks",
+    "totalCost": "Total Cost",
+    "totalTokens": "Total Tokens",
+    "inputTokens": "Input Tokens",
+    "outputTokens": "Output Tokens",
+    "perPhase": "Cost per Phase",
+    "phases": {
+      "planning": "Planning",
+      "coding": "Coding",
+      "validation": "Validation"
+    }
+  },
+  "budget": {
+    "title": "Budget Settings",
+    "description": "Set monthly cost limits and alert thresholds",
+    "monthlyBudget": "Monthly Budget",
+    "monthlyBudgetHelp": "Set your maximum monthly API spending limit in USD",
+    "alertThreshold": "Alert Threshold",
+    "alertThresholdHelp": "Show warning when spending reaches this percentage of budget",
+    "save": "Save Settings",
+    "saving": "Saving...",
+    "saved": "Settings saved successfully",
+    "savedDescription": "Budget settings have been saved",
+    "saveFailed": "Failed to Save",
+    "saveFailedDescription": "An error occurred while saving budget settings. Please try again.",
+    "currentSpending": "Current Spending",
+    "budgetRemaining": "Budget Remaining",
+    "budgetExceeded": "Budget exceeded",
+    "alertTitle": "Budget Alert",
+    "alertMessage": "You have used {{percentage}}% of your monthly budget",
+    "validation": {
+      "invalidBudget": "Invalid Budget",
+      "invalidBudgetDescription": "Please enter a valid budget amount greater than 0",
+      "invalidThreshold": "Invalid Threshold",
+      "invalidThresholdDescription": "Alert threshold must be between 0 and 100 percent"
+    }
+  },
+  "export": {
+    "title": "Export Cost Data",
+    "format": "Format",
+    "json": "JSON",
+    "csv": "CSV",
+    "export": "Export",
+    "success": "Cost data exported successfully"
+  },
+  "timeRange": {
+    "title": "Time Range",
+    "select": "Select time range",
+    "custom": "Custom range",
+    "startDate": "Start date",
+    "endDate": "End date",
+    "apply": "Apply range",
+    "invalidRange": "Invalid date range",
+    "startDateAfterEnd": "Start date must be before end date"
+  },
+  "metrics": {
+    "totalCost": "Total Cost",
+    "totalCostDescription": "Total API cost for the selected period",
+    "averageCost": "Average Cost",
+    "averageCostDescription": "Average daily cost",
+    "requestCount": "Total Requests",
+    "requestCountDescription": "Number of API requests made",
+    "costPerRequest": "Cost per Request",
+    "costPerRequestDescription": "Average cost per API request",
+    "tokensUsed": "Tokens Used",
+    "tokensUsedDescription": "Total tokens consumed",
+    "cacheHits": "Cache Hits",
+    "cacheHitsDescription": "Number of requests served from cache",
+    "cacheHitRate": "Cache Hit Rate",
+    "cacheHitRateDescription": "Percentage of requests served from cache"
+  },
+  "charts": {
+    "costOverTime": "Cost Over Time",
+    "costByTask": "Cost by Task",
+    "costByModel": "Cost by Model",
+    "requestsByDay": "Requests by Day",
+    "tokenUsage": "Token Usage",
+    "emptyState": "No data available for the selected time range",
+    "emptyStateHint": "Try selecting a different time range or check back later"
+  },
+  "filters": {
+    "title": "Filters",
+    "model": "Model",
+    "allModels": "All Models",
+    "task": "Task",
+    "allTasks": "All Tasks",
+    "status": "Status",
+    "allStatuses": "All Statuses",
+    "clearFilters": "Clear Filters",
+    "activeFilters": "{{count}} active filter",
+    "activeFilters_plural": "{{count}} active filters"
+  },
+  "breakdown": {
+    "title": "Cost Breakdown",
+    "byTask": "By Task",
+    "byModel": "By Model",
+    "byAgent": "By Agent",
+    "total": "Total",
+    "percentage": "Percentage",
+    "expand": "Expand details",
+    "collapse": "Collapse details"
+  },
+  "table": {
+    "date": "Date",
+    "task": "Task",
+    "model": "Model",
+    "agent": "Agent",
+    "requests": "Requests",
+    "tokens": "Tokens",
+    "cost": "Cost",
+    "duration": "Duration",
+    "empty": "No records found",
+    "emptyHint": "Try adjusting your filters or time range",
+    "loading": "Loading data...",
+    "error": "Failed to load data",
+    "retry": "Retry",
+    "sortBy": "Sort by",
+    "sortDirection": "Sort direction",
+    "groupBy": "Group by"
+  },
+  "actions": {
+    "export": "Export Data",
+    "exportCSV": "Export as CSV",
+    "exportJSON": "Export as JSON",
+    "refresh": "Refresh",
+    "resetFilters": "Reset Filters",
+    "viewDetails": "View Details",
+    "hideDetails": "Hide Details"
+  },
+  "empty": {
+    "title": "No cost data yet",
+    "description": "API usage and costs will appear here once you start running tasks",
+    "startTask": "Start a Task",
+    "startTaskHint": "Run tasks to generate cost analytics"
+  },
+  "tooltips": {
+    "totalCost": "Total amount spent on API calls during this period",
+    "averageCost": "Average daily cost calculated over the selected time range",
+    "requestCount": "Total number of API requests made",
+    "costPerRequest": "Average cost per individual API request",
+    "tokensUsed": "Total number of tokens consumed (input + output)",
+    "cacheHits": "Number of requests served from cache (no API call made)",
+    "cacheHitRate": "Percentage of requests that were served from cache",
+    "export": "Export the current data view as CSV or JSON",
+    "refresh": "Reload the latest data from the server"
+  },
+  "status": {
+    "loading": "Loading analytics...",
+    "error": "Failed to load analytics",
+    "success": "Analytics updated",
+    "noData": "No data available"
+  },
+  "errors": {
+    "loadFailed": "Failed to load cost analytics",
+    "exportFailed": "Failed to export data",
+    "invalidDateRange": "Invalid date range selected",
+    "tryAgain": "Please try again",
+    "contactSupport": "If the problem persists, contact support"
+  },
+  "details": {
+    "title": "Request Details",
+    "requestId": "Request ID",
+    "timestamp": "Timestamp",
+    "model": "Model",
+    "agentType": "Agent Type",
+    "tokens": {
+      "input": "Input Tokens",
+      "output": "Output Tokens",
+      "total": "Total Tokens"
+    },
+    "cost": "Cost",
+    "duration": "Duration",
+    "cacheStatus": "Cache Status",
+    "cacheHit": "Cache Hit",
+    "cacheMiss": "Cache Miss",
+    "metadata": "Metadata",
+    "close": "Close Details"
+  },
+  "summary": {
+    "title": "Summary",
+    "period": "Selected Period",
+    "comparison": "vs. previous period",
+    "change": "{{change}} change",
+    "increase": "{{percent}} increase",
+    "decrease": "{{percent}} decrease",
+    "noChange": "No change"
+  },
+  "models": {
+    "claude": "Claude",
+    "gpt": "GPT",
+    "all": "All Models",
+    "unknown": "Unknown Model"
+  },
+  "agents": {
+    "planner": "Planner",
+    "coder": "Coder",
+    "qaReviewer": "QA Reviewer",
+    "qaFixer": "QA Fixer",
+    "all": "All Agents",
+    "unknown": "Unknown Agent"
+  }
+}

@@ -22,7 +22,9 @@ from debug import (
     debug_success,
     debug_warning,
 )
+from core.cost_tracking import CostTracker
 from insight_extractor import extract_session_insights
+import os
 from linear_updater import (
     linear_subtask_completed,
     linear_subtask_failed,
@@ -412,6 +414,124 @@ def save_token_stats(
     except Exception as e:
         logger.error(f"Failed to save token stats to {spec_dir}: {e}")
         return False
+
+
+def check_budget_alerts(spec_dir: Path) -> dict[str, Any]:
+    """
+    Check budget status and generate alerts if thresholds are exceeded.
+
+    Reads budget configuration from spec directory or environment variables.
+    Compares total cost against budget thresholds and returns alert status.
+
+    Budget Configuration (priority order):
+    1. {spec_dir}/budget_config.json - Spec-specific budget
+    2. Environment variables (API_COST_BUDGET, API_COST_ALERT_THRESHOLD)
+    3. Default: $100 budget, 80% alert threshold
+
+    Alert Levels:
+    - healthy: Spending < alert_threshold% of budget
+    - moderate: alert_threshold% <= spending < 100% of budget
+    - warning: 100% <= spending < 120% of budget
+    - exceeded: spending >= 120% of budget
+
+    Args:
+        spec_dir: Path to spec directory
+
+    Returns:
+        Dict with budget status:
+        {
+            "enabled": bool,
+            "budget": float,
+            "spent": float,
+            "remaining": float,
+            "percentage": float,
+            "alert_threshold": float,
+            "alert_level": str,  # "healthy", "moderate", "warning", "exceeded"
+            "message": str
+        }
+    """
+    # Initialize default budget config
+    budget_config = {
+        "budget": 100.0,  # Default $100 budget
+        "alert_threshold": 80.0,  # Default 80% alert threshold
+    }
+
+    # Try to load from spec-specific budget config
+    budget_file = spec_dir / "budget_config.json"
+    if budget_file.exists():
+        try:
+            with open(budget_file) as f:
+                spec_budget = json.load(f)
+                budget_config.update(spec_budget)
+        except (json.JSONDecodeError, TypeError) as e:
+            logger.debug(f"Failed to load budget config from {budget_file}: {e}")
+
+    # Override with environment variables if set
+    env_budget = os.getenv("API_COST_BUDGET")
+    env_threshold = os.getenv("API_COST_ALERT_THRESHOLD")
+
+    if env_budget:
+        try:
+            budget_config["budget"] = float(env_budget)
+        except ValueError:
+            logger.warning(f"Invalid API_COST_BUDGET value: {env_budget}")
+
+    if env_threshold:
+        try:
+            budget_config["threshold"] = float(env_threshold)
+        except ValueError:
+            logger.warning(f"Invalid API_COST_ALERT_THRESHOLD value: {env_threshold}")
+
+    budget = budget_config["budget"]
+    alert_threshold = budget_config["alert_threshold"]
+
+    # Get current spending from CostTracker
+    try:
+        cost_tracker = CostTracker(spec_dir=spec_dir)
+        spent = cost_tracker.get_total_cost()
+    except Exception as e:
+        logger.debug(f"Failed to get cost tracker for budget check: {e}")
+        spent = 0.0
+
+    remaining = budget - spent
+    percentage = (spent / budget * 100) if budget > 0 else 0
+
+    # Determine alert level
+    if percentage >= 120:
+        alert_level = "exceeded"
+        message = (
+            f"🚨 BUDGET EXCEEDED: ${spent:.2f} / ${budget:.2f} ({percentage:.0f}%) "
+            f"- Over budget by ${abs(remaining):.2f}"
+        )
+    elif percentage >= 100:
+        alert_level = "warning"
+        message = (
+            f"⚠️  BUDGET WARNING: ${spent:.2f} / ${budget:.2f} ({percentage:.0f}%) "
+            f"- Budget reached"
+        )
+    elif percentage >= alert_threshold:
+        alert_level = "moderate"
+        message = (
+            f"ℹ️  BUDGET ALERT: ${spent:.2f} / ${budget:.2f} ({percentage:.0f}%) "
+            f"- Approaching budget limit"
+        )
+    else:
+        alert_level = "healthy"
+        message = (
+            f"✅ Budget healthy: ${spent:.2f} / ${budget:.2f} ({percentage:.0f}%) "
+            f"- ${remaining:.2f} remaining"
+        )
+
+    return {
+        "enabled": True,
+        "budget": budget,
+        "spent": spent,
+        "remaining": remaining,
+        "percentage": percentage,
+        "alert_threshold": alert_threshold,
+        "alert_level": alert_level,
+        "message": message,
+    }
 
 
 async def post_session_processing(
@@ -807,6 +927,8 @@ async def run_agent_session(
     phase: LogPhase = LogPhase.CODING,
     conversation_history: ConversationHistory | None = None,
     subtask_id: str | None = None,
+    model: str | None = None,
+    agent_type: str | None = None,
 ) -> tuple[str, str, dict[str, int] | None]:
     """
     Run a single agent session using Claude Agent SDK.
@@ -821,6 +943,8 @@ async def run_agent_session(
         phase: Current execution phase for logging
         conversation_history: Optional existing history for resuming sessions
         subtask_id: Optional subtask ID for session tracking
+        model: Optional model identifier for cost tracking
+        agent_type: Optional agent type for cost tracking (e.g., "coder", "planner")
 
     Returns:
         (status, response_text, usage_metadata) where:
@@ -1110,6 +1234,41 @@ async def run_agent_session(
                     )
             except Exception as e:
                 logger.warning(f"Failed to persist token stats: {e}")
+
+            # Track API costs if model and agent_type are provided
+            if model and agent_type:
+                try:
+                    cost_tracker = CostTracker(spec_dir=spec_dir)
+                    session_cost = cost_tracker.log_session_usage(
+                        agent_type=agent_type,
+                        model=model,
+                        usage_metadata=usage_metadata,
+                    )
+                    print_status(
+                        f"API cost tracked: ${session_cost:.4f} ({agent_type}/{model})",
+                        "info",
+                    )
+
+                    # Check budget alerts after tracking cost
+                    try:
+                        budget_status = check_budget_alerts(spec_dir)
+                        if budget_status["enabled"]:
+                            alert_level = budget_status["alert_level"]
+                            message = budget_status["message"]
+
+                            # Print appropriate status based on alert level
+                            if alert_level == "exceeded":
+                                print_status(message, "error")
+                            elif alert_level == "warning":
+                                print_status(message, "warning")
+                            elif alert_level == "moderate":
+                                print_status(message, "info")
+                            # No need to print healthy status - keeps output cleaner
+                    except Exception as budget_err:
+                        logger.debug(f"Budget alert check failed: {budget_err}")
+
+                except Exception as e:
+                    logger.warning(f"Failed to track API cost: {e}")
 
         # Update conversation history with usage metadata and save
         if usage_metadata:

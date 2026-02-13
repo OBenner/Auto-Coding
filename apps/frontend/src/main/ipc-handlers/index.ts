@@ -38,6 +38,7 @@ import { registerScreenshotHandlers } from './screenshot-handlers';
 import { registerTerminalWorktreeIpcHandlers } from './terminal';
 import { registerMergeAnalyticsHandlers } from './merge-analytics-handlers';
 import { registerAnalyticsHandlers } from './analytics-handlers';
+import { registerCostHandlers } from './cost-analytics-handlers';
 import { registerTokenStatsHandlers } from './token-stats-handler';
 import { registerTemplateHandlers } from './template-handlers';
 import { registerFeedbackHandlers } from './feedback-handlers';
@@ -138,6 +139,9 @@ export function setupIpcHandlers(
   // Productivity analytics handlers
   registerAnalyticsHandlers();
 
+  // Cost analytics handlers
+  registerCostHandlers();
+
   // Token statistics handlers
   registerTokenStatsHandlers();
 
@@ -181,6 +185,7 @@ export {
   registerScreenshotHandlers,
   registerMergeAnalyticsHandlers,
   registerAnalyticsHandlers,
+  registerCostHandlers,
   registerTokenStatsHandlers,
   registerTemplateHandlers,
   registerFeedbackHandlers,

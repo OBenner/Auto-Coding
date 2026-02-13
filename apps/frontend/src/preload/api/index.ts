@@ -18,6 +18,7 @@ import { QueueAPI, createQueueAPI } from './queue-api';
 import { PluginAPI, createPluginAPI } from './plugin-api';
 import { SchedulerAPI, createSchedulerAPI } from './scheduler-api';
 import { FeedbackAPI, createFeedbackAPI } from './feedback-api';
+import { CostAPI, createCostAPI } from './cost-analytics-api';
 
 export interface ElectronAPI extends
   ProjectAPI,
@@ -36,7 +37,8 @@ export interface ElectronAPI extends
   ProfileAPI,
   ScreenshotAPI,
   PluginAPI,
-  FeedbackAPI {
+  FeedbackAPI,
+  CostAPI {
   github: GitHubAPI;
   /** Queue routing API for rate limit recovery */
   queue: QueueAPI;
@@ -59,6 +61,7 @@ export const createElectronAPI = (): ElectronAPI => ({
   ...createScreenshotAPI(),
   ...createPluginAPI(),
   ...createFeedbackAPI(),
+  ...createCostAPI(),
   github: createGitHubAPI(),
   queue: createQueueAPI(),  // Queue routing for rate limit recovery
   scheduler: createSchedulerAPI()
@@ -83,7 +86,8 @@ export {
   createQueueAPI,
   createPluginAPI,
   createSchedulerAPI,
-  createFeedbackAPI
+  createFeedbackAPI,
+  createCostAPI
 };
 
 export type {
@@ -106,5 +110,6 @@ export type {
   QueueAPI,
   PluginAPI,
   SchedulerAPI,
-  FeedbackAPI
+  FeedbackAPI,
+  CostAPI
 };
