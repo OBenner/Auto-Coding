@@ -143,6 +143,7 @@ from core.auth import (
     require_auth_token,
     validate_token_not_encrypted,
 )
+from enterprise.data_residency import get_data_residency_config
 from linear_updater import is_linear_enabled
 from prompts_pkg.project_context import detect_project_capabilities, load_project_index
 from security import bash_security_hook
@@ -668,6 +669,17 @@ def create_client(
     # Collect env vars to pass to SDK (ANTHROPIC_BASE_URL, etc.)
     sdk_env = get_sdk_env_vars()
 
+    # Configure data residency (regional API endpoints)
+    data_residency_config = get_data_residency_config()
+    regional_endpoint = data_residency_config.get_endpoint()
+
+    # Override ANTHROPIC_BASE_URL if custom regional endpoint is configured
+    if data_residency_config.custom_endpoint:
+        sdk_env["ANTHROPIC_BASE_URL"] = regional_endpoint
+        logger.info(
+            f"Data residency: Using custom endpoint for region {data_residency_config.region}: {regional_endpoint}"
+        )
+
     # Debug: Log git-bash path detection on Windows
     if "CLAUDE_CODE_GIT_BASH_PATH" in sdk_env:
         logger.info(f"Git Bash path found: {sdk_env['CLAUDE_CODE_GIT_BASH_PATH']}")
@@ -834,6 +846,18 @@ def create_client(
         print(f"   - Extended thinking: {max_thinking_tokens:,} tokens")
     else:
         print("   - Extended thinking: disabled")
+
+    # Display data residency configuration
+    if data_residency_config.custom_endpoint:
+        print(
+            f"   - Data residency: {data_residency_config.region} "
+            f"(endpoint: {regional_endpoint})"
+        )
+        if data_residency_config.requires_gdpr_compliance:
+            frameworks = ", ".join(data_residency_config.compliance_frameworks)
+            print(f"   - Compliance: {frameworks}")
+    else:
+        print(f"   - Data residency: {data_residency_config.region} (default endpoint)")
 
     # Build list of MCP servers for display based on required_servers
     mcp_servers_list = []
