@@ -19,7 +19,8 @@ import {
   Code,
   Bug,
   Users,
-  Keyboard
+  Keyboard,
+  Shield
 } from 'lucide-react';
 
 // GitLab icon component (lucide-react doesn't have one)
@@ -53,6 +54,7 @@ import { DevToolsSettings } from './DevToolsSettings';
 import { DebugSettings } from './DebugSettings';
 import { AccountSettings } from './AccountSettings';
 import { KeyboardShortcutsSettings } from './KeyboardShortcutsSettings';
+import { SecuritySettings } from './SecuritySettings';
 import { ProjectSelector } from './ProjectSelector';
 import { ProjectSettingsContent, ProjectSettingsSection } from './ProjectSettingsContent';
 import { useProjectStore } from '../../stores/project-store';
@@ -67,7 +69,7 @@ interface AppSettingsDialogProps {
 }
 
 // App-level settings sections
-export type AppSection = 'appearance' | 'display' | 'language' | 'devtools' | 'agent' | 'paths' | 'accounts' | 'updates' | 'notifications' | 'keyboardShortcuts' | 'debug';
+export type AppSection = 'appearance' | 'display' | 'language' | 'devtools' | 'agent' | 'paths' | 'accounts' | 'security' | 'updates' | 'notifications' | 'keyboardShortcuts' | 'debug';
 
 interface NavItemConfig<T extends string> {
   id: T;
@@ -82,6 +84,7 @@ const appNavItemsConfig: NavItemConfig<AppSection>[] = [
   { id: 'agent', icon: Bot },
   { id: 'paths', icon: FolderOpen },
   { id: 'accounts', icon: Users },
+  { id: 'security', icon: Shield },
   { id: 'updates', icon: Package },
   { id: 'notifications', icon: Bell },
   { id: 'keyboardShortcuts', icon: Keyboard },
@@ -194,6 +197,8 @@ export function AppSettingsDialog({ open, onOpenChange, initialSection, initialP
         return <GeneralSettings settings={settings} onSettingsChange={setSettings} section="paths" />;
       case 'accounts':
         return <AccountSettings settings={settings} onSettingsChange={setSettings} isOpen={open} />;
+      case 'security':
+        return <SecuritySettings settings={settings} onSettingsChange={setSettings} isOpen={open} />;
       case 'updates':
         return <AdvancedSettings settings={settings} onSettingsChange={setSettings} section="updates" version={version} />;
       case 'notifications':

@@ -1,0 +1,67 @@
+{
+  "title": "Security",
+  "description": "Manage security settings, permissions, and audit logs",
+  "levels": {
+    "title": "Security Level",
+    "paranoid": {
+      "name": "Paranoid",
+      "description": "Maximum security with minimal permissions. Only essential commands allowed."
+    },
+    "standard": {
+      "name": "Standard",
+      "description": "Balanced security with reasonable restrictions. Recommended for most users."
+    },
+    "permissive": {
+      "name": "Permissive",
+      "description": "Minimal restrictions with broad permissions. Use with caution."
+    },
+    "maxCommands": "Max {{count}} commands",
+    "filesystemRestricted": "Filesystem: Restricted",
+    "filesystemOpen": "Filesystem: Open",
+    "apiRestricted": "API: Restricted",
+    "apiOpen": "API: Open"
+  },
+  "status": {
+    "active": "Active"
+  },
+  "profile": {
+    "title": "Security Profile",
+    "totalCommands": "Total Allowed Commands",
+    "filesystemAccess": "Filesystem Access",
+    "apiAccess": "API Access",
+    "restricted": "Restricted",
+    "fullAccess": "Full Access"
+  },
+  "actions": {
+    "export": "Export Configuration",
+    "exporting": "Exporting..."
+  },
+  "audit": {
+    "title": "Audit Log",
+    "totalEvents": "Total Logged Events",
+    "recentEvents": "Recent Events",
+    "noEvents": "No security events logged yet"
+  },
+  "warnings": {
+    "permissiveLevel": "Switching to Permissive mode will allow broad system access. This may expose your system to security risks. Continue?",
+    "riskyConfigTitle": "Risky Security Configuration",
+    "riskyConfigDescription": "Your current security settings allow broad access to system resources. Consider switching to Standard or Paranoid mode for better security.",
+    "dialogTitle": "Confirm Security Change",
+    "confirmRisk": "Confirm Risk"
+  },
+  "toast": {
+    "loadProfileFailed": "Failed to load security profile",
+    "saveProfileFailed": "Failed to save security profile",
+    "levelApplied": {
+      "paranoid": "Paranoid security level applied",
+      "standard": "Standard security level applied",
+      "permissive": "Permissive security level applied"
+    },
+    "levelApplied": "Security level applied",
+    "exportSuccess": "Configuration exported",
+    "exportSuccessDescription": "Security configuration downloaded successfully",
+    "exportFailed": "Failed to export configuration",
+    "logsRefreshed": "Audit logs refreshed",
+    "logsRefreshedDescription": "Security event logs have been updated"
+  }
+}

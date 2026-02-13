@@ -33,6 +33,10 @@
       "title": "Accounts",
       "description": "Claude accounts & API endpoints"
     },
+    "security": {
+      "title": "Security",
+      "description": "Security settings & permissions"
+    },
     "updates": {
       "title": "Updates",
       "description": "Auto-Coding updates"

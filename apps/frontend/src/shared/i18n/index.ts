@@ -5,6 +5,7 @@ import { initReactI18next } from 'react-i18next';
 import enCommon from './locales/en/common.json';
 import enNavigation from './locales/en/navigation.json';
 import enSettings from './locales/en/settings.json';
+import enSecurity from './locales/en/security.json';
 import enTasks from './locales/en/tasks.json';
 import enWelcome from './locales/en/welcome.json';
 import enOnboarding from './locales/en/onboarding.json';
@@ -18,6 +19,7 @@ import enErrors from './locales/en/errors.json';
 import frCommon from './locales/fr/common.json';
 import frNavigation from './locales/fr/navigation.json';
 import frSettings from './locales/fr/settings.json';
+import frSecurity from './locales/fr/security.json';
 import frTasks from './locales/fr/tasks.json';
 import frWelcome from './locales/fr/welcome.json';
 import frOnboarding from './locales/fr/onboarding.json';
@@ -34,6 +36,7 @@ export const resources = {
     common: enCommon,
     navigation: enNavigation,
     settings: enSettings,
+    security: enSecurity,
     tasks: enTasks,
     welcome: enWelcome,
     onboarding: enOnboarding,
@@ -47,6 +50,7 @@ export const resources = {
     common: frCommon,
     navigation: frNavigation,
     settings: frSettings,
+    security: frSecurity,
     tasks: frTasks,
     welcome: frWelcome,
     onboarding: frOnboarding,
@@ -65,7 +69,7 @@ i18n
     lng: 'en', // Default language (will be overridden by settings)
     fallbackLng: 'en',
     defaultNS,
-    ns: ['common', 'navigation', 'settings', 'tasks', 'welcome', 'onboarding', 'dialogs', 'gitlab', 'taskReview', 'terminal', 'errors'],
+    ns: ['common', 'navigation', 'settings', 'security', 'tasks', 'welcome', 'onboarding', 'dialogs', 'gitlab', 'taskReview', 'terminal', 'errors'],
     interpolation: {
       escapeValue: false // React already escapes values
     },
