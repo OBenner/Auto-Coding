@@ -1208,13 +1208,16 @@ async def run_agent_session_isolated(
     max_thinking_tokens: int | None = None,
     session_name: str = "agent-session",
     limits: ResourceLimits | None = None,
+    subtask_id: str | None = None,
+    max_retries: int = 3,
 ) -> tuple[str, str, dict[str, int] | None]:
     """
     Run an agent session in an isolated subprocess with resource limits.
 
     This provides crash-resistant execution by running the agent in a separate
     process with controlled resource usage. If the agent crashes, the main
-    process remains unaffected.
+    process remains unaffected and the agent is automatically restarted with
+    state restoration.
 
     Args:
         project_dir: Root directory of the project
@@ -1226,6 +1229,8 @@ async def run_agent_session_isolated(
         max_thinking_tokens: Optional thinking token limit
         session_name: Name for the agent session
         limits: Optional resource limits (defaults to ResourceLimits())
+        subtask_id: Optional subtask ID for recovery tracking
+        max_retries: Maximum number of retry attempts on failure (default: 3)
 
     Returns:
         (status, response_text, usage_metadata) where:
@@ -1247,7 +1252,11 @@ async def run_agent_session_isolated(
         agent_type=agent_type,
         model=model,
         session_name=session_name,
+        subtask_id=subtask_id,
     )
+
+    # Initialize recovery manager for automatic crash recovery
+    recovery_manager = RecoveryManager(spec_dir=spec_dir, project_dir=project_dir)
 
     # Initialize process isolator with resource limits
     isolator = AgentProcessIsolator(project_dir=project_dir, limits=limits)
@@ -1262,139 +1271,272 @@ async def run_agent_session_isolated(
         debug_error("session", error_msg)
         return "error", error_msg, None
 
-    args = [
-        "--project-dir",
-        str(project_dir),
-        "--spec-dir",
-        str(spec_dir),
-        "--agent-type",
-        agent_type,
-        "--model",
-        model,
-        "--message",
-        starting_message,
-        "--session-name",
-        session_name,
-    ]
+    # Track retry attempts and conversation history for state restoration
+    attempt = 0
+    conversation_history: ConversationHistory | None = None
+    last_error = None
 
-    if system_prompt:
-        args.extend(["--system-prompt", system_prompt])
+    while attempt <= max_retries:
+        attempt += 1
+        attempt_suffix = f" (attempt {attempt}/{max_retries})" if attempt > 1 else ""
 
-    if max_thinking_tokens:
-        args.extend(["--max-thinking-tokens", str(max_thinking_tokens)])
-
-    debug_verbose(
-        "session",
-        "Executing agent in isolated subprocess",
-        script=agent_script.name,
-        args=args,
-    )
-
-    # Execute agent in isolated subprocess
-    print(
-        f"Running {agent_type} agent in isolated subprocess (resource-limited)...\n"
-    )
-
-    try:
-        result: AgentIsolationResult = isolator.execute_agent(
-            agent_script=str(agent_script),
-            agent_args=args,
-            working_dir=project_dir,
-        )
-
-        debug(
-            "session",
-            "Subprocess execution completed",
-            success=result.success,
-            return_code=result.return_code,
-            execution_time=result.execution_time,
-            violated_limits=result.violated_limits,
-        )
-
-        # Handle execution results
-        if not result.success:
-            error_details = []
-
-            if result.crashed:
-                error_details.append(f"Agent process crashed (exit code: {result.return_code})")
-
-            if result.violated_limits:
-                limits_str = ", ".join(result.violated_limits)
-                error_details.append(f"Resource limits exceeded: {limits_str}")
-
-            if result.error:
-                error_details.append(f"Error: {result.error}")
-
-            if result.stderr:
-                error_details.append(f"stderr: {result.stderr[:500]}")
-
-            error_msg = "\n".join(error_details)
-            debug_error("session", "Isolated agent session failed", error=error_msg)
-            print(f"\n[ERROR] Agent subprocess failed:\n{error_msg}\n")
-
-            return "error", error_msg, None
-
-        # Parse agent output from JSON
-        if result.agent_output:
+        # Prepare message with resume context if retrying
+        if attempt > 1 and conversation_history:
+            # Resume with previous conversation history for state restoration
+            starting_message, _ = await resume_session(
+                spec_dir=spec_dir,
+                subtask_id=subtask_id or session_name,
+                new_message=(
+                    f"\n\n## Recovery Attempt {attempt}/{max_retries}\n\n"
+                    f"Previous attempt failed with error: {last_error}\n\n"
+                    f"Please continue from where you left off. Your previous work has been saved.\n\n"
+                    f"{starting_message}"
+                ),
+            )
             debug_success(
                 "session",
-                "Agent subprocess completed successfully",
-                execution_time=result.execution_time,
+                f"Restored conversation history for retry {attempt}",
+                previous_rounds=len(conversation_history.rounds),
             )
 
-            agent_success = result.agent_output.get("success", False)
-            agent_output = result.agent_output.get("output", {})
-            agent_error = result.agent_output.get("error")
+        args = [
+            "--project-dir",
+            str(project_dir),
+            "--spec-dir",
+            str(spec_dir),
+            "--agent-type",
+            agent_type,
+            "--model",
+            model,
+            "--message",
+            starting_message,
+            "--session-name",
+            f"{session_name}_attempt{attempt}",
+        ]
 
-            if not agent_success:
-                error_msg = agent_error or "Agent session failed (no error message)"
-                debug_error("session", "Agent reported failure", error=error_msg)
-                print(f"\n[ERROR] Agent session failed: {error_msg}\n")
+        if system_prompt:
+            args.extend(["--system-prompt", system_prompt])
+
+        if max_thinking_tokens:
+            args.extend(["--max-thinking-tokens", str(max_thinking_tokens)])
+
+        debug_verbose(
+            "session",
+            f"Executing agent in isolated subprocess{attempt_suffix}",
+            script=agent_script.name,
+            args=args,
+        )
+
+        # Execute agent in isolated subprocess
+        print(
+            f"Running {agent_type} agent in isolated subprocess (resource-limited)"
+            f"{attempt_suffix}...\n"
+        )
+
+        try:
+            result: AgentIsolationResult = isolator.execute_agent(
+                agent_script=str(agent_script),
+                agent_args=args,
+                working_dir=project_dir,
+            )
+
+            debug(
+                "session",
+                f"Subprocess execution completed (attempt {attempt})",
+                success=result.success,
+                return_code=result.return_code,
+                execution_time=result.execution_time,
+                violated_limits=result.violated_limits,
+            )
+
+            # Load conversation history after this attempt (for potential retry)
+            if subtask_id:
+                attempt_history = ConversationHistory.load_latest(spec_dir, subtask_id)
+                if attempt_history:
+                    conversation_history = attempt_history
+                    debug_success(
+                        "session",
+                        f"Loaded conversation history after attempt {attempt}",
+                        rounds=len(conversation_history.rounds),
+                    )
+
+            # Handle execution results
+            if not result.success:
+                error_details = []
+
+                if result.crashed:
+                    error_details.append(f"Agent process crashed (exit code: {result.return_code})")
+
+                if result.violated_limits:
+                    limits_str = ", ".join(result.violated_limits)
+                    error_details.append(f"Resource limits exceeded: {limits_str}")
+
+                if result.error:
+                    error_details.append(f"Error: {result.error}")
+
+                if result.stderr:
+                    error_details.append(f"stderr: {result.stderr[:500]}")
+
+                error_msg = "\n".join(error_details)
+                last_error = error_msg
+                debug_error("session", f"Isolated agent session failed (attempt {attempt})", error=error_msg)
+                print(f"\n[ERROR] Agent subprocess failed (attempt {attempt}/{max_retries}):\n{error_msg}\n")
+
+                # Determine recovery action using RecoveryManager
+                if subtask_id and attempt < max_retries:
+                    failure_type = recovery_manager.classify_failure(
+                        error=error_msg, subtask_id=subtask_id
+                    )
+                    recovery_action = recovery_manager.determine_recovery_action(
+                        failure_type=failure_type, subtask_id=subtask_id
+                    )
+
+                    debug(
+                        "session",
+                        f"Recovery assessment (attempt {attempt})",
+                        failure_type=failure_type.value,
+                        recovery_action=recovery_action.action,
+                        recovery_reason=recovery_action.reason,
+                    )
+
+                    # Record this attempt
+                    recovery_manager.record_attempt(
+                        subtask_id=subtask_id,
+                        session=attempt,
+                        success=False,
+                        approach=f"Isolated subprocess execution - {agent_type}",
+                        error=error_msg[:500],
+                    )
+
+                    # Determine if we should retry
+                    if recovery_action.action in ("retry", "continue"):
+                        print_status(
+                            f"Crash recovery: retrying ({recovery_action.reason})",
+                            "warning",
+                        )
+                        # Continue to next iteration of retry loop
+                        continue
+                    elif recovery_action.action == "rollback":
+                        print_status(f"Crash recovery: rolling back ({recovery_action.reason})", "warning")
+                        # Perform rollback and retry
+                        if recovery_manager.rollback_to_commit(recovery_action.target):
+                            continue
+                        else:
+                            print_status("Rollback failed, aborting retries", "error")
+                            return "error", f"Rollback failed: {error_msg}", None
+                    else:
+                        # Skip or escalate - don't retry
+                        if recovery_action.action == "escalate":
+                            recovery_manager.mark_subtask_stuck(
+                                subtask_id=subtask_id, reason=recovery_action.reason
+                            )
+                            print_status(
+                                f"Crash recovery: escalating to human ({recovery_action.reason})",
+                                "error",
+                            )
+                        return "error", error_msg, None
+
+                # No more retries or no subtask_id - return error
                 return "error", error_msg, None
 
-            # Extract response from agent output
-            response_text = ""
-            if isinstance(agent_output, dict):
-                response_text = agent_output.get("response", "")
-            elif isinstance(agent_output, str):
-                response_text = agent_output
+            # Success! Parse agent output from JSON
+            if result.agent_output:
+                debug_success(
+                    "session",
+                    f"Agent subprocess completed successfully (attempt {attempt})",
+                    execution_time=result.execution_time,
+                )
+
+                agent_success = result.agent_output.get("success", False)
+                agent_output_data = result.agent_output.get("output", {})
+                agent_error = result.agent_output.get("error")
+
+                if not agent_success:
+                    error_msg = agent_error or "Agent session failed (no error message)"
+                    last_error = error_msg
+                    debug_error("session", f"Agent reported failure (attempt {attempt})", error=error_msg)
+                    print(f"\n[ERROR] Agent session failed (attempt {attempt}): {error_msg}\n")
+
+                    # Record failed attempt and check for retry
+                    if subtask_id and attempt < max_retries:
+                        failure_type = recovery_manager.classify_failure(
+                            error=error_msg, subtask_id=subtask_id
+                        )
+                        recovery_action = recovery_manager.determine_recovery_action(
+                            failure_type=failure_type, subtask_id=subtask_id
+                        )
+
+                        recovery_manager.record_attempt(
+                            subtask_id=subtask_id,
+                            session=attempt,
+                            success=False,
+                            approach=f"Isolated subprocess execution - {agent_type}",
+                            error=error_msg[:500],
+                        )
+
+                        if recovery_action.action in ("retry", "continue"):
+                            print_status(f"Agent failed, retrying ({recovery_action.reason})", "warning")
+                            continue
+
+                    return "error", error_msg, None
+
+                # Extract response from agent output
+                response_text = ""
+                if isinstance(agent_output_data, dict):
+                    response_text = agent_output_data.get("response", "")
+                elif isinstance(agent_output_data, str):
+                    response_text = agent_output_data
+                else:
+                    response_text = str(agent_output_data)
+
+                # Note: Usage metadata not currently available from subprocess
+                # This would require extending agent_subprocess.py to capture and return it
+                usage_metadata = None
+
+                # Record successful attempt if subtask_id provided
+                if subtask_id:
+                    recovery_manager.record_attempt(
+                        subtask_id=subtask_id,
+                        session=attempt,
+                        success=True,
+                        approach=f"Isolated subprocess execution - {agent_type}",
+                    )
+                    if attempt > 1:
+                        print_status(
+                            f"Agent subprocess recovered after {attempt} attempts",
+                            "success",
+                        )
+
+                print(
+                    f"\n✓ Agent subprocess completed successfully "
+                    f"(execution time: {result.execution_time:.1f}s)\n"
+                )
+
+                # For subprocess execution, we consider it "complete" since it ran to completion
+                return "complete", response_text, usage_metadata
+
             else:
-                response_text = str(agent_output)
+                # No JSON output but success - treat stdout as response
+                debug_warning(
+                    "session",
+                    "Agent subprocess succeeded but produced no JSON output",
+                    stdout_length=len(result.stdout),
+                )
+                return "complete", result.stdout, None
 
-            # Note: Usage metadata not currently available from subprocess
-            # This would require extending agent_subprocess.py to capture and return it
-            usage_metadata = None
+        except AgentProcessError as e:
+            error_msg = f"Process isolation error: {e}"
+            debug_error("session", error_msg, exception_type=type(e).__name__)
+            print(f"\n[ERROR] {error_msg}\n")
+            return "error", error_msg, None
 
-            print(
-                f"\n✓ Agent subprocess completed successfully "
-                f"(execution time: {result.execution_time:.1f}s)\n"
-            )
-
-            # For subprocess execution, we consider it "complete" since it ran to completion
-            return "complete", response_text, usage_metadata
-
-        else:
-            # No JSON output but success - treat stdout as response
-            debug_warning(
+        except Exception as e:
+            error_msg = f"Unexpected error in isolated session: {e}"
+            debug_error(
                 "session",
-                "Agent subprocess succeeded but produced no JSON output",
-                stdout_length=len(result.stdout),
+                error_msg,
+                exception_type=type(e).__name__,
+                traceback=str(e),
             )
-            return "complete", result.stdout, None
-
-    except AgentProcessError as e:
-        error_msg = f"Process isolation error: {e}"
-        debug_error("session", error_msg, exception_type=type(e).__name__)
-        print(f"\n[ERROR] {error_msg}\n")
-        return "error", error_msg, None
-
-    except Exception as e:
-        error_msg = f"Unexpected error in isolated session: {e}"
-        debug_error(
-            "session",
-            error_msg,
-            exception_type=type(e).__name__,
-            traceback=str(e),
-        )
-        print(f"\n[ERROR] {error_msg}\n")
-        return "error", error_msg, None
+            print(f"\n[ERROR] {error_msg}\n")
+            return "error", error_msg, None
