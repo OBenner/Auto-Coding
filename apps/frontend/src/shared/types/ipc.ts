@@ -62,6 +62,12 @@ import type {
   ProductivityAnalyticsExportOptions
 } from './productivity-analytics';
 import type {
+  ModelUsageSummary,
+  ModelUsageTrendPoint,
+  ModelUsageExportOptions,
+  ModelUsageFilter
+} from './model-usage';
+import type {
   TerminalCreateOptions,
   TerminalSession,
   TerminalRestoreResult,
@@ -907,6 +913,11 @@ export interface ElectronAPI {
   getProductivitySummary: (projectId: string, filter?: ProductivityAnalyticsFilter) => Promise<IPCResult<ProductivitySummary>>;
   getProductivityTrends: (projectId: string, filter?: ProductivityAnalyticsFilter) => Promise<IPCResult<ProductivityTrendPoint[]>>;
   exportProductivityAnalytics: (projectId: string, options: ProductivityAnalyticsExportOptions) => Promise<IPCResult<string>>;
+
+  // Model usage analytics operations
+  getModelUsageSummary: (projectId: string, filter?: ModelUsageFilter) => Promise<IPCResult<ModelUsageSummary>>;
+  getModelUsageTrends: (projectId: string, filter?: ModelUsageFilter) => Promise<IPCResult<ModelUsageTrendPoint[]>>;
+  exportModelUsageAnalytics: (projectId: string, options: ModelUsageExportOptions) => Promise<IPCResult<string>>;
 
   // Template library operations
   listTemplates: (projectId: string, options?: { category?: TemplateCategory | 'all'; tags?: string[] }) => Promise<IPCResult<TemplateInfo[]>>;
