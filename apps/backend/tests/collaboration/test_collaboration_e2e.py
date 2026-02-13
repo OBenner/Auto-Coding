@@ -131,16 +131,28 @@ async def connect_client(
     return json.loads(response)
 
 
-async def send_content_update(
+async def send_operation(
     websocket: websockets.asyncio.client.ClientConnection,
-    content: str,
+    op_type: str,  # "insert" or "delete"
+    position: int,
+    content: str = "",
+    author_id: str = "user1",
+    author_name: str = "Test User",
 ):
-    """Send a content update to the server."""
-    update_msg = {
-        "type": MessageType.CONTENT_UPDATE.value,
-        "content": content,
+    """Send CRDT operation to server."""
+    operation_msg = {
+        "type": MessageType.OPERATION.value,
+        "data": {
+            "operation": {
+                "op_type": op_type,
+                "position": position,
+                "content": content,
+                "author": author_id,
+                "author_name": author_name,
+            }
+        },
     }
-    await websocket.send(json.dumps(update_msg))
+    await websocket.send(json.dumps(operation_msg))
 
 
 async def send_presence_update(
@@ -267,13 +279,13 @@ async def test_content_sync_between_clients(two_test_clients):
 
     # User 1 updates content
     new_content = "# Updated Spec\n\nThis is updated content."
-    await send_content_update(client1, new_content)
+    await send_operation(client1, "insert", 0, new_content, author_id="user1", author_name="Alice")
 
     # User 2 should receive the update
     msg = await client2.recv()
-    update = json.loads(msg)
-    assert update["type"] == "content_update"
-    assert update["content"] == new_content
+    broadcast = json.loads(msg)
+    assert broadcast["type"] == "operation_broadcast"
+    assert broadcast["data"]["operation"]["content"] == new_content
 
 
 @pytest.mark.asyncio
@@ -450,13 +462,13 @@ async def test_version_history_tracking(two_test_clients, temp_spec_dir):
     await asyncio.sleep(0.1)
 
     # Make multiple edits
-    await send_content_update(client1, "# Version 1\n")
+    await send_operation(client1, "insert", 0, "# Version 1\n", author_id="user1", author_name="Alice")
     await asyncio.sleep(0.1)
 
-    await send_content_update(client2, "# Version 2\n")
+    await send_operation(client2, "insert", 0, "# Version 2\n", author_id="user2", author_name="Bob")
     await asyncio.sleep(0.1)
 
-    await send_content_update(client1, "# Version 3\n")
+    await send_operation(client1, "insert", 0, "# Version 3\n", author_id="user1", author_name="Alice")
     await asyncio.sleep(0.1)
 
     # Request version history
@@ -486,7 +498,7 @@ async def test_approval_workflow(two_test_clients):
 
     # Finalize content
     final_content = "# Final Spec\n\nThis is ready for implementation."
-    await send_content_update(client1, final_content)
+    await send_operation(client1, "insert", 0, final_content, author_id="user1", author_name="Alice")
     await asyncio.sleep(0.1)
 
     # Request approval
@@ -518,17 +530,17 @@ async def test_concurrent_editing_no_conflicts(two_test_clients):
     await asyncio.sleep(0.1)
 
     # Both clients edit simultaneously (within short time window)
-    await send_content_update(client1, "# Edit 1\n\nContent from Alice.")
-    await send_content_update(client2, "# Edit 2\n\nContent from Bob.")
+    await send_operation(client1, "insert", 0, "# Edit 1\n\nContent from Alice.", author_id="user1", author_name="Alice")
+    await send_operation(client2, "insert", 0, "# Edit 2\n\nContent from Bob.", author_id="user2", author_name="Bob")
 
     # Both should receive updates
     msg1 = await client1.recv()
-    update1 = json.loads(msg1)
-    assert update1["type"] == "content_update"
+    broadcast1 = json.loads(msg1)
+    assert broadcast1["type"] == "operation_broadcast"
 
     msg2 = await client2.recv()
-    update2 = json.loads(msg2)
-    assert update2["type"] == "content_update"
+    broadcast2 = json.loads(msg2)
+    assert broadcast2["type"] == "operation_broadcast"
 
     # No errors should occur
     # The CRDT should handle the concurrent edits
