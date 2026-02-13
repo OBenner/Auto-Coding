@@ -8,12 +8,13 @@ Provides cost reporting and analysis for budget management.
 Components:
 - MODEL_PRICING: Pricing data for all Claude models (per 1M tokens)
 - CostTracker: Tracks usage and calculates costs per agent session
+- UsageRecord: Single usage record for an agent session
 
 Usage:
     # Create tracker for a spec
     tracker = CostTracker(spec_dir=Path(".auto-claude/specs/001"))
 
-    # Log usage after agent session
+    # Log usage after agent session with explicit parameters
     tracker.log_usage(
         agent_type="coder",
         model="claude-sonnet-4-5-20250929",
@@ -21,9 +22,19 @@ Usage:
         output_tokens=2000
     )
 
+    # Log usage from agent session metadata
+    tracker.log_session_usage(
+        agent_type="coder",
+        model="claude-sonnet-4-5-20250929",
+        usage_metadata={"input_tokens": 5000, "output_tokens": 2000}
+    )
+
     # Get cost summary
     summary = tracker.get_cost_summary()
     print(summary)
+
+    # Get cost data for analytics API
+    cost_data = tracker.get_analytics_data()
 """
 
 from __future__ import annotations
@@ -246,6 +257,36 @@ class CostTracker:
             ),
         }
 
+    def log_session_usage(
+        self,
+        agent_type: str,
+        model: str,
+        usage_metadata: dict[str, int],
+    ) -> float:
+        """
+        Log usage from agent session metadata.
+
+        This is a convenience method for logging usage from the dict returned
+        by Claude SDK client's usage_metadata.
+
+        Args:
+            agent_type: Type of agent (e.g., "coder", "planner")
+            model: Model identifier
+            usage_metadata: Dict with "input_tokens" and "output_tokens" keys
+
+        Returns:
+            Cost of this operation in dollars
+        """
+        input_tokens = usage_metadata.get("input_tokens", 0)
+        output_tokens = usage_metadata.get("output_tokens", 0)
+
+        return self.log_usage(
+            agent_type=agent_type,
+            model=model,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+        )
+
     def get_cost_summary(self) -> str:
         """
         Generate human-readable cost summary.
@@ -307,3 +348,61 @@ class CostTracker:
         )
 
         return "\n".join(lines)
+
+    def get_analytics_data(self) -> dict[str, Any]:
+        """
+        Get cost data structured for analytics dashboard.
+
+        Returns:
+            Dict with cost breakdowns suitable for JSON API responses
+        """
+        total_cost = self.get_total_cost()
+        by_agent = self.get_cost_by_agent()
+        by_model = self.get_cost_by_model()
+        tokens = self.get_token_usage()
+
+        # Create time series data from records
+        timeline = [
+            {
+                "timestamp": record.timestamp,
+                "agent_type": record.agent_type,
+                "model": record.model,
+                "cost": record.cost,
+                "input_tokens": record.input_tokens,
+                "output_tokens": record.output_tokens,
+            }
+            for record in self.records
+        ]
+
+        return {
+            "total_cost": total_cost,
+            "cost_by_agent": by_agent,
+            "cost_by_model": by_model,
+            "token_usage": tokens,
+            "timeline": timeline,
+            "record_count": len(self.records),
+        }
+
+    def get_records_by_agent(self, agent_type: str) -> list[UsageRecord]:
+        """
+        Get all records for a specific agent type.
+
+        Args:
+            agent_type: The agent type to filter by
+
+        Returns:
+            List of UsageRecord objects for the agent type
+        """
+        return [r for r in self.records if r.agent_type == agent_type]
+
+    def get_records_by_model(self, model: str) -> list[UsageRecord]:
+        """
+        Get all records for a specific model.
+
+        Args:
+            model: The model to filter by
+
+        Returns:
+            List of UsageRecord objects for the model
+        """
+        return [r for r in self.records if r.model == model]
