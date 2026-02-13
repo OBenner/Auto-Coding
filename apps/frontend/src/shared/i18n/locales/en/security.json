@@ -32,6 +32,54 @@
     "restricted": "Restricted",
     "fullAccess": "Full Access"
   },
+  "allowlist": {
+    "title": "Command Allowlist",
+    "description": "Control which commands Auto-Claude can execute in allowlist",
+    "stats": {
+      "total": "{{count}} total",
+      "allowed": "{{count}} allowed",
+      "blocked": "{{count}} blocked"
+    },
+    "searchPlaceholder": "Search allowlist commands...",
+    "addButton": "Add Command",
+    "empty": "No commands in allowlist. Add commands to get started.",
+    "noMatching": "No commands match your allowlist search",
+    "addedOn": "Added {{date}}",
+    "filters": {
+      "all": "All",
+      "allowed": "Allowed",
+      "blocked": "Blocked"
+    },
+    "addDialog": {
+      "title": "Add Command to Allowlist",
+      "description": "Add a new command to security allowlist. You can specify whether it's allowed by default in allowlist.",
+      "commandLabel": "Command",
+      "commandPlaceholder": "e.g., npm, git, python3",
+      "labelLabel": "Label (Optional)",
+      "labelPlaceholder": "e.g., Package Manager",
+      "allowedLabel": "Allowed by Default",
+      "allowedHint": "If checked, command will be allowed in allowlist. If unchecked, it will be blocked unless explicitly allowed."
+    },
+    "status": {
+      "allowed": "Allowed",
+      "blocked": "Blocked",
+      "allowedHint": "This command is currently allowed to execute",
+      "blockedHint": "This command is currently blocked from executing in allowlist"
+    },
+    "actions": {
+      "allow": "Allow Command",
+      "block": "Block Command",
+      "remove": "Remove from Allowlist"
+    },
+    "removeDialog": {
+      "title": "Remove Command?",
+      "description": "Are you sure you want to remove \"{{command}}\" from allowlist?",
+      "warning": "This action cannot be undone.",
+      "warningHint": "The command will be removed from allowlist and revert to its default security behavior."
+    },
+    "tipTitle": "Command Allowlist",
+    "tipDescription": "Manage which commands Auto-Claude is allowed to execute. Blocked commands in allowlist will be prevented from running for security."
+  },
   "actions": {
     "export": "Export Configuration",
     "exporting": "Exporting..."
@@ -43,14 +91,43 @@
     "noEvents": "No security events logged yet",
     "searchPlaceholder": "Search by message, command, file path...",
     "noMatchingEvents": "No matching security events",
-    "eventDetails": "Event Details"
+    "eventDetails": "Event Details",
+    "filters": {
+      "all": "All",
+      "category": "Category",
+      "severity": "Severity",
+      "status": "Status",
+      "allowed": "Allowed",
+      "blocked": "Blocked"
+    },
+    "categories": {
+      "command_execution": "Command",
+      "filesystem_access": "Filesystem",
+      "api_call": "API Call",
+      "permission_change": "Permission",
+      "sandbox_violation": "Sandbox",
+      "profile_loaded": "Profile",
+      "profile_exported": "Export",
+      "risk_detected": "Risk"
+    },
+    "severities": {
+      "info": "Info",
+      "warning": "Warning",
+      "critical": "Critical"
+    },
+    "status": {
+      "allowed": "Allowed",
+      "blocked": "Blocked"
+    }
   },
   "warnings": {
     "permissiveLevel": "Switching to Permissive mode will allow broad system access. This may expose your system to security risks. Continue?",
     "riskyConfigTitle": "Risky Security Configuration",
     "riskyConfigDescription": "Your current security settings allow broad access to system resources. Consider switching to Standard or Paranoid mode for better security.",
     "dialogTitle": "Confirm Security Change",
-    "confirmRisk": "Confirm Risk"
+    "confirmRisk": "Confirm Risk",
+    "paranoidEnabled": "Paranoid security level enabled - only essential commands are allowed",
+    "paranoidDisabled": "Paranoid security level disabled - returning to standard security settings"
   },
   "toast": {
     "loadProfileFailed": "Failed to load security profile",
@@ -65,7 +142,13 @@
     "exportSuccessDescription": "Security configuration downloaded successfully",
     "exportFailed": "Failed to export configuration",
     "logsRefreshed": "Audit logs refreshed",
-    "logsRefreshedDescription": "Security event logs have been updated"
+    "logsRefreshedDescription": "Security event logs have been updated",
+    "allowlistUpdated": "Command allowlist updated successfully",
+    "allowlistUpdateFailed": "Failed to update command allowlist",
+    "commandAllowed": "Command allowed in allowlist",
+    "commandBlocked": "Command blocked in allowlist",
+    "commandRemoved": "Command removed from allowlist",
+    "commandAdded": "Command added to allowlist"
   },
   "categories": {
     "command_execution": "Command",
