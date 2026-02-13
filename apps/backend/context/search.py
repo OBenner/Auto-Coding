@@ -135,17 +135,21 @@ class CodeSearcher:
                 try:
                     file_path = self.project_dir / match.path
                     content = file_path.read_text(encoding="utf-8", errors="ignore")
-                    files_to_score.append({
-                        "path": match.path,
-                        "content": content,
-                        "keyword_score": match.relevance_score,
-                    })
+                    files_to_score.append(
+                        {
+                            "path": match.path,
+                            "content": content,
+                            "keyword_score": match.relevance_score,
+                        }
+                    )
                 except (OSError, UnicodeDecodeError):
-                    files_to_score.append({
-                        "path": match.path,
-                        "content": "",
-                        "keyword_score": match.relevance_score,
-                    })
+                    files_to_score.append(
+                        {
+                            "path": match.path,
+                            "content": "",
+                            "keyword_score": match.relevance_score,
+                        }
+                    )
 
             # Score files semantically
             scored_files = await self.semantic_scorer.score_files(
@@ -154,24 +158,25 @@ class CodeSearcher:
 
             # Update matches with combined scores
             enhanced_matches = []
+            # Normalize keyword scores to [0, 1] using the max observed value
+            max_keyword = max((m.relevance_score for m in matches), default=1.0) or 1.0
+
             for scored_file in scored_files:
                 # Find the original match
                 original_match = next(
-                    (m for m in matches if m.path == scored_file["path"]),
-                    None
+                    (m for m in matches if m.path == scored_file["path"]), None
                 )
                 if original_match is None:
                     continue
 
-                # Combined scoring: 70% keyword, 30% semantic
-                # Keyword scores are typically higher (0-100+), semantic are 0-1
-                keyword_score = original_match.relevance_score
-                semantic_score = scored_file.get("semantic_score", 0.0)
+                # Normalize both scores to [0, 1] and combine
+                keyword_norm = min(original_match.relevance_score / max_keyword, 1.0)
+                semantic_score = float(scored_file.get("semantic_score", 0.0) or 0.0)
 
-                # Normalize and combine scores
-                # Use semantic score as a multiplier (0.5 to 1.5 range)
-                semantic_boost = 0.5 + semantic_score  # 0.5 to 1.5
-                combined_score = keyword_score * semantic_boost
+                # Weighted linear combination (both in [0, 1])
+                combined_norm = 0.7 * keyword_norm + 0.3 * semantic_score
+                # Project back to original keyword scale
+                combined_score = combined_norm * max_keyword
 
                 # Update reason to include semantic info
                 reason = original_match.reason
@@ -196,7 +201,9 @@ class CodeSearcher:
             return enhanced_matches[:20]  # Top 20 per service
 
         except Exception as e:
-            logger.warning(f"Semantic scoring failed, falling back to keyword-only: {e}")
+            logger.warning(
+                f"Semantic scoring failed, falling back to keyword-only: {e}"
+            )
             return matches
 
     def _iter_code_files(self, directory: Path):

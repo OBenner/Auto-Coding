@@ -58,24 +58,36 @@ class PriorityManager:
 
         return {}
 
+    def _normalize_path(self, file_path: str) -> str:
+        """Normalize a file path to project-relative POSIX format for lookup."""
+        path = Path(file_path)
+        if path.is_absolute():
+            try:
+                path = path.resolve().relative_to(self.project_dir)
+            except ValueError:
+                path = Path(path.name)
+        return str(path.as_posix())
+
     def get_priority(self, file_path: str) -> int:
         """
         Get priority level for a specific file.
 
         Args:
-            file_path: Path to the file (relative to project root)
+            file_path: Path to the file (absolute or relative to project root)
 
         Returns:
             Priority score (higher = more important)
         """
+        rel_path = self._normalize_path(file_path)
+
         # Check explicit file matches
-        if file_path in self.priorities:
-            level = self.priorities[file_path].get("priority", "normal")
+        if rel_path in self.priorities:
+            level = self.priorities[rel_path].get("priority", "normal")
             return self.PRIORITY_LEVELS.get(level, 0)
 
         # Check pattern matches
         for pattern, config in self.priorities.items():
-            if fnmatch.fnmatch(file_path, pattern):
+            if fnmatch.fnmatch(rel_path, pattern):
                 level = config.get("priority", "normal")
                 return self.PRIORITY_LEVELS.get(level, 0)
 
@@ -88,7 +100,7 @@ class PriorityManager:
         exclude_never: bool = True,
     ) -> list[FileMatch]:
         """
-        Filter matches based on user priorities.
+        Filter matches based on user priorities without mutating scores.
 
         Args:
             matches: List of FileMatch objects to filter
@@ -107,15 +119,13 @@ class PriorityManager:
                 logger.debug(f"Excluding {match.path} (user priority: never)")
                 continue
 
-            # Add priority score to relevance score
-            match.relevance_score += priority
             filtered.append(match)
 
         return filtered
 
     def sort_by_priority(self, matches: list[FileMatch]) -> list[FileMatch]:
         """
-        Sort matches by user priority (highest first).
+        Sort matches by combined priority + relevance (highest first).
 
         Args:
             matches: List of FileMatch objects to sort
@@ -125,10 +135,7 @@ class PriorityManager:
         """
         return sorted(
             matches,
-            key=lambda m: (
-                self.get_priority(m.path),
-                m.relevance_score,
-            ),
+            key=lambda m: float(self.get_priority(m.path)) + m.relevance_score,
             reverse=True,
         )
 

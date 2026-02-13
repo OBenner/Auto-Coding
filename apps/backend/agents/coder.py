@@ -70,6 +70,7 @@ from .utils import (
 # Import for context window usage display
 try:
     from context.token_estimator import TokenEstimator
+
     TOKEN_ESTIMATOR_AVAILABLE = True
 except ImportError:
     TOKEN_ESTIMATOR_AVAILABLE = False
@@ -79,7 +80,6 @@ logger = logging.getLogger(__name__)
 
 def _display_context_window_usage(
     context: dict,
-    spec_dir: Path,
     subtask_id: str | None = None,
 ) -> None:
     """
@@ -91,7 +91,6 @@ def _display_context_window_usage(
 
     Args:
         context: Context dict from load_subtask_context
-        spec_dir: Directory containing the spec
         subtask_id: Optional subtask ID for more detailed display
     """
     if not TOKEN_ESTIMATOR_AVAILABLE:
@@ -127,9 +126,9 @@ def _display_context_window_usage(
     # Context window limits (Claude models)
     # Conservative estimates to leave room for prompts and responses
     CONTEXT_LIMITS = {
-        "warning": 100000,    # Show warning above 100K tokens
-        "critical": 150000,   # Show critical message above 150K tokens
-        "max": 200000,        # Maximum safe context window
+        "warning": 100000,  # Show warning above 100K tokens
+        "critical": 150000,  # Show critical message above 150K tokens
+        "max": 200000,  # Maximum safe context window
     }
 
     # Determine status level
@@ -144,8 +143,12 @@ def _display_context_window_usage(
     print_status("Context Window Usage", status_level)
     print_key_value("Total Files", str(total_files))
     print_key_value("Estimated Tokens", f"{total_tokens:,}")
-    print_key_value("Pattern Files", f"{len(pattern_files)} ({pattern_tokens:,} tokens)")
-    print_key_value("Files to Modify", f"{len(files_to_modify)} ({modify_tokens:,} tokens)")
+    print_key_value(
+        "Pattern Files", f"{len(pattern_files)} ({pattern_tokens:,} tokens)"
+    )
+    print_key_value(
+        "Files to Modify", f"{len(files_to_modify)} ({modify_tokens:,} tokens)"
+    )
 
     # Show warnings if approaching limits
     if total_tokens > CONTEXT_LIMITS["critical"]:
@@ -153,14 +156,14 @@ def _display_context_window_usage(
         print_status(
             f"⚠️ Context window is critically large ({total_tokens:,} tokens). "
             f"This may impact performance or exceed model limits.",
-            "error"
+            "error",
         )
     elif total_tokens > CONTEXT_LIMITS["warning"]:
         print()
         print_status(
             f"⚠️ Context window is large ({total_tokens:,} tokens). "
             f"Consider reducing file count or using summaries.",
-            "warning"
+            "warning",
         )
 
     # Show percentage of context window used
@@ -515,7 +518,7 @@ async def run_autonomous_agent(
                 prompt += "\n\n" + format_context_for_prompt(context)
 
                 # Display context window usage for transparency
-                _display_context_window_usage(context, spec_dir, subtask_id)
+                _display_context_window_usage(context, subtask_id)
 
             # Retrieve and append Graphiti memory context (if enabled)
             graphiti_context = await get_graphiti_context(

@@ -6,6 +6,7 @@ Detects duplicate and similar code to reduce token usage in context.
 """
 
 import logging
+import os
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -71,8 +72,8 @@ class RedundancyDetector:
 
         filtered_files: list[FileMatch] = []
         removal_report: list[dict] = []
-        seen_hashes: set[str] = {}
-        seen_content_signatures: dict[str, FileMatch] = {}
+        seen_hashes: dict[str, str] = {}
+        seen_content_signatures: dict[str, dict] = {}
 
         # Sort by relevance score if keeping highest relevance
         if keep_highest_relevance:
@@ -82,7 +83,18 @@ class RedundancyDetector:
 
         for file_match in sorted_files:
             try:
-                file_path = self.project_dir / file_match.path
+                # Resolve path and ensure it's inside the project directory
+                raw_path = Path(file_match.path)
+                candidate = (
+                    raw_path if raw_path.is_absolute() else self.project_dir / raw_path
+                )
+                file_path = candidate.resolve()
+
+                if not str(file_path).startswith(str(self.project_dir) + os.sep):
+                    logger.warning(
+                        "Skipping file outside project root: %s", file_match.path
+                    )
+                    continue
 
                 # Check if file exists and is readable
                 if not file_path.exists():
@@ -98,28 +110,32 @@ class RedundancyDetector:
                         {
                             "file": file_match.path,
                             "reason": "exact_duplicate",
-                            "duplicate_of": seen_hashes.get(content_hash),
-                            "tokens_saved": file_match.estimated_tokens,
+                            "duplicate_of": seen_hashes[content_hash],
+                            "tokens_saved": file_match.estimated_tokens or 0,
                         }
                     )
                     logger.debug(f"Exact duplicate found: {file_match.path}")
                     continue
 
+                # Normalize content for near-duplicate detection
+                normalized_content = self._normalize_content(content)
+
                 # Check for near-duplicate (signature-based)
                 signature = self._compute_content_signature(content)
                 if signature in seen_content_signatures:
-                    # Check similarity score
-                    similar_file = seen_content_signatures[signature]
-                    similarity = self._compute_similarity(content, signature)
+                    stored = seen_content_signatures[signature]
+                    similarity = self._compute_similarity(
+                        normalized_content, stored["normalized"]
+                    )
 
                     if similarity >= self.similarity_threshold:
                         removal_report.append(
                             {
                                 "file": file_match.path,
                                 "reason": "near_duplicate",
-                                "similar_to": similar_file.path,
+                                "similar_to": stored["file"].path,
                                 "similarity": similarity,
-                                "tokens_saved": file_match.estimated_tokens,
+                                "tokens_saved": file_match.estimated_tokens or 0,
                             }
                         )
                         logger.debug(
@@ -131,7 +147,10 @@ class RedundancyDetector:
                 # No redundancy found, keep this file
                 filtered_files.append(file_match)
                 seen_hashes[content_hash] = file_match.path
-                seen_content_signatures[signature] = file_match
+                seen_content_signatures[signature] = {
+                    "file": file_match,
+                    "normalized": normalized_content,
+                }
 
             except (OSError, UnicodeDecodeError) as e:
                 logger.debug(f"Failed to analyze file {file_match.path}: {e}")
@@ -203,36 +222,51 @@ class RedundancyDetector:
 
         return hashlib.md5(normalized_content.encode("utf-8")).hexdigest()
 
-    def _compute_similarity(self, content: str, signature: str) -> float:
+    def _normalize_content(self, content: str) -> str:
         """
-        Compute similarity between content and a signature.
-
-        This is a simplified similarity check. For more accurate results,
-        consider using semantic embeddings from SemanticScorer.
+        Normalize content for similarity comparison.
 
         Args:
-            content: File content to compare
-            signature: Content signature to compare against
+            content: Raw file content
+
+        Returns:
+            Normalized content string
+        """
+        lines = content.split("\n")
+        normalized_lines = []
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+            if line.startswith(("#", "//")):
+                continue
+            normalized = " ".join(line.split()).lower()
+            if normalized:
+                normalized_lines.append(normalized)
+        return "\n".join(normalized_lines)
+
+    def _compute_similarity(self, a: str, b: str) -> float:
+        """
+        Compute Jaccard similarity between two normalized contents.
+
+        Args:
+            a: First normalized content string
+            b: Second normalized content string
 
         Returns:
             Similarity score between 0.0 and 1.0
         """
-        # For now, use a basic line-based similarity
-        # In production, this could use embeddings from SemanticScorer
+        if not a or not b:
+            return 0.0
 
-        lines = set(content.split("\n"))
-        # Recompute signature to get lines
-        normalized_lines = []
-        for line in lines:
-            line = line.strip()
-            if line and not line.startswith(("#", "//")):
-                normalized = " ".join(line.split()).lower()
-                if normalized:
-                    normalized_lines.append(normalized)
+        a_lines = {line for line in a.split("\n") if line}
+        b_lines = {line for line in b.split("\n") if line}
+        if not a_lines or not b_lines:
+            return 0.0
 
-        # Simple Jaccard similarity placeholder
-        # Real implementation would compare against stored signature
-        return 0.9  # Placeholder - indicates high similarity if signature matches
+        intersection = a_lines & b_lines
+        union = a_lines | b_lines
+        return len(intersection) / len(union)
 
     def find_redundant_snippets(
         self,
@@ -271,8 +305,7 @@ class RedundancyDetector:
                     snippet_lines = lines[i : i + min_lines]
                     # Skip empty/comment-only snippets
                     if any(
-                        line.strip()
-                        and not line.strip().startswith(("#", "//"))
+                        line.strip() and not line.strip().startswith(("#", "//"))
                         for line in snippet_lines
                     ):
                         snippet_key = "\n".join(snippet_lines)
@@ -289,9 +322,7 @@ class RedundancyDetector:
         for snippet, occurrences in all_snippets.items():
             if len(occurrences) > 1:
                 # Found duplicate snippet
-                total_tokens = (
-                    len(snippet.split()) // 4 if self.token_estimator else 0
-                )
+                total_tokens = len(snippet.split()) // 4 if self.token_estimator else 0
                 snippets.append(
                     {
                         "snippet": snippet[:200],  # Truncate for report
@@ -300,7 +331,8 @@ class RedundancyDetector:
                             for path, line_num, _ in occurrences
                         ],
                         "count": len(occurrences),
-                        "potential_token_savings": total_tokens * (len(occurrences) - 1),
+                        "potential_token_savings": total_tokens
+                        * (len(occurrences) - 1),
                     }
                 )
 

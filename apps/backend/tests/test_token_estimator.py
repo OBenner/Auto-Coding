@@ -21,10 +21,9 @@ for td in tests_dirs:
 backend_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(backend_root))
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
-
 from context.token_estimator import TokenEstimator
 
 
@@ -122,7 +121,7 @@ def hello_world():
 
         # Create a temporary file
         test_file = tmp_path / "test.py"
-        test_file.write_text('x = 42', encoding="utf-8")
+        test_file.write_text("x = 42", encoding="utf-8")
 
         # Pass as string instead of Path
         tokens = estimator.count_tokens_in_file(str(test_file))
@@ -181,7 +180,6 @@ def hello_world():
 
         # Use character-based estimation directly (4 chars per token)
         text = "Hello, world!"  # 13 characters
-        expected_fallback_tokens = len(text) // 4  # Should be 3
 
         # Create a fresh estimator
         estimator = TokenEstimator()
@@ -366,7 +364,9 @@ Symbols: ©®™€£¥
         test_file.write_text("content", encoding="utf-8")
 
         # Mock read_text to raise an exception
-        with patch.object(Path, "read_text", side_effect=PermissionError("Access denied")):
+        with patch.object(
+            Path, "read_text", side_effect=PermissionError("Access denied")
+        ):
             with pytest.raises(IOError):
                 estimator.count_tokens_in_file(test_file)
 

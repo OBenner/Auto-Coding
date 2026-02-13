@@ -17,7 +17,7 @@ class FileMatch:
     reason: str
     relevance_score: float = 0.0
     matching_lines: list[tuple[int, str]] = field(default_factory=list)
-    estimated_tokens: int = 0  # Estimated token count for this file
+    estimated_tokens: int | None = None  # Estimated token count for this file
 
 
 @dataclass
@@ -33,7 +33,7 @@ class TaskContext:
     graph_hints: list[dict] = field(
         default_factory=list
     )  # Historical hints from Graphiti
-    total_estimated_tokens: int = 0  # Total estimated tokens for the context
+    total_estimated_tokens: int | None = None  # Total estimated tokens for the context
     selection_reasoning: list[str] = field(
         default_factory=list
     )  # Explanation of why files/services were selected

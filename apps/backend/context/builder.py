@@ -40,7 +40,9 @@ class ContextBuilder:
         self.token_estimator = TokenEstimator()
 
         # Initialize components
-        self.searcher = CodeSearcher(self.project_dir, semantic_scorer=self.semantic_scorer)
+        self.searcher = CodeSearcher(
+            self.project_dir, semantic_scorer=self.semantic_scorer
+        )
         self.service_matcher = ServiceMatcher(self.project_index)
         self.keyword_extractor = KeywordExtractor()
         self.categorizer = FileCategorizer()
@@ -139,28 +141,9 @@ class ContextBuilder:
             if not service_path.is_absolute():
                 service_path = self.project_dir / service_path
 
-            # Search this service
-            # Use semantic search if available, otherwise fall back to keyword search
-            if self.semantic_scorer:
-                try:
-                    # Try to use semantic search (async)
-                    try:
-                        loop = asyncio.get_running_loop()
-                        # We're already in an async context - shouldn't happen in CLI
-                        # but handle it gracefully by falling back to sync search
-                        matches = self.searcher.search_service(service_path, service_name, keywords)
-                    except RuntimeError:
-                        # No event loop running - create one for async semantic search
-                        matches = asyncio.run(
-                            self.searcher.search_with_semantics(
-                                service_path, service_name, keywords, task
-                            )
-                        )
-                except Exception as e:
-                    logger.warning(f"Semantic search failed for {service_name}, falling back: {e}")
-                    matches = self.searcher.search_service(service_path, service_name, keywords)
-            else:
-                matches = self.searcher.search_service(service_path, service_name, keywords)
+            # Search this service (sync version always uses keyword search;
+            # use build_context_async for semantic search support)
+            matches = self.searcher.search_service(service_path, service_name, keywords)
 
             all_matches.extend(matches)
 
@@ -171,21 +154,12 @@ class ContextBuilder:
 
         # Apply user priorities to filter and sort matches
         all_matches = self.priority_manager.apply_priorities(
-            all_matches,
-            exclude_never=True,
-            sort=True
+            all_matches, exclude_never=True, sort=True
         )
 
         # Log priority application
         if all_matches:
-            logger.debug(
-                f"Applied user priorities to {len(all_matches)} files"
-            )
-
-        # Categorize matches
-        files_to_modify, files_to_reference = self.categorizer.categorize_matches(
-            all_matches, task
-        )
+            logger.debug(f"Applied user priorities to {len(all_matches)} files")
 
         # Detect and remove redundant files
         all_matches, redundancy_report = self.redundancy_detector.detect_redundancies(
@@ -199,7 +173,7 @@ class ContextBuilder:
                 f"{sum(r.get('tokens_saved', 0) for r in redundancy_report)} tokens saved"
             )
 
-        # Categorize matches
+        # Categorize matches after redundancy removal
         files_to_modify, files_to_reference = self.categorizer.categorize_matches(
             all_matches, task
         )
@@ -213,20 +187,17 @@ class ContextBuilder:
         graph_hints = []
         if include_graph_hints and is_graphiti_enabled():
             try:
-                # Run the async function in a new event loop if necessary
+                asyncio.get_running_loop()
+                # Already in an async context - skip to avoid RuntimeError
+            except RuntimeError:
+                # No event loop running - safe to create one
                 try:
-                    loop = asyncio.get_running_loop()
-                    # We're already in an async context - this shouldn't happen in CLI
-                    # but handle it gracefully
-                    graph_hints = []
-                except RuntimeError:
-                    # No event loop running - create one
                     graph_hints = asyncio.run(
                         fetch_graph_hints(task, str(self.project_dir))
                     )
-            except Exception:
-                # Graphiti is optional - fail gracefully
-                graph_hints = []
+                except Exception:
+                    # Graphiti is optional - fail gracefully
+                    graph_hints = []
 
         return TaskContext(
             task_description=task,
@@ -293,10 +264,16 @@ class ContextBuilder:
                         service_path, service_name, keywords, task
                     )
                 except Exception as e:
-                    logger.warning(f"Semantic search failed for {service_name}, falling back: {e}")
-                    matches = self.searcher.search_service(service_path, service_name, keywords)
+                    logger.warning(
+                        f"Semantic search failed for {service_name}, falling back: {e}"
+                    )
+                    matches = self.searcher.search_service(
+                        service_path, service_name, keywords
+                    )
             else:
-                matches = self.searcher.search_service(service_path, service_name, keywords)
+                matches = self.searcher.search_service(
+                    service_path, service_name, keywords
+                )
 
             all_matches.extend(matches)
 
@@ -307,21 +284,12 @@ class ContextBuilder:
 
         # Apply user priorities to filter and sort matches
         all_matches = self.priority_manager.apply_priorities(
-            all_matches,
-            exclude_never=True,
-            sort=True
+            all_matches, exclude_never=True, sort=True
         )
 
         # Log priority application
         if all_matches:
-            logger.debug(
-                f"Applied user priorities to {len(all_matches)} files"
-            )
-
-        # Categorize matches
-        files_to_modify, files_to_reference = self.categorizer.categorize_matches(
-            all_matches, task
-        )
+            logger.debug(f"Applied user priorities to {len(all_matches)} files")
 
         # Detect and remove redundant files
         all_matches, redundancy_report = self.redundancy_detector.detect_redundancies(
@@ -335,7 +303,7 @@ class ContextBuilder:
                 f"{sum(r.get('tokens_saved', 0) for r in redundancy_report)} tokens saved"
             )
 
-        # Categorize matches
+        # Categorize matches after redundancy removal
         files_to_modify, files_to_reference = self.categorizer.categorize_matches(
             all_matches, task
         )

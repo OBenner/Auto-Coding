@@ -15,10 +15,6 @@ import asyncio
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from claude_agent_sdk import ClaudeSDKClient
 
 from context.token_estimator import TokenEstimator
 
@@ -77,8 +73,8 @@ class ContextCompressor:
         """
         Compress a file synchronously.
 
-        This is a convenience wrapper that runs the async compression
-        in an event loop.
+        This is a convenience wrapper for CLI / non-async callers.
+        Call ``compress_file_async`` instead when already inside an event loop.
 
         Args:
             file_path: Path to the file to compress
@@ -91,7 +87,18 @@ class ContextCompressor:
             FileNotFoundError: If the file doesn't exist
             IOError: If the file cannot be read
         """
-        return asyncio.run(self.compress_file_async(file_path, strategy))
+        try:
+            asyncio.get_running_loop()
+            # Already in an event loop - cannot use asyncio.run()
+            raise RuntimeError(
+                "compress_file() cannot be called from an async context. "
+                "Use 'await compress_file_async()' instead."
+            )
+        except RuntimeError as e:
+            if "compress_file()" in str(e):
+                raise
+            # No running loop - safe to create one
+            return asyncio.run(self.compress_file_async(file_path, strategy))
 
     async def compress_file_async(
         self,
@@ -116,11 +123,24 @@ class ContextCompressor:
         if not path.exists():
             raise FileNotFoundError(f"File not found: {file_path}")
 
+        # Guard against extremely large files to avoid OOM
+        max_bytes = 5 * 1024 * 1024  # 5 MB
+        try:
+            size = path.stat().st_size
+        except OSError as e:
+            raise OSError(f"Failed to stat file {file_path}: {e}")
+
+        if size > max_bytes:
+            raise OSError(
+                f"File {file_path} is too large to compress ({size} bytes > {max_bytes} bytes). "
+                "Consider splitting the file or using a streaming strategy."
+            )
+
         # Read file content
         try:
             content = path.read_text(encoding="utf-8")
         except Exception as e:
-            raise IOError(f"Failed to read file {file_path}: {e}")
+            raise OSError(f"Failed to read file {file_path}: {e}")
 
         # Count tokens
         original_tokens = self.token_estimator.count_tokens(content)
@@ -186,7 +206,9 @@ class ContextCompressor:
             summary = self._truncate_content(content, target_tokens)
 
         compressed_tokens = self.token_estimator.count_tokens(summary)
-        compression_ratio = compressed_tokens / original_tokens if original_tokens > 0 else 1.0
+        compression_ratio = (
+            compressed_tokens / original_tokens if original_tokens > 0 else 1.0
+        )
 
         return CompressionResult(
             original_content=content,
@@ -240,6 +262,11 @@ class ContextCompressor:
             method="key_sections",
         )
 
+    @staticmethod
+    def _sanitize_for_code_fence(content: str) -> str:
+        """Escape triple backticks in content to avoid breaking code fences."""
+        return content.replace("```", "`\u200b``")
+
     def _build_summary_prompt(
         self,
         content: str,
@@ -257,7 +284,10 @@ class ContextCompressor:
         Returns:
             Prompt string for Claude
         """
-        return f"""Summarize the following file to reduce it from {self.token_estimator.count_tokens(content)} tokens to approximately {target_tokens} tokens (about {int(self.target_ratio * 100)}% of original size).
+        original_tokens = self.token_estimator.count_tokens(content)
+        safe_content = self._sanitize_for_code_fence(content)
+
+        return f"""Summarize the following file to reduce it from {original_tokens} tokens to approximately {target_tokens} tokens (about {int(self.target_ratio * 100)}% of original size).
 
 File path: {file_path}
 
@@ -271,12 +301,10 @@ Requirements:
 
 Content to summarize:
 ```
-{{content}}
+{safe_content}
 ```
 
-Provide ONLY the summarized content, no explanations.""".replace(
-            "{{content}}", content
-        )
+Provide ONLY the summarized content, no explanations."""
 
     def _build_extraction_prompt(
         self,
@@ -295,7 +323,10 @@ Provide ONLY the summarized content, no explanations.""".replace(
         Returns:
             Prompt string for Claude
         """
-        return f"""Extract the most important sections from this file to reduce it from {self.token_estimator.count_tokens(content)} tokens to approximately {target_tokens} tokens (about {int(self.target_ratio * 100)}% of original size).
+        original_tokens = self.token_estimator.count_tokens(content)
+        safe_content = self._sanitize_for_code_fence(content)
+
+        return f"""Extract the most important sections from this file to reduce it from {original_tokens} tokens to approximately {target_tokens} tokens (about {int(self.target_ratio * 100)}% of original size).
 
 File path: {file_path}
 
@@ -309,25 +340,26 @@ Requirements:
 
 Content:
 ```
-{{content}}
+{safe_content}
 ```
 
-Provide ONLY the extracted sections, no explanations.""".replace(
-            "{{content}}", content
-        )
+Provide ONLY the extracted sections, no explanations."""
 
-    async def _call_claude_for_summary(self, prompt: str) -> str:
+    async def _call_claude_for_summary(
+        self, prompt: str, *, timeout: float = 60.0
+    ) -> str:
         """
-        Call Claude SDK to generate a summary.
+        Call Claude SDK to generate a summary with timeout.
 
         Args:
             prompt: The prompt to send to Claude
+            timeout: Maximum seconds to wait for a response
 
         Returns:
             Generated summary text
 
         Raises:
-            RuntimeError: If Claude SDK call fails
+            RuntimeError: If Claude SDK call fails after retries
         """
         from core.simple_client import create_simple_client
 
@@ -338,24 +370,36 @@ Provide ONLY the extracted sections, no explanations.""".replace(
             max_turns=1,
         )
 
-        try:
-            async with client:
-                await client.query(prompt)
+        last_error: Exception | None = None
+        for attempt in range(1, 4):
+            try:
+                async with client:
+                    await asyncio.wait_for(client.query(prompt), timeout=timeout)
 
-                response_text = ""
-                async for msg in client.receive_response():
-                    msg_type = type(msg).__name__
-                    if msg_type == "AssistantMessage" and hasattr(msg, "content"):
-                        for block in msg.content:
-                            block_type = type(block).__name__
-                            if block_type == "TextBlock" and hasattr(block, "text"):
-                                response_text += block.text
+                    response_text = ""
+                    async for msg in client.receive_response():
+                        msg_type = type(msg).__name__
+                        if msg_type == "AssistantMessage" and hasattr(msg, "content"):
+                            for block in msg.content:
+                                block_type = type(block).__name__
+                                if block_type == "TextBlock" and hasattr(block, "text"):
+                                    response_text += block.text
 
-                return response_text.strip()
+                    return response_text.strip()
 
-        except Exception as e:
-            logger.error(f"Claude SDK call failed: {e}")
-            raise RuntimeError(f"Failed to generate summary: {e}")
+            except TimeoutError:
+                last_error = TimeoutError(
+                    f"Claude summarization timed out (attempt {attempt})"
+                )
+                logger.warning("Claude summarization timed out on attempt %s", attempt)
+            except Exception as e:
+                last_error = e
+                logger.warning("Claude SDK call failed on attempt %s: %s", attempt, e)
+
+            await asyncio.sleep(min(2 * attempt, 10))
+
+        logger.error("Claude SDK call failed after 3 attempts: %s", last_error)
+        raise RuntimeError(f"Failed to generate summary: {last_error}")
 
     def _truncate_content(self, content: str, target_tokens: int) -> str:
         """

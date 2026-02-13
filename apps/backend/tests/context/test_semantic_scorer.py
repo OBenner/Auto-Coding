@@ -22,11 +22,9 @@ for td in tests_dirs:
 backend_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(backend_root))
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-import numpy as np
-
 from context.semantic_scorer import SemanticScorer
 
 
@@ -142,14 +140,15 @@ class TestCosineSimilarity:
         # Identical high-dimensional vectors should have similarity of 1.0
         assert score == pytest.approx(1.0, rel=1e-5)
 
-    def test_cosine_similarity_different_lengths_raises_error(self, scorer):
-        """Test that different length vectors are handled gracefully."""
+    def test_cosine_similarity_different_lengths_handled(self, scorer):
+        """Test that different length vectors return a valid float without crashing."""
         vec1 = [1.0, 2.0, 3.0]
         vec2 = [1.0, 2.0]
 
-        # This should not crash, but may return 0.0 or handle gracefully
+        # numpy may broadcast or return a value; ensure we get a valid float
         score = scorer._cosine_similarity(vec1, vec2)
         assert isinstance(score, float)
+        # Result should be clamped to [0, 1] regardless
         assert 0.0 <= score <= 1.0
 
 
@@ -265,10 +264,7 @@ class TestScoreFiles:
             [0.8, 0.2, 0.0],  # File 3
         ]
 
-        files = [
-            {"path": f"file{i}.py", "content": f"content {i}"}
-            for i in range(3)
-        ]
+        files = [{"path": f"file{i}.py", "content": f"content {i}"} for i in range(3)]
         result = await scorer.score_files(files, "test query", max_results=2)
 
         assert len(result) == 2
@@ -412,9 +408,7 @@ class TestScoreQueryPairs:
         assert ("query 2", "doc 2") in query_doc_pairs
 
     @pytest.mark.asyncio
-    async def test_score_query_pairs_with_failed_embedding(
-        self, scorer, mock_embedder
-    ):
+    async def test_score_query_pairs_with_failed_embedding(self, scorer, mock_embedder):
         """Test when some embeddings fail."""
         mock_embedder.embed.side_effect = [
             [1.0, 0.0],  # Query 1 succeeds
@@ -430,11 +424,11 @@ class TestScoreQueryPairs:
         assert len(result) == 4
 
         # Pairs with successful embeddings should have scores
-        q1_d1 = next((r for r in result if r[0] == "query 1" and r[1] == "doc 1"))
+        q1_d1 = next(r for r in result if r[0] == "query 1" and r[1] == "doc 1")
         assert q1_d1[2] > 0
 
         # Pairs with failed embeddings should have 0.0 score
-        q2_d1 = next((r for r in result if r[0] == "query 2" and r[1] == "doc 1"))
+        q2_d1 = next(r for r in result if r[0] == "query 2" and r[1] == "doc 1")
         assert q2_d1[2] == 0.0
 
     @pytest.mark.asyncio
@@ -482,7 +476,6 @@ class TestAddZeroScores:
     def test_add_zero_scores_does_not_mutate_original(self, scorer):
         """Test that _add_zero_scores does not mutate original list."""
         files = [{"path": "test.py", "content": "content"}]
-        original_files = files.copy()
 
         result = scorer._add_zero_scores(files)
 
@@ -616,7 +609,11 @@ class TestIntegrationBehavior:
         ]
 
         files = [
-            {"path": "backend/cache.py", "content": "Cache implementation", "tokens": 500},
+            {
+                "path": "backend/cache.py",
+                "content": "Cache implementation",
+                "tokens": 500,
+            },
             {"path": "backend/api.py", "content": "API endpoints", "tokens": 1000},
             {"path": "backend/redis.py", "content": "Redis client", "tokens": 300},
             {"path": "frontend/app.js", "content": "Frontend code", "tokens": 2000},

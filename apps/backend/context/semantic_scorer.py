@@ -9,7 +9,6 @@ import logging
 from typing import Any
 
 import numpy as np
-
 from core.sentry import capture_exception
 
 logger = logging.getLogger(__name__)

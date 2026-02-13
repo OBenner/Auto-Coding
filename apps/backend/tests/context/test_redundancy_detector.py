@@ -21,10 +21,9 @@ for td in tests_dirs:
 backend_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(backend_root))
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
-
 from context.models import FileMatch
 from context.redundancy_detector import RedundancyDetector
 
@@ -36,10 +35,18 @@ def temp_project_dir(tmp_path):
     project_dir.mkdir()
 
     # Create some test files
-    (project_dir / "file1.py").write_text("def hello():\n    print('hello')\n", encoding="utf-8")
-    (project_dir / "file2.py").write_text("def hello():\n    print('hello')\n", encoding="utf-8")  # Exact duplicate
-    (project_dir / "file3.py").write_text("def hello():\n    print('hello')\n    # Extra comment\n", encoding="utf-8")  # Near-duplicate
-    (project_dir / "file4.py").write_text("def different():\n    print('different')\n", encoding="utf-8")
+    (project_dir / "file1.py").write_text(
+        "def hello():\n    print('hello')\n", encoding="utf-8"
+    )
+    (project_dir / "file2.py").write_text(
+        "def hello():\n    print('hello')\n", encoding="utf-8"
+    )  # Exact duplicate
+    (project_dir / "file3.py").write_text(
+        "def hello():\n    print('hello')\n    # Extra comment\n", encoding="utf-8"
+    )  # Near-duplicate
+    (project_dir / "file4.py").write_text(
+        "def different():\n    print('different')\n", encoding="utf-8"
+    )
 
     return project_dir
 
@@ -258,7 +265,9 @@ class TestDetectRedundancies:
         assert filtered == []
         assert report == []
 
-    def test_detect_redundancies_exact_duplicates(self, detector, sample_files, temp_project_dir):
+    def test_detect_redundancies_exact_duplicates(
+        self, detector, sample_files, temp_project_dir
+    ):
         """Test detection of exact duplicate files."""
         # file1.py and file2.py have identical content
         filtered, report = detector.detect_redundancies(sample_files)
@@ -283,7 +292,9 @@ class TestDetectRedundancies:
         file4 = [f for f in filtered if f.path == "file4.py"]
         assert len(file4) == 1
 
-    def test_detect_redundancies_does_not_keep_highest_relevance(self, detector, sample_files):
+    def test_detect_redundancies_does_not_keep_highest_relevance(
+        self, detector, sample_files
+    ):
         """Test behavior when keep_highest_relevance is False."""
         filtered, report = detector.detect_redundancies(
             sample_files, keep_highest_relevance=False
@@ -396,7 +407,9 @@ class TestFindRedundantSnippets:
         # Should find the duplicate "def func1():\n    pass" snippet
         assert len(snippets) > 0
 
-    def test_find_redundant_snippets_min_lines_parameter(self, detector, temp_project_dir):
+    def test_find_redundant_snippets_min_lines_parameter(
+        self, detector, temp_project_dir
+    ):
         """Test min_lines parameter affects snippet detection."""
         # Create file with repeated pattern
         (temp_project_dir / "repeat.py").write_text(
@@ -425,8 +438,12 @@ class TestFindRedundantSnippets:
         (temp_project_dir / "b.py").write_text("common code\n", encoding="utf-8")
 
         files = [
-            FileMatch(path="a.py", service="backend", reason="test", estimated_tokens=20),
-            FileMatch(path="b.py", service="backend", reason="test", estimated_tokens=20),
+            FileMatch(
+                path="a.py", service="backend", reason="test", estimated_tokens=20
+            ),
+            FileMatch(
+                path="b.py", service="backend", reason="test", estimated_tokens=20
+            ),
         ]
 
         snippets = detector.find_redundant_snippets(files, min_lines=1)
@@ -452,7 +469,9 @@ class TestFindRedundantSnippets:
         (temp_project_dir / "dup.py").write_text("duplicate\n", encoding="utf-8")
 
         files = [
-            FileMatch(path="dup.py", service="backend", reason="test", estimated_tokens=20)
+            FileMatch(
+                path="dup.py", service="backend", reason="test", estimated_tokens=20
+            )
         ]
 
         snippets = detector.find_redundant_snippets(files, min_lines=1)
@@ -462,12 +481,20 @@ class TestFindRedundantSnippets:
 
     def test_find_redundant_snippets_no_duplicates(self, detector, temp_project_dir):
         """Test when no duplicate snippets exist."""
-        (temp_project_dir / "unique1.py").write_text("unique content 1\n", encoding="utf-8")
-        (temp_project_dir / "unique2.py").write_text("unique content 2\n", encoding="utf-8")
+        (temp_project_dir / "unique1.py").write_text(
+            "unique content 1\n", encoding="utf-8"
+        )
+        (temp_project_dir / "unique2.py").write_text(
+            "unique content 2\n", encoding="utf-8"
+        )
 
         files = [
-            FileMatch(path="unique1.py", service="backend", reason="test", estimated_tokens=20),
-            FileMatch(path="unique2.py", service="backend", reason="test", estimated_tokens=20),
+            FileMatch(
+                path="unique1.py", service="backend", reason="test", estimated_tokens=20
+            ),
+            FileMatch(
+                path="unique2.py", service="backend", reason="test", estimated_tokens=20
+            ),
         ]
 
         snippets = detector.find_redundant_snippets(files, min_lines=1)
@@ -489,8 +516,15 @@ class TestEdgeCases:
         )
 
         files = [
-            FileMatch(path="unicode.py", service="backend", reason="test", estimated_tokens=50),
-            FileMatch(path="unicode2.py", service="backend", reason="test", estimated_tokens=50),
+            FileMatch(
+                path="unicode.py", service="backend", reason="test", estimated_tokens=50
+            ),
+            FileMatch(
+                path="unicode2.py",
+                service="backend",
+                reason="test",
+                estimated_tokens=50,
+            ),
         ]
 
         filtered, report = detector.detect_redundancies(files)
@@ -511,8 +545,12 @@ class TestEdgeCases:
         )
 
         files = [
-            FileMatch(path="crlf.py", service="backend", reason="test", estimated_tokens=40),
-            FileMatch(path="lf.py", service="backend", reason="test", estimated_tokens=40),
+            FileMatch(
+                path="crlf.py", service="backend", reason="test", estimated_tokens=40
+            ),
+            FileMatch(
+                path="lf.py", service="backend", reason="test", estimated_tokens=40
+            ),
         ]
 
         filtered, report = detector.detect_redundancies(files)
@@ -528,8 +566,18 @@ class TestEdgeCases:
         (temp_project_dir / "large2.py").write_text(large_content, encoding="utf-8")
 
         files = [
-            FileMatch(path="large1.py", service="backend", reason="test", estimated_tokens=5000),
-            FileMatch(path="large2.py", service="backend", reason="test", estimated_tokens=5000),
+            FileMatch(
+                path="large1.py",
+                service="backend",
+                reason="test",
+                estimated_tokens=5000,
+            ),
+            FileMatch(
+                path="large2.py",
+                service="backend",
+                reason="test",
+                estimated_tokens=5000,
+            ),
         ]
 
         filtered, report = detector.detect_redundancies(files)
@@ -540,10 +588,14 @@ class TestEdgeCases:
 
     def test_single_file_list(self, detector, temp_project_dir):
         """Test with only one file in list."""
-        (temp_project_dir / "single.py").write_text("def hello():\n    pass\n", encoding="utf-8")
+        (temp_project_dir / "single.py").write_text(
+            "def hello():\n    pass\n", encoding="utf-8"
+        )
 
         files = [
-            FileMatch(path="single.py", service="backend", reason="test", estimated_tokens=30)
+            FileMatch(
+                path="single.py", service="backend", reason="test", estimated_tokens=30
+            )
         ]
 
         filtered, report = detector.detect_redundancies(files)
@@ -559,9 +611,15 @@ class TestEdgeCases:
         (temp_project_dir / "unique3.py").write_text("content 3\n", encoding="utf-8")
 
         files = [
-            FileMatch(path="unique1.py", service="backend", reason="test", estimated_tokens=20),
-            FileMatch(path="unique2.py", service="backend", reason="test", estimated_tokens=20),
-            FileMatch(path="unique3.py", service="backend", reason="test", estimated_tokens=20),
+            FileMatch(
+                path="unique1.py", service="backend", reason="test", estimated_tokens=20
+            ),
+            FileMatch(
+                path="unique2.py", service="backend", reason="test", estimated_tokens=20
+            ),
+            FileMatch(
+                path="unique3.py", service="backend", reason="test", estimated_tokens=20
+            ),
         ]
 
         filtered, report = detector.detect_redundancies(files)
@@ -576,8 +634,12 @@ class TestEdgeCases:
         (temp_project_dir / "empty2.py").write_text("", encoding="utf-8")
 
         files = [
-            FileMatch(path="empty1.py", service="backend", reason="test", estimated_tokens=0),
-            FileMatch(path="empty2.py", service="backend", reason="test", estimated_tokens=0),
+            FileMatch(
+                path="empty1.py", service="backend", reason="test", estimated_tokens=0
+            ),
+            FileMatch(
+                path="empty2.py", service="backend", reason="test", estimated_tokens=0
+            ),
         ]
 
         filtered, report = detector.detect_redundancies(files)
@@ -608,20 +670,38 @@ class TestIntegrationBehavior:
 
         files = [
             FileMatch(
-                path="auth.py", service="backend", reason="test", relevance_score=0.7, estimated_tokens=100
+                path="auth.py",
+                service="backend",
+                reason="test",
+                relevance_score=0.7,
+                estimated_tokens=100,
             ),
             FileMatch(
-                path="auth_copy.py", service="backend", reason="test", relevance_score=0.5, estimated_tokens=100
+                path="auth_copy.py",
+                service="backend",
+                reason="test",
+                relevance_score=0.5,
+                estimated_tokens=100,
             ),
             FileMatch(
-                path="auth_similar.py", service="backend", reason="test", relevance_score=0.6, estimated_tokens=120
+                path="auth_similar.py",
+                service="backend",
+                reason="test",
+                relevance_score=0.6,
+                estimated_tokens=120,
             ),
             FileMatch(
-                path="database.py", service="backend", reason="test", relevance_score=0.8, estimated_tokens=80
+                path="database.py",
+                service="backend",
+                reason="test",
+                relevance_score=0.8,
+                estimated_tokens=80,
             ),
         ]
 
-        filtered, report = detector.detect_redundancies(files, keep_highest_relevance=True)
+        filtered, report = detector.detect_redundancies(
+            files, keep_highest_relevance=True
+        )
 
         # Should remove duplicates
         assert len(filtered) < len(files)
@@ -637,7 +717,9 @@ class TestIntegrationBehavior:
         total_saved = sum(r.get("tokens_saved", 0) for r in report)
         assert total_saved > 0
 
-    def test_redundancy_detection_preserves_file_attributes(self, detector, temp_project_dir):
+    def test_redundancy_detection_preserves_file_attributes(
+        self, detector, temp_project_dir
+    ):
         """Test that filtered files preserve their attributes."""
         (temp_project_dir / "test.py").write_text("content\n", encoding="utf-8")
 
@@ -660,7 +742,9 @@ class TestIntegrationBehavior:
         assert filtered[0].matching_lines == [(1, "content")]
         assert filtered[0].estimated_tokens == 50
 
-    def test_combined_redundancy_and_snippet_detection(self, detector, temp_project_dir):
+    def test_combined_redundancy_and_snippet_detection(
+        self, detector, temp_project_dir
+    ):
         """Test using both redundancy detection and snippet finding."""
         # Create files with both full duplicates and snippet duplicates
         (temp_project_dir / "lib1.py").write_text(
@@ -671,8 +755,12 @@ class TestIntegrationBehavior:
         )
 
         files = [
-            FileMatch(path="lib1.py", service="backend", reason="test", estimated_tokens=100),
-            FileMatch(path="lib2.py", service="backend", reason="test", estimated_tokens=100),
+            FileMatch(
+                path="lib1.py", service="backend", reason="test", estimated_tokens=100
+            ),
+            FileMatch(
+                path="lib2.py", service="backend", reason="test", estimated_tokens=100
+            ),
         ]
 
         # Test full file redundancy

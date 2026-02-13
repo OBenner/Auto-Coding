@@ -89,7 +89,7 @@ class TokenEstimator:
             content = path.read_text(encoding="utf-8")
             return self.count_tokens(content)
         except Exception as e:
-            raise IOError(f"Failed to read file {file_path}: {e}")
+            raise OSError(f"Failed to read file {file_path}: {e}")
 
     def estimate_tokens_for_lines(
         self, lines: list[str] | list[tuple[int, str]]
@@ -106,12 +106,12 @@ class TokenEstimator:
         if not lines:
             return 0
 
-        # Extract text content from tuples if needed
-        if lines and isinstance(lines[0], tuple):
-            text = "\n".join(line[1] if len(line) > 1 else line[0] for line in lines)
-        else:
-            text = "\n".join(lines)
+        def _extract_text(item: object) -> str:
+            if isinstance(item, tuple):
+                return str(item[1]) if len(item) > 1 else str(item[0])
+            return str(item)
 
+        text = "\n".join(_extract_text(line) for line in lines)
         return self.count_tokens(text)
 
     @property

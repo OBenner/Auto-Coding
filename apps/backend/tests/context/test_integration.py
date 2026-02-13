@@ -26,7 +26,6 @@ sys.path.insert(0, str(backend_root))
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from context.builder import ContextBuilder
 from context.compressor import ContextCompressor
 from context.models import FileMatch, TaskContext
@@ -73,7 +72,9 @@ class TestTokenEstimationE2E:
 
             # Verify token count is reasonable
             assert tokens > 0, f"Token count should be positive for {file_path.name}"
-            assert tokens < 100000, f"Token count seems too high for {file_path.name}: {tokens}"
+            assert tokens < 100000, (
+                f"Token count seems too high for {file_path.name}: {tokens}"
+            )
 
             # Tokens should be roughly proportional to file length
             # (Approximate: ~4 chars per token for code)
@@ -111,7 +112,9 @@ class TestTokenEstimationE2E:
             # Docstrings and comments typically have more tokens per character
             if name in ["docstring", "comments"]:
                 # These should have more tokens relative to length
-                assert tokens >= 5, f"{name} should have at least 5 tokens, got {tokens}"
+                assert tokens >= 5, (
+                    f"{name} should have at least 5 tokens, got {tokens}"
+                )
 
     def test_token_summation(self, token_estimator):
         """Test that token counts can be accurately summed."""
@@ -153,7 +156,10 @@ class TestSemanticScoringE2E:
         scorer = SemanticScorer(mock_embedder)
 
         files = [
-            {"path": "src/auth.py", "content": "Authentication and authorization logic"},
+            {
+                "path": "src/auth.py",
+                "content": "Authentication and authorization logic",
+            },
             {"path": "src/login.py", "content": "Login form and validation"},
             {"path": "src/user.py", "content": "User model and database operations"},
             {"path": "src/database.py", "content": "Database connection and queries"},
@@ -174,12 +180,16 @@ class TestSemanticScoringE2E:
             assert results[i]["semantic_score"] >= results[i + 1]["semantic_score"], (
                 f"Scores not in descending order: "
                 f"{results[i]['path']} ({results[i]['semantic_score']}) >= "
-                f"{results[i+1]['path']} ({results[i+1]['semantic_score']})"
+                f"{results[i + 1]['path']} ({results[i + 1]['semantic_score']})"
             )
 
         # Relevant files should have higher scores than irrelevant ones
-        auth_score = next(f["semantic_score"] for f in results if f["path"] == "src/auth.py")
-        frontend_score = next(f["semantic_score"] for f in results if f["path"] == "frontend/app.js")
+        auth_score = next(
+            f["semantic_score"] for f in results if f["path"] == "src/auth.py"
+        )
+        frontend_score = next(
+            f["semantic_score"] for f in results if f["path"] == "frontend/app.js"
+        )
 
         assert auth_score > frontend_score, (
             f"Relevant file (auth.py) score {auth_score} should be > "
@@ -241,7 +251,9 @@ class TestRedundancyDetectionE2E:
         # Create actual test files
         (tmp_path / "file1.py").write_text(duplicate_content, encoding="utf-8")
         (tmp_path / "file2.py").write_text(duplicate_content, encoding="utf-8")
-        (tmp_path / "file3.py").write_text("def different():\n    return 'unique'\n", encoding="utf-8")
+        (tmp_path / "file3.py").write_text(
+            "def different():\n    return 'unique'\n", encoding="utf-8"
+        )
 
         files = [
             FileMatch(
@@ -368,7 +380,7 @@ class TestContextCompressionE2E:
         """Test that compression returns proper result structure."""
         compressor = ContextCompressor(
             compression_threshold=10,  # Low threshold for testing
-            token_estimator=token_estimator
+            token_estimator=token_estimator,
         )
 
         # Create a test file
@@ -397,7 +409,7 @@ class TestContextCompressionE2E:
         compressor = ContextCompressor(
             compression_threshold=1000,  # High threshold
             target_ratio=0.5,
-            token_estimator=token_estimator
+            token_estimator=token_estimator,
         )
 
         # Create a small file
@@ -417,7 +429,7 @@ class TestContextCompressionE2E:
         compressor = ContextCompressor(
             compression_threshold=10,  # Low threshold for testing
             target_ratio=0.5,
-            token_estimator=token_estimator
+            token_estimator=token_estimator,
         )
 
         # Create a test file
@@ -458,10 +470,16 @@ class TestFullPipelineE2E:
         builder = ContextBuilder(real_project_dir, project_index=project_index)
 
         # Verify components are initialized
-        assert builder.token_estimator is not None, "TokenEstimator should be initialized"
+        assert builder.token_estimator is not None, (
+            "TokenEstimator should be initialized"
+        )
         assert builder.searcher is not None, "CodeSearcher should be initialized"
-        assert builder.redundancy_detector is not None, "RedundancyDetector should be initialized"
-        assert builder.priority_manager is not None, "PriorityManager should be initialized"
+        assert builder.redundancy_detector is not None, (
+            "RedundancyDetector should be initialized"
+        )
+        assert builder.priority_manager is not None, (
+            "PriorityManager should be initialized"
+        )
 
         # Build context for a realistic task
         task = "Add token estimation to context builder"
@@ -478,8 +496,12 @@ class TestFullPipelineE2E:
         all_files = context.files_to_modify + context.files_to_reference
         for file_dict in all_files:
             if isinstance(file_dict, dict):
-                assert "estimated_tokens" in file_dict, "Each file should have token count"
-                assert file_dict["estimated_tokens"] >= 0, "Token count should be non-negative"
+                assert "estimated_tokens" in file_dict, (
+                    "Each file should have token count"
+                )
+                assert file_dict["estimated_tokens"] >= 0, (
+                    "Token count should be non-negative"
+                )
 
     def test_token_accuracy_within_acceptable_range(self, token_estimator):
         """Test that token estimation is accurate within acceptable margin."""
@@ -621,12 +643,10 @@ class TestEdgeCasesAndIntegration:
         short_doc = {"path": "short.py", "content": "def foo(): return 1"}
         long_doc = {
             "path": "long.py",
-            "content": "\n".join([f"# Comment {i}" for i in range(1000)])
+            "content": "\n".join([f"# Comment {i}" for i in range(1000)]),
         }
 
-        results = await scorer.score_files(
-            [short_doc, long_doc], "test query"
-        )
+        results = await scorer.score_files([short_doc, long_doc], "test query")
 
         assert len(results) == 2
         # Both should have scores (length shouldn't matter for scoring)
@@ -672,7 +692,7 @@ class TestPerformanceAndScalability:
         # Mock file reading
         with patch.object(Path, "read_text", return_value="def foo(): return 1"):
             start = time.time()
-            filtered, report = detector.detect_redundancies(files)
+            _filtered, _report = detector.detect_redundancies(files)
             elapsed = time.time() - start
 
         # Should complete in reasonable time (< 5 seconds for 100 files)
