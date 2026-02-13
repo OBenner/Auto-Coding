@@ -47,6 +47,12 @@ from ui import (
 
 from .decision_tracker import DecisionTracker
 from .memory_manager import save_session_memory
+from .process_isolator import (
+    AgentIsolationResult,
+    AgentProcessError,
+    AgentProcessIsolator,
+    ResourceLimits,
+)
 from .utils import (
     find_subtask_in_plan,
     get_commit_count,
@@ -1190,3 +1196,205 @@ async def run_agent_session(
         except Exception as save_err:
             logger.debug(f"Failed to save conversation history after error: {save_err}")
         return "error", str(e), None, decision_tracker
+
+
+async def run_agent_session_isolated(
+    project_dir: Path,
+    spec_dir: Path,
+    agent_type: str,
+    model: str,
+    starting_message: str,
+    system_prompt: str | None = None,
+    max_thinking_tokens: int | None = None,
+    session_name: str = "agent-session",
+    limits: ResourceLimits | None = None,
+) -> tuple[str, str, dict[str, int] | None]:
+    """
+    Run an agent session in an isolated subprocess with resource limits.
+
+    This provides crash-resistant execution by running the agent in a separate
+    process with controlled resource usage. If the agent crashes, the main
+    process remains unaffected.
+
+    Args:
+        project_dir: Root directory of the project
+        spec_dir: Spec directory path
+        agent_type: Type of agent to run (coder, planner, qa_reviewer, qa_fixer)
+        model: Claude model to use
+        starting_message: The prompt to send to the agent
+        system_prompt: Optional custom system prompt
+        max_thinking_tokens: Optional thinking token limit
+        session_name: Name for the agent session
+        limits: Optional resource limits (defaults to ResourceLimits())
+
+    Returns:
+        (status, response_text, usage_metadata) where:
+        - status: "continue", "complete", or "error"
+        - response_text: The agent's response or error message
+        - usage_metadata: Dict with "input_tokens" and "output_tokens" keys (or None)
+
+    Raises:
+        AgentProcessError: If subprocess execution fails critically
+    """
+    debug_section(
+        "session", f"Isolated Agent Session - {agent_type} (process isolation)"
+    )
+    debug(
+        "session",
+        "Starting isolated agent session",
+        project_dir=str(project_dir),
+        spec_dir=str(spec_dir),
+        agent_type=agent_type,
+        model=model,
+        session_name=session_name,
+    )
+
+    # Initialize process isolator with resource limits
+    isolator = AgentProcessIsolator(project_dir=project_dir, limits=limits)
+
+    # Build command-line arguments for subprocess
+    import sys
+
+    agent_script = Path(__file__).parent / "agent_subprocess.py"
+
+    if not agent_script.exists():
+        error_msg = f"Agent subprocess script not found: {agent_script}"
+        debug_error("session", error_msg)
+        return "error", error_msg, None
+
+    args = [
+        "--project-dir",
+        str(project_dir),
+        "--spec-dir",
+        str(spec_dir),
+        "--agent-type",
+        agent_type,
+        "--model",
+        model,
+        "--message",
+        starting_message,
+        "--session-name",
+        session_name,
+    ]
+
+    if system_prompt:
+        args.extend(["--system-prompt", system_prompt])
+
+    if max_thinking_tokens:
+        args.extend(["--max-thinking-tokens", str(max_thinking_tokens)])
+
+    debug_verbose(
+        "session",
+        "Executing agent in isolated subprocess",
+        script=agent_script.name,
+        args=args,
+    )
+
+    # Execute agent in isolated subprocess
+    print(
+        f"Running {agent_type} agent in isolated subprocess (resource-limited)...\n"
+    )
+
+    try:
+        result: AgentIsolationResult = isolator.execute_agent(
+            agent_script=str(agent_script),
+            agent_args=args,
+            working_dir=project_dir,
+        )
+
+        debug(
+            "session",
+            "Subprocess execution completed",
+            success=result.success,
+            return_code=result.return_code,
+            execution_time=result.execution_time,
+            violated_limits=result.violated_limits,
+        )
+
+        # Handle execution results
+        if not result.success:
+            error_details = []
+
+            if result.crashed:
+                error_details.append(f"Agent process crashed (exit code: {result.return_code})")
+
+            if result.violated_limits:
+                limits_str = ", ".join(result.violated_limits)
+                error_details.append(f"Resource limits exceeded: {limits_str}")
+
+            if result.error:
+                error_details.append(f"Error: {result.error}")
+
+            if result.stderr:
+                error_details.append(f"stderr: {result.stderr[:500]}")
+
+            error_msg = "\n".join(error_details)
+            debug_error("session", "Isolated agent session failed", error=error_msg)
+            print(f"\n[ERROR] Agent subprocess failed:\n{error_msg}\n")
+
+            return "error", error_msg, None
+
+        # Parse agent output from JSON
+        if result.agent_output:
+            debug_success(
+                "session",
+                "Agent subprocess completed successfully",
+                execution_time=result.execution_time,
+            )
+
+            agent_success = result.agent_output.get("success", False)
+            agent_output = result.agent_output.get("output", {})
+            agent_error = result.agent_output.get("error")
+
+            if not agent_success:
+                error_msg = agent_error or "Agent session failed (no error message)"
+                debug_error("session", "Agent reported failure", error=error_msg)
+                print(f"\n[ERROR] Agent session failed: {error_msg}\n")
+                return "error", error_msg, None
+
+            # Extract response from agent output
+            response_text = ""
+            if isinstance(agent_output, dict):
+                response_text = agent_output.get("response", "")
+            elif isinstance(agent_output, str):
+                response_text = agent_output
+            else:
+                response_text = str(agent_output)
+
+            # Note: Usage metadata not currently available from subprocess
+            # This would require extending agent_subprocess.py to capture and return it
+            usage_metadata = None
+
+            print(
+                f"\n✓ Agent subprocess completed successfully "
+                f"(execution time: {result.execution_time:.1f}s)\n"
+            )
+
+            # For subprocess execution, we consider it "complete" since it ran to completion
+            return "complete", response_text, usage_metadata
+
+        else:
+            # No JSON output but success - treat stdout as response
+            debug_warning(
+                "session",
+                "Agent subprocess succeeded but produced no JSON output",
+                stdout_length=len(result.stdout),
+            )
+            return "complete", result.stdout, None
+
+    except AgentProcessError as e:
+        error_msg = f"Process isolation error: {e}"
+        debug_error("session", error_msg, exception_type=type(e).__name__)
+        print(f"\n[ERROR] {error_msg}\n")
+        return "error", error_msg, None
+
+    except Exception as e:
+        error_msg = f"Unexpected error in isolated session: {e}"
+        debug_error(
+            "session",
+            error_msg,
+            exception_type=type(e).__name__,
+            traceback=str(e),
+        )
+        print(f"\n[ERROR] {error_msg}\n")
+        return "error", error_msg, None
