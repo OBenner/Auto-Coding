@@ -530,6 +530,7 @@ class GraphitiMemory:
         task_description: str,
         agent_type: str,
         context: dict,
+        rating: int | None = None,
     ) -> bool:
         """
         Add user feedback to the preference profile and save it.
@@ -544,6 +545,7 @@ class GraphitiMemory:
             task_description: Description of the task that was evaluated
             agent_type: Agent that produced the output
             context: Additional context about the feedback
+            rating: Optional rating (1-5 for stars, 0/1 for thumbs)
 
         Returns:
             True if feedback was added and saved successfully
@@ -567,6 +569,7 @@ class GraphitiMemory:
                 task_description=task_description,
                 agent_type=agent_type,
                 context=context,
+                rating=rating,
             )
 
             # Save updated profile

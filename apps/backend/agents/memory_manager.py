@@ -696,6 +696,7 @@ async def save_feedback(
     task_description: str,
     agent_type: str,
     context: dict | None = None,
+    rating: int | None = None,
 ) -> bool:
     """
     Save user feedback (accept/reject/modify) to memory and update preferences.
@@ -713,6 +714,7 @@ async def save_feedback(
         context: Optional additional context about the feedback
                  For "modified": should include what was changed
                  For "rejected": should include why it was rejected
+        rating: Optional rating (1-5 for stars, or 0/1 for thumbs down/up)
 
     Returns:
         True if saved successfully, False otherwise
@@ -724,19 +726,24 @@ async def save_feedback(
 
     memory = None
     try:
-        memory = get_graphiti_memory(spec_dir, project_dir)
+        memory = await get_graphiti_memory(spec_dir, project_dir)
         if memory is None:
             if is_debug_enabled():
                 debug_warning("memory", "GraphitiMemory not available for feedback")
             return False
 
         if is_debug_enabled():
+            debug_data = {
+                "feedback_type": feedback_type,
+                "agent_type": agent_type,
+                "task": task_description[:100],
+            }
+            if rating is not None:
+                debug_data["rating"] = rating
             debug(
                 "memory",
                 "Saving user feedback",
-                feedback_type=feedback_type,
-                agent_type=agent_type,
-                task=task_description[:100],
+                **debug_data,
             )
 
         # Save feedback to preference profile via Graphiti
@@ -761,6 +768,8 @@ async def save_feedback(
             "agent_type": agent_type,
             "context": context or {},
         }
+        if rating is not None:
+            episode_data["rating"] = rating
 
         # Build insights based on feedback type
         insights = {
@@ -830,12 +839,15 @@ async def save_feedback(
         )
 
         # Also update preference profile directly
-        profile_result = await memory.add_feedback_to_profile(
-            feedback_type=feedback_enum,
-            task_description=task_description,
-            agent_type=agent_type,
-            context=context or {},
-        )
+        profile_kwargs = {
+            "feedback_type": feedback_enum,
+            "task_description": task_description,
+            "agent_type": agent_type,
+            "context": context or {},
+        }
+        if rating is not None:
+            profile_kwargs["rating"] = rating
+        profile_result = await memory.add_feedback_to_profile(**profile_kwargs)
 
         if result and profile_result:
             logger.info(f"User feedback saved: {feedback_type} for {agent_type} task")
