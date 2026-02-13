@@ -547,6 +547,9 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
                             isCreatingPR={state.isCreatingPR}
                             onShowPRDialog={state.setShowPRDialog}
                             onCreatePR={handleCreatePR}
+                            showFeedbackDialog={state.showFeedbackDialog}
+                            onShowFeedbackDialog={state.setShowFeedbackDialog}
+                            onSubmitFeedback={state.handleSubmitFeedback}
                           />
                         </>
                       )}
