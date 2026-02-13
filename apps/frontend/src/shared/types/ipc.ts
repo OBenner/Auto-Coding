@@ -931,6 +931,10 @@ export interface ElectronAPI {
     context?: string;
   }) => Promise<IPCResult<{ recorded: boolean }>>;
 
+  // Feedback analytics operations
+  getFeedbackSummary?: (projectId: string, days: number) => Promise<IPCResult<import('../../preload/api/feedback-api').FeedbackSummary>>;
+  exportFeedbackData?: (projectId: string, format: 'json' | 'csv', days: number) => Promise<IPCResult<string>>;
+
   // Queue Routing API (rate limit recovery)
   queue: import('../../preload/api/queue-api').QueueAPI;
   // Scheduler API for build scheduling and queue management
