@@ -7,8 +7,71 @@ from __future__ import annotations
 import difflib
 import re
 
+from ..rename_detector import (
+    detect_rename,
+    extract_renamed_identifiers,
+    is_function_rename,
+)
 from ..signature_parser import parse_function_signature
 from ..types import ChangeType, FileAnalysis, SemanticChange
+
+
+def extract_function_definitions(code: str, ext: str) -> dict[str, str]:
+    """
+    Extract full function definitions from code.
+
+    Args:
+        code: Source code
+        ext: File extension
+
+    Returns:
+        Dictionary mapping function name to full definition (including body)
+    """
+    if ext != ".py":
+        return {}
+
+    definitions = {}
+    lines = code.split("\n")
+    i = 0
+
+    while i < len(lines):
+        line = lines[i]
+        line_stripped = line.strip()
+
+        # Match function definition
+        if re.match(r"^(async\s+)?def\s+\w+", line_stripped):
+            match = re.match(r"^(?:async\s+)?def\s+(\w+)\s*\(", line_stripped)
+            if match:
+                func_name = match.group(1)
+                # Collect function body (simplified - just collect until we hit dedent)
+                definition_lines = [line]
+                i += 1
+                # Get base indentation
+                base_indent = len(line) - len(line.lstrip())
+
+                # Collect all lines that are part of this function
+                while i < len(lines):
+                    next_line = lines[i]
+                    if next_line.strip() == "":
+                        definition_lines.append(next_line)
+                        i += 1
+                        continue
+
+                    next_indent = len(next_line) - len(next_line.lstrip())
+
+                    # If we see something at same or less indent, function ended
+                    if next_indent <= base_indent:
+                        break
+
+                    definition_lines.append(next_line)
+                    i += 1
+
+                definitions[func_name] = "\n".join(definition_lines)
+                continue
+
+        i += 1
+
+    return definitions
 
 
 def analyze_with_regex(
@@ -112,7 +175,56 @@ def analyze_with_regex(
         funcs_before = extract_func_names(func_pattern.findall(before_normalized))
         funcs_after = extract_func_names(func_pattern.findall(after_normalized))
 
-        for func in funcs_after - funcs_before:
+        # Check for renames before marking as add/remove
+        # A rename looks like: remove old_name + add new_name with same structure
+        removed_funcs = funcs_before - funcs_after
+        added_funcs = funcs_after - funcs_before
+
+        # For Python functions, check for renames using AST analysis
+        if ext == ".py" and removed_funcs and added_funcs:
+            # Extract full function definitions for rename detection
+            func_defs_before = extract_function_definitions(before_normalized, ext)
+            func_defs_after = extract_function_definitions(after_normalized, ext)
+
+            # Check each removed+added pair for rename
+            matched_adds = set()
+            matched_removes = set()
+            for removed_func in removed_funcs:
+                for added_func in added_funcs:
+                    if added_func in matched_adds:
+                        continue
+
+                    removed_def = func_defs_before.get(removed_func, "")
+                    added_def = func_defs_after.get(added_func, "")
+
+                    # Check if this is a rename (same structure, different name)
+                    if removed_def and added_def and is_function_rename(removed_def, added_def):
+                        # This is a rename, not remove+add
+                        changes.append(
+                            SemanticChange(
+                                change_type=ChangeType.RENAME_FUNCTION,
+                                target=f"{removed_func}->{added_func}",
+                                location=f"function:{added_func}",
+                                line_start=1,
+                                line_end=1,
+                                content_before=removed_func,
+                                content_after=added_func,
+                                metadata={
+                                    "old_name": removed_func,
+                                    "new_name": added_func,
+                                },
+                            )
+                        )
+                        matched_adds.add(added_func)
+                        matched_removes.add(removed_func)
+                        break
+
+            # Filter out matched adds and removes
+            added_funcs -= matched_adds
+            removed_funcs -= matched_removes
+
+        # Remaining adds are new functions
+        for func in added_funcs:
             changes.append(
                 SemanticChange(
                     change_type=ChangeType.ADD_FUNCTION,
@@ -123,7 +235,8 @@ def analyze_with_regex(
                 )
             )
 
-        for func in funcs_before - funcs_after:
+        # Remaining removes are deleted functions
+        for func in removed_funcs:
             changes.append(
                 SemanticChange(
                     change_type=ChangeType.REMOVE_FUNCTION,

@@ -17,6 +17,7 @@ import logging
 from collections import defaultdict
 
 from .compatibility_rules import CompatibilityRule
+from .rename_detector import detect_rename, extract_renamed_identifiers
 from .types import (
     ChangeType,
     ConflictRegion,
@@ -267,23 +268,149 @@ def detect_implicit_conflicts(
 
     Returns:
         List of implicit conflict regions
-
-    Note:
-        These advanced checks are currently TODO.
-        The main location-based detection handles most cases.
     """
     conflicts = []
 
-    # Check for function rename + function call changes
-    # (If task A renames a function and task B calls the old name)
+    # Check for function rename + function call conflicts
+    # If task A renames a function and task B modifies/uses the old name
+    rename_conflicts = _detect_rename_conflicts(task_analyses)
+    if rename_conflicts:
+        debug_detailed(
+            MODULE,
+            f"Found {len(rename_conflicts)} rename-related conflicts",
+        )
+        conflicts.extend(rename_conflicts)
 
     # Check for import removal + usage
     # (If task A removes an import and task B uses it)
+    # TODO: Implement import conflict detection
 
-    # For now, these advanced checks are TODO
-    # The main location-based detection handles most cases
+    # Check for variable rename + references
+    # TODO: Implement variable rename conflict detection
 
     return conflicts
+
+
+def _detect_rename_conflicts(
+    task_analyses: dict[str, FileAnalysis],
+) -> list[ConflictRegion]:
+    """
+    Detect conflicts related to renames.
+
+    This catches cases where:
+    - Task A renames a function/variable
+    - Task B modifies or uses the old name
+
+    Args:
+        task_analyses: Map of task_id -> FileAnalysis
+
+    Returns:
+        List of rename-related conflict regions
+    """
+    conflicts = []
+
+    # Group analyses by file path
+    by_file: dict[str, dict[str, FileAnalysis]] = defaultdict(dict)
+    for task_id, analysis in task_analyses.items():
+        by_file[analysis.file_path][task_id] = analysis
+
+    # Check each file for rename conflicts
+    for file_path, file_analyses in by_file.items():
+        # Find all rename changes across tasks
+        renames_by_task: dict[str, dict[str, str]] = defaultdict(dict)
+
+        for task_id, analysis in file_analyses.items():
+            for change in analysis.changes:
+                if change.change_type in (
+                    ChangeType.RENAME_FUNCTION,
+                    ChangeType.RENAME_VARIABLE,
+                ):
+                    # Extract old_name -> new_name mapping from metadata
+                    if change.metadata:
+                        old_name = change.metadata.get("old_name")
+                        new_name = change.metadata.get("new_name")
+                        if old_name and new_name:
+                            renames_by_task[task_id][old_name] = new_name
+
+        # If no renames found, no conflicts to check
+        if not renames_by_task:
+            continue
+
+        # Check if any other task modifies/uses the old names
+        for rename_task, renames in renames_by_task.items():
+            for other_task, other_analysis in file_analyses.items():
+                if other_task == rename_task:
+                    continue
+
+                # Check if other task modifies the old name
+                for change in other_analysis.changes:
+                    # Check if this change references a renamed entity
+                    for old_name, new_name in renames.items():
+                        if _references_entity(change, old_name):
+                            # Found implicit conflict: rename + modify/call old name
+                            conflicts.append(
+                                ConflictRegion(
+                                    file_path=file_path,
+                                    location=change.location,
+                                    tasks_involved=[rename_task, other_task],
+                                    change_types=[
+                                        ChangeType.RENAME_FUNCTION
+                                        if "function" in change.location
+                                        else ChangeType.RENAME_VARIABLE,
+                                        change.change_type,
+                                    ],
+                                    severity=ConflictSeverity.HIGH,
+                                    can_auto_merge=False,
+                                    merge_strategy=MergeStrategy.AI_REQUIRED,
+                                    reason=f"Task {rename_task} renamed '{old_name}' to '{new_name}', but task {other_task} modifies the old name",
+                                )
+                            )
+                            debug_verbose(
+                                MODULE,
+                                f"Rename conflict detected",
+                                file=file_path,
+                                rename_task=rename_task,
+                                other_task=other_task,
+                                old_name=old_name,
+                                new_name=new_name,
+                                location=change.location,
+                            )
+
+    return conflicts
+
+
+def _references_entity(change: SemanticChange, entity_name: str) -> bool:
+    """
+    Check if a semantic change references an entity by name.
+
+    Args:
+        change: Semantic change to check
+        entity_name: Name of entity to look for
+
+    Returns:
+        True if the change references the entity
+    """
+    # Check if target matches
+    if change.target == entity_name:
+        return True
+
+    # Check if target contains entity_name (e.g., "calling foo")
+    if entity_name in change.target.lower():
+        return True
+
+    # Check content_before/content_after for references
+    if change.content_before and entity_name in change.content_before:
+        return True
+
+    if change.content_after and entity_name in change.content_after:
+        return True
+
+    # For MODIFY_FUNCTION, check if it's modifying the entity
+    if change.change_type == ChangeType.MODIFY_FUNCTION:
+        if change.target == entity_name:
+            return True
+
+    return False
 
 
 def analyze_compatibility(
