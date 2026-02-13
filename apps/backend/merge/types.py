@@ -153,6 +153,42 @@ class MergeDecision(Enum):
 
 
 @dataclass
+class FunctionSignature:
+    """
+    Signature of a function for semantic comparison.
+
+    Used in function signature analysis to detect parameter changes,
+    return type modifications, and function renames.
+
+    Attributes:
+        name: Function/method name
+        params: List of parameter names
+        return_type: Return type (as string, language-specific format)
+    """
+
+    name: str
+    params: list[str] = field(default_factory=list)
+    return_type: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dictionary for serialization."""
+        return {
+            "name": self.name,
+            "params": self.params,
+            "return_type": self.return_type,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> FunctionSignature:
+        """Create from dictionary."""
+        return cls(
+            name=data["name"],
+            params=data.get("params", []),
+            return_type=data.get("return_type", ""),
+        )
+
+
+@dataclass
 class SemanticChange:
     """
     A single semantic change within a file.
