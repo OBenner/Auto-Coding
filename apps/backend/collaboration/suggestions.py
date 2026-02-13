@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -124,7 +124,7 @@ class SuggestionManager:
             suggested_text=suggested_text.strip(),
             reason=reason.strip() if reason else None,
             status=SuggestionStatus.PENDING,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
         )
 
         suggestions.append(suggestion)
@@ -232,7 +232,7 @@ class SuggestionManager:
             if suggestion.id == suggestion_id:
                 suggestion.status = SuggestionStatus.ACCEPTED
                 suggestion.reviewed_by = reviewed_by
-                suggestion.reviewed_at = datetime.utcnow()
+                suggestion.reviewed_at = datetime.now(timezone.utc)
                 suggestion.review_comment = review_comment.strip() if review_comment else None
 
                 if self.save_suggestions(suggestions):
@@ -269,7 +269,7 @@ class SuggestionManager:
             if suggestion.id == suggestion_id:
                 suggestion.status = SuggestionStatus.REJECTED
                 suggestion.reviewed_by = reviewed_by
-                suggestion.reviewed_at = datetime.utcnow()
+                suggestion.reviewed_at = datetime.now(timezone.utc)
                 suggestion.review_comment = review_comment.strip() if review_comment else None
 
                 if self.save_suggestions(suggestions):

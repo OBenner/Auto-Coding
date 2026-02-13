@@ -9,7 +9,7 @@ Tracks user activity, cursor positions, and collaborative state.
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from threading import Lock
 from typing import TYPE_CHECKING
@@ -76,7 +76,7 @@ class PresenceManager:
                 presence.presence_type = presence_type
                 presence.section_id = section_id
                 presence.cursor_position = cursor_position
-                presence.last_seen = datetime.utcnow()
+                presence.last_seen = datetime.now(timezone.utc)
                 logger.debug(
                     "Updated presence for user %s in spec %s (type: %s)",
                     user_id,
@@ -91,7 +91,7 @@ class PresenceManager:
                     presence_type=presence_type,
                     section_id=section_id,
                     cursor_position=cursor_position,
-                    last_seen=datetime.utcnow(),
+                    last_seen=datetime.now(timezone.utc),
                 )
                 self._presence_store[user_id] = presence
                 logger.info(
@@ -273,7 +273,7 @@ class PresenceManager:
             if user_id in self._presence_store:
                 presence = self._presence_store[user_id]
                 presence.presence_type = PresenceType.IDLE
-                presence.last_seen = datetime.utcnow()
+                presence.last_seen = datetime.now(timezone.utc)
                 logger.debug(
                     "Marked user %s as idle in spec %s",
                     user_id,
@@ -297,7 +297,7 @@ class PresenceManager:
                 presence = self._presence_store[user_id]
                 presence.presence_type = PresenceType.EDITING
                 presence.section_id = section_id
-                presence.last_seen = datetime.utcnow()
+                presence.last_seen = datetime.now(timezone.utc)
                 logger.debug(
                     "Marked user %s as editing in spec %s (section: %s)",
                     user_id,
@@ -322,7 +322,7 @@ class PresenceManager:
                 presence = self._presence_store[user_id]
                 presence.presence_type = PresenceType.VIEWING
                 presence.section_id = section_id
-                presence.last_seen = datetime.utcnow()
+                presence.last_seen = datetime.now(timezone.utc)
                 logger.debug(
                     "Marked user %s as viewing in spec %s (section: %s)",
                     user_id,

@@ -13,7 +13,7 @@ from __future__ import annotations
 import json
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -66,7 +66,7 @@ class CrdtOperation:
         self.position = position
         self.author = author
         self.author_name = author_name
-        self.timestamp = timestamp or datetime.utcnow()
+        self.timestamp = timestamp or datetime.now(timezone.utc)
         self.op_id = op_id or str(uuid.uuid4())
         self.parent_id = parent_id
 
@@ -224,7 +224,7 @@ class CRDTStore:
                 "spec_id": self.spec_id,
                 "current_state": self.current_state,
                 "operations": [op.to_dict() for op in self.operations],
-                "updated_at": datetime.utcnow().isoformat(),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
             }
 
             with open(crdt_file, "w", encoding="utf-8") as f:
@@ -286,7 +286,7 @@ class CRDTStore:
             position=position,
             author=author,
             author_name=author_name,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             parent_id=parent_id or self._get_latest_head(),
         )
 
@@ -335,7 +335,7 @@ class CRDTStore:
             position=position,
             author=author,
             author_name=author_name,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             parent_id=parent_id or self._get_latest_head(),
         )
 

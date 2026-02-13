@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -268,7 +268,7 @@ class Presence(BaseModel):
         Returns:
             True if presence is stale
         """
-        elapsed = (datetime.utcnow() - self.last_seen).total_seconds()
+        elapsed = (datetime.now(timezone.utc) - self.last_seen).total_seconds()
         return elapsed > timeout_seconds
 
 

@@ -19,7 +19,7 @@ import json
 import logging
 import os
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -71,7 +71,7 @@ class MessageType(str, Enum):
     SUGGESTION_ADDED = "suggestion_added"
     SUGGESTION_REVIEWED = "suggestion_reviewed"
     ERROR = "error"
-    INIT_STATE = "init_state"
+    INIT_STATE = "initial_state"
 
 
 class WebSocketMessage(BaseModel):
@@ -81,7 +81,7 @@ class WebSocketMessage(BaseModel):
     spec_id: str | None = Field(default=None, description="Spec identifier")
     data: dict = Field(default_factory=dict, description="Message payload")
     timestamp: str = Field(
-        default_factory=lambda: datetime.utcnow().isoformat(),
+        default_factory=lambda: datetime.now(timezone.utc).isoformat(),
         description="Message timestamp",
     )
 
@@ -119,8 +119,8 @@ class ConnectedClient:
         self.spec_id = spec_id
         self.user_id = user_id
         self.user_name = user_name
-        self.connected_at = datetime.utcnow()
-        self.last_activity = datetime.utcnow()
+        self.connected_at = datetime.now(timezone.utc)
+        self.last_activity = datetime.now(timezone.utc)
 
     def is_stale(self, timeout_seconds: int = 300) -> bool:
         """Check if client connection is stale.
@@ -131,7 +131,7 @@ class ConnectedClient:
         Returns:
             True if client is stale
         """
-        elapsed = (datetime.utcnow() - self.last_activity).total_seconds()
+        elapsed = (datetime.now(timezone.utc) - self.last_activity).total_seconds()
         return elapsed > timeout_seconds
 
 
@@ -208,7 +208,7 @@ class CollaborationServer:
             # Handle messages
             async for raw_message in websocket:
                 try:
-                    client.last_activity = datetime.utcnow()
+                    client.last_activity = datetime.now(timezone.utc)
                     message_data = json.loads(raw_message)
 
                     # Validate message structure
@@ -517,7 +517,7 @@ class CollaborationServer:
             if comment.id == comment_id:
                 comment.status = CommentStatus.RESOLVED
                 comment.resolved_by = client.user_id
-                comment.resolved_at = datetime.utcnow()
+                comment.resolved_at = datetime.now(timezone.utc)
                 break
 
         save_comments(spec_dir, comments)
@@ -529,7 +529,7 @@ class CollaborationServer:
             data={
                 "comment_id": comment_id,
                 "resolved_by": client.user_id,
-                "resolved_at": datetime.utcnow().isoformat(),
+                "resolved_at": datetime.now(timezone.utc).isoformat(),
             },
         )
 
@@ -613,7 +613,7 @@ class CollaborationServer:
             if suggestion.id == suggestion_id:
                 suggestion.status = suggestion_status
                 suggestion.reviewed_by = client.user_id
-                suggestion.reviewed_at = datetime.utcnow()
+                suggestion.reviewed_at = datetime.now(timezone.utc)
                 suggestion.review_comment = review_comment
                 break
 
@@ -627,7 +627,7 @@ class CollaborationServer:
                 "suggestion_id": suggestion_id,
                 "status": suggestion_status.value,
                 "reviewed_by": client.user_id,
-                "reviewed_at": datetime.utcnow().isoformat(),
+                "reviewed_at": datetime.now(timezone.utc).isoformat(),
                 "review_comment": review_comment,
             },
         )
@@ -659,7 +659,7 @@ class CollaborationServer:
             presence_type=presence_type,
             section_id=section_id,
             cursor_position=cursor_position,
-            last_seen=datetime.utcnow(),
+            last_seen=datetime.now(timezone.utc),
         )
 
     async def _broadcast_presence(self, spec_id: str, exclude_client: str | None = None):

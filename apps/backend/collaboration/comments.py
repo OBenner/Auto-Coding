@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -117,7 +117,7 @@ class CommentManager:
             content=content.strip(),
             parent_id=parent_id,
             status=CommentStatus.ACTIVE,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
         )
 
         comments.append(comment)
@@ -258,7 +258,7 @@ class CommentManager:
             if comment.id == comment_id:
                 comment.status = CommentStatus.RESOLVED
                 comment.resolved_by = resolved_by
-                comment.resolved_at = datetime.utcnow()
+                comment.resolved_at = datetime.now(timezone.utc)
 
                 if self.save_comments(comments):
                     logger.info(
@@ -343,7 +343,7 @@ class CommentManager:
         for comment in comments:
             if comment.id == comment_id:
                 comment.content = content.strip()
-                comment.updated_at = datetime.utcnow()
+                comment.updated_at = datetime.now(timezone.utc)
 
                 if self.save_comments(comments):
                     logger.info("Updated comment %s", comment_id)

@@ -11,7 +11,7 @@ from __future__ import annotations
 import difflib
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -163,7 +163,7 @@ class VersionManager:
             content=content,
             commit_message=commit_message,
             previous_version_id=previous_id,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
             is_approved=False,
         )
 
@@ -260,7 +260,7 @@ class VersionManager:
             if version.id == version_id:
                 version.is_approved = True
                 version.approved_by = approved_by
-                version.approved_at = datetime.utcnow()
+                version.approved_at = datetime.now(timezone.utc)
 
                 if self.save_versions(versions):
                     logger.info(
