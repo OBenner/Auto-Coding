@@ -373,7 +373,7 @@ def is_false_positive(line: str, matched_text: str) -> bool:
                 return True
 
     for pattern in FALSE_POSITIVE_PATTERNS:
-        if re.search(pattern, line_lower):
+        if re.search(pattern, line_lower, re.IGNORECASE):
             return True
 
     # Check if it's just a variable name or type hint
