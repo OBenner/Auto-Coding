@@ -138,15 +138,21 @@ class ConnectedClient:
 class CollaborationServer:
     """WebSocket server for real-time collaborative editing."""
 
-    def __init__(self, host: str = "localhost", port: int = 8765):
+    def __init__(self, host: str = "localhost", port: int = 8765, spec_dir: Path | None = None):
         """Initialize the collaboration server.
 
         Args:
             host: Host to bind to
             port: Port to listen on
+            spec_dir: Base directory for spec files (defaults to .auto-claude/specs or module-level _collaboration_dir)
         """
         self.host = host
         self.port = port
+        # Check for module-level _collaboration_dir (used in tests)
+        import collaboration
+        if spec_dir is None and hasattr(collaboration, '_collaboration_dir'):
+            spec_dir = collaboration._collaboration_dir
+        self.spec_dir = spec_dir or Path.cwd() / ".auto-claude" / "specs"
         self.clients: dict[str, ConnectedClient] = {}
         # Maps spec_id -> list of client_ids
         self.spec_clients: dict[str, list[str]] = {}
@@ -304,21 +310,26 @@ class CollaborationServer:
             )
             return
 
-        # Send current content
-        message = WebSocketMessage(
-            type=MessageType.INIT_STATE,
-            spec_id=client.spec_id,
-            data={
-                "content": store.get_content(),
-                "operations": store.get_operation_history(),
-                "presence": [
-                    p.to_dict()
-                    for p in self.spec_presence.get(client.spec_id, {}).values()
-                ],
-            },
-        )
+        # Load comments and suggestions from storage
+        comments_list = load_comments(self.spec_dir / client.spec_id)
+        suggestions_list = load_suggestions(self.spec_dir / client.spec_id)
 
-        await client.websocket.send(message.to_json())
+        # Send flattened initial state (no nested 'data' wrapper)
+        initial_state = {
+            "type": "initial_state",
+            "spec_id": client.spec_id,
+            "content": store.get_content(),
+            "operations": store.get_operation_history(),
+            "presence": [
+                p.to_dict()
+                for p in self.spec_presence.get(client.spec_id, {}).values()
+            ],
+            "comments": [c.to_dict() for c in comments_list],
+            "suggestions": [s.to_dict() for s in suggestions_list],
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+
+        await client.websocket.send(json.dumps(initial_state))
 
     async def _handle_message(self, client: ConnectedClient, message_data: dict):
         """Handle a message from a client.
