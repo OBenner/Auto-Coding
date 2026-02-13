@@ -23,9 +23,6 @@ from typing import TYPE_CHECKING, Any
 
 from ..base import PluginBase, PluginMetadata, PluginType
 
-if TYPE_CHECKING:
-    pass  # type: ignore
-
 logger = logging.getLogger(__name__)
 
 
