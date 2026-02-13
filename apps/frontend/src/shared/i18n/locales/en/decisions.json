@@ -1,0 +1,66 @@
+{
+  "empty": {
+    "noDecisions": "No decisions recorded yet",
+    "noDisplay": "No decisions to display"
+  },
+  "types": {
+    "approach": "Approach",
+    "implementation": "Implementation",
+    "toolSelection": "Tool Selection",
+    "fileModification": "File Change",
+    "errorRecovery": "Error Recovery",
+    "architecture": "Architecture",
+    "optimization": "Optimization",
+    "other": "Other"
+  },
+  "confidence": {
+    "veryLow": "Very Low",
+    "low": "Low",
+    "medium": "Medium",
+    "high": "High",
+    "veryHigh": "Very High",
+    "average": "Avg"
+  },
+  "labels": {
+    "reviewNeeded": "Review Needed",
+    "review": "Review",
+    "allDecisions": "All Decisions",
+    "unknown": "Unknown",
+    "yes": "Yes",
+    "no": "No",
+    "decision": "decision",
+    "decision_plural": "decisions",
+    "alternative": "alternative",
+    "alternative_plural": "alternatives",
+    "reasoningStep": "reasoning step",
+    "reasoningStep_plural": "reasoning steps",
+    "considered": "considered"
+  },
+  "sections": {
+    "context": "Context",
+    "chosenApproach": "Chosen Approach",
+    "reasoning": "Reasoning",
+    "reasoningSteps": "Reasoning Steps",
+    "alternativesConsidered": "Alternatives Considered",
+    "impact": "Impact",
+    "reversible": "Reversible",
+    "dependencies": "Dependencies",
+    "whyConsidered": "Why Considered",
+    "whyRejected": "Why Rejected",
+    "confidenceImpact": "Confidence Impact",
+    "tradeoffs": "Tradeoffs"
+  },
+  "tree": {
+    "groupBy": {
+      "phase": "Group by Phase",
+      "type": "Group by Type",
+      "confidence": "Group by Confidence"
+    }
+  },
+  "hints": {
+    "alternativesCount": "{{count}} alternative considered",
+    "alternativesCount_plural": "{{count}} alternatives considered",
+    "reasoningCount": "{{count}} reasoning step",
+    "reasoningCount_plural": "{{count}} reasoning steps"
+  }
+}
