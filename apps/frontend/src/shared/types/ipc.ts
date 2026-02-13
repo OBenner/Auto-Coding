@@ -934,6 +934,7 @@ export interface ElectronAPI {
   // Feedback analytics operations
   getFeedbackSummary?: (projectId: string, days: number) => Promise<IPCResult<import('../../preload/api/feedback-api').FeedbackSummary>>;
   exportFeedbackData?: (projectId: string, format: 'json' | 'csv', days: number) => Promise<IPCResult<string>>;
+  getImprovements?: (projectId: string, days: number) => Promise<IPCResult<import('../../preload/api/feedback-api').ImprovementData[]>>;
 
   // Queue Routing API (rate limit recovery)
   queue: import('../../preload/api/queue-api').QueueAPI;

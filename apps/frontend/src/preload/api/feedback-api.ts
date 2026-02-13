@@ -77,6 +77,29 @@ export interface FeedbackSummary {
   feedback_items: FeedbackMetrics[];
 }
 
+/**
+ * Metric change for improvement tracking
+ */
+export interface MetricChange {
+  before: number;
+  after: number;
+  delta: number;
+  percent_change: number;
+}
+
+/**
+ * Improvement data for tracking feedback impact
+ */
+export interface ImprovementData {
+  improvement_id: string;
+  improvement_description: string;
+  feedback_ids: string[];
+  agent_type?: string;
+  created_at?: string;
+  improvement_delta: Record<string, MetricChange>;
+  context?: Record<string, unknown>;
+}
+
 export interface FeedbackAPI {
   submitFeedback: (request: FeedbackRequest) => Promise<{
     success: boolean;
@@ -95,11 +118,18 @@ export interface FeedbackAPI {
     data?: string;
     error?: string;
   }>;
+
+  getImprovements?: (projectId: string, days: number) => Promise<{
+    success: boolean;
+    data?: ImprovementData[];
+    error?: string;
+  }>;
 }
 
 export const createFeedbackAPI = (): FeedbackAPI => ({
   submitFeedback: (request) => ipcRenderer.invoke(IPC_CHANNELS.FEEDBACK_SUBMIT, request),
-  // Note: getFeedbackSummary and exportFeedbackData are optional and will be implemented when backend support is ready
+  // Note: getFeedbackSummary, exportFeedbackData, and getImprovements are optional and will be implemented when backend support is ready
   getFeedbackSummary: undefined,
   exportFeedbackData: undefined,
+  getImprovements: undefined,
 });
