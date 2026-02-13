@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useProjectStore } from '../../../stores/project-store';
 import { checkTaskRunning, isIncompleteHumanReview, getTaskProgress, useTaskStore, loadTasks } from '../../../stores/task-store';
+import { useSettingsStore } from '../../../stores/settings-store';
 import type { Task, TaskLogs, TaskLogPhase, WorktreeStatus, WorktreeDiff, MergeConflict, MergeStats, GitConflictInfo, ImageAttachment } from '../../../../shared/types';
 import type { FeedbackRating } from '../../FeedbackDialog';
 
@@ -181,6 +182,24 @@ export function useTaskDetail({ task }: UseTaskDetailOptions) {
   useEffect(() => {
     setFeedbackImages([]);
   }, []);
+
+  // Track previous task status to detect transitions to 'done'
+  const prevTaskStatusRef = useRef<string | null>(null);
+
+  // Automatically show feedback dialog when task completes to 'done' status
+  // Only shows if user has opted in to feedback collection (feedbackEnabled = true)
+  useEffect(() => {
+    const feedbackEnabled = useSettingsStore.getState().settings.feedbackEnabled ?? true;
+
+    // Only trigger on transition from non-done to done status
+    if (task.status === 'done' && prevTaskStatusRef.current !== 'done' && feedbackEnabled) {
+      console.log('[useTaskDetail] Task completed, showing feedback dialog');
+      setShowFeedbackDialog(true);
+    }
+
+    // Update previous status ref
+    prevTaskStatusRef.current = task.status;
+  }, [task.status]);
 
   // Load worktree status when task is in human_review
   useEffect(() => {
