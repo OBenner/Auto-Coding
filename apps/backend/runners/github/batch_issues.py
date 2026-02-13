@@ -87,7 +87,8 @@ class ClaudeBatchAnalyzer:
         try:
             import sys
 
-            import claude_agent_sdk  # noqa: F401 - check availability
+            # Optional: claude_agent_sdk is checked at runtime for availability
+            import claude_agent_sdk  # noqa: F401
 
             backend_path = Path(__file__).parent.parent.parent
             sys.path.insert(0, str(backend_path))

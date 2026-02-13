@@ -58,6 +58,7 @@ def _apply_ladybug_monkeypatch() -> bool:
 
     # Fall back to native kuzu
     try:
+        # Optional: kuzu is optional (fallback if LadybugDB unavailable)
         import kuzu  # noqa: F401
 
         logger.info("Using native kuzu (LadybugDB not installed)")

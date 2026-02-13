@@ -630,8 +630,9 @@ def get_graphiti_status() -> dict:
 
     # Try importing the required Graphiti packages
     try:
-        # Attempt to import the main graphiti_memory module
+        # Optional: graphiti_core is an optional runtime dependency
         import graphiti_core  # noqa: F401
+        # Optional: FalkorDriver is an optional runtime dependency
         from graphiti_core.driver.falkordb_driver import FalkorDriver  # noqa: F401
 
         # If we got here, packages are importable

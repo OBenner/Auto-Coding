@@ -329,6 +329,7 @@ class OpenRouterProvider(AIEngineProvider):
 
         # Verify openai package is installed
         try:
+            # Optional: openai is an optional runtime dependency
             from openai import AsyncOpenAI  # noqa: F401
         except ImportError as e:
             raise ProviderNotInstalled(
@@ -443,6 +444,7 @@ class OpenRouterProvider(AIEngineProvider):
 
         # Check if openai is installed
         try:
+            # Optional: openai is an optional runtime dependency
             from openai import AsyncOpenAI  # noqa: F401
 
             return True
