@@ -4,6 +4,7 @@ import { Button } from '../ui/button';
 import { ScrollArea } from '../ui/scroll-area';
 import { useToast } from '../../hooks/use-toast';
 import { ModelUsageCard } from './ModelUsageCard';
+import { CostChart } from './CostChart';
 import type {
   ModelUsageSummary,
   ModelUsageTrendPoint,
@@ -405,15 +406,8 @@ export function ModelUsageDashboard({ projectId }: ModelUsageDashboardProps) {
             </div>
           )}
 
-          {/* Trends Chart Placeholder */}
-          {trends.length > 0 && (
-            <div className="rounded-lg border border-border bg-card p-6">
-              <h2 className="text-lg font-semibold mb-4">Trends Over Time</h2>
-              <div className="h-64 flex items-center justify-center text-muted-foreground">
-                <p>Trends chart will be displayed here (CostChart component)</p>
-              </div>
-            </div>
-          )}
+          {/* Cost Trends Chart */}
+          <CostChart trends={trends} />
 
           {/* Empty State */}
           {(!summary || summary.total_usage_count === 0) && (
