@@ -7,7 +7,6 @@ Handles batch processing of similar issues.
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 try:

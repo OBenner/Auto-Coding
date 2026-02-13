@@ -7,7 +7,6 @@ Handles automatic issue fixing workflow including permissions and state manageme
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 try:
