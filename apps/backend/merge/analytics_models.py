@@ -57,6 +57,7 @@ class MergeAnalyticsEntry:
 
     # Additional context
     merge_intent: str = ""  # Why this merge was performed
+    resolution_explanations: dict[str, str] = field(default_factory=dict)  # File path -> explanation
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
@@ -77,6 +78,7 @@ class MergeAnalyticsEntry:
             "conflicts_ai_resolved": self.conflicts_ai_resolved,
             "conflicts_remaining": self.conflicts_remaining,
             "merge_intent": self.merge_intent,
+            "resolution_explanations": self.resolution_explanations,
         }
 
     @classmethod
@@ -103,6 +105,7 @@ class MergeAnalyticsEntry:
             conflicts_ai_resolved=data.get("conflicts_ai_resolved", 0),
             conflicts_remaining=data.get("conflicts_remaining", 0),
             merge_intent=data.get("merge_intent", ""),
+            resolution_explanations=data.get("resolution_explanations", {}),
         )
 
     @property
