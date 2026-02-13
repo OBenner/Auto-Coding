@@ -45,8 +45,9 @@ FRONTEND_PATTERNS = [
     ),
     # window.config object with secrets
     # Detects: window.config = { apiKey: 'sk-1234...' } or window.config.apiKey = 'sk-1234...'
+    # Also: window.CONFIG, window.appConfig, window.APP_CONFIG
     (
-        r'window\.(?:config|CONFIG|appConfig|APP_CONFIG)\s*(?:\.\s*[a-zA-Z_]\w*\s*)?[:=]\s*{?\s*["\']?([a-zA-Z0-9_-]{16,})["\']?',
+        r'window\.(?:config|CONFIG|appConfig|APP_CONFIG)(?:\.\s*(?:api[_-]?key|apikey|token|access[_-]?token|auth[_-]?token|secret|api_secret|bearer|aws[_-]?key)\s*)?[:=]\s*["\']([a-zA-Z0-9_-]{16,})["\']|window\.(?:config|CONFIG|appConfig|APP_CONFIG)\s*=\s*{[^}]*?(?:api[_-]?key|apikey|token|access[_-]?token|auth[_-]?token|secret|api_secret|bearer|aws[_-]?key)\s*:\s*["\']?([a-zA-Z0-9_-]{16,})["\']?',
         "window.config object with potential secret",
     ),
     # Firebase config objects (contain API keys)
