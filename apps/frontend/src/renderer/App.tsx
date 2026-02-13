@@ -48,6 +48,7 @@ import { QueueView } from './components/Scheduler/QueueView';
 import { Worktrees } from './components/Worktrees';
 import { AgentTools } from './components/AgentTools';
 import { ProductivityDashboard } from './components/analytics/ProductivityDashboard';
+import { FeedbackDashboard } from './components/FeedbackDashboard';
 import { WelcomeScreen } from './components/WelcomeScreen';
 import { RateLimitModal } from './components/RateLimitModal';
 import { SDKRateLimitModal } from './components/SDKRateLimitModal';
@@ -1073,6 +1074,9 @@ export function App() {
                 {activeView === 'agent-tools' && <AgentTools />}
                 {activeView === 'analytics' && (activeProjectId || selectedProjectId) && (
                   <ProductivityDashboard projectId={activeProjectId || selectedProjectId!} />
+                )}
+                {activeView === 'feedback' && (activeProjectId || selectedProjectId) && (
+                  <FeedbackDashboard projectId={activeProjectId || selectedProjectId!} />
                 )}
               </>
             ) : (

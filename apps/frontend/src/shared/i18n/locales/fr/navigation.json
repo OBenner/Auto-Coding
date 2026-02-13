@@ -21,7 +21,8 @@
     "worktrees": "Worktrees",
     "agentTools": "Aperçu MCP",
     "analytics": "Analytique",
-    "mergeAnalytics": "Analyse des fusions"
+    "mergeAnalytics": "Analyse des fusions",
+    "feedback": "Retour d'information"
   },
   "actions": {
     "settings": "Paramètres",

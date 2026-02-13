@@ -21,7 +21,8 @@
     "worktrees": "Worktrees",
     "agentTools": "MCP Overview",
     "analytics": "Analytics",
-    "mergeAnalytics": "Merge Analytics"
+    "mergeAnalytics": "Merge Analytics",
+    "feedback": "Feedback"
   },
   "actions": {
     "settings": "Settings",
