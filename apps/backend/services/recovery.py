@@ -61,6 +61,7 @@ class RecoveryAction:
     target: str  # commit hash, subtask id, or message
     reason: str
     wait_seconds: float = field(default=0.0)  # Exponential backoff delay before retry
+    use_model_fallback: bool = field(default=False)  # Suggest trying with fallback model
 
 
 # Error Pattern Database
@@ -400,12 +401,18 @@ class RecoveryManager:
         Applies exponential backoff to retry actions to prevent API rate
         limiting and thundering herd problems.
 
+        Model Fallback Strategy:
+        - First attempt: Use original model
+        - Second+ attempt: Enable model fallback (opus -> sonnet -> haiku)
+        - This prevents model-specific failures from causing unnecessary escalations
+
         Args:
             failure_type: Type of failure that occurred
             subtask_id: ID of the subtask that failed
 
         Returns:
-            RecoveryAction describing what to do (includes wait_seconds for retries)
+            RecoveryAction describing what to do (includes wait_seconds for retries
+            and use_model_fallback flag for alternative models)
         """
         attempt_count = self.get_attempt_count(subtask_id)
 
@@ -429,11 +436,15 @@ class RecoveryManager:
             # Verification failed: retry with different approach if < 3 attempts
             if attempt_count < 3:
                 backoff_delay = self.calculate_backoff_delay(attempt_count)
+                # Enable model fallback after first attempt to try alternative models
+                use_fallback = attempt_count >= 1
+                reason_suffix = " with model fallback" if use_fallback else ""
                 return RecoveryAction(
                     action="retry",
                     target=subtask_id,
-                    reason=f"Verification failed, retry with different approach (attempt {attempt_count + 1}/3)",
+                    reason=f"Verification failed, retry with different approach{reason_suffix} (attempt {attempt_count + 1}/3)",
                     wait_seconds=backoff_delay,
+                    use_model_fallback=use_fallback,
                 )
             else:
                 return RecoveryAction(
@@ -462,11 +473,15 @@ class RecoveryManager:
             # Unknown error: retry once, then escalate
             if attempt_count < 2:
                 backoff_delay = self.calculate_backoff_delay(attempt_count)
+                # Enable model fallback on retry to try alternative models
+                use_fallback = attempt_count >= 1
+                reason_suffix = " with model fallback" if use_fallback else ""
                 return RecoveryAction(
                     action="retry",
                     target=subtask_id,
-                    reason=f"Unknown error, retrying (attempt {attempt_count + 1}/2)",
+                    reason=f"Unknown error, retrying{reason_suffix} (attempt {attempt_count + 1}/2)",
                     wait_seconds=backoff_delay,
+                    use_model_fallback=use_fallback,
                 )
             else:
                 return RecoveryAction(
