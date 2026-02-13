@@ -9,15 +9,19 @@ Memory Integration:
 - Saves fix outcomes and learnings after session
 """
 
+import asyncio
 import time
 from pathlib import Path
 
 # Memory integration for cross-session learning
 from agents.memory_manager import get_graphiti_context, save_session_memory
 from claude_agent_sdk import ClaudeSDKClient
+from core.client import create_client
+from core.model_fallback import MODEL_FALLBACK_CHAIN
 from debug import debug, debug_detailed, debug_error, debug_section, debug_success
+from phase_config import resolve_model_id
 from security.tool_input_validator import get_safe_tool_input
-from services.recovery import RecoveryManager
+from services.recovery import FailureType, RecoveryAction, RecoveryManager
 from task_logger import (
     LogEntryType,
     LogPhase,
@@ -53,16 +57,18 @@ async def run_qa_fixer_session(
     fix_session: int,
     verbose: bool = False,
     project_dir: Path | None = None,
+    model: str = "sonnet",
 ) -> tuple[str, str]:
     """
-    Run a QA fixer agent session.
+    Run a QA fixer agent session with enhanced recovery.
 
     Args:
-        client: Claude SDK client
+        client: Claude SDK client (initial client, may be replaced for fallback)
         spec_dir: Spec directory
         fix_session: Fix iteration number
         verbose: Whether to show detailed output
         project_dir: Project root directory (for memory context)
+        model: Base model to use (for fallback chain)
 
     Returns:
         (status, response_text) where status is:
@@ -82,6 +88,12 @@ async def run_qa_fixer_session(
     # Initialize recovery manager for circular fix detection
     recovery_manager = RecoveryManager(spec_dir=spec_dir, project_dir=project_dir)
     fixer_subtask_id = f"qa_fixer_{fix_session}"
+
+    # === ENHANCED RECOVERY: Track recovery state ===
+    pending_recovery_action: RecoveryAction | None = None
+    override_model: str | None = None  # For model fallback
+    recovery_guidance: str | None = None  # Strategy guidance for next attempt
+    current_client = client  # Track current client (may be replaced for fallback)
 
     debug_section("qa_fixer", f"QA Fixer Session {fix_session}")
     debug(
@@ -156,6 +168,9 @@ async def run_qa_fixer_session(
     prompt += f"\n**IMPORTANT**: All spec files are located in: `{spec_dir}/`\n"
     prompt += f"The fix request file is at: `{spec_dir}/QA_FIX_REQUEST.md`\n"
 
+    # Store base prompt (recovery guidance will be added per-iteration)
+    base_prompt = prompt
+
     # Check for circular fixes (same fix attempted multiple times)
     fix_request_content = fix_request_file.read_text(encoding="utf-8")
     if recovery_manager.is_circular_fix(fixer_subtask_id, fix_request_content):
@@ -187,6 +202,58 @@ async def run_qa_fixer_session(
         # Track iteration start time for duration reporting
         iteration_start_time = time.time()
 
+        # === ENHANCED RECOVERY: Handle pending recovery action ===
+        if pending_recovery_action:
+            # Apply exponential backoff delay if specified
+            if pending_recovery_action.wait_seconds > 0:
+                print(
+                    f"⏳ Recovery backoff: waiting {pending_recovery_action.wait_seconds:.1f}s before retry..."
+                )
+                await asyncio.sleep(pending_recovery_action.wait_seconds)
+
+            # Handle rollback action
+            if pending_recovery_action.action == "rollback":
+                print(f"↩️  Rolling back to commit {pending_recovery_action.target[:8]}...")
+                rollback_success = recovery_manager.rollback_to_commit(
+                    pending_recovery_action.target
+                )
+                if rollback_success:
+                    print("✓ Rollback successful\n")
+                else:
+                    print("✗ Rollback failed\n")
+
+            # Display recovery notification if needed
+            if pending_recovery_action.should_notify:
+                print()
+                print(f"⚠️  {pending_recovery_action.notification_message}")
+                print()
+
+            # Clear the pending action
+            pending_recovery_action = None
+
+        # Recreate client if model fallback is needed
+        if override_model:
+            print(f"🔄 Using fallback model: {override_model}")
+            fallback_model = resolve_model_id(override_model)
+            # Close old client if it's not the original one
+            if current_client != client:
+                try:
+                    await current_client.__aexit__(None, None, None)
+                except Exception:
+                    pass  # Ignore cleanup errors
+            # Create new client with fallback model
+            current_client = create_client(
+                project_dir,
+                spec_dir,
+                fallback_model,
+                agent_type="qa_fixer",
+                max_thinking_tokens=None,
+            )
+            # Enter async context for new client
+            await current_client.__aenter__()
+            # Reset override after creating new client
+            override_model = None
+
         if fixer_iteration > 1:
             print(f"\n{'=' * 70}")
             print(
@@ -212,14 +279,21 @@ async def run_qa_fixer_session(
             approach=f"QA fixer session {fix_session}, iteration {fixer_iteration}",
         )
 
+        # Build prompt with recovery guidance (if available)
+        iteration_prompt = base_prompt
+        if recovery_guidance:
+            iteration_prompt += f"\n\n## RECOVERY STRATEGY\n\n{recovery_guidance}\n"
+            # Clear guidance after using it
+            recovery_guidance = None
+
         try:
             debug("qa_fixer", "Sending query to Claude SDK...")
-            await client.query(prompt)
+            await current_client.query(iteration_prompt)
             debug_success("qa_fixer", "Query sent successfully")
 
             response_text = ""
             debug("qa_fixer", "Starting to receive response stream...")
-            async for msg in client.receive_response():
+            async for msg in current_client.receive_response():
                 msg_type = type(msg).__name__
                 message_count += 1
                 debug_detailed(
@@ -474,31 +548,99 @@ async def run_qa_fixer_session(
                 duration_seconds=iteration_duration,
             )
 
-            # If this is the last iteration, return stuck status
-            if fixer_iteration == MAX_FIXER_ITERATIONS:
-                debug_error(
-                    "qa_fixer",
-                    f"Max fixer iterations ({MAX_FIXER_ITERATIONS}) reached, fixer is stuck",
-                )
-                print(
-                    f"⚠️  Max recovery attempts ({MAX_FIXER_ITERATIONS}) reached. Fixer stuck.\n"
-                )
+            # === ENHANCED RECOVERY: Use smart recovery system ===
+            attempt_count = recovery_manager.get_attempt_count(fixer_subtask_id)
+
+            # Classify the failure type
+            error_message = f"QA fixer error: {e}"
+            failure_type = recovery_manager.classify_failure(error_message, fixer_subtask_id)
+
+            # Determine recovery action (handles exponential backoff, model fallback, DLQ, notifications)
+            recovery_action = recovery_manager.determine_recovery_action(
+                failure_type, fixer_subtask_id
+            )
+
+            # Record the notification or silent failure
+            recovery_manager.record_recovery_notification(
+                fixer_subtask_id, failure_type, recovery_action
+            )
+
+            print()
+            print(f"🔧 Recovery action: {recovery_action.action}")
+            print(f"   Reason: {recovery_action.reason}")
+
+            # Handle different recovery actions
+            if recovery_action.action == "retry":
+                # Set up for retry with exponential backoff and optional model fallback
+                pending_recovery_action = recovery_action
+
+                # Set model fallback if recommended
+                if recovery_action.use_model_fallback:
+                    # Extract current model shorthand and get fallback
+                    current_model_shorthand = model
+                    if "opus" in model.lower():
+                        current_model_shorthand = "opus"
+                    elif "sonnet" in model.lower():
+                        current_model_shorthand = "sonnet"
+                    elif "haiku" in model.lower():
+                        current_model_shorthand = "haiku"
+
+                    # Get fallback model from chain
+                    fallback_chain = MODEL_FALLBACK_CHAIN.get(current_model_shorthand, [])
+                    if fallback_chain:
+                        override_model = fallback_chain[0]  # Use first fallback
+                        print(f"   Will try fallback model: {override_model}")
+                    else:
+                        override_model = None
+
+                # Set recovery guidance from strategy
+                if recovery_action.strategy:
+                    recovery_guidance = recovery_action.strategy.guidance
+                    print(f"   Strategy: {recovery_action.strategy.description}")
+
+                print(f"   Will retry after {recovery_action.wait_seconds:.1f}s backoff\n")
+                continue
+
+            elif recovery_action.action == "skip":
+                # Mark subtask as stuck and skip
+                recovery_manager.mark_subtask_stuck(fixer_subtask_id, recovery_action.reason)
+                print(f"❌ QA Fixer marked as STUCK")
+                print("   Recovery exhausted - consider manual intervention\n")
                 # Record failed outcome
                 recovery_manager.record_outcome(
                     fixer_subtask_id, success=False, error=last_error
                 )
-                return (
-                    "stuck",
-                    f"Fixer stuck after {MAX_FIXER_ITERATIONS} recovery attempts: {last_error}",
-                )
+                return "stuck", f"Fixer stuck: {recovery_action.reason}"
 
-            # Otherwise, continue to next iteration
+            elif recovery_action.action == "escalate":
+                # Critical failure - escalate to human
+                recovery_manager.mark_subtask_stuck(fixer_subtask_id, recovery_action.reason)
+                print()
+                print("🚨 ESCALATION REQUIRED")
+                print(f"   {recovery_action.reason}")
+                print("   This failure has been added to the dead-letter queue for manual review")
+                print()
+                # Record failed outcome
+                recovery_manager.record_outcome(
+                    fixer_subtask_id, success=False, error=last_error
+                )
+                return "escalate", recovery_action.reason
+
+            elif recovery_action.action == "rollback":
+                # Rollback will be handled at the start of next iteration
+                pending_recovery_action = recovery_action
+                print(f"   Will rollback to {recovery_action.target[:8]} on next iteration\n")
+                continue
+
+            elif recovery_action.action == "continue":
+                # Context exhausted - will continue in next session
+                print("   Context exhausted - will continue in next iteration\n")
+                continue
+
+            # Fallback to old behavior if unknown action
             debug(
                 "qa_fixer",
-                f"Will retry (attempt {fixer_iteration + 1}/{MAX_FIXER_ITERATIONS})",
-            )
-            print(
-                f"  Retrying... (attempt {fixer_iteration + 1}/{MAX_FIXER_ITERATIONS})\n"
+                f"Unknown recovery action: {recovery_action.action}, falling back to retry",
             )
             continue
 
