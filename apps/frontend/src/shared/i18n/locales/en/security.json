@@ -40,7 +40,10 @@
     "title": "Audit Log",
     "totalEvents": "Total Logged Events",
     "recentEvents": "Recent Events",
-    "noEvents": "No security events logged yet"
+    "noEvents": "No security events logged yet",
+    "searchPlaceholder": "Search by message, command, file path...",
+    "noMatchingEvents": "No matching security events",
+    "eventDetails": "Event Details"
   },
   "warnings": {
     "permissiveLevel": "Switching to Permissive mode will allow broad system access. This may expose your system to security risks. Continue?",
@@ -63,5 +66,20 @@
     "exportFailed": "Failed to export configuration",
     "logsRefreshed": "Audit logs refreshed",
     "logsRefreshedDescription": "Security event logs have been updated"
+  },
+  "categories": {
+    "command_execution": "Command",
+    "filesystem_access": "Filesystem",
+    "api_call": "API Call",
+    "permission_change": "Permission",
+    "sandbox_violation": "Sandbox",
+    "profile_loaded": "Profile",
+    "profile_exported": "Export",
+    "risk_detected": "Risk"
+  },
+  "severities": {
+    "info": "Info",
+    "warning": "Warning",
+    "critical": "Critical"
   }
 }

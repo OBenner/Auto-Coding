@@ -40,7 +40,10 @@
     "title": "Journal d'audit",
     "totalEvents": "Total des événements enregistrés",
     "recentEvents": "Événements récents",
-    "noEvents": "Aucun événement de sécurité enregistré pour le moment"
+    "noEvents": "Aucun événement de sécurité enregistré pour le moment",
+    "searchPlaceholder": "Rechercher par message, commande, chemin de fichier...",
+    "noMatchingEvents": "Aucun événement de sécurité correspondant",
+    "eventDetails": "Détails de l'événement"
   },
   "warnings": {
     "permissiveLevel": "Le passage en mode Permissif autorisera un accès étendu au système. Cela peut exposer votre système à des risques de sécurité. Continuer ?",
@@ -63,5 +66,20 @@
     "exportFailed": "Échec de l'exportation de la configuration",
     "logsRefreshed": "Journaux d'audit actualisés",
     "logsRefreshedDescription": "Les journaux d'événements de sécurité ont été mis à jour"
+  },
+  "categories": {
+    "command_execution": "Commande",
+    "filesystem_access": "Système de fichiers",
+    "api_call": "Appel API",
+    "permission_change": "Permission",
+    "sandbox_violation": "Bac à sable",
+    "profile_loaded": "Profil",
+    "profile_exported": "Exportation",
+    "risk_detected": "Risque"
+  },
+  "severities": {
+    "info": "Info",
+    "warning": "Avertissement",
+    "critical": "Critique"
   }
 }
