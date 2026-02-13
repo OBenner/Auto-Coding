@@ -45,6 +45,7 @@ from ui import (
     print_status,
 )
 
+from .decision_tracker import DecisionTracker
 from .memory_manager import save_session_memory
 from .utils import (
     find_subtask_in_plan,
@@ -823,10 +824,11 @@ async def run_agent_session(
         subtask_id: Optional subtask ID for session tracking
 
     Returns:
-        (status, response_text, usage_metadata) where:
+        (status, response_text, usage_metadata, decision_tracker) where:
         - status: "continue", "complete", or "error"
         - response_text: The agent's response
         - usage_metadata: Dict with "input_tokens" and "output_tokens" keys (or None if unavailable)
+        - decision_tracker: DecisionTracker instance for tracking AI decisions
     """
     debug_section("session", f"Agent Session - {phase.value}")
     debug(
@@ -841,6 +843,16 @@ async def run_agent_session(
 
     # Get task logger for this spec
     task_logger = get_task_logger(spec_dir)
+
+    # Initialize decision tracker for this session
+    decision_tracker = DecisionTracker(
+        spec_dir=spec_dir,
+        task_logger=task_logger,
+        current_phase=phase,
+    )
+    if subtask_id:
+        decision_tracker.set_subtask(subtask_id)
+
     current_tool = None
     message_count = 0
     tool_count = 0
@@ -1127,7 +1139,7 @@ async def run_agent_session(
                 tool_count=tool_count,
                 response_length=len(response_text),
             )
-            return "complete", response_text, usage_metadata
+            return "complete", response_text, usage_metadata, decision_tracker
 
         debug_success(
             "session",
@@ -1136,7 +1148,7 @@ async def run_agent_session(
             tool_count=tool_count,
             response_length=len(response_text),
         )
-        return "continue", response_text, usage_metadata
+        return "continue", response_text, usage_metadata, decision_tracker
 
     except Exception as e:
         debug_error(
@@ -1154,4 +1166,4 @@ async def run_agent_session(
             conversation_history.save()
         except Exception as save_err:
             logger.debug(f"Failed to save conversation history after error: {save_err}")
-        return "error", str(e), None
+        return "error", str(e), None, decision_tracker
