@@ -394,6 +394,11 @@ Environment Variables:
         help="Show productivity analytics across all specs",
     )
     parser.add_argument(
+        "--cost-summary",
+        action="store_true",
+        help="Show API cost summary across all specs",
+    )
+    parser.add_argument(
         "--analytics-trends",
         action="store_true",
         help="Show productivity trends over time",
@@ -547,12 +552,13 @@ def _run_cli() -> None:
         return
 
     # Handle productivity analytics command
-    if args.analytics:
+    if args.analytics or args.cost_summary:
         export_path = (
             Path(args.analytics_export_path) if args.analytics_export_path else None
         )
         handle_analytics_command(
             project_dir=project_dir,
+            cost_summary=args.cost_summary,
             trends=args.analytics_trends,
             days=args.analytics_days,
             granularity=args.analytics_granularity,

@@ -15,6 +15,7 @@ _PARENT_DIR = Path(__file__).parent.parent
 if str(_PARENT_DIR) not in sys.path:
     sys.path.insert(0, str(_PARENT_DIR))
 
+from analysis.cost_analytics import aggregate_cost_metrics
 from analysis.productivity_analytics import (
     aggregate_productivity_metrics,
     export_productivity_data,
@@ -226,6 +227,111 @@ def show_productivity_trends(project_dir: Path, days: int, granularity: str) -> 
         print()
 
 
+def show_cost_summary(project_dir: Path) -> None:
+    """
+    Display cost summary across all specs.
+
+    Shows:
+    - Total cost across all specs
+    - Total tokens used
+    - Cost breakdown by agent type
+    - Cost breakdown by model
+    - Average cost per spec
+    - Average cost per million tokens
+
+    Args:
+        project_dir: Project directory path
+    """
+    print_banner()
+    print(f"\n{icon(Icons.LIGHTNING)} Cost Summary\n")
+
+    # Get cost analytics
+    summary = aggregate_cost_metrics(project_dir)
+
+    # === OVERALL METRICS ===
+    print_header("Overall Metrics")
+    print()
+
+    if summary.total_specs == 0:
+        print(info(f"{icon(Icons.INFO)} No specs with cost data found yet"))
+        print(muted("Run specs to start tracking API costs"))
+        print()
+        return
+
+    print_key_value("Total Specs", str(summary.total_specs))
+    print_key_value("Total Sessions", str(summary.total_sessions))
+    print()
+
+    print_key_value("Total Cost", success(f"${summary.total_cost:.2f}"))
+    print_key_value("Avg Cost per Spec", f"${summary.average_cost_per_spec:.2f}")
+    print_key_value("Median Cost per Spec", f"${summary.median_cost_per_spec:.2f}")
+    print()
+
+    # === TOKEN USAGE ===
+    print(divider())
+    print_header("Token Usage")
+    print()
+
+    print_key_value("Total Tokens", f"{summary.total_tokens:,}")
+    print_key_value("Input Tokens", f"{summary.total_input_tokens:,}")
+    print_key_value("Output Tokens", f"{summary.total_output_tokens:,}")
+    print()
+
+    if summary.total_tokens > 0:
+        print_key_value(
+            "Cost per 1M Tokens", f"${summary.average_cost_per_million_tokens:.2f}"
+        )
+        print_key_value(
+            "Avg Tokens per Session", f"{summary.average_tokens_per_session:.0f}"
+        )
+        print()
+
+    # === COST BY AGENT ===
+    if summary.cost_by_agent:
+        print(divider())
+        print_header("Cost by Agent")
+        print()
+
+        # Sort by cost (highest first)
+        sorted_agents = sorted(
+            summary.cost_by_agent.items(), key=lambda x: x[1], reverse=True
+        )
+
+        for agent_type, cost in sorted_agents:
+            pct = (cost / summary.total_cost) * 100 if summary.total_cost > 0 else 0
+            print(f"  • {agent_type.title()}: ${cost:.2f} ({pct:.1f}%)")
+
+        print()
+
+    # === COST BY MODEL ===
+    if summary.cost_by_model:
+        print(divider())
+        print_header("Cost by Model")
+        print()
+
+        # Sort by cost (highest first)
+        sorted_models = sorted(
+            summary.cost_by_model.items(), key=lambda x: x[1], reverse=True
+        )
+
+        for model, cost in sorted_models:
+            pct = (cost / summary.total_cost) * 100 if summary.total_cost > 0 else 0
+            print(f"  • {model}: ${cost:.2f} ({pct:.1f}%)")
+
+        print()
+
+    # === TIME PERIOD ===
+    print(divider())
+    print_header("Period")
+    print()
+
+    start_str = summary.period_start.strftime("%Y-%m-%d")
+    end_str = summary.period_end.strftime("%Y-%m-%d")
+    print_key_value("From", start_str)
+    print_key_value("To", end_str)
+    print()
+
+
 def export_analytics(project_dir: Path, output_path: Path, format: str) -> None:
     """
     Export productivity analytics to file.
@@ -261,6 +367,7 @@ def export_analytics(project_dir: Path, output_path: Path, format: str) -> None:
 
 def handle_analytics_command(
     project_dir: Path,
+    cost_summary: bool = False,
     trends: bool = False,
     days: int = 30,
     granularity: str = "daily",
@@ -272,13 +379,16 @@ def handle_analytics_command(
 
     Args:
         project_dir: Project directory path
+        cost_summary: Show cost summary
         trends: Show trends over time
         days: Number of days for trends
         granularity: Time granularity for trends
         export_path: Optional path to export analytics
         export_format: Export format - "json" or "csv"
     """
-    if export_path:
+    if cost_summary:
+        show_cost_summary(project_dir)
+    elif export_path:
         export_analytics(project_dir, export_path, export_format)
     elif trends:
         show_productivity_trends(project_dir, days, granularity)
