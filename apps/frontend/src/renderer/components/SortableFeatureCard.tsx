@@ -1,5 +1,6 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { motion } from 'motion/react';
 import { cn } from '../lib/utils';
 import { Card } from './ui/card';
 import { Badge } from './ui/badge';
@@ -60,14 +61,26 @@ export function SortableFeatureCard({
   const isExternal = feature.source?.provider && feature.source.provider !== 'internal';
 
   return (
-    <div
+    <motion.div
       ref={setNodeRef}
       style={style}
       className={cn(
-        'touch-none transition-all duration-200',
-        isDragging && 'dragging-placeholder opacity-40 scale-[0.98]',
+        'touch-none',
         isOver && !isDragging && 'ring-2 ring-primary/30 ring-offset-2 ring-offset-background rounded-xl'
       )}
+      animate={{
+        scale: isDragging ? 1.05 : 1,
+        opacity: isDragging ? 0.8 : 1,
+        boxShadow: isDragging
+          ? '0 10px 40px -10px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(0, 0, 0, 0.05)'
+          : '0 0 0 0 rgba(0, 0, 0, 0)',
+      }}
+      transition={{
+        type: 'spring',
+        stiffness: 300,
+        damping: 25,
+        mass: 0.5,
+      }}
       {...attributes}
       {...listeners}
     >
@@ -209,6 +222,6 @@ export function SortableFeatureCard({
           )}
         </div>
       </Card>
-    </div>
+    </motion.div>
   );
 }
