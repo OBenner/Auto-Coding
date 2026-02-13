@@ -761,5 +761,10 @@
     "submitError": "Failed to submit feedback: {{error}}",
     "notAvailable": "Feedback Not Available",
     "notAvailableDescription": "Feedback system is not yet fully configured"
+  },
+  "quality": {
+    "score": "Quality Score",
+    "trend": "Trend",
+    "alert": "Quality Alert"
   }
 }
