@@ -75,6 +75,25 @@ class AuditAction(str, Enum):
     AGENT_SESSION_STARTED = "agent_session_started"
     AGENT_SESSION_COMPLETED = "agent_session_completed"
     AGENT_SESSION_FAILED = "agent_session_failed"
+
+    # Planner agent actions
+    AGENT_PLANNER_STARTED = "agent_planner_started"
+    AGENT_PLANNER_COMPLETED = "agent_planner_completed"
+    AGENT_PLANNER_FAILED = "agent_planner_failed"
+
+    # Coder agent actions
+    AGENT_CODER_STARTED = "agent_coder_started"
+    AGENT_CODER_COMPLETED = "agent_coder_completed"
+    AGENT_CODER_FAILED = "agent_coder_failed"
+
+    # QA agent actions
+    AGENT_QA_REVIEWER_STARTED = "agent_qa_reviewer_started"
+    AGENT_QA_REVIEWER_COMPLETED = "agent_qa_reviewer_completed"
+    AGENT_QA_REVIEWER_FAILED = "agent_qa_reviewer_failed"
+    AGENT_QA_FIXER_STARTED = "agent_qa_fixer_started"
+    AGENT_QA_FIXER_COMPLETED = "agent_qa_fixer_completed"
+    AGENT_QA_FIXER_FAILED = "agent_qa_fixer_failed"
+
     BUILD_STARTED = "build_started"
     BUILD_COMPLETED = "build_completed"
     BUILD_FAILED = "build_failed"
