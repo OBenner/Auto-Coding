@@ -163,7 +163,7 @@ class SecurityReport:
         return json.dumps(self.to_dict(), indent=indent)
 
     def to_markdown(self) -> str:
-        """Convert report to markdown format."""
+        """Convert report to markdown format with severity grouping."""
         lines = [
             "# Security Audit Report",
             "",
@@ -184,52 +184,47 @@ class SecurityReport:
             "",
         ]
 
-        # Critical findings section
-        critical = self.get_critical_findings()
-        if critical:
-            lines.extend([
-                "## Critical & High Severity Findings",
-                "",
-            ])
-            for finding in critical:
+        # Findings grouped by severity (severity grouping)
+        severity_order = ["critical", "high", "medium", "low", "info"]
+
+        for severity in severity_order:
+            findings_at_severity = [f for f in self.findings if f.severity == severity]
+            if findings_at_severity:
                 lines.extend([
-                    f"### {finding.title}",
-                    "",
-                    f"**Severity:** {finding.severity.upper()}",
-                    f"**Category:** {finding.category}",
-                    "",
-                    finding.description,
+                    f"## {severity.capitalize()} Severity Findings",
                     "",
                 ])
-                if finding.file:
-                    lines.append(f"**Location:** `{finding.file}:{finding.line or '?'}`")
-                    lines.append("")
-                if finding.remediation:
+                for finding in findings_at_severity:
                     lines.extend([
-                        "**Remediation:**",
+                        f"### {finding.title}",
                         "",
-                        finding.remediation,
+                        f"**Severity:** {finding.severity.upper()}",
+                        f"**Category:** {finding.category}",
+                        "",
+                        finding.description,
                         "",
                     ])
-
-        # All findings by category
-        lines.extend([
-            "## All Findings",
-            "",
-        ])
-        for finding in self.findings:
-            lines.extend([
-                f"### {finding.title}",
-                "",
-                f"**Severity:** {finding.severity.upper()}",
-                f"**Category:** {finding.category}",
-                "",
-            ])
-            if finding.file:
-                lines.append(f"**Location:** `{finding.file}:{finding.line or '?'}`")
-            lines.append("")
-            lines.append(finding.description)
-            lines.append("")
+                    if finding.file:
+                        lines.append(f"**Location:** `{finding.file}:{finding.line or '?'}`")
+                        lines.append("")
+                    if finding.remediation:
+                        lines.extend([
+                            "**Remediation:**",
+                            "",
+                            finding.remediation,
+                            "",
+                        ])
+                    if finding.cwe:
+                        lines.append(f"**CWE:** {finding.cwe}")
+                        lines.append("")
+                    if finding.references:
+                        lines.extend([
+                            "**References:**",
+                            "",
+                        ])
+                        for ref in finding.references:
+                            lines.append(f"- {ref}")
+                        lines.append("")
 
         # Recommendations
         if self.recommendations:
@@ -242,6 +237,36 @@ class SecurityReport:
             lines.append("")
 
         return "\n".join(lines)
+
+    def to_json_file(self, filepath: str | Path) -> None:
+        """
+        Save report to JSON file.
+
+        Args:
+            filepath: Path to output JSON file
+        """
+        filepath = Path(filepath)
+        filepath.parent.mkdir(parents=True, exist_ok=True)
+
+        with open(filepath, "w", encoding="utf-8") as f:
+            f.write(self.to_json())
+
+        logger.info(f"Security report saved to {filepath}")
+
+    def to_markdown_file(self, filepath: str | Path) -> None:
+        """
+        Save report to Markdown file.
+
+        Args:
+            filepath: Path to output Markdown file
+        """
+        filepath = Path(filepath)
+        filepath.parent.mkdir(parents=True, exist_ok=True)
+
+        with open(filepath, "w", encoding="utf-8") as f:
+            f.write(self.to_markdown())
+
+        logger.info(f"Security report saved to {filepath}")
 
 
 # =============================================================================
@@ -1272,6 +1297,61 @@ class SecurityAuditAgent:
             )
 
         report.recommendations = recommendations
+
+    def generate_report(
+        self,
+        findings: list[SecurityFinding] | None = None,
+        project_dir: Path | None = None,
+        include_severity_grouping: bool = True,
+        include_executive_summary: bool = True,
+    ) -> SecurityReport:
+        """
+        Generate a security report with severity grouping and executive summary.
+
+        This is a standalone report generation method that can be used with
+        existing findings or to create a new report structure.
+
+        Args:
+            findings: Optional list of security findings to include
+            project_dir: Optional path to project directory (for context)
+            include_severity_grouping: Whether to group findings by severity in markdown output
+            include_executive_summary: Whether to generate executive summary
+
+        Returns:
+            SecurityReport with all findings, summary, and recommendations
+
+        Example:
+            auditor = SecurityAuditAgent()
+
+            # Generate report from existing findings
+            findings = [finding1, finding2, finding3]
+            report = auditor.generate_report(
+                findings=findings,
+                project_dir=Path("/project")
+            )
+
+            # Save report
+            report.to_json_file("output.json")
+            report.to_markdown_file("output.md")
+        """
+        from datetime import datetime
+
+        # Initialize report
+        report = SecurityReport(
+            project_dir=str(project_dir) if project_dir else "unknown",
+            timestamp=datetime.now().isoformat(),
+        )
+
+        # Add findings if provided
+        if findings:
+            for finding in findings:
+                report.add_finding(finding)
+
+        # Generate executive summary
+        if include_executive_summary:
+            self._generate_summary_and_recommendations(report)
+
+        return report
 
     def _save_report(self, spec_dir: Path, report: SecurityReport) -> None:
         """
