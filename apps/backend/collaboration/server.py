@@ -686,15 +686,17 @@ class CollaborationServer:
             if not p.is_stale(timeout_seconds=60)
         ]
 
-        message = WebSocketMessage(
-            type=MessageType.PRESENCE_BROADCAST,
-            spec_id=spec_id,
-            data={"presence": presence_list},
-        )
+        # Send flattened presence broadcast (no nested 'data' wrapper)
+        presence_message = {
+            "type": "presence_broadcast",
+            "spec_id": spec_id,
+            "presence": presence_list,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
 
         await self._broadcast_to_spec(
             spec_id,
-            message.to_json(),
+            json.dumps(presence_message),
             exclude_client=exclude_client,
         )
 

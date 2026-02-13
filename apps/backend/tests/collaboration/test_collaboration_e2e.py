@@ -249,7 +249,7 @@ async def test_two_clients_connect(two_test_clients):
     # Both clients should receive presence updates
     msg1 = await client1.recv()
     presence1 = json.loads(msg1)
-    assert presence1["type"] == "presence_update"
+    assert presence1["type"] == "presence_broadcast"
     assert len(presence1["presence"]) >= 1  # At least Bob
 
 

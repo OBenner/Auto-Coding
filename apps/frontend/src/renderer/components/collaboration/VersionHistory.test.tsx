@@ -1,6 +1,14 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { VersionHistory } from './VersionHistory';
+
+// Mock collaboration store
+vi.mock('@/renderer/stores/collaboration-store', () => ({
+  useCollaborationStore: vi.fn(() => ({
+    getVersions: vi.fn(() => []),
+    restoreVersion: vi.fn(),
+  })),
+}));
 
 describe('VersionHistory', () => {
   it('renders version history component', () => {

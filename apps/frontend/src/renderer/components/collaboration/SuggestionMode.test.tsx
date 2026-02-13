@@ -1,6 +1,15 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { SuggestionMode } from './SuggestionMode';
+
+// Mock collaboration store
+vi.mock('@/renderer/stores/collaboration-store', () => ({
+  useCollaborationStore: vi.fn(() => ({
+    getSuggestions: vi.fn(() => []),
+    addSuggestion: vi.fn(),
+    reviewSuggestion: vi.fn(),
+  })),
+}));
 
 describe('SuggestionMode', () => {
   it('renders suggestion mode component', () => {
