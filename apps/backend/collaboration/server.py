@@ -30,9 +30,11 @@ from pydantic import BaseModel, Field
 from collaboration.crdt_store import CRDTStore
 from collaboration.models import (
     Comment,
+    CommentStatus,
     Presence,
     PresenceType,
     Suggestion,
+    SuggestionStatus,
     load_comments,
     load_suggestions,
     save_comments,
@@ -152,6 +154,8 @@ class CollaborationServer:
         self.spec_stores: dict[str, CRDTStore] = {}
         # Maps spec_id -> presence data
         self.spec_presence: dict[str, dict[str, Presence]] = {}
+        # Server task for lifecycle management
+        self._server_task: asyncio.Task | None = None
 
     async def handle_client(self, websocket: WebSocketServerProtocol, client_id: str):
         """Handle a client connection.
@@ -760,6 +764,16 @@ class CollaborationServer:
         future explicit shutdown logic.
         """
         logger.info("Server shutdown requested")
+
+    async def run(self):
+        """Run server (alias for start, test compatibility)."""
+        self._server_task = asyncio.create_task(self.start())
+        await self._server_task
+
+    def shutdown(self):
+        """Shutdown server (test cleanup)."""
+        if self._server_task:
+            self._server_task.cancel()
 
 
 def _setup_logging(level: str = "INFO"):
