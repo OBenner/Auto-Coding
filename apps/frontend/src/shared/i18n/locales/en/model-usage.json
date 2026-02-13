@@ -13,5 +13,17 @@
   "modelLocked": "Model Locked",
   "modelUnlocked": "Model Unlocked",
   "lockTooltip": "Prevent automatic model upgrades for this agent",
-  "unlockTooltip": "Allow automatic model upgrades for this agent"
+  "unlockTooltip": "Allow automatic model upgrades for this agent",
+  "changeConfirmation": {
+    "title": "Confirm Model Change",
+    "description": "You are about to change the model for <strong>{{agent}}</strong>.",
+    "currentModel": "Current model",
+    "newModel": "New model",
+    "reasonLabel": "Reason for change",
+    "reasonRequired": "Please provide a reason for this model change",
+    "warning": "This change will affect all future tasks using this agent. Make sure you understand the implications before proceeding.",
+    "confirm": "Confirm Change",
+    "cancel": "Cancel",
+    "changing": "Changing..."
+  }
 }
