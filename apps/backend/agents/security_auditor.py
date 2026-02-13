@@ -143,6 +143,71 @@ class SecurityReport:
         """Check if report has critical or high severity issues."""
         return any(f.severity in ("critical", "high") for f in self.findings)
 
+    def to_security_scan_results_dict(self) -> dict[str, Any]:
+        """
+        Convert report to security_scan_results.json compatible format.
+
+        This format is compatible with the SecurityScanner output format
+        used by the QA agent and validation strategy.
+
+        Returns:
+            Dictionary in security_scan_results.json format
+        """
+        # Convert findings to vulnerabilities format
+        vulnerabilities = []
+        secrets = []
+
+        for finding in self.findings:
+            if finding.category == "secret":
+                secrets.append({
+                    "file": finding.file,
+                    "line": finding.line,
+                    "pattern": finding.title.replace("Potential secret: ", ""),
+                    "matched_text": "[redacted]",
+                })
+                # Also add as vulnerability
+                vulnerabilities.append({
+                    "severity": finding.severity,
+                    "source": "secrets",
+                    "title": finding.title,
+                    "description": finding.description,
+                    "file": finding.file,
+                    "line": finding.line,
+                    "cwe": finding.cwe,
+                })
+            else:
+                # Map category to source
+                source_map = {
+                    "auth": "auth_scanner",
+                    "dependency": "dependency_audit",
+                    "owasp": "owasp_scanner",
+                }
+                vulnerabilities.append({
+                    "severity": finding.severity,
+                    "source": source_map.get(finding.category, finding.category),
+                    "title": finding.title,
+                    "description": finding.description,
+                    "file": finding.file,
+                    "line": finding.line,
+                    "cwe": finding.cwe,
+                })
+
+        return {
+            "secrets": secrets,
+            "vulnerabilities": vulnerabilities,
+            "scan_errors": [],
+            "has_critical_issues": self.summary_counts["critical"] > 0,
+            "should_block_qa": self.summary_counts["critical"] > 0,
+            "summary": {
+                "total_secrets": len(secrets),
+                "total_vulnerabilities": len(vulnerabilities),
+                "critical_count": self.summary_counts["critical"],
+                "high_count": self.summary_counts["high"],
+                "medium_count": self.summary_counts["medium"],
+                "low_count": self.summary_counts["low"],
+            },
+        }
+
     def to_dict(self) -> dict[str, Any]:
         """Convert report to dictionary for JSON serialization."""
         return {
@@ -1631,6 +1696,55 @@ class SecurityAuditAgent:
             f.write(report.to_markdown())
 
         logger.info(f"Security report saved to {spec_dir}")
+
+    def to_dict(self) -> dict[str, Any]:
+        """
+        Convert agent state to dictionary.
+
+        This method provides a dictionary representation of the agent,
+        useful for debugging, logging, and state inspection.
+
+        Returns:
+            Dictionary with agent state information
+        """
+        return {
+            "agent_type": "SecurityAuditAgent",
+            "capabilities": [
+                "owasp_top_10_scanning",
+                "dependency_vulnerability_checking",
+                "authentication_flow_analysis",
+                "secret_detection",
+                "security_report_generation",
+            ],
+            "scanner_available": self._security_scanner is not None,
+        }
+
+    def export_report_to_scan_results_format(
+        self,
+        report: SecurityReport,
+        filepath: str | Path,
+    ) -> None:
+        """
+        Export report in security_scan_results.json compatible format.
+
+        This format is compatible with SecurityScanner output and can be
+        consumed by QA validation strategies.
+
+        Args:
+            report: SecurityReport to export
+            filepath: Path to output file
+        """
+        import json
+
+        filepath = Path(filepath)
+        filepath.parent.mkdir(parents=True, exist_ok=True)
+
+        scan_results = report.to_security_scan_results_dict()
+
+        with open(filepath, "w", encoding="utf-8") as f:
+            json.dump(scan_results, f, indent=2)
+
+        logger.info(f"Security scan results exported to {filepath}")
 
 
 # =============================================================================
