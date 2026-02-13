@@ -21,6 +21,7 @@ from enum import Enum
 from pathlib import Path
 
 from services.dead_letter_queue import DeadLetterQueue
+from services.notification_manager import NotificationManager
 
 
 class FailureType(Enum):
@@ -76,6 +77,8 @@ class RecoveryAction:
     wait_seconds: float = field(default=0.0)  # Exponential backoff delay before retry
     use_model_fallback: bool = field(default=False)  # Suggest trying with fallback model
     strategy: RetryStrategy | None = field(default=None)  # Selected retry strategy
+    should_notify: bool = field(default=False)  # Whether to notify user
+    notification_message: str = field(default="")  # Notification message if should_notify=True
 
 
 # Error Pattern Database
@@ -169,6 +172,9 @@ class RecoveryManager:
 
         # Initialize dead-letter queue for unrecoverable failures
         self.dlq = DeadLetterQueue(spec_dir)
+
+        # Initialize notification manager for user notifications
+        self.notification_manager = NotificationManager(spec_dir)
 
     def _init_attempt_history(self) -> None:
         """Initialize the attempt history file."""
@@ -527,6 +533,11 @@ class RecoveryManager:
         including model fallback, alternative approaches, and simpler implementations.
         Applies exponential backoff to prevent API rate limiting.
 
+        Integrates with NotificationManager to determine when to notify users:
+        - Silent retries below retry_threshold (default: 3 attempts)
+        - Notify at threshold and every N attempts after
+        - Escalate to human at escalation_threshold (default: 5 attempts)
+
         Strategy Progression:
         - Attempt 0: Direct retry with same approach
         - Attempt 1: Model fallback (opus -> sonnet -> haiku)
@@ -538,25 +549,45 @@ class RecoveryManager:
 
         Returns:
             RecoveryAction describing what to do (includes wait_seconds, strategy,
-            and use_model_fallback flag)
+            use_model_fallback flag, and notification info)
         """
         attempt_count = self.get_attempt_count(subtask_id)
+
+        # Check notification thresholds
+        should_notify = self.notification_manager.should_notify(
+            subtask_id=subtask_id,
+            attempt_count=attempt_count,
+            failure_type=failure_type.value,
+        )
+        should_escalate = self.notification_manager.should_escalate(attempt_count)
 
         # Special case: BROKEN_BUILD requires rollback
         if failure_type == FailureType.BROKEN_BUILD:
             last_good = self.get_last_good_commit()
             if last_good:
+                notification_msg = (
+                    f"Auto-recovery: Build broken in {subtask_id}, "
+                    f"rolling back to working state (attempt {attempt_count + 1})"
+                )
                 return RecoveryAction(
                     action="rollback",
                     target=last_good,
                     reason=f"Build broken in subtask {subtask_id}, rolling back to working state",
+                    should_notify=should_notify,
+                    notification_message=notification_msg,
                 )
             else:
                 # Add to DLQ before escalating
+                notification_msg = (
+                    f"ESCALATION REQUIRED: Build broken in {subtask_id} "
+                    f"and no good commit found to rollback to (attempt {attempt_count + 1})"
+                )
                 action = RecoveryAction(
                     action="escalate",
                     target=subtask_id,
                     reason="Build broken and no good commit found to rollback to",
+                    should_notify=True,  # Always notify on escalation
+                    notification_message=notification_msg,
                 )
                 self.add_failure_to_dlq(
                     subtask_id=subtask_id,
@@ -568,18 +599,30 @@ class RecoveryManager:
 
         # Special case: CIRCULAR_FIX should skip (no retry)
         if failure_type == FailureType.CIRCULAR_FIX:
+            notification_msg = (
+                f"Auto-recovery: Circular fix detected in {subtask_id} - "
+                f"same approach tried multiple times, skipping"
+            )
             return RecoveryAction(
                 action="skip",
                 target=subtask_id,
                 reason="Circular fix detected - same approach tried multiple times",
+                should_notify=should_notify,
+                notification_message=notification_msg,
             )
 
         # Special case: CONTEXT_EXHAUSTED continues in next session
         if failure_type == FailureType.CONTEXT_EXHAUSTED:
+            notification_msg = (
+                f"Auto-recovery: Context exhausted in {subtask_id}, "
+                f"will commit progress and continue in next session"
+            )
             return RecoveryAction(
                 action="continue",
                 target=subtask_id,
                 reason="Context exhausted, will commit progress and continue in next session",
+                should_notify=should_notify,
+                notification_message=notification_msg,
             )
 
         # For other failure types, use strategy selection
@@ -588,6 +631,13 @@ class RecoveryManager:
         if strategy:
             # Retry with selected strategy
             backoff_delay = self.calculate_backoff_delay(attempt_count)
+            notification_msg = (
+                f"Auto-recovery: {failure_type.value} in {subtask_id}, "
+                f"{strategy.description} (attempt {attempt_count + 1}/{strategy.max_attempts})"
+            )
+            if backoff_delay > 0:
+                notification_msg += f" - waiting {backoff_delay:.1f}s before retry"
+
             return RecoveryAction(
                 action="retry",
                 target=subtask_id,
@@ -598,21 +648,35 @@ class RecoveryManager:
                 wait_seconds=backoff_delay,
                 use_model_fallback=strategy.use_model_fallback,
                 strategy=strategy,
+                should_notify=should_notify or should_escalate,
+                notification_message=notification_msg,
             )
         else:
             # No more strategies available - escalate or skip
             if failure_type == FailureType.VERIFICATION_FAILED:
+                notification_msg = (
+                    f"Auto-recovery: Verification failed in {subtask_id} "
+                    f"after {attempt_count} attempts, marking as stuck"
+                )
                 return RecoveryAction(
                     action="skip",
                     target=subtask_id,
                     reason=f"Verification failed after {attempt_count} attempts, marking as stuck",
+                    should_notify=True,  # Always notify when giving up
+                    notification_message=notification_msg,
                 )
             else:  # UNKNOWN
                 # Add to DLQ before escalating
+                notification_msg = (
+                    f"ESCALATION REQUIRED: Unknown error in {subtask_id} "
+                    f"persists after {attempt_count} attempts"
+                )
                 action = RecoveryAction(
                     action="escalate",
                     target=subtask_id,
                     reason=f"Unknown error persists after {attempt_count} attempts",
+                    should_notify=True,  # Always notify on escalation
+                    notification_message=notification_msg,
                 )
                 self.add_failure_to_dlq(
                     subtask_id=subtask_id,
@@ -898,6 +962,100 @@ class RecoveryManager:
             Formatted report as string
         """
         return self.dlq.export_pending_failures(output_path)
+
+    def record_recovery_notification(
+        self,
+        subtask_id: str,
+        failure_type: FailureType,
+        recovery_action: RecoveryAction,
+    ) -> bool:
+        """
+        Record a notification or silent failure based on recovery action.
+
+        Should be called after determine_recovery_action() to track
+        whether the user was notified or if this was a silent retry.
+
+        Args:
+            subtask_id: ID of the subtask that failed
+            failure_type: Type of failure that occurred
+            recovery_action: Recovery action that was taken
+
+        Returns:
+            True if recorded successfully
+        """
+        attempt_count = self.get_attempt_count(subtask_id)
+
+        if recovery_action.should_notify:
+            # Record that a notification was sent
+            is_escalated = recovery_action.action == "escalate"
+            return self.notification_manager.record_notification(
+                subtask_id=subtask_id,
+                attempt_count=attempt_count,
+                failure_type=failure_type.value,
+                message=recovery_action.notification_message,
+                escalated=is_escalated,
+            )
+        else:
+            # Record as silent failure (below notification threshold)
+            return self.notification_manager.record_silent_failure(
+                subtask_id=subtask_id,
+                attempt_count=attempt_count,
+                failure_type=failure_type.value,
+            )
+
+    def get_notification_statistics(self) -> dict:
+        """
+        Get notification statistics.
+
+        Returns:
+            Dict with notification statistics including notification rate,
+            escalation rate, thresholds, etc.
+        """
+        return self.notification_manager.get_statistics()
+
+    def get_notifications_for_subtask(self, subtask_id: str) -> list[dict]:
+        """
+        Get all notifications sent for a specific subtask.
+
+        Args:
+            subtask_id: Subtask ID to filter by
+
+        Returns:
+            List of notification records for the subtask
+        """
+        return self.notification_manager.get_notifications_for_subtask(subtask_id)
+
+    def get_recent_notifications(self, limit: int = 10) -> list[dict]:
+        """
+        Get recent notifications.
+
+        Args:
+            limit: Maximum number of notifications to return
+
+        Returns:
+            List of recent notification records
+        """
+        return self.notification_manager.get_recent_notifications(limit)
+
+    def update_notification_thresholds(
+        self,
+        retry_threshold: int | None = None,
+        escalation_threshold: int | None = None,
+    ) -> bool:
+        """
+        Update notification thresholds.
+
+        Args:
+            retry_threshold: New retry threshold (notify after N retries)
+            escalation_threshold: New escalation threshold (escalate after N retries)
+
+        Returns:
+            True if updated successfully
+        """
+        return self.notification_manager.update_thresholds(
+            retry_threshold=retry_threshold,
+            escalation_threshold=escalation_threshold,
+        )
 
 
 # Utility functions for integration with agent.py
