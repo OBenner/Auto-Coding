@@ -152,6 +152,11 @@ class QualityTrend:
     alert_threshold_percent: float = 10.0  # Alert at 10% drop
     minimum_sessions_for_trend: int = 5
 
+    def __post_init__(self):
+        """Recalculate metrics after initialization."""
+        if self.scores:
+            self._recalculate_metrics()
+
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
         return {
