@@ -1215,6 +1215,262 @@ class SecurityAuditAgent:
 
         logger.info("OWASP Top 10 scanning will be implemented in subtask-1-2")
 
+    def generate_remediation(
+        self,
+        finding: SecurityFinding,
+    ) -> str:
+        """
+        Generate detailed remediation guidance with code examples for a security finding.
+
+        This method provides actionable remediation steps tailored to the specific
+        vulnerability type, including code examples and best practices.
+
+        Args:
+            finding: SecurityFinding requiring remediation guidance
+
+        Returns:
+            Detailed remediation text with code examples and best practices
+        """
+        # Get base remediation from the finding if available
+        base_guidance = finding.remediation if finding.remediation else ""
+
+        # Generate detailed guidance based on vulnerability category
+        if finding.category == "secret":
+            return self._generate_secret_remediation(finding, base_guidance)
+        elif finding.category == "auth":
+            return self._generate_auth_remediation(finding, base_guidance)
+        elif finding.category == "dependency":
+            return self._generate_dependency_remediation(finding, base_guidance)
+        elif finding.category == "owasp":
+            return self._generate_owasp_remediation(finding, base_guidance)
+        else:
+            # Generic remediation for unknown categories
+            return self._generate_generic_remediation(finding, base_guidance)
+
+    def _generate_secret_remediation(
+        self,
+        finding: SecurityFinding,
+        base_guidance: str,
+    ) -> str:
+        """Generate remediation guidance for secret detection findings."""
+        guidance_parts = []
+
+        # Severity-based warning
+        if finding.severity == "critical":
+            guidance_parts.append(
+                "CRITICAL: Hardcoded secrets pose an immediate security risk. "
+                "Attackers who gain access to your codebase can extract these secrets "
+                "and use them to compromise your systems."
+            )
+
+        # What to do
+        guidance_parts.extend([
+            "",
+            "## Immediate Actions",
+            "",
+            "1. Remove the secret from code immediately",
+            "2. Rotate the credential - assume it has been compromised",
+            "3. Use environment variables or a secrets management system",
+            "",
+            "## Code Examples",
+            "",
+        ])
+
+        # Python examples
+        guidance_parts.extend([
+            "### Python",
+            "",
+            "Wrong (hardcoded secret):",
+            "```python",
+            "API_KEY = 'sk-live-1234567890abcdef'",
+            "```",
+            "",
+            "Correct (environment variable):",
+            "```python",
+            "import os",
+            "api_key = os.getenv('API_KEY')",
+            "if not api_key:",
+            "    raise ValueError('API_KEY not set')",
+            "```",
+            "",
+        ])
+
+        # JavaScript examples
+        guidance_parts.extend([
+            "### JavaScript",
+            "",
+            "Wrong (hardcoded secret):",
+            "```javascript",
+            "const API_KEY = 'sk-live-1234567890abcdef';",
+            "```",
+            "",
+            "Correct (environment variable):",
+            "```javascript",
+            "const apiKey = process.env.API_KEY;",
+            "if (!apiKey) {",
+            "  throw new Error('API_KEY not set');",
+            "}",
+            "```",
+            "",
+        ])
+
+        # Best practices
+        guidance_parts.extend([
+            "## Best Practices",
+            "",
+            "- Use .env files for local development only",
+            "- Add .env to .gitignore before committing secrets",
+            "- Use cloud secrets managers in production (AWS Secrets Manager, Azure Key Vault, GCP Secret Manager)",
+            "- Rotate credentials regularly (90 days recommended)",
+            "- Never commit secrets to version control",
+            "",
+            "## References",
+            "- [OWASP Secrets Management Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Secrets_Management_Cheat_Sheet.html)",
+            "- [GitHub Secret Scanning](https://docs.github.com/en/code-security/secret-scanning)",
+        ])
+
+        return "\n".join(guidance_parts)
+
+    def _generate_auth_remediation(
+        self,
+        finding: SecurityFinding,
+        base_guidance: str,
+    ) -> str:
+        """Generate remediation guidance for authentication security findings."""
+        guidance_parts = [
+            f"## Remediation for {finding.title}",
+            "",
+            finding.description,
+            "",
+            base_guidance,
+            "",
+            "## Best Practices",
+            "",
+            "### Password Storage",
+            "- Use bcrypt, scrypt, or Argon2 for password hashing",
+            "- Never store passwords in plaintext",
+            "- Always use a unique salt for each password",
+            "",
+            "### Session Management",
+            "- Set cookies with HttpOnly and Secure flags",
+            "- Implement session timeout (15-30 minutes idle timeout)",
+            "- Regenerate session IDs after authentication",
+            "",
+            "### Token Handling (JWT/OAuth)",
+            "- Always verify token signatures",
+            "- Validate token expiration",
+            "- Use short-lived tokens with refresh tokens",
+            "",
+            "### Brute Force Protection",
+            "- Implement rate limiting on auth endpoints",
+            "- Use account lockout after failed attempts",
+            "- Add CAPTCHA for repeated failures",
+            "",
+            "## References",
+            "- [OWASP Authentication Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html)",
+            "- [OWASP Password Storage Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html)",
+        ]
+
+        return "\n".join(guidance_parts)
+
+    def _generate_dependency_remediation(
+        self,
+        finding: SecurityFinding,
+        base_guidance: str,
+    ) -> str:
+        """Generate remediation guidance for dependency vulnerabilities."""
+        guidance_parts = [
+            "## Remediation: Vulnerable Dependency",
+            "",
+            f"**Severity:** {finding.severity.upper()}",
+            "",
+            finding.description,
+            "",
+            base_guidance,
+            "",
+            "## Update Commands",
+            "",
+            "### npm/yarn",
+            "```bash",
+            "npm audit",
+            "npm audit fix",
+            "```",
+            "",
+            "### pip (Python)",
+            "```bash",
+            "pip install --upgrade package-name",
+            "pip freeze > requirements.txt",
+            "```",
+            "",
+            "## Prevention",
+            "",
+            "- Enable Dependabot for automated vulnerability tracking",
+            "- Run dependency audits in CI/CD pipeline",
+            "- Always commit lock files for reproducible builds",
+            "- Review dependency updates before deploying",
+            "",
+            "## References",
+            "- [OWASP Vulnerable Dependencies](https://owasp.org/www-project-top-ten/A06_2021-Vulnerable_and_Outdated_Components)",
+            "- [npm audit](https://docs.npmjs.com/cli/audit)",
+            "- [pip-audit](https://pypi.org/project/pip-audit/)",
+        ]
+
+        return "\n".join(guidance_parts)
+
+    def _generate_owasp_remediation(
+        self,
+        finding: SecurityFinding,
+        base_guidance: str,
+    ) -> str:
+        """Generate remediation guidance for OWASP Top 10 findings."""
+        guidance_parts = [
+            f"## Remediation for {finding.title}",
+            "",
+            f"**OWASP Category:** {finding.owasp_category}",
+            f"**Severity:** {finding.severity.upper()}",
+            "",
+            finding.description,
+            "",
+            base_guidance,
+            "",
+            "## References",
+            "- [OWASP Top 10 2021](https://owasp.org/www-project-top-ten/)",
+            "- [OWASP Cheat Sheet Series](https://cheatsheetseries.owasp.org/)",
+        ]
+
+        return "\n".join(guidance_parts)
+
+    def _generate_generic_remediation(
+        self,
+        finding: SecurityFinding,
+        base_guidance: str,
+    ) -> str:
+        """Generate generic remediation guidance for unknown categories."""
+        return f"""
+## Remediation for {finding.title}
+
+**Category:** {finding.category}
+**Severity:** {finding.severity.upper()}
+
+{finding.description}
+
+### Remediation Steps
+
+{base_guidance}
+
+### Security Best Practices
+
+1. Principle of Least Privilege - Grant minimum required permissions
+2. Defense in Depth - Use multiple security layers
+3. Fail Securely - Default to deny, not allow
+4. Security by Design - Build security in from the start
+
+### References
+
+- [OWASP Top 10 2021](https://owasp.org/www-project-top-ten/)
+- [OWASP Cheat Sheet Series](https://cheatsheetseries.owasp.org/)
+"""
+
     def _generate_summary_and_recommendations(self, report: SecurityReport) -> None:
         """
         Generate executive summary and prioritized recommendations.
