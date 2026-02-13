@@ -1,0 +1,17 @@
+{
+  "title": "Utilisation des Modèles",
+  "description": "Voir et gérer l'utilisation des modèles IA dans vos projets",
+  "errors": {
+    "lockOperationFailed": "Échec de la mise à jour du verrouillage du modèle",
+    "loadFailed": "Échec du chargement des données d'utilisation des modèles",
+    "unlockFailed": "Échec du déverrouillage du modèle",
+    "lockFailed": "Échec du verrouillage du modèle"
+  },
+  "lockModel": "Verrouiller {{agent}} à ce modèle",
+  "unlockModel": "Déverrouiller le modèle {{agent}}",
+  "lockedTo": "Verrouillé à {{model}}",
+  "modelLocked": "Modèle Verrouillé",
+  "modelUnlocked": "Modèle Déverrouillé",
+  "lockTooltip": "Empêcher les mises à niveau automatiques du modèle pour cet agent",
+  "unlockTooltip": "Autoriser les mises à niveau automatiques du modèle pour cet agent"
+}
