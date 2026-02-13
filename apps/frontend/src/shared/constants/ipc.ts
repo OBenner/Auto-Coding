@@ -629,5 +629,30 @@ export const IPC_CHANNELS = {
   SCHEDULER_STATUS_CHANGED: 'scheduler:statusChanged',
   SCHEDULER_BUILD_PROGRESS: 'scheduler:buildProgress',
   SCHEDULER_BUILD_COMPLETE: 'scheduler:buildComplete',
-  SCHEDULER_BUILD_FAILED: 'scheduler:buildFailed'
+  SCHEDULER_BUILD_FAILED: 'scheduler:buildFailed',
+
+  // Collaboration operations
+  COLLABORATION_PERMISSIONS_GET: 'collaboration:permissionsGet',  // Get all permissions for a spec
+  COLLABORATION_PERMISSIONS_ADD: 'collaboration:permissionsAdd',    // Add user to spec with role
+  COLLABORATION_PERMISSIONS_UPDATE: 'collaboration:permissionsUpdate',  // Update user's role
+  COLLABORATION_PERMISSIONS_REMOVE: 'collaboration:permissionsRemove',  // Remove user from spec
+  COLLABORATION_COMMENTS_GET: 'collaboration:commentsGet',            // Get all comments for a spec
+  COLLABORATION_COMMENTS_CREATE: 'collaboration:commentsCreate',      // Create new comment
+  COLLABORATION_COMMENTS_UPDATE: 'collaboration:commentsUpdate',      // Update existing comment
+  COLLABORATION_COMMENTS_DELETE: 'collaboration:commentsDelete',      // Delete comment
+  COLLABORATION_COMMENTS_RESOLVE: 'collaboration:commentsResolve',    // Resolve comment thread
+  COLLABORATION_COMMENTS_REPLY: 'collaboration:commentsReply',        // Reply to comment
+  COLLABORATION_APPROVALS_GET: 'collaboration:approvalsGet',          // Get approval status
+  COLLABORATION_APPROVALS_REQUEST: 'collaboration:approvalsRequest',  // Request approval
+  COLLABORATION_APPROVALS_APPROVE: 'collaboration:approvalsApprove',  // Approve spec
+  COLLABORATION_APPROVALS_REJECT: 'collaboration:approvalsReject',    // Reject spec
+  COLLABORATION_NOTIFICATIONS_GET: 'collaboration:notificationsGet',    // Get user's notifications
+  COLLABORATION_NOTIFICATIONS_MARK_READ: 'collaboration:notificationsMarkRead',  // Mark notification as read
+  COLLABORATION_NOTIFICATIONS_MARK_ALL_READ: 'collaboration:notificationsMarkAllRead',  // Mark all as read
+  COLLABORATION_CHANGE_HISTORY_GET: 'collaboration:changeHistoryGet',  // Get change history for spec
+
+  // Collaboration events (main -> renderer)
+  COLLABORATION_COMMENT_ADDED: 'collaboration:commentAdded',          // New comment added
+  COLLABORATION_APPROVAL_STATUS_CHANGED: 'collaboration:approvalStatusChanged',  // Approval status changed
+  COLLABORATION_NOTIFICATION_RECEIVED: 'collaboration:notificationReceived'  // New notification
 } as const;
