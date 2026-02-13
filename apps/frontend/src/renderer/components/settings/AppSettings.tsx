@@ -19,7 +19,8 @@ import {
   Code,
   Bug,
   Users,
-  Keyboard
+  Keyboard,
+  Cpu
 } from 'lucide-react';
 
 // GitLab icon component (lucide-react doesn't have one)
@@ -93,7 +94,8 @@ const projectNavItemsConfig: NavItemConfig<ProjectSettingsSection>[] = [
   { id: 'linear', icon: Zap },
   { id: 'github', icon: Github },
   { id: 'gitlab', icon: GitLabIcon },
-  { id: 'memory', icon: Database }
+  { id: 'memory', icon: Database },
+  { id: 'model-usage', icon: Cpu }
 ];
 
 /**

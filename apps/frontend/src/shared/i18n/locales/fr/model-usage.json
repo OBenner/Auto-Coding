@@ -1,11 +1,16 @@
 {
   "title": "Utilisation des Modèles",
   "description": "Voir et gérer l'utilisation des modèles IA dans vos projets",
+  "loading": "Chargement des verrous de modèle...",
+  "lockedModels": "Modèles Verrouillés",
+  "lockedModelsDescription": "Les modèles verrouillés empêchent les mises à niveau automatiques et garantissent un comportement cohérent",
+  "locked": "verrouillé",
   "errors": {
     "lockOperationFailed": "Échec de la mise à jour du verrouillage du modèle",
     "loadFailed": "Échec du chargement des données d'utilisation des modèles",
     "unlockFailed": "Échec du déverrouillage du modèle",
-    "lockFailed": "Échec du verrouillage du modèle"
+    "lockFailed": "Échec du verrouillage du modèle",
+    "fetchLocksFailed": "Échec de la récupération des verrous de modèle"
   },
   "lockModel": "Verrouiller {{agent}} à ce modèle",
   "unlockModel": "Déverrouiller le modèle {{agent}}",
@@ -13,5 +18,17 @@
   "modelLocked": "Modèle Verrouillé",
   "modelUnlocked": "Modèle Déverrouillé",
   "lockTooltip": "Empêcher les mises à niveau automatiques du modèle pour cet agent",
-  "unlockTooltip": "Autoriser les mises à niveau automatiques du modèle pour cet agent"
+  "unlockTooltip": "Autoriser les mises à niveau automatiques du modèle pour cet agent",
+  "changeConfirmation": {
+    "title": "Confirmer le Changement de Modèle",
+    "description": "Vous êtes sur le point de changer le modèle pour <strong>{{agent}}</strong>.",
+    "currentModel": "Modèle actuel",
+    "newModel": "Nouveau modèle",
+    "reasonLabel": "Raison du changement",
+    "reasonRequired": "Veuillez fournir une raison pour ce changement de modèle",
+    "warning": "Ce changement affectera toutes les tâches futures utilisant cet agent. Assurez-vous de comprendre les implications avant de procéder.",
+    "confirm": "Confirmer le Changement",
+    "cancel": "Annuler",
+    "changing": "Changement en cours..."
+  }
 }

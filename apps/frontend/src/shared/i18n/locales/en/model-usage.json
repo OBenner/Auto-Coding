@@ -1,11 +1,16 @@
 {
   "title": "Model Usage",
   "description": "View and manage AI model usage across your projects",
+  "loading": "Loading model locks...",
+  "lockedModels": "Locked Models",
+  "lockedModelsDescription": "Locked models prevent automatic upgrades and ensure consistent behavior",
+  "locked": "locked",
   "errors": {
     "lockOperationFailed": "Failed to update model lock",
     "loadFailed": "Failed to load model usage data",
     "unlockFailed": "Failed to unlock model",
-    "lockFailed": "Failed to lock model"
+    "lockFailed": "Failed to lock model",
+    "fetchLocksFailed": "Failed to fetch model locks"
   },
   "lockModel": "Lock {{agent}} to this model",
   "unlockModel": "Unlock {{agent}} model",
