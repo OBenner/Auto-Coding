@@ -53,7 +53,6 @@ export function registerSecurityHandlers(): void {
       try {
         // TODO: Implement security profile saving with validation
         // This will be implemented with the security service layer
-        console.warn('[SECURITY_SAVE_PROFILE] Saving security profile:', profileData);
 
         return { success: true, data: profileData };
       } catch (error) {
