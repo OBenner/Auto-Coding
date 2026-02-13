@@ -100,3 +100,23 @@ def extract_batch_code_blocks(
         return match.group(1).strip()
 
     return None
+
+
+def extract_explanation(response: str) -> str | None:
+    """
+    Extract explanation from AI response.
+
+    Args:
+        response: The AI response text
+
+    Returns:
+        Extracted explanation text, or None if not found
+    """
+    # Look for "EXPLANATION: " prefix
+    pattern = r"EXPLANATION:\s*(.*?)(?:```|$)"
+    match = re.search(pattern, response, re.DOTALL)
+
+    if match:
+        return match.group(1).strip()
+
+    return None
