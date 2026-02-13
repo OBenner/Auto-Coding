@@ -30,6 +30,28 @@ class FailureType(Enum):
     CONTEXT_EXHAUSTED = "context_exhausted"  # Ran out of context mid-subtask
     UNKNOWN = "unknown"
 
+    def is_recoverable(self) -> bool:
+        """
+        Determine if this failure type is automatically recoverable.
+
+        Recoverable failures can be retried with alternative strategies
+        (rollback, different approach, model fallback, etc.).
+
+        Non-recoverable failures require human intervention or escalation.
+
+        Returns:
+            True if the failure can be automatically recovered from
+        """
+        # Recoverable: can rollback, retry, or continue with different approach
+        recoverable_types = {
+            FailureType.BROKEN_BUILD,  # Rollback to last good state and retry
+            FailureType.VERIFICATION_FAILED,  # Retry with different approach
+            FailureType.CONTEXT_EXHAUSTED,  # Continue in next session
+            FailureType.UNKNOWN,  # Can retry with caution
+        }
+
+        return self in recoverable_types
+
 
 @dataclass
 class RecoveryAction:
