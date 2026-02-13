@@ -14,7 +14,8 @@ auto-claude/agents/
 ├── memory.py            # Memory management (Graphiti + file-based)
 ├── session.py           # Agent session execution
 ├── planner.py           # Follow-up planner logic
-└── coder.py             # Main autonomous agent loop
+├── coder.py             # Main autonomous agent loop
+└── security_auditor.py  # Security analysis agent
 ```
 
 ## Modules
@@ -51,6 +52,15 @@ auto-claude/agents/
 - Planning and coding phase management
 - Linear integration
 - Recovery and stuck subtask handling
+
+### `security_auditor.py` (71.7 KB)
+- `SecurityAuditAgent` - Comprehensive security analysis agent
+- OWASP Top 10 vulnerability scanning
+- Dependency vulnerability checking
+- Authentication flow analysis
+- Secret detection in code
+- Security report generation with remediation guidance
+- Integration with SecurityScanner and OWASPScanner
 
 ## Public API
 
