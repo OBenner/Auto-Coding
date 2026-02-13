@@ -76,6 +76,7 @@ class ConversationRound:
         phase: Execution phase (planning, coding, validation)
         input_tokens: Number of input tokens used
         output_tokens: Number of output tokens used
+        model: The AI model used for this round (e.g., "claude-sonnet-4-5-20250929")
     """
 
     def __init__(
@@ -84,6 +85,7 @@ class ConversationRound:
         user_message: str,
         timestamp: datetime | None = None,
         phase: str = "coding",
+        model: str = "",
     ):
         self.round_number = round_number
         self.timestamp = timestamp or datetime.now()
@@ -94,6 +96,7 @@ class ConversationRound:
         self.phase = phase
         self.input_tokens = 0
         self.output_tokens = 0
+        self.model = model
 
     def add_text(self, text: str) -> None:
         """Add text to assistant response."""
@@ -129,6 +132,7 @@ class ConversationRound:
             "code_references": list(self.code_references),
             "input_tokens": self.input_tokens,
             "output_tokens": self.output_tokens,
+            "model": self.model,
         }
 
     @classmethod
@@ -139,6 +143,7 @@ class ConversationRound:
             user_message=data["user_message"],
             timestamp=datetime.fromisoformat(data["timestamp"]),
             phase=data.get("phase", "coding"),
+            model=data.get("model", ""),
         )
         round_obj.assistant_response = data["assistant_response"]
         round_obj.tool_calls = data.get("tool_calls", [])
@@ -165,11 +170,13 @@ class ConversationHistory:
         self.session_start = datetime.now()
         self.session_id = f"{subtask_id}_{self.session_start.strftime('%Y%m%d_%H%M%S')}"
 
-    def add_round(self, user_message: str, phase: str = "coding") -> ConversationRound:
+    def add_round(
+        self, user_message: str, phase: str = "coding", model: str = ""
+    ) -> ConversationRound:
         """Start a new conversation round."""
         round_number = len(self.rounds) + 1
         round_obj = ConversationRound(
-            round_number=round_number, user_message=user_message, phase=phase
+            round_number=round_number, user_message=user_message, phase=phase, model=model
         )
         self.rounds.append(round_obj)
         return round_obj
@@ -807,6 +814,7 @@ async def run_agent_session(
     phase: LogPhase = LogPhase.CODING,
     conversation_history: ConversationHistory | None = None,
     subtask_id: str | None = None,
+    model: str = "",
 ) -> tuple[str, str, dict[str, int] | None]:
     """
     Run a single agent session using Claude Agent SDK.
@@ -821,6 +829,7 @@ async def run_agent_session(
         phase: Current execution phase for logging
         conversation_history: Optional existing history for resuming sessions
         subtask_id: Optional subtask ID for session tracking
+        model: The AI model being used (e.g., "claude-sonnet-4-5-20250929")
 
     Returns:
         (status, response_text, usage_metadata) where:
@@ -860,7 +869,7 @@ async def run_agent_session(
         )
 
     current_round = conversation_history.add_round(
-        user_message=message, phase=phase.value
+        user_message=message, phase=phase.value, model=model
     )
     debug(
         "session", "Created conversation round", round_number=current_round.round_number

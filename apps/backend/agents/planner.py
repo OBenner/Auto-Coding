@@ -112,7 +112,7 @@ async def run_followup_planner(
         # Run single planning session
         async with client:
             status, response, usage_metadata = await run_agent_session(
-                client, prompt, spec_dir, verbose, phase=LogPhase.PLANNING
+                client, prompt, spec_dir, verbose, phase=LogPhase.PLANNING, model=planning_model
             )
 
         # Save token statistics for planning phase
