@@ -3,6 +3,9 @@ import { Download, Loader2, RefreshCw, BarChart3, FileText, Calendar } from 'luc
 import { Button } from '../ui/button';
 import { ScrollArea } from '../ui/scroll-area';
 import { useToast } from '../../hooks/use-toast';
+import { QualityTrendChart } from './QualityTrendChart';
+import { QualityAlertCard } from './QualityAlertCard';
+import { useQualityStore, type QualityScore } from '../../stores/quality-store';
 import type {
   ProductivitySummary,
   ProductivityTrendPoint,
@@ -26,6 +29,11 @@ export function ProductivityDashboard({ projectId }: ProductivityDashboardProps)
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [timeRange, setTimeRange] = useState<TimeRange>('30d');
+
+  // Quality store
+  const qualityScores = useQualityStore((state) => state.scores);
+  const qualityAlerts = useQualityStore((state) => state.alerts);
+  const isLoadingQuality = useQualityStore((state) => state.isLoadingScores);
 
   // Calculate date filter based on time range
   const getDateFilter = useCallback((): Pick<ProductivityAnalyticsFilter, 'start_date' | 'end_date'> => {
@@ -302,6 +310,21 @@ export function ProductivityDashboard({ projectId }: ProductivityDashboardProps)
               </div>
             </div>
           )}
+
+          {/* Quality Section */}
+          <div className="space-y-6">
+            {/* Quality Alerts */}
+            <QualityAlertCard
+              alerts={qualityAlerts}
+              isLoading={isLoadingQuality}
+            />
+
+            {/* Quality Trend Chart */}
+            <QualityTrendChart
+              scores={qualityScores}
+              isLoading={isLoadingQuality}
+            />
+          </div>
 
           {/* Breakdown by Type and Complexity */}
           {summary && (
