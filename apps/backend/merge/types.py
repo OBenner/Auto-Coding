@@ -64,6 +64,7 @@ class ChangeType(Enum):
     ADD_VARIABLE = "add_variable"
     REMOVE_VARIABLE = "remove_variable"
     MODIFY_VARIABLE = "modify_variable"
+    RENAME_VARIABLE = "rename_variable"
     ADD_CONSTANT = "add_constant"
 
     # Class changes
