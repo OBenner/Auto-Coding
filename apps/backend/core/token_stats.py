@@ -21,6 +21,7 @@ class PhaseTokenStats:
     input_tokens: int = 0
     output_tokens: int = 0
     session_count: int = 0  # Number of agent sessions in this phase
+    cost: float = 0.0  # Cost in USD for this phase
     updated_at: datetime = field(default_factory=datetime.now)
 
     @property
@@ -37,6 +38,7 @@ class TaskTokenStats:
     total_input_tokens: int
     total_output_tokens: int
     total_tokens: int
+    total_cost: float  # Total cost in USD for the entire task
     created_at: datetime
     updated_at: datetime
 
@@ -50,6 +52,7 @@ class TaskTokenStats:
                     "output_tokens": stats.output_tokens,
                     "total_tokens": stats.total_tokens,
                     "session_count": stats.session_count,
+                    "cost": stats.cost,
                     "updated_at": stats.updated_at.isoformat(),
                 }
                 for name, stats in self.phases.items()
@@ -57,6 +60,7 @@ class TaskTokenStats:
             "total_input_tokens": self.total_input_tokens,
             "total_output_tokens": self.total_output_tokens,
             "total_tokens": self.total_tokens,
+            "total_cost": self.total_cost,
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),
         }
