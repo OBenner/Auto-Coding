@@ -15,7 +15,7 @@ Key Features:
 
 import json
 import subprocess
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
@@ -60,6 +60,7 @@ class RecoveryAction:
     action: str  # "rollback", "retry", "skip", "escalate"
     target: str  # commit hash, subtask id, or message
     reason: str
+    wait_seconds: float = field(default=0.0)  # Exponential backoff delay before retry
 
 
 # Error Pattern Database
@@ -98,6 +99,21 @@ ERROR_PATTERNS: dict[FailureType, list[str]] = {
         "too many tokens",
     ],
 }
+
+
+# Exponential Backoff Configuration
+# ==================================
+# Prevents API rate limiting and thundering herd problems by increasing
+# delay between retry attempts. Based on pattern from rate_limiter.py.
+
+# Base delay for first retry (seconds)
+BACKOFF_BASE_DELAY = 1.0
+
+# Maximum delay cap to prevent excessively long waits (seconds)
+BACKOFF_MAX_DELAY = 60.0
+
+# Backoff multiplier (exponential growth: delay = base * multiplier^attempt)
+BACKOFF_MULTIPLIER = 2.0
 
 
 class RecoveryManager:
@@ -161,6 +177,39 @@ class RecoveryManager:
         }
         with open(self.build_commits_file, "w", encoding="utf-8") as f:
             json.dump(initial_data, f, indent=2)
+
+    def calculate_backoff_delay(self, attempt_count: int) -> float:
+        """
+        Calculate exponential backoff delay for retry attempts.
+
+        Implements exponential backoff to prevent API rate limiting and
+        thundering herd problems. Delay doubles with each attempt, capped
+        at BACKOFF_MAX_DELAY.
+
+        Formula: delay = min(base * multiplier^attempt, max_delay)
+        Example progression (base=1.0, multiplier=2.0):
+            - Attempt 0: 1.0s
+            - Attempt 1: 2.0s
+            - Attempt 2: 4.0s
+            - Attempt 3: 8.0s
+            - Attempt 4: 16.0s
+            - Attempt 5: 32.0s
+            - Attempt 6+: 60.0s (capped)
+
+        Args:
+            attempt_count: Number of previous attempts (0-indexed)
+
+        Returns:
+            Delay in seconds before next retry
+        """
+        if attempt_count <= 0:
+            return 0.0
+
+        # Calculate exponential delay: base * multiplier^attempt
+        delay = BACKOFF_BASE_DELAY * (BACKOFF_MULTIPLIER**attempt_count)
+
+        # Cap at maximum delay to prevent excessively long waits
+        return min(delay, BACKOFF_MAX_DELAY)
 
     def _load_attempt_history(self) -> dict:
         """Load attempt history from JSON file."""
@@ -348,12 +397,15 @@ class RecoveryManager:
         """
         Decide what to do based on failure type and history.
 
+        Applies exponential backoff to retry actions to prevent API rate
+        limiting and thundering herd problems.
+
         Args:
             failure_type: Type of failure that occurred
             subtask_id: ID of the subtask that failed
 
         Returns:
-            RecoveryAction describing what to do
+            RecoveryAction describing what to do (includes wait_seconds for retries)
         """
         attempt_count = self.get_attempt_count(subtask_id)
 
@@ -376,10 +428,12 @@ class RecoveryManager:
         elif failure_type == FailureType.VERIFICATION_FAILED:
             # Verification failed: retry with different approach if < 3 attempts
             if attempt_count < 3:
+                backoff_delay = self.calculate_backoff_delay(attempt_count)
                 return RecoveryAction(
                     action="retry",
                     target=subtask_id,
                     reason=f"Verification failed, retry with different approach (attempt {attempt_count + 1}/3)",
+                    wait_seconds=backoff_delay,
                 )
             else:
                 return RecoveryAction(
@@ -407,10 +461,12 @@ class RecoveryManager:
         else:  # UNKNOWN
             # Unknown error: retry once, then escalate
             if attempt_count < 2:
+                backoff_delay = self.calculate_backoff_delay(attempt_count)
                 return RecoveryAction(
                     action="retry",
                     target=subtask_id,
                     reason=f"Unknown error, retrying (attempt {attempt_count + 1}/2)",
+                    wait_seconds=backoff_delay,
                 )
             else:
                 return RecoveryAction(
