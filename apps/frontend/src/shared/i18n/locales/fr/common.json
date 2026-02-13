@@ -760,6 +760,15 @@
     "submitted": "Retour soumis avec succès",
     "submitError": "Échec de la soumission du retour : {{error}}",
     "notAvailable": "Retour non disponible",
-    "notAvailableDescription": "Le système de retour n'est pas encore entièrement configuré"
+    "notAvailableDescription": "Le système de retour n'est pas encore entièrement configuré",
+    "dialogTitle": "Évaluer la sortie de l'agent",
+    "dialogDescription": "Aidez-nous à améliorer en évaluant la qualité du travail de l'agent.",
+    "ratingLabel": "Comment évalueriez-vous cette sortie ?",
+    "positive": "Bien",
+    "negative": "À améliorer",
+    "commentLabel": "Commentaires supplémentaires",
+    "commentPlaceholder": "Dites-nous ce qui pourrait être amélioré...",
+    "submitting": "Envoi en cours...",
+    "submit": "Soumettre le retour"
   }
 }
