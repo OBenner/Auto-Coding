@@ -82,7 +82,7 @@ export function GitLabIssues({ onOpenSettings, onNavigateToTask }: GitLabIssuesP
     if (!selectedProject?.id) return;
 
     try {
-      const result = await window.electronAPI.gitlab.importGitLabIssues(
+      const result = await window.electronAPI.importGitLabIssues(
         selectedProject.id,
         [issue.iid]
       );
