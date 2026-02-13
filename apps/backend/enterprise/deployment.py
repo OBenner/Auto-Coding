@@ -386,6 +386,10 @@ def validate_deployment() -> DeploymentValidation:
     return validation
 
 
+# Alias for backward compatibility (verification command uses this name)
+is_airgapped = is_air_gapped
+
+
 def get_deployment_info() -> dict[str, Any]:
     """
     Get comprehensive deployment information.
