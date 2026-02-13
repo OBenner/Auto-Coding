@@ -1,0 +1,61 @@
+{
+  "title": "Cost Analytics",
+  "loading": "Loading cost data...",
+  "noData": "No cost data available",
+  "noDataHint": "Run tasks to see cost breakdown by model",
+  "summary": {
+    "title": "Cost Summary",
+    "totalCost": "Total Cost",
+    "planning": "Planning",
+    "coding": "Coding",
+    "validation": "Validation",
+    "totalTokens": "Total Tokens",
+    "models": "models"
+  },
+  "trends": {
+    "title": "Cost Trends Over Time",
+    "last7Days": "7 Days",
+    "last30Days": "30 Days",
+    "last90Days": "90 Days",
+    "allTime": "All Time",
+    "noData": "No cost trend data available",
+    "noDataHint": "Run more tasks to see cost trends over time"
+  },
+  "costByModel": {
+    "title": "Cost by Model",
+    "loading": "Loading model cost data...",
+    "noData": "No model cost data available",
+    "noDataHint": "Model cost breakdown will appear here after running tasks",
+    "totalCost": "Total Cost",
+    "totalTokens": "Total Tokens",
+    "inputTokens": "Input Tokens",
+    "outputTokens": "Output Tokens",
+    "perPhase": "Cost per Phase",
+    "phases": {
+      "planning": "Planning",
+      "coding": "Coding",
+      "validation": "Validation"
+    }
+  },
+  "budget": {
+    "title": "Budget Settings",
+    "monthlyBudget": "Monthly Budget",
+    "alertThreshold": "Alert Threshold",
+    "alertThresholdHelp": "Percentage of budget at which to show alert",
+    "save": "Save Settings",
+    "saved": "Settings saved successfully",
+    "currentSpending": "Current Spending",
+    "budgetRemaining": "Budget Remaining",
+    "budgetExceeded": "Budget exceeded",
+    "alertTitle": "Budget Alert",
+    "alertMessage": "You have used {{percentage}}% of your monthly budget"
+  },
+  "export": {
+    "title": "Export Cost Data",
+    "format": "Format",
+    "json": "JSON",
+    "csv": "CSV",
+    "export": "Export",
+    "success": "Cost data exported successfully"
+  }
+}

@@ -1,0 +1,61 @@
+{
+  "title": "Analyse des Coûts",
+  "loading": "Chargement des données de coût...",
+  "noData": "Aucune donnée de coût disponible",
+  "noDataHint": "Exécutez des tâches pour voir la répartition des coûts par modèle",
+  "summary": {
+    "title": "Résumé des Coûts",
+    "totalCost": "Coût Total",
+    "planning": "Planification",
+    "coding": "Codage",
+    "validation": "Validation",
+    "totalTokens": "Total des Jetons",
+    "models": "modèles"
+  },
+  "trends": {
+    "title": "Tendances des Coûts",
+    "last7Days": "7 Derniers Jours",
+    "last30Days": "30 Derniers Jours",
+    "last90Days": "90 Derniers Jours",
+    "allTime": "Tout le Temps",
+    "noData": "Aucune donnée de tendance disponible",
+    "noDataHint": "Exécutez plus de tâches pour voir les tendances des coûts"
+  },
+  "costByModel": {
+    "title": "Coût par Modèle",
+    "loading": "Chargement des coûts par modèle...",
+    "noData": "Aucune donnée de coût par modèle disponible",
+    "noDataHint": "La répartition des coûts par modèle apparaîtra ici après l'exécution de tâches",
+    "totalCost": "Coût Total",
+    "totalTokens": "Total des Jetons",
+    "inputTokens": "Jetons d'Entrée",
+    "outputTokens": "Jetons de Sortie",
+    "perPhase": "Coût par Phase",
+    "phases": {
+      "planning": "Planification",
+      "coding": "Codage",
+      "validation": "Validation"
+    }
+  },
+  "budget": {
+    "title": "Paramètres du Budget",
+    "monthlyBudget": "Budget Mensuel",
+    "alertThreshold": "Seuil d'Alerte",
+    "alertThresholdHelp": "Pourcentage du budget à partir duquel afficher une alerte",
+    "save": "Enregistrer",
+    "saved": "Paramètres enregistrés avec succès",
+    "currentSpending": "Dépenses Actuelles",
+    "budgetRemaining": "Budget Restant",
+    "budgetExceeded": "Budget dépassé",
+    "alertTitle": "Alerte de Budget",
+    "alertMessage": "Vous avez utilisé {{percentage}}% de votre budget mensuel"
+  },
+  "export": {
+    "title": "Exporter les Données de Coût",
+    "format": "Format",
+    "json": "JSON",
+    "csv": "CSV",
+    "export": "Exporter",
+    "success": "Données de coût exportées avec succès"
+  }
+}
