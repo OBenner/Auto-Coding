@@ -11,7 +11,7 @@ from datetime import UTC, datetime
 
 from core.platform import is_windows
 from core.sentry import capture_exception
-from graphiti_config import GraphitiConfig, GraphitiState
+from integrations.graphiti.config import GraphitiConfig, GraphitiState
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +58,7 @@ def _apply_ladybug_monkeypatch() -> bool:
 
     # Fall back to native kuzu
     try:
+        # Optional: kuzu is optional (fallback if LadybugDB unavailable)
         import kuzu  # noqa: F401
 
         logger.info("Using native kuzu (LadybugDB not installed)")
@@ -120,7 +121,7 @@ class GraphitiClient:
             from graphiti_core import Graphiti
 
             # Import our provider factory
-            from graphiti_providers import (
+            from integrations.graphiti.providers_pkg import (
                 ProviderError,
                 ProviderNotInstalled,
                 create_embedder,

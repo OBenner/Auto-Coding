@@ -34,12 +34,12 @@ from typing import Any
 _IS_WINDOWS = os.name == "nt"
 _WINDOWS_LOCK_SIZE = 1024 * 1024
 
-try:
+try:  # Platform-specific
     import fcntl  # type: ignore
 except ImportError:  # pragma: no cover
     fcntl = None
 
-try:
+try:  # Platform-specific
     import msvcrt  # type: ignore
 except ImportError:  # pragma: no cover
     msvcrt = None
