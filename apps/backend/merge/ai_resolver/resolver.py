@@ -158,6 +158,43 @@ class AIResolver:
             f"{conflict.reason}"
         )
 
+        # Extract semantic context from changes (scope, signatures, renames)
+        semantic_context = {}
+        scopes = {}
+        signatures = {}
+        renames = []
+
+        for task_id, _, changes in task_changes:
+            for change in changes:
+                # Extract scope information
+                if change.metadata and "scope" in change.metadata:
+                    scopes[change.target] = change.metadata["scope"]
+
+                # Extract signature information
+                if change.metadata and "signature_before" in change.metadata:
+                    signatures[change.target] = {
+                        "before": change.metadata["signature_before"],
+                        "after": change.metadata.get("signature_after", ""),
+                        "params_before": change.metadata.get("params_before", []),
+                        "params_after": change.metadata.get("params_after", []),
+                    }
+
+                # Extract rename information
+                if change.change_type.value in ("rename_function", "rename_variable"):
+                    renames.append({
+                        "type": change.change_type.value,
+                        "old_name": change.metadata.get("old_name", ""),
+                        "new_name": change.metadata.get("new_name", ""),
+                        "task": task_id,
+                    })
+
+        if scopes:
+            semantic_context["scopes"] = scopes
+        if signatures:
+            semantic_context["signatures"] = signatures
+        if renames:
+            semantic_context["renames"] = renames
+
         return ConflictContext(
             file_path=conflict.file_path,
             location=conflict.location,
@@ -165,6 +202,7 @@ class AIResolver:
             task_changes=task_changes,
             conflict_description=description,
             language=language,
+            semantic_context=semantic_context,
         )
 
     def resolve_conflict(

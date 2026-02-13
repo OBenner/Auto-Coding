@@ -12,6 +12,7 @@ from ..rename_detector import (
     extract_renamed_identifiers,
     is_function_rename,
 )
+from ..scope_analyzer import infer_scope
 from ..signature_parser import parse_function_signature
 from ..types import ChangeType, FileAnalysis, SemanticChange
 
@@ -200,11 +201,13 @@ def analyze_with_regex(
                     # Check if this is a rename (same structure, different name)
                     if removed_def and added_def and is_function_rename(removed_def, added_def):
                         # This is a rename, not remove+add
+                        location = f"function:{added_func}"
+                        scope = infer_scope(added_func, location)
                         changes.append(
                             SemanticChange(
                                 change_type=ChangeType.RENAME_FUNCTION,
                                 target=f"{removed_func}->{added_func}",
-                                location=f"function:{added_func}",
+                                location=location,
                                 line_start=1,
                                 line_end=1,
                                 content_before=removed_func,
@@ -212,6 +215,7 @@ def analyze_with_regex(
                                 metadata={
                                     "old_name": removed_func,
                                     "new_name": added_func,
+                                    "scope": scope,
                                 },
                             )
                         )
@@ -225,25 +229,31 @@ def analyze_with_regex(
 
         # Remaining adds are new functions
         for func in added_funcs:
+            location = f"function:{func}"
+            scope = infer_scope(func, location)
             changes.append(
                 SemanticChange(
                     change_type=ChangeType.ADD_FUNCTION,
                     target=func,
-                    location=f"function:{func}",
+                    location=location,
                     line_start=1,
                     line_end=1,
+                    metadata={"scope": scope},
                 )
             )
 
         # Remaining removes are deleted functions
         for func in removed_funcs:
+            location = f"function:{func}"
+            scope = infer_scope(func, location)
             changes.append(
                 SemanticChange(
                     change_type=ChangeType.REMOVE_FUNCTION,
                     target=func,
-                    location=f"function:{func}",
+                    location=location,
                     line_start=1,
                     line_end=1,
+                    metadata={"scope": scope},
                 )
             )
 
@@ -272,6 +282,8 @@ def analyze_with_regex(
 
                     if sig_differs:
                         # Store signature details in metadata
+                        location = f"function:{func_name}"
+                        scope = infer_scope(func_name, location)
                         metadata = {
                             "signature_before": sig_before,
                             "signature_after": sig_after,
@@ -279,13 +291,14 @@ def analyze_with_regex(
                             "params_after": parsed_after.params,
                             "return_type_before": parsed_before.return_type,
                             "return_type_after": parsed_after.return_type,
+                            "scope": scope,
                         }
 
                         changes.append(
                             SemanticChange(
                                 change_type=ChangeType.MODIFY_FUNCTION,
                                 target=func_name,
-                                location=f"function:{func_name}",
+                                location=location,
                                 line_start=1,  # Line info approximate for signature changes
                                 line_end=1,
                                 content_before=sig_before,
