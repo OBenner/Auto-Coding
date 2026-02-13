@@ -458,6 +458,21 @@ export const IPC_CHANNELS = {
   PRODUCTIVITY_ANALYTICS_GET_TRENDS: 'productivityAnalytics:getTrends',
   PRODUCTIVITY_ANALYTICS_EXPORT: 'productivityAnalytics:export',
 
+  // Model Usage Analytics operations
+  MODEL_USAGE_GET_SUMMARY: 'modelUsage:getSummary',
+  MODEL_USAGE_GET_TRENDS: 'modelUsage:getTrends',
+  MODEL_USAGE_EXPORT: 'modelUsage:export',
+  MODEL_USAGE_GET_MODEL_METRICS: 'modelUsage:getModelMetrics',
+  MODEL_USAGE_GET_AGENT_METRICS: 'modelUsage:getAgentMetrics',
+
+  // Model Lock operations
+  MODEL_LOCK_LIST: 'modelLock:list',
+  MODEL_LOCK_PHASE: 'modelLock:lockPhase',
+  MODEL_LOCK_AGENT: 'modelLock:lockAgent',
+  MODEL_UNLOCK_PHASE: 'modelLock:unlockPhase',
+  MODEL_UNLOCK_AGENT: 'modelLock:unlockAgent',
+  MODEL_LOCK_CLEAR: 'modelLock:clear',
+
   // Memory Infrastructure status (LadybugDB - no Docker required)
   MEMORY_STATUS: 'memory:status',
   MEMORY_LIST_DATABASES: 'memory:listDatabases',
