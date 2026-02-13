@@ -17,6 +17,22 @@ from enum import Enum
 from typing import Any
 
 
+class VariableScope(Enum):
+    """
+    Variable scope levels.
+
+    Used in SemanticChange metadata to track the visibility context
+    of variable additions and modifications.
+    """
+
+    LOCAL = "local"  # Function/method local variable
+    FUNCTION = "function"  # Function-level scope
+    CLASS = "class"  # Class member/property
+    MODULE = "module"  # Module/global level
+    GLOBAL = "global"  # Global variable
+    BLOCK = "block"  # Block-scoped (if/for/while blocks)
+
+
 class ChangeType(Enum):
     """
     Semantic classification of code changes.
@@ -152,7 +168,8 @@ class SemanticChange:
         line_end: Ending line number (1-indexed)
         content_before: The code before the change (for modifications)
         content_after: The code after the change
-        metadata: Additional context (dependency info, etc.)
+        metadata: Additional context (dependency info, scope for variables, etc.)
+            For variable changes, includes 'scope' key (local, function, class, module, global, block)
     """
 
     change_type: ChangeType
@@ -222,6 +239,17 @@ class SemanticChange:
             ChangeType.ADD_COMMENT,
         }
         return self.change_type in additive_types
+
+    @property
+    def scope(self) -> str | None:
+        """
+        Get the variable scope from metadata.
+
+        Returns the scope value if present in metadata (e.g., 'local', 'function', 'class'),
+        or None if no scope information is available. Used primarily for variable-related
+        changes (ADD_VARIABLE, MODIFY_VARIABLE, REMOVE_VARIABLE).
+        """
+        return self.metadata.get("scope")
 
 
 @dataclass
