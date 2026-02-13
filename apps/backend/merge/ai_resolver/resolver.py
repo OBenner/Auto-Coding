@@ -19,11 +19,12 @@ from ..types import (
     MergeDecision,
     MergeResult,
     MergeStrategy,
+    ResolutionPreview,
     TaskSnapshot,
 )
 from .context import ConflictContext
 from .language_utils import infer_language, locations_overlap
-from .parsers import extract_batch_code_blocks, extract_code_block
+from .parsers import extract_batch_code_blocks, extract_code_block, extract_explanation
 from .prompts import (
     SYSTEM_PROMPT,
     format_batch_merge_prompt,
@@ -58,6 +59,7 @@ class AIResolver:
         self,
         ai_call_fn: AICallFunction | None = None,
         max_context_tokens: int = MAX_CONTEXT_TOKENS,
+        preview_mode: bool = False,
     ):
         """
         Initialize the AI resolver.
@@ -66,11 +68,14 @@ class AIResolver:
             ai_call_fn: Function that calls AI. Signature: (system_prompt, user_prompt) -> response
                         If None, uses a stub that requires explicit calls.
             max_context_tokens: Maximum tokens to include in context
+            preview_mode: If True, generates previews instead of applying resolutions directly
         """
         self.ai_call_fn = ai_call_fn
         self.max_context_tokens = max_context_tokens
+        self.preview_mode = preview_mode
         self._call_count = 0
         self._total_tokens = 0
+        self._pending_previews: list[ResolutionPreview] = []
 
     def set_ai_function(self, ai_call_fn: AICallFunction) -> None:
         """Set the AI call function after initialization."""
@@ -88,6 +93,18 @@ class AIResolver:
         """Reset usage statistics."""
         self._call_count = 0
         self._total_tokens = 0
+
+    def set_preview_mode(self, enabled: bool) -> None:
+        """
+        Enable or disable preview mode.
+
+        Args:
+            enabled: If True, resolutions will be generated as previews for approval
+        """
+        self.preview_mode = enabled
+        if not enabled:
+            # Clear pending previews when disabling preview mode
+            self._pending_previews = []
 
     def build_context(
         self,
@@ -204,8 +221,32 @@ class AIResolver:
 
             # Parse response
             merged_code = extract_code_block(response, context.language)
+            explanation_text = extract_explanation(response) or f"AI resolved conflict at {conflict.location}"
 
             if merged_code:
+                # Create preview if in preview mode
+                if self.preview_mode:
+                    preview = ResolutionPreview(
+                        file_path=conflict.file_path,
+                        original=baseline_code,
+                        suggested=merged_code,
+                        explanation=explanation_text,
+                        conflicts_addressed=[conflict],
+                    )
+                    self._pending_previews.append(preview)
+
+                    # Return a result indicating preview is pending approval
+                    return MergeResult(
+                        decision=MergeDecision.NEEDS_HUMAN_REVIEW,
+                        file_path=conflict.file_path,
+                        explanation=f"Preview generated, awaiting approval: {explanation_text}",
+                        conflicts_remaining=[conflict],
+                        ai_calls_made=1,
+                        tokens_used=context.estimated_tokens,
+                        resolution_explanation=explanation_text,
+                    )
+
+                # Apply resolution directly if not in preview mode
                 return MergeResult(
                     decision=MergeDecision.AI_MERGED,
                     file_path=conflict.file_path,
@@ -214,6 +255,7 @@ class AIResolver:
                     ai_calls_made=1,
                     tokens_used=context.estimated_tokens,
                     explanation=f"AI resolved conflict at {conflict.location}",
+                    resolution_explanation=explanation_text,
                 )
             else:
                 logger.warning("Could not parse AI response")
@@ -403,6 +445,92 @@ class AIResolver:
                 error=str(e),
                 conflicts_remaining=conflicts,
             )
+
+    def get_pending_previews(self) -> list[ResolutionPreview]:
+        """
+        Get all pending resolution previews.
+
+        Returns:
+            List of ResolutionPreview objects awaiting approval
+        """
+        return self._pending_previews.copy()
+
+    def approve_preview(self, file_path: str) -> MergeResult | None:
+        """
+        Approve a pending resolution preview and apply it.
+
+        Args:
+            file_path: Path to the file whose preview should be approved
+
+        Returns:
+            MergeResult with the approved resolution, or None if no preview found
+        """
+        # Find the preview for this file
+        preview = None
+        for i, p in enumerate(self._pending_previews):
+            if p.file_path == file_path:
+                preview = self._pending_previews.pop(i)
+                break
+
+        if preview is None:
+            logger.warning(f"No pending preview found for {file_path}")
+            return None
+
+        # Create MergeResult with approved resolution
+        result = MergeResult(
+            decision=MergeDecision.AI_MERGED,
+            file_path=preview.file_path,
+            merged_content=preview.suggested,
+            conflicts_resolved=preview.conflicts_addressed,
+            explanation=f"Approved: {preview.explanation}",
+            resolution_explanation=preview.explanation,
+        )
+
+        logger.info(f"Approved resolution for {file_path}")
+        return result
+
+    def reject_preview(self, file_path: str, reason: str = "") -> MergeResult | None:
+        """
+        Reject a pending resolution preview.
+
+        Args:
+            file_path: Path to the file whose preview should be rejected
+            reason: Optional reason for rejection
+
+        Returns:
+            MergeResult indicating the rejection, or None if no preview found
+        """
+        # Find and remove the preview for this file
+        preview = None
+        for i, p in enumerate(self._pending_previews):
+            if p.file_path == file_path:
+                preview = self._pending_previews.pop(i)
+                break
+
+        if preview is None:
+            logger.warning(f"No pending preview found for {file_path}")
+            return None
+
+        # Create MergeResult indicating rejection
+        explanation = f"Rejected resolution for {file_path}"
+        if reason:
+            explanation += f": {reason}"
+
+        result = MergeResult(
+            decision=MergeDecision.NEEDS_HUMAN_REVIEW,
+            file_path=preview.file_path,
+            explanation=explanation,
+            conflicts_remaining=preview.conflicts_addressed,
+        )
+
+        logger.info(f"Rejected resolution for {file_path}")
+        return result
+
+    def clear_previews(self) -> None:
+        """Clear all pending resolution previews."""
+        count = len(self._pending_previews)
+        self._pending_previews = []
+        logger.info(f"Cleared {count} pending previews")
 
     def can_resolve(self, conflict: ConflictRegion) -> bool:
         """
