@@ -769,6 +769,14 @@
     "commentLabel": "Additional comments",
     "commentPlaceholder": "Tell us what could be improved...",
     "submitting": "Submitting...",
-    "submit": "Submit Feedback"
+    "submit": "Submit Feedback",
+    "reportIssueTitle": "Report an Issue",
+    "reportIssueDescription": "Provide details about the issue or suggestion to help us improve.",
+    "issueTitle": "Title",
+    "issueTitlePlaceholder": "Brief summary of the issue...",
+    "issueDescription": "Description",
+    "issueDescriptionPlaceholder": "Detailed description of the issue, including steps to reproduce if applicable...",
+    "issueSeverity": "Severity",
+    "submitReport": "Submit Report"
   }
 }

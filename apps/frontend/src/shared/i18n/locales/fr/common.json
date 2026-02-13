@@ -769,6 +769,14 @@
     "commentLabel": "Commentaires supplémentaires",
     "commentPlaceholder": "Dites-nous ce qui pourrait être amélioré...",
     "submitting": "Envoi en cours...",
-    "submit": "Soumettre le retour"
+    "submit": "Soumettre le retour",
+    "reportIssueTitle": "Signaler un problème",
+    "reportIssueDescription": "Fournissez des détails sur le problème ou la suggestion pour nous aider à améliorer.",
+    "issueTitle": "Titre",
+    "issueTitlePlaceholder": "Résumé bref du problème...",
+    "issueDescription": "Description",
+    "issueDescriptionPlaceholder": "Description détaillée du problème, y compris les étapes pour reproduire si applicable...",
+    "issueSeverity": "Gravité",
+    "submitReport": "Soumettre le rapport"
   }
 }
