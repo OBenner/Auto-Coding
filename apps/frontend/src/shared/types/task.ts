@@ -77,7 +77,7 @@ export interface QAIssue {
 // Task Log Types - for persistent, phase-based logging
 export type TaskLogPhase = 'planning' | 'coding' | 'validation';
 export type TaskLogPhaseStatus = 'pending' | 'active' | 'completed' | 'failed';
-export type TaskLogEntryType = 'text' | 'tool_start' | 'tool_end' | 'phase_start' | 'phase_end' | 'error' | 'success' | 'info';
+export type TaskLogEntryType = 'text' | 'tool_start' | 'tool_end' | 'phase_start' | 'phase_end' | 'error' | 'success' | 'info' | 'decision';
 
 export interface TaskLogEntry {
   timestamp: string;
@@ -92,6 +92,8 @@ export interface TaskLogEntry {
   detail?: string;  // Full content that can be expanded (e.g., file contents, command output)
   subphase?: string;  // Subphase grouping (e.g., "PROJECT DISCOVERY", "CONTEXT GATHERING")
   collapsed?: boolean;  // Whether to show collapsed by default in UI
+  // Decision data for decision log entries
+  decision_data?: any;  // DecisionPoint data (imported separately to avoid circular deps)
 }
 
 export interface TaskPhaseLog {
@@ -115,7 +117,7 @@ export interface TaskLogs {
 
 // Streaming markers from Python (similar to InsightsStreamChunk)
 export interface TaskLogStreamChunk {
-  type: 'text' | 'tool_start' | 'tool_end' | 'phase_start' | 'phase_end' | 'error';
+  type: 'text' | 'tool_start' | 'tool_end' | 'phase_start' | 'phase_end' | 'error' | 'decision';
   content?: string;
   phase?: TaskLogPhase;
   timestamp?: string;
@@ -125,6 +127,7 @@ export interface TaskLogStreamChunk {
     success?: boolean;
   };
   subtask_id?: string;
+  decision_data?: any;  // DecisionPoint data for decision entries
 }
 
 // Log filtering and search types
