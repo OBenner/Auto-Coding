@@ -54,6 +54,17 @@ class FailureType(Enum):
 
 
 @dataclass
+class RetryStrategy:
+    """Describes a retry strategy to use for recovery."""
+
+    name: str  # Strategy identifier (e.g., "direct_retry", "model_fallback")
+    description: str  # Human-readable description of what this strategy does
+    use_model_fallback: bool = field(default=False)  # Try with fallback model
+    guidance: str = field(default="")  # Specific guidance for the agent
+    max_attempts: int = field(default=3)  # Maximum attempts for this strategy
+
+
+@dataclass
 class RecoveryAction:
     """Action to take in response to a failure."""
 
@@ -62,6 +73,7 @@ class RecoveryAction:
     reason: str
     wait_seconds: float = field(default=0.0)  # Exponential backoff delay before retry
     use_model_fallback: bool = field(default=False)  # Suggest trying with fallback model
+    strategy: RetryStrategy | None = field(default=None)  # Selected retry strategy
 
 
 # Error Pattern Database
@@ -211,6 +223,114 @@ class RecoveryManager:
 
         # Cap at maximum delay to prevent excessively long waits
         return min(delay, BACKOFF_MAX_DELAY)
+
+    def select_retry_strategy(
+        self, failure_type: FailureType, attempt_count: int, subtask_id: str
+    ) -> RetryStrategy | None:
+        """
+        Select an appropriate retry strategy based on failure type and history.
+
+        Strategies are selected progressively to increase chances of success:
+        - Attempt 0: Direct retry (same approach)
+        - Attempt 1: Model fallback (try different model)
+        - Attempt 2+: Alternative approach with guidance
+
+        For BROKEN_BUILD failures, no retry strategy is returned since
+        these require rollback instead.
+
+        Args:
+            failure_type: Type of failure that occurred
+            attempt_count: Number of previous attempts (0-indexed)
+            subtask_id: ID of the subtask that failed
+
+        Returns:
+            RetryStrategy if retry should be attempted, None if should escalate/skip
+        """
+        # BROKEN_BUILD requires rollback, not retry
+        if failure_type == FailureType.BROKEN_BUILD:
+            return None
+
+        # CIRCULAR_FIX should not retry (already detected repetition)
+        if failure_type == FailureType.CIRCULAR_FIX:
+            return None
+
+        # CONTEXT_EXHAUSTED continues in next session (no retry strategy needed)
+        if failure_type == FailureType.CONTEXT_EXHAUSTED:
+            return None
+
+        # For VERIFICATION_FAILED and UNKNOWN, select progressive strategies
+        if failure_type == FailureType.VERIFICATION_FAILED:
+            max_attempts = 3
+
+            if attempt_count >= max_attempts:
+                return None  # Exhausted retries
+
+            if attempt_count == 0:
+                # First attempt: direct retry
+                return RetryStrategy(
+                    name="direct_retry",
+                    description="Retry with same approach",
+                    use_model_fallback=False,
+                    guidance="Review the verification error and fix the issue",
+                    max_attempts=max_attempts,
+                )
+            elif attempt_count == 1:
+                # Second attempt: try with model fallback
+                return RetryStrategy(
+                    name="model_fallback",
+                    description="Retry with fallback model (opus→sonnet→haiku)",
+                    use_model_fallback=True,
+                    guidance="Use a different model which may handle this task better",
+                    max_attempts=max_attempts,
+                )
+            else:
+                # Third attempt: alternative approach with specific guidance
+                return RetryStrategy(
+                    name="alternative_approach",
+                    description="Try a simpler or different approach",
+                    use_model_fallback=True,
+                    guidance=(
+                        "IMPORTANT: Try a DIFFERENT approach:\n"
+                        "- Use a simpler implementation\n"
+                        "- Try a different library or pattern\n"
+                        "- Break down into smaller steps\n"
+                        "- Review previous attempt errors carefully"
+                    ),
+                    max_attempts=max_attempts,
+                )
+
+        elif failure_type == FailureType.UNKNOWN:
+            max_attempts = 2
+
+            if attempt_count >= max_attempts:
+                return None  # Exhausted retries
+
+            if attempt_count == 0:
+                # First attempt: direct retry
+                return RetryStrategy(
+                    name="direct_retry",
+                    description="Retry with same approach",
+                    use_model_fallback=False,
+                    guidance="Review the error message and fix the issue",
+                    max_attempts=max_attempts,
+                )
+            else:
+                # Second attempt: try with model fallback and alternative approach
+                return RetryStrategy(
+                    name="model_fallback_alternative",
+                    description="Retry with fallback model and alternative approach",
+                    use_model_fallback=True,
+                    guidance=(
+                        "Unknown error - try a different approach:\n"
+                        "- Simplify the implementation\n"
+                        "- Add error handling\n"
+                        "- Check for edge cases\n"
+                        "- Verify dependencies are available"
+                    ),
+                    max_attempts=max_attempts,
+                )
+
+        return None
 
     def _load_attempt_history(self) -> dict:
         """Load attempt history from JSON file."""
@@ -398,26 +518,27 @@ class RecoveryManager:
         """
         Decide what to do based on failure type and history.
 
-        Applies exponential backoff to retry actions to prevent API rate
-        limiting and thundering herd problems.
+        Uses select_retry_strategy() to choose appropriate retry strategies
+        including model fallback, alternative approaches, and simpler implementations.
+        Applies exponential backoff to prevent API rate limiting.
 
-        Model Fallback Strategy:
-        - First attempt: Use original model
-        - Second+ attempt: Enable model fallback (opus -> sonnet -> haiku)
-        - This prevents model-specific failures from causing unnecessary escalations
+        Strategy Progression:
+        - Attempt 0: Direct retry with same approach
+        - Attempt 1: Model fallback (opus -> sonnet -> haiku)
+        - Attempt 2+: Alternative approach with guidance
 
         Args:
             failure_type: Type of failure that occurred
             subtask_id: ID of the subtask that failed
 
         Returns:
-            RecoveryAction describing what to do (includes wait_seconds for retries
-            and use_model_fallback flag for alternative models)
+            RecoveryAction describing what to do (includes wait_seconds, strategy,
+            and use_model_fallback flag)
         """
         attempt_count = self.get_attempt_count(subtask_id)
 
+        # Special case: BROKEN_BUILD requires rollback
         if failure_type == FailureType.BROKEN_BUILD:
-            # Broken build: rollback to last good state
             last_good = self.get_last_good_commit()
             if last_good:
                 return RecoveryAction(
@@ -432,58 +553,48 @@ class RecoveryManager:
                     reason="Build broken and no good commit found to rollback to",
                 )
 
-        elif failure_type == FailureType.VERIFICATION_FAILED:
-            # Verification failed: retry with different approach if < 3 attempts
-            if attempt_count < 3:
-                backoff_delay = self.calculate_backoff_delay(attempt_count)
-                # Enable model fallback after first attempt to try alternative models
-                use_fallback = attempt_count >= 1
-                reason_suffix = " with model fallback" if use_fallback else ""
-                return RecoveryAction(
-                    action="retry",
-                    target=subtask_id,
-                    reason=f"Verification failed, retry with different approach{reason_suffix} (attempt {attempt_count + 1}/3)",
-                    wait_seconds=backoff_delay,
-                    use_model_fallback=use_fallback,
-                )
-            else:
-                return RecoveryAction(
-                    action="skip",
-                    target=subtask_id,
-                    reason=f"Verification failed after {attempt_count} attempts, marking as stuck",
-                )
-
-        elif failure_type == FailureType.CIRCULAR_FIX:
-            # Circular fix detected: skip and escalate
+        # Special case: CIRCULAR_FIX should skip (no retry)
+        if failure_type == FailureType.CIRCULAR_FIX:
             return RecoveryAction(
                 action="skip",
                 target=subtask_id,
                 reason="Circular fix detected - same approach tried multiple times",
             )
 
-        elif failure_type == FailureType.CONTEXT_EXHAUSTED:
-            # Context exhausted: commit current progress and continue
+        # Special case: CONTEXT_EXHAUSTED continues in next session
+        if failure_type == FailureType.CONTEXT_EXHAUSTED:
             return RecoveryAction(
                 action="continue",
                 target=subtask_id,
                 reason="Context exhausted, will commit progress and continue in next session",
             )
 
-        else:  # UNKNOWN
-            # Unknown error: retry once, then escalate
-            if attempt_count < 2:
-                backoff_delay = self.calculate_backoff_delay(attempt_count)
-                # Enable model fallback on retry to try alternative models
-                use_fallback = attempt_count >= 1
-                reason_suffix = " with model fallback" if use_fallback else ""
+        # For other failure types, use strategy selection
+        strategy = self.select_retry_strategy(failure_type, attempt_count, subtask_id)
+
+        if strategy:
+            # Retry with selected strategy
+            backoff_delay = self.calculate_backoff_delay(attempt_count)
+            return RecoveryAction(
+                action="retry",
+                target=subtask_id,
+                reason=(
+                    f"{failure_type.value}: {strategy.description} "
+                    f"(attempt {attempt_count + 1}/{strategy.max_attempts})"
+                ),
+                wait_seconds=backoff_delay,
+                use_model_fallback=strategy.use_model_fallback,
+                strategy=strategy,
+            )
+        else:
+            # No more strategies available - escalate or skip
+            if failure_type == FailureType.VERIFICATION_FAILED:
                 return RecoveryAction(
-                    action="retry",
+                    action="skip",
                     target=subtask_id,
-                    reason=f"Unknown error, retrying{reason_suffix} (attempt {attempt_count + 1}/2)",
-                    wait_seconds=backoff_delay,
-                    use_model_fallback=use_fallback,
+                    reason=f"Verification failed after {attempt_count} attempts, marking as stuck",
                 )
-            else:
+            else:  # UNKNOWN
                 return RecoveryAction(
                     action="escalate",
                     target=subtask_id,
