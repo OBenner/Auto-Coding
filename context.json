@@ -1,96 +1,83 @@
 {
   "files_to_modify": {
+    "backend": [
+      "apps/backend/core/cost_tracking.py",
+      "apps/backend/phase_config.py",
+      "apps/backend/agents/session.py"
+    ],
     "frontend": [
+      "apps/frontend/src/main/ipc-handlers/analytics-handlers.ts",
+      "apps/frontend/src/main/ipc-handlers/index.ts",
       "apps/frontend/src/renderer/App.tsx",
-      "apps/frontend/src/renderer/components/KanbanBoard.tsx",
-      "apps/frontend/src/renderer/components/GitHubIssues.tsx",
-      "apps/frontend/src/renderer/components/GitLabIssues.tsx",
-      "apps/frontend/src/renderer/components/settings/AppSettings.tsx",
-      "apps/frontend/src/renderer/stores/settings-store.ts",
-      "apps/frontend/src/preload/api/task-api.ts",
-      "apps/frontend/src/main/ipc-handlers/task/execution-handlers.ts",
-      "apps/frontend/src/shared/i18n/locales/en/common.json",
-      "apps/frontend/src/shared/i18n/locales/en/dialogs.json",
-      "apps/frontend/src/shared/i18n/locales/en/tasks.json",
-      "apps/frontend/src/shared/i18n/locales/fr/common.json",
-      "apps/frontend/src/shared/i18n/locales/fr/dialogs.json",
-      "apps/frontend/src/shared/i18n/locales/fr/tasks.json",
-      "package.json"
+      "apps/frontend/src/renderer/pages/ProjectSettings.tsx",
+      "apps/frontend/src/shared/i18n/locales/en/settings.json",
+      "apps/frontend/src/shared/i18n/locales/en/model-usage.json"
     ]
   },
   "files_to_create": {
+    "backend": [
+      "apps/backend/analysis/model_usage_analytics.py",
+      "apps/backend/scripts/model_locks_manager.py"
+    ],
     "frontend": [
-      "apps/frontend/src/renderer/stores/keyboard-shortcuts-store.ts",
-      "apps/frontend/src/renderer/stores/quick-actions-store.ts",
-      "apps/frontend/src/renderer/components/CommandPalette.tsx",
-      "apps/frontend/src/renderer/components/BatchQADialog.tsx",
-      "apps/frontend/src/renderer/components/BatchStatusUpdateDialog.tsx",
-      "apps/frontend/src/renderer/components/QuickActionsMenu.tsx",
-      "apps/frontend/src/renderer/components/settings/KeyboardShortcutsSettings.tsx",
-      "apps/frontend/src/shared/i18n/locales/en/quickActions.json",
-      "apps/frontend/src/shared/i18n/locales/fr/quickActions.json"
+      "apps/frontend/src/main/ipc-handlers/model-usage-handlers.ts",
+      "apps/frontend/src/renderer/components/model-usage/ModelUsageDashboard.tsx",
+      "apps/frontend/src/renderer/components/model-usage/ModelUsageCard.tsx",
+      "apps/frontend/src/renderer/components/model-usage/CostChart.tsx",
+      "apps/frontend/src/renderer/components/model-usage/AgentModelDisplay.tsx",
+      "apps/frontend/src/renderer/components/model-usage/ModelLockControl.tsx",
+      "apps/frontend/src/renderer/components/model-usage/ModelChangeConfirmationDialog.tsx",
+      "apps/frontend/src/shared/i18n/locales/fr/model-usage.json"
     ]
   },
   "files_to_reference": [
-    "apps/frontend/src/renderer/components/BulkPRDialog.tsx",
-    "apps/frontend/src/renderer/components/github-issues/components/BatchReviewWizard.tsx",
-    "apps/frontend/src/renderer/components/ui/combobox.tsx",
-    "apps/frontend/src/renderer/components/ui/dialog.tsx",
-    "apps/frontend/src/renderer/components/ui/dropdown-menu.tsx",
-    "apps/frontend/src/renderer/stores/task-store.ts",
-    "apps/frontend/src/renderer/components/settings/AccountSettings.tsx",
-    "apps/frontend/src/shared/i18n/locales/en/tasks.json",
-    "apps/frontend/src/shared/i18n/locales/fr/tasks.json"
+    "apps/backend/core/cost_tracking.py",
+    "apps/backend/phase_config.py",
+    "apps/backend/analysis/productivity_analytics.py",
+    "apps/frontend/src/renderer/components/analytics/ProductivityDashboard.tsx",
+    "apps/frontend/src/renderer/components/analytics/MetricsSummaryCard.tsx",
+    "apps/frontend/src/renderer/components/analytics/TrendsChart.tsx",
+    "apps/frontend/src/renderer/components/project-settings/AgentConfigSection.tsx",
+    "apps/frontend/src/main/ipc-handlers/analytics-handlers.ts"
   ],
   "patterns": {
-    "batch_dialog_pattern": "Multi-step dialog with progress tracking, using BulkPRDialog as pattern. Steps: options -> creating -> results. Use ScrollArea for lists, Progress for tracking, Badge for status.",
-    "keyboard_shortcut_pattern": "App.tsx has keyboard listener pattern (lines 375-411). Use useEffect with addEventListener 'keydown', check e.ctrlKey/e.metaKey + e.key, skip if in input fields.",
-    "dialog_system": "Use shadcn/ui Dialog components (Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter). All dialogs have onOpenChange callback for state management.",
-    "i18n_pattern": "Use react-i18next with namespaces. Import useTranslation, const { t } = useTranslation(['namespace', 'common']). All user-facing text must use translation keys, not hardcoded strings.",
-    "store_pattern": "Zustand stores follow pattern: create() with state interface + actions. Use slice pattern for updates to avoid re-renders. Stores persist to filesystem via settings-store.",
-    "ipc_pattern": "IPC handlers in main/ipc-handlers/, preload API in preload/api/. Task operations: getTasks, startTask, updateTaskStatus, submitReview all follow same pattern."
+    "backend_analytics": "Productivity analytics pattern: create Python script in analysis/ directory, call via IPC handler using spawn(). Script outputs JSON with summary, trends, export options.",
+    "ipc_handler_pattern": "IPC handlers in main/ipc-handlers/ use ipcMain.handle() with IPC_CHANNELS constant. Execute Python scripts via spawn() with augmented env vars.",
+    "dashboard_component": "Dashboard components follow ProductivityDashboard pattern: useState for data, useCallback for loading, use Toast for notifications. Separate into card and chart components.",
+    "settings_component": "Settings components use CollapsibleSection with Label + Select pattern. All state changes via onUpdateSettings callback.",
+    "i18n_pattern": "Add translation keys to en/ and fr/ locales. Use namespace: t('namespace:key') pattern in components."
   },
   "existing_implementations": {
-    "description": "Found existing batch operations and keyboard shortcut patterns in codebase",
-    "batch_operations": {
-      "BulkPRDialog": "apps/frontend/src/renderer/components/BulkPRDialog.tsx - Creates PRs for multiple tasks with progress tracking",
-      "BatchReviewWizard": "apps/frontend/src/renderer/components/github-issues/components/BatchReviewWizard.tsx - Multi-step wizard for issue batching"
+    "cost_tracking": {
+      "description": "Found existing cost tracking system in apps/backend/core/cost_tracking.py",
+      "relevant_files": [
+        "apps/backend/core/cost_tracking.py",
+        "apps/backend/core/token_tracker.py"
+      ],
+      "details": "CostTracker class logs usage records with agent_type, model, tokens, cost, timestamp. Reads MODEL_PRICING dict with per-1M-token pricing."
     },
-    "keyboard_shortcuts": {
-      "location": "apps/frontend/src/renderer/App.tsx lines 375-411",
-      "pattern": "useEffect with keydown listener, Cmd/Ctrl+T for add project",
-      "note": "Checks if target is input field to avoid interfering with typing"
+    "model_configuration": {
+      "description": "Found model configuration system in phase_config.py",
+      "relevant_files": [
+        "apps/backend/phase_config.py"
+      ],
+      "details": "AGENT_DEFAULT_MODELS dict maps agent types to default models. Supports environment variable overrides AGENT_MODEL_<AGENT_TYPE>. Task metadata agentModels field for per-agent config."
     },
-    "command_palette": {
-      "status": "Not implemented yet",
-      "recommended_package": "cmdk",
-      "integration_point": "App.tsx with Cmd/Ctrl+K trigger"
+    "agent_session": {
+      "description": "Found agent session tracking in agents/session.py",
+      "relevant_files": [
+        "apps/backend/agents/session.py"
+      ],
+      "details": "AgentSession class manages SDK client creation and agent execution. Logs model used per session."
     },
-    "task_api": {
-      "location": "apps/frontend/src/preload/api/task-api.ts",
-      "relevant_methods": ["startTask", "updateTaskStatus", "submitReview", "getTasks"],
-      "note": "All return Promise<IPCResult<T>> with success/error properties"
-    },
-    "ui_components": {
-      "shadcn_ui": "26 components in apps/frontend/src/renderer/components/ui/",
-      "available": ["dialog", "dropdown-menu", "combobox", "checkbox", "badge", "progress", "scroll-area"],
-      "note": "All components follow consistent API and styling patterns"
-    }
-  },
-  "tech_stack": {
-    "frontend": {
-      "framework": "Electron + React + TypeScript",
-      "state_management": "Zustand",
-      "ui_library": "shadcn/ui (Radix UI primitives)",
-      "i18n": "react-i18next",
-      "testing": "Vitest + Testing Library",
-      "build": "Vite"
-    },
-    "component_conventions": {
-      "naming": "PascalCase for components, camelCase for utilities",
-      "structure": "Co-locate components with hooks and stores",
-      "styling": "Tailwind CSS with cn() utility for class merging",
-      "types": "Shared types in apps/frontend/src/shared/types/"
+    "dashboard_ui": {
+      "description": "Found analytics dashboard pattern",
+      "relevant_files": [
+        "apps/frontend/src/renderer/components/analytics/ProductivityDashboard.tsx",
+        "apps/frontend/src/renderer/components/analytics/MetricsSummaryCard.tsx",
+        "apps/frontend/src/renderer/components/analytics/TrendsChart.tsx"
+      ],
+      "details": "ProductivityDashboard uses summary cards and trends chart. IPC handlers call Python scripts via executePythonAnalytics()."
     }
   }
 }

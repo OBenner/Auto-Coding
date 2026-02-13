@@ -80,6 +80,7 @@ class UsageRecord:
     output_tokens: int
     cost: float
     timestamp: str
+    provider: str = "anthropic"  # Provider name (e.g., "anthropic", "openai")
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
@@ -90,6 +91,7 @@ class UsageRecord:
             "output_tokens": self.output_tokens,
             "cost": self.cost,
             "timestamp": self.timestamp,
+            "provider": self.provider,
         }
 
     @classmethod
@@ -102,6 +104,7 @@ class UsageRecord:
             output_tokens=data["output_tokens"],
             cost=data["cost"],
             timestamp=data["timestamp"],
+            provider=data.get("provider", "anthropic"),  # Default for backward compatibility
         )
 
 
@@ -189,6 +192,7 @@ class CostTracker:
         model: str,
         input_tokens: int,
         output_tokens: int,
+        provider: str = "anthropic",
     ) -> float:
         """
         Log usage for an agent session.
@@ -198,6 +202,7 @@ class CostTracker:
             model: Model identifier
             input_tokens: Number of input tokens
             output_tokens: Number of output tokens
+            provider: Model provider (e.g., "anthropic", "openai")
 
         Returns:
             Cost of this operation in dollars
@@ -211,6 +216,7 @@ class CostTracker:
             output_tokens=output_tokens,
             cost=cost,
             timestamp=datetime.now(UTC).isoformat() + "Z",
+            provider=provider,
         )
 
         self.records.append(record)
@@ -236,6 +242,13 @@ class CostTracker:
             costs[record.model] = costs.get(record.model, 0.0) + record.cost
         return costs
 
+    def get_cost_by_provider(self) -> dict[str, float]:
+        """Get cost breakdown by provider."""
+        costs: dict[str, float] = {}
+        for record in self.records:
+            costs[record.provider] = costs.get(record.provider, 0.0) + record.cost
+        return costs
+
     def get_token_usage(self) -> dict[str, int]:
         """Get total token usage (input + output)."""
         return {
@@ -259,6 +272,7 @@ class CostTracker:
         total = self.get_total_cost()
         by_agent = self.get_cost_by_agent()
         by_model = self.get_cost_by_model()
+        by_provider = self.get_cost_by_provider()
         tokens = self.get_token_usage()
 
         lines = [
@@ -293,6 +307,18 @@ class CostTracker:
                 .replace("-20251101", "")
             )
             lines.append(f"  {model_short:20s} ${cost:7.4f} ({percentage:5.1f}%)")
+
+        lines.extend(
+            [
+                "",
+                "Cost by Provider:",
+                "-" * 60,
+            ]
+        )
+
+        for provider, cost in sorted(by_provider.items(), key=lambda x: x[1], reverse=True):
+            percentage = (cost / total * 100) if total > 0 else 0
+            lines.append(f"  {provider:20s} ${cost:7.4f} ({percentage:5.1f}%)")
 
         lines.extend(
             [
