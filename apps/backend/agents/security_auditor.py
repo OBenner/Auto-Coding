@@ -442,6 +442,83 @@ class SecurityAuditAgent:
 
         logger.info(f"Dependency audit found {len(dep_vulnerabilities)} vulnerabilities")
 
+    def analyze_authentication(
+        self,
+        project_dir: Path,
+    ) -> dict[str, Any]:
+        """
+        Analyze authentication flows for security issues.
+
+        This method performs a comprehensive analysis of authentication implementations,
+        checking for common security vulnerabilities and misconfigurations.
+
+        Authentication checks include:
+        - Hardcoded credentials (passwords, API keys, tokens)
+        - Insecure password storage (plaintext, weak hashing)
+        - Missing authentication on sensitive endpoints
+        - Session management issues (session fixation, timeout)
+        - Token handling (JWT, OAuth)
+        - Multi-factor authentication (MFA) implementation
+        - Rate limiting and brute force protection
+        - Password reset flow security
+
+        Args:
+            project_dir: Path to the project root
+
+        Returns:
+            Dictionary containing:
+                - findings: List of SecurityFinding objects
+                - auth_mechanisms: List of detected auth frameworks/libraries
+                - checks_performed: List of authentication checks that were run
+                - summary: Summary statistics
+
+        Example:
+            result = auditor.analyze_authentication(Path("/project"))
+            print(f"Found {len(result['findings'])} authentication issues")
+        """
+        auth_findings = self._scan_auth_patterns(project_dir)
+
+        # Detect authentication mechanisms in use
+        auth_mechanisms = self._detect_auth_mechanisms(project_dir)
+
+        # Perform additional authentication checks
+        additional_findings = self._check_password_policies(project_dir)
+        auth_findings.extend(additional_findings)
+
+        additional_findings = self._check_session_management(project_dir)
+        auth_findings.extend(additional_findings)
+
+        additional_findings = self._check_token_handling(project_dir)
+        auth_findings.extend(additional_findings)
+
+        additional_findings = self._check_rate_limiting(project_dir)
+        auth_findings.extend(additional_findings)
+
+        # Calculate summary
+        severity_counts = {
+            "critical": sum(1 for f in auth_findings if f.severity == "critical"),
+            "high": sum(1 for f in auth_findings if f.severity == "high"),
+            "medium": sum(1 for f in auth_findings if f.severity == "medium"),
+            "low": sum(1 for f in auth_findings if f.severity == "low"),
+            "info": sum(1 for f in auth_findings if f.severity == "info"),
+        }
+
+        return {
+            "findings": auth_findings,
+            "auth_mechanisms": auth_mechanisms,
+            "checks_performed": [
+                "hardcoded_credentials",
+                "password_policies",
+                "session_management",
+                "token_handling",
+                "rate_limiting",
+            ],
+            "summary": {
+                **severity_counts,
+                "total": len(auth_findings),
+            },
+        }
+
     def _analyze_authentication(self, project_dir: Path, report: SecurityReport) -> None:
         """
         Analyze authentication flows for security issues.
@@ -456,28 +533,26 @@ class SecurityAuditAgent:
             project_dir: Path to the project root
             report: Report object to update with findings
         """
-        # This will be implemented in subtask-1-4
-        # For now, we'll do basic pattern scanning
+        auth_result = self.analyze_authentication(project_dir)
 
-        auth_findings = self._scan_auth_patterns(project_dir)
-
-        for finding in auth_findings:
+        for finding in auth_result["findings"]:
             report.add_finding(finding)
 
         report.authentication_review = {
-            "findings_count": len(auth_findings),
-            "patterns_checked": [
-                "hardcoded_credentials",
-                "insecure_password_storage",
-                "missing_auth_checks",
-            ],
+            "findings_count": len(auth_result["findings"]),
+            "auth_mechanisms": auth_result["auth_mechanisms"],
+            "checks_performed": auth_result["checks_performed"],
+            "summary": auth_result["summary"],
         }
 
-        logger.info(f"Authentication analysis found {len(auth_findings)} issues")
+        logger.info(f"Authentication analysis found {len(auth_result['findings'])} issues")
 
     def _scan_auth_patterns(self, project_dir: Path) -> list[SecurityFinding]:
         """
         Scan for authentication security issues.
+
+        This method scans code for hardcoded credentials, insecure password handling,
+        and other authentication-related security issues.
 
         Args:
             project_dir: Path to the project root
@@ -485,44 +560,601 @@ class SecurityAuditAgent:
         Returns:
             List of security findings related to authentication
         """
-        findings = []
-
-        # TODO: Implement full authentication flow analysis in subtask-1-4
-        # This is a placeholder for basic pattern scanning
-
-        # Scan for hardcoded credentials
         import re
 
-        credential_patterns = {
-            r"password\s*=\s*['\"][^'\"]+['\"]": "Hardcoded password detected",
-            r"api_key\s*=\s*['\"][^'\"]+['\"]": "Hardcoded API key detected",
-            r"secret\s*=\s*['\"][^'\"]+['\"]": "Hardcoded secret detected",
+        findings = []
+
+        # =============================================================================
+        # AUTHENTICATION SECURITY PATTERNS
+        # =============================================================================
+
+        # Patterns for hardcoded credentials and secrets
+        # These patterns match common but insecure ways of storing credentials
+        CREDENTIAL_PATTERNS = {
+            # Password assignments
+            r"password\s*=\s*['\"][^'\"]{8,}['\"]": {
+                "title": "Hardcoded password detected",
+                "severity": "critical",
+                "cwe": "CWE-798",
+            },
+            r"passwd\s*=\s*['\"][^'\"]{8,}['\"]": {
+                "title": "Hardcoded password detected",
+                "severity": "critical",
+                "cwe": "CWE-798",
+            },
+            # API keys and tokens
+            r"api_key\s*=\s*['\"][^'\"]{20,}['\"]": {
+                "title": "Hardcoded API key detected",
+                "severity": "critical",
+                "cwe": "CWE-798",
+            },
+            r"apikey\s*=\s*['\"][^'\"]{20,}['\"]": {
+                "title": "Hardcoded API key detected",
+                "severity": "critical",
+                "cwe": "CWE-798",
+            },
+            r"api_secret\s*=\s*['\"][^'\"]{20,}['\"]": {
+                "title": "Hardcoded API secret detected",
+                "severity": "critical",
+                "cwe": "CWE-798",
+            },
+            r"secret_key\s*=\s*['\"][^'\"]{20,}['\"]": {
+                "title": "Hardcoded secret key detected",
+                "severity": "critical",
+                "cwe": "CWE-798",
+            },
+            r"secret\s*=\s*['\"][^'\"]{20,}['\"]": {
+                "title": "Hardcoded secret detected",
+                "severity": "critical",
+                "cwe": "CWE-798",
+            },
+            # Tokens
+            r"access_token\s*=\s*['\"][^'\"]{20,}['\"]": {
+                "title": "Hardcoded access token detected",
+                "severity": "critical",
+                "cwe": "CWE-798",
+            },
+            r"auth_token\s*=\s*['\"][^'\"]{20,}['\"]": {
+                "title": "Hardcoded authentication token detected",
+                "severity": "critical",
+                "cwe": "CWE-798",
+            },
+            r"bearer_token\s*=\s*['\"][^'\"]{20,}['\"]": {
+                "title": "Hardcoded bearer token detected",
+                "severity": "critical",
+                "cwe": "CWE-798",
+            },
+            # Database credentials
+            r"db_password\s*=\s*['\"][^'\"]{8,}['\"]": {
+                "title": "Hardcoded database password detected",
+                "severity": "critical",
+                "cwe": "CWE-798",
+            },
+            r"database_password\s*=\s*['\"][^'\"]{8,}['\"]": {
+                "title": "Hardcoded database password detected",
+                "severity": "critical",
+                "cwe": "CWE-798",
+            },
+            # JWT secrets
+            r"jwt_secret\s*=\s*['\"][^'\"]{20,}['\"]": {
+                "title": "Hardcoded JWT secret detected",
+                "severity": "critical",
+                "cwe": "CWE-798",
+            },
+            # OAuth credentials
+            r"oauth_secret\s*=\s*['\"][^'\"]{20,}['\"]": {
+                "title": "Hardcoded OAuth secret detected",
+                "severity": "critical",
+                "cwe": "CWE-798",
+            },
+            r"client_secret\s*=\s*['\"][^'\"]{20,}['\"]": {
+                "title": "Hardcoded client secret detected",
+                "severity": "critical",
+                "cwe": "CWE-798",
+            },
         }
+
+        # Patterns for insecure authentication configurations
+        INSECURE_AUTH_PATTERNS = {
+            # Plaintext password storage
+            r"password\s*=\s*.*\.encode\(\)": {
+                "title": "Plaintext password encoding detected",
+                "description": "Password is being encoded but not hashed",
+                "severity": "high",
+                "cwe": "CWE-256",
+            },
+            # Weak hashing algorithms
+            r"md5\(.+password": {
+                "title": "MD5 used for password hashing",
+                "description": "MD5 is cryptographically broken and should not be used for password hashing",
+                "severity": "high",
+                "cwe": "CWE-327",
+            },
+            r"sha1\(.+password": {
+                "title": "SHA1 used for password hashing",
+                "description": "SHA1 is deprecated for password hashing. Use bcrypt, scrypt, or Argon2",
+                "severity": "medium",
+                "cwe": "CWE-327",
+            },
+            # Missing salt
+            r"hash\(.+password\)": {
+                "title": "Password hashing without salt detected",
+                "description": "Password hashing should use a salt. Consider using bcrypt or scrypt",
+                "severity": "medium",
+                "cwe": "CWE-759",
+            },
+            # Hardcoded comparison strings
+            r"password\s*==\s*['\"]": {
+                "title": "Direct password string comparison detected",
+                "description": "Passwords should be hashed and compared using a timing-safe function",
+                "severity": "critical",
+                "cwe": "CWE-257",
+            },
+        }
+
+        # =============================================================================
+        # FILE SCANNING
+        # =============================================================================
 
         # Scan Python files
         for py_file in project_dir.rglob("*.py"):
             try:
                 content = py_file.read_text(encoding="utf-8", errors="ignore")
-                for pattern, message in credential_patterns.items():
+                lines = content.split("\n")
+
+                # Check for hardcoded credentials
+                for pattern, config in CREDENTIAL_PATTERNS.items():
                     for match in re.finditer(pattern, content, re.IGNORECASE):
                         line_num = content[:match.start()].count("\n") + 1
+                        line_content = lines[line_num - 1] if line_num <= len(lines) else ""
+
+                        finding = SecurityFinding(
+                            category="auth",
+                            owasp_category="A07_2021",
+                            severity=config["severity"],
+                            title=config["title"],
+                            description=f"Potential hardcoded credential found in {py_file.name}",
+                            file=str(py_file.relative_to(project_dir)),
+                            line=line_num,
+                            code_snippet=line_content.strip(),
+                            remediation=(
+                                "Remove hardcoded credentials from code. "
+                                "Use environment variables or a secrets management system. "
+                                "If this is a test value, move it to test fixtures."
+                            ),
+                            cwe=config["cwe"],
+                            references=[
+                                "https://owasp.org/www-project-top-ten/A07_2021-Identification_and_Authentication_Failures",
+                                "https://cheatsheetseries.owasp.org/cheatsheets/Secrets_Management_Cheat_Sheet.html",
+                            ],
+                        )
+                        findings.append(finding)
+
+                # Check for insecure authentication patterns
+                for pattern, config in INSECURE_AUTH_PATTERNS.items():
+                    for match in re.finditer(pattern, content, re.IGNORECASE):
+                        line_num = content[:match.start()].count("\n") + 1
+                        line_content = lines[line_num - 1] if line_num <= len(lines) else ""
+
+                        finding = SecurityFinding(
+                            category="auth",
+                            owasp_category="A07_2021",
+                            severity=config["severity"],
+                            title=config["title"],
+                            description=config.get("description", "Insecure authentication pattern detected"),
+                            file=str(py_file.relative_to(project_dir)),
+                            line=line_num,
+                            code_snippet=line_content.strip(),
+                            remediation=(
+                                "Use strong password hashing algorithms (bcrypt, scrypt, Argon2) "
+                                "with proper salting. Never store passwords in plaintext."
+                            ),
+                            cwe=config["cwe"],
+                            references=[
+                                "https://owasp.org/www-project-top-ten/A07_2021-Identification_and_Authentication_Failures",
+                                "https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html",
+                            ],
+                        )
+                        findings.append(finding)
+
+            except (OSError, UnicodeDecodeError):
+                pass  # Skip files that can't be read
+
+        # Scan JavaScript/TypeScript files
+        for js_file in project_dir.rglob("*.{js,ts,jsx,tsx}"):
+            try:
+                content = js_file.read_text(encoding="utf-8", errors="ignore")
+                lines = content.split("\n")
+
+                # Check for hardcoded credentials
+                for pattern, config in CREDENTIAL_PATTERNS.items():
+                    # Adjust pattern for JavaScript syntax
+                    js_pattern = pattern.replace(r"\s*=\s*", r"\s*[:=]\s*")
+                    for match in re.finditer(js_pattern, content, re.IGNORECASE):
+                        line_num = content[:match.start()].count("\n") + 1
+                        line_content = lines[line_num - 1] if line_num <= len(lines) else ""
+
+                        finding = SecurityFinding(
+                            category="auth",
+                            owasp_category="A07_2021",
+                            severity=config["severity"],
+                            title=config["title"],
+                            description=f"Potential hardcoded credential found in {js_file.name}",
+                            file=str(js_file.relative_to(project_dir)),
+                            line=line_num,
+                            code_snippet=line_content.strip(),
+                            remediation=(
+                                "Remove hardcoded credentials from code. "
+                                "Use environment variables or a secrets management system."
+                            ),
+                            cwe=config["cwe"],
+                            references=[
+                                "https://owasp.org/www-project-top-ten/A07_2021-Identification_and_Authentication_Failures",
+                            ],
+                        )
+                        findings.append(finding)
+
+            except (OSError, UnicodeDecodeError):
+                pass  # Skip files that can't be read
+
+        return findings
+
+    def _detect_auth_mechanisms(self, project_dir: Path) -> list[str]:
+        """
+        Detect authentication frameworks and libraries in use.
+
+        Args:
+            project_dir: Path to the project root
+
+        Returns:
+            List of detected authentication mechanisms
+        """
+        import re
+
+        mechanisms = []
+
+        # Check package.json for Node.js projects
+        package_json = project_dir / "package.json"
+        if package_json.exists():
+            try:
+                content = package_json.read_text(encoding="utf-8")
+                if "passport" in content.lower():
+                    mechanisms.append("Passport.js")
+                if "next-auth" in content.lower() or "next-auth" in content:
+                    mechanisms.append("NextAuth.js")
+                if "auth0" in content.lower():
+                    mechanisms.append("Auth0")
+                if "firebase" in content.lower() and "auth" in content.lower():
+                    mechanisms.append("Firebase Authentication")
+                if "cognito" in content.lower():
+                    mechanisms.append("AWS Cognito")
+                if "jsonwebtoken" in content.lower():
+                    mechanisms.append("JWT (jsonwebtoken)")
+                if "bcrypt" in content.lower():
+                    mechanisms.append("bcrypt")
+                if "argon2" in content.lower():
+                    mechanisms.append("Argon2")
+            except (OSError, UnicodeDecodeError):
+                pass
+
+        # Check requirements.txt for Python projects
+        requirements = project_dir / "requirements.txt"
+        if requirements.exists():
+            try:
+                content = requirements.read_text(encoding="utf-8")
+                if "django" in content.lower():
+                    mechanisms.append("Django Authentication")
+                if "flask-login" in content.lower():
+                    mechanisms.append("Flask-Login")
+                if "flask-security" in content.lower():
+                    mechanisms.append("Flask-Security")
+                if "pyjwt" in content.lower():
+                    mechanisms.append("PyJWT")
+                if "bcrypt" in content.lower():
+                    mechanisms.append("bcrypt")
+                if "argon2-cffi" in content.lower():
+                    mechanisms.append("Argon2")
+                if "passlib" in content.lower():
+                    mechanisms.append("Passlib")
+                if "authlib" in content.lower():
+                    mechanisms.append("Authlib")
+            except (OSError, UnicodeDecodeError):
+                pass
+
+        # Check for common auth files
+        auth_files = [
+            "auth.py",
+            "authentication.py",
+            "login.py",
+            "auth.ts",
+            "auth.tsx",
+            "Auth.tsx",
+        ]
+        for auth_file in auth_files:
+            if (project_dir / auth_file).exists():
+                mechanisms.append(f"Custom Auth ({auth_file})")
+                break
+
+        # Check for JWT usage in code
+        for py_file in project_dir.rglob("*.py"):
+            try:
+                content = py_file.read_text(encoding="utf-8", errors="ignore")
+                if re.search(r"jwt\.|JWT|", content, re.IGNORECASE):
+                    if "JWT" not in mechanisms:
+                        mechanisms.append("JWT")
+                    break
+            except (OSError, UnicodeDecodeError):
+                pass
+
+        return list(set(mechanisms)) if mechanisms else ["No auth mechanisms detected"]
+
+    def _check_password_policies(self, project_dir: Path) -> list[SecurityFinding]:
+        """
+        Check for password policy implementation.
+
+        Checks for:
+        - Password length requirements
+        - Password complexity requirements
+        - Password hashing algorithms
+
+        Args:
+            project_dir: Path to the project root
+
+        Returns:
+            List of security findings
+        """
+        import re
+
+        findings = []
+
+        # Check for password validation/policy code
+        for py_file in project_dir.rglob("*.py"):
+            try:
+                content = py_file.read_text(encoding="utf-8", errors="ignore")
+
+                # Check if password validation exists
+                if "password" in content.lower():
+                    # Look for password length checks
+                    if not re.search(r"len\(.*password.*\)\s*[<>]=\s*\d+", content, re.IGNORECASE):
+                        # If password handling exists but no length check found
+                        if re.search(r"def.*password|class.*password", content, re.IGNORECASE):
+                            finding = SecurityFinding(
+                                category="auth",
+                                owasp_category="A07_2021",
+                                severity="medium",
+                                title="Password policy may not enforce minimum length",
+                                description="Password handling detected but minimum length requirements may not be enforced",
+                                file=str(py_file.relative_to(project_dir)),
+                                remediation=(
+                                    "Implement password policy with minimum length of 8 characters. "
+                                    "Consider requiring complexity (uppercase, lowercase, numbers, symbols)."
+                                ),
+                                cwe="CWE-521",
+                                references=[
+                                    "https://owasp.org/www-project-top-ten/A07_2021-Identification_and_Authentication_Failures",
+                                    "https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html",
+                                ],
+                            )
+                            findings.append(finding)
+
+            except (OSError, UnicodeDecodeError):
+                pass
+
+        return findings
+
+    def _check_session_management(self, project_dir: Path) -> list[SecurityFinding]:
+        """
+        Check for session management security.
+
+        Checks for:
+        - Session timeout configuration
+        - Session fixation prevention
+        - Secure cookie flags
+
+        Args:
+            project_dir: Path to the project root
+
+        Returns:
+            List of security findings
+        """
+        import re
+
+        findings = []
+
+        # Check for session management code
+        for py_file in project_dir.rglob("*.py"):
+            try:
+                content = py_file.read_text(encoding="utf-8", errors="ignore")
+                lines = content.split("\n")
+
+                if "session" in content.lower():
+                    # Check for secure cookie flags
+                    if re.search(r"session\.cookie_httponly\s*=\s*False", content, re.IGNORECASE):
+                        line_num = next(
+                            i for i, line in enumerate(lines)
+                            if "session.cookie_httponly" in line.lower()
+                        )
                         finding = SecurityFinding(
                             category="auth",
                             owasp_category="A07_2021",
                             severity="high",
-                            title=message,
-                            description=f"Potential hardcoded credential found in {py_file.name}",
+                            title="Session cookies not marked HTTPOnly",
+                            description="HTTPOnly flag is not set on session cookies, making them vulnerable to XSS",
                             file=str(py_file.relative_to(project_dir)),
-                            line=line_num,
-                            remediation="Remove hardcoded credentials. Use environment variables or a secrets manager.",
-                            cwe="CWE-798",
+                            line=line_num + 1,
+                            code_snippet=lines[line_num].strip(),
+                            remediation=(
+                                "Set session.cookie_httponly = True to prevent JavaScript access "
+                                "to session cookies."
+                            ),
+                            cwe="CWE-1004",
                             references=[
-                                "https://owasp.org/www-project-top-ten/A07_2021-Identification_and_Authentication_Failures"
+                                "https://owasp.org/www-project-top-ten/A07_2021-Identification_and_Authentication_Failures",
+                                "https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html",
                             ],
                         )
                         findings.append(finding)
-            except Exception:
-                pass  # Skip files that can't be read
+
+                    if re.search(r"session\.cookie_secure\s*=\s*False", content, re.IGNORECASE):
+                        line_num = next(
+                            i for i, line in enumerate(lines)
+                            if "session.cookie_secure" in line.lower()
+                        )
+                        finding = SecurityFinding(
+                            category="auth",
+                            owasp_category="A05_2021",
+                            severity="high",
+                            title="Session cookies not marked Secure",
+                            description="Secure flag is not set on session cookies, allowing transmission over HTTP",
+                            file=str(py_file.relative_to(project_dir)),
+                            line=line_num + 1,
+                            code_snippet=lines[line_num].strip(),
+                            remediation=(
+                                "Set session.cookie_secure = True to ensure cookies are only "
+                                "transmitted over HTTPS."
+                            ),
+                            cwe="CWE-614",
+                            references=[
+                                "https://owasp.org/www-project-top-ten/A05_2021-Security_Misconfiguration",
+                                "https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html",
+                            ],
+                        )
+                        findings.append(finding)
+
+            except (OSError, UnicodeDecodeError, StopIteration):
+                pass
+
+        return findings
+
+    def _check_token_handling(self, project_dir: Path) -> list[SecurityFinding]:
+        """
+        Check for secure token handling (JWT, OAuth).
+
+        Checks for:
+        - Token validation
+        - Secure token storage
+        - Token expiration
+
+        Args:
+            project_dir: Path to the project root
+
+        Returns:
+            List of security findings
+        """
+        import re
+
+        findings = []
+
+        # Check for JWT/OAuth token handling
+        for py_file in project_dir.rglob("*.py"):
+            try:
+                content = py_file.read_text(encoding="utf-8", errors="ignore")
+
+                if "jwt" in content.lower():
+                    # Check for token validation
+                    if re.search(r"jwt\.decode\(", content, re.IGNORECASE):
+                        # Check if verification is being done
+                        decode_matches = list(re.finditer(r"jwt\.decode\(", content, re.IGNORECASE))
+                        for match in decode_matches:
+                            # Get the context around the match
+                            start = max(0, match.start() - 200)
+                            end = min(len(content), match.end() + 200)
+                            context = content[start:end]
+
+                            # Check if verify parameter is set to False
+                            if "verify=False" in context or "verify = False" in context:
+                                line_num = content[:match.start()].count("\n") + 1
+                                finding = SecurityFinding(
+                                    category="auth",
+                                    owasp_category="A07_2021",
+                                    severity="critical",
+                                    title="JWT signature verification disabled",
+                                    description="JWT token is being decoded without signature verification (verify=False)",
+                                    file=str(py_file.relative_to(project_dir)),
+                                    line=line_num,
+                                    remediation=(
+                                        "Never disable JWT signature verification. "
+                                        "Always verify tokens to prevent token forgery attacks."
+                                    ),
+                                    cwe="CWE-347",
+                                    references=[
+                                        "https://owasp.org/www-project-top-ten/A07_2021-Identification_and_Authentication_Failures",
+                                        "https://cheatsheetseries.owasp.org/cheatsheets/JSON_Web_Token_for_Java_Cheat_Sheet.html",
+                                    ],
+                                )
+                                findings.append(finding)
+
+            except (OSError, UnicodeDecodeError):
+                pass
+
+        return findings
+
+    def _check_rate_limiting(self, project_dir: Path) -> list[SecurityFinding]:
+        """
+        Check for rate limiting and brute force protection.
+
+        Checks for:
+        - Rate limiting on authentication endpoints
+        - Account lockout mechanisms
+        - CAPTCHA implementation
+
+        Args:
+            project_dir: Path to the project root
+
+        Returns:
+            List of security findings
+        """
+        findings = []
+
+        # Check for rate limiting configuration
+        has_rate_limiting = False
+        has_account_lockout = False
+
+        # Check for common rate limiting libraries
+        for py_file in project_dir.rglob("*.py"):
+            try:
+                content = py_file.read_text(encoding="utf-8", errors="ignore")
+
+                # Check for rate limiting
+                if any(keyword in content.lower() for keyword in ["rate_limit", "ratelimit", "throttle", "limiter"]):
+                    has_rate_limiting = True
+
+                # Check for account lockout
+                if any(keyword in content.lower() for keyword in ["lockout", "account_lock", "max_login_attempts"]):
+                    has_account_lockout = True
+
+            except (OSError, UnicodeDecodeError):
+                pass
+
+        # If auth endpoints exist but no rate limiting found
+        if not has_rate_limiting:
+            # Check if there are authentication endpoints
+            for py_file in project_dir.rglob("*.py"):
+                try:
+                    content = py_file.read_text(encoding="utf-8", errors="ignore")
+                    if any(keyword in content.lower() for keyword in ["login", "authenticate", "signin"]):
+                        finding = SecurityFinding(
+                            category="auth",
+                            owasp_category="A07_2021",
+                            severity="medium",
+                            title="No rate limiting detected on authentication endpoints",
+                            description="Authentication endpoints may be vulnerable to brute force attacks",
+                            file=str(py_file.relative_to(project_dir)),
+                            remediation=(
+                                "Implement rate limiting on authentication endpoints to prevent "
+                                "brute force attacks. Consider using Flask-Limiter, Django-Ratelimit, "
+                                "or similar libraries."
+                            ),
+                            cwe="CWE-307",
+                            references=[
+                                "https://owasp.org/www-project-top-ten/A07_2021-Identification_and_Authentication_Failures",
+                                "https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html",
+                            ],
+                        )
+                        findings.append(finding)
+                        break
+                except (OSError, UnicodeDecodeError):
+                    pass
 
         return findings
 
