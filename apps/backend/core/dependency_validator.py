@@ -22,7 +22,7 @@ def validate_platform_dependencies() -> None:
     # Check Windows-specific dependencies (all Python versions per ACS-306)
     # pywin32 is required on all Python versions on Windows - MCP library unconditionally imports win32api
     if is_windows():
-        try:
+        try:  # Platform-specific
             import pywintypes  # noqa: F401
         except ImportError:
             _exit_with_pywin32_error()
@@ -31,7 +31,7 @@ def validate_platform_dependencies() -> None:
     # Note: secretstorage is optional for app functionality (falls back to .env),
     # but we validate it to ensure proper OAuth token storage via keyring
     if is_linux():
-        try:
+        try:  # Platform-specific
             import secretstorage  # noqa: F401
         except ImportError:
             _warn_missing_secretstorage()
