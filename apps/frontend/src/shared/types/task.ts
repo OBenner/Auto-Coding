@@ -549,3 +549,126 @@ export interface TaskTokenStats {
   created_at: string;
   updated_at: string;
 }
+
+// ============================================================================
+// Multi-User Spec Collaboration Types
+// ============================================================================
+
+/**
+ * Permission levels for spec collaboration
+ * - read: Can view spec and comments
+ * - write: Can comment and edit spec
+ * - admin: Can manage permissions and approve
+ */
+export type PermissionLevel = 'read' | 'write' | 'admin';
+
+/**
+ * Approval workflow statuses
+ * - pending: Awaiting review
+ * - approved: Spec approved, build can start
+ * - rejected: Spec rejected, needs revision
+ */
+export type ApprovalStatus = 'pending' | 'approved' | 'rejected';
+
+/**
+ * Represents a user in the collaboration system
+ */
+export interface CollaborationUser {
+  user_id: string;
+  username: string;
+  email?: string;
+}
+
+/**
+ * Permission grant for a user on a specific spec
+ */
+export interface SpecPermission {
+  spec_id: string;
+  user: CollaborationUser;
+  level: PermissionLevel;
+  granted_by: string;
+  granted_at: string;
+}
+
+/**
+ * A comment in a spec discussion thread
+ * Supports threaded replies and @mentions for notifications
+ */
+export interface Comment {
+  comment_id: string;
+  spec_id: string;
+  author: CollaborationUser;
+  content: string;
+  created_at: string;
+  parent_id?: string;
+  mentions: string[];
+  resolved: boolean;
+  updated_at?: string;
+}
+
+/**
+ * Approval or rejection record for a spec
+ * Used in approval workflows to track who approved/rejected
+ */
+export interface Approval {
+  approval_id: string;
+  spec_id: string;
+  approver: CollaborationUser;
+  status: ApprovalStatus;
+  reason?: string;
+  created_at: string;
+  reviewed_at?: string;
+}
+
+/**
+ * Types of notifications in the collaboration system
+ */
+export type NotificationType =
+  | 'mention'
+  | 'permission_granted'
+  | 'permission_revoked'
+  | 'approval_requested'
+  | 'approval_approved'
+  | 'approval_rejected'
+  | 'spec_modified';
+
+/**
+ * Types of changes tracked in history
+ */
+export type ChangeType =
+  | 'comment_added'
+  | 'comment_edited'
+  | 'comment_resolved'
+  | 'permission_granted'
+  | 'permission_revoked'
+  | 'approval_requested'
+  | 'approval_approved'
+  | 'approval_rejected'
+  | 'spec_edited';
+
+/**
+ * A notification for a user about collaboration events
+ */
+export interface Notification {
+  notification_id: string;
+  spec_id: string;
+  notification_type: NotificationType;
+  target_user: string;
+  actor_user: string;
+  created_at: string;
+  read: boolean;
+  metadata?: Record<string, unknown>;
+}
+
+/**
+ * A record of a change made to a spec
+ * Tracks who changed what and when for full audit trail
+ */
+export interface ChangeRecord {
+  change_id: string;
+  spec_id: string;
+  change_type: ChangeType;
+  actor_user: string;
+  created_at: string;
+  details?: Record<string, unknown>;
+}
