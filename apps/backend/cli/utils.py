@@ -208,7 +208,7 @@ def validate_environment(spec_dir: Path) -> bool:
 
     # Check Graphiti integration (optional but show status)
     # Lazy import to avoid triggering pywintypes import before validation (ACS-253)
-    from graphiti_config import get_graphiti_status
+    from integrations.graphiti.config import get_graphiti_status
 
     graphiti_status = get_graphiti_status()
     if graphiti_status["available"]:

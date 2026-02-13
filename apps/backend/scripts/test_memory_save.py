@@ -69,7 +69,7 @@ async def test_memory_imports():
 
     # Test graphiti_config imports
     try:
-        from graphiti_config import (
+        from integrations.graphiti.config import (
             get_graphiti_status,
             is_graphiti_enabled,
         )
@@ -120,7 +120,7 @@ async def test_graphiti_status():
     print("\n=== Testing Graphiti Status ===")
 
     try:
-        from graphiti_config import get_graphiti_status, is_graphiti_enabled
+        from integrations.graphiti.config import get_graphiti_status, is_graphiti_enabled
 
         enabled = is_graphiti_enabled()
         status = get_graphiti_status()
