@@ -227,4 +227,4 @@ def signatures_match(sig1: str, sig2: str) -> bool:
 
 
 # Import at end to avoid circular dependency
-from merge.types import FunctionSignature
+from .types import FunctionSignature
