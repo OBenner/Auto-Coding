@@ -3,6 +3,7 @@ import { Download, Loader2, RefreshCw, BarChart3, FileText, Calendar, Cpu } from
 import { Button } from '../ui/button';
 import { ScrollArea } from '../ui/scroll-area';
 import { useToast } from '../../hooks/use-toast';
+import { ModelUsageCard } from './ModelUsageCard';
 import type {
   ModelUsageSummary,
   ModelUsageTrendPoint,
@@ -299,30 +300,17 @@ export function ModelUsageDashboard({ projectId }: ModelUsageDashboardProps) {
           {summary && summary.agents && summary.agents.length > 0 && (
             <div className="rounded-lg border border-border bg-card p-6">
               <h2 className="text-lg font-semibold mb-4">Model Usage by Agent</h2>
-              <div className="space-y-2">
-                {summary.agents.map((agent) => (
-                  <div key={agent.agent_type} className="flex justify-between items-center p-2 rounded hover:bg-muted/50">
-                    <div className="flex flex-col">
-                      <span className="text-sm font-medium capitalize">{agent.agent_type}</span>
-                      <span className="text-xs text-muted-foreground">
-                        Preferred: {agent.preferred_model}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <div className="text-right">
-                        <p className="text-sm font-semibold">{agent.total_usage_count} calls</p>
-                        <p className="text-xs text-muted-foreground">
-                          {Number(agent.total_tokens).toLocaleString()} tokens
-                        </p>
-                      </div>
-                      <div className="text-right w-24">
-                        <p className="text-sm font-semibold text-green-600">
-                          ${Number(agent.total_cost).toFixed(2)}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {summary.agents
+                  .sort((a, b) => b.total_usage_count - a.total_usage_count)
+                  .map((agent, index) => (
+                    <ModelUsageCard
+                      key={agent.agent_type}
+                      agent={agent}
+                      showRank
+                      rank={index + 1}
+                    />
+                  ))}
               </div>
             </div>
           )}
