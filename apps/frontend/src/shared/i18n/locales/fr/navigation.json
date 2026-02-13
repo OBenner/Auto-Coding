@@ -21,7 +21,8 @@
     "worktrees": "Worktrees",
     "agentTools": "Aperçu MCP",
     "analytics": "Analytique",
-    "mergeAnalytics": "Analyse des fusions"
+    "mergeAnalytics": "Analyse des fusions",
+    "costAnalytics": "Analyse des coûts"
   },
   "actions": {
     "settings": "Paramètres",
