@@ -39,16 +39,28 @@
   },
   "budget": {
     "title": "Budget Settings",
+    "description": "Set monthly cost limits and alert thresholds",
     "monthlyBudget": "Monthly Budget",
+    "monthlyBudgetHelp": "Set your maximum monthly API spending limit in USD",
     "alertThreshold": "Alert Threshold",
-    "alertThresholdHelp": "Percentage of budget at which to show alert",
+    "alertThresholdHelp": "Show warning when spending reaches this percentage of budget",
     "save": "Save Settings",
+    "saving": "Saving...",
     "saved": "Settings saved successfully",
+    "savedDescription": "Budget settings have been saved",
+    "saveFailed": "Failed to Save",
+    "saveFailedDescription": "An error occurred while saving budget settings. Please try again.",
     "currentSpending": "Current Spending",
     "budgetRemaining": "Budget Remaining",
     "budgetExceeded": "Budget exceeded",
     "alertTitle": "Budget Alert",
-    "alertMessage": "You have used {{percentage}}% of your monthly budget"
+    "alertMessage": "You have used {{percentage}}% of your monthly budget",
+    "validation": {
+      "invalidBudget": "Invalid Budget",
+      "invalidBudgetDescription": "Please enter a valid budget amount greater than 0",
+      "invalidThreshold": "Invalid Threshold",
+      "invalidThresholdDescription": "Alert threshold must be between 0 and 100 percent"
+    }
   },
   "export": {
     "title": "Export Cost Data",

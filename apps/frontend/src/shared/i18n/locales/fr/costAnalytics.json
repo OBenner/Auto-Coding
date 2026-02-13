@@ -39,16 +39,28 @@
   },
   "budget": {
     "title": "Paramètres du Budget",
+    "description": "Définissez les limites de coûts mensuels et les seuils d'alerte",
     "monthlyBudget": "Budget Mensuel",
+    "monthlyBudgetHelp": "Définissez votre limite mensuelle de dépenses API en USD",
     "alertThreshold": "Seuil d'Alerte",
-    "alertThresholdHelp": "Pourcentage du budget à partir duquel afficher une alerte",
+    "alertThresholdHelp": "Afficher un avertissement lorsque les dépenses atteignent ce pourcentage du budget",
     "save": "Enregistrer",
+    "saving": "Enregistrement...",
     "saved": "Paramètres enregistrés avec succès",
+    "savedDescription": "Les paramètres du budget ont été enregistrés avec succès",
+    "saveFailed": "Échec de l'Enregistrement",
+    "saveFailedDescription": "Une erreur s'est produite lors de l'enregistrement des paramètres du budget. Veuillez réessayer.",
     "currentSpending": "Dépenses Actuelles",
     "budgetRemaining": "Budget Restant",
     "budgetExceeded": "Budget dépassé",
     "alertTitle": "Alerte de Budget",
-    "alertMessage": "Vous avez utilisé {{percentage}}% de votre budget mensuel"
+    "alertMessage": "Vous avez utilisé {{percentage}}% de votre budget mensuel",
+    "validation": {
+      "invalidBudget": "Budget Invalide",
+      "invalidBudgetDescription": "Veuillez entrer un montant de budget valide supérieur à 0",
+      "invalidThreshold": "Seuil Invalide",
+      "invalidThresholdDescription": "Le seuil d'alerte doit être compris entre 0 et 100 pour cents"
+    }
   },
   "export": {
     "title": "Exporter les Données de Coût",
