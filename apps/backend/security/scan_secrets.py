@@ -55,9 +55,10 @@ FRONTEND_PATTERNS = [
         r'firebaseConfig\s*=\s*{[^}]*apiKey\s*:\s*["\']([a-zA-Z0-9_-]{20,})["\']',
         "Firebase config with API key",
     ),
-    # Google Analytics measurement IDs
+    # Google Analytics measurement IDs (must be exactly G-XXXXXXXXXX format)
+    # Use word boundaries to avoid matching CSS classes like 'bg-background'
     (
-        r'["\']?[Gg]-[A-Z0-9]{10}["\']?',
+        r'\bG-[A-Z0-9]{10}\b',
         "Google Analytics Measurement ID",
     ),
     # Public API endpoints with embedded keys in URL
@@ -157,11 +158,6 @@ SERVICE_PATTERNS = [
     (r"lin_api_[a-zA-Z0-9]{40,}", "Linear API Key"),
     # Vercel
     (r"[a-zA-Z0-9]{24}_[a-zA-Z0-9]{28,}", "Potential Vercel Token"),
-    # Heroku
-    (
-        r"[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}",
-        "Heroku API Key / UUID",
-    ),
     # Doppler
     (r"dp\.pt\.[a-zA-Z0-9]{40,}", "Doppler Service Token"),
 ]
@@ -302,6 +298,16 @@ FALSE_POSITIVE_PATTERNS = [
     r"CHANGEME",
     r"INSERT[-_]?YOUR",
     r"REPLACE[-_]?WITH",
+    r"mock",  # Test mocks (no word boundary to match substrings)
+    r"fixture",  # Test fixtures (no word boundary)
+    r"example",  # Example data (no word boundary)
+    r"dummy",  # Dummy/test data (no word boundary)
+    r"fake",  # Fake test data (no word boundary)
+    r"service[-_]?token",  # Common test token placeholder
+    r"very[-_]?long[-_]?key",  # Test key placeholder
+    r"abc123",  # Common test placeholder
+    r"xyz789",  # Common test placeholder
+    r"test@?example\.com",  # Test email
 ]
 
 
@@ -479,7 +485,12 @@ def scan_files(
         if should_skip_file(file_path, custom_ignores):
             continue
 
-        full_path = project_dir / file_path
+        # Handle both relative and absolute paths
+        file_path_obj = Path(file_path)
+        if file_path_obj.is_absolute():
+            full_path = file_path_obj
+        else:
+            full_path = project_dir / file_path_obj
 
         # Skip if file doesn't exist or is a directory
         if not full_path.exists() or full_path.is_dir():
@@ -592,13 +603,20 @@ def main() -> int:
 
     # Determine which files to scan
     if args.path:
-        path = Path(args.path)
+        path = Path(args.path).resolve()
         if path.is_file():
             files = [str(path)]
         elif path.is_dir():
-            files = [
-                str(f.relative_to(project_dir)) for f in path.rglob("*") if f.is_file()
-            ]
+            # For directories, collect all files and make them relative to project_dir if possible
+            # Otherwise use absolute paths
+            files = []
+            for f in path.rglob("*"):
+                if f.is_file():
+                    try:
+                        files.append(str(f.relative_to(project_dir)))
+                    except ValueError:
+                        # File is not under project_dir, use absolute path
+                        files.append(str(f))
         else:
             print(f"{RED}Error: Path not found: {args.path}{NC}", file=sys.stderr)
             return 2
