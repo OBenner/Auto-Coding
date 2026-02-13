@@ -425,6 +425,27 @@ export class UsageMonitor extends EventEmitter {
         needsReauthentication: this.needsReauthProfiles.has(profile.id)
       }));
 
+      // Also include API profiles in the startup minimal response
+      try {
+        const profilesFile = await loadProfilesFile();
+        for (const apiProfile of profilesFile.profiles) {
+          if (!apiProfile.apiKey) continue;
+          allProfiles.push({
+            profileId: apiProfile.id,
+            profileName: apiProfile.name,
+            sessionPercent: 0,
+            weeklyPercent: 0,
+            isAuthenticated: true,
+            isRateLimited: false,
+            availabilityScore: 100,
+            isActive: apiProfile.id === activeProfileId,
+            needsReauthentication: false
+          });
+        }
+      } catch (error) {
+        this.debugLog('[UsageMonitor:getAllProfilesUsage] Failed to load API profiles on startup:', error);
+      }
+
       // Return minimal data with auth status - don't return null!
       return {
         activeProfile: {
