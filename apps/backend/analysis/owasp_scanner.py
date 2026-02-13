@@ -214,7 +214,155 @@ class OWASPScanner:
 
     def __init__(self) -> None:
         """Initialize the OWASP scanner."""
-        pass
+        # Compile regex patterns for better performance
+        self._compiled_patterns: dict[str, list[tuple[re.Pattern[str], str]]] = {}
+        for category, patterns in self.PATTERNS.items():
+            self._compiled_patterns[category] = [
+                (re.compile(pattern), description) for pattern, description in patterns
+            ]
+
+    def scan_injection_risks(
+        self,
+        project_dir: Path,
+        files_to_scan: list[str] | None = None,
+    ) -> list[OWASPVulnerability]:
+        """
+        Scan specifically for injection vulnerabilities (OWASP A03).
+
+        Args:
+            project_dir: Path to the project root
+            files_to_scan: Optional list of files to scan (if None, scans all)
+
+        Returns:
+            List of injection vulnerabilities found
+        """
+        project_dir = Path(project_dir)
+        injection_vulns: list[OWASPVulnerability] = []
+
+        # Find files to scan
+        if files_to_scan:
+            file_paths = [
+                project_dir / f for f in files_to_scan if self._is_scannable_file(f)
+            ]
+        else:
+            file_paths = self._find_scannable_files(project_dir)
+
+        # Scan each file for injection patterns
+        for file_path in file_paths:
+            try:
+                with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                    content = f.read()
+                    lines = content.splitlines()
+
+                # Check injection patterns (A03)
+                patterns = self._compiled_patterns.get("A03", [])
+                if not patterns:
+                    patterns = self.PATTERNS.get("A03", [])
+                    patterns = [(re.compile(p), desc) for p, desc in patterns]
+
+                for regex, description in patterns:
+                    for line_num, line in enumerate(lines, start=1):
+                        if regex.search(line):
+                            injection_vulns.append(
+                                OWASPVulnerability(
+                                    category="A03",
+                                    category_name=OWASP_CATEGORIES["A03"],
+                                    severity="critical",
+                                    title=description,
+                                    description=f"Pattern matched: {description}",
+                                    file=str(file_path.relative_to(project_dir)),
+                                    line=line_num,
+                                    code_snippet=line.strip(),
+                                    recommendation=self._get_recommendation("A03", description),
+                                )
+                            )
+
+                # Python-specific AST analysis for injection
+                if file_path.suffix == ".py":
+                    injection_vulns.extend(
+                        self._analyze_python_for_injection(file_path, content)
+                    )
+
+            except Exception as e:
+                logger.warning(f"Error scanning {file_path} for injection: {e}")
+
+        return injection_vulns
+
+    def _analyze_python_for_injection(
+        self,
+        file_path: Path,
+        content: str,
+    ) -> list[OWASPVulnerability]:
+        """
+        Analyze Python AST for injection vulnerabilities.
+
+        Args:
+            file_path: Path to the file
+            content: File content
+
+        Returns:
+            List of injection vulnerabilities found
+        """
+        injection_vulns: list[OWASPVulnerability] = []
+
+        try:
+            tree = ast.parse(content)
+            lines = content.splitlines()
+
+            for node in ast.walk(tree):
+                # Check for dangerous function calls
+                if isinstance(node, ast.Call):
+                    # Check for eval/exec
+                    if isinstance(node.func, ast.Name):
+                        if node.func.id in {"eval", "exec", "compile"}:
+                            injection_vulns.append(
+                                OWASPVulnerability(
+                                    category="A03",
+                                    category_name=OWASP_CATEGORIES["A03"],
+                                    severity="critical",
+                                    title=f"Dangerous function: {node.func.id}",
+                                    description=f"Use of {node.func.id}() allows code injection",
+                                    file=str(file_path.relative_to(file_path.parents[1])),
+                                    line=node.lineno,
+                                    code_snippet=lines[node.lineno - 1].strip() if node.lineno <= len(lines) else "",
+                                    recommendation="Avoid eval/exec; use safer alternatives",
+                                )
+                            )
+
+                    # Check for shell=True in subprocess
+                    if isinstance(node.func, ast.Attribute):
+                        if node.func.attr in {"call", "run", "Popen"}:
+                            # Check if shell=True keyword argument
+                            for keyword in node.keywords:
+                                if keyword.arg == "shell":
+                                    if isinstance(keyword.value, ast.Constant):
+                                        if keyword.value.value is True:
+                                            injection_vulns.append(
+                                                OWASPVulnerability(
+                                                    category="A03",
+                                                    category_name=OWASP_CATEGORIES["A03"],
+                                                    severity="critical",
+                                                    title=f"OS command injection via {node.func.attr}",
+                                                    description=f"Use of {node.func.attr}(shell=True) allows command injection",
+                                                    file=str(file_path.relative_to(file_path.parents[1])),
+                                                    line=node.lineno,
+                                                    code_snippet=lines[node.lineno - 1].strip() if node.lineno <= len(lines) else "",
+                                                    recommendation="Avoid shell=True; use list arguments for subprocess",
+                                                )
+                                            )
+
+                # Check for SQL string concatenation patterns
+                if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
+                    if isinstance(node.left, ast.Constant) and isinstance(node.left.value, str):
+                        # Could be SQL concatenation - flag for review
+                        pass  # This is noisy, so we skip it
+
+        except SyntaxError:
+            pass  # Skip files with syntax errors
+        except Exception as e:
+            logger.debug(f"AST injection analysis error for {file_path}: {e}")
+
+        return injection_vulns
 
     def scan(
         self,
