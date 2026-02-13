@@ -29,6 +29,56 @@ logger = logging.getLogger(__name__)
 # SECRET PATTERNS
 # =============================================================================
 
+# Frontend-specific patterns for JavaScript/TypeScript/Electron apps
+# These patterns detect secrets in frontend code that ships to users
+FRONTEND_PATTERNS = [
+    # localStorage.setItem with API keys/tokens
+    # Detects: localStorage.setItem('apiKey', 'sk-1234...') or similar
+    (
+        r'localStorage\.setItem\s*\(\s*["\'](?:api[_-]?key|apikey|token|access[_-]?token|auth[_-]?token|secret|api_secret|bearer)["\']\s*,\s*["\']([a-zA-Z0-9_-]{20,})["\']',
+        "localStorage API key/token assignment",
+    ),
+    # sessionStorage.setItem with API keys/tokens
+    (
+        r'sessionStorage\.setItem\s*\(\s*["\'](?:api[_-]?key|apikey|token|access[_-]?token|auth[_-]?token|secret|api_secret|bearer)["\']\s*,\s*["\']([a-zA-Z0-9_-]{20,})["\']',
+        "sessionStorage API key/token assignment",
+    ),
+    # window.config object with secrets
+    # Detects: window.config = { apiKey: 'sk-1234...' } or window.config.apiKey = 'sk-1234...'
+    (
+        r'window\.(?:config|CONFIG|appConfig|APP_CONFIG)\s*(?:\.\s*[a-zA-Z_]\w*\s*)?[:=]\s*{?\s*["\']?([a-zA-Z0-9_-]{16,})["\']?',
+        "window.config object with potential secret",
+    ),
+    # Firebase config objects (contain API keys)
+    (
+        r'firebaseConfig\s*=\s*{[^}]*apiKey\s*:\s*["\']([a-zA-Z0-9_-]{20,})["\']',
+        "Firebase config with API key",
+    ),
+    # Google Analytics measurement IDs
+    (
+        r'["\']?[Gg]-[A-Z0-9]{10}["\']?',
+        "Google Analytics Measurement ID",
+    ),
+    # Public API endpoints with embedded keys in URL
+    (
+        r'https?://[^\s"\']*api[_-]?key[_-]?=?[a-zA-Z0-9_-]{20,}',
+        "API endpoint with embedded key",
+    ),
+    # Vite/CRA environment variable assignments in .env files
+    # These files should be gitignored but sometimes get committed
+    (
+        r'^[A-Z_]+=\s*["\']?([a-zA-Z0-9_-]{20,})["\']?\s*$',
+        "Environment variable assignment (.env file)",
+    ),
+    # Electron main process: process.env with hardcoded values in code
+    # Note: process.env.VAR_NAME is safe (reads from environment)
+    # But process.env.VAR_NAME = 'sk-1234...' is bad
+    (
+        r'process\.env\.[A-Z_]+\s*=\s*["\']([a-zA-Z0-9_-]{20,})',
+        "Hardcoded process.env assignment",
+    ),
+]
+
 # Generic high-entropy patterns that match common API key formats
 GENERIC_PATTERNS = [
     # Generic API key patterns (32+ char alphanumeric strings assigned to variables)
@@ -145,7 +195,7 @@ DATABASE_PATTERNS = [
 
 # Combine all patterns
 ALL_PATTERNS = (
-    GENERIC_PATTERNS + SERVICE_PATTERNS + PRIVATE_KEY_PATTERNS + DATABASE_PATTERNS
+    FRONTEND_PATTERNS + GENERIC_PATTERNS + SERVICE_PATTERNS + PRIVATE_KEY_PATTERNS + DATABASE_PATTERNS
 )
 
 
@@ -235,14 +285,14 @@ BINARY_EXTENSIONS = {
 
 # False positive patterns to filter out
 FALSE_POSITIVE_PATTERNS = [
-    r"process\.env\.",  # Environment variable references
     r"os\.environ",  # Python env references
     r"ENV\[",  # Ruby/other env references
     r"\$\{[A-Z_]+\}",  # Shell variable substitution
+    r"import\.meta\.env\.[A-Z_]+",  # Vite/env references (safe)
+    r"__[\w_]+__",  # Build-time defines like __SENTRY_DSN__ (safe)
     r"your[-_]?api[-_]?key",  # Placeholder values
     r"xxx+",  # Placeholder
     r"placeholder",  # Placeholder
-    r"example",  # Example value
     r"sample",  # Sample value
     r"test[-_]?key",  # Test placeholder
     r"<[A-Z_]+>",  # Placeholder like <API_KEY>
@@ -303,6 +353,24 @@ def should_skip_file(file_path: str, custom_ignores: list[str]) -> bool:
 def is_false_positive(line: str, matched_text: str) -> bool:
     """Check if a match is likely a false positive."""
     line_lower = line.lower()
+
+    # Special handling for process.env: only filter safe references (reads), not assignments
+    if "process.env." in line_lower:
+        # Check if this is an assignment TO process.env (unsafe) vs FROM process.env (safe)
+        # Unsafe: process.env.X = "value"  -> Don't filter
+        # Safe: const x = process.env.X  -> Filter
+        eq_pos = line.find("=")
+        env_pos = line.find("process.env.")
+
+        if eq_pos != -1 and eq_pos > env_pos:
+            # = comes after process.env., likely an assignment TO process.env (unsafe)
+            # Don't filter - this should be flagged
+            return False
+        else:
+            # Either no =, or = comes before process.env., likely a safe reference
+            # Check if it matches the read pattern
+            if re.search(r'process\.env\.[A-Z_]+(\s|\)|,|;|$)', line):
+                return True
 
     for pattern in FALSE_POSITIVE_PATTERNS:
         if re.search(pattern, line_lower):
