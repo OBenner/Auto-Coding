@@ -1191,7 +1191,7 @@ def _get_audit_logger() -> "EnterpriseAuditLogger | None":
         return None
 
     try:
-        # Create audit logger with default output directory
+        # Create audit logger with default log directory
         # The logger will create .auto-claude/enterprise/audit/ directory
         from pathlib import Path
 
@@ -1200,7 +1200,7 @@ def _get_audit_logger() -> "EnterpriseAuditLogger | None":
         audit_dir = project_dir / ".auto-claude" / "enterprise" / "audit"
         audit_dir.mkdir(parents=True, exist_ok=True)
 
-        logger_instance = EnterpriseAuditLogger(output_dir=audit_dir)
+        logger_instance = EnterpriseAuditLogger(log_dir=audit_dir)
         return logger_instance
 
     except Exception as e:
@@ -1275,8 +1275,8 @@ def authenticate_with_sso(
 
         # Log SSO login started
         audit_logger.log(
-            action=AuditAction.SSO_LOGIN_STARTED,
             context=audit_context,
+            action=AuditAction.SSO_LOGIN_STARTED,
             details={
                 "provider_type": os.environ.get("SAML_PROVIDER_TYPE", "generic"),
                 "sp_entity_id": os.environ.get("SAML_SP_ENTITY_ID", "auto-claude-sp"),
@@ -1305,8 +1305,8 @@ def authenticate_with_sso(
         # Log SAML assertion verified
         if audit_logger and audit_context:
             audit_logger.log(
-                action=AuditAction.SAML_ASSERTION_VERIFIED,
                 context=audit_context,
+                action=AuditAction.SAML_ASSERTION_VERIFIED,
                 details={
                     "user_id": user.user_id,
                     "email": user.email,
@@ -1322,8 +1322,9 @@ def authenticate_with_sso(
         # Log SSO login completed
         if audit_logger and audit_context:
             audit_logger.log(
-                action=AuditAction.SSO_LOGIN_COMPLETED,
                 context=audit_context,
+                action=AuditAction.SSO_LOGIN_COMPLETED,
+                result="success",
                 details={
                     "user_id": user.user_id,
                     "email": user.email,
@@ -1333,7 +1334,6 @@ def authenticate_with_sso(
                         config.allow_jit_provisioning and not user.attributes.get("existing_user")
                     ),
                 },
-                result="success",
             )
 
         logger.info(
@@ -1347,13 +1347,13 @@ def authenticate_with_sso(
         # Log SSO login failed
         if audit_logger and audit_context:
             audit_logger.log(
-                action=AuditAction.SSO_LOGIN_FAILED,
                 context=audit_context,
+                action=AuditAction.SSO_LOGIN_FAILED,
+                result="failure",
+                error=str(e),
                 details={
-                    "error": str(e),
                     "error_type": type(e).__name__,
                 },
-                result="failure",
             )
 
         logger.error(f"SSO authentication failed: {e}, correlation_id={correlation_id}")
@@ -1361,11 +1361,10 @@ def authenticate_with_sso(
         # Log SAML assertion rejected if it's a validation error
         if isinstance(e, ValueError) and audit_logger and audit_context:
             audit_logger.log(
-                action=AuditAction.SAML_ASSERTION_REJECTED,
                 context=audit_context,
-                details={
-                    "reason": str(e),
-                },
+                action=AuditAction.SAML_ASSERTION_REJECTED,
+                result="failure",
+                error=str(e),
             )
 
         # Re-raise the exception
