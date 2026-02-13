@@ -646,6 +646,53 @@ class MergeResult:
         )
 
 
+@dataclass
+class ResolutionPreview:
+    """
+    Preview of a suggested conflict resolution.
+
+    Used in the resolution preview system to show users how conflicts
+    could be resolved before applying the merge.
+
+    Attributes:
+        file_path: Path to the file with conflicts
+        original: The original conflicting code section
+        suggested: The suggested merged/resolved code
+        explanation: Optional explanation of the resolution strategy
+        conflicts_addressed: List of conflict regions this preview addresses
+    """
+
+    file_path: str
+    original: str
+    suggested: str
+    explanation: str = ""
+    conflicts_addressed: list[ConflictRegion] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dictionary for serialization."""
+        return {
+            "file_path": self.file_path,
+            "original": self.original,
+            "suggested": self.suggested,
+            "explanation": self.explanation,
+            "conflicts_addressed": [c.to_dict() for c in self.conflicts_addressed],
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> ResolutionPreview:
+        """Create from dictionary."""
+        return cls(
+            file_path=data["file_path"],
+            original=data["original"],
+            suggested=data["suggested"],
+            explanation=data.get("explanation", ""),
+            conflicts_addressed=[
+                ConflictRegion.from_dict(c)
+                for c in data.get("conflicts_addressed", [])
+            ],
+        )
+
+
 def compute_content_hash(content: str) -> str:
     """Compute a hash of file content for comparison."""
     return hashlib.sha256(content.encode("utf-8")).hexdigest()[:16]
