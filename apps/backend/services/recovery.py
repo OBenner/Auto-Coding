@@ -20,6 +20,8 @@ from datetime import datetime
 from enum import Enum
 from pathlib import Path
 
+from services.dead_letter_queue import DeadLetterQueue
+
 
 class FailureType(Enum):
     """Types of failures that can occur during autonomous builds."""
@@ -164,6 +166,9 @@ class RecoveryManager:
 
         if not self.build_commits_file.exists():
             self._init_build_commits()
+
+        # Initialize dead-letter queue for unrecoverable failures
+        self.dlq = DeadLetterQueue(spec_dir)
 
     def _init_attempt_history(self) -> None:
         """Initialize the attempt history file."""
@@ -547,11 +552,19 @@ class RecoveryManager:
                     reason=f"Build broken in subtask {subtask_id}, rolling back to working state",
                 )
             else:
-                return RecoveryAction(
+                # Add to DLQ before escalating
+                action = RecoveryAction(
                     action="escalate",
                     target=subtask_id,
                     reason="Build broken and no good commit found to rollback to",
                 )
+                self.add_failure_to_dlq(
+                    subtask_id=subtask_id,
+                    failure_type=failure_type,
+                    error_message=action.reason,
+                    recovery_action=action,
+                )
+                return action
 
         # Special case: CIRCULAR_FIX should skip (no retry)
         if failure_type == FailureType.CIRCULAR_FIX:
@@ -595,11 +608,19 @@ class RecoveryManager:
                     reason=f"Verification failed after {attempt_count} attempts, marking as stuck",
                 )
             else:  # UNKNOWN
-                return RecoveryAction(
+                # Add to DLQ before escalating
+                action = RecoveryAction(
                     action="escalate",
                     target=subtask_id,
                     reason=f"Unknown error persists after {attempt_count} attempts",
                 )
+                self.add_failure_to_dlq(
+                    subtask_id=subtask_id,
+                    failure_type=failure_type,
+                    error_message=action.reason,
+                    recovery_action=action,
+                )
+                return action
 
     def get_last_good_commit(self) -> str | None:
         """
@@ -685,6 +706,52 @@ class RecoveryManager:
             history["subtasks"][subtask_id]["status"] = "stuck"
 
         self._save_attempt_history(history)
+
+    def add_failure_to_dlq(
+        self,
+        subtask_id: str,
+        failure_type: FailureType,
+        error_message: str,
+        recovery_action: RecoveryAction | None = None,
+    ) -> bool:
+        """
+        Add a failure to the dead-letter queue for manual review.
+
+        Called when recovery is escalated and no automatic recovery is possible.
+        Captures full context including attempt history for debugging.
+
+        Args:
+            subtask_id: ID of the subtask that failed
+            failure_type: Type of failure that occurred
+            error_message: Error message or description
+            recovery_action: Last recovery action attempted (optional)
+
+        Returns:
+            True if added to DLQ successfully
+        """
+        attempt_count = self.get_attempt_count(subtask_id)
+        subtask_history = self.get_subtask_history(subtask_id)
+
+        # Build context for debugging
+        context = {
+            "attempts": subtask_history.get("attempts", []),
+            "status": subtask_history.get("status", "unknown"),
+            "last_attempt": (
+                subtask_history["attempts"][-1]
+                if subtask_history.get("attempts")
+                else None
+            ),
+        }
+
+        # Add to DLQ
+        return self.dlq.add_failure(
+            subtask_id=subtask_id,
+            failure_type=failure_type.value,
+            error_message=error_message,
+            attempt_count=attempt_count,
+            recovery_action=recovery_action.action if recovery_action else None,
+            context=context,
+        )
 
     def get_stuck_subtasks(self) -> list[dict]:
         """
@@ -800,6 +867,37 @@ class RecoveryManager:
         ]
 
         self._save_attempt_history(history)
+
+    def get_dlq_pending_failures(self) -> list[dict]:
+        """
+        Get all pending failures from the dead-letter queue.
+
+        Returns:
+            List of pending failure records
+        """
+        return self.dlq.get_pending_failures()
+
+    def get_dlq_statistics(self) -> dict:
+        """
+        Get dead-letter queue statistics.
+
+        Returns:
+            Dict with DLQ statistics including pending count,
+            total failures, resolution rate, etc.
+        """
+        return self.dlq.get_statistics()
+
+    def export_dlq_report(self, output_path: Path | str | None = None) -> str:
+        """
+        Export dead-letter queue failures to a human-readable report.
+
+        Args:
+            output_path: Optional path to save the report
+
+        Returns:
+            Formatted report as string
+        """
+        return self.dlq.export_pending_failures(output_path)
 
 
 # Utility functions for integration with agent.py
