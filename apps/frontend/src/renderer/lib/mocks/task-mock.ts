@@ -79,6 +79,12 @@ export const taskMock = {
   archiveTasks: async () => ({ success: true, data: true }),
   unarchiveTasks: async () => ({ success: true, data: true }),
 
+  // Task export operation
+  exportTask: async (projectId: string, taskId: string) => {
+    console.log('[Browser Mock] exportTask:', projectId, taskId);
+    return { success: true, data: '/mock/path/to/spec.zip' };
+  },
+
   // Task status operations
   updateTaskStatus: async (_taskId: string, _status: string, _options?: { forceCleanup?: boolean }) => ({ success: true }),
 
