@@ -628,5 +628,13 @@ export const IPC_CHANNELS = {
   SCHEDULER_STATUS_CHANGED: 'scheduler:statusChanged',
   SCHEDULER_BUILD_PROGRESS: 'scheduler:buildProgress',
   SCHEDULER_BUILD_COMPLETE: 'scheduler:buildComplete',
-  SCHEDULER_BUILD_FAILED: 'scheduler:buildFailed'
+  SCHEDULER_BUILD_FAILED: 'scheduler:buildFailed',
+
+  // Security profile operations
+  SECURITY_GET_PROFILE: 'security:getProfile',
+  SECURITY_SAVE_PROFILE: 'security:saveProfile',
+  SECURITY_GET_AUDIT_LOGS: 'security:getAuditLogs',
+  SECURITY_EXPORT_CONFIG: 'security:exportConfig',
+  SECURITY_RESET_TO_DEFAULT: 'security:resetToDefault',
+  SECURITY_VALIDATE_COMMAND: 'security:validateCommand'
 } as const;
