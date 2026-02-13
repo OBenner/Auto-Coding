@@ -219,6 +219,114 @@ def _count_unique_sessions(plan: dict[str, Any]) -> int:
     return len(session_ids)
 
 
+def _calculate_quality_metrics(plan: dict[str, Any]) -> dict[str, Any]:
+    """
+    Calculate quality metrics based on completion rates and QA performance.
+
+    Args:
+        plan: Implementation plan dict
+
+    Returns:
+        Dict with quality metrics
+    """
+    # Count subtasks by status
+    total_subtasks = 0
+    completed_subtasks = 0
+    failed_subtasks = 0
+
+    for phase in plan.get("phases", []):
+        for subtask in phase.get("subtasks", []):
+            total_subtasks += 1
+            status = subtask.get("status", "pending")
+            if status == "completed":
+                completed_subtasks += 1
+            elif status == "failed":
+                failed_subtasks += 1
+
+    # Calculate completion rate (0.0 to 1.0)
+    completion_rate = (
+        completed_subtasks / total_subtasks if total_subtasks > 0 else 0.0
+    )
+
+    # QA metrics
+    qa_signoff = plan.get("qa_signoff", {})
+    qa_iterations = qa_signoff.get("qa_session", 0)
+    qa_status = qa_signoff.get("status", "pending")
+
+    # Determine if spec is completed
+    is_completed = (
+        total_subtasks > 0
+        and completed_subtasks == total_subtasks
+        and qa_status == "approved"
+    )
+
+    # Calculate first-attempt success (QA approved on first iteration)
+    first_attempt_success = is_completed and qa_iterations <= 1
+
+    # Calculate quality score (0-100)
+    # Based on:
+    # - Completion rate (40%)
+    # - QA success (40%)
+    # - Low failure rate (20%)
+    quality_score = 0.0
+
+    # Completion component (0-40 points)
+    quality_score += completion_rate * 40
+
+    # QA component (0-40 points)
+    if qa_status == "approved":
+        qa_component = 40.0
+        # Reduce points for multiple QA iterations
+        if qa_iterations > 1:
+            qa_component -= min((qa_iterations - 1) * 5, 20)
+        quality_score += max(qa_component, 20)  # Minimum 20 points if approved
+    elif qa_status == "in_progress":
+        quality_score += 10
+
+    # Failure rate component (0-20 points)
+    if total_subtasks > 0:
+        failure_rate = failed_subtasks / total_subtasks
+        failure_component = (1 - failure_rate) * 20
+        quality_score += failure_component
+
+    return {
+        "completion_rate": round(completion_rate, 3),
+        "is_completed": is_completed,
+        "first_attempt_success": first_attempt_success,
+        "quality_score": round(quality_score, 1),
+        "qa_iterations": qa_iterations,
+        "qa_status": qa_status,
+        "total_subtasks": total_subtasks,
+        "completed_subtasks": completed_subtasks,
+        "failed_subtasks": failed_subtasks,
+        "failure_rate": round(
+            failed_subtasks / total_subtasks if total_subtasks > 0 else 0.0, 3
+        ),
+    }
+
+
+def _get_quality_assessment(quality_score: float) -> str:
+    """
+    Get qualitative assessment based on quality score.
+
+    Args:
+        quality_score: Quality score (0-100)
+
+    Returns:
+        Assessment string
+    """
+    if quality_score >= 90:
+        return "Excellent - High quality build with minimal issues"
+    elif quality_score >= 75:
+        return "Good - Solid build with acceptable QA performance"
+    elif quality_score >= 60:
+        return "Fair - Build completed but with some quality concerns"
+    elif quality_score >= 40:
+        return "Poor - Significant quality issues or incomplete build"
+    else:
+        return "Critical - Major quality problems or build failure"
+
+
 def create_statistics_tools(spec_dir: Path, project_dir: Path) -> list:
     """
     Create spec statistics tools.
@@ -368,5 +476,71 @@ Phase Durations:"""
             }
 
     tools.append(get_spec_statistics)
+
+    # -------------------------------------------------------------------------
+    # Tool: get_quality_metrics
+    # -------------------------------------------------------------------------
+    @tool(
+        "get_quality_metrics",
+        "Get quality metrics including completion rates, QA success, quality score, and failure rates.",
+        {},
+    )
+    async def get_quality_metrics(args: dict[str, Any]) -> dict[str, Any]:
+        """Get quality metrics for the spec."""
+        plan_file = spec_dir / "implementation_plan.json"
+
+        if not plan_file.exists():
+            return {
+                "content": [
+                    {
+                        "type": "text",
+                        "text": "No implementation plan found. Run the planner first.",
+                    }
+                ]
+            }
+
+        try:
+            with open(plan_file, encoding="utf-8") as f:
+                plan = json.load(f)
+
+            # Calculate quality metrics
+            quality = _calculate_quality_metrics(plan)
+
+            # Build output
+            result = f"""Quality Metrics
+===============
+
+Completion:
+  Completion Rate: {quality["completion_rate"]:.1%} ({quality["completed_subtasks"]}/{quality["total_subtasks"]} subtasks)
+  Spec Completed: {"Yes" if quality["is_completed"] else "No"}
+  Failed Subtasks: {quality["failed_subtasks"]}
+  Failure Rate: {quality["failure_rate"]:.1%}
+
+QA Performance:
+  QA Status: {quality["qa_status"]}
+  QA Iterations: {quality["qa_iterations"]}
+  First-Attempt Success: {"Yes" if quality["first_attempt_success"] else "No"}
+
+Overall Quality Score: {quality["quality_score"]}/100
+
+Quality Score Breakdown:
+  - Completion Rate (40%): {quality["completion_rate"] * 40:.1f}/40
+  - QA Success (40%): Based on QA status and iterations
+  - Low Failure Rate (20%): {(1 - quality["failure_rate"]) * 20:.1f}/20
+
+Quality Assessment:
+  {_get_quality_assessment(quality["quality_score"])}
+"""
+
+            return {"content": [{"type": "text", "text": result}]}
+
+        except Exception as e:
+            return {
+                "content": [
+                    {"type": "text", "text": f"Error calculating quality metrics: {e}"}
+                ]
+            }
+
+    tools.append(get_quality_metrics)
 
     return tools
