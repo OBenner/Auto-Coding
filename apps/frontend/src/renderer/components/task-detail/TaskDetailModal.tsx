@@ -44,6 +44,9 @@ import { TaskLogs } from './TaskLogs';
 import { TaskFiles } from './TaskFiles';
 import { TaskReview } from './TaskReview';
 import { ResourceUsageIndicator } from '../ResourceUsageIndicator';
+import { PermissionsPanel } from '../collaboration/PermissionsPanel';
+import { CommentThread } from '../collaboration/CommentThread';
+import { ApprovalWorkflow } from '../collaboration/ApprovalWorkflow';
 import type { Task, WorktreeCreatePROptions } from '../../../shared/types';
 
 interface TaskDetailModalProps {
@@ -510,6 +513,12 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
                       {t('tasks:files.tab')}
                     </TabsTrigger>
                   )}
+                  <TabsTrigger
+                    value="collaboration"
+                    className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 py-2.5 text-sm"
+                  >
+                    Collaboration
+                  </TabsTrigger>
                 </TabsList>
 
                 {/* Overview Tab */}
@@ -608,6 +617,67 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
                     <TaskFiles task={task} />
                   </TabsContent>
                 )}
+
+                {/* Collaboration Tab */}
+                <TabsContent value="collaboration" className="flex-1 min-h-0 overflow-hidden mt-0">
+                  <ScrollArea className="h-full">
+                    <div className="p-5 space-y-6">
+                      {/* Permissions Panel */}
+                      <PermissionsPanel
+                        specId={task.specId}
+                        onPermissionGranted={(permission) => {
+                          console.log('Permission granted:', permission);
+                        }}
+                        onPermissionUpdated={(permission) => {
+                          console.log('Permission updated:', permission);
+                        }}
+                        onPermissionRevoked={(userId) => {
+                          console.log('Permission revoked:', userId);
+                        }}
+                      />
+
+                      <Separator />
+
+                      {/* Comment Thread */}
+                      <CommentThread
+                        specId={task.specId}
+                        onCommentAdded={(comment) => {
+                          console.log('Comment added:', comment);
+                        }}
+                        onCommentUpdated={(comment) => {
+                          console.log('Comment updated:', comment);
+                        }}
+                        onCommentDeleted={(commentId) => {
+                          console.log('Comment deleted:', commentId);
+                        }}
+                        onCommentResolved={(commentId) => {
+                          console.log('Comment resolved:', commentId);
+                        }}
+                        onReplyAdded={(comment, parentId) => {
+                          console.log('Reply added:', comment, 'to:', parentId);
+                        }}
+                      />
+
+                      <Separator />
+
+                      {/* Approval Workflow */}
+                      <ApprovalWorkflow
+                        specId={task.specId}
+                        currentUserId="current-user"
+                        userRole="write"
+                        onApprovalRequested={(approval) => {
+                          console.log('Approval requested:', approval);
+                        }}
+                        onApprovalApproved={(approval) => {
+                          console.log('Approval approved:', approval);
+                        }}
+                        onApprovalRejected={(approval) => {
+                          console.log('Approval rejected:', approval);
+                        }}
+                      />
+                    </div>
+                  </ScrollArea>
+                </TabsContent>
               </Tabs>
             </div>
 
