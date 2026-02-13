@@ -18,6 +18,12 @@ Main functions:
 - get_security_profile: Get or create security profile for a project
 - reset_profile_cache: Reset cached security profile
 
+Audit logging:
+- log_security_event: Log security events to audit log
+- get_audit_logs: Retrieve audit logs with optional filtering
+- clear_audit_logs: Clear all audit logs
+- export_audit_logs: Export audit logs for compliance
+
 Command parsing:
 - extract_commands: Extract command names from shell strings
 - split_command_segments: Split compound commands into segments
@@ -54,6 +60,15 @@ from .profile import (
 from .tool_input_validator import (
     get_safe_tool_input,
     validate_tool_input,
+)
+
+# Audit logging
+from .audit_logger import (
+    clear_audit_logs,
+    export_audit_logs,
+    get_audit_log_path,
+    get_audit_logs,
+    log_security_event,
 )
 
 # Validators (for advanced usage)
@@ -121,4 +136,10 @@ __all__ = [
     # Tool input validation
     "validate_tool_input",
     "get_safe_tool_input",
+    # Audit logging
+    "log_security_event",
+    "get_audit_logs",
+    "clear_audit_logs",
+    "export_audit_logs",
+    "get_audit_log_path",
 ]
