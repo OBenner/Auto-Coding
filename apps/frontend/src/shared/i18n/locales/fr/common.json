@@ -82,7 +82,9 @@
     "saving": "Enregistrement..."
   },
   "actions": {
-    "view": "Voir"
+    "view": "Voir",
+    "dismiss": "Ignorer",
+    "processing": "Traitement..."
   },
   "labels": {
     "loading": "Chargement...",

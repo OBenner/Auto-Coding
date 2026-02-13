@@ -82,7 +82,9 @@
     "saving": "Saving..."
   },
   "actions": {
-    "view": "View"
+    "view": "View",
+    "dismiss": "Dismiss",
+    "processing": "Processing..."
   },
   "labels": {
     "loading": "Loading...",

@@ -207,7 +207,8 @@
     "errorLoadingContent": "Échec du chargement du contenu du fichier",
     "retry": "Réessayer",
     "selectFile": "Sélectionnez un fichier pour voir son contenu",
-    "openInIDE": "Ouvrir dans l'IDE"
+    "openInIDE": "Ouvrir dans l'IDE",
+    "collaborative": "Collaboratif"
   },
   "metadata": {
     "severity": "sévérité",

@@ -41,6 +41,7 @@ import { registerAnalyticsHandlers } from './analytics-handlers';
 import { registerTokenStatsHandlers } from './token-stats-handler';
 import { registerTemplateHandlers } from './template-handlers';
 import { registerFeedbackHandlers } from './feedback-handlers';
+import { registerCollaborationHandlers } from './collaboration-handlers';
 import { notificationService } from '../notification-service';
 
 /**
@@ -150,6 +151,9 @@ export function setupIpcHandlers(
   // Scheduler handlers (build scheduling and queue management)
   registerSchedulerHandlers(getMainWindow);
 
+  // Collaboration handlers (real-time spec editing)
+  registerCollaborationHandlers(getMainWindow);
+
   console.warn('[IPC] All handler modules registered successfully');
 }
 
@@ -184,5 +188,6 @@ export {
   registerTokenStatsHandlers,
   registerTemplateHandlers,
   registerFeedbackHandlers,
-  registerSchedulerHandlers
+  registerSchedulerHandlers,
+  registerCollaborationHandlers
 };

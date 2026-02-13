@@ -207,7 +207,8 @@
     "errorLoadingContent": "Failed to load file content",
     "retry": "Retry",
     "selectFile": "Select a file to view its contents",
-    "openInIDE": "Open in IDE"
+    "openInIDE": "Open in IDE",
+    "collaborative": "Collaborative"
   },
   "metadata": {
     "severity": "severity",
