@@ -393,6 +393,45 @@ class TestFrontendPatterns:
         # Window.config patterns may be detected by other patterns (e.g., Generic API key, Google API Key)
         assert any(m for m in matches)
 
+    def test_detects_window_config_property_assignment(self):
+        """Detects window.config property assignments with secrets."""
+        content = 'window.config.apiKey = "sk-1234567890abcdefghijklmnop"'
+        matches = scan_content(content, "config.js")
+        assert len(matches) >= 1
+        assert any("window.config" in m.pattern_name for m in matches)
+
+    def test_detects_window_CONFIG_uppercase(self):
+        """Detects window.CONFIG (uppercase) object with secrets."""
+        content = 'window.CONFIG = { secret: "abcdefghijk123456789012" }'
+        matches = scan_content(content, "config.js")
+        assert len(matches) >= 1
+        assert any("window.config" in m.pattern_name.lower() for m in matches)
+
+    def test_detects_window_appConfig(self):
+        """Detects window.appConfig with API keys."""
+        content = 'window.appConfig = { apiKey: "sk-ant-api03-1234567890abcdefghijklmnop" }'
+        matches = scan_content(content, "app.js")
+        assert len(matches) >= 1
+        assert any("window.config" in m.pattern_name.lower() for m in matches)
+
+    def test_detects_window_APP_CONFIG(self):
+        """Detects window.APP_CONFIG with secrets."""
+        content = 'window.APP_CONFIG = { token: "ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ123456789012" }'
+        matches = scan_content(content, "app.js")
+        assert len(matches) >= 1
+
+    def test_detects_window_config_with_aws_key(self):
+        """Detects window.config with AWS access keys."""
+        content = f'window.config = {{ awsKey: "{_TEST_AWS_KEY}" }}'
+        matches = scan_content(content, "config.js")
+        assert len(matches) >= 1
+
+    def test_detects_window_config_with_firebase_key(self):
+        """Detects window.config with Firebase API keys."""
+        content = 'window.config.firebase = { apiKey: "AIza012345678901234567890123456789012345" }'
+        matches = scan_content(content, "firebase.js")
+        assert len(matches) >= 1
+
     def test_detects_firebase_config(self):
         """Detects Firebase config objects with API keys."""
         content = 'const firebaseConfig = { apiKey: "AIza012345678901234567890123456789012345" }'
