@@ -11,6 +11,7 @@ import os
 from pathlib import Path
 
 from core.client import create_client
+from core.model_fallback import MODEL_FALLBACK_CHAIN
 from linear_updater import (
     LinearTaskState,
     is_linear_enabled,
@@ -18,7 +19,7 @@ from linear_updater import (
     linear_task_started,
     linear_task_stuck,
 )
-from phase_config import get_phase_model, get_phase_thinking_budget
+from phase_config import get_phase_model, get_phase_thinking_budget, resolve_model_id
 from phase_event import ExecutionPhase, emit_phase
 from progress import (
     count_subtasks,
@@ -37,7 +38,7 @@ from prompt_generator import (
     load_subtask_context,
 )
 from prompts import is_first_run
-from recovery import RecoveryManager
+from recovery import FailureType, RecoveryAction, RecoveryManager
 from security.constants import PROJECT_DIR_ENV_VAR
 from task_logger import (
     LogPhase,
@@ -139,6 +140,11 @@ async def run_autonomous_agent(
     planning_retry_context: str | None = None
     planning_validation_failures = 0
     max_planning_validation_retries = 3
+
+    # Track recovery state for enhanced recovery
+    pending_recovery_action: RecoveryAction | None = None
+    override_model: str | None = None  # For model fallback
+    recovery_guidance: str | None = None  # Strategy guidance for next attempt
 
     def _validate_and_fix_implementation_plan() -> tuple[bool, list[str]]:
         from spec.validate_pkg import SpecValidator, auto_fix_plan
@@ -274,10 +280,45 @@ async def run_autonomous_agent(
         commit_before = get_latest_commit(project_dir)
         commit_count_before = get_commit_count(project_dir)
 
+        # === ENHANCED RECOVERY: Handle pending recovery action ===
+        if pending_recovery_action:
+            # Apply exponential backoff delay if specified
+            if pending_recovery_action.wait_seconds > 0:
+                print_status(
+                    f"Recovery backoff: waiting {pending_recovery_action.wait_seconds:.1f}s before retry...",
+                    "progress",
+                )
+                await asyncio.sleep(pending_recovery_action.wait_seconds)
+
+            # Handle rollback action
+            if pending_recovery_action.action == "rollback":
+                print_status(f"Rolling back to commit {pending_recovery_action.target[:8]}...", "warning")
+                rollback_success = recovery_manager.rollback_to_commit(pending_recovery_action.target)
+                if rollback_success:
+                    print_status("Rollback successful", "success")
+                else:
+                    print_status("Rollback failed", "error")
+
+            # Display recovery notification if needed
+            if pending_recovery_action.should_notify:
+                print()
+                print_status(pending_recovery_action.notification_message, "warning")
+                print()
+
+            # Clear the pending action
+            pending_recovery_action = None
+
         # Get the phase-specific model and thinking level (respects task_metadata.json configuration)
         # first_run means we're in planning phase, otherwise coding phase
         current_phase = "planning" if first_run else "coding"
-        phase_model = get_phase_model(spec_dir, current_phase, model)
+
+        # Use override model if set (for model fallback), otherwise use phase model
+        if override_model:
+            phase_model = resolve_model_id(override_model)
+            print_status(f"Using fallback model: {override_model}", "progress")
+        else:
+            phase_model = get_phase_model(spec_dir, current_phase, model)
+
         phase_thinking_budget = get_phase_thinking_budget(spec_dir, current_phase)
 
         # Create client (fresh context) with phase-specific model and thinking
@@ -390,6 +431,12 @@ async def run_autonomous_agent(
                 recovery_hints=recovery_hints,
             )
 
+            # Add recovery strategy guidance if available
+            if recovery_guidance:
+                prompt += f"\n\n## RECOVERY STRATEGY\n\n{recovery_guidance}\n"
+                # Clear the guidance after using it
+                recovery_guidance = None
+
             # Load and append relevant file context
             context = load_subtask_context(spec_dir, project_dir, next_subtask)
             if context.get("patterns") or context.get("files_to_modify"):
@@ -494,27 +541,101 @@ async def run_autonomous_agent(
                 source_spec_dir=source_spec_dir,
             )
 
-            # Check for stuck subtasks
-            attempt_count = recovery_manager.get_attempt_count(subtask_id)
-            if not success and attempt_count >= 3:
-                recovery_manager.mark_subtask_stuck(
-                    subtask_id, f"Failed after {attempt_count} attempts"
-                )
-                print()
-                print_status(
-                    f"Subtask {subtask_id} marked as STUCK after {attempt_count} attempts",
-                    "error",
-                )
-                print(muted("Consider: manual intervention or skipping this subtask"))
+            # === ENHANCED RECOVERY: Handle failures with smart recovery ===
+            if not success:
+                attempt_count = recovery_manager.get_attempt_count(subtask_id)
 
-                # Record stuck subtask in Linear (if enabled)
-                if linear_is_enabled:
-                    await linear_task_stuck(
-                        spec_dir=spec_dir,
-                        subtask_id=subtask_id,
-                        attempt_count=attempt_count,
-                    )
-                    print_status("Linear notified of stuck subtask", "info")
+                # Classify the failure type
+                # We use a generic "verification failed" error since we don't have the actual error message
+                # The recovery system will use attempt history to determine if it's circular
+                error_message = f"Subtask {subtask_id} verification failed or incomplete"
+                failure_type = recovery_manager.classify_failure(error_message, subtask_id)
+
+                # Determine recovery action (handles exponential backoff, model fallback, DLQ, notifications)
+                recovery_action = recovery_manager.determine_recovery_action(failure_type, subtask_id)
+
+                # Record the notification or silent failure
+                recovery_manager.record_recovery_notification(subtask_id, failure_type, recovery_action)
+
+                print()
+                print_status(f"Recovery action: {recovery_action.action}", "warning")
+                print_key_value("Reason", recovery_action.reason)
+
+                # Handle different recovery actions
+                if recovery_action.action == "retry":
+                    # Set up for retry with exponential backoff and optional model fallback
+                    pending_recovery_action = recovery_action
+
+                    # Set model fallback if recommended
+                    if recovery_action.use_model_fallback:
+                        # Extract current model shorthand and get fallback
+                        current_model_shorthand = "sonnet"  # Default
+                        if "opus" in phase_model.lower():
+                            current_model_shorthand = "opus"
+                        elif "sonnet" in phase_model.lower():
+                            current_model_shorthand = "sonnet"
+                        elif "haiku" in phase_model.lower():
+                            current_model_shorthand = "haiku"
+
+                        # Get fallback model from chain
+                        fallback_chain = MODEL_FALLBACK_CHAIN.get(current_model_shorthand, [])
+                        if fallback_chain:
+                            override_model = fallback_chain[0]  # Use first fallback
+                            print_status(f"Will try fallback model: {override_model}", "info")
+                        else:
+                            override_model = None
+
+                    # Set recovery guidance from strategy
+                    if recovery_action.strategy:
+                        recovery_guidance = recovery_action.strategy.guidance
+                        print_key_value("Strategy", recovery_action.strategy.description)
+
+                    print_status(f"Will retry after {recovery_action.wait_seconds:.1f}s backoff", "progress")
+
+                elif recovery_action.action == "skip":
+                    # Mark subtask as stuck and skip
+                    recovery_manager.mark_subtask_stuck(subtask_id, recovery_action.reason)
+                    print_status(f"Subtask {subtask_id} marked as STUCK", "error")
+                    print(muted("Recovery exhausted - consider manual intervention"))
+
+                    # Record stuck subtask in Linear (if enabled)
+                    if linear_is_enabled:
+                        await linear_task_stuck(
+                            spec_dir=spec_dir,
+                            subtask_id=subtask_id,
+                            attempt_count=attempt_count,
+                        )
+                        print_status("Linear notified of stuck subtask", "info")
+
+                elif recovery_action.action == "escalate":
+                    # Critical failure - escalate to human
+                    recovery_manager.mark_subtask_stuck(subtask_id, recovery_action.reason)
+                    print()
+                    print_status("ESCALATION REQUIRED", "error")
+                    print_status(recovery_action.reason, "error")
+                    print(muted("This failure has been added to the dead-letter queue for manual review"))
+                    print()
+
+                    # Record stuck subtask in Linear (if enabled)
+                    if linear_is_enabled:
+                        await linear_task_stuck(
+                            spec_dir=spec_dir,
+                            subtask_id=subtask_id,
+                            attempt_count=attempt_count,
+                        )
+                        print_status("Linear notified of escalation", "info")
+
+                elif recovery_action.action == "rollback":
+                    # Rollback will be handled at the start of next iteration
+                    pending_recovery_action = recovery_action
+                    print_status(f"Will rollback to {recovery_action.target[:8]} on next iteration", "warning")
+
+                elif recovery_action.action == "continue":
+                    # Context exhausted - will continue in next session
+                    print_status("Context exhausted - will continue in next session", "info")
+                    # No special handling needed - natural session boundary
+
+                print()
         elif plan_validated and source_spec_dir:
             # After planning phase, sync the newly created implementation plan back to source
             if sync_spec_to_source(spec_dir, source_spec_dir):
