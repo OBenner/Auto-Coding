@@ -40,6 +40,44 @@ class RecoveryAction:
     reason: str
 
 
+# Error Pattern Database
+# ======================
+# Maps failure types to their error message patterns for classification.
+# Used by classify_failure() to determine the type of failure from error messages.
+
+ERROR_PATTERNS: dict[FailureType, list[str]] = {
+    FailureType.BROKEN_BUILD: [
+        "syntax error",
+        "compilation error",
+        "module not found",
+        "import error",
+        "cannot find module",
+        "unexpected token",
+        "indentation error",
+        "parse error",
+        "type error",
+        "reference error",
+        "name error",
+    ],
+    FailureType.VERIFICATION_FAILED: [
+        "verification failed",
+        "expected",
+        "assertion",
+        "test failed",
+        "status code",
+        "timeout",
+        "connection refused",
+    ],
+    FailureType.CONTEXT_EXHAUSTED: [
+        "context",
+        "token limit",
+        "maximum length",
+        "context window",
+        "too many tokens",
+    ],
+}
+
+
 class RecoveryManager:
     """
     Manages recovery from build failures.
@@ -136,7 +174,7 @@ class RecoveryManager:
 
     def classify_failure(self, error: str, subtask_id: str) -> FailureType:
         """
-        Classify what type of failure occurred.
+        Classify what type of failure occurred using the error pattern database.
 
         Args:
             error: Error message or description
@@ -147,40 +185,17 @@ class RecoveryManager:
         """
         error_lower = error.lower()
 
-        # Check for broken build indicators
-        build_errors = [
-            "syntax error",
-            "compilation error",
-            "module not found",
-            "import error",
-            "cannot find module",
-            "unexpected token",
-            "indentation error",
-            "parse error",
-        ]
-        if any(be in error_lower for be in build_errors):
-            return FailureType.BROKEN_BUILD
+        # Check against error pattern database
+        # Iterate through known failure types and their patterns
+        for failure_type, patterns in ERROR_PATTERNS.items():
+            if any(pattern in error_lower for pattern in patterns):
+                return failure_type
 
-        # Check for verification failures
-        verification_errors = [
-            "verification failed",
-            "expected",
-            "assertion",
-            "test failed",
-            "status code",
-        ]
-        if any(ve in error_lower for ve in verification_errors):
-            return FailureType.VERIFICATION_FAILED
-
-        # Check for context exhaustion
-        context_errors = ["context", "token limit", "maximum length"]
-        if any(ce in error_lower for ce in context_errors):
-            return FailureType.CONTEXT_EXHAUSTED
-
-        # Check for circular fixes (will be determined by attempt history)
+        # Check for circular fixes (determined by attempt history, not error patterns)
         if self.is_circular_fix(subtask_id, error):
             return FailureType.CIRCULAR_FIX
 
+        # No pattern matched - return unknown
         return FailureType.UNKNOWN
 
     def get_attempt_count(self, subtask_id: str) -> int:
