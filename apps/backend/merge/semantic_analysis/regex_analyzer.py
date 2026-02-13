@@ -7,6 +7,7 @@ from __future__ import annotations
 import difflib
 import re
 
+from ..signature_parser import parse_function_signature
 from ..types import ChangeType, FileAnalysis, SemanticChange
 
 
@@ -133,6 +134,56 @@ def analyze_with_regex(
                 )
             )
 
+        # Detect signature modifications for Python functions
+        if ext == ".py":
+            sigs_before = extract_function_signatures(before_normalized, ext)
+            sigs_after = extract_function_signatures(after_normalized, ext)
+
+            # Find functions that exist in both but have different signatures
+            common_funcs = set(sigs_before.keys()) & set(sigs_after.keys())
+            for func_name in common_funcs:
+                sig_before = sigs_before[func_name]
+                sig_after = sigs_after[func_name]
+
+                # Check if signatures actually differ (including return types)
+                # Note: We don't use signatures_match() because it ignores return types
+                try:
+                    parsed_before = parse_function_signature(sig_before)
+                    parsed_after = parse_function_signature(sig_after)
+
+                    # Compare all aspects: name (already same), params, return type
+                    sig_differs = (
+                        parsed_before.params != parsed_after.params
+                        or parsed_before.return_type != parsed_after.return_type
+                    )
+
+                    if sig_differs:
+                        # Store signature details in metadata
+                        metadata = {
+                            "signature_before": sig_before,
+                            "signature_after": sig_after,
+                            "params_before": parsed_before.params,
+                            "params_after": parsed_after.params,
+                            "return_type_before": parsed_before.return_type,
+                            "return_type_after": parsed_after.return_type,
+                        }
+
+                        changes.append(
+                            SemanticChange(
+                                change_type=ChangeType.MODIFY_FUNCTION,
+                                target=func_name,
+                                location=f"function:{func_name}",
+                                line_start=1,  # Line info approximate for signature changes
+                                line_end=1,
+                                content_before=sig_before,
+                                content_after=sig_after,
+                                metadata=metadata,
+                            )
+                        )
+                except ValueError:
+                    # If signature parsing fails, skip detailed analysis
+                    pass
+
     # Build analysis
     analysis = FileAnalysis(file_path=file_path, changes=changes)
 
@@ -197,3 +248,38 @@ def get_function_pattern(ext: str) -> re.Pattern | None:
         ),
     }
     return patterns.get(ext)
+
+
+def extract_function_signatures(code: str, ext: str) -> dict[str, str]:
+    """
+    Extract function signatures from code.
+
+    Args:
+        code: Source code to parse
+        ext: File extension
+
+    Returns:
+        Dictionary mapping function name to full signature line (including colon)
+    """
+    if ext != ".py":
+        # Only Python signature parsing is currently supported
+        return {}
+
+    signatures = {}
+    lines = code.split("\n")
+
+    for line in lines:
+        line_stripped = line.strip()
+        # Match function definition lines
+        if re.match(r"^(async\s+)?def\s+\w+", line_stripped):
+            # Extract function name
+            match = re.match(r"^(?:async\s+)?def\s+(\w+)\s*\(", line_stripped)
+            if match:
+                func_name = match.group(1)
+                # Extract only the signature portion (up to and including colon)
+                # This ensures we get "def foo(x):" not "def foo(x): pass"
+                sig_match = re.match(r"^(async\s+)?def\s+\w+\s*\(.*?\)\s*(?:->\s*[^:]+)?\s*:", line_stripped)
+                if sig_match:
+                    signatures[func_name] = sig_match.group(0)
+
+    return signatures
