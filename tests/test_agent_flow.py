@@ -97,7 +97,7 @@ class TestPlannerToCoderTransition:
 
     def test_first_run_flag_indicates_planner_mode(self, test_env):
         """Test that first_run=True indicates planner mode."""
-        from prompts import is_first_run
+        from prompts_pkg import is_first_run
 
         _temp_dir, spec_dir, _project_dir = test_env
 
@@ -442,7 +442,7 @@ class TestHandoffDataPreservation:
 
     def test_subtask_context_loading(self, test_env):
         """Test that subtask context is properly loaded for coder."""
-        from prompt_generator import load_subtask_context
+        from prompts_pkg import load_subtask_context
 
         temp_dir, spec_dir, project_dir = test_env
 

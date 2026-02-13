@@ -65,6 +65,16 @@ sys.modules['client'] = mock_client
 # Now import the phases module directly (bypasses __init__.py issues)
 from spec.phases import PhaseExecutor, PhaseResult, MAX_RETRIES
 
+# IMPORTANT: Immediately restore all mocked modules after the import above.
+# The mocks were only needed to satisfy the import chain. Without this cleanup,
+# module-level sys.modules mocks leak into other test files (e.g. test_graphiti.py)
+# because pytest imports all test modules before running any tests.
+for _name in _mocked_module_names:
+    if _name in _original_modules:
+        sys.modules[_name] = _original_modules[_name]
+    elif _name in sys.modules:
+        del sys.modules[_name]
+
 
 # Cleanup fixture to restore original modules after all tests in this module
 @pytest.fixture(scope="module", autouse=True)

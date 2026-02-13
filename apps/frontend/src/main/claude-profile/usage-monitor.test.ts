@@ -162,9 +162,14 @@ describe('usage-monitor', () => {
       expect(monitor1).toBe(monitor2);
     });
 
-    it('should start monitoring when settings allow', () => {
+    it('should start monitoring when settings allow', async () => {
       const monitor = getUsageMonitor();
       monitor.start();
+
+      // start() is internally async: it calls checkUsageAndSwap() and sets
+      // intervalId in the .then() callback via scheduleNext(). With fake timers,
+      // we need to flush microtasks so the promise chain resolves.
+      await vi.advanceTimersByTimeAsync(0);
 
       // Verify monitor started (has intervalId set)
       expect(monitor['intervalId']).not.toBeNull();
@@ -186,10 +191,12 @@ describe('usage-monitor', () => {
       monitor.stop();
     });
 
-    it('should stop monitoring', () => {
+    it('should stop monitoring', async () => {
       const monitor = getUsageMonitor();
 
       monitor.start();
+      // Flush microtasks so start()'s async checkUsageAndSwap resolves and scheduleNext sets intervalId
+      await vi.advanceTimersByTimeAsync(0);
       expect(monitor['intervalId']).not.toBeNull();
 
       monitor.stop();
@@ -1156,6 +1163,9 @@ describe('usage-monitor', () => {
         // Should start with default values for missing fields
         monitor.start();
 
+        // start() is internally async - flush microtasks so intervalId is set
+        await vi.advanceTimersByTimeAsync(0);
+
         // Should have started monitoring
         expect(monitor['intervalId']).not.toBeNull();
 
@@ -1196,6 +1206,9 @@ describe('usage-monitor', () => {
 
         // Should not crash when checking thresholds
         monitor.start();
+
+        // start() is internally async - flush microtasks so intervalId is set
+        await vi.advanceTimersByTimeAsync(0);
 
         // Should have started successfully
         expect(monitor['intervalId']).not.toBeNull();
