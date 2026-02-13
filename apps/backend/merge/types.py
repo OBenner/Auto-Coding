@@ -598,6 +598,7 @@ class MergeResult:
         ai_calls_made: Number of AI calls required
         tokens_used: Approximate tokens used for AI calls
         explanation: Human-readable explanation of what was done
+        resolution_explanation: Detailed explanation of how conflicts were resolved
         error: Error message if merge failed
     """
 
@@ -609,6 +610,7 @@ class MergeResult:
     ai_calls_made: int = 0
     tokens_used: int = 0
     explanation: str = ""
+    resolution_explanation: str = ""
     error: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
@@ -622,6 +624,7 @@ class MergeResult:
             "ai_calls_made": self.ai_calls_made,
             "tokens_used": self.tokens_used,
             "explanation": self.explanation,
+            "resolution_explanation": self.resolution_explanation,
             "error": self.error,
         }
 
