@@ -268,6 +268,7 @@ class ConflictPattern:
     auto_resolved_count: int = 0
     ai_resolved_count: int = 0
     manual_required_count: int = 0
+    resolution_accuracy: float = 0.0  # Accuracy rate (0.0 to 1.0) for resolved conflicts
 
     # Additional context
     description: str = ""
@@ -287,6 +288,7 @@ class ConflictPattern:
             "auto_resolved_count": self.auto_resolved_count,
             "ai_resolved_count": self.ai_resolved_count,
             "manual_required_count": self.manual_required_count,
+            "resolution_accuracy": self.resolution_accuracy,
             "description": self.description,
         }
 
@@ -306,6 +308,7 @@ class ConflictPattern:
             auto_resolved_count=data.get("auto_resolved_count", 0),
             ai_resolved_count=data.get("ai_resolved_count", 0),
             manual_required_count=data.get("manual_required_count", 0),
+            resolution_accuracy=data.get("resolution_accuracy", 0.0),
             description=data.get("description", ""),
         )
 
