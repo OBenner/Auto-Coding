@@ -367,6 +367,24 @@ class TestFrontendPatterns:
         matches = scan_content(content, "auth.ts")
         assert len(matches) >= 1
 
+    def test_detects_sessionStorage_access_token(self):
+        """Detects sessionStorage.setItem with access tokens."""
+        content = 'sessionStorage.setItem("access_token", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c")'
+        matches = scan_content(content, "oauth.js")
+        assert len(matches) >= 1
+
+    def test_detects_sessionStorage_auth_token(self):
+        """Detects sessionStorage.setItem with auth tokens."""
+        content = "sessionStorage.setItem('auth_token', 'xoxb-123456789012-123456789012-abc123def456')"
+        matches = scan_content(content, "slack.js")
+        assert len(matches) >= 1
+
+    def test_detects_sessionStorage_secret(self):
+        """Detects sessionStorage.setItem with secrets."""
+        content = f'sessionStorage.setItem("secret", "{_TEST_STRIPE_KEY}")'
+        matches = scan_content(content, "payment.js")
+        assert len(matches) >= 1
+
     def test_detects_window_config_with_api_key(self):
         """Detects window.config object with API keys."""
         content = 'window.config = { apiKey: "AIza012345678901234567890123456789012345" }'
