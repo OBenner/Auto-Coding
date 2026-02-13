@@ -22,6 +22,7 @@ from debug import (
     debug_success,
     debug_warning,
 )
+from core.cost_tracking import CostTracker
 from insight_extractor import extract_session_insights
 from linear_updater import (
     linear_subtask_completed,
@@ -807,6 +808,8 @@ async def run_agent_session(
     phase: LogPhase = LogPhase.CODING,
     conversation_history: ConversationHistory | None = None,
     subtask_id: str | None = None,
+    model: str | None = None,
+    agent_type: str | None = None,
 ) -> tuple[str, str, dict[str, int] | None]:
     """
     Run a single agent session using Claude Agent SDK.
@@ -821,6 +824,8 @@ async def run_agent_session(
         phase: Current execution phase for logging
         conversation_history: Optional existing history for resuming sessions
         subtask_id: Optional subtask ID for session tracking
+        model: Optional model identifier for cost tracking
+        agent_type: Optional agent type for cost tracking (e.g., "coder", "planner")
 
     Returns:
         (status, response_text, usage_metadata) where:
@@ -1110,6 +1115,22 @@ async def run_agent_session(
                     )
             except Exception as e:
                 logger.warning(f"Failed to persist token stats: {e}")
+
+            # Track API costs if model and agent_type are provided
+            if model and agent_type:
+                try:
+                    cost_tracker = CostTracker(spec_dir=spec_dir)
+                    session_cost = cost_tracker.log_session_usage(
+                        agent_type=agent_type,
+                        model=model,
+                        usage_metadata=usage_metadata,
+                    )
+                    print_status(
+                        f"API cost tracked: ${session_cost:.4f} ({agent_type}/{model})",
+                        "info",
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to track API cost: {e}")
 
         # Update conversation history with usage metadata and save
         if usage_metadata:
