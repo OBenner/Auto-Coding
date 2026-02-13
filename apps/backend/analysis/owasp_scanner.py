@@ -221,6 +221,84 @@ class OWASPScanner:
                 (re.compile(pattern), description) for pattern, description in patterns
             ]
 
+        # Validate that all OWASP Top 10 categories are covered
+        self._validate_coverage()
+
+    def _validate_coverage(self) -> None:
+        """
+        Validate that all OWASP Top 10 (2021) categories are covered.
+
+        Raises:
+            ValueError: If any OWASP category is missing patterns or configuration
+        """
+        missing_categories = []
+        missing_patterns = []
+        missing_severity = []
+        missing_recommendations = []
+
+        for category in OWASP_CATEGORIES.keys():
+            # Check if category exists in PATTERNS
+            if category not in self.PATTERNS:
+                missing_patterns.append(category)
+            elif not self.PATTERNS[category]:
+                missing_patterns.append(f"{category} (empty)")
+
+            # Check if category has severity mapping
+            severity = self._get_severity_for_category(category)
+            if severity == "medium" and category not in {"A04", "A05", "A08"}:
+                # Only A04, A05, A08 should default to medium
+                missing_severity.append(category)
+
+            # Check if category has recommendation
+            recommendation = self._get_recommendation(category, "test")
+            if recommendation == "Review and fix the vulnerability":
+                missing_recommendations.append(category)
+
+        # Report any missing coverage
+        errors = []
+        if missing_patterns:
+            errors.append(f"Missing detection patterns: {', '.join(missing_patterns)}")
+        if missing_severity:
+            errors.append(f"Missing severity mapping: {', '.join(missing_severity)}")
+        if missing_recommendations:
+            errors.append(f"Missing recommendations: {', '.join(missing_recommendations)}")
+
+        if errors:
+            raise ValueError(f"OWASP coverage validation failed:\n" + "\n".join(errors))
+
+        logger.info(f"✓ All OWASP Top 10 (2021) categories covered: {len(OWASP_CATEGORIES)} categories")
+
+    def validate_owasp_coverage(self) -> dict[str, Any]:
+        """
+        Validate and return OWASP Top 10 coverage information.
+
+        Returns:
+            Dictionary with coverage details for each category
+        """
+        coverage = {}
+
+        for category, category_name in OWASP_CATEGORIES.items():
+            pattern_count = len(self.PATTERNS.get(category, []))
+            severity = self._get_severity_for_category(category)
+            recommendation = self._get_recommendation(category, "test")
+
+            coverage[category] = {
+                "category_name": category_name,
+                "pattern_count": pattern_count,
+                "severity": severity,
+                "has_recommendation": recommendation != "Review and fix the vulnerability",
+                "has_patterns": pattern_count > 0,
+                "is_covered": pattern_count > 0,
+            }
+
+        return {
+            "total_categories": len(OWASP_CATEGORIES),
+            "covered_categories": sum(1 for c in coverage.values() if c["is_covered"]),
+            "total_patterns": sum(c["pattern_count"] for c in coverage.values()),
+            "categories": coverage,
+            "all_covered": all(c["is_covered"] for c in coverage.values()),
+        }
+
     def scan_injection_risks(
         self,
         project_dir: Path,
@@ -692,6 +770,20 @@ def has_owasp_issues(project_dir: Path) -> bool:
     return result.has_critical_issues
 
 
+def validate_owasp_coverage() -> dict[str, Any]:
+    """
+    Validate that all OWASP Top 10 (2021) categories are covered.
+
+    Returns:
+        Dictionary with coverage information for all categories
+
+    Raises:
+        ValueError: If any category is missing patterns or configuration
+    """
+    scanner = OWASPScanner()
+    return scanner.validate_owasp_coverage()
+
+
 # =============================================================================
 # CLI
 # =============================================================================
@@ -702,7 +794,7 @@ def main() -> None:
     import argparse
 
     parser = argparse.ArgumentParser(description="Run OWASP Top 10 scans")
-    parser.add_argument("project_dir", type=Path, help="Path to project root")
+    parser.add_argument("project_dir", type=Path, nargs="?", help="Path to project root")
     parser.add_argument("--spec-dir", type=Path, help="Path to spec directory")
     parser.add_argument(
         "--categories",
@@ -710,8 +802,43 @@ def main() -> None:
         help="Comma-separated list of OWASP categories (e.g., A01,A02,A03)",
     )
     parser.add_argument("--json", action="store_true", help="Output as JSON")
+    parser.add_argument(
+        "--validate-coverage",
+        action="store_true",
+        help="Validate that all OWASP Top 10 categories are covered",
+    )
 
     args = parser.parse_args()
+
+    # Handle coverage validation
+    if args.validate_coverage:
+        try:
+            coverage = validate_owasp_coverage()
+            if args.json:
+                print(json.dumps(coverage, indent=2))
+            else:
+                print("OWASP Top 10 (2021) Coverage Validation")
+                print("=" * 50)
+                print(f"Total Categories: {coverage['total_categories']}")
+                print(f"Covered Categories: {coverage['covered_categories']}")
+                print(f"Total Detection Patterns: {coverage['total_patterns']}")
+                print(f"All Categories Covered: {'✓ YES' if coverage['all_covered'] else '✗ NO'}")
+                print("\nCategory Details:")
+                for cat, details in coverage['categories'].items():
+                    status = "✓" if details['is_covered'] else "✗"
+                    print(
+                        f"  {status} {cat} - {details['category_name']}: "
+                        f"{details['pattern_count']} patterns, "
+                        f"severity={details['severity']}"
+                    )
+        except ValueError as e:
+            print(f"ERROR: {e}")
+            exit(1)
+        return
+
+    # Require project_dir for scanning
+    if not args.project_dir:
+        parser.error("project_dir is required when not using --validate-coverage")
 
     scanner = OWASPScanner()
     categories = args.categories.split(",") if args.categories else None
