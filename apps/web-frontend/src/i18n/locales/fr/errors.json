@@ -94,5 +94,8 @@
     "description": "Une erreur s'est produite lors du rendu de ce contenu",
     "errorMessage": "Message d'erreur",
     "tryAgain": "Réessayer"
+  },
+  "terminal": {
+    "backendRequired": "La saisie du terminal nécessite une connexion au backend"
   }
 }

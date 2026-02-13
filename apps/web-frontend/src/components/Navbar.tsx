@@ -63,7 +63,7 @@ export function Navbar({
         {/* Brand */}
         <div className="flex items-center gap-3">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex-shrink-0">
-            <span className="text-sm font-bold text-white">AC</span>
+            <span className="text-sm font-bold text-white">{t('common:appNameShort')}</span>
           </div>
           <div className="flex flex-col">
             <h1 className="text-sm font-semibold leading-none">

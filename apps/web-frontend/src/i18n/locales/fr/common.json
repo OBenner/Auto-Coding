@@ -1,5 +1,6 @@
 {
-  "appName": "Auto-Coding Web",
+  "appName": "Auto Code",
+  "appNameShort": "AC",
   "accessibility": {
     "closeAriaLabel": "Fermer",
     "deleteAriaLabel": "Supprimer",
@@ -75,7 +76,9 @@
     "date": "Date",
     "time": "Heure",
     "duration": "Durée",
-    "progress": "Progression"
+    "progress": "Progression",
+    "updatedRecently": "Mis à jour récemment",
+    "orContinueWith": "Ou continuer avec"
   },
   "selection": {
     "select": "Sélectionner",
@@ -135,5 +138,8 @@
   "tasks": "Tâches",
   "specs": "Spécifications",
   "settings": "Paramètres",
-  "dashboard": "Tableau de bord"
+  "dashboard": "Tableau de bord",
+  "services": {
+    "github": "GitHub"
+  }
 }

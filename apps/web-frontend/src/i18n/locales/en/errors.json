@@ -94,5 +94,8 @@
     "description": "An error occurred while rendering this content",
     "errorMessage": "Error message",
     "tryAgain": "Try Again"
+  },
+  "terminal": {
+    "backendRequired": "Terminal input requires backend connection"
   }
 }

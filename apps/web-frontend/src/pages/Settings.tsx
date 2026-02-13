@@ -131,8 +131,8 @@ export function Settings() {
                         onChange={(e) => handleSettingChange('language', e.target.value)}
                         className="mt-2"
                       >
-                        <option value="en">English</option>
-                        <option value="fr">Français</option>
+                        <option value="en">{t('settings:general.languageOptions.english')}</option>
+                        <option value="fr">{t('settings:general.languageOptions.french')}</option>
                       </Select>
                     </div>
 

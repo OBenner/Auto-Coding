@@ -10,6 +10,10 @@
   "general": {
     "language": "Langue",
     "languageDescription": "Sélectionnez votre langue préférée",
+    "languageOptions": {
+      "english": "English",
+      "french": "Français"
+    },
     "theme": "Thème",
     "themeOptions": {
       "light": "Clair",

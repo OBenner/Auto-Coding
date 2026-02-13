@@ -5,6 +5,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Terminal as XtermIcon, X } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Button } from './ui/button';
@@ -32,6 +33,7 @@ export function Terminal({
   onActivate,
   title = 'Terminal'
 }: TerminalProps) {
+  const { t } = useTranslation(['errors']);
   const terminalRef = useRef<HTMLDivElement>(null);
   const [output] = useState<string[]>([
     'Terminal (Web Preview)',
@@ -99,7 +101,7 @@ export function Terminal({
       <div className="px-4 py-2 bg-gray-900 border-t border-gray-700">
         <div className="flex items-center gap-2 text-xs text-gray-500">
           <span>$</span>
-          <span className="opacity-50">Terminal input requires backend connection</span>
+          <span className="opacity-50">{t('errors:terminal.backendRequired')}</span>
         </div>
       </div>
     </div>
