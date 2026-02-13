@@ -22,6 +22,7 @@
  * ```
  */
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Shield,
   ShieldAlert,
@@ -71,26 +72,26 @@ interface PermissionLevelInfo {
 /**
  * Get permission level display information
  */
-function getPermissionLevelInfo(level: PermissionLevel): PermissionLevelInfo {
+function getPermissionLevelInfo(level: PermissionLevel, t: (key: string) => string): PermissionLevelInfo {
   const levels: Record<PermissionLevel, PermissionLevelInfo> = {
     read: {
       level: 'read',
       label: 'Read',
-      description: 'View spec and comments',
+      description: t('collaboration:permissions.read'),
       icon: <Shield className="h-4 w-4" />,
       colorClass: 'bg-blue-500/10 text-blue-500 border-blue-500/20'
     },
     write: {
       level: 'write',
       label: 'Write',
-      description: 'Comment and edit spec',
+      description: t('collaboration:permissions.write'),
       icon: <ShieldCheck className="h-4 w-4" />,
       colorClass: 'bg-green-500/10 text-green-500 border-green-500/20'
     },
     admin: {
       level: 'admin',
       label: 'Admin',
-      description: 'Manage permissions and approve',
+      description: t('collaboration:permissions.admin'),
       icon: <ShieldAlert className="h-4 w-4" />,
       colorClass: 'bg-purple-500/10 text-purple-500 border-purple-500/20'
     }
@@ -112,8 +113,9 @@ interface PermissionCardProps {
 function PermissionCard({ permission, canEdit, onUpdate, onRemove }: PermissionCardProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [selectedLevel, setSelectedLevel] = useState<PermissionLevel>(permission.level);
+  const { t } = useTranslation(['collaboration', 'common']);
 
-  const levelInfo = getPermissionLevelInfo(permission.level);
+  const levelInfo = getPermissionLevelInfo(permission.level, t);
   const isNewUser = !permission.granted_at || permission.granted_at === '';
 
   const handleSaveUpdate = () => {
@@ -158,9 +160,9 @@ function PermissionCard({ permission, canEdit, onUpdate, onRemove }: PermissionC
                   onChange={(e) => setSelectedLevel(e.target.value as PermissionLevel)}
                   className="text-sm rounded-md border border-input bg-background px-2 py-1"
                 >
-                  <option value="read">Read - View spec and comments</option>
-                  <option value="write">Write - Comment and edit spec</option>
-                  <option value="admin">Admin - Manage permissions and approve</option>
+                  <option value="read">{t('collaboration:permissions.read')}</option>
+                  <option value="write">{t('collaboration:permissions.write')}</option>
+                  <option value="admin">{t('collaboration:permissions.admin')}</option>
                 </select>
               </div>
             ) : (
@@ -242,12 +244,13 @@ function AddUserForm({ onAddUser, isAdding }: AddUserFormProps) {
   const [username, setUsername] = useState('');
   const [selectedLevel, setSelectedLevel] = useState<PermissionLevel>('read');
   const [error, setError] = useState<string | null>(null);
+  const { t } = useTranslation(['collaboration', 'common']);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!username.trim()) {
-      setError('Username is required');
+      setError(t('collaboration:permissions.usernameRequired'));
       return;
     }
 
@@ -268,7 +271,7 @@ function AddUserForm({ onAddUser, isAdding }: AddUserFormProps) {
                 <Input
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  placeholder="Enter username or email"
+                  placeholder={t('collaboration:permissions.enterUsername')}
                   disabled={isAdding}
                   className="text-sm"
                 />
@@ -284,9 +287,9 @@ function AddUserForm({ onAddUser, isAdding }: AddUserFormProps) {
                   disabled={isAdding}
                   className="text-sm rounded-md border border-input bg-background px-2 py-1 flex-1"
                 >
-                  <option value="read">Read - View spec and comments</option>
-                  <option value="write">Write - Comment and edit spec</option>
-                  <option value="admin">Admin - Manage permissions and approve</option>
+                  <option value="read">{t('collaboration:permissions.read')}</option>
+                  <option value="write">{t('collaboration:permissions.write')}</option>
+                  <option value="admin">{t('collaboration:permissions.admin')}</option>
                 </select>
 
                 <Button
@@ -298,12 +301,12 @@ function AddUserForm({ onAddUser, isAdding }: AddUserFormProps) {
                   {isAdding ? (
                     <>
                       <Loader2 className="h-3 w-3 animate-spin" />
-                      Adding...
+                      {t('collaboration:permissions.adding')}
                     </>
                   ) : (
                     <>
                       <UserPlus className="h-3 w-3" />
-                      Add User
+                      {t('collaboration:permissions.addUser')}
                     </>
                   )}
                 </Button>
@@ -330,6 +333,7 @@ export function PermissionsPanel({
   const [isLoading, setIsLoading] = useState(true);
   const [isAdding, setIsAdding] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { t } = useTranslation(['collaboration', 'common']);
 
   // Load permissions when component mounts
   useEffect(() => {
@@ -464,22 +468,22 @@ export function PermissionsPanel({
         <div>
           <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
             <Shield className="h-5 w-5 text-primary" />
-            Team Access
+            {t('collaboration:permissions.title')}
           </h3>
           <p className="text-sm text-muted-foreground mt-1">
-            Manage who can access and collaborate on this spec
+            {t('collaboration:permissions.description')}
           </p>
         </div>
         {permissions.length > 0 && (
           <div className="flex items-center gap-2 text-xs">
             <Badge variant="outline" className="bg-blue-500/10 text-blue-500 border-blue-500/20">
-              {permissionCounts.read} read
+              {permissionCounts.read} {t('collaboration:permissions.readBadge')}
             </Badge>
             <Badge variant="outline" className="bg-green-500/10 text-green-500 border-green-500/20">
-              {permissionCounts.write} write
+              {permissionCounts.write} {t('collaboration:permissions.writeBadge')}
             </Badge>
             <Badge variant="outline" className="bg-purple-500/10 text-purple-500 border-purple-500/20">
-              {permissionCounts.admin} admin
+              {permissionCounts.admin} {t('collaboration:permissions.adminBadge')}
             </Badge>
           </div>
         )}
@@ -491,7 +495,7 @@ export function PermissionsPanel({
           <CardContent className="p-6">
             <div className="flex items-center justify-center gap-3 text-muted-foreground">
               <Loader2 className="h-5 w-5 animate-spin" />
-              <span>Loading permissions...</span>
+              <span>{t('collaboration:permissions.loading')}</span>
             </div>
           </CardContent>
         </Card>
@@ -504,7 +508,7 @@ export function PermissionsPanel({
             <div className="flex items-start gap-3 text-destructive">
               <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
               <div>
-                <p className="font-medium">Error</p>
+                <p className="font-medium">{t('collaboration:permissions.error')}</p>
                 <p className="text-sm mt-1">{error}</p>
               </div>
             </div>
@@ -538,8 +542,8 @@ export function PermissionsPanel({
           <CardContent className="p-8">
             <div className="flex flex-col items-center gap-3 text-center text-muted-foreground">
               <Shield className="h-10 w-10 opacity-20" />
-              <p className="text-sm">No team members have access yet</p>
-              <p className="text-xs">Add users above to start collaborating</p>
+              <p className="text-sm">{t('collaboration:permissions.noMembers')}</p>
+              <p className="text-xs">{t('collaboration:permissions.addMembersPrompt')}</p>
             </div>
           </CardContent>
         </Card>

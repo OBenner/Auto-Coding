@@ -21,6 +21,7 @@
  * ```
  */
 import { useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   MessageSquare,
   MessageCircle,
@@ -85,7 +86,7 @@ interface CommentWithReplies extends Comment {
 /**
  * Format timestamp for display
  */
-function formatTimestamp(timestamp: string): string {
+function formatTimestamp(timestamp: string, t: (key: string, params?: any) => string): string {
   const date = new Date(timestamp);
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
@@ -93,10 +94,10 @@ function formatTimestamp(timestamp: string): string {
   const diffHours = Math.floor(diffMs / 3600000);
   const diffDays = Math.floor(diffMs / 86400000);
 
-  if (diffMins < 1) return 'Just now';
-  if (diffMins < 60) return `${diffMins}m ago`;
-  if (diffHours < 24) return `${diffHours}h ago`;
-  if (diffDays < 7) return `${diffDays}d ago`;
+  if (diffMins < 1) return t('collaboration:comments.justNow');
+  if (diffMins < 60) return t('collaboration:comments.minutesAgo', { mins: diffMins });
+  if (diffHours < 24) return t('collaboration:comments.hoursAgo', { hours: diffHours });
+  if (diffDays < 7) return t('collaboration:comments.daysAgo', { days: diffDays });
 
   return date.toLocaleDateString();
 }
@@ -141,12 +142,13 @@ function CommentInput({
   value,
   onChange,
   onSubmit,
-  placeholder = 'Write a comment...',
+  placeholder,
   onCancel,
-  submitLabel = 'Send',
+  submitLabel,
   isLoading = false,
   disabled = false,
-  autoFocus = false
+  autoFocus = false,
+  t
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -157,6 +159,7 @@ function CommentInput({
   isLoading?: boolean;
   disabled?: boolean;
   autoFocus?: boolean;
+  t: (key: string, params?: any) => string;
 }) {
   const [mentionSuggestions, setMentionSuggestions] = useState<MentionSuggestion[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -281,12 +284,12 @@ function CommentInput({
       <div className="flex items-center justify-between mt-2">
         {onCancel && (
           <Button variant="ghost" size="sm" onClick={onCancel} disabled={isLoading}>
-            Cancel
+            {t('collaboration:comments.cancel')}
           </Button>
         )}
         <div className={cn('flex items-center gap-2', onCancel && 'ml-auto')}>
           <span className="text-xs text-muted-foreground">
-            Press Enter to send, Shift+Enter for new line
+            {t('collaboration:comments.pressEnter')}
           </span>
           <Button
             size="sm"
@@ -299,7 +302,7 @@ function CommentInput({
             ) : (
               <Send className="h-3 w-3" />
             )}
-            {submitLabel}
+            {submitLabel || t('collaboration:comments.send')}
           </Button>
         </div>
       </div>
@@ -319,7 +322,8 @@ function CommentItem({
   onDelete,
   isReplying,
   onReplySubmit,
-  onReplyCancel
+  onReplyCancel,
+  t
 }: {
   comment: CommentWithReplies;
   depth?: number;
@@ -330,6 +334,7 @@ function CommentItem({
   isReplying?: boolean;
   onReplySubmit?: (content: string) => void;
   onReplyCancel?: () => void;
+  t: (key: string, params?: any) => string;
 }) {
   const [isExpanded, setIsExpanded] = useState(true);
   const [replyText, setReplyText] = useState('');
@@ -375,12 +380,12 @@ function CommentItem({
                     {comment.author.username}
                   </span>
                   <span className="text-xs text-muted-foreground">
-                    {formatTimestamp(comment.created_at)}
+                    {formatTimestamp(comment.created_at, t)}
                   </span>
                   {comment.resolved && (
                     <Badge variant="outline" className="gap-1 text-xs bg-success/10 text-success border-success/20">
                       <CheckCircle2 className="h-3 w-3" />
-                      Resolved
+                      {t('collaboration:comments.resolved')}
                     </Badge>
                   )}
                   {comment.mentions && comment.mentions.length > 0 && (
@@ -405,7 +410,10 @@ function CommentItem({
                     className="mt-2 h-auto p-0 text-xs text-muted-foreground hover:text-foreground"
                   >
                     <ChevronDown className="h-3 w-3 mr-1" />
-                    {comment.replies!.length} {comment.replies!.length === 1 ? 'reply' : 'replies'}
+                    {t('collaboration:comments.expandReplies', {
+                      count: comment.replies!.length,
+                      type: comment.replies!.length === 1 ? t('collaboration:comments.reply') : t('collaboration:comments.replies')
+                    })}
                   </Button>
                 )}
               </div>
@@ -444,9 +452,10 @@ function CommentItem({
                 onChange={setReplyText}
                 onSubmit={handleReplySubmit}
                 onCancel={onReplyCancel}
-                placeholder="Write a reply..."
-                submitLabel="Reply"
+                placeholder={t('collaboration:comments.writeReply')}
+                submitLabel={t('collaboration:comments.reply')}
                 isLoading={isSubmittingReply}
+                t={t}
               />
             </div>
           )}
@@ -465,6 +474,7 @@ function CommentItem({
               onResolve={onResolve}
               onEdit={onEdit}
               onDelete={onDelete}
+              t={t}
             />
           ))}
           {comment.replies!.length > 0 && (
@@ -475,7 +485,7 @@ function CommentItem({
               className="h-auto p-0 text-xs text-muted-foreground hover:text-foreground"
             >
               <ChevronUp className="h-3 w-3 mr-1" />
-              Collapse replies
+              {t('collaboration:comments.collapseReplies')}
             </Button>
           )}
         </div>
@@ -502,6 +512,7 @@ export function CommentThread({
   const [newCommentText, setNewCommentText] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [replyingToId, setReplyingToId] = useState<string | null>(null);
+  const { t } = useTranslation(['collaboration', 'common']);
 
   // Load comments when component mounts
   useEffect(() => {
@@ -649,20 +660,20 @@ export function CommentThread({
         <div>
           <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
             <MessageSquare className="h-5 w-5 text-primary" />
-            Discussion
+            {t('collaboration:comments.title')}
           </h3>
           <p className="text-sm text-muted-foreground mt-1">
-            Comment and discuss this spec with your team.
+            {t('collaboration:comments.description')}
           </p>
         </div>
         {comments.length > 0 && (
           <div className="flex items-center gap-2 text-xs">
             <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">
-              {totalComments} {totalComments === 1 ? 'comment' : 'comments'}
+              {totalComments} {totalComments === 1 ? t('collaboration:comments.comment') : t('collaboration:comments.comments')}
             </Badge>
             {resolvedCount > 0 && (
               <Badge variant="outline" className="bg-success/10 text-success border-success/20">
-                {resolvedCount} resolved
+                {t('collaboration:comments.resolvedBadge', { count: resolvedCount })}
               </Badge>
             )}
           </div>
@@ -675,7 +686,7 @@ export function CommentThread({
           <CardContent className="p-6">
             <div className="flex items-center justify-center gap-3 text-muted-foreground">
               <Loader2 className="h-5 w-5 animate-spin" />
-              <span>Loading comments...</span>
+              <span>{t('collaboration:comments.loading')}</span>
             </div>
           </CardContent>
         </Card>
@@ -688,7 +699,7 @@ export function CommentThread({
             <div className="flex items-start gap-3 text-destructive">
               <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
               <div>
-                <p className="font-medium">Error</p>
+                <p className="font-medium">{t('collaboration:comments.error')}</p>
                 <p className="text-sm mt-1">{error}</p>
               </div>
             </div>
@@ -704,9 +715,10 @@ export function CommentThread({
               value={newCommentText}
               onChange={setNewCommentText}
               onSubmit={handleAddComment}
-              placeholder="Add a comment... Use @username to mention team members"
-              submitLabel="Send"
+              placeholder={t('collaboration:comments.addComment')}
+              submitLabel={t('collaboration:comments.send')}
               isLoading={isSubmitting}
+              t={t}
             />
           </CardContent>
         </Card>
@@ -724,6 +736,7 @@ export function CommentThread({
               isReplying={replyingToId === comment.comment_id}
               onReplySubmit={handleReplySubmit}
               onReplyCancel={handleReplyCancel}
+              t={t}
             />
           ))}
         </div>
@@ -736,8 +749,8 @@ export function CommentThread({
             <div className="flex flex-col items-center gap-3 text-center text-muted-foreground">
               <MessageCircle className="h-12 w-12 opacity-20" />
               <div>
-                <p className="font-medium text-foreground">No comments yet</p>
-                <p className="text-sm mt-1">Start the discussion by adding a comment above.</p>
+                <p className="font-medium text-foreground">{t('collaboration:comments.noComments')}</p>
+                <p className="text-sm mt-1">{t('collaboration:comments.startDiscussion')}</p>
               </div>
             </div>
           </CardContent>

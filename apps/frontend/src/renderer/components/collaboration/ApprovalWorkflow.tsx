@@ -25,6 +25,7 @@
  * ```
  */
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   CheckCircle2,
   XCircle,
@@ -80,28 +81,28 @@ interface StatusInfo {
 /**
  * Get approval status display information
  */
-function getStatusInfo(status: ApprovalStatus): StatusInfo {
+function getStatusInfo(status: ApprovalStatus, t: (key: string, params?: any) => string): StatusInfo {
   const statusMap: Record<ApprovalStatus, StatusInfo> = {
     pending: {
       status: 'pending',
-      label: 'Pending Approval',
-      description: 'Waiting for admin review',
+      label: t('collaboration:approvals.status.pending'),
+      description: t('collaboration:approvals.statusDescription.pending'),
       icon: <Clock className="h-5 w-5" />,
       colorClass: 'text-warning',
       bgColorClass: 'bg-warning/10 border-warning/20'
     },
     approved: {
       status: 'approved',
-      label: 'Approved',
-      description: 'Build can start',
+      label: t('collaboration:approvals.status.approved'),
+      description: t('collaboration:approvals.statusDescription.approved'),
       icon: <CheckCircle2 className="h-5 w-5" />,
       colorClass: 'text-success',
       bgColorClass: 'bg-success/10 border-success/20'
     },
     rejected: {
       status: 'rejected',
-      label: 'Rejected',
-      description: 'Needs revision',
+      label: t('collaboration:approvals.status.rejected'),
+      description: t('collaboration:approvals.statusDescription.rejected'),
       icon: <XCircle className="h-5 w-5" />,
       colorClass: 'text-destructive',
       bgColorClass: 'bg-destructive/10 border-destructive/20'
@@ -140,7 +141,8 @@ interface ApprovalHistoryItemProps {
 }
 
 function ApprovalHistoryItem({ approval, isExpanded, onToggleExpand }: ApprovalHistoryItemProps) {
-  const statusInfo = getStatusInfo(approval.status);
+  const { t } = useTranslation(['collaboration', 'common']);
+  const statusInfo = getStatusInfo(approval.status, t);
 
   return (
     <div className="border-b border-border last:border-0 pb-3 last:pb-0">
@@ -200,12 +202,12 @@ function ApprovalHistoryItem({ approval, isExpanded, onToggleExpand }: ApprovalH
           <div className="flex items-center gap-4 text-xs text-muted-foreground">
             <div className="flex items-center gap-1">
               <Calendar className="h-3 w-3" />
-              <span>Created: {new Date(approval.created_at).toLocaleString()}</span>
+              <span>{t('collaboration:approvals.created')} {new Date(approval.created_at).toLocaleString()}</span>
             </div>
             {approval.reviewed_at && (
               <div className="flex items-center gap-1">
                 <CheckCircle2 className="h-3 w-3" />
-                <span>Reviewed: {new Date(approval.reviewed_at).toLocaleString()}</span>
+                <span>{t('collaboration:approvals.reviewed')} {new Date(approval.reviewed_at).toLocaleString()}</span>
               </div>
             )}
           </div>
@@ -227,9 +229,10 @@ interface ApprovalActionFormProps {
 function ApprovalActionForm({ action, onSubmit, onCancel }: ApprovalActionFormProps) {
   const [reason, setReason] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const { t } = useTranslation(['collaboration', 'common']);
 
   const isApprove = action === 'approve';
-  const statusInfo = getStatusInfo(isApprove ? 'approved' : 'rejected');
+  const statusInfo = getStatusInfo(isApprove ? 'approved' : 'rejected', t);
 
   const handleSubmit = async () => {
     setIsSubmitting(true);
@@ -247,19 +250,19 @@ function ApprovalActionForm({ action, onSubmit, onCancel }: ApprovalActionFormPr
         <div className="flex items-center gap-2">
           {statusInfo.icon}
           <h4 className="text-sm font-semibold text-foreground">
-            {isApprove ? 'Approve Spec' : 'Reject Spec'}
+            {isApprove ? t('collaboration:approvals.approveSpec') : t('collaboration:approvals.rejectSpec')}
           </h4>
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
         <div>
           <label className="text-sm font-medium text-foreground mb-2 block">
-            Reason {isApprove ? '(optional)' : '(required)'}
+            {t('collaboration:common.reason')} {isApprove ? t('collaboration:approvals.reasonOptional') : t('collaboration:approvals.reasonRequired')}
           </label>
           <Textarea
             value={reason}
             onChange={(e) => setReason(e.target.value)}
-            placeholder={isApprove ? 'Why are you approving this spec?' : 'Why does this spec need revision?'}
+            placeholder={isApprove ? t('collaboration:approvals.approvePlaceholder') : t('collaboration:approvals.rejectPlaceholder')}
             className="min-h-[100px] text-sm"
           />
         </div>
@@ -275,10 +278,10 @@ function ApprovalActionForm({ action, onSubmit, onCancel }: ApprovalActionFormPr
             ) : (
               <CheckCircle2 className="h-3 w-3" />
             )}
-            {isApprove ? 'Approve' : 'Reject'}
+            {isApprove ? t('collaboration:approvals.approve') : t('collaboration:approvals.reject')}
           </Button>
           <Button size="sm" variant="outline" onClick={onCancel}>
-            Cancel
+            {t('collaboration:approvals.cancel')}
           </Button>
         </div>
       </CardContent>
@@ -306,10 +309,11 @@ export function ApprovalWorkflow({
 
   const [showActionForm, setShowActionForm] = useState<'approve' | 'reject' | null>(null);
   const [expandedHistoryId, setExpandedHistoryId] = useState<string | null>(null);
+  const { t } = useTranslation(['collaboration', 'common']);
 
   const isAdmin = userRole === 'admin';
   const status = currentApproval?.status || 'pending';
-  const statusInfo = getStatusInfo(status);
+  const statusInfo = getStatusInfo(status, t);
 
   // Load approval status when component mounts
   useEffect(() => {
@@ -432,10 +436,10 @@ export function ApprovalWorkflow({
         <div>
           <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
             <ShieldCheck className="h-5 w-5 text-primary" />
-            Approval Workflow
+            {t('collaboration:approvals.title')}
           </h3>
           <p className="text-sm text-muted-foreground mt-1">
-            Spec must be approved before builds can start
+            {t('collaboration:approvals.description')}
           </p>
         </div>
         {currentApproval && (
@@ -455,7 +459,7 @@ export function ApprovalWorkflow({
           <CardContent className="p-6">
             <div className="flex items-center justify-center gap-3 text-muted-foreground">
               <Loader2 className="h-5 w-5 animate-spin" />
-              <span>Loading approval status...</span>
+              <span>{t('collaboration:approvals.loading')}</span>
             </div>
           </CardContent>
         </Card>
@@ -468,7 +472,7 @@ export function ApprovalWorkflow({
             <div className="flex items-start gap-3 text-destructive">
               <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
               <div>
-                <p className="font-medium">Approval Error</p>
+                <p className="font-medium">{t('collaboration:approvals.error')}</p>
                 <p className="text-sm mt-1">{error}</p>
               </div>
             </div>
@@ -510,7 +514,7 @@ export function ApprovalWorkflow({
                       className="gap-1"
                     >
                       <Send className="h-3 w-3" />
-                      Request Approval
+                      {t('collaboration:approvals.requestApproval')}
                     </Button>
                   )}
                   {status === 'pending' && isAdmin && (
@@ -522,7 +526,7 @@ export function ApprovalWorkflow({
                         className="gap-1 bg-success text-success hover:bg-success/90"
                       >
                         <CheckCircle2 className="h-3 w-3" />
-                        Approve
+                        {t('collaboration:approvals.approve')}
                       </Button>
                       <Button
                         size="sm"
@@ -532,7 +536,7 @@ export function ApprovalWorkflow({
                         className="gap-1 text-destructive hover:bg-destructive/10"
                       >
                         <XCircle className="h-3 w-3" />
-                        Reject
+                        {t('collaboration:approvals.reject')}
                       </Button>
                     </>
                   )}
@@ -552,7 +556,7 @@ export function ApprovalWorkflow({
               {actionInProgress && (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  <span>Processing...</span>
+                  <span>{t('collaboration:approvals.processing')}</span>
                 </div>
               )}
             </CardContent>
@@ -564,7 +568,7 @@ export function ApprovalWorkflow({
               <CardHeader className="pb-3">
                 <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
                   <FileText className="h-4 w-4" />
-                  Approval History
+                  {t('collaboration:approvals.history')}
                 </h4>
               </CardHeader>
               <CardContent>
