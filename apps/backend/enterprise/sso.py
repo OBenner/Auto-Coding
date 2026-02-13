@@ -715,6 +715,209 @@ class SAMLProvider:
         return metadata
 
 
+# Token validation helpers
+def is_valid_saml_token_format(token: str | None) -> bool:
+    """
+    Check if a token is in valid SAML response format.
+
+    SAML responses are base64-encoded XML documents.
+    This function performs basic format validation.
+
+    Args:
+        token: Token string to check (can be None)
+
+    Returns:
+        True if token appears to be valid base64-encoded SAML response
+    """
+    if not token or not isinstance(token, str):
+        return False
+
+    # SAML responses should be reasonably sized (at least 100 chars when base64-encoded)
+    if len(token) < 100:
+        return False
+
+    # Check if it's valid base64
+    try:
+        decoded = base64.b64decode(token)
+        # Check if decoded data looks like XML
+        decoded_str = decoded.decode("utf-8")
+        return decoded_str.strip().startswith("<?xml") or decoded_str.strip().startswith("<")
+    except Exception:
+        return False
+
+
+def validate_saml_token_format(token: str) -> None:
+    """
+    Validate that a token is in proper SAML response format.
+
+    This function should be called before processing a SAML response
+    to ensure proper error messages when the token format is invalid.
+
+    Args:
+        token: Token string to validate
+
+    Raises:
+        ValueError: If token format is invalid
+    """
+    if not token:
+        raise ValueError(
+            "SAML response token is empty or None.\n\n"
+            "Expected a base64-encoded SAML response from the identity provider.\n\n"
+            "To fix this issue:\n"
+            "  1. Ensure the SAML authentication flow completed successfully\n"
+            "  2. Check that the identity provider returned a valid SAML response\n"
+            "  3. Verify the Assertion Consumer Service (ACS) URL is correctly configured"
+        )
+
+    if not isinstance(token, str):
+        raise ValueError(
+            f"Invalid SAML response type. Expected string, got: {type(token).__name__}\n\n"
+            "The SAML response must be a base64-encoded string."
+        )
+
+    if len(token) < 100:
+        raise ValueError(
+            "SAML response is too short to be valid.\n\n"
+            f"Received token length: {len(token)} characters\n"
+            "Expected: At least 100 characters for a valid base64-encoded SAML response\n\n"
+            "This may indicate:\n"
+            "  - The authentication flow was interrupted\n"
+            "  - The identity provider returned an error instead of a SAML response\n"
+            "  - The token was truncated during transmission"
+        )
+
+    # Validate base64 format
+    try:
+        decoded = base64.b64decode(token)
+    except Exception as e:
+        raise ValueError(
+            f"SAML response is not valid base64-encoded data: {e}\n\n"
+            "The SAML response from the identity provider must be base64-encoded.\n\n"
+            "To fix this issue:\n"
+            "  1. Ensure you're using the correct parameter (SAMLResponse) from the IDP callback\n"
+            "  2. Verify the token hasn't been URL-decoded or modified\n"
+            "  3. Check for any middleware that might be altering the response"
+        )
+
+    # Validate XML format
+    try:
+        decoded_str = decoded.decode("utf-8")
+        if not (decoded_str.strip().startswith("<?xml") or decoded_str.strip().startswith("<")):
+            raise ValueError("Decoded data is not XML")
+    except Exception as e:
+        raise ValueError(
+            f"SAML response does not contain valid XML data: {e}\n\n"
+            "After base64 decoding, the SAML response must be a valid XML document.\n\n"
+            "This may indicate:\n"
+            "  - The token is corrupted\n"
+            "  - The identity provider is misconfigured\n"
+            "  - The token was encrypted and needs to be decrypted first"
+        )
+
+    logger.debug("SAML token format validation passed")
+
+
+def map_saml_attributes(
+    assertion: SAMLAssertion,
+    attribute_map: dict[str, str],
+) -> dict[str, Any]:
+    """
+    Map SAML assertion attributes to application attributes.
+
+    This follows the attribute mapping pattern from SAMLConfig to extract
+    user identity information from SAML assertions.
+
+    Args:
+        assertion: Parsed SAML assertion
+        attribute_map: Mapping of app attributes to SAML attribute names
+
+    Returns:
+        Dictionary of mapped attributes with application-friendly keys
+
+    Example:
+        attribute_map = {
+            "email": "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress",
+            "first_name": "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/givenname",
+        }
+        mapped = map_saml_attributes(assertion, attribute_map)
+        # mapped = {"email": "user@example.com", "first_name": "John"}
+    """
+    mapped = {}
+
+    for app_key, saml_attr in attribute_map.items():
+        value = assertion.attributes.get(saml_attr)
+        if value is not None:
+            mapped[app_key] = value
+
+    return mapped
+
+
+def create_user_from_saml(
+    assertion: SAMLAssertion,
+    attribute_map: dict[str, str],
+    organization_id: str | None = None,
+) -> SAMLUser:
+    """
+    Create SAMLUser from assertion using attribute mapping.
+
+    This is a convenience function that handles the common pattern of:
+    1. Mapping SAML attributes to application attributes
+    2. Extracting user identity fields
+    3. Creating a SAMLUser object
+
+    Args:
+        assertion: Parsed and validated SAML assertion
+        attribute_map: Mapping of app attributes to SAML attribute names
+        organization_id: Optional organization identifier
+
+    Returns:
+        SAMLUser with mapped identity information
+
+    Raises:
+        ValueError: If required attributes (email) are missing
+    """
+    # Map attributes
+    mapped = map_saml_attributes(assertion, attribute_map)
+
+    # Extract user identity
+    email = mapped.get("email") or assertion.subject
+    if not email:
+        raise ValueError(
+            "Unable to extract email from SAML assertion.\n\n"
+            "The SAML assertion must contain an email address either:\n"
+            "  - In the NameID (subject)\n"
+            "  - As a mapped attribute\n\n"
+            "Check your SAML attribute mapping configuration."
+        )
+
+    first_name = mapped.get("first_name")
+    last_name = mapped.get("last_name")
+    display_name = mapped.get("display_name")
+    role = mapped.get("role")
+    groups = mapped.get("groups")
+
+    # Normalize groups to list
+    if groups and not isinstance(groups, list):
+        groups = [groups]
+
+    user = SAMLUser(
+        user_id=assertion.subject,
+        email=email,
+        first_name=first_name,
+        last_name=last_name,
+        display_name=display_name,
+        role=role,
+        groups=groups or [],
+        organization_id=organization_id,
+        session_index=assertion.session_index,
+        assertion_expires_at=assertion.not_on_or_after,
+        attributes=assertion.attributes,
+    )
+
+    logger.info(f"Created SAMLUser from assertion: {user.email} (ID: {user.user_id})")
+    return user
+
+
 # Convenience functions
 def validate_saml_token(
     saml_response: str,
@@ -722,6 +925,11 @@ def validate_saml_token(
 ) -> SAMLUser:
     """
     Validate SAML response and extract user identity.
+
+    This is the main entry point for SAML token validation. It:
+    1. Validates the token format
+    2. Parses and validates the SAML assertion
+    3. Extracts and maps user identity
 
     Args:
         saml_response: Base64-encoded SAML response
@@ -731,10 +939,45 @@ def validate_saml_token(
         SAMLUser with extracted identity
 
     Raises:
-        ValueError: If response is invalid
+        ValueError: If response is invalid or validation fails
+
+    Example:
+        config = SAMLConfig(
+            idp_entity_id="https://idp.example.com",
+            idp_sso_url="https://idp.example.com/sso",
+            idp_x509_cert="MIICertData...",
+        )
+        user = validate_saml_token(saml_response, config)
+        print(f"Authenticated user: {user.email}")
     """
-    provider = SAMLProvider(config)
-    return provider.validate_response(saml_response)
+    # Validate token format first for better error messages
+    try:
+        validate_saml_token_format(saml_response)
+    except ValueError as e:
+        logger.error(f"SAML token format validation failed: {e}")
+        raise
+
+    # Process with provider
+    try:
+        provider = SAMLProvider(config)
+        user = provider.validate_response(saml_response)
+        logger.info(f"Successfully validated SAML token for user: {user.email}")
+        return user
+    except ValueError as e:
+        # Re-raise with context
+        logger.error(f"SAML token validation failed: {e}")
+        raise
+    except Exception as e:
+        # Catch unexpected errors and provide helpful message
+        logger.error(f"Unexpected error during SAML validation: {e}", exc_info=True)
+        raise ValueError(
+            f"Failed to validate SAML token: {e}\n\n"
+            "This may indicate:\n"
+            "  - The SAML response is malformed\n"
+            "  - The identity provider configuration is incorrect\n"
+            "  - There's a mismatch between SP and IDP settings\n\n"
+            "Check the logs for more details."
+        )
 
 
 def load_saml_config(config_path: Path | str) -> SAMLConfig:
