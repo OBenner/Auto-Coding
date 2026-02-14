@@ -43,6 +43,7 @@ import { TaskSubtasks } from './TaskSubtasks';
 import { TaskLogs } from './TaskLogs';
 import { TaskFiles } from './TaskFiles';
 import { TaskReview } from './TaskReview';
+import { TaskOverview } from './TaskOverview';
 import { ResourceUsageIndicator } from '../ResourceUsageIndicator';
 import type { Task, WorktreeCreatePROptions } from '../../../shared/types';
 
@@ -516,6 +517,11 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
                 <TabsContent value="overview" className="flex-1 min-h-0 overflow-hidden mt-0">
                   <ScrollArea className="h-full">
                     <div className="p-5 space-y-5 overflow-x-hidden max-w-full">
+                      {/* Task Overview with Implementation Plan */}
+                      <TaskOverview task={task} />
+
+                      <Separator />
+
                       {/* Metadata */}
                       <TaskMetadata task={task} />
 

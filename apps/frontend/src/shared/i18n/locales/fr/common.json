@@ -705,6 +705,12 @@
     "deleteMemory": "Supprimer la mémoire",
     "exportMemories": "Exporter les mémoires"
   },
+  "status": {
+    "completed": "Terminé",
+    "inProgress": "En cours",
+    "failed": "Échoué",
+    "pending": "En attente"
+  },
   "commands": {
     "newTask": "Nouvelle Tâche",
     "newTaskDescription": "Créer une nouvelle tâche ou spec",

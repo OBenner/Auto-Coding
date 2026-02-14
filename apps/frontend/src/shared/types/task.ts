@@ -74,6 +74,39 @@ export interface QAIssue {
   line?: number;
 }
 
+// QA Escalation types - for QA_ESCALATION.md parsing
+export interface QAEscalation {
+  generated: string;  // ISO timestamp
+  iteration: number;
+  maxIterations: number;
+  reason: string;
+  summary: QAEscalationSummary;
+  recurringIssues: QARecurringIssue[];
+  mostCommonIssues: QACommonIssue[];
+}
+
+export interface QAEscalationSummary {
+  totalIterations: number;
+  totalIssues: number;
+  uniqueIssues: number;
+  fixSuccessRate: number;  // 0-1 (percentage as decimal)
+}
+
+export interface QARecurringIssue {
+  title: string;
+  file?: string;
+  line?: number;
+  type?: string;
+  occurrences: number;
+  description: string;
+}
+
+export interface QACommonIssue {
+  title: string;
+  file?: string;
+  occurrences: number;
+}
+
 // Task Log Types - for persistent, phase-based logging
 export type TaskLogPhase = 'planning' | 'coding' | 'validation';
 export type TaskLogPhaseStatus = 'pending' | 'active' | 'completed' | 'failed';

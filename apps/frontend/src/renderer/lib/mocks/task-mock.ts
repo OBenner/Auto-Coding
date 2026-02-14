@@ -120,6 +120,22 @@ export const taskMock = {
 
   unwatchTaskLogs: async () => ({ success: true }),
 
+  // Task spec file reading (for task overview display)
+  getImplementationPlan: async () => ({
+    success: true,
+    data: null
+  }),
+
+  getQAReport: async () => ({
+    success: true,
+    data: null
+  }),
+
+  getQAEscalation: async () => ({
+    success: true,
+    data: null
+  }),
+
   // Event Listeners (no-op in browser)
   onTaskProgress: () => () => {},
   onTaskError: () => () => {},
