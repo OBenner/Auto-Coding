@@ -636,7 +636,7 @@ describe('cli-tool-manager - Claude CLI Windows where.exe detection', () => {
     expect(result.found).toBe(true);
     expect(result.path).toContain('nvm4w');
     expect(result.path).toContain('claude.cmd');
-    expect(result.source).toBe('system-path');
+    expect(result.source).toBe('windows-where');
     expect(result.message).toContain('Using Windows Claude CLI');
   });
 
