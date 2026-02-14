@@ -158,10 +158,44 @@ class GitHubProvider:
         return await self._gh_client.pr_diff(number)
 
     async def post_review(self, pr_number: int, review: ReviewData) -> int:
-        """Post a review to a pull request."""
+        """Post a review to a pull request.
+
+        If the review contains structured findings, they are appended to the
+        review body with inline evidence (code quotes).
+        """
+        body = review.body
+
+        # Append structured findings with evidence if present
+        if review.findings:
+            body += "\n\n---\n\n### Structured Findings\n\n"
+            for finding in review.findings:
+                icon = {
+                    "critical": "\u274c",
+                    "high": "\u26a0\ufe0f",
+                    "medium": "\U0001f7e1",
+                    "low": "\U0001f535",
+                    "info": "\u2139\ufe0f",
+                }.get(finding.severity, "\u2022")
+                location = ""
+                if finding.file:
+                    location = f" (`{finding.file}"
+                    if finding.line:
+                        location += f":{finding.line}"
+                        if finding.end_line and finding.end_line != finding.line:
+                            location += f"-{finding.end_line}"
+                    location += "`)"
+
+                body += f"- {icon} **[{finding.severity.upper()}]** {finding.title}{location}\n"
+                body += f"  {finding.description}\n"
+
+                # Inline code evidence
+                for evidence_line in finding.evidence:
+                    body += f"  > {evidence_line}\n"
+                body += "\n"
+
         return await self._gh_client.pr_review(
             pr_number=pr_number,
-            body=review.body,
+            body=body,
             event=review.event.upper(),
         )
 

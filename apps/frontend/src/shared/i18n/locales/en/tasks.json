@@ -404,5 +404,17 @@
     "recurringIssues": "Recurring Issues",
     "commonIssues": "Common Issues",
     "noDataAvailable": "No overview data available yet"
+  },
+  "merge": {
+    "progress": "Merging files...",
+    "analyzing": "Analyzing changes...",
+    "fileProgress": "{{current}} / {{total}} files",
+    "currentFile": "Processing: {{file}}",
+    "conflicts": "{{count}} conflict(s) detected",
+    "complete": "Merge complete",
+    "autoResolved": "{{count}} file(s) auto-resolved"
+  },
+  "prPolling": {
+    "autoRefreshing": "Auto-refreshing"
   }
 }

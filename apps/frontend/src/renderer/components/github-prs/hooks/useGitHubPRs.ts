@@ -221,6 +221,33 @@ export function useGitHubPRs(
     wasActiveRef.current = isActive;
   }, [isActive, fetchPRs]);
 
+  // Adaptive polling: 60s when open PRs exist, 5min when all merged/closed
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  useEffect(() => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+
+    if (!isActive || !isConnected || !hasLoadedRef.current) return;
+
+    const POLL_ACTIVE = 60_000;  // 60s when open PRs exist
+    const POLL_STABLE = 300_000; // 5min when all PRs merged/closed
+    const hasOpen = prs.some((pr) => pr.state === "OPEN");
+    const interval = hasOpen ? POLL_ACTIVE : POLL_STABLE;
+
+    pollRef.current = setInterval(() => {
+      fetchPRs();
+    }, interval);
+
+    return () => {
+      if (pollRef.current) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
+    };
+  }, [isActive, isConnected, prs, fetchPRs]);
+
   // Reset state and selected PR when project changes
   useEffect(() => {
     hasLoadedRef.current = false;

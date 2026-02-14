@@ -19,9 +19,14 @@ with maximum automation and minimum AI token usage.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+
+# Callback type for merge progress reporting
+# Called with: {"phase": str, "current": int, "total": int, "file": str}
+ProgressCallback = Callable[[dict[str, Any]], None]
 
 from .ai_resolver import AIResolver, create_claude_resolver
 from .analytics_recorder import MergeAnalyticsRecorder
@@ -258,6 +263,7 @@ class MergeOrchestrator:
         task_id: str,
         worktree_path: Path | None = None,
         target_branch: str = "main",
+        progress_callback: ProgressCallback | None = None,
     ) -> MergeReport:
         """
         Merge a single task's changes into the target branch.
@@ -266,6 +272,7 @@ class MergeOrchestrator:
             task_id: The task identifier
             worktree_path: Path to the task's worktree (auto-detected if not provided)
             target_branch: Branch to merge into
+            progress_callback: Optional callback for progress events
 
         Returns:
             MergeReport with results
@@ -313,8 +320,28 @@ class MergeOrchestrator:
                 report.completed_at = datetime.now()
                 return report
 
+            total_files = len(modifications)
+            if progress_callback:
+                progress_callback(
+                    {
+                        "phase": "analyzing",
+                        "current": 0,
+                        "total": total_files,
+                        "file": "",
+                    }
+                )
+
             # Process each modified file
-            for file_path, snapshot in modifications:
+            for file_idx, (file_path, snapshot) in enumerate(modifications):
+                if progress_callback:
+                    progress_callback(
+                        {
+                            "phase": "merging",
+                            "current": file_idx + 1,
+                            "total": total_files,
+                            "file": file_path,
+                        }
+                    )
                 debug_detailed(
                     MODULE,
                     f"Processing file: {file_path}",
@@ -382,6 +409,7 @@ class MergeOrchestrator:
         self,
         requests: list[TaskMergeRequest],
         target_branch: str = "main",
+        progress_callback: ProgressCallback | None = None,
     ) -> MergeReport:
         """
         Merge multiple tasks' changes.
@@ -392,6 +420,7 @@ class MergeOrchestrator:
         Args:
             requests: List of merge requests (one per task)
             target_branch: Branch to merge into
+            progress_callback: Optional callback for progress events
 
         Returns:
             MergeReport with combined results
@@ -420,7 +449,17 @@ class MergeOrchestrator:
             file_tasks = self.evolution_tracker.get_files_modified_by_tasks(task_ids)
 
             # Process each file
-            for file_path, modifying_tasks in file_tasks.items():
+            total_files = len(file_tasks)
+            for file_idx, (file_path, modifying_tasks) in enumerate(file_tasks.items()):
+                if progress_callback:
+                    progress_callback(
+                        {
+                            "phase": "merging",
+                            "current": file_idx + 1,
+                            "total": total_files,
+                            "file": file_path,
+                        }
+                    )
                 # Get snapshots from all tasks that modified this file
                 evolution = self.evolution_tracker.get_file_evolution(file_path)
                 if not evolution:

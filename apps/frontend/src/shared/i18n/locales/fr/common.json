@@ -612,7 +612,8 @@
       "description": "Veuillez vous ré-authentifier pour continuer à utiliser Auto-Coding.",
       "taskAffected": "Tâche affectée",
       "technicalDetails": "Détails techniques",
-      "goToSettings": "Aller aux paramètres"
+      "goToSettings": "Aller aux paramètres",
+      "badgeTooltip": "Problème d'authentification — cliquez pour résoudre"
     }
   },
   "roadmapProgress": {
