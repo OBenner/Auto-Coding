@@ -18,6 +18,7 @@ from linear_updater import (
     linear_task_started,
     linear_task_stuck,
 )
+from notifications import notify_stuck_subtask
 from phase_config import get_phase_model, get_phase_thinking_budget
 from phase_event import ExecutionPhase, emit_phase
 from progress import (
@@ -505,12 +506,14 @@ async def run_autonomous_agent(
                 recovery_manager.mark_subtask_stuck(
                     subtask_id, f"Failed after {attempt_count} attempts"
                 )
-                print()
-                print_status(
-                    f"Subtask {subtask_id} marked as STUCK after {attempt_count} attempts",
-                    "error",
+
+                # Notify user about stuck subtask
+                notify_stuck_subtask(
+                    subtask_id=subtask_id,
+                    reason=f"Failed after {attempt_count} attempts",
+                    attempt_count=attempt_count,
+                    spec_dir=spec_dir,
                 )
-                print(muted("Consider: manual intervention or skipping this subtask"))
 
                 # Record stuck subtask in Linear (if enabled)
                 if linear_is_enabled:
