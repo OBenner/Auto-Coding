@@ -105,7 +105,7 @@ class LogStorage:
     def add_entry(self, entry: LogEntry) -> None:
         """
         Add an entry to the specified phase.
-        ANSI escape codes are stripped from content and detail fields before storage.
+        ANSI escape codes are stripped from content, detail, and tool_input fields before storage.
 
         Args:
             entry: The log entry to add

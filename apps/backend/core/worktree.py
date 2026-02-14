@@ -656,7 +656,10 @@ class WorktreeManager:
             if remote_check.returncode != 0:
                 logger.warning("Skipping auto-push: no 'origin' remote configured")
             else:
-                push_result = self._run_git(["push", "-u", "origin", branch_name])
+                push_result = self._run_git(
+                    ["push", "-u", "origin", branch_name],
+                    timeout=self.GIT_PUSH_TIMEOUT,
+                )
                 if push_result.returncode == 0:
                     logger.info(
                         f"Auto-pushed branch {branch_name} with upstream tracking"

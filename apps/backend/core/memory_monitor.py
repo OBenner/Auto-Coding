@@ -55,7 +55,7 @@ class MemoryMonitor:
         try:
             mem = self._process.memory_info()
             return mem.rss / (1024.0 * 1024.0)
-        except (psutil.Error, OSError):
+        except Exception:  # noqa: BLE001 — psutil can raise various exceptions
             return -1.0
 
     def check_pressure(self) -> MemoryPressure:

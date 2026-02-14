@@ -70,6 +70,7 @@ logger = logging.getLogger(__name__)
 # Module-level resilience singletons (shared across sessions)
 _error_classifier = ErrorClassifier()
 _memory_monitor = MemoryMonitor()
+_GC_MESSAGE_INTERVAL = 50  # Run GC check every N messages
 _api_circuit_breaker = CircuitBreaker(
     name="sdk_api", failure_threshold=3, recovery_timeout=60.0
 )
@@ -969,7 +970,7 @@ async def run_agent_session(
                 return "error", reason, None, decision_tracker
 
             # Periodic GC under memory pressure
-            if message_count % 50 == 0:
+            if message_count % _GC_MESSAGE_INTERVAL == 0:
                 _memory_monitor.maybe_gc()
 
             # Handle AssistantMessage (text and tool use)

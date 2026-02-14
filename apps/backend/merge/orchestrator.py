@@ -322,26 +322,32 @@ class MergeOrchestrator:
 
             total_files = len(modifications)
             if progress_callback:
-                progress_callback(
-                    {
-                        "phase": "analyzing",
-                        "current": 0,
-                        "total": total_files,
-                        "file": "",
-                    }
-                )
+                try:
+                    progress_callback(
+                        {
+                            "phase": "analyzing",
+                            "current": 0,
+                            "total": total_files,
+                            "file": "",
+                        }
+                    )
+                except Exception:
+                    logger.debug("progress_callback raised; ignoring")
 
             # Process each modified file
             for file_idx, (file_path, snapshot) in enumerate(modifications):
                 if progress_callback:
-                    progress_callback(
-                        {
-                            "phase": "merging",
-                            "current": file_idx + 1,
-                            "total": total_files,
-                            "file": file_path,
-                        }
-                    )
+                    try:
+                        progress_callback(
+                            {
+                                "phase": "merging",
+                                "current": file_idx + 1,
+                                "total": total_files,
+                                "file": file_path,
+                            }
+                        )
+                    except Exception:
+                        logger.debug("progress_callback raised; ignoring")
                 debug_detailed(
                     MODULE,
                     f"Processing file: {file_path}",

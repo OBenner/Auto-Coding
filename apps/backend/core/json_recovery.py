@@ -144,7 +144,14 @@ def parse_json_with_recovery(
 
     Raises:
         json.JSONDecodeError: If all recovery tiers fail.
+        ValueError: If *raw_text* exceeds ``_MAX_INPUT_SIZE``.
     """
+    if len(raw_text) > _MAX_INPUT_SIZE:
+        raise ValueError(
+            f"Input too large for JSON recovery ({len(raw_text):,} bytes, "
+            f"limit {_MAX_INPUT_SIZE:,}){f' ({context})' if context else ''}"
+        )
+
     ctx = f" ({context})" if context else ""
 
     # --- Tier 1: direct parse --------------------------------------------------

@@ -517,6 +517,7 @@ export function Sidebar({
                   size={isCollapsed ? "icon" : "sm"}
                   className={cn(isCollapsed ? "relative" : "relative flex-1 justify-start gap-2")}
                   onClick={onSettingsClick}
+                  aria-label={isCollapsed ? t('actions.settings') : undefined}
                 >
                   <Settings className="h-4 w-4" />
                   {!isCollapsed && t('actions.settings')}

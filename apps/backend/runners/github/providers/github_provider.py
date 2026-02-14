@@ -193,6 +193,14 @@ class GitHubProvider:
                     body += f"  > {evidence_line}\n"
                 body += "\n"
 
+        # GitHub API enforces a 65 536-character limit on review bodies.
+        _MAX_REVIEW_BODY = 65_536
+        if len(body) > _MAX_REVIEW_BODY:
+            truncation_note = (
+                "\n\n---\n*Review truncated due to GitHub body-size limit.*\n"
+            )
+            body = body[: _MAX_REVIEW_BODY - len(truncation_note)] + truncation_note
+
         return await self._gh_client.pr_review(
             pr_number=pr_number,
             body=body,

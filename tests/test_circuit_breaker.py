@@ -1,7 +1,6 @@
 """Tests for the circuit breaker module."""
 
 import time
-from unittest.mock import patch
 
 from core.circuit_breaker import CircuitBreaker, CircuitState
 

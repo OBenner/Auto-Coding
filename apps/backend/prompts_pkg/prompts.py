@@ -273,6 +273,26 @@ def get_coding_prompt(spec_dir: Path) -> str:
 
     prompt = prompt_file.read_text(encoding="utf-8")
 
+    # Detect worktree isolation — if inside a worktree the "project root"
+    # becomes the worktree root, NOT the parent of auto-claude/.
+    isolation_warning = _get_worktree_isolation_warning(spec_dir)
+
+    if isolation_warning:
+        # Extract worktree root from the warning text for use in spec_context
+        import re as _re
+
+        _wt_match = _re.search(r"Worktree root:\*\* `([^`]+)`", isolation_warning)
+        worktree_root = _wt_match.group(1) if _wt_match else str(spec_dir)
+        project_root_note = (
+            f"The project root (your worktree) is `{worktree_root}`. "
+            "All code goes in the worktree root, not in the spec directory."
+        )
+    else:
+        project_root_note = (
+            "The project root is the parent of auto-claude/. "
+            "All code goes in the project root, not in the spec directory."
+        )
+
     spec_context = f"""## SPEC LOCATION
 
 Your spec and progress files are located at:
@@ -281,14 +301,12 @@ Your spec and progress files are located at:
 - Progress notes: `{spec_dir}/build-progress.txt`
 - Recovery context: `{spec_dir}/memory/attempt_history.json`
 
-The project root is the parent of auto-claude/. All code goes in the project root, not in the spec directory.
+{project_root_note}
 
 ---
 
 """
 
-    # Inject worktree isolation warning if applicable
-    isolation_warning = _get_worktree_isolation_warning(spec_dir)
     if isolation_warning:
         spec_context += isolation_warning
 

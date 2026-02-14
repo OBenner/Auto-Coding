@@ -2,7 +2,6 @@
 
 import pytest
 from core.error_classifier import (
-    ClassifiedError,
     ErrorClassifier,
     SDKErrorCategory,
 )

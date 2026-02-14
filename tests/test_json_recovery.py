@@ -65,6 +65,18 @@ class TestTier3Extract:
         assert tier == "tier3_extract"
 
 
+class TestInputSizeGuard:
+    def test_oversized_input_raises_value_error(self):
+        large = "x" * (1_048_577)  # 1 byte over _MAX_INPUT_SIZE
+        with pytest.raises(ValueError, match="Input too large"):
+            parse_json_with_recovery(large)
+
+    def test_oversized_input_includes_context(self):
+        large = "x" * (1_048_577)
+        with pytest.raises(ValueError, match="my_context"):
+            parse_json_with_recovery(large, context="my_context")
+
+
 class TestAllTiersFail:
     def test_completely_invalid_text(self):
         with pytest.raises(json.JSONDecodeError):
