@@ -425,7 +425,7 @@ class RecoveryManager:
         """
         try:
             # Use git reset --hard to rollback
-            result = subprocess.run(
+            subprocess.run(
                 ["git", "reset", "--hard", commit_hash],
                 cwd=self.project_dir,
                 capture_output=True,

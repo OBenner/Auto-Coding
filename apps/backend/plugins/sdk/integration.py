@@ -16,15 +16,9 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from ..base import PluginBase, PluginMetadata, PluginType
-
-if TYPE_CHECKING:
-    try:
-        from claude_agent_sdk import create_sdk_mcp_server
-    except ImportError:
-        create_sdk_mcp_server = None
 
 logger = logging.getLogger(__name__)
 

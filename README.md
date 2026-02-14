@@ -1,189 +1,171 @@
+<div align="center">
+
 # Auto Code
 
-**Autonomous multi-agent coding framework that plans, builds, and validates software for you.**
+**Autonomous AI agents that plan, build, and test your software.**
 
-![Auto Code Kanban Board](.github/assets/Auto-Coding-Kanban.png)
+Describe what you want. Auto Code creates the spec, writes the code, runs QA, and hands you a clean branch to review.
 
-[![License](https://img.shields.io/badge/license-AGPL--3.0-green?style=flat-square)](./agpl-3.0.txt)
-
+[![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-green?style=flat-square)](./LICENSE)
 [![CI](https://img.shields.io/github/actions/workflow/status/OBenner/Auto-Coding/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/OBenner/Auto-Coding/actions)
+[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue?style=flat-square)]()
+[![Version](https://img.shields.io/badge/version-3.0.0-orange?style=flat-square)](https://github.com/OBenner/Auto-Coding/releases)
+
+</div>
 
 ---
 
-> **🔱 This is a fork of [AndyMik90/Auto-Code](https://github.com/AndyMik90/Auto-Code)**
->
-> This repository contains custom modifications and enhancements on top of the original project.
-> I aim to keep it in sync with upstream changes while maintaining my own features.
->
-> **Fork repository:** [OBenner/Auto-Coding](https://github.com/OBenner/Auto-Coding)
+<!-- DEMO_GIF_PLACEHOLDER
+     To add an animated demo:
+     1. Record a GIF/video showing a task going from creation to merged PR
+     2. Save it to .github/assets/demo.gif (keep under 10 MB)
+     3. Replace this comment block with:
+        <p align="center">
+          <img src=".github/assets/demo.gif" alt="Auto Code demo" width="800" />
+        </p>
+-->
+
+<p align="center">
+  <img src=".github/assets/Auto-Claude-Kanban.png" alt="Auto Code Kanban Board" width="800" />
+</p>
 
 ---
 
-## Fork Enhancements
+## What is Auto Code?
 
-### Completed Features
-
-| Feature | Description |
-|---------|-------------|
-| **Memory System Dashboard** | Graph visualization of memories, delete/export functionality |
-| **Resource Monitoring** | Enhanced progress tracking with resource usage display |
-| **Ollama Integration** | Local model support via Ollama service |
-| **Platform Abstraction** | Complete cross-platform support (Windows, macOS, Linux) |
-| **Automated Test Generation** | AI-generated tests in QA validation loop |
-| **Token Statistics** | Per-phase token usage tracking and visualization |
-| **Skeleton Loading States** | Improved UX with loading skeletons for data-heavy components |
-| **QA Status Tool** | Read tool for checking QA validation status |
-| **Spec Statistics Tool** | Analytics for spec creation and completion |
-| **Troubleshooting Guide** | Comprehensive FAQ for common issues |
-| **Web Interface** | Browser-based access option |
-| **Research Improvements** | Enhanced web search guidance in spec creation |
-
-### Roadmap
-
-| Feature | Description |
-|---------|-------------|
-| **Multi-Model Provider Support** | OpenAI GPT, Google Gemini, local models via Ollama |
-| **Code Review Agent** | Specialized agent for security/performance code review |
-| **AI Pair Programming Mode** | Real-time interactive coding assistance |
-| **Multi-Codebase Orchestration** | Manage multiple repos from single instance |
-| **Intelligent Pattern Recognition** | Auto-extract and suggest coding patterns from memory |
-
----
-
-## Download
-
-### Stable Release
-
-
-## Requirements
-
-- **Claude Pro/Max subscription** - [Get one here](https://claude.ai/upgrade)
-- **Claude Code CLI** - `npm install -g @anthropic-ai/claude-code`
-- **Git repository** - Your project must be initialized as a git repo
-
----
-
-## Quick Start
-
-1. **Download and install** the app for your platform
-2. **Open your project** - Select a git repository folder
-3. **Connect Claude** - The app will guide you through OAuth setup
-4. **Create a task** - Describe what you want to build
-5. **Watch it work** - Agents plan, code, and validate autonomously
+Auto Code is a multi-agent framework that turns a plain-language task description into working, tested code. You describe what you want, and a pipeline of specialized AI agents creates a specification, plans the implementation, writes the code, and validates it through automated QA -- all in isolated git worktrees so your main branch is never at risk. A built-in memory system means agents learn from previous sessions and get smarter over time.
 
 ---
 
 ## Features
 
-| Feature | Description |
-|---------|-------------|
-| **Autonomous Tasks** | Describe your goal; agents handle planning, implementation, and validation |
-| **Parallel Execution** | Run multiple builds simultaneously with up to 12 agent terminals |
-| **Isolated Workspaces** | All changes happen in git worktrees - your main branch stays safe |
-| **Self-Validating QA** | Built-in quality assurance loop catches issues before you review |
-| **AI-Powered Merge** | Automatic conflict resolution when integrating back to main |
-| **Memory Layer** | Agents retain insights across sessions for smarter builds |
-| **GitHub/GitLab Integration** | Import issues, investigate with AI, create merge requests |
-| **Linear Integration** | Sync tasks with Linear for team progress tracking |
-| **Cloud-Hosted Option** | Fully managed cloud deployment - no local installation required |
-| **Cross-Platform** | Native desktop apps for Windows, macOS, and Linux |
-| **Auto-Updates** | App updates automatically when new versions are released |
+<table>
+<tr>
+<td width="50%">
+
+### Multi-Agent Pipeline
+Planner, Coder, QA Reviewer, and QA Fixer agents work in sequence -- each with a focused role and clear handoff.
+
+### Isolated Workspaces
+Every build runs in its own git worktree. Your main branch stays clean until you explicitly merge.
+
+### Cross-Session Memory
+Graphiti-powered knowledge graph stores patterns, gotchas, and discoveries so agents improve across builds.
+
+### Self-Validating QA
+A dedicated QA loop catches issues before you ever look at the code, with optional E2E testing via Electron.
+
+</td>
+<td width="50%">
+
+### Parallel Execution
+Run up to 12 agent terminals simultaneously. The Coder agent can spawn subagents for parallel subtask work.
+
+### GitHub, GitLab & Linear Integration
+Import issues, create PRs, and sync progress with your existing project management tools.
+
+### Multi-Provider LLM Support
+Works with Claude, OpenAI, Google Gemini, Azure OpenAI, Ollama, and more -- not locked to a single model.
+
+### Cross-Platform
+Native desktop apps for Windows, macOS, and Linux. Cloud-hosted option also available.
+
+</td>
+</tr>
+</table>
 
 ---
 
-## Interface
+## Screenshots
 
-### Kanban Board
-Visual task management from planning through completion. Create tasks and monitor agent progress in real-time.
+<details>
+<summary><strong>Kanban Board</strong> -- visual task management from planning through completion</summary>
+<br />
+<img src=".github/assets/Auto-Claude-Kanban.png" alt="Kanban Board" width="800" />
+</details>
 
-### Agent Terminals
-AI-powered terminals with one-click task context injection. Spawn multiple agents for parallel work.
+<details>
+<summary><strong>Agent Terminals</strong> -- multiple AI-powered terminals with one-click task context</summary>
+<br />
+<img src=".github/assets/Auto-Claude-Agents-terminals.png" alt="Agent Terminals" width="800" />
+</details>
 
-![Agent Terminals](.github/assets/Auto-Coding-Agents-terminals.png)
-
-### Roadmap
-AI-assisted feature planning with competitor analysis and audience targeting.
-
-![Roadmap](.github/assets/Auto-Coding-roadmap.png)
-
-### Additional Features
-- **Insights** - Chat interface for exploring your codebase
-- **Ideation** - Discover improvements, performance issues, and vulnerabilities
-- **Changelog** - Generate release notes from completed tasks
-
----
-
-## Project Structure
-
-```
-Auto-Code/
-├── apps/
-│   ├── backend/     # Python agents, specs, QA pipeline
-│   └── frontend/    # Electron desktop application
-├── guides/          # Additional documentation
-├── tests/           # Test suite
-└── scripts/         # Build utilities
-```
+<details>
+<summary><strong>Roadmap</strong> -- AI-assisted feature planning with competitor analysis</summary>
+<br />
+<img src=".github/assets/Auto-Claude-roadmap.png" alt="Roadmap" width="800" />
+</details>
 
 ---
 
-## CLI Usage
+## Search & Navigation
 
-For headless operation, CI/CD integration, or terminal-only workflows:
+**Looking for something specific?**
 
-```bash
-cd apps/backend
+- **[📖 Documentation Portal](guides/DOCUMENTATION-PORTAL.md)** - Comprehensive guide to all documentation
+- **[📖 Search Index](docs/search/INDEX.md)** - Comprehensive searchable index with keywords
+- **[🔍 Search Guide](docs/search/SEARCH-GUIDE.md)** - Learn effective search strategies
+- **[✅ Verification Checklist](docs/VERIFICATION-CHECKLIST.md)** - Documentation quality verification
 
-# Create a spec interactively
-python spec_runner.py --interactive
+**Quick links:**
+- [Quick Start Guide](guides/QUICK-START.md) - Get started in 15 minutes
+- [CLI Usage Guide](guides/CLI-USAGE.md) - Terminal-only usage
+- [Troubleshooting Guide](guides/TROUBLESHOOTING.md) - Having issues?
 
-# Run autonomous build
-python run.py --spec 001
+---
 
-# Review and merge
-python run.py --spec 001 --review
-python run.py --spec 001 --merge
+## Quick Start
+
+Get started in under 15 minutes with our comprehensive [Quick Start Guide](guides/QUICK-START.md).
+
+**TL;DR:** Download → Connect Claude → Open Project → Create Task → Watch agents build → Review & merge
+
+[Download the latest release](https://github.com/OBenner/Auto-Coding/releases) for your platform.
+
+---
+
+## How It Works
+
+```
+ You describe a task
+        |
+        v
+ +--------------+     +-----------+     +--------+     +-------------+     +-----------+
+ | Spec Creation | --> |  Planner  | --> | Coder  | --> | QA Reviewer | --> | QA Fixer  |
+ +--------------+     +-----------+     +--------+     +-------------+     +-----------+
+                                                                                  |
+                                                                                  v
+                                                                        You review & merge
 ```
 
-See [guides/CLI-USAGE.md](guides/CLI-USAGE.md) for complete CLI documentation.
+**Spec Creation** analyzes your request and produces a structured specification. The **Planner** breaks it into subtasks. The **Coder** implements each subtask (spawning subagents for parallel work when needed). The **QA Reviewer** validates against acceptance criteria, and the **QA Fixer** resolves any issues in a loop. You get a clean branch ready to merge.
 
 ---
 
 ## Deployment Options
 
-Auto Code can be deployed in multiple ways to suit your needs:
+**Desktop (recommended for individual developers)** -- Download and run the native app. All processing happens locally.
 
-### 🖥️ Local Desktop (Recommended for Individual Developers)
-
-Download and run the native desktop application on Windows, macOS, or Linux. All processing happens locally on your machine.
-
-**Best for:** Individual developers, small teams, full control over execution environment
-
-### ☁️ Cloud-Hosted (Recommended for Teams & Enterprise)
-
-Deploy Auto Code to cloud infrastructure for centralized access without local installation. Users access via web interface with OAuth authentication.
-
-**Best for:** Teams, enterprises, users who want instant access without setup
-
-**Features:**
-- Multi-user authentication and authorization
-- Centralized usage tracking and rate limiting
-- Git repository integration (GitHub/GitLab OAuth)
-- Scalable infrastructure with Kubernetes support
-- No local installation required
-
-**Documentation:**
-- **[Cloud Overview](guides/CLOUD_README.md)** - Understanding the cloud-hosted architecture
-- **[Cloud Setup Guide](guides/CLOUD_SETUP.md)** - Initial deployment and configuration
-- **[Cloud Deployment Guide](guides/CLOUD_DEPLOYMENT.md)** - Production operations and scaling
+**Cloud-hosted (not ready)** – Deploy to your infrastructure for centralized, multi-user access with OAuth, usage tracking, and Kubernetes support. See the [Cloud Setup Guide](guides/CLOUD_SETUP.md).
 
 ---
 
-## Development
+## CLI Usage
 
-Want to build from source or contribute? See [CONTRIBUTING.md](CONTRIBUTING.md) for complete development setup instructions.
+For headless operation, CI/CD integration, or terminal workflows:
 
-For Linux-specific builds (Flatpak, AppImage), see [guides/linux.md](guides/linux.md).
+```bash
+cd apps/backend
+
+python spec_runner.py --interactive       # Create a spec interactively
+python spec_runner.py --task "Add auth"   # Create spec from description
+
+python run.py --spec 001                  # Run autonomous build
+python run.py --spec 001 --review         # Review changes
+python run.py --spec 001 --merge          # Merge into your branch
+```
+
+See [CLI Usage Guide](guides/CLI-USAGE.md) for full documentation.
 
 ---
 
@@ -191,65 +173,44 @@ For Linux-specific builds (Flatpak, AppImage), see [guides/linux.md](guides/linu
 
 Auto Code uses a three-layer security model:
 
-1. **OS Sandbox** - Bash commands run in isolation
-2. **Filesystem Restrictions** - Operations limited to project directory
-3. **Dynamic Command Allowlist** - Only approved commands based on detected project stack
+- **OS Sandbox** -- bash commands run in isolation
+- **Filesystem restrictions** -- operations limited to the project directory
+- **Dynamic command allowlist** -- only approved commands based on detected project stack
 
-All releases are:
-- Scanned with VirusTotal before publishing
-- Include SHA256 checksums for verification
-- Code-signed where applicable (macOS)
-
----
-
-## Available Scripts
-
-| Command | Description |
-|---------|-------------|
-| `npm run install:all` | Install backend and frontend dependencies |
-| `npm start` | Build and run the desktop app |
-| `npm run dev` | Run in development mode with hot reload |
-| `npm run package` | Package for current platform |
-| `npm run package:mac` | Package for macOS |
-| `npm run package:win` | Package for Windows |
-| `npm run package:linux` | Package for Linux |
-| `npm run package:flatpak` | Package as Flatpak (see [guides/linux.md](guides/linux.md)) |
-| `npm run lint` | Run linter |
-| `npm test` | Run frontend tests |
-| `npm run test:backend` | Run backend tests |
-
----
-
-## Contributing
-
-We welcome contributions! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for:
-- Development setup instructions
-- Code style guidelines
-- Testing requirements
-- Pull request process
+All releases include SHA256 checksums. macOS builds are code-signed.
 
 ---
 
 ## Community
 
-- **Discord** - [Join our community](https://discord.gg/KCXaPBr4Dj)
-- **Issues** - [Report bugs or request features](https://github.com/OBenner/Auto-Coding/issues)
-- **Discussions** - [Ask questions](https://github.com/OBenner/Auto-Coding/discussions)
+- [Discord](https://discord.gg/KCXaPBr4Dj) -- chat, get help, share what you're building
+- [Issues](https://github.com/OBenner/Auto-Coding/issues) -- report bugs or request features
+- [Discussions](https://github.com/OBenner/Auto-Coding/discussions) -- ask questions and share ideas
+
+---
+
+## Contributing
+
+Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup instructions, code style, testing, and PR guidelines.
+
+---
+
+## Credits
+
+Auto Code was originally forked from [AndyMik90/Auto-Code](https://github.com/AndyMik90/Auto-Code). Thank you to the original author for laying the foundation.
 
 ---
 
 ## License
 
-**AGPL-3.0** - GNU Affero General Public License v3.0
-
-Auto Code is free to use. If you modify and distribute it, or run it as a service, your code must also be open source under AGPL-3.0.
-
-Commercial licensing available for closed-source use cases.
+[AGPL-3.0](./LICENSE) -- Auto Code is free to use. If you modify and distribute it, or run it as a service, your changes must also be open source under AGPL-3.0.
 
 ---
 
-## Star History
+<div align="center">
 
-[![GitHub Repo stars](https://img.shields.io/github/stars/OBenner/Auto-Coding?style=social)](https://github.com/OBenner/Auto-Coding/stargazers)
+[![GitHub stars](https://img.shields.io/github/stars/OBenner/Auto-Coding?style=social)](https://github.com/OBenner/Auto-Coding/stargazers)
 
 [![Star History Chart](https://api.star-history.com/svg?repos=OBenner/Auto-Coding&type=Date)](https://star-history.com/#OBenner/Auto-Coding&Date)
+
+</div>

@@ -252,7 +252,7 @@ def test_token_stats_persistence():
         assert loaded_stats["total_tokens"] == 8801, "total tokens should be 8801"
 
         # Test multiple sessions in same phase (should increment session_count)
-        result = save_token_stats(
+        save_token_stats(
             spec_dir=spec_dir,
             phase="coding",
             input_tokens=1000,
@@ -266,7 +266,7 @@ def test_token_stats_persistence():
         assert coding["output_tokens"] == 2500, "output_tokens should accumulate to 2500"
 
         # Add validation phase
-        result = save_token_stats(
+        save_token_stats(
             spec_dir=spec_dir,
             phase="validation",
             input_tokens=800,

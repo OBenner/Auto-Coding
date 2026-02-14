@@ -30,13 +30,13 @@ from progress import (
     print_progress_summary,
     print_session_header,
 )
-from prompt_generator import (
+from prompts_pkg.prompt_generator import (
     format_context_for_prompt,
     generate_planner_prompt,
     generate_subtask_prompt,
     load_subtask_context,
 )
-from prompts import is_first_run
+from prompts_pkg.prompts import is_first_run
 from recovery import RecoveryManager
 from security.constants import PROJECT_DIR_ENV_VAR
 from task_logger import (
@@ -245,11 +245,10 @@ async def run_autonomous_agent(
         # Get the next subtask to work on (planner sessions shouldn't bind to a subtask)
         next_subtask = None if first_run else get_next_subtask(spec_dir)
         subtask_id = next_subtask.get("id") if next_subtask else None
-        phase_name = next_subtask.get("phase_name") if next_subtask else None
 
         # Update status for this session
         status_manager.update_session(iteration)
-        if phase_name:
+        if next_subtask and next_subtask.get("phase_name"):
             current_phase = get_current_phase(spec_dir)
             if current_phase:
                 status_manager.update_phase(
@@ -265,7 +264,7 @@ async def run_autonomous_agent(
             is_planner=first_run,
             subtask_id=subtask_id,
             subtask_desc=next_subtask.get("description") if next_subtask else None,
-            phase_name=phase_name,
+            phase_name=next_subtask.get("phase_name") if next_subtask else None,
             attempt=recovery_manager.get_attempt_count(subtask_id) + 1
             if subtask_id
             else 1,
@@ -353,9 +352,8 @@ async def run_autonomous_agent(
                         await asyncio.sleep(delay)
                         next_subtask = get_next_subtask(spec_dir)
                         if next_subtask:
-                            # Update subtask_id and phase_name after successful retry
+                            # Update subtask_id after successful retry
                             subtask_id = next_subtask.get("id")
-                            phase_name = next_subtask.get("phase_name")
                             print_status(
                                 f"Found subtask {subtask_id} after {delay}s delay",
                                 "success",

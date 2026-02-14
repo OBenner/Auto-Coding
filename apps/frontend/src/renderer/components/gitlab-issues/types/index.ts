@@ -14,6 +14,7 @@ export interface IssueListItemProps {
   isSelected: boolean;
   onClick: () => void;
   onInvestigate: () => void;
+  onQuickCreate?: () => void;
 }
 
 export interface IssueDetailProps {
@@ -59,6 +60,7 @@ export interface IssueListProps {
   error: string | null;
   onSelectIssue: (issueIid: number) => void;
   onInvestigate: (issue: GitLabIssue) => void;
+  onQuickCreate?: (issue: GitLabIssue) => void;
 }
 
 export interface EmptyStateProps {

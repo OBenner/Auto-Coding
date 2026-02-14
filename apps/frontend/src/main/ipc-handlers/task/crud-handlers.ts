@@ -2,12 +2,55 @@ import { ipcMain } from 'electron';
 import { IPC_CHANNELS, AUTO_BUILD_PATHS, getSpecsDir } from '../../../shared/constants';
 import type { IPCResult, Task, TaskMetadata } from '../../../shared/types';
 import path from 'path';
-import { existsSync, promises as fsPromises, Dirent } from 'fs';
+import { promises as fsPromises, Dirent } from 'fs';
 import { projectStore } from '../../project-store';
 import { titleGenerator } from '../../title-generator';
 import { AgentManager } from '../../agent';
 import { findTaskAndProject } from './shared';
-import { findAllSpecPaths } from '../../utils/spec-path-helpers';
+import { findAllSpecPathsAsync } from '../../utils/spec-path-helpers';
+import { withSpecNumberLock } from '../../utils/spec-number-lock';
+import { runPythonSubprocess } from '../github/utils/subprocess-runner';
+import { getRunnerEnv } from '../github/utils/runner-env';
+
+/**
+ * Helper to get the backend directory path
+ */
+function getBackendDir(): string {
+  const projectRoot = path.resolve(__dirname, '../../../..');
+  return path.join(projectRoot, 'apps', 'backend');
+}
+
+/**
+ * Helper to get Python executable path and environment
+ */
+async function getPythonEnv(): Promise<{ pythonPath: string; env: Record<string, string> }> {
+  const env = await getRunnerEnv();
+  const pythonPath = 'python';
+  return { pythonPath, env };
+}
+
+/**
+ * Create a slugified version of a title for use in directory names
+ */
+function slugifyTitle(title: string): string {
+  return title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .substring(0, 50);
+}
+
+/**
+ * Check if a file exists
+ */
+async function fileExists(filePath: string): Promise<boolean> {
+  try {
+    await fsPromises.access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Register task CRUD (Create, Read, Update, Delete) handlers
@@ -84,7 +127,7 @@ export function registerTaskCRUDHandlers(agentManager: AgentManager): void {
 
       // Find next available spec number
       let specNumber = 1;
-      if (existsSync(specsDir)) {
+      if (await fileExists(specsDir)) {
         const existingDirs = (await fsPromises.readdir(specsDir, { withFileTypes: true }))
           .filter((d: Dirent) => d.isDirectory())
           .map((d: Dirent) => d.name);
@@ -238,7 +281,7 @@ export function registerTaskCRUDHandlers(agentManager: AgentManager): void {
       // Find ALL locations where this task exists (main + worktrees)
       // Following the archiveTasks() pattern from project-store.ts
       const specsBaseDir = getSpecsDir(project.autoBuildPath);
-      const specPaths = findAllSpecPaths(project.path, specsBaseDir, task.specId);
+      const specPaths = await findAllSpecPathsAsync(project.path, specsBaseDir, task.specId);
 
       // If spec directory doesn't exist anywhere, return success (already removed)
       if (specPaths.length === 0) {
@@ -300,7 +343,7 @@ export function registerTaskCRUDHandlers(agentManager: AgentManager): void {
         const autoBuildDir = project.autoBuildPath || '.auto-claude';
         const specDir = path.join(project.path, autoBuildDir, 'specs', task.specId);
 
-        if (!existsSync(specDir)) {
+        if (!(await fileExists(specDir))) {
           return { success: false, error: 'Spec directory not found' };
         }
 
@@ -331,7 +374,7 @@ export function registerTaskCRUDHandlers(agentManager: AgentManager): void {
 
         // Update implementation_plan.json
         const planPath = path.join(specDir, AUTO_BUILD_PATHS.IMPLEMENTATION_PLAN);
-        if (existsSync(planPath)) {
+        if (await fileExists(planPath)) {
           try {
             const planContent = await fsPromises.readFile(planPath, 'utf-8');
             const plan = JSON.parse(planContent);
@@ -352,7 +395,7 @@ export function registerTaskCRUDHandlers(agentManager: AgentManager): void {
 
         // Update spec.md if it exists
         const specPath = path.join(specDir, AUTO_BUILD_PATHS.SPEC_FILE);
-        if (existsSync(specPath)) {
+        if (await fileExists(specPath)) {
           try {
             let specContent = await fsPromises.readFile(specPath, 'utf-8');
 
@@ -428,7 +471,7 @@ export function registerTaskCRUDHandlers(agentManager: AgentManager): void {
 
           // Update requirements.json if it exists
           const requirementsPath = path.join(specDir, 'requirements.json');
-          if (existsSync(requirementsPath)) {
+          if (await fileExists(requirementsPath)) {
             try {
               const requirementsContent = await fsPromises.readFile(requirementsPath, 'utf-8');
               const requirements = JSON.parse(requirementsContent);
@@ -464,6 +507,176 @@ export function registerTaskCRUDHandlers(agentManager: AgentManager): void {
         return {
           success: false,
           error: error instanceof Error ? error.message : 'Unknown error'
+        };
+      }
+    }
+  );
+
+  /**
+   * Create a task from a template
+   */
+  ipcMain.handle(
+    IPC_CHANNELS.TASK_CREATE_FROM_TEMPLATE,
+    async (
+      _,
+      projectId: string,
+      templateName: string,
+      parameters: Record<string, unknown>
+    ): Promise<IPCResult<Task>> => {
+      const project = projectStore.getProject(projectId);
+      if (!project) {
+        return { success: false, error: 'Project not found' };
+      }
+
+      // Get specs directory path
+      const specsBaseDir = getSpecsDir(project.autoBuildPath);
+      const specsDir = path.join(project.path, specsBaseDir);
+
+      // Ensure specs directory exists
+      if (!(await fileExists(specsDir))) {
+        await fsPromises.mkdir(specsDir, { recursive: true });
+      }
+
+      try {
+        // Use coordinated spec numbering with lock to prevent collisions
+        return await withSpecNumberLock(project.path, async (lock) => {
+          // Get next spec number from global scan (main + all worktrees)
+          const nextNum = lock.getNextSpecNumber(project.autoBuildPath);
+          const slugifiedName = slugifyTitle(templateName);
+          const specId = `${String(nextNum).padStart(3, '0')}-${slugifiedName}`;
+          const specDir = path.join(specsDir, specId);
+
+          // Create spec directory
+          await fsPromises.mkdir(specDir, { recursive: true });
+
+          // Call Python backend to generate spec files from template
+          const { pythonPath, env } = await getPythonEnv();
+          const backendDir = getBackendDir();
+
+          const paramsJson = JSON.stringify(parameters);
+
+          const args = [
+            '-c',
+            `
+import sys
+import json
+from pathlib import Path
+
+sys.path.insert(0, ${JSON.stringify(backendDir)})
+
+from spec.templates.library import TemplateLibrary
+
+library = TemplateLibrary()
+spec_dir = Path(${JSON.stringify(specDir)})
+
+result = library.create_spec_from_template(
+    ${JSON.stringify(templateName)},
+    ${paramsJson},
+    spec_dir
+)
+
+if not result:
+    print(json.dumps({"error": "Failed to create spec from template"}))
+    sys.exit(1)
+
+print(json.dumps({"success": True}))
+            `
+          ];
+
+          const { promise } = runPythonSubprocess<{ success: boolean; error?: string }>({
+            pythonPath,
+            args,
+            cwd: backendDir,
+            env
+          });
+
+          const result = await promise;
+
+          if (!result.success || result.exitCode !== 0) {
+            console.error('[TASK_CREATE_FROM_TEMPLATE] Python subprocess failed:', result.error);
+            return { success: false, error: result.error || 'Failed to create spec from template' };
+          }
+
+          // Read the generated spec.md to extract the title
+          const specPath = path.join(specDir, AUTO_BUILD_PATHS.SPEC_FILE);
+          let specTitle = templateName;
+          if (await fileExists(specPath)) {
+            try {
+              const specContent = await fsPromises.readFile(specPath, 'utf-8');
+              // Extract title from first # heading
+              const titleMatch = specContent.match(/^#\s+(.+)$/m);
+              if (titleMatch) {
+                specTitle = titleMatch[1].trim();
+              }
+            } catch (err) {
+              console.error('[TASK_CREATE_FROM_TEMPLATE] Failed to read spec.md:', err);
+            }
+          }
+
+          // Read or create implementation_plan.json
+          const planPath = path.join(specDir, AUTO_BUILD_PATHS.IMPLEMENTATION_PLAN);
+          let description = '';
+
+          if (await fileExists(planPath)) {
+            try {
+              const planContent = await fsPromises.readFile(planPath, 'utf-8');
+              const plan = JSON.parse(planContent);
+              description = plan.description || '';
+
+              // Update plan with correct status
+              plan.status = 'backlog';
+              plan.updated_at = new Date().toISOString();
+              await fsPromises.writeFile(planPath, JSON.stringify(plan, null, 2));
+            } catch (err) {
+              console.error('[TASK_CREATE_FROM_TEMPLATE] Failed to update plan:', err);
+            }
+          } else {
+            // Create initial implementation_plan.json if not created by backend
+            const now = new Date().toISOString();
+            const implementationPlan = {
+              feature: specTitle,
+              description: description,
+              created_at: now,
+              updated_at: now,
+              status: 'backlog',
+              phases: []
+            };
+            await fsPromises.writeFile(planPath, JSON.stringify(implementationPlan, null, 2));
+          }
+
+          // Create task metadata with source type
+          const taskMetadata: TaskMetadata = {
+            sourceType: 'template',
+            templateName: templateName
+          };
+
+          const metadataPath = path.join(specDir, 'task_metadata.json');
+          await fsPromises.writeFile(metadataPath, JSON.stringify(taskMetadata, null, 2));
+
+          // Create the task object
+          const task: Task = {
+            id: specId,
+            specId: specId,
+            projectId,
+            title: specTitle,
+            description,
+            status: 'backlog',
+            subtasks: [],
+            logs: [],
+            metadata: taskMetadata,
+            createdAt: new Date(),
+            updatedAt: new Date()
+          };
+
+          // Invalidate cache since a new task was created
+          projectStore.invalidateTasksCache(projectId);
+
+          return { success: true, data: task };
+        });
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Failed to create task from template'
         };
       }
     }
