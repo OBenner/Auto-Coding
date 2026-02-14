@@ -808,7 +808,7 @@ async def run_agent_session(
     phase: LogPhase = LogPhase.CODING,
     conversation_history: ConversationHistory | None = None,
     subtask_id: str | None = None,
-) -> tuple[str, str, dict[str, int] | None]:
+) -> tuple[str, str, dict[str, int] | None, "DecisionTracker"]:
     """
     Run a single agent session using Claude Agent SDK.
 

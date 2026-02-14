@@ -56,7 +56,7 @@ export interface DecisionPoint {
   impact?: string;               // Expected impact of this decision
   reversible?: boolean;          // Whether this decision can be easily reversed
   dependencies?: string[];       // What this decision depends on
-  metadata?: Record<string, any>; // Additional metadata
+  metadata?: Record<string, unknown>; // Additional metadata
 }
 
 /**

@@ -93,7 +93,7 @@ export interface TaskLogEntry {
   subphase?: string;  // Subphase grouping (e.g., "PROJECT DISCOVERY", "CONTEXT GATHERING")
   collapsed?: boolean;  // Whether to show collapsed by default in UI
   // Decision data for decision log entries
-  decision_data?: any;  // DecisionPoint data (imported separately to avoid circular deps)
+  decision_data?: Record<string, unknown>;  // DecisionPoint data (imported separately to avoid circular deps)
 }
 
 export interface TaskPhaseLog {
@@ -127,7 +127,7 @@ export interface TaskLogStreamChunk {
     success?: boolean;
   };
   subtask_id?: string;
-  decision_data?: any;  // DecisionPoint data for decision entries
+  decision_data?: Record<string, unknown>;  // DecisionPoint data for decision entries
 }
 
 // Log filtering and search types

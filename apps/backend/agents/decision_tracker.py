@@ -93,7 +93,7 @@ class DecisionTracker:
         """Load existing decisions from file."""
         if self.decisions_file.exists():
             try:
-                with open(self.decisions_file, "r", encoding="utf-8") as f:
+                with open(self.decisions_file, encoding="utf-8") as f:
                     data = json.load(f)
                     # Reconstruct DecisionPoint objects from stored data
                     self.decisions = [
@@ -105,7 +105,7 @@ class DecisionTracker:
                 self.decisions = []
 
     def _save_decisions(self) -> None:
-        """Save decisions to file."""
+        """Save decisions to file using atomic write to prevent corruption."""
         try:
             # Ensure spec directory exists
             self.spec_dir.mkdir(parents=True, exist_ok=True)
@@ -116,38 +116,51 @@ class DecisionTracker:
                 "last_updated": datetime.now(UTC).isoformat(),
             }
 
-            with open(self.decisions_file, "w", encoding="utf-8") as f:
+            # Atomic write: write to temp file then rename
+            tmp_file = self.decisions_file.with_suffix(".json.tmp")
+            with open(tmp_file, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2)
+            tmp_file.replace(self.decisions_file)
 
-            logger.debug(f"Saved {len(self.decisions)} decisions to {self.decisions_file}")
+            logger.debug(
+                f"Saved {len(self.decisions)} decisions to {self.decisions_file}"
+            )
         except Exception as e:
             logger.error(f"Failed to save decisions: {e}")
+            # Clean up temp file if it exists
+            tmp_file = self.decisions_file.with_suffix(".json.tmp")
+            if tmp_file.exists():
+                try:
+                    tmp_file.unlink()
+                except OSError:
+                    pass
 
     def _decision_from_dict(self, data: dict[str, Any]) -> DecisionPoint:
         """Reconstruct a DecisionPoint from dictionary data."""
         # Convert Alternative dicts back to Alternative objects
         alternatives = []
-        if "alternatives" in data and data["alternatives"]:
-            for alt_data in data["alternatives"]:
-                alternatives.append(
-                    Alternative(
-                        description=alt_data["description"],
-                        reasoning=alt_data["reasoning"],
-                        rejected_reason=alt_data["rejected_reason"],
-                        confidence_impact=alt_data.get("confidence_impact"),
-                        tradeoffs=alt_data.get("tradeoffs", []),
-                    )
+        for alt_data in data.get("alternatives") or []:
+            if not isinstance(alt_data, dict):
+                continue
+            alternatives.append(
+                Alternative(
+                    description=alt_data.get("description", ""),
+                    reasoning=alt_data.get("reasoning", ""),
+                    rejected_reason=alt_data.get("rejected_reason", ""),
+                    confidence_impact=alt_data.get("confidence_impact"),
+                    tradeoffs=alt_data.get("tradeoffs", []),
                 )
+            )
 
         return DecisionPoint(
-            timestamp=data["timestamp"],
-            decision_type=data["decision_type"],
-            context=data["context"],
-            chosen_approach=data["chosen_approach"],
-            reasoning=data["reasoning"],
-            confidence=data["confidence"],
-            confidence_level=data["confidence_level"],
-            phase=data["phase"],
+            timestamp=data.get("timestamp", ""),
+            decision_type=data.get("decision_type", "other"),
+            context=data.get("context", ""),
+            chosen_approach=data.get("chosen_approach", ""),
+            reasoning=data.get("reasoning", ""),
+            confidence=data.get("confidence", 0.5),
+            confidence_level=data.get("confidence_level", "medium"),
+            phase=data.get("phase", ""),
             subtask_id=data.get("subtask_id"),
             session=data.get("session"),
             alternatives=alternatives,
@@ -311,8 +324,7 @@ class DecisionTracker:
             )
             for i, alt in enumerate(decision.alternatives, 1):
                 detail_parts.append(
-                    f"  {i}. {alt.description}\n"
-                    f"     Rejected: {alt.rejected_reason}"
+                    f"  {i}. {alt.description}\n     Rejected: {alt.rejected_reason}"
                 )
 
         if decision.reasoning_chain:
@@ -370,7 +382,11 @@ class DecisionTracker:
             results = [d for d in results if d.subtask_id == subtask_id]
 
         if decision_type is not None:
-            dtype = decision_type.value if isinstance(decision_type, DecisionType) else decision_type
+            dtype = (
+                decision_type.value
+                if isinstance(decision_type, DecisionType)
+                else decision_type
+            )
             results = [d for d in results if d.decision_type == dtype]
 
         if min_confidence is not None:

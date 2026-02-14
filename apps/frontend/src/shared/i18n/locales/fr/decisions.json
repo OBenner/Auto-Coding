@@ -6,19 +6,19 @@
   "types": {
     "approach": "Approche",
     "implementation": "Implémentation",
-    "toolSelection": "Sélection d'outil",
-    "fileModification": "Modification de fichier",
-    "errorRecovery": "Récupération d'erreur",
+    "tool_selection": "Sélection d'outil",
+    "file_modification": "Modification de fichier",
+    "error_recovery": "Récupération d'erreur",
     "architecture": "Architecture",
     "optimization": "Optimisation",
     "other": "Autre"
   },
   "confidence": {
-    "veryLow": "Très faible",
+    "very_low": "Très faible",
     "low": "Faible",
     "medium": "Moyen",
     "high": "Élevé",
-    "veryHigh": "Très élevé",
+    "very_high": "Très élevé",
     "average": "Moy"
   },
   "labels": {

@@ -6,19 +6,19 @@
   "types": {
     "approach": "Approach",
     "implementation": "Implementation",
-    "toolSelection": "Tool Selection",
-    "fileModification": "File Change",
-    "errorRecovery": "Error Recovery",
+    "tool_selection": "Tool Selection",
+    "file_modification": "File Change",
+    "error_recovery": "Error Recovery",
     "architecture": "Architecture",
     "optimization": "Optimization",
     "other": "Other"
   },
   "confidence": {
-    "veryLow": "Very Low",
+    "very_low": "Very Low",
     "low": "Low",
     "medium": "Medium",
     "high": "High",
-    "veryHigh": "Very High",
+    "very_high": "Very High",
     "average": "Avg"
   },
   "labels": {

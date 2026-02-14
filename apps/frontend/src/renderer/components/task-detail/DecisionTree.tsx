@@ -4,7 +4,6 @@ import {
   ChevronDown,
   ChevronRight,
   AlertTriangle,
-  CheckCircle2,
   Info,
   Target,
   TrendingUp,
@@ -16,85 +15,7 @@ import {
 import { Badge } from '../ui/badge';
 import { cn } from '../../lib/utils';
 import type { DecisionPoint, DecisionType, ConfidenceLevel } from '../../../shared/types';
-
-interface DecisionTreeProps {
-  decisions: DecisionPoint[];
-  className?: string;
-  groupBy?: 'phase' | 'type' | 'confidence';
-}
-
-// Decision type metadata
-const DECISION_TYPE_META: Record<DecisionType, { label: string; icon: typeof Brain; color: string }> = {
-  approach: {
-    label: 'Approach',
-    icon: Target,
-    color: 'text-blue-500 bg-blue-500/10 border-blue-500/30'
-  },
-  implementation: {
-    label: 'Implementation',
-    icon: Layers,
-    color: 'text-purple-500 bg-purple-500/10 border-purple-500/30'
-  },
-  tool_selection: {
-    label: 'Tool Selection',
-    icon: Brain,
-    color: 'text-cyan-500 bg-cyan-500/10 border-cyan-500/30'
-  },
-  file_modification: {
-    label: 'File Change',
-    icon: GitBranch,
-    color: 'text-amber-500 bg-amber-500/10 border-amber-500/30'
-  },
-  error_recovery: {
-    label: 'Error Recovery',
-    icon: AlertTriangle,
-    color: 'text-orange-500 bg-orange-500/10 border-orange-500/30'
-  },
-  architecture: {
-    label: 'Architecture',
-    icon: Layers,
-    color: 'text-indigo-500 bg-indigo-500/10 border-indigo-500/30'
-  },
-  optimization: {
-    label: 'Optimization',
-    icon: TrendingUp,
-    color: 'text-green-500 bg-green-500/10 border-green-500/30'
-  },
-  other: {
-    label: 'Other',
-    icon: Info,
-    color: 'text-gray-500 bg-gray-500/10 border-gray-500/30'
-  }
-};
-
-// Confidence level metadata
-const CONFIDENCE_META: Record<ConfidenceLevel, { label: string; color: string; icon: typeof CheckCircle2 }> = {
-  very_low: {
-    label: 'Very Low',
-    color: 'text-red-500 bg-red-500/10 border-red-500/30',
-    icon: AlertTriangle
-  },
-  low: {
-    label: 'Low',
-    color: 'text-orange-500 bg-orange-500/10 border-orange-500/30',
-    icon: AlertTriangle
-  },
-  medium: {
-    label: 'Medium',
-    color: 'text-amber-500 bg-amber-500/10 border-amber-500/30',
-    icon: Info
-  },
-  high: {
-    label: 'High',
-    color: 'text-green-500 bg-green-500/10 border-green-500/30',
-    icon: CheckCircle2
-  },
-  very_high: {
-    label: 'Very High',
-    color: 'text-emerald-500 bg-emerald-500/10 border-emerald-500/30',
-    icon: CheckCircle2
-  }
-};
+import { getDecisionTypeMeta, getConfidenceMeta, DECISION_TYPE_META, CONFIDENCE_META } from '../../../shared/constants/decision-meta';
 
 // Tree node structure
 interface TreeNode {
@@ -124,7 +45,7 @@ export function DecisionTree({ decisions, className, groupBy = 'phase' }: Decisi
       color: 'text-primary bg-primary/10 border-primary/30',
       children: [],
       count: decisions.length,
-      averageConfidence: decisions.reduce((sum, d) => sum + d.confidence, 0) / decisions.length
+      averageConfidence: decisions.reduce((sum, d) => sum + (d.confidence ?? 0), 0) / decisions.length
     };
 
     if (groupBy === 'phase') {
@@ -147,7 +68,7 @@ export function DecisionTree({ decisions, className, groupBy = 'phase' }: Decisi
           color: 'text-info bg-info/10 border-info/30',
           children: [],
           count: phaseDecisions.length,
-          averageConfidence: phaseDecisions.reduce((sum, d) => sum + d.confidence, 0) / phaseDecisions.length
+          averageConfidence: phaseDecisions.reduce((sum, d) => sum + (d.confidence ?? 0), 0) / phaseDecisions.length
         };
 
         // Group by subtask within phase
@@ -174,7 +95,7 @@ export function DecisionTree({ decisions, className, groupBy = 'phase' }: Decisi
             color: 'text-purple-500 bg-purple-500/10 border-purple-500/30',
             children: subtaskDecisions.map((d, idx) => createDecisionNode(d, `${subtaskId}-${idx}`)),
             count: subtaskDecisions.length,
-            averageConfidence: subtaskDecisions.reduce((sum, d) => sum + d.confidence, 0) / subtaskDecisions.length
+            averageConfidence: subtaskDecisions.reduce((sum, d) => sum + (d.confidence ?? 0), 0) / subtaskDecisions.length
           };
           phaseNode.children.push(subtaskNode);
         });
@@ -206,7 +127,7 @@ export function DecisionTree({ decisions, className, groupBy = 'phase' }: Decisi
           color: typeMeta.color,
           children: typeDecisions.map((d, idx) => createDecisionNode(d, `${type}-${idx}`)),
           count: typeDecisions.length,
-          averageConfidence: typeDecisions.reduce((sum, d) => sum + d.confidence, 0) / typeDecisions.length
+          averageConfidence: typeDecisions.reduce((sum, d) => sum + (d.confidence ?? 0), 0) / typeDecisions.length
         };
         root.children.push(typeNode);
       });
@@ -235,7 +156,7 @@ export function DecisionTree({ decisions, className, groupBy = 'phase' }: Decisi
             color: confidenceMeta.color,
             children: levelDecisions.map((d, idx) => createDecisionNode(d, `${level}-${idx}`)),
             count: levelDecisions.length,
-            averageConfidence: levelDecisions.reduce((sum, d) => sum + d.confidence, 0) / levelDecisions.length
+            averageConfidence: levelDecisions.reduce((sum, d) => sum + (d.confidence ?? 0), 0) / levelDecisions.length
           };
           root.children.push(levelNode);
         }
@@ -282,10 +203,10 @@ export function DecisionTree({ decisions, className, groupBy = 'phase' }: Decisi
 
 // Helper to create a decision node
 function createDecisionNode(decision: DecisionPoint, id: string): TreeNode {
-  const typeMeta = DECISION_TYPE_META[decision.decision_type];
+  const typeMeta = getDecisionTypeMeta(decision.decision_type);
   return {
     id,
-    label: decision.chosen_approach,
+    label: decision.chosen_approach || 'Untitled decision',
     icon: typeMeta.icon,
     color: typeMeta.color,
     decision,
@@ -405,7 +326,7 @@ function TreeNodeComponent({
               {/* Average confidence badge */}
               {node.averageConfidence !== undefined && (
                 <Badge variant="outline" className="text-xs">
-                  Avg: {Math.round(node.averageConfidence * 100)}%
+                  Avg: {Math.round((node.averageConfidence ?? 0) * 100)}%
                 </Badge>
               )}
             </>
@@ -447,13 +368,13 @@ function TreeNodeComponent({
 
 // Confidence badge component
 function ConfidenceBadge({ decision }: { decision: DecisionPoint }) {
-  const confidenceMeta = CONFIDENCE_META[decision.confidence_level];
+  const confidenceMeta = getConfidenceMeta(decision.confidence_level);
   const ConfidenceIcon = confidenceMeta.icon;
 
   return (
     <Badge variant="outline" className={cn('text-xs', confidenceMeta.color)}>
       <ConfidenceIcon className="mr-1 h-3 w-3" />
-      {Math.round(decision.confidence * 100)}%
+      {Math.round((decision.confidence ?? 0) * 100)}%
     </Badge>
   );
 }

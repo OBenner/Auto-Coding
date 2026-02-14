@@ -80,6 +80,9 @@ class DecisionPoint:
         if self.metadata is None:
             self.metadata = {}
 
+        # Clamp confidence to valid range
+        self.confidence = max(0.0, min(1.0, float(self.confidence)))
+
         # Auto-flag low confidence decisions for review
         if self.confidence < 0.6 and not self.requires_review:
             self.requires_review = True
@@ -89,11 +92,7 @@ class DecisionPoint:
         data = {}
         for k, v in asdict(self).items():
             if v is not None:
-                # Convert Alternative objects to dicts
-                if k == "alternatives" and isinstance(v, list):
-                    data[k] = [alt if isinstance(alt, dict) else alt for alt in v]
-                else:
-                    data[k] = v
+                data[k] = v
         return data
 
     def add_alternative(self, alternative: Alternative) -> None:

@@ -111,7 +111,12 @@ async def run_followup_planner(
     try:
         # Run single planning session
         async with client:
-            status, response, usage_metadata, decision_tracker = await run_agent_session(
+            (
+                status,
+                response,
+                usage_metadata,
+                _,
+            ) = await run_agent_session(
                 client, prompt, spec_dir, verbose, phase=LogPhase.PLANNING
             )
 

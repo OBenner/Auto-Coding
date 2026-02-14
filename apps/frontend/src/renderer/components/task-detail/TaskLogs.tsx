@@ -27,10 +27,11 @@ import {
 } from 'lucide-react';
 import { Badge } from '../ui/badge';
 import { cn } from '../../lib/utils';
-import type { Task, TaskLogs, TaskLogPhase, TaskPhaseLog, TaskLogEntry, TaskMetadata, DecisionPoint, DecisionType, ConfidenceLevel, Alternative } from '../../../shared/types';
+import type { Task, TaskLogs, TaskLogPhase, TaskPhaseLog, TaskLogEntry, TaskMetadata, DecisionPoint, Alternative } from '../../../shared/types';
 import type { PhaseModelConfig, PhaseThinkingConfig, ThinkingLevel, ModelTypeShort } from '../../../shared/types/settings';
 import { useVirtualizedLogs } from '../../hooks/useVirtualizedLogs';
 import { FeedbackButtons } from '../feedback/FeedbackButtons';
+import { getDecisionTypeMeta, getConfidenceMeta } from '../../../shared/constants/decision-meta';
 
 interface TaskLogsProps {
   task: Task;
@@ -86,78 +87,6 @@ const THINKING_SHORT_LABELS: Record<ThinkingLevel, string> = {
   ultrathink: 'Ultra'
 };
 
-// Decision type metadata
-const DECISION_TYPE_META: Record<DecisionType, { label: string; icon: typeof Brain; color: string }> = {
-  approach: {
-    label: 'Approach',
-    icon: Target,
-    color: 'text-blue-500 bg-blue-500/10 border-blue-500/30'
-  },
-  implementation: {
-    label: 'Implementation',
-    icon: Layers,
-    color: 'text-purple-500 bg-purple-500/10 border-purple-500/30'
-  },
-  tool_selection: {
-    label: 'Tool Selection',
-    icon: Brain,
-    color: 'text-cyan-500 bg-cyan-500/10 border-cyan-500/30'
-  },
-  file_modification: {
-    label: 'File Change',
-    icon: GitBranch,
-    color: 'text-amber-500 bg-amber-500/10 border-amber-500/30'
-  },
-  error_recovery: {
-    label: 'Error Recovery',
-    icon: AlertTriangle,
-    color: 'text-orange-500 bg-orange-500/10 border-orange-500/30'
-  },
-  architecture: {
-    label: 'Architecture',
-    icon: Layers,
-    color: 'text-indigo-500 bg-indigo-500/10 border-indigo-500/30'
-  },
-  optimization: {
-    label: 'Optimization',
-    icon: TrendingUp,
-    color: 'text-green-500 bg-green-500/10 border-green-500/30'
-  },
-  other: {
-    label: 'Other',
-    icon: Info,
-    color: 'text-gray-500 bg-gray-500/10 border-gray-500/30'
-  }
-};
-
-// Confidence level metadata
-const CONFIDENCE_META: Record<ConfidenceLevel, { label: string; color: string; icon: typeof CheckCircle2 }> = {
-  very_low: {
-    label: 'Very Low',
-    color: 'text-red-500 bg-red-500/10 border-red-500/30',
-    icon: AlertTriangle
-  },
-  low: {
-    label: 'Low',
-    color: 'text-orange-500 bg-orange-500/10 border-orange-500/30',
-    icon: AlertTriangle
-  },
-  medium: {
-    label: 'Medium',
-    color: 'text-amber-500 bg-amber-500/10 border-amber-500/30',
-    icon: Info
-  },
-  high: {
-    label: 'High',
-    color: 'text-green-500 bg-green-500/10 border-green-500/30',
-    icon: CheckCircle2
-  },
-  very_high: {
-    label: 'Very High',
-    color: 'text-emerald-500 bg-emerald-500/10 border-emerald-500/30',
-    icon: CheckCircle2
-  }
-};
 
 // Helper to get model and thinking info for a log phase
 function getPhaseConfig(
@@ -813,8 +742,8 @@ function LogEntry({ entry, isExpanded, onToggleExpand }: LogEntryProps) {
 
   if (entry.type === 'decision' && entry.decision_data) {
     const decision = entry.decision_data as DecisionPoint;
-    const typeMeta = DECISION_TYPE_META[decision.decision_type];
-    const confidenceMeta = CONFIDENCE_META[decision.confidence_level];
+    const typeMeta = getDecisionTypeMeta(decision.decision_type);
+    const confidenceMeta = getConfidenceMeta(decision.confidence_level);
     const TypeIcon = typeMeta.icon;
     const ConfidenceIcon = confidenceMeta.icon;
 
@@ -852,7 +781,7 @@ function LogEntry({ entry, isExpanded, onToggleExpand }: LogEntryProps) {
               {/* Confidence Badge */}
               <Badge variant="outline" className={cn('text-[10px] px-1 py-0', confidenceMeta.color)}>
                 <ConfidenceIcon className="mr-1 h-2.5 w-2.5" />
-                {confidenceMeta.label} ({Math.round(decision.confidence * 100)}%)
+                {confidenceMeta.label} ({Math.round((decision.confidence ?? 0) * 100)}%)
               </Badge>
 
               {/* Review Required Badge */}

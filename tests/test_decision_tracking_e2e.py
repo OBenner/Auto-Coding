@@ -21,9 +21,9 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent.parent / "apps" / "backend"))
 
 from agents.decision_tracker import DecisionTracker
-from task_logger.decision_models import Alternative, DecisionPoint, DecisionType, ConfidenceLevel
+from task_logger.decision_models import Alternative, DecisionType, ConfidenceLevel
 from task_logger.logger import TaskLogger
-from task_logger.models import LogPhase, LogEntryType
+from task_logger.models import LogPhase
 
 
 @pytest.fixture
