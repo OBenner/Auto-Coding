@@ -48,10 +48,14 @@ export const IPC_CHANNELS = {
   TASK_LIST_WORKTREES: 'task:listWorktrees',
   TASK_ARCHIVE: 'task:archive',
   TASK_UNARCHIVE: 'task:unarchive',
+  TASK_EXPORT: 'task:export',
   TASK_CLEAR_STAGED_STATE: 'task:clearStagedState',
 
   // Task token statistics
   TASK_TOKEN_STATS_GET: 'task:tokenStats:get',
+
+  // Batch operations
+  TASK_BATCH_RUN_QA: 'task:batchRunQA',
 
   // Task events (main -> renderer)
   TASK_PROGRESS: 'task:progress',
@@ -204,6 +208,12 @@ export const IPC_CHANNELS = {
   CONTEXT_GET_MEMORIES: 'context:getMemories',
   CONTEXT_GET_PATTERN_SUGGESTIONS: 'context:getPatternSuggestions',
   CONTEXT_CONFIRM_PATTERN: 'context:confirmPattern',
+
+  // Session context operations (conversation history tracking)
+  SESSION_CONTEXT_GET_HISTORY: 'sessionContext:getHistory',
+  SESSION_CONTEXT_GET_SUMMARIES: 'sessionContext:getSummaries',
+  SESSION_CONTEXT_GET_CODE_REFS: 'sessionContext:getCodeRefs',
+  SESSION_CONTEXT_GET_ALL_SESSIONS: 'sessionContext:getAllSessions',
 
   // Environment configuration
   ENV_GET: 'env:get',
@@ -449,6 +459,11 @@ export const IPC_CHANNELS = {
   MERGE_ANALYTICS_GET_PATTERNS: 'mergeAnalytics:getPatterns',
   MERGE_ANALYTICS_EXPORT: 'mergeAnalytics:export',
 
+  // Productivity Analytics operations
+  PRODUCTIVITY_ANALYTICS_GET_SUMMARY: 'productivityAnalytics:getSummary',
+  PRODUCTIVITY_ANALYTICS_GET_TRENDS: 'productivityAnalytics:getTrends',
+  PRODUCTIVITY_ANALYTICS_EXPORT: 'productivityAnalytics:export',
+
   // Memory Infrastructure status (LadybugDB - no Docker required)
   MEMORY_STATUS: 'memory:status',
   MEMORY_LIST_DATABASES: 'memory:listDatabases',
@@ -600,5 +615,24 @@ export const IPC_CHANNELS = {
   TEMPLATE_SEARCH: 'template:search',
   TEMPLATE_PREVIEW: 'template:preview',
   TEMPLATE_CREATE_SPEC: 'template:createSpec',
-  TEMPLATE_SUGGEST: 'template:suggest'
+  TEMPLATE_SUGGEST: 'template:suggest',
+
+  // Feedback submission (adaptive agent learning)
+  FEEDBACK_SUBMIT: 'feedback:submit',
+
+  // Scheduler operations
+  SCHEDULER_SCHEDULE_BUILD: 'scheduler:scheduleBuild',
+  SCHEDULER_GET_STATUS: 'scheduler:getStatus',
+  SCHEDULER_CANCEL_BUILD: 'scheduler:cancelBuild',
+  SCHEDULER_START: 'scheduler:start',
+  SCHEDULER_STOP: 'scheduler:stop',
+  SCHEDULER_GET_BUILDS: 'scheduler:getBuilds',
+
+  // Scheduler events (main -> renderer)
+  SCHEDULER_BUILD_SCHEDULED: 'scheduler:buildScheduled',
+  SCHEDULER_BUILD_CANCELLED: 'scheduler:buildCancelled',
+  SCHEDULER_STATUS_CHANGED: 'scheduler:statusChanged',
+  SCHEDULER_BUILD_PROGRESS: 'scheduler:buildProgress',
+  SCHEDULER_BUILD_COMPLETE: 'scheduler:buildComplete',
+  SCHEDULER_BUILD_FAILED: 'scheduler:buildFailed'
 } as const;

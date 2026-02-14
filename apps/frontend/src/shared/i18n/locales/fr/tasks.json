@@ -109,7 +109,9 @@
     "lockColumn": "Verrouiller la largeur de la colonne",
     "unlockColumn": "Déverrouiller la largeur de la colonne",
     "columnLocked": "La largeur de la colonne est verrouillée",
-    "expandAll": "Développer toutes les colonnes"
+    "expandAll": "Développer toutes les colonnes",
+    "searchPlaceholder": "Rechercher des tâches...",
+    "clearFilters": "Effacer les filtres"
   },
   "queue": {
     "limitReached": "Limite de tâches parallèles atteinte ({{current}}/{{max}}). Tâche déplacée vers la file d'attente.",

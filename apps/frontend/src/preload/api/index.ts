@@ -16,6 +16,8 @@ import { ProfileAPI, createProfileAPI } from './profile-api';
 import { ScreenshotAPI, createScreenshotAPI } from './screenshot-api';
 import { QueueAPI, createQueueAPI } from './queue-api';
 import { PluginAPI, createPluginAPI } from './plugin-api';
+import { SchedulerAPI, createSchedulerAPI } from './scheduler-api';
+import { FeedbackAPI, createFeedbackAPI } from './feedback-api';
 
 export interface ElectronAPI extends
   ProjectAPI,
@@ -33,10 +35,13 @@ export interface ElectronAPI extends
   McpAPI,
   ProfileAPI,
   ScreenshotAPI,
-  PluginAPI {
+  PluginAPI,
+  FeedbackAPI {
   github: GitHubAPI;
   /** Queue routing API for rate limit recovery */
   queue: QueueAPI;
+  /** Scheduler API for build scheduling and queue management */
+  scheduler: SchedulerAPI;
 }
 
 export const createElectronAPI = (): ElectronAPI => ({
@@ -45,7 +50,7 @@ export const createElectronAPI = (): ElectronAPI => ({
   ...createTaskAPI(),
   ...createSettingsAPI(),
   ...createFileAPI(),
-  ...createAgentAPI(),  // Includes: Roadmap, Ideation, Insights, Changelog, Linear, GitHub, GitLab, Shell
+  ...createAgentAPI(),  // Includes: Roadmap, Ideation, Insights, Changelog, Linear, GitHub, GitLab, Shell, SessionContext
   ...createAppUpdateAPI(),
   ...createDebugAPI(),
   ...createClaudeCodeAPI(),
@@ -53,8 +58,10 @@ export const createElectronAPI = (): ElectronAPI => ({
   ...createProfileAPI(),
   ...createScreenshotAPI(),
   ...createPluginAPI(),
+  ...createFeedbackAPI(),
   github: createGitHubAPI(),
-  queue: createQueueAPI()  // Queue routing for rate limit recovery
+  queue: createQueueAPI(),  // Queue routing for rate limit recovery
+  scheduler: createSchedulerAPI()
 });
 
 // Export individual API creators for potential use in tests or specialized contexts
@@ -74,7 +81,9 @@ export {
   createMcpAPI,
   createScreenshotAPI,
   createQueueAPI,
-  createPluginAPI
+  createPluginAPI,
+  createSchedulerAPI,
+  createFeedbackAPI
 };
 
 export type {
@@ -95,5 +104,7 @@ export type {
   McpAPI,
   ScreenshotAPI,
   QueueAPI,
-  PluginAPI
+  PluginAPI,
+  SchedulerAPI,
+  FeedbackAPI
 };

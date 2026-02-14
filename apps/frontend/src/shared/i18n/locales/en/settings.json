@@ -44,6 +44,10 @@
     "debug": {
       "title": "Debug & Logs",
       "description": "Troubleshooting tools"
+    },
+    "keyboardShortcuts": {
+      "title": "Keyboard Shortcuts",
+      "description": "Customize keyboard shortcuts for common actions"
     }
   },
   "apiProfiles": {
@@ -215,6 +219,7 @@
     "sourceHomebrew": "Homebrew",
     "sourceNvm": "NVM",
     "sourceSystemPath": "System PATH",
+    "sourceWindowsWhere": "Windows Where",
     "sourceBundled": "Bundled",
     "sourceFallback": "Fallback",
     "notDetected": "Not detected",
@@ -768,6 +773,100 @@
       "createAnthropicKey": "Create Anthropic API Key",
       "openai": "This looks like an OpenAI API. You'll need an API key.",
       "createOpenaiKey": "Create OpenAI API Key"
+    }
+  },
+  "keyboardShortcuts": {
+    "title": "Keyboard Shortcuts",
+    "description": "Customize keyboard shortcuts for common actions",
+    "infoBanner": "Click on a shortcut to record a new key combination. Press Escape to cancel recording.",
+    "unsavedChanges": "You have unsaved changes",
+    "actions": {
+      "change": "Change",
+      "resetToDefaults": "Reset to Defaults",
+      "save": "Save Changes",
+      "saving": "Saving...",
+      "commandPalette": {
+        "label": "Open Command Palette",
+        "description": "Quickly search and execute commands"
+      },
+      "quickActions": {
+        "label": "Quick Actions",
+        "description": "Access recent actions and quick tasks"
+      },
+      "createTask": {
+        "label": "Create New Task",
+        "description": "Create a new task or spec"
+      },
+      "batchQA": {
+        "label": "Batch QA",
+        "description": "Run QA on multiple tasks at once"
+      },
+      "batchStatusUpdate": {
+        "label": "Batch Status Update",
+        "description": "Update status of multiple tasks"
+      }
+    },
+    "recording": {
+      "pressKeys": "Press keys...",
+      "cancel": "Cancel"
+    },
+    "toast": {
+      "resetTitle": "Shortcuts Reset",
+      "resetDescription": "All keyboard shortcuts have been reset to default values",
+      "savedTitle": "Shortcuts Saved",
+      "savedDescription": "Your keyboard shortcuts have been saved successfully",
+      "saveFailedTitle": "Save Failed",
+      "saveFailedDescription": "Failed to save keyboard shortcuts. Please try again."
+    }
+  },
+  "agentPreferences": {
+    "title": "Agent Behavior Preferences",
+    "description": "Configure how agents adapt their behavior to match your preferences",
+    "verbosity": {
+      "label": "Response Verbosity",
+      "description": "Control how detailed agent explanations should be",
+      "minimal": "Very brief",
+      "concise": "Short",
+      "normal": "Standard",
+      "detailed": "Thorough",
+      "verbose": "Very detailed"
+    },
+    "riskTolerance": {
+      "label": "Risk Tolerance",
+      "description": "How cautious agents should be when making changes",
+      "cautious": "Safe first",
+      "balanced": "Moderate",
+      "aggressive": "Move fast"
+    },
+    "projectType": {
+      "label": "Project Type",
+      "description": "Project maturity level affecting risk decisions",
+      "greenfield": "New project",
+      "established": "Stable",
+      "legacy": "Old codebase"
+    },
+    "codingStyle": {
+      "label": "Coding Style Preferences",
+      "description": "Learn and match project conventions automatically",
+      "indentation": "Indentation",
+      "quoteStyle": "Quote Style",
+      "namingConvention": "Naming Convention",
+      "commentDensity": "Comment Density",
+      "typeHints": "Use Type Hints",
+      "typeHintsDescription": "Add type annotations to code",
+      "auto": "Auto-detect",
+      "spaces": "Spaces",
+      "tabs": "Tabs",
+      "single": "Single quotes",
+      "double": "Double quotes",
+      "minimal": "Minimal",
+      "normalComments": "Normal",
+      "verbose": "Verbose"
+    },
+    "userInstructions": {
+      "label": "Custom Instructions",
+      "description": "Add explicit preferences like 'be more cautious' or 'use TypeScript'",
+      "placeholder": "e.g., 'be more cautious' or 'prefer functional style'"
     }
   }
 }

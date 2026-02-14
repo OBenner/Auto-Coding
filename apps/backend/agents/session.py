@@ -10,10 +10,18 @@ import json
 import logging
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from claude_agent_sdk import ClaudeSDKClient
 from core.token_stats import PhaseTokenStats, PhaseType, TaskTokenStats
-from debug import debug, debug_detailed, debug_error, debug_section, debug_success
+from debug import (
+    debug,
+    debug_detailed,
+    debug_error,
+    debug_section,
+    debug_success,
+    debug_warning,
+)
 from insight_extractor import extract_session_insights
 from linear_updater import (
     linear_subtask_completed,
@@ -37,6 +45,7 @@ from ui import (
     print_status,
 )
 
+from .decision_tracker import DecisionTracker
 from .memory_manager import save_session_memory
 from .utils import (
     find_subtask_in_plan,
@@ -47,6 +56,240 @@ from .utils import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+# ============================================================================
+# Conversation History Tracking
+# ============================================================================
+
+
+class ConversationRound:
+    """
+    Represents a single round of conversation (user message + assistant response).
+
+    Attributes:
+        round_number: Sequential round number within session
+        timestamp: When this round started
+        user_message: The prompt/query sent to the agent
+        assistant_response: The complete text response from the agent
+        tool_calls: List of tools called during this round
+        code_references: List of file paths referenced in this round
+        phase: Execution phase (planning, coding, validation)
+        input_tokens: Number of input tokens used
+        output_tokens: Number of output tokens used
+    """
+
+    def __init__(
+        self,
+        round_number: int,
+        user_message: str,
+        timestamp: datetime | None = None,
+        phase: str = "coding",
+    ):
+        self.round_number = round_number
+        self.timestamp = timestamp or datetime.now()
+        self.user_message = user_message
+        self.assistant_response = ""
+        self.tool_calls: list[dict[str, Any]] = []
+        self.code_references: set[str] = set()
+        self.phase = phase
+        self.input_tokens = 0
+        self.output_tokens = 0
+
+    def add_text(self, text: str) -> None:
+        """Add text to assistant response."""
+        self.assistant_response += text
+
+    def add_tool_call(self, tool_name: str, tool_input: dict[str, Any]) -> None:
+        """Record a tool call."""
+        self.tool_calls.append({"name": tool_name, "input": tool_input})
+
+        # Extract file paths from common tool inputs
+        if "file_path" in tool_input:
+            self.code_references.add(tool_input["file_path"])
+        elif "path" in tool_input:
+            self.code_references.add(tool_input["path"])
+        elif "pattern" in tool_input and "path" in tool_input:
+            # Grep/Glob operations
+            self.code_references.add(tool_input["path"])
+
+    def set_usage(self, input_tokens: int, output_tokens: int) -> None:
+        """Set token usage for this round."""
+        self.input_tokens = input_tokens
+        self.output_tokens = output_tokens
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dictionary for JSON serialization."""
+        return {
+            "round_number": self.round_number,
+            "timestamp": self.timestamp.isoformat(),
+            "phase": self.phase,
+            "user_message": self.user_message,
+            "assistant_response": self.assistant_response,
+            "tool_calls": self.tool_calls,
+            "code_references": list(self.code_references),
+            "input_tokens": self.input_tokens,
+            "output_tokens": self.output_tokens,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "ConversationRound":
+        """Reconstruct from dictionary."""
+        round_obj = cls(
+            round_number=data["round_number"],
+            user_message=data["user_message"],
+            timestamp=datetime.fromisoformat(data["timestamp"]),
+            phase=data.get("phase", "coding"),
+        )
+        round_obj.assistant_response = data["assistant_response"]
+        round_obj.tool_calls = data.get("tool_calls", [])
+        round_obj.code_references = set(data.get("code_references", []))
+        round_obj.input_tokens = data.get("input_tokens", 0)
+        round_obj.output_tokens = data.get("output_tokens", 0)
+        return round_obj
+
+
+class ConversationHistory:
+    """
+    Manages full conversation history for a session.
+
+    This tracks all rounds of conversation, enabling:
+    - Session resumption with full context
+    - Context window optimization
+    - Progress review and debugging
+    """
+
+    def __init__(self, spec_dir: Path, subtask_id: str | None = None):
+        self.spec_dir = spec_dir
+        self.subtask_id = subtask_id
+        self.rounds: list[ConversationRound] = []
+        self.session_start = datetime.now()
+        self.session_id = f"{subtask_id}_{self.session_start.strftime('%Y%m%d_%H%M%S')}"
+
+    def add_round(self, user_message: str, phase: str = "coding") -> ConversationRound:
+        """Start a new conversation round."""
+        round_number = len(self.rounds) + 1
+        round_obj = ConversationRound(
+            round_number=round_number, user_message=user_message, phase=phase
+        )
+        self.rounds.append(round_obj)
+        return round_obj
+
+    def get_current_round(self) -> ConversationRound | None:
+        """Get the most recent conversation round."""
+        return self.rounds[-1] if self.rounds else None
+
+    def get_total_tokens(self) -> tuple[int, int]:
+        """Get total input and output tokens across all rounds."""
+        total_input = sum(r.input_tokens for r in self.rounds)
+        total_output = sum(r.output_tokens for r in self.rounds)
+        return total_input, total_output
+
+    def get_all_code_references(self) -> set[str]:
+        """Get all unique file paths referenced in the conversation."""
+        all_refs = set()
+        for round_obj in self.rounds:
+            all_refs.update(round_obj.code_references)
+        return all_refs
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dictionary for JSON serialization."""
+        return {
+            "session_id": self.session_id,
+            "subtask_id": self.subtask_id,
+            "session_start": self.session_start.isoformat(),
+            "total_rounds": len(self.rounds),
+            "rounds": [r.to_dict() for r in self.rounds],
+        }
+
+    @classmethod
+    def from_dict(cls, spec_dir: Path, data: dict[str, Any]) -> "ConversationHistory":
+        """Reconstruct from dictionary."""
+        history = cls(spec_dir=spec_dir, subtask_id=data.get("subtask_id"))
+        history.session_id = data["session_id"]
+        history.session_start = datetime.fromisoformat(data["session_start"])
+        history.rounds = [
+            ConversationRound.from_dict(r) for r in data.get("rounds", [])
+        ]
+        return history
+
+    def save(self) -> bool:
+        """
+        Save conversation history to JSON file.
+
+        Returns:
+            True if saved successfully, False otherwise
+        """
+        try:
+            history_dir = self.spec_dir / "conversation_history"
+            history_dir.mkdir(parents=True, exist_ok=True)
+
+            history_file = history_dir / f"{self.session_id}.json"
+
+            with open(history_file, "w") as f:
+                json.dump(self.to_dict(), f, indent=2)
+
+            debug_success(
+                "session",
+                f"Saved conversation history: {len(self.rounds)} rounds",
+                file=str(history_file),
+            )
+            return True
+
+        except Exception as e:
+            debug_error("session", f"Failed to save conversation history: {e}")
+            logger.error(f"Failed to save conversation history: {e}")
+            return False
+
+    @classmethod
+    def load_latest(
+        cls, spec_dir: Path, subtask_id: str | None = None
+    ) -> "ConversationHistory | None":
+        """
+        Load the most recent conversation history for a subtask.
+
+        Args:
+            spec_dir: Spec directory
+            subtask_id: Optional subtask filter
+
+        Returns:
+            ConversationHistory object or None if no history exists
+        """
+        try:
+            history_dir = spec_dir / "conversation_history"
+            if not history_dir.exists():
+                return None
+
+            # Find all history files
+            history_files = list(history_dir.glob("*.json"))
+            if not history_files:
+                return None
+
+            # Filter by subtask_id if provided
+            if subtask_id:
+                history_files = [
+                    f for f in history_files if f.stem.startswith(f"{subtask_id}_")
+                ]
+                if not history_files:
+                    return None
+
+            # Get most recent file
+            latest_file = max(history_files, key=lambda f: f.stat().st_mtime)
+
+            with open(latest_file) as f:
+                data = json.load(f)
+
+            debug_success(
+                "session",
+                f"Loaded conversation history: {data.get('total_rounds', 0)} rounds",
+                file=str(latest_file),
+            )
+            return cls.from_dict(spec_dir, data)
+
+        except Exception as e:
+            debug_error("session", f"Failed to load conversation history: {e}")
+            logger.warning(f"Failed to load conversation history: {e}")
+            return None
 
 
 def load_token_stats(spec_dir: Path) -> TaskTokenStats | None:
@@ -437,15 +680,139 @@ async def post_session_processing(
         return False
 
 
+def format_context_for_resume(history: ConversationHistory) -> str:
+    """
+    Format conversation history into a context summary for session resumption.
+
+    Args:
+        history: ConversationHistory object to format
+
+    Returns:
+        Formatted context string for resuming the session
+    """
+    if not history or not history.rounds:
+        return ""
+
+    context_parts = [
+        "# Session Resume Context",
+        "",
+        f"Session ID: {history.session_id}",
+        f"Total rounds: {len(history.rounds)}",
+        f"Session started: {history.session_start.isoformat()}",
+        "",
+        "## Previous Conversation Summary",
+        "",
+    ]
+
+    # Include last 5 rounds for immediate context
+    recent_rounds = history.rounds[-5:] if len(history.rounds) > 5 else history.rounds
+
+    for round_obj in recent_rounds:
+        context_parts.append(f"### Round {round_obj.round_number}")
+        context_parts.append(f"**User:** {round_obj.user_message[:200]}...")
+        if round_obj.assistant_response:
+            response_preview = round_obj.assistant_response[:300]
+            context_parts.append(f"**Assistant:** {response_preview}...")
+        if round_obj.tool_calls:
+            tools_used = [tc["name"] for tc in round_obj.tool_calls[:3]]
+            context_parts.append(f"**Tools used:** {', '.join(tools_used)}")
+        context_parts.append("")
+
+    # Include code references
+    code_refs = history.get_all_code_references()
+    if code_refs:
+        context_parts.append("## Code References from Session")
+        for ref in sorted(code_refs)[:10]:  # Limit to 10 most recent
+            context_parts.append(f"- {ref}")
+        context_parts.append("")
+
+    # Token usage summary
+    total_input, total_output = history.get_total_tokens()
+    if total_input > 0 or total_output > 0:
+        context_parts.append("## Token Usage")
+        context_parts.append(f"- Input tokens: {total_input:,}")
+        context_parts.append(f"- Output tokens: {total_output:,}")
+        context_parts.append("")
+
+    return "\n".join(context_parts)
+
+
+async def resume_session(
+    spec_dir: Path,
+    subtask_id: str,
+    new_message: str,
+) -> tuple[str, ConversationHistory | None]:
+    """
+    Resume a previous session with full context restore.
+
+    Loads the most recent conversation history for the given subtask
+    and formats it for continuing the session.
+
+    Args:
+        spec_dir: Spec directory path
+        subtask_id: ID of the subtask to resume
+        new_message: New message to send after resuming
+
+    Returns:
+        Tuple of (formatted_message, conversation_history) where:
+        - formatted_message: Message with resume context prepended
+        - conversation_history: Loaded ConversationHistory or None if not found
+    """
+    debug_section("session", f"Resuming session for subtask: {subtask_id}")
+
+    # Load latest conversation history for this subtask
+    history = ConversationHistory.load_latest(spec_dir, subtask_id)
+
+    if not history:
+        debug_warning(
+            "session",
+            f"No previous session history found for subtask {subtask_id}",
+        )
+        # Return as-is if no history exists
+        return new_message, None
+
+    debug_success(
+        "session",
+        f"Loaded session history: {len(history.rounds)} rounds",
+        session_id=history.session_id,
+        total_rounds=len(history.rounds),
+    )
+
+    # Format context for resume
+    context_summary = format_context_for_resume(history)
+
+    # Prepend context to new message
+    resume_message = (
+        f"{context_summary}\n\n"
+        f"---\n\n"
+        f"## Resuming Session\n\n"
+        f"You are resuming the above session. Continue from where you left off.\n\n"
+        f"{new_message}"
+    )
+
+    debug(
+        "session",
+        "Formatted resume message",
+        context_length=len(context_summary),
+        total_length=len(resume_message),
+    )
+
+    return resume_message, history
+
+
 async def run_agent_session(
     client: ClaudeSDKClient,
     message: str,
     spec_dir: Path,
     verbose: bool = False,
     phase: LogPhase = LogPhase.CODING,
-) -> tuple[str, str, dict[str, int] | None]:
+    conversation_history: ConversationHistory | None = None,
+    subtask_id: str | None = None,
+) -> tuple[str, str, dict[str, int] | None, "DecisionTracker"]:
     """
     Run a single agent session using Claude Agent SDK.
+
+    Supports session resumption by passing an existing conversation_history.
 
     Args:
         client: Claude SDK client
@@ -453,12 +820,15 @@ async def run_agent_session(
         spec_dir: Spec directory path
         verbose: Whether to show detailed output
         phase: Current execution phase for logging
+        conversation_history: Optional existing history for resuming sessions
+        subtask_id: Optional subtask ID for session tracking
 
     Returns:
-        (status, response_text, usage_metadata) where:
+        (status, response_text, usage_metadata, decision_tracker) where:
         - status: "continue", "complete", or "error"
         - response_text: The agent's response
         - usage_metadata: Dict with "input_tokens" and "output_tokens" keys (or None if unavailable)
+        - decision_tracker: DecisionTracker instance for tracking AI decisions
     """
     debug_section("session", f"Agent Session - {phase.value}")
     debug(
@@ -473,9 +843,40 @@ async def run_agent_session(
 
     # Get task logger for this spec
     task_logger = get_task_logger(spec_dir)
+
+    # Initialize decision tracker for this session
+    decision_tracker = DecisionTracker(
+        spec_dir=spec_dir,
+        task_logger=task_logger,
+        current_phase=phase,
+    )
+    if subtask_id:
+        decision_tracker.set_subtask(subtask_id)
+
     current_tool = None
     message_count = 0
     tool_count = 0
+
+    # Initialize or reuse conversation history tracking
+    if conversation_history is None:
+        conversation_history = ConversationHistory(
+            spec_dir=spec_dir, subtask_id=subtask_id
+        )
+        debug("session", "Created new conversation history", subtask_id=subtask_id)
+    else:
+        debug(
+            "session",
+            "Resuming with existing conversation history",
+            session_id=conversation_history.session_id,
+            previous_rounds=len(conversation_history.rounds),
+        )
+
+    current_round = conversation_history.add_round(
+        user_message=message, phase=phase.value
+    )
+    debug(
+        "session", "Created conversation round", round_number=current_round.round_number
+    )
 
     try:
         # Send the query
@@ -503,6 +904,8 @@ async def run_agent_session(
                     if block_type == "TextBlock" and hasattr(block, "text"):
                         response_text += block.text
                         print(block.text, end="", flush=True)
+                        # Track text in conversation history
+                        current_round.add_text(block.text)
                         # Log text to task logger (persist without double-printing)
                         if task_logger and block.text.strip():
                             task_logger.log(
@@ -542,6 +945,10 @@ async def run_agent_session(
                             tool_input=tool_input_display,
                             full_input=str(inp)[:500] if inp else None,
                         )
+
+                        # Track tool call in conversation history
+                        if inp:
+                            current_round.add_tool_call(tool_name, inp)
 
                         # Log tool start (handles printing too)
                         if task_logger:
@@ -716,6 +1123,13 @@ async def run_agent_session(
             except Exception as e:
                 logger.warning(f"Failed to persist token stats: {e}")
 
+        # Update conversation history with usage metadata and save
+        if usage_metadata:
+            current_round.set_usage(
+                usage_metadata["input_tokens"], usage_metadata["output_tokens"]
+            )
+        conversation_history.save()
+
         # Check if build is complete
         if is_build_complete(spec_dir):
             debug_success(
@@ -725,7 +1139,7 @@ async def run_agent_session(
                 tool_count=tool_count,
                 response_length=len(response_text),
             )
-            return "complete", response_text, usage_metadata
+            return "complete", response_text, usage_metadata, decision_tracker
 
         debug_success(
             "session",
@@ -734,7 +1148,7 @@ async def run_agent_session(
             tool_count=tool_count,
             response_length=len(response_text),
         )
-        return "continue", response_text, usage_metadata
+        return "continue", response_text, usage_metadata, decision_tracker
 
     except Exception as e:
         debug_error(
@@ -747,4 +1161,9 @@ async def run_agent_session(
         print(f"Error during agent session: {e}")
         if task_logger:
             task_logger.log_error(f"Session error: {e}", phase)
-        return "error", str(e), None
+        # Save conversation history even on error for debugging
+        try:
+            conversation_history.save()
+        except Exception as save_err:
+            logger.debug(f"Failed to save conversation history after error: {save_err}")
+        return "error", str(e), None, decision_tracker

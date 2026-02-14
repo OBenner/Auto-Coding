@@ -243,6 +243,74 @@ const browserMockAPI: ElectronAPI = {
     onPRUpdated: () => () => {}
   },
 
+  // GitLab API
+  gitlab: {
+    getGitLabProjects: async () => ({ success: true, data: [] }),
+    checkGitLabConnection: async () => ({ success: true, data: { connected: false, projectPathWithNamespace: undefined, error: undefined } }),
+    getGitLabIssues: async () => ({ success: true, data: [] }),
+    getGitLabIssue: async () => ({ success: true, data: null as any }),
+    getGitLabIssueNotes: async () => ({ success: true, data: [] }),
+    investigateGitLabIssue: () => {},
+    importGitLabIssues: async () => ({ success: true, data: { success: true, imported: 0, failed: 0, errors: undefined } }),
+    getGitLabMergeRequests: async () => ({ success: true, data: [] }),
+    getGitLabMergeRequest: async () => ({ success: true, data: null as any }),
+    createGitLabMergeRequest: async () => ({ success: true, data: null as any }),
+    updateGitLabMergeRequest: async () => ({ success: true, data: null as any }),
+    getGitLabMRDiff: async () => null,
+    getGitLabMRReview: async () => null,
+    runGitLabMRReview: () => {},
+    runGitLabMRFollowupReview: () => {},
+    postGitLabMRReview: async () => true,
+    postGitLabMRNote: async () => true,
+    mergeGitLabMR: async () => true,
+    assignGitLabMR: async () => true,
+    approveGitLabMR: async () => true,
+    cancelGitLabMRReview: async () => true,
+    checkGitLabMRNewCommits: async () => ({ hasNewCommits: false, newCommitCount: 0 }),
+    onGitLabMRReviewProgress: () => () => {},
+    onGitLabMRReviewComplete: () => () => {},
+    onGitLabMRReviewError: () => () => {},
+    getGitLabAutoFixConfig: async () => null,
+    saveGitLabAutoFixConfig: async () => true,
+    getGitLabAutoFixQueue: async () => [],
+    checkGitLabAutoFixLabels: async () => [],
+    checkNewGitLabAutoFixIssues: async () => [],
+    startGitLabAutoFix: () => {},
+    getGitLabAutoFixBatches: async () => [],
+    analyzeGitLabAutoFixPreview: () => {},
+    approveGitLabAutoFixBatches: async () => ({ success: true, batches: [] }),
+    onGitLabAutoFixProgress: () => () => {},
+    onGitLabAutoFixComplete: () => () => {},
+    onGitLabAutoFixError: () => () => {},
+    onGitLabAutoFixAnalyzePreviewProgress: () => () => {},
+    onGitLabAutoFixAnalyzePreviewComplete: () => () => {},
+    onGitLabAutoFixAnalyzePreviewError: () => () => {},
+    getGitLabTriageConfig: async () => null,
+    saveGitLabTriageConfig: async () => true,
+    getGitLabTriageResults: async () => [],
+    runGitLabTriage: () => {},
+    applyGitLabTriageLabels: async () => true,
+    onGitLabTriageProgress: () => () => {},
+    onGitLabTriageComplete: () => () => {},
+    onGitLabTriageError: () => () => {},
+    createGitLabRelease: async () => ({ success: true, data: { url: '' } }),
+    checkGitLabCli: async () => ({ success: true, data: { installed: false } }),
+    installGitLabCli: async () => ({ success: true, data: { command: '' } }),
+    checkGitLabAuth: async () => ({ success: true, data: { authenticated: false } }),
+    startGitLabAuth: async () => ({ success: true, data: { deviceCode: '', verificationUrl: '', userCode: '' } }),
+    getGitLabToken: async () => ({ success: true, data: { token: '' } }),
+    getGitLabUser: async () => ({ success: true, data: { username: '' } }),
+    listGitLabUserProjects: async () => ({ success: true, data: { projects: [] } }),
+    detectGitLabProject: async () => ({ success: true, data: { project: '', instanceUrl: '' } }),
+    getGitLabBranches: async () => ({ success: true, data: [] }),
+    createGitLabProject: async () => ({ success: true, data: { pathWithNamespace: '', webUrl: '' } }),
+    addGitLabRemote: async () => ({ success: true, data: { remoteUrl: '' } }),
+    listGitLabGroups: async () => ({ success: true, data: { groups: [] } }),
+    onGitLabInvestigationProgress: () => () => {},
+    onGitLabInvestigationComplete: () => () => {},
+    onGitLabInvestigationError: () => () => {}
+  },
+
   // Template Library Operations
   listTemplates: async (_projectId: string, _options?: { category?: string | 'all'; tags?: string[] }) => ({
     success: true,
@@ -299,6 +367,22 @@ const browserMockAPI: ElectronAPI = {
     onQueueProfileSwapped: () => () => {},
     onQueueSessionCaptured: () => () => {},
     onQueueBlockedNoProfiles: () => () => {}
+  },
+
+  // Scheduler API (build scheduling and queue management)
+  scheduler: {
+    scheduleBuild: async () => ({ success: true, data: { buildId: 'mock-build-1' } }),
+    getStatus: async () => ({ success: true, data: { schedulerRunning: false, totalBuilds: 0, byStatus: { pending: 0, queued: 0, running: 0, completed: 0, failed: 0, cancelled: 0, retrying: 0 }, builds: [], nextBuild: null } }),
+    cancelBuild: async () => ({ success: true }),
+    start: async () => ({ success: true }),
+    stop: async () => ({ success: true }),
+    getBuilds: async () => ({ success: true, data: [] }),
+    onBuildScheduled: () => () => {},
+    onBuildCancelled: () => () => {},
+    onStatusChanged: () => () => {},
+    onBuildProgress: () => () => {},
+    onBuildComplete: () => () => {},
+    onBuildFailed: () => () => {}
   },
 
   // Claude Code Operations
@@ -448,7 +532,47 @@ const browserMockAPI: ElectronAPI = {
   enablePlugin: async () => ({ success: true, data: { success: true } }),
   disablePlugin: async () => ({ success: true, data: { success: true } }),
   installPlugin: async () => ({ success: true, data: { success: true } }),
-  uninstallPlugin: async () => ({ success: true, data: { success: true } })
+  uninstallPlugin: async () => ({ success: true, data: { success: true } }),
+
+  // Productivity analytics operations
+  getProductivitySummary: async (
+    _projectId?: string,
+    filter?: import('../../shared/types').ProductivityAnalyticsFilter
+  ) => {
+    const now = Date.now();
+    const windowDays = filter?.window_days ?? 30;
+    const periodEnd = filter?.end_date ? new Date(filter.end_date).getTime() : now;
+    const periodStart = filter?.start_date
+      ? new Date(filter.start_date).getTime()
+      : periodEnd - windowDays * 24 * 60 * 60 * 1000;
+
+    return {
+      success: true as const,
+      data: {
+        period_start: new Date(periodStart).toISOString(),
+        period_end: new Date(periodEnd).toISOString(),
+        total_specs: 0,
+        completed_specs: 0,
+        in_progress_specs: 0,
+        failed_specs: 0,
+        total_time_saved_hours: 0,
+        total_build_time_hours: 0,
+        average_success_rate: 0,
+        first_attempt_success_rate: 0,
+        specs_by_type: {},
+        specs_by_complexity: {},
+        average_subtasks_per_spec: 0,
+        average_qa_iterations: 0,
+        total_subtasks_completed: 0,
+        specs: []
+      }
+    };
+  },
+  getProductivityTrends: async (
+    _projectId?: string,
+    _filter?: import('../../shared/types').ProductivityAnalyticsFilter
+  ) => ({ success: true as const, data: [] as import('../../shared/types').ProductivityTrendPoint[] }),
+  exportProductivityAnalytics: async () => ({ success: true as const, data: '/mock/export/productivity' })
 };
 
 /**

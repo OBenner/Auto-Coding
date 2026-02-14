@@ -21,6 +21,12 @@ from services.agent_runner import (
 
 logger = logging.getLogger(__name__)
 
+
+def _sanitize_log(value: str) -> str:
+    """Sanitize value for safe logging (prevent log injection)."""
+    return str(value).replace("\n", "\\n").replace("\r", "\\r")
+
+
 # Create router for agent endpoints
 router = APIRouter(prefix="/api/agents", tags=["agents"])
 
@@ -110,8 +116,8 @@ async def run_agent(request: AgentRunRequest):
     """
     try:
         logger.info(
-            f"Agent run request: spec_id={request.spec_id}, "
-            f"agent_type={request.agent_type}, model={request.model}"
+            f"Agent run request: spec_id={_sanitize_log(request.spec_id)}, "
+            f"agent_type={_sanitize_log(request.agent_type)}, model={_sanitize_log(request.model)}"
         )
 
         # Start the agent task

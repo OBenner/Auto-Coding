@@ -620,9 +620,6 @@ async def run_qa_validation_loop(
 
         if status == "approved":
             emit_phase(ExecutionPhase.COMPLETE, "QA validation passed")
-            # Reset error tracking on success
-            consecutive_errors = 0
-            last_error_context = None
 
             # Record successful iteration
             debug_success(

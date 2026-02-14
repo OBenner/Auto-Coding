@@ -19,7 +19,7 @@ import json
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Optional
 
 from apps.backend.plugins.base import PluginMetadata
 from apps.backend.plugins.sdk.integration import IntegrationContext, IntegrationPlugin
