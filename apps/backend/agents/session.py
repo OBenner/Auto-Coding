@@ -45,6 +45,7 @@ from ui import (
     print_status,
 )
 
+from .decision_tracker import DecisionTracker
 from .memory_manager import save_session_memory
 from .utils import (
     find_subtask_in_plan,
@@ -495,6 +496,14 @@ async def post_session_processing(
             approach=f"Implemented: {subtask.get('description', 'subtask')[:100]}",
         )
 
+        # Get recovery hints for context (if this was a retry)
+        attempt_count = recovery_manager.get_attempt_count(subtask_id)
+        recovery_hints = (
+            recovery_manager.get_recovery_hints(subtask_id)
+            if attempt_count > 1
+            else None
+        )
+
         # Record good commit for rollback safety
         if commit_after and commit_after != commit_before:
             recovery_manager.record_good_commit(commit_after, subtask_id)
@@ -573,6 +582,15 @@ async def post_session_processing(
             error="Subtask not marked as completed",
         )
 
+        # Get recovery hints to help next attempt
+        attempt_count = recovery_manager.get_attempt_count(subtask_id)
+        recovery_hints = recovery_manager.get_recovery_hints(subtask_id)
+        if recovery_hints:
+            print_status(
+                f"Recovery hints available for next attempt ({attempt_count} attempts so far)",
+                "info",
+            )
+
         # Still record commit if one was made (partial progress)
         if commit_after and commit_after != commit_before:
             recovery_manager.record_good_commit(commit_after, subtask_id)
@@ -635,6 +653,12 @@ async def post_session_processing(
             approach="Session ended without progress",
             error=f"Subtask status is {subtask_status}",
         )
+
+        # Get recovery hints to help diagnose and retry
+        attempt_count = recovery_manager.get_attempt_count(subtask_id)
+        recovery_hints = recovery_manager.get_recovery_hints(subtask_id)
+        if recovery_hints and attempt_count > 0:
+            print_status(f"Recovery hints available ({attempt_count} attempts)", "info")
 
         # Record Linear session result (if enabled)
         if linear_enabled:
@@ -807,7 +831,7 @@ async def run_agent_session(
     phase: LogPhase = LogPhase.CODING,
     conversation_history: ConversationHistory | None = None,
     subtask_id: str | None = None,
-) -> tuple[str, str, dict[str, int] | None]:
+) -> tuple[str, str, dict[str, int] | None, "DecisionTracker"]:
     """
     Run a single agent session using Claude Agent SDK.
 
@@ -823,10 +847,11 @@ async def run_agent_session(
         subtask_id: Optional subtask ID for session tracking
 
     Returns:
-        (status, response_text, usage_metadata) where:
+        (status, response_text, usage_metadata, decision_tracker) where:
         - status: "continue", "complete", or "error"
         - response_text: The agent's response
         - usage_metadata: Dict with "input_tokens" and "output_tokens" keys (or None if unavailable)
+        - decision_tracker: DecisionTracker instance for tracking AI decisions
     """
     debug_section("session", f"Agent Session - {phase.value}")
     debug(
@@ -841,6 +866,16 @@ async def run_agent_session(
 
     # Get task logger for this spec
     task_logger = get_task_logger(spec_dir)
+
+    # Initialize decision tracker for this session
+    decision_tracker = DecisionTracker(
+        spec_dir=spec_dir,
+        task_logger=task_logger,
+        current_phase=phase,
+    )
+    if subtask_id:
+        decision_tracker.set_subtask(subtask_id)
+
     current_tool = None
     message_count = 0
     tool_count = 0
@@ -1127,7 +1162,7 @@ async def run_agent_session(
                 tool_count=tool_count,
                 response_length=len(response_text),
             )
-            return "complete", response_text, usage_metadata
+            return "complete", response_text, usage_metadata, decision_tracker
 
         debug_success(
             "session",
@@ -1136,7 +1171,7 @@ async def run_agent_session(
             tool_count=tool_count,
             response_length=len(response_text),
         )
-        return "continue", response_text, usage_metadata
+        return "continue", response_text, usage_metadata, decision_tracker
 
     except Exception as e:
         debug_error(
@@ -1154,4 +1189,4 @@ async def run_agent_session(
             conversation_history.save()
         except Exception as save_err:
             logger.debug(f"Failed to save conversation history after error: {save_err}")
-        return "error", str(e), None
+        return "error", str(e), None, decision_tracker

@@ -110,8 +110,8 @@
     "unlockColumn": "Unlock column width",
     "columnLocked": "Column width is locked",
     "expandAll": "Expand all columns",
-    "batchQA": "Batch QA",
-    "batchStatusUpdate": "Update Status"
+    "searchPlaceholder": "Search tasks...",
+    "clearFilters": "Clear Filters"
   },
   "queue": {
     "limitReached": "Parallel task limit reached ({{current}}/{{max}}). Task moved to queue.",
@@ -137,7 +137,6 @@
       "idle": "Idle",
       "planning": "Planning",
       "coding": "Coding",
-      "testGeneration": "Testing",
       "reviewing": "Reviewing",
       "fixing": "Fixing",
       "complete": "Complete",
@@ -255,9 +254,7 @@
     "deselectAll": "Deselect all tasks",
     "editTask": "Edit task: {{title}}",
     "deleteTask": "Delete task: {{title}}",
-    "moveTask": "Move task to {{status}}",
-    "batchQA": "Run QA on selected tasks",
-    "batchStatusUpdate": "Update status for selected tasks"
+    "moveTask": "Move task to {{status}}"
   },
   "wizard": {
     "createTitle": "Create New Task",
@@ -393,30 +390,19 @@
     "title": "Reference Images (optional)",
     "description": "Add visual references like screenshots or designs to help the AI understand your requirements."
   },
-  "githubIssues": {
-    "quickCreateSpec": "Quick Create Spec",
-    "investigate": "Investigate"
-  },
-  "gitlabIssues": {
-    "quickCreateSpec": "Quick Create Spec",
-    "investigate": "Investigate"
-  },
-  "batchStatusUpdate": {
-    "title": "Update Status",
-    "description": "Update status for {{count}} selected task(s)",
-    "updating": "Updating status ({{current}} of {{total}})...",
-    "resultsDescription": "{{success}} succeeded, {{failed}} failed",
-    "tasksToUpdate": "Tasks to update",
-    "newStatus": "New Status",
-    "selectStatus": "Select status",
-    "statusHint": "All selected tasks will be updated to this status",
-    "updateAll": "Update All",
-    "updatingStatus": "Updating task {{current}} of {{total}}",
-    "completed": "completed",
-    "succeeded": "succeeded",
-    "failed": "failed",
-    "errors": {
-      "unknown": "An unknown error occurred"
-    }
+  "overview": {
+    "implementationPlan": "Implementation Plan",
+    "phaseNumber": "Phase {{number}}",
+    "subtasksCompleted": "subtasks completed",
+    "verification": "Verification",
+    "qaReport": "QA Report",
+    "qaEscalation": "QA Escalation",
+    "totalIterations": "Total Iterations",
+    "totalIssues": "Total Issues",
+    "uniqueIssues": "Unique Issues",
+    "fixSuccessRate": "Fix Success Rate",
+    "recurringIssues": "Recurring Issues",
+    "commonIssues": "Common Issues",
+    "noDataAvailable": "No overview data available yet"
   }
 }

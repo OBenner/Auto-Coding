@@ -373,8 +373,8 @@ async function main() {
 // Run main() only when this file is executed directly (not when imported for testing)
 if (require.main === module) {
   main().catch((err) => {
-    // eslint-disable-next-line no-control-regex
-    console.error(`[package] Error: ${String(err.message).replace(/[\x00-\x1f\x7f]/g, '').slice(0, 200)}`);
+    const safeMsg = String(err.message || '').replace(/[\x00-\x1f\x7f\n\r]/g, ' ').slice(0, 200);
+    console.error('[package] Error: ' + safeMsg);
     process.exitCode = 1;
   });
 }

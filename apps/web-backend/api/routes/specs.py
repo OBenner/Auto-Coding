@@ -22,6 +22,12 @@ from core.config import settings
 
 logger = logging.getLogger(__name__)
 
+
+def _sanitize_log(value: str) -> str:
+    """Sanitize value for safe logging (prevent log injection)."""
+    return str(value).replace("\n", "\\n").replace("\r", "\\r")
+
+
 # Create router for spec endpoints
 router = APIRouter(prefix="/api/specs", tags=["specs"])
 
@@ -359,7 +365,7 @@ async def get_spec_detail(spec_id: str):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error getting spec detail for {spec_id}: {e}", exc_info=True)
+        logger.error(f"Error getting spec detail for {_sanitize_log(spec_id)}: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to get spec detail: {str(e)}",

@@ -231,6 +231,31 @@ def print_progress_summary(spec_dir: Path, show_next: bool = True) -> None:
                         f"  {icon(Icons.ARROW_RIGHT)} Next: {highlight(next_id)} - {next_desc}"
                     )
 
+            # Show recovery metrics if available
+            recovery_stats = get_recovery_metrics_summary(spec_dir)
+            if recovery_stats:
+                print()
+                print("Recovery Metrics:")
+                success_rate = recovery_stats["success_rate"]
+                total_attempts = recovery_stats["total_attempts"]
+                successful = recovery_stats["successful_recoveries"]
+
+                if success_rate >= 70:
+                    rate_display = success(f"{success_rate:.0f}%")
+                elif success_rate >= 40:
+                    rate_display = warning(f"{success_rate:.0f}%")
+                else:
+                    rate_display = f"{success_rate:.0f}%"
+
+                print(
+                    f"  {icon(Icons.SUCCESS)} Success Rate: {rate_display} ({successful}/{total_attempts} attempts)"
+                )
+
+                if recovery_stats["circular_fixes"] > 0:
+                    print(
+                        f"  {icon(Icons.WARNING)} Circular Fixes: {recovery_stats['circular_fixes']}"
+                    )
+
         except (OSError, json.JSONDecodeError, UnicodeDecodeError):
             pass  # Ignore corrupted/unreadable progress files
     else:
@@ -641,3 +666,35 @@ def get_remaining_time_estimate(spec_dir: Path) -> dict:
             "confidence": "low",
             "pending_count": 0,
         }
+
+
+def get_recovery_metrics_summary(spec_dir: Path) -> dict | None:
+    """
+    Get recovery metrics summary for the current build.
+
+    Args:
+        spec_dir: Directory containing recovery_metrics.json
+
+    Returns:
+        Dict with recovery stats, or None if no metrics available
+    """
+    try:
+        # Import here to avoid circular dependency
+        from qa.recovery_metrics import RecoveryMetrics
+
+        metrics = RecoveryMetrics(spec_dir)
+        stats = metrics.get_stats()
+
+        if stats["total_attempts"] == 0:
+            return None
+
+        return {
+            "total_attempts": stats["total_attempts"],
+            "successful_recoveries": stats["successful_recoveries"],
+            "failed_recoveries": stats["failed_recoveries"],
+            "circular_fixes": stats["circular_fixes"],
+            "success_rate": stats["success_rate"],
+            "avg_iterations": stats.get("avg_iterations", 0.0),
+        }
+    except (OSError, ValueError, AttributeError, ImportError):
+        return None

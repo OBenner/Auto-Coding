@@ -546,7 +546,7 @@ asyncio.run(main())
 
         return {
           success: true,
-          data: Array.from(allCodeRefs).sort()
+          data: Array.from(allCodeRefs).sort((a, b) => a.localeCompare(b))
         };
       } catch (error) {
         console.error('Failed to get code references:', error);

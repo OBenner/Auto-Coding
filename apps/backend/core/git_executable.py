@@ -79,9 +79,8 @@ def get_git_executable() -> str:
     if _cached_git_path is not None:
         return _cached_git_path
 
-    git_path = _find_git_executable()
-    _cached_git_path = git_path
-    return git_path
+    _cached_git_path = _find_git_executable()
+    return _cached_git_path
 
 
 def _find_git_executable() -> str:

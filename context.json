@@ -1,96 +1,71 @@
 {
   "files_to_modify": {
     "frontend": [
-      "apps/frontend/src/renderer/App.tsx",
       "apps/frontend/src/renderer/components/KanbanBoard.tsx",
-      "apps/frontend/src/renderer/components/GitHubIssues.tsx",
-      "apps/frontend/src/renderer/components/GitLabIssues.tsx",
-      "apps/frontend/src/renderer/components/settings/AppSettings.tsx",
-      "apps/frontend/src/renderer/stores/settings-store.ts",
-      "apps/frontend/src/preload/api/task-api.ts",
-      "apps/frontend/src/main/ipc-handlers/task/execution-handlers.ts",
-      "apps/frontend/src/shared/i18n/locales/en/common.json",
-      "apps/frontend/src/shared/i18n/locales/en/dialogs.json",
+      "apps/frontend/src/renderer/hooks/index.ts",
       "apps/frontend/src/shared/i18n/locales/en/tasks.json",
-      "apps/frontend/src/shared/i18n/locales/fr/common.json",
-      "apps/frontend/src/shared/i18n/locales/fr/dialogs.json",
-      "apps/frontend/src/shared/i18n/locales/fr/tasks.json",
-      "package.json"
+      "apps/frontend/src/shared/i18n/locales/fr/tasks.json"
     ]
   },
   "files_to_create": {
     "frontend": [
-      "apps/frontend/src/renderer/stores/keyboard-shortcuts-store.ts",
-      "apps/frontend/src/renderer/stores/quick-actions-store.ts",
-      "apps/frontend/src/renderer/components/CommandPalette.tsx",
-      "apps/frontend/src/renderer/components/BatchQADialog.tsx",
-      "apps/frontend/src/renderer/components/BatchStatusUpdateDialog.tsx",
-      "apps/frontend/src/renderer/components/QuickActionsMenu.tsx",
-      "apps/frontend/src/renderer/components/settings/KeyboardShortcutsSettings.tsx",
-      "apps/frontend/src/shared/i18n/locales/en/quickActions.json",
-      "apps/frontend/src/shared/i18n/locales/fr/quickActions.json"
+      "apps/frontend/src/renderer/components/KanbanBoard/utils/index.ts",
+      "apps/frontend/src/renderer/hooks/useTaskFiltering.ts"
     ]
   },
   "files_to_reference": [
-    "apps/frontend/src/renderer/components/BulkPRDialog.tsx",
-    "apps/frontend/src/renderer/components/github-issues/components/BatchReviewWizard.tsx",
-    "apps/frontend/src/renderer/components/ui/combobox.tsx",
-    "apps/frontend/src/renderer/components/ui/dialog.tsx",
-    "apps/frontend/src/renderer/components/ui/dropdown-menu.tsx",
-    "apps/frontend/src/renderer/stores/task-store.ts",
-    "apps/frontend/src/renderer/components/settings/AccountSettings.tsx",
-    "apps/frontend/src/shared/i18n/locales/en/tasks.json",
-    "apps/frontend/src/shared/i18n/locales/fr/tasks.json"
+    "apps/frontend/src/renderer/components/github-issues/hooks/useIssueFiltering.ts",
+    "apps/frontend/src/renderer/components/gitlab-issues/hooks/useIssueFiltering.ts",
+    "apps/frontend/src/renderer/components/linear-import/hooks/useIssueFiltering.ts",
+    "apps/frontend/src/renderer/components/github-issues/utils/index.ts",
+    "apps/frontend/src/renderer/components/github-issues/components/IssueList.tsx",
+    "apps/frontend/src/renderer/components/github-issues/components/IssueListHeader.tsx"
   ],
   "patterns": {
-    "batch_dialog_pattern": "Multi-step dialog with progress tracking, using BulkPRDialog as pattern. Steps: options -> creating -> results. Use ScrollArea for lists, Progress for tracking, Badge for status.",
-    "keyboard_shortcut_pattern": "App.tsx has keyboard listener pattern (lines 375-411). Use useEffect with addEventListener 'keydown', check e.ctrlKey/e.metaKey + e.key, skip if in input fields.",
-    "dialog_system": "Use shadcn/ui Dialog components (Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter). All dialogs have onOpenChange callback for state management.",
-    "i18n_pattern": "Use react-i18next with namespaces. Import useTranslation, const { t } = useTranslation(['namespace', 'common']). All user-facing text must use translation keys, not hardcoded strings.",
-    "store_pattern": "Zustand stores follow pattern: create() with state interface + actions. Use slice pattern for updates to avoid re-renders. Stores persist to filesystem via settings-store.",
-    "ipc_pattern": "IPC handlers in main/ipc-handlers/, preload API in preload/api/. Task operations: getTasks, startTask, updateTaskStatus, submitReview all follow same pattern."
+    "hook_pattern": "All useIssueFiltering hooks follow same pattern: useState for searchQuery, useMemo for filtered results, return { searchQuery, setSearchQuery, filteredIssues }",
+    "utility_pattern": "Utility functions in utils/index.ts handle actual filtering logic (filterIssuesBySearch)",
+    "integration_pattern": "Components import hook, destructure filteredResults, use filteredResults in render instead of raw data",
+    "i18n_pattern": "All user-facing text uses translation keys (e.g., t('tasks:search.placeholder'))"
   },
   "existing_implementations": {
-    "description": "Found existing batch operations and keyboard shortcut patterns in codebase",
-    "batch_operations": {
-      "BulkPRDialog": "apps/frontend/src/renderer/components/BulkPRDialog.tsx - Creates PRs for multiple tasks with progress tracking",
-      "BatchReviewWizard": "apps/frontend/src/renderer/components/github-issues/components/BatchReviewWizard.tsx - Multi-step wizard for issue batching"
+    "description": "Found 4 identical useIssueFiltering implementations following the same pattern",
+    "github_issues": {
+      "file": "apps/frontend/src/renderer/components/github-issues/hooks/useIssueFiltering.ts",
+      "features": ["searchQuery state", "filteredIssues memo", "onSearchStart/onSearchClear callbacks"],
+      "utility": "apps/frontend/src/renderer/components/github-issues/utils/index.ts"
     },
-    "keyboard_shortcuts": {
-      "location": "apps/frontend/src/renderer/App.tsx lines 375-411",
-      "pattern": "useEffect with keydown listener, Cmd/Ctrl+T for add project",
-      "note": "Checks if target is input field to avoid interfering with typing"
+    "gitlab_issues": {
+      "file": "apps/frontend/src/renderer/components/gitlab-issues/hooks/useIssueFiltering.ts",
+      "features": ["searchQuery state", "filteredIssues memo"],
+      "utility": "apps/frontend/src/renderer/components/gitlab-issues/utils/index.ts"
     },
-    "command_palette": {
-      "status": "Not implemented yet",
-      "recommended_package": "cmdk",
-      "integration_point": "App.tsx with Cmd/Ctrl+K trigger"
+    "linear_import": {
+      "file": "apps/frontend/src/renderer/components/linear-import/hooks/useIssueFiltering.ts",
+      "features": ["searchQuery state", "filterState state", "filteredIssues memo", "uniqueStateTypes memo"],
+      "utility": "Inline filtering (no separate utility file)"
     },
-    "task_api": {
-      "location": "apps/frontend/src/preload/api/task-api.ts",
-      "relevant_methods": ["startTask", "updateTaskStatus", "submitReview", "getTasks"],
-      "note": "All return Promise<IPCResult<T>> with success/error properties"
-    },
-    "ui_components": {
-      "shadcn_ui": "26 components in apps/frontend/src/renderer/components/ui/",
-      "available": ["dialog", "dropdown-menu", "combobox", "checkbox", "badge", "progress", "scroll-area"],
-      "note": "All components follow consistent API and styling patterns"
+    "kanban_current": {
+      "file": "apps/frontend/src/renderer/components/KanbanBoard.tsx",
+      "features": ["Inline filteredTasks memo on line 739-744"],
+      "issues": ["No dedicated hook", "No search functionality", "Only filters by archived status"]
     }
   },
-  "tech_stack": {
-    "frontend": {
-      "framework": "Electron + React + TypeScript",
-      "state_management": "Zustand",
-      "ui_library": "shadcn/ui (Radix UI primitives)",
-      "i18n": "react-i18next",
-      "testing": "Vitest + Testing Library",
-      "build": "Vite"
+  "task_type_info": {
+    "file": "apps/frontend/src/shared/types/task.ts",
+    "filterable_fields": {
+      "basic": ["id", "title", "description", "status"],
+      "metadata": ["category", "priority", "complexity", "impact", "sourceType"],
+      "timestamps": ["createdAt", "updatedAt"]
     },
-    "component_conventions": {
-      "naming": "PascalCase for components, camelCase for utilities",
-      "structure": "Co-locate components with hooks and stores",
-      "styling": "Tailwind CSS with cn() utility for class merging",
-      "types": "Shared types in apps/frontend/src/shared/types/"
-    }
+    "status_values": ["backlog", "queue", "in_progress", "ai_review", "human_review", "done", "pr_created", "error"],
+    "category_values": ["feature", "bug_fix", "refactoring", "documentation", "security", "performance", "ui_ux", "infrastructure", "testing"],
+    "priority_values": ["low", "medium", "high", "urgent"],
+    "complexity_values": ["trivial", "small", "medium", "large", "complex"],
+    "impact_values": ["low", "medium", "high", "critical"]
+  },
+  "tech_stack": {
+    "frontend": ["electron", "react", "typescript", "zustand", "i18next", "vitest"],
+    "testing_framework": "vitest + testing-library",
+    "i18n_framework": "react-i18next"
   }
 }

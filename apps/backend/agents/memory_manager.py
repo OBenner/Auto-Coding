@@ -25,7 +25,7 @@ from debug import (
     debug_warning,
     is_debug_enabled,
 )
-from graphiti_config import get_graphiti_status, is_graphiti_enabled
+from integrations.graphiti.config import get_graphiti_status, is_graphiti_enabled
 
 # Import from parent memory package
 # Now safe since this module is named memory_manager (not memory)
@@ -465,7 +465,7 @@ async def get_graphiti_context(
         if memory is not None:
             try:
                 await memory.close()
-            except Exception as e:
+            except Exception:
                 logger.debug(
                     "Failed to close Graphiti memory connection", exc_info=True
                 )
@@ -557,14 +557,13 @@ async def save_session_memory(
         try:
             # Use centralized helper for GraphitiMemory instantiation (async)
             memory = get_graphiti_memory(spec_dir, project_dir)
-            if memory is None:
-                if is_debug_enabled():
-                    debug_warning("memory", "GraphitiMemory not available")
-                    debug(
-                        "memory",
-                        "get_graphiti_memory() returned None - this usually means Graphiti is disabled or provider config is invalid",
-                    )
-                # Continue to file-based fallback
+            if memory is None and is_debug_enabled():
+                debug_warning("memory", "GraphitiMemory not available")
+                debug(
+                    "memory",
+                    "get_graphiti_memory() returned None - this usually means Graphiti is disabled or provider config is invalid",
+                )
+            # Continue to file-based fallback
             if memory is not None and memory.is_enabled:
                 if is_debug_enabled():
                     debug("memory", "Saving to Graphiti...")

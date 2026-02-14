@@ -41,7 +41,6 @@ class TestSessionContextCodeReferences:
             EPISODE_TYPE_CODE_REFERENCE,
             EPISODE_TYPE_CONVERSATION_ROUND,
             EPISODE_TYPE_SESSION_CONTEXT,
-            SessionContext,
         )
 
         # Verify episode type constants exist

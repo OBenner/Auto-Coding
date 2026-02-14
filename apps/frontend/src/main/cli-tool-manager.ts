@@ -27,7 +27,7 @@ import os from 'os';
 import { promisify } from 'util';
 import { app } from 'electron';
 import { findExecutable, findExecutableAsync, getAugmentedEnv, getAugmentedEnvAsync, shouldUseShell, existsAsync } from './env-utils';
-import { isWindows, isMacOS, isUnix, joinPaths, getExecutableExtension } from './platform';
+import { isWindows, isMacOS, isUnix } from './platform';
 import type { ToolDetectionResult } from '../shared/types';
 const execFileAsync = promisify(execFile);
 
@@ -53,6 +53,7 @@ import {
   getGitDetectionPaths,
   getGitHubCLIDetectionPaths,
   type ClaudeDetectionPaths,
+  type WindowsToolPaths,
 } from './platform/paths';
 
 // Re-export platform utilities for backward compatibility
@@ -220,9 +221,6 @@ class CLIToolManager {
     // Check cache first
     const cached = this.cache.get(tool);
     if (cached) {
-      console.warn(
-        `[CLI Tools] Using cached ${tool}: ${cached.path} (${cached.source})`
-      );
       return cached.path;
     }
 
@@ -494,7 +492,7 @@ class CLIToolManager {
             found: true,
             path: whereGitPath,
             version: validation.version,
-            source: 'system-path',
+            source: 'windows-where',
             message: `Using Windows Git: ${whereGitPath}`,
           };
         }
@@ -610,6 +608,29 @@ class CLIToolManager {
           };
         }
       }
+
+      // Fallback to standard installation locations (mirrors Git detection behavior)
+      const windowsGhPaths: WindowsToolPaths = {
+        toolName: 'GitHub CLI',
+        executable: 'gh.exe',
+        patterns: [
+          '%PROGRAMFILES%\\GitHub CLI',
+          '%PROGRAMFILES(X86)%\\GitHub CLI',
+        ],
+      };
+      const windowsPaths = getWindowsExecutablePaths(windowsGhPaths, '[GitHub CLI]');
+      for (const winGhPath of windowsPaths) {
+        const validation = this.validateGitHubCLI(winGhPath);
+        if (validation.valid) {
+          return {
+            found: true,
+            path: winGhPath,
+            version: validation.version,
+            source: 'system-path',
+            message: `Using Windows GitHub CLI: ${winGhPath}`,
+          };
+        }
+      }
     }
 
     // 5. Not found
@@ -681,7 +702,7 @@ class CLIToolManager {
       const whereClaudePath = findWindowsExecutableViaWhere('claude', '[Claude CLI]');
       if (whereClaudePath) {
         const validation = this.validateClaude(whereClaudePath);
-        const result = buildClaudeDetectionResult(whereClaudePath, validation, 'system-path', 'Using Windows Claude CLI');
+        const result = buildClaudeDetectionResult(whereClaudePath, validation, 'windows-where', 'Using Windows Claude CLI');
         if (result) return result;
       }
     }
@@ -934,9 +955,6 @@ class CLIToolManager {
     // Check cache first (instant return if cached)
     const cached = this.cache.get(tool);
     if (cached) {
-      console.warn(
-        `[CLI Tools] Using cached ${tool}: ${cached.path} (${cached.source})`
-      );
       return cached.path;
     }
 
@@ -1260,7 +1278,7 @@ class CLIToolManager {
       const whereClaudePath = await findWindowsExecutableViaWhereAsync('claude', '[Claude CLI]');
       if (whereClaudePath) {
         const validation = await this.validateClaudeAsync(whereClaudePath);
-        const result = buildClaudeDetectionResult(whereClaudePath, validation, 'system-path', 'Using Windows Claude CLI');
+        const result = buildClaudeDetectionResult(whereClaudePath, validation, 'windows-where', 'Using Windows Claude CLI');
         if (result) return result;
       }
     }
@@ -1487,7 +1505,7 @@ class CLIToolManager {
             found: true,
             path: whereGitPath,
             version: validation.version,
-            source: 'system-path',
+            source: 'windows-where',
             message: `Using Windows Git: ${whereGitPath}`,
           };
         }
@@ -1592,6 +1610,29 @@ class CLIToolManager {
             version: validation.version,
             source: 'windows-where',
             message: `Using Windows GitHub CLI: ${whereGhPath}`,
+          };
+        }
+      }
+
+      // Fallback to standard installation locations
+      const windowsGhPaths: WindowsToolPaths = {
+        toolName: 'GitHub CLI',
+        executable: 'gh.exe',
+        patterns: [
+          '%PROGRAMFILES%\\GitHub CLI',
+          '%PROGRAMFILES(X86)%\\GitHub CLI',
+        ],
+      };
+      const windowsPaths = await getWindowsExecutablePathsAsync(windowsGhPaths, '[GitHub CLI]');
+      for (const winGhPath of windowsPaths) {
+        const validation = await this.validateGitHubCLIAsync(winGhPath);
+        if (validation.valid) {
+          return {
+            found: true,
+            path: winGhPath,
+            version: validation.version,
+            source: 'system-path',
+            message: `Using Windows GitHub CLI: ${winGhPath}`,
           };
         }
       }

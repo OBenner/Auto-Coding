@@ -1053,6 +1053,14 @@ try:
         FileEvolutionTracker,
         AIResolver,
     )
+
+    __all__ = [
+        "SemanticAnalyzer",
+        "ConflictDetector",
+        "AutoMerger",
+        "FileEvolutionTracker",
+        "AIResolver",
+    ]
 except ImportError:
     # Module will be available when tests run from correct directory
     pass

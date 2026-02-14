@@ -474,14 +474,16 @@ def get_required_mcp_servers(
             ):
                 servers.append("electron")
             # Puppeteer: enabled by project config (no global env var)
-            elif is_web_frontend and not is_electron:
-                if str(puppeteer_enabled).lower() == "true":
-                    servers.append("puppeteer")
+            elif (
+                is_web_frontend
+                and not is_electron
+                and str(puppeteer_enabled).lower() == "true"
+            ):
+                servers.append("puppeteer")
 
     # Filter graphiti if not enabled
-    if "graphiti" in servers:
-        if not os.environ.get("GRAPHITI_MCP_URL"):
-            servers = [s for s in servers if s != "graphiti"]
+    if "graphiti" in servers and not os.environ.get("GRAPHITI_MCP_URL"):
+        servers = [s for s in servers if s != "graphiti"]
 
     # ========== Apply per-agent MCP overrides ==========
     # Format: AGENT_MCP_<agent_type>_ADD=server1,server2

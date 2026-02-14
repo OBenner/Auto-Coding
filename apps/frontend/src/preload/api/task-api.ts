@@ -73,6 +73,7 @@ export interface TaskAPI {
   worktreeDetectTools: () => Promise<IPCResult<{ ides: Array<{ id: string; name: string; path: string; installed: boolean }>; terminals: Array<{ id: string; name: string; path: string; installed: boolean }> }>>;
   archiveTasks: (projectId: string, taskIds: string[], version?: string) => Promise<IPCResult<boolean>>;
   unarchiveTasks: (projectId: string, taskIds: string[]) => Promise<IPCResult<boolean>>;
+  exportTask: (projectId: string, taskId: string) => Promise<IPCResult<string>>;
   createWorktreePR: (taskId: string, options?: WorktreeCreatePROptions) => Promise<IPCResult<WorktreeCreatePRResult>>;
   batchRunQA: (taskId: string) => Promise<IPCResult<{ success: boolean; issues?: Array<{ message: string; file?: string }> }>>;
 
@@ -95,6 +96,11 @@ export interface TaskAPI {
 
   // Task Token Stats
   getTokenStats: (projectPath: string, specId: string) => Promise<IPCResult<import('../../shared/types').TaskTokenStats | null>>;
+
+  // Task Spec File Reading (for task overview display)
+  getImplementationPlan: (taskId: string) => Promise<IPCResult<ImplementationPlan | null>>;
+  getQAReport: (taskId: string) => Promise<IPCResult<string | null>>;
+  getQAEscalation: (taskId: string) => Promise<IPCResult<import('../../shared/types').QAEscalation | null>>;
 
   // Merge Analytics
   getMergeHistory: (projectId: string, filter?: MergeAnalyticsFilter) => Promise<IPCResult<MergeOperationRecord[]>>;
@@ -201,6 +207,9 @@ export const createTaskAPI = (): TaskAPI => ({
 
   unarchiveTasks: (projectId: string, taskIds: string[]): Promise<IPCResult<boolean>> =>
     ipcRenderer.invoke(IPC_CHANNELS.TASK_UNARCHIVE, projectId, taskIds),
+
+  exportTask: (projectId: string, taskId: string): Promise<IPCResult<string>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.TASK_EXPORT, projectId, taskId),
 
   createWorktreePR: (taskId: string, options?: WorktreeCreatePROptions): Promise<IPCResult<WorktreeCreatePRResult>> =>
     ipcRenderer.invoke(IPC_CHANNELS.TASK_WORKTREE_CREATE_PR, taskId, options),
@@ -339,6 +348,16 @@ export const createTaskAPI = (): TaskAPI => ({
   // Task Token Stats
   getTokenStats: (projectPath: string, specId: string): Promise<IPCResult<import('../../shared/types').TaskTokenStats | null>> =>
     ipcRenderer.invoke(IPC_CHANNELS.TASK_TOKEN_STATS_GET, projectPath, specId),
+
+  // Task Spec File Reading
+  getImplementationPlan: (taskId: string): Promise<IPCResult<ImplementationPlan | null>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.TASK_SPEC_IMPLEMENTATION_PLAN_GET, taskId),
+
+  getQAReport: (taskId: string): Promise<IPCResult<string | null>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.TASK_SPEC_QA_REPORT_GET, taskId),
+
+  getQAEscalation: (taskId: string): Promise<IPCResult<import('../../shared/types').QAEscalation | null>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.TASK_SPEC_QA_ESCALATION_GET, taskId),
 
   // Merge Analytics
   getMergeHistory: (projectId: string, filter?: MergeAnalyticsFilter): Promise<IPCResult<MergeOperationRecord[]>> =>

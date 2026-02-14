@@ -79,7 +79,7 @@ async def _save_to_graphiti_async(
             # Always close the memory connection (swallow exceptions to avoid overriding)
             try:
                 await memory.close()
-            except Exception as e:
+            except Exception:
                 logger.debug(
                     "Failed to close Graphiti memory connection", exc_info=True
                 )
@@ -389,8 +389,8 @@ def create_memory_tools(spec_dir: Path, project_dir: Path) -> list:
                     for path, info in list(discoveries.items())[:20]:  # Limit to 20
                         desc = info.get("description", "No description")
                         result_parts.append(f"- `{path}`: {desc}")
-            except Exception:
-                pass
+            except (OSError, json.JSONDecodeError, KeyError, TypeError):
+                logger.debug("Failed to load codebase map", exc_info=True)
 
         # Load gotchas
         gotchas_file = memory_dir / "gotchas.md"
@@ -403,8 +403,8 @@ def create_memory_tools(spec_dir: Path, project_dir: Path) -> list:
                     result_parts.append(
                         content[-1000:] if len(content) > 1000 else content
                     )
-            except Exception:
-                pass
+            except OSError:
+                logger.debug("Failed to load gotchas file", exc_info=True)
 
         # Load patterns
         patterns_file = memory_dir / "patterns.md"
@@ -416,8 +416,8 @@ def create_memory_tools(spec_dir: Path, project_dir: Path) -> list:
                     result_parts.append(
                         content[-1000:] if len(content) > 1000 else content
                     )
-            except Exception:
-                pass
+            except OSError:
+                logger.debug("Failed to load patterns file", exc_info=True)
 
         if not result_parts:
             return {

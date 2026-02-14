@@ -13,6 +13,12 @@ from typing import Dict, Optional
 
 logger = logging.getLogger(__name__)
 
+
+def _sanitize_log(value: str) -> str:
+    """Sanitize value for safe logging (prevent log injection)."""
+    return str(value).replace("\n", "\\n").replace("\r", "\\r")
+
+
 # Keep track of running agent tasks
 _running_tasks: Dict[str, asyncio.Task] = {}
 
@@ -106,8 +112,8 @@ async def run_agent_async(
         raise FileNotFoundError(f"Spec not found: {spec_id}")
 
     logger.info(
-        f"Starting agent execution: type={agent_type}, spec={spec_dir.name}, "
-        f"model={model}"
+        f"Starting agent execution: type={_sanitize_log(agent_type)}, spec={_sanitize_log(spec_dir.name)}, "
+        f"model={_sanitize_log(model)}"
     )
 
     try:
@@ -204,7 +210,7 @@ def start_agent_task(
 
     _running_tasks[task_id] = task
 
-    logger.info(f"Started agent task: {task_id}")
+    logger.info(f"Started agent task: {_sanitize_log(task_id)}")
 
     return task_id
 
@@ -261,7 +267,7 @@ def cancel_task(task_id: str) -> bool:
         return False
 
     task.cancel()
-    logger.info(f"Cancelled agent task: {task_id}")
+    logger.info(f"Cancelled agent task: {_sanitize_log(task_id)}")
 
     return True
 

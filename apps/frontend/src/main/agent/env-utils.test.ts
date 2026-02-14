@@ -112,7 +112,7 @@ describe('getOAuthModeClearVars', () => {
         'ANTHROPIC_DEFAULT_SONNET_MODEL',
         'ANTHROPIC_DEFAULT_OPUS_MODEL'
       ];
-      expect(Object.keys(result1).sort()).toEqual(expectedKeys.sort());
+      expect(Object.keys(result1).sort((a, b) => a.localeCompare(b))).toEqual(expectedKeys.sort((a, b) => a.localeCompare(b)));
     });
 
     it('should NOT clear if apiProfileEnv has non-ANTHROPIC keys only', () => {

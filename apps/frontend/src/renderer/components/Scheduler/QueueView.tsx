@@ -203,10 +203,10 @@ export function QueueView({
   /**
    * Handle build cancellation
    */
-  const handleCancelBuild = async (buildId: string) => {
+  const handleCancelBuild = (buildId: string) => {
     setCancellingBuilds((prev) => new Set(prev).add(buildId));
     try {
-      await onCancelBuild?.(buildId);
+      onCancelBuild?.(buildId);
     } finally {
       setCancellingBuilds((prev) => {
         const next = new Set(prev);

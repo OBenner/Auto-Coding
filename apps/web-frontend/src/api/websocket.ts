@@ -76,19 +76,15 @@ export class WebSocketClient {
   }
 
   /**
-   * Internal logging helper
+   * Internal logging helper - sanitizes all values inline to prevent log injection
    */
-  /**
-   * Sanitize a value for safe log output (prevent log injection).
-   */
-  // eslint-disable-next-line no-control-regex
-  private static sanitize(v: unknown, max = 200): string {
-    return String(v).replace(/[\x00-\x1f\x7f]/g, '').slice(0, max);
-  }
-
   private log(message: string, ...args: unknown[]): void {
     if (this.config.debug) {
-      console.log(`[WebSocketClient] ${WebSocketClient.sanitize(message)}`, ...args);
+      // eslint-disable-next-line no-control-regex
+      const safeMsg = String(message).replace(/[\x00-\x1f\x7f]/g, '').slice(0, 200);
+      // eslint-disable-next-line no-control-regex
+      const sanitizedArgs = args.map(a => String(a).replace(/[\x00-\x1f\x7f]/g, '').slice(0, 200));
+      console.log('[WebSocketClient] ' + safeMsg, ...sanitizedArgs);
     }
   }
 
@@ -286,7 +282,8 @@ export class WebSocketClient {
         try {
           handler(event);
         } catch (error) {
-          console.error(`Error in ${WebSocketClient.sanitize(event.event_type, 50)} event handler:`, error);
+          // eslint-disable-next-line no-control-regex
+          console.error("Error in event handler for type:", String(event.event_type).replace(/[\x00-\x1f\x7f]/g, '').slice(0, 50), error);
         }
       }
     }

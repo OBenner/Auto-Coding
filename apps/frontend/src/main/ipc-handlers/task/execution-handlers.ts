@@ -1148,43 +1148,11 @@ export function registerTaskExecutionHandlers(
               projectStore.invalidateTasksCache(project.id);
             }
 
-            // Start the task execution
-            // Start file watcher for this task
-            const specsBaseDir = getSpecsDir(project.autoBuildPath);
-            const specDirForWatcher = path.join(project.path, specsBaseDir, task.specId);
-            fileWatcher.watch(taskId, specDirForWatcher);
-
-            // Check if spec.md exists to determine whether to run spec creation or task execution
-            const specFilePath = path.join(specDirForWatcher, AUTO_BUILD_PATHS.SPEC_FILE);
-            const hasSpec = existsSync(specFilePath);
-            const needsSpecCreation = !hasSpec;
-
-            // Get base branch: task-level override takes precedence over project settings
-            const baseBranchForRecovery = task.metadata?.baseBranch || project.settings?.mainBranch;
-
-            if (needsSpecCreation) {
-              // No spec file - need to run spec_runner.py to create the spec
-              const taskDescription = task.description || task.title;
-              console.warn(`[Recovery] Starting spec creation for: ${task.specId}`);
-              agentManager.startSpecCreation(taskId, project.path, taskDescription, specDirForWatcher, task.metadata, baseBranchForRecovery);
-            } else {
-              // Spec exists - run task execution
-              console.warn(`[Recovery] Starting task execution for: ${task.specId}`);
-              agentManager.startTaskExecution(
-                taskId,
-                project.path,
-                task.specId,
-                {
-                  parallel: false,
-                  workers: 1,
-                  baseBranch: baseBranchForRecovery,
-                  useWorktree: task.metadata?.useWorktree
-                }
-              );
-            }
-
-            autoRestarted = true;
-            console.warn(`[Recovery] Auto-restarted task ${taskId}`);
+            // Mark task as recovered but do NOT auto-restart
+            // Auto-restarting on startup caused cascading ENOENT (-4058) errors
+            // when Python env wasn't ready yet, leading to OOM crashes
+            console.warn(`[Recovery] Task ${taskId} (${task.specId}) recovered - needs manual restart`);
+            autoRestarted = false;
           } catch (restartError) {
             console.error('Failed to auto-restart task after recovery:', restartError);
             // Recovery succeeded but restart failed - still report success
@@ -1207,9 +1175,7 @@ export function registerTaskExecutionHandlers(
             taskId,
             recovered: true,
             newStatus,
-            message: autoRestarted
-              ? 'Task recovered and restarted successfully'
-              : `Task recovered successfully and moved to ${newStatus}`,
+            message: `Task recovered and moved to ${newStatus} - restart manually when ready`,
             autoRestarted
           }
         };
@@ -1249,7 +1215,7 @@ export function registerTaskExecutionHandlers(
         }
 
         // Find worktree path if it exists
-        const worktreePath = await findTaskWorktree(project.path, task.specId);
+        const worktreePath = findTaskWorktree(project.path, task.specId);
         const hasWorktree = worktreePath !== null;
 
         // Determine project path for QA (worktree if exists, otherwise main project)

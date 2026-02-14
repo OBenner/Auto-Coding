@@ -58,6 +58,16 @@ interface FeedbackResult {
 async function executeFeedbackRecorder(
   request: FeedbackRequest
 ): Promise<IPCResult<FeedbackResult>> {
+  // Guard: don't spawn Python if env isn't ready yet (prevents ENOENT -4058 errors)
+  if (!pythonEnvManager.isEnvReady()) {
+    console.warn('[Feedback] Python env not ready, skipping feedback recording');
+    return {
+      success: false,
+      error: 'Python environment is not ready yet. Feedback will not be recorded.'
+    };
+  }
+
+
   // Use configured Python path (venv if ready, otherwise bundled/system)
   const pythonCmd = getConfiguredPythonPath();
 
