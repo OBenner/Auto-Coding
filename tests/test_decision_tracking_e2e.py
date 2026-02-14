@@ -77,7 +77,7 @@ class TestDecisionTrackingE2E:
 
         # Verify decision was created correctly
         assert decision.decision_type == DecisionType.IMPLEMENTATION.value
-        assert decision.confidence == 0.85
+        assert decision.confidence == pytest.approx(0.85)
         assert decision.confidence_level == ConfidenceLevel.HIGH.value
         assert decision.phase == LogPhase.CODING.value
         assert decision.subtask_id == "test-subtask-1"
@@ -305,7 +305,7 @@ class TestDecisionTrackingE2E:
         # Filter by review requirement
         needs_review = decision_tracker.get_decisions(requires_review=True)
         assert len(needs_review) == 1
-        assert needs_review[0].confidence == 0.45
+        assert needs_review[0].confidence == pytest.approx(0.45)
 
     def test_decision_statistics(self, decision_tracker):
         """Test decision statistics generation."""
