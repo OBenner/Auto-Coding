@@ -98,13 +98,29 @@ Native desktop apps for Windows, macOS, and Linux. Cloud-hosted option also avai
 
 ---
 
+## Search & Navigation
+
+**Looking for something specific?**
+
+- **[📖 Documentation Portal](guides/DOCUMENTATION-PORTAL.md)** - Comprehensive guide to all documentation
+- **[📖 Search Index](docs/search/INDEX.md)** - Comprehensive searchable index with keywords
+- **[🔍 Search Guide](docs/search/SEARCH-GUIDE.md)** - Learn effective search strategies
+- **[✅ Verification Checklist](docs/VERIFICATION-CHECKLIST.md)** - Documentation quality verification
+
+**Quick links:**
+- [Quick Start Guide](guides/QUICK-START.md) - Get started in 15 minutes
+- [CLI Usage Guide](guides/CLI-USAGE.md) - Terminal-only usage
+- [Troubleshooting Guide](guides/TROUBLESHOOTING.md) - Having issues?
+
+---
+
 ## Quick Start
 
-1. **Download** the latest release for your platform from [Releases](https://github.com/OBenner/Auto-Coding/releases)
-2. **Open your project** -- select any git repository folder
-3. **Connect Claude** -- the app walks you through OAuth setup (requires [Claude Pro/Max](https://claude.ai/upgrade))
-4. **Create a task** -- describe what you want to build in plain language
-5. **Watch it work** -- agents plan, code, and validate autonomously; you review and merge
+Get started in under 15 minutes with our comprehensive [Quick Start Guide](guides/QUICK-START.md).
+
+**TL;DR:** Download → Connect Claude → Open Project → Create Task → Watch agents build → Review & merge
+
+[Download the latest release](https://github.com/OBenner/Auto-Coding/releases) for your platform.
 
 ---
 

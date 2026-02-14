@@ -1273,7 +1273,6 @@ class WorktreeManager:
             if result.returncode == 0:
                 return result.stdout.strip()
         except (
-            subprocess.TimeoutExpired,
             FileNotFoundError,
             subprocess.SubprocessError,
         ) as e:

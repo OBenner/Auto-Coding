@@ -633,8 +633,8 @@ function PhaseLogSection({ phase, phaseLog, isExpanded, onToggle, isTaskStuck, p
           {getStatusBadge()}
         </div>
       </button>
-      {/* Feedback buttons for completed phases */}
-      {status === 'completed' && (
+      {/* Feedback buttons for completed phases (only when expanded) */}
+      {status === 'completed' && isExpanded && (
         <div className="mt-2 ml-3">
           <FeedbackButtons
             taskId={taskId}

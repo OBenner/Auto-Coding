@@ -524,9 +524,8 @@ class GitHubProvider:
             return []
         reviewers = []
         for req in review_requests:
-            if isinstance(req, dict):
-                if "requestedReviewer" in req:
-                    reviewer = req["requestedReviewer"]
-                    if isinstance(reviewer, dict):
-                        reviewers.append(reviewer.get("login", ""))
+            if isinstance(req, dict) and "requestedReviewer" in req:
+                reviewer = req["requestedReviewer"]
+                if isinstance(reviewer, dict):
+                    reviewers.append(reviewer.get("login", ""))
         return reviewers

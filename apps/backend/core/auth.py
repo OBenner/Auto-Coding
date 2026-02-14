@@ -402,7 +402,7 @@ def _get_token_from_macos_keychain() -> str | None:
 
         return token
 
-    except (subprocess.TimeoutExpired, json.JSONDecodeError, KeyError, Exception):
+    except Exception:
         return None
 
 
@@ -430,7 +430,7 @@ def _get_token_from_windows_credential_files() -> str | None:
 
         return None
 
-    except (json.JSONDecodeError, KeyError, FileNotFoundError, Exception):
+    except Exception:
         return None
 
 
@@ -548,7 +548,7 @@ def _get_token_from_config_dir(config_dir: str) -> str | None:
                 ):
                     logger.debug(f"Found token in {cred_path}")
                     return token
-            except (json.JSONDecodeError, KeyError, Exception) as e:
+            except Exception as e:
                 logger.debug(f"Failed to read {cred_path}: {e}")
                 continue
 
@@ -719,7 +719,7 @@ def _find_git_bash_path() -> str | None:
             git_paths = result.stdout.strip().splitlines()
             if git_paths:
                 git_path = git_paths[0].strip()
-    except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.SubprocessError):
+    except (FileNotFoundError, subprocess.SubprocessError):
         # Intentionally suppress errors - best-effort detection with fallback to common paths
         pass
 
