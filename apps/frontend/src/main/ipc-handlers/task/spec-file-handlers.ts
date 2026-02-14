@@ -9,6 +9,13 @@ import {
 } from './spec-file-readers';
 
 /**
+ * Validate taskId is a non-empty string
+ */
+function isValidTaskId(taskId: unknown): taskId is string {
+  return typeof taskId === 'string' && taskId.length > 0;
+}
+
+/**
  * Register spec file reading IPC handlers
  *
  * These handlers provide read-only access to task specification files:
@@ -24,20 +31,21 @@ export function registerSpecFileHandlers(): void {
   ipcMain.handle(
     IPC_CHANNELS.TASK_SPEC_IMPLEMENTATION_PLAN_GET,
     async (_, taskId: string): Promise<IPCResult<ImplementationPlan>> => {
-      console.warn('[IPC] TASK_SPEC_IMPLEMENTATION_PLAN_GET called with taskId:', taskId);
-
-      const { task, project } = await findTaskAndProject(taskId);
-      if (!task || !project) {
-        return { success: false, error: 'Task or project not found' };
+      if (!isValidTaskId(taskId)) {
+        return { success: false, error: 'Invalid taskId' };
       }
 
       try {
-        const plan = readImplementationPlan(project, task);
+        const { task, project } = await findTaskAndProject(taskId);
+        if (!task || !project) {
+          return { success: false, error: 'Task or project not found' };
+        }
+
+        const plan = await readImplementationPlan(project, task);
         if (!plan) {
           return { success: false, error: 'Implementation plan not found' };
         }
 
-        console.warn('[IPC] TASK_SPEC_IMPLEMENTATION_PLAN_GET returning plan');
         return { success: true, data: plan };
       } catch (err) {
         console.error('[IPC] TASK_SPEC_IMPLEMENTATION_PLAN_GET error:', err);
@@ -56,20 +64,21 @@ export function registerSpecFileHandlers(): void {
   ipcMain.handle(
     IPC_CHANNELS.TASK_SPEC_QA_REPORT_GET,
     async (_, taskId: string): Promise<IPCResult<string>> => {
-      console.warn('[IPC] TASK_SPEC_QA_REPORT_GET called with taskId:', taskId);
-
-      const { task, project } = await findTaskAndProject(taskId);
-      if (!task || !project) {
-        return { success: false, error: 'Task or project not found' };
+      if (!isValidTaskId(taskId)) {
+        return { success: false, error: 'Invalid taskId' };
       }
 
       try {
-        const qaReport = readQAReport(project, task);
+        const { task, project } = await findTaskAndProject(taskId);
+        if (!task || !project) {
+          return { success: false, error: 'Task or project not found' };
+        }
+
+        const qaReport = await readQAReport(project, task);
         if (!qaReport) {
           return { success: false, error: 'QA report not found' };
         }
 
-        console.warn('[IPC] TASK_SPEC_QA_REPORT_GET returning report');
         return { success: true, data: qaReport };
       } catch (err) {
         console.error('[IPC] TASK_SPEC_QA_REPORT_GET error:', err);
@@ -88,20 +97,21 @@ export function registerSpecFileHandlers(): void {
   ipcMain.handle(
     IPC_CHANNELS.TASK_SPEC_QA_ESCALATION_GET,
     async (_, taskId: string): Promise<IPCResult<QAEscalation>> => {
-      console.warn('[IPC] TASK_SPEC_QA_ESCALATION_GET called with taskId:', taskId);
-
-      const { task, project } = await findTaskAndProject(taskId);
-      if (!task || !project) {
-        return { success: false, error: 'Task or project not found' };
+      if (!isValidTaskId(taskId)) {
+        return { success: false, error: 'Invalid taskId' };
       }
 
       try {
-        const escalation = readQAEscalation(project, task);
+        const { task, project } = await findTaskAndProject(taskId);
+        if (!task || !project) {
+          return { success: false, error: 'Task or project not found' };
+        }
+
+        const escalation = await readQAEscalation(project, task);
         if (!escalation) {
           return { success: false, error: 'QA escalation not found' };
         }
 
-        console.warn('[IPC] TASK_SPEC_QA_ESCALATION_GET returning escalation');
         return { success: true, data: escalation };
       } catch (err) {
         console.error('[IPC] TASK_SPEC_QA_ESCALATION_GET error:', err);

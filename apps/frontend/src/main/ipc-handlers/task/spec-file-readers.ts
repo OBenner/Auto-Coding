@@ -9,7 +9,7 @@
  */
 
 import path from 'path';
-import { readFileSync, existsSync } from 'fs';
+import fs from 'fs/promises';
 import { AUTO_BUILD_PATHS, getSpecsDir } from '../../../shared/constants';
 import type { Project, Task, ImplementationPlan, QAEscalation } from '../../../shared/types';
 
@@ -21,11 +21,28 @@ function isFileNotFoundError(err: unknown): boolean {
 }
 
 /**
- * Get the spec directory path for a task
+ * Validate specId to prevent path traversal attacks
+ */
+function isValidSpecId(specId: string): boolean {
+  return /^[\w-]+$/.test(specId);
+}
+
+/**
+ * Get the spec directory path for a task.
+ * Validates specId to prevent path traversal.
  */
 export function getSpecDir(project: Project, task: Task): string {
+  if (!isValidSpecId(task.specId)) {
+    throw new Error(`Invalid specId: ${task.specId}`);
+  }
   const specsBaseDir = getSpecsDir(project.autoBuildPath);
-  return path.join(project.path, specsBaseDir, task.specId);
+  const specDir = path.join(project.path, specsBaseDir, task.specId);
+  const resolvedSpecDir = path.resolve(specDir);
+  const resolvedProjectDir = path.resolve(project.path);
+  if (!resolvedSpecDir.startsWith(resolvedProjectDir + path.sep) && resolvedSpecDir !== resolvedProjectDir) {
+    throw new Error(`Path traversal detected: specDir escapes project root`);
+  }
+  return specDir;
 }
 
 /**
@@ -35,20 +52,15 @@ export function getSpecDir(project: Project, task: Task): string {
  * @param task - The task to read the plan for
  * @returns The implementation plan, or null if file doesn't exist
  */
-export function readImplementationPlan(
+export async function readImplementationPlan(
   project: Project,
   task: Task
-): ImplementationPlan | null {
+): Promise<ImplementationPlan | null> {
   try {
     const specDir = getSpecDir(project, task);
     const planPath = path.join(specDir, AUTO_BUILD_PATHS.IMPLEMENTATION_PLAN);
 
-    if (!existsSync(planPath)) {
-      console.warn(`[spec-file-readers] Implementation plan not found at ${planPath}`);
-      return null;
-    }
-
-    const planContent = readFileSync(planPath, 'utf-8');
+    const planContent = await fs.readFile(planPath, 'utf-8');
     const plan = JSON.parse(planContent) as ImplementationPlan;
 
     return plan;
@@ -68,17 +80,12 @@ export function readImplementationPlan(
  * @param task - The task to read the QA report for
  * @returns The QA report content as markdown string, or null if file doesn't exist
  */
-export function readQAReport(project: Project, task: Task): string | null {
+export async function readQAReport(project: Project, task: Task): Promise<string | null> {
   try {
     const specDir = getSpecDir(project, task);
     const qaReportPath = path.join(specDir, AUTO_BUILD_PATHS.QA_REPORT);
 
-    if (!existsSync(qaReportPath)) {
-      console.warn(`[spec-file-readers] QA report not found at ${qaReportPath}`);
-      return null;
-    }
-
-    const qaReportContent = readFileSync(qaReportPath, 'utf-8');
+    const qaReportContent = await fs.readFile(qaReportPath, 'utf-8');
     return qaReportContent;
   } catch (err) {
     if (isFileNotFoundError(err)) {
@@ -218,17 +225,12 @@ function parseMostCommonIssues(content: string): QAEscalation['mostCommonIssues'
  * @param task - The task to read the QA escalation for
  * @returns The parsed QA escalation data, or null if file doesn't exist
  */
-export function readQAEscalation(project: Project, task: Task): QAEscalation | null {
+export async function readQAEscalation(project: Project, task: Task): Promise<QAEscalation | null> {
   try {
     const specDir = getSpecDir(project, task);
     const escalationPath = path.join(specDir, 'QA_ESCALATION.md');
 
-    if (!existsSync(escalationPath)) {
-      console.warn(`[spec-file-readers] QA escalation not found at ${escalationPath}`);
-      return null;
-    }
-
-    const escalationContent = readFileSync(escalationPath, 'utf-8');
+    const escalationContent = await fs.readFile(escalationPath, 'utf-8');
 
     // Parse frontmatter
     const metadata = parseQAEscalationFrontmatter(escalationContent);

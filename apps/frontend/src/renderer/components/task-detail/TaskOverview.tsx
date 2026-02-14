@@ -244,7 +244,7 @@ export function TaskOverview({ task }: TaskOverviewProps) {
               {t('tasks:overview.qaReport')}
             </div>
             <div className="prose prose-sm dark:prose-invert max-w-none">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{qaReport}</ReactMarkdown>
+              <ReactMarkdown remarkPlugins={[remarkGfm]} skipHtml>{qaReport}</ReactMarkdown>
             </div>
           </div>
         </>
