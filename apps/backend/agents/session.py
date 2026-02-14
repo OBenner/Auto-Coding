@@ -8,6 +8,7 @@ memory updates, recovery tracking, and Linear integration.
 
 import json
 import logging
+import os
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -1198,6 +1199,30 @@ async def run_agent_session(
         return "error", str(e), None, decision_tracker
 
 
+def _assess_and_record_failure(
+    recovery_manager: RecoveryManager,
+    subtask_id: str,
+    attempt: int,
+    agent_type: str,
+    error_msg: str,
+):
+    """Classify failure, record attempt, and determine recovery action."""
+    failure_type = recovery_manager.classify_failure(
+        error=error_msg, subtask_id=subtask_id
+    )
+    recovery_action = recovery_manager.determine_recovery_action(
+        failure_type=failure_type, subtask_id=subtask_id
+    )
+    recovery_manager.record_attempt(
+        subtask_id=subtask_id,
+        session=attempt,
+        success=False,
+        approach=f"Isolated subprocess execution - {agent_type}",
+        error=error_msg[:500],
+    )
+    return failure_type, recovery_action
+
+
 async def run_agent_session_isolated(
     project_dir: Path,
     spec_dir: Path,
@@ -1300,8 +1325,12 @@ async def run_agent_session_isolated(
         # Write message to temp file to avoid OS command-line length limits
         import tempfile
 
-        message_file = Path(tempfile.mktemp(suffix=".txt", dir=spec_dir))
-        message_file.write_text(starting_message, encoding="utf-8")
+        msg_fd, msg_path = tempfile.mkstemp(suffix=".txt", dir=spec_dir)
+        message_file = Path(msg_path)
+        try:
+            os.write(msg_fd, starting_message.encode("utf-8"))
+        finally:
+            os.close(msg_fd)
 
         args = [
             "--project-dir",
@@ -1396,11 +1425,8 @@ async def run_agent_session_isolated(
 
                 # Determine recovery action using RecoveryManager
                 if subtask_id and attempt < max_retries:
-                    failure_type = recovery_manager.classify_failure(
-                        error=error_msg, subtask_id=subtask_id
-                    )
-                    recovery_action = recovery_manager.determine_recovery_action(
-                        failure_type=failure_type, subtask_id=subtask_id
+                    failure_type, recovery_action = _assess_and_record_failure(
+                        recovery_manager, subtask_id, attempt, agent_type, error_msg
                     )
 
                     debug(
@@ -1409,15 +1435,6 @@ async def run_agent_session_isolated(
                         failure_type=failure_type.value,
                         recovery_action=recovery_action.action,
                         recovery_reason=recovery_action.reason,
-                    )
-
-                    # Record this attempt
-                    recovery_manager.record_attempt(
-                        subtask_id=subtask_id,
-                        session=attempt,
-                        success=False,
-                        approach=f"Isolated subprocess execution - {agent_type}",
-                        error=error_msg[:500],
                     )
 
                     # Determine if we should retry
@@ -1480,19 +1497,8 @@ async def run_agent_session_isolated(
 
                     # Record failed attempt and check for retry
                     if subtask_id and attempt < max_retries:
-                        failure_type = recovery_manager.classify_failure(
-                            error=error_msg, subtask_id=subtask_id
-                        )
-                        recovery_action = recovery_manager.determine_recovery_action(
-                            failure_type=failure_type, subtask_id=subtask_id
-                        )
-
-                        recovery_manager.record_attempt(
-                            subtask_id=subtask_id,
-                            session=attempt,
-                            success=False,
-                            approach=f"Isolated subprocess execution - {agent_type}",
-                            error=error_msg[:500],
+                        _, recovery_action = _assess_and_record_failure(
+                            recovery_manager, subtask_id, attempt, agent_type, error_msg
                         )
 
                         if recovery_action.action in ("retry", "continue"):

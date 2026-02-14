@@ -259,7 +259,7 @@ class TestAgentIsolationResult:
         assert result.stdout == ""
         assert result.stderr == ""
         assert result.return_code == 0
-        assert result.execution_time == 0.0
+        assert result.execution_time == pytest.approx(0.0)
         assert result.error is None
         assert result.violated_limits == []
         assert result.crashed is False
@@ -276,7 +276,7 @@ class TestAgentIsolationResult:
         )
         assert result.success is True
         assert result.stdout == "test output"
-        assert result.execution_time == 1.5
+        assert result.execution_time == pytest.approx(1.5)
         assert result.agent_output["response"] == "done"
 
     def test_failure_result_with_error(self):
@@ -330,7 +330,7 @@ class TestAgentIsolationResult:
 
         assert data["success"] is True
         assert data["stdout"] == "output"
-        assert data["execution_time"] == 2.5
+        assert data["execution_time"] == pytest.approx(2.5)
         assert data["agent_output"]["data"] == "value"
 
 
@@ -413,58 +413,39 @@ class TestAgentProcessIsolator:
             # Process should be None after execution
             assert isolator._process is None
 
-        # After context exit, cleanup is complete
-        assert True  # If we get here, cleanup didn't crash
+        # After context exit, cleanup is complete (process should remain None)
+        assert isolator._process is None
+
+    def _start_hanging_agent(self, temp_project_dir, hanging_agent_script):
+        """Start a hanging agent in a background thread, return the isolator."""
+        import threading
+        import time
+
+        isolator = AgentProcessIsolator(
+            project_dir=temp_project_dir,
+            limits=ResourceLimits(max_execution_seconds=60),
+        )
+        thread = threading.Thread(
+            target=lambda: isolator.execute_agent(
+                agent_script=str(hanging_agent_script)
+            ),
+            daemon=True,
+        )
+        thread.start()
+        time.sleep(0.5)  # Give it time to start
+        return isolator
 
     def test_terminate_graceful(self, temp_project_dir, hanging_agent_script):
         """Terminates running agent gracefully."""
-        isolator = AgentProcessIsolator(
-            project_dir=temp_project_dir,
-            limits=ResourceLimits(max_execution_seconds=60),
-        )
-
-        # Start process in background
-        import threading
-
-        def run_agent():
-            isolator.execute_agent(agent_script=str(hanging_agent_script))
-
-        thread = threading.Thread(target=run_agent, daemon=True)
-        thread.start()
-
-        # Give it time to start
-        import time
-
-        time.sleep(0.5)
-
-        # Terminate should work
+        isolator = self._start_hanging_agent(temp_project_dir, hanging_agent_script)
         isolator.terminate()
-        assert True  # If we get here, terminate didn't hang
+        assert isolator._process is None
 
     def test_kill_forceful(self, temp_project_dir, hanging_agent_script):
         """Forcefully kills running agent."""
-        isolator = AgentProcessIsolator(
-            project_dir=temp_project_dir,
-            limits=ResourceLimits(max_execution_seconds=60),
-        )
-
-        # Start process in background
-        import threading
-
-        def run_agent():
-            isolator.execute_agent(agent_script=str(hanging_agent_script))
-
-        thread = threading.Thread(target=run_agent, daemon=True)
-        thread.start()
-
-        # Give it time to start
-        import time
-
-        time.sleep(0.5)
-
-        # Kill should work
+        isolator = self._start_hanging_agent(temp_project_dir, hanging_agent_script)
         isolator.kill()
-        assert True  # If we get here, kill didn't hang
+        assert isolator._process is None
 
 
 # =============================================================================
@@ -491,9 +472,9 @@ sys.exit(1)
         isolator = AgentProcessIsolator(project_dir=temp_project_dir)
         result = isolator.execute_agent(agent_script=str(crashing_script))
 
-        # Main process should still be running
+        # Main process should still be running after agent crash
         assert result.success is False
-        assert True  # If we reach here, main process survived
+        assert result.return_code != 0
 
     def test_multiple_agents_can_fail_independently(self, temp_project_dir):
         """Multiple agents can fail without affecting each other."""
