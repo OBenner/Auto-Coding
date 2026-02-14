@@ -741,5 +741,68 @@
     "loading": "Loading...",
     "failedToLoadStats": "Failed to load statistics",
     "load": "Load Data"
+  },
+  "status": {
+    "completed": "Completed",
+    "inProgress": "In Progress",
+    "failed": "Failed",
+    "pending": "Pending"
+  },
+  "commands": {
+    "newTask": "New Task",
+    "newTaskDescription": "Create a new task or spec",
+    "openSettings": "Open Settings",
+    "openSettingsDescription": "Open application settings",
+    "viewKanban": "View Kanban Board",
+    "viewKanbanDescription": "Switch to kanban board view",
+    "viewTerminals": "View Terminals",
+    "viewTerminalsDescription": "Switch to terminals view",
+    "viewRoadmap": "View Roadmap",
+    "viewRoadmapDescription": "Switch to roadmap view",
+    "viewContext": "View Context",
+    "viewContextDescription": "Switch to context/memory view",
+    "addProject": "Add Project",
+    "addProjectDescription": "Add a new project"
+  },
+  "sessionContext": {
+    "description": "View and manage agent session context and conversation history",
+    "conversationRounds": "Conversation Rounds",
+    "codeReferences": "Code References",
+    "sessionDuration": "Session Duration",
+    "timeline": "Session Timeline",
+    "timelineDescription": "Full conversation history and code references",
+    "noSessionData": "No session data available",
+    "startAgentSession": "Start an agent session to begin tracking context",
+    "label": "Session Context",
+    "title": "Session Persistence Status",
+    "status": {
+      "loading": "Loading session context...",
+      "persisting": "Session context is being persisted",
+      "error": "Failed to load session context",
+      "noData": "No session data available"
+    },
+    "error": {
+      "loadFailed": "Failed to load session context data"
+    },
+    "noSessions": "No agent sessions found. Context tracking will begin when you run an agent.",
+    "stats": {
+      "rounds": "rounds",
+      "tokens": "tokens"
+    },
+    "recentSessions": "Recent Sessions",
+    "lastChecked": "Last checked: {{time}}",
+    "summary": "{{sessions}} sessions, {{rounds}} rounds, {{codeRefs}} code references"
+  },
+  "feedback": {
+    "accept": "Accept",
+    "reject": "Reject",
+    "modified": "Modified",
+    "acceptTooltip": "Accept this agent output",
+    "rejectTooltip": "Reject this agent output",
+    "modifiedTooltip": "Accepted with modifications",
+    "submitted": "Feedback submitted successfully",
+    "submitError": "Failed to submit feedback: {{error}}",
+    "notAvailable": "Feedback Not Available",
+    "notAvailableDescription": "Feedback system is not yet fully configured"
   }
 }

@@ -7,10 +7,10 @@ Provides endpoints for token verification and authentication management.
 import logging
 from typing import Dict
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, status
 from pydantic import BaseModel
 
-from core.security import get_current_token, require_auth
+from core.security import require_auth
 
 logger = logging.getLogger(__name__)
 

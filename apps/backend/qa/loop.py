@@ -13,8 +13,6 @@ from pathlib import Path
 from typing import Any
 
 from agents.memory_manager import save_user_correction
-
-# Test generation imports
 from agents.test_generator import run_test_generator_session
 from analysis.code_analyzer import CodeAnalyzer
 from analysis.failure_analyzer import analyze_failure, is_analysis_enabled
@@ -622,9 +620,6 @@ async def run_qa_validation_loop(
 
         if status == "approved":
             emit_phase(ExecutionPhase.COMPLETE, "QA validation passed")
-            # Reset error tracking on success
-            consecutive_errors = 0
-            last_error_context = None
 
             # Record successful iteration
             debug_success(
@@ -831,6 +826,55 @@ async def run_qa_validation_loop(
                     [{"title": "Fixer error", "description": fix_response}],
                 )
                 break
+            elif fix_status == "circular":
+                # Circular fix detected - record dead-end and continue QA loop
+                debug_warning(
+                    "qa_loop",
+                    "Circular fix detected - recording dead-end and continuing",
+                )
+                print("\n⚠️  Circular Fix Detected")
+                print("   The fixer attempted the same approach multiple times.")
+                print("   Recording dead-end and continuing QA validation loop...")
+                record_iteration(
+                    spec_dir,
+                    qa_iteration,
+                    "circular",
+                    [{"title": "Circular fix detected", "description": fix_response}],
+                )
+                # Continue to next QA iteration to see if a different approach is needed
+                continue
+            elif fix_status == "stuck":
+                # Fixer is stuck - escalate to human
+                debug_error(
+                    "qa_loop",
+                    "Fixer stuck after multiple recovery attempts - escalating to human",
+                )
+                print("\n⚠️  QA Fixer Stuck")
+                print(
+                    "   The fixer attempted multiple recovery approaches but could not resolve the issues."
+                )
+                print("   Escalating to human review...")
+                record_iteration(
+                    spec_dir,
+                    qa_iteration,
+                    "stuck",
+                    [{"title": "Fixer stuck", "description": fix_response}],
+                )
+
+                # End validation phase as failed
+                if task_logger:
+                    task_logger.end_phase(
+                        LogPhase.VALIDATION,
+                        success=False,
+                        message="QA fixer stuck after multiple recovery attempts - human intervention required",
+                    )
+
+                # Update Linear if enabled
+                if linear_task and linear_task.task_id:
+                    await linear_qa_max_iterations(spec_dir, qa_iteration)
+                    print("\nLinear: Task marked as needing human intervention")
+
+                return False
 
             debug_success("qa_loop", "Fixes applied, re-running QA validation")
             print("\n✅ Fixes applied. Re-running QA validation...")

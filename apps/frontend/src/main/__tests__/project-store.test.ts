@@ -85,7 +85,11 @@ describe('ProjectStore', () => {
     vi.resetModules();
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    // Wait for any in-flight async saves to complete before cleanup.
+    // ProjectStore uses fire-and-forget saveAsync() which can still be
+    // writing to disk when afterEach runs, causing ENOTEMPTY on macOS.
+    await new Promise(r => setTimeout(r, 50));
     cleanupTestDirs();
     vi.clearAllMocks();
   });
@@ -202,9 +206,13 @@ describe('ProjectStore', () => {
       const start = Date.now();
       let content: { projects: unknown[] } = { projects: [1] };
       while (Date.now() - start < 2000) {
-        const raw = readFileSync(storePath, 'utf-8');
-        content = JSON.parse(raw);
-        if (content.projects.length === 0) break;
+        try {
+          const raw = readFileSync(storePath, 'utf-8');
+          content = JSON.parse(raw);
+          if (content.projects.length === 0) break;
+        } catch {
+          // File may be partially written - keep polling
+        }
         await new Promise(r => setTimeout(r, 10));
       }
       expect(content.projects).toHaveLength(0);
@@ -272,6 +280,7 @@ describe('ProjectStore', () => {
     it('should update settings and return updated project', async () => {
       const { ProjectStore } = await import('../project-store');
       const store = new ProjectStore();
+      await waitForStoreInit();
 
       const project = store.addProject(TEST_PROJECT_PATH);
       const updated = store.updateProjectSettings(project.id, {
@@ -287,6 +296,7 @@ describe('ProjectStore', () => {
     it('should update updatedAt timestamp', async () => {
       const { ProjectStore } = await import('../project-store');
       const store = new ProjectStore();
+      await waitForStoreInit();
 
       const project = store.addProject(TEST_PROJECT_PATH);
       const originalUpdatedAt = project.updatedAt;
@@ -315,9 +325,13 @@ describe('ProjectStore', () => {
       const start = Date.now();
       let content: { projects: Array<{ settings: { model?: string } }> } = { projects: [] };
       while (Date.now() - start < 2000) {
-        const raw = readFileSync(storePath, 'utf-8');
-        content = JSON.parse(raw);
-        if (content.projects[0]?.settings?.model === 'sonnet') break;
+        try {
+          const raw = readFileSync(storePath, 'utf-8');
+          content = JSON.parse(raw);
+          if (content.projects[0]?.settings?.model === 'sonnet') break;
+        } catch {
+          // File may be partially written - keep polling
+        }
         await new Promise(r => setTimeout(r, 10));
       }
       expect(content.projects[0].settings.model).toBe('sonnet');
@@ -934,6 +948,9 @@ describe('ProjectStore', () => {
 
       const { ProjectStore } = await import('../project-store');
       const store = new ProjectStore();
+      // Wait for async init to complete so it doesn't race with addProject
+      // and overwrite in-memory data (the constructor fires initializeAsync
+      // in the background which reloads this.data from disk).
       await waitForStoreInit();
 
       const project = store.addProject(TEST_PROJECT_PATH);
@@ -944,10 +961,12 @@ describe('ProjectStore', () => {
       expect(tasksBefore[0].metadata?.archivedAt).toBeUndefined();
 
       // Archive the task
-      await store.archiveTasks(project.id, ['005-cache-test']);
+      const archiveResult = await store.archiveTasks(project.id, ['005-cache-test']);
+      expect(archiveResult).toBe(true);
 
       // After archiving, cache should be invalidated and getTasks should return updated data
       const tasksAfter = await store.getTasks(project.id);
+      expect(tasksAfter).toHaveLength(1);
       expect(tasksAfter[0].metadata?.archivedAt).toBeDefined();
     });
 
@@ -969,12 +988,16 @@ describe('ProjectStore', () => {
 
       const { ProjectStore } = await import('../project-store');
       const store = new ProjectStore();
+      // Wait for async init to complete so it doesn't race with addProject
+      // and overwrite in-memory data (the constructor fires initializeAsync
+      // in the background which reloads this.data from disk).
       await waitForStoreInit();
 
       const project = store.addProject(TEST_PROJECT_PATH);
 
       // First call should populate cache
       const tasksBefore = await store.getTasks(project.id);
+      expect(tasksBefore).toHaveLength(1);
       expect(tasksBefore[0].title).toBe('Initial Feature');
 
       // Modify the file directly (simulating external change)
@@ -983,6 +1006,7 @@ describe('ProjectStore', () => {
 
       // Without invalidation, should still return cached data
       const tasksCached = await store.getTasks(project.id);
+      expect(tasksCached).toHaveLength(1);
       expect(tasksCached[0].title).toBe('Initial Feature');
 
       // Invalidate cache
@@ -990,6 +1014,7 @@ describe('ProjectStore', () => {
 
       // Now should return fresh data
       const tasksAfterInvalidation = await store.getTasks(project.id);
+      expect(tasksAfterInvalidation).toHaveLength(1);
       expect(tasksAfterInvalidation[0].title).toBe('Updated Feature');
     });
   });

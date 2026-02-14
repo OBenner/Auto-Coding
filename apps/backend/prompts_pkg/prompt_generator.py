@@ -118,7 +118,7 @@ def generate_subtask_prompt(
     verification = subtask.get("verification", {})
 
     # Get relative spec path
-    relative_spec = get_relative_spec_path(spec_dir, project_dir)
+    get_relative_spec_path(spec_dir, project_dir)
 
     # Build the prompt
     sections = []

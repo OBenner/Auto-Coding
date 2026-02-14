@@ -283,6 +283,10 @@ class TaskLogger:
         """Log an info message."""
         self.log(content, LogEntryType.INFO, phase)
 
+    def log_decision(self, content: str, phase: LogPhase | None = None) -> None:
+        """Log a decision made by the AI agent."""
+        self.log(content, LogEntryType.DECISION, phase)
+
     def log_with_detail(
         self,
         content: str,

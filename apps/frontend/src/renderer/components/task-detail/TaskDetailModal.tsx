@@ -28,7 +28,8 @@ import {
   AlertTriangle,
   Pencil,
   X,
-  GitPullRequest
+  GitPullRequest,
+  Archive
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { calculateProgress } from '../../lib/utils';
@@ -42,6 +43,7 @@ import { TaskSubtasks } from './TaskSubtasks';
 import { TaskLogs } from './TaskLogs';
 import { TaskFiles } from './TaskFiles';
 import { TaskReview } from './TaskReview';
+import { TaskOverview } from './TaskOverview';
 import { ResourceUsageIndicator } from '../ResourceUsageIndicator';
 import type { Task, WorktreeCreatePROptions } from '../../../shared/types';
 
@@ -201,6 +203,33 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
       return { success: false, error: error instanceof Error ? error.message : undefined, prUrl: undefined, alreadyExists: false };
     } finally {
       state.setIsCreatingPR(false);
+    }
+  };
+
+  const handleExport = async () => {
+    try {
+      const result = await window.electronAPI.exportTask(task.projectId, task.id);
+      if (result.success && result.data) {
+        toast({
+          title: 'Export Successful',
+          description: `Spec exported to ${result.data}`,
+          duration: 4000,
+        });
+      } else {
+        toast({
+          title: 'Export Failed',
+          description: result.error || 'Failed to export spec',
+          variant: 'destructive',
+          duration: 5000,
+        });
+      }
+    } catch (error) {
+      toast({
+        title: 'Export Failed',
+        description: error instanceof Error ? error.message : 'Unknown error during export',
+        variant: 'destructive',
+        duration: 5000,
+      });
     }
   };
 
@@ -488,6 +517,11 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
                 <TabsContent value="overview" className="flex-1 min-h-0 overflow-hidden mt-0">
                   <ScrollArea className="h-full">
                     <div className="p-5 space-y-5 overflow-x-hidden max-w-full">
+                      {/* Task Overview with Implementation Plan */}
+                      <TaskOverview task={task} />
+
+                      <Separator />
+
                       {/* Metadata */}
                       <TaskMetadata task={task} />
 
@@ -585,6 +619,15 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
 
             {/* Footer - Actions */}
             <div className="flex items-center gap-3 px-5 py-3 border-t border-border shrink-0">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-muted-foreground hover:text-foreground hover:bg-accent"
+                onClick={handleExport}
+              >
+                <Archive className="mr-2 h-4 w-4" />
+                Export Spec
+              </Button>
               <Button
                 variant="ghost"
                 size="sm"

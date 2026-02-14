@@ -8,7 +8,7 @@ to their Git repositories via OAuth.
 from datetime import datetime, UTC
 from typing import Optional
 
-from pydantic import BaseModel, Field, HttpUrl, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict
 from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship
 

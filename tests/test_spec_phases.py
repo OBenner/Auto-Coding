@@ -22,7 +22,7 @@ _mocked_module_names = [
     'claude_code_sdk',
     'claude_code_sdk.types',
     'claude_agent_sdk',
-    'graphiti_providers',
+    'integrations.graphiti.providers_pkg',
     'validate_spec',
     'client',
 ]
@@ -46,11 +46,11 @@ mock_agent_sdk.ClaudeSDKClient = MagicMock()
 mock_agent_sdk.ClaudeAgentOptions = MagicMock()
 sys.modules['claude_agent_sdk'] = mock_agent_sdk
 
-# Mock graphiti_providers module
+# Mock integrations.graphiti.providers_pkg module
 mock_graphiti = MagicMock()
 mock_graphiti.is_graphiti_enabled = MagicMock(return_value=False)
 mock_graphiti.get_graph_hints = AsyncMock(return_value=[])
-sys.modules['graphiti_providers'] = mock_graphiti
+sys.modules['integrations.graphiti.providers_pkg'] = mock_graphiti
 
 # Mock validate_spec module
 mock_validate_spec = MagicMock()
@@ -64,6 +64,16 @@ sys.modules['client'] = mock_client
 
 # Now import the phases module directly (bypasses __init__.py issues)
 from spec.phases import PhaseExecutor, PhaseResult, MAX_RETRIES
+
+# IMPORTANT: Immediately restore all mocked modules after the import above.
+# The mocks were only needed to satisfy the import chain. Without this cleanup,
+# module-level sys.modules mocks leak into other test files (e.g. test_graphiti.py)
+# because pytest imports all test modules before running any tests.
+for _name in _mocked_module_names:
+    if _name in _original_modules:
+        sys.modules[_name] = _original_modules[_name]
+    elif _name in sys.modules:
+        del sys.modules[_name]
 
 
 # Cleanup fixture to restore original modules after all tests in this module
@@ -301,7 +311,7 @@ class TestPhaseHistoricalContext:
             ui_module=mock_ui_module,
         )
 
-        with patch('graphiti_providers.is_graphiti_enabled', return_value=False):
+        with patch('integrations.graphiti.providers_pkg.is_graphiti_enabled', return_value=False):
             result = await executor.phase_historical_context()
 
         assert result.success is True

@@ -5,7 +5,6 @@ Provides endpoints for user registration, login, and profile management.
 """
 
 import logging
-from datetime import timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -18,7 +17,7 @@ from api.models.user import (
     UserResponse,
 )
 from core.database import get_db
-from core.security import create_access_token, verify_password
+from core.security import create_access_token
 
 logger = logging.getLogger(__name__)
 

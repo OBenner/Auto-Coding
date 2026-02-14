@@ -16,7 +16,6 @@ import json
 import logging
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -322,8 +321,6 @@ class TestModelFallback:
         """Test that MODEL_FALLBACK_CHAIN is properly defined."""
         from core.model_fallback import MODEL_FALLBACK_CHAIN
 
-        temp_dir, spec_dir, project_dir = test_env
-
         # Verify fallback chain exists
         assert "opus" in MODEL_FALLBACK_CHAIN, "Should have opus fallback chain"
         assert "sonnet" in MODEL_FALLBACK_CHAIN, "Should have sonnet fallback chain"
@@ -339,16 +336,12 @@ class TestModelFallback:
         """Test that retry_with_fallback() function is implemented."""
         from core.model_fallback import retry_with_fallback
 
-        temp_dir, spec_dir, project_dir = test_env
-
         # Function should be importable and callable
         assert callable(retry_with_fallback), "retry_with_fallback should be callable"
 
     def test_fallback_logging(self, test_env, caplog):
         """Test that fallback attempts are logged."""
         from core.model_fallback import retry_with_fallback
-
-        temp_dir, spec_dir, project_dir = test_env
 
         # Mock function that fails once then succeeds
         call_count = 0
@@ -380,8 +373,6 @@ class TestModelFallback:
         """Test that rate limit errors trigger fallback to degraded model."""
         from core.model_fallback import retry_with_fallback
 
-        temp_dir, spec_dir, project_dir = test_env
-
         # Mock function that simulates rate limit error
         call_count = 0
 
@@ -410,8 +401,6 @@ class TestModelFallback:
         """Test that connection errors trigger fallback."""
         from core.model_fallback import retry_with_fallback
 
-        temp_dir, spec_dir, project_dir = test_env
-
         # Mock function that simulates connection error
         def mock_fn(model: str):
             if "opus" in model.lower():
@@ -428,8 +417,6 @@ class TestModelFallback:
     def test_fallback_on_server_overload(self, test_env, caplog):
         """Test that server overload errors (503) trigger fallback."""
         from core.model_fallback import retry_with_fallback
-
-        temp_dir, spec_dir, project_dir = test_env
 
         # Mock function that simulates server overload
         def mock_fn(model: str):
@@ -448,8 +435,6 @@ class TestModelFallback:
         """Test that non-retryable errors don't trigger fallback."""
         from core.model_fallback import retry_with_fallback
 
-        temp_dir, spec_dir, project_dir = test_env
-
         # Mock function that raises non-retryable error
         def mock_fn(model: str):
             # Validation error is not retryable
@@ -466,8 +451,6 @@ class TestModelFallback:
     def test_fallback_chain_opus_to_haiku(self, test_env, caplog):
         """Test complete fallback chain: opus -> sonnet -> haiku."""
         from core.model_fallback import retry_with_fallback
-
-        temp_dir, spec_dir, project_dir = test_env
 
         # Mock function that fails for opus and sonnet, succeeds with haiku
         def mock_fn(model: str):
@@ -492,8 +475,6 @@ class TestModelFallback:
         """Test that all models exhausted raises final exception."""
         from core.model_fallback import retry_with_fallback
 
-        temp_dir, spec_dir, project_dir = test_env
-
         # Mock function that fails for all models
         def mock_fn(model: str):
             raise Exception(f"RateLimitError: {model} unavailable")
@@ -511,8 +492,6 @@ class TestModelFallback:
     def test_fallback_max_retries_per_model(self, test_env, caplog):
         """Test that max_retries_per_model is respected."""
         from core.model_fallback import retry_with_fallback
-
-        temp_dir, spec_dir, project_dir = test_env
 
         # Mock function that counts retries
         retry_counts = {"opus": 0, "sonnet": 0}
@@ -541,8 +520,6 @@ class TestModelFallback:
         """Test fallback chain from sonnet (not opus)."""
         from core.model_fallback import retry_with_fallback
 
-        temp_dir, spec_dir, project_dir = test_env
-
         # Start with sonnet, fall back to haiku
         def mock_fn(model: str):
             if "sonnet" in model.lower():
@@ -560,8 +537,6 @@ class TestModelFallback:
         """Test that haiku has no fallback (final model in chain)."""
         from core.model_fallback import retry_with_fallback, MODEL_FALLBACK_CHAIN
 
-        temp_dir, spec_dir, project_dir = test_env
-
         # Verify haiku has no fallback
         assert MODEL_FALLBACK_CHAIN["haiku"] == [], "Haiku should have no fallback"
 
@@ -576,8 +551,6 @@ class TestModelFallback:
     def test_fallback_success_logging(self, test_env, caplog):
         """Test that successful fallback logs [SUCCESS] tag."""
         from core.model_fallback import retry_with_fallback
-
-        temp_dir, spec_dir, project_dir = test_env
 
         # Mock function that fails once then succeeds
         def mock_fn(model: str):

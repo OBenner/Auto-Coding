@@ -122,8 +122,15 @@ if (typeof window !== 'undefined') {
 const originalConsoleError = console.error;
 console.error = (...args: unknown[]) => {
   // Allow certain error messages through for debugging
-  const message = args[0]?.toString() || '';
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: Sanitizing for log injection
+  const message = String(args[0] ?? '').replace(/[\x00-\x1f\x7f]/g, '');
   if (message.includes('[TEST]')) {
-    originalConsoleError(...args);
+    // Sanitize each arg individually before logging to prevent log injection
+    const safeArgs: string[] = [];
+    for (const a of args) {
+      // biome-ignore lint/suspicious/noControlCharactersInRegex: Sanitizing for log injection
+      safeArgs.push(String(a).replace(/[\x00-\x1f\x7f]/g, '').slice(0, 500));
+    }
+    originalConsoleError(...safeArgs);
   }
 };

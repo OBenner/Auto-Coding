@@ -11,6 +11,7 @@ Falls back to generic "uncategorized" if classification fails (never blocks the 
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -20,13 +21,12 @@ logger = logging.getLogger(__name__)
 
 # Check for Claude SDK availability
 try:
-    from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient
+    # Optional: claude_agent_sdk is checked at runtime for availability
+    import claude_agent_sdk  # noqa: F401
 
     SDK_AVAILABLE = True
 except ImportError:
     SDK_AVAILABLE = False
-    ClaudeAgentOptions = None
-    ClaudeSDKClient = None
 
 from core.auth import ensure_claude_code_oauth_token, get_auth_token
 
@@ -375,8 +375,6 @@ def categorize_pattern_sync(pattern: str, project_dir: Path | None = None) -> di
     Returns:
         Dict with category, confidence, and reasoning
     """
-    import asyncio
-
     try:
         return asyncio.run(categorize_pattern(pattern, project_dir))
     except Exception as e:
@@ -390,7 +388,6 @@ def categorize_pattern_sync(pattern: str, project_dir: Path | None = None) -> di
 
 if __name__ == "__main__":
     import argparse
-    import asyncio
 
     parser = argparse.ArgumentParser(description="Test pattern categorization")
     parser.add_argument(

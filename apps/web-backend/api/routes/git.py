@@ -6,16 +6,13 @@ Provides endpoints for GitHub and GitLab OAuth authentication to access user rep
 
 import logging
 import secrets
-from typing import Dict
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from core.config import settings
 from core.database import get_db
 from core.oauth import oauth
-from core.security import get_current_token
 
 logger = logging.getLogger(__name__)
 

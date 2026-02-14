@@ -45,6 +45,7 @@ def apply_monkeypatch():
 
     # Try native kuzu as fallback
     try:
+        # Optional: kuzu is optional (fallback if LadybugDB unavailable)
         import kuzu  # noqa: F401
 
         return "kuzu"
@@ -325,7 +326,7 @@ def cmd_semantic_search(args):
     try:
         result = asyncio.run(_async_semantic_search(args))
         if result.get("success"):
-            output_json(True, data=result.get("data"))
+            return output_json(True, data=result.get("data"))
         else:
             # Semantic search failed, fall back to keyword search
             return cmd_search(args)

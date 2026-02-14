@@ -11,9 +11,7 @@ Tests the implementation_plan.py module functionality including:
 - Plan serialization
 """
 
-import json
 import pytest
-from datetime import datetime
 from pathlib import Path
 
 from implementation_plan import (

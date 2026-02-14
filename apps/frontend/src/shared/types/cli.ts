@@ -19,6 +19,7 @@ export interface ToolDetectionResult {
     | 'homebrew'
     | 'nvm'
     | 'system-path'
+    | 'windows-where'
     | 'bundled'
     | 'fallback';
   message: string;

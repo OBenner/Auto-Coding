@@ -13,14 +13,14 @@ Key Features:
 - Linear integration for project management
 
 Usage:
-    python auto-claude/run.py --spec 001-initial-app
-    python auto-claude/run.py --spec 001
-    python auto-claude/run.py --list
+    python auto-code/run.py --spec 001-initial-app
+    python auto-code/run.py --spec 001
+    python auto-code/run.py --list
 
     # Workspace management
-    python auto-claude/run.py --spec 001 --merge     # Add completed build to project
-    python auto-claude/run.py --spec 001 --review    # See what was built
-    python auto-claude/run.py --spec 001 --discard   # Delete build (requires confirmation)
+    python auto-code/run.py --spec 001 --merge     # Add completed build to project
+    python auto-code/run.py --spec 001 --review    # See what was built
+    python auto-code/run.py --spec 001 --discard   # Delete build (requires confirmation)
 
 Prerequisites:
     - CLAUDE_CODE_OAUTH_TOKEN environment variable set (run: claude setup-token)
@@ -54,7 +54,7 @@ if is_windows():
                 _stream.reconfigure(encoding="utf-8", errors="replace")
                 continue
             except (AttributeError, io.UnsupportedOperation, OSError):
-                pass
+                _stream = getattr(sys, _stream_name)  # re-fetch unchanged stream
         # Method 2: Wrap with TextIOWrapper for piped output
         try:
             if hasattr(_stream, "buffer"):
@@ -66,7 +66,7 @@ if is_windows():
                 )
                 setattr(sys, _stream_name, _new_stream)
         except (AttributeError, io.UnsupportedOperation, OSError):
-            pass
+            _stream = getattr(sys, _stream_name)  # re-fetch unchanged stream
     # Clean up temporary variables
     del _stream_name, _stream
     if "_new_stream" in dir():

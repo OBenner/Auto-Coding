@@ -17,6 +17,8 @@ import { ScreenshotAPI, createScreenshotAPI } from './screenshot-api';
 import { QueueAPI, createQueueAPI } from './queue-api';
 import { PluginAPI, createPluginAPI } from './plugin-api';
 import { ContextViewerAPI, createContextViewerAPI } from './modules/context-viewer-api';
+import { SchedulerAPI, createSchedulerAPI } from './scheduler-api';
+import { FeedbackAPI, createFeedbackAPI } from './feedback-api';
 
 export interface ElectronAPI extends
   ProjectAPI,
@@ -35,10 +37,13 @@ export interface ElectronAPI extends
   ProfileAPI,
   ScreenshotAPI,
   PluginAPI,
-  ContextViewerAPI {
+  ContextViewerAPI,
+  FeedbackAPI {
   github: GitHubAPI;
   /** Queue routing API for rate limit recovery */
   queue: QueueAPI;
+  /** Scheduler API for build scheduling and queue management */
+  scheduler: SchedulerAPI;
 }
 
 export const createElectronAPI = (): ElectronAPI => ({
@@ -47,7 +52,7 @@ export const createElectronAPI = (): ElectronAPI => ({
   ...createTaskAPI(),
   ...createSettingsAPI(),
   ...createFileAPI(),
-  ...createAgentAPI(),  // Includes: Roadmap, Ideation, Insights, Changelog, Linear, GitHub, GitLab, Shell
+  ...createAgentAPI(),  // Includes: Roadmap, Ideation, Insights, Changelog, Linear, GitHub, GitLab, Shell, SessionContext
   ...createAppUpdateAPI(),
   ...createDebugAPI(),
   ...createClaudeCodeAPI(),
@@ -56,8 +61,10 @@ export const createElectronAPI = (): ElectronAPI => ({
   ...createScreenshotAPI(),
   ...createPluginAPI(),
   ...createContextViewerAPI(),
+  ...createFeedbackAPI(),
   github: createGitHubAPI(),
-  queue: createQueueAPI()  // Queue routing for rate limit recovery
+  queue: createQueueAPI(),  // Queue routing for rate limit recovery
+  scheduler: createSchedulerAPI()
 });
 
 // Export individual API creators for potential use in tests or specialized contexts
@@ -78,7 +85,9 @@ export {
   createScreenshotAPI,
   createQueueAPI,
   createPluginAPI,
-  createContextViewerAPI
+  createContextViewerAPI,
+  createSchedulerAPI,
+  createFeedbackAPI
 };
 
 export type {
@@ -100,5 +109,7 @@ export type {
   ScreenshotAPI,
   QueueAPI,
   PluginAPI,
-  ContextViewerAPI
+  ContextViewerAPI,
+  SchedulerAPI,
+  FeedbackAPI
 };
