@@ -2,19 +2,20 @@
 
 from unittest.mock import MagicMock, patch
 
+import pytest
 from core.memory_monitor import MemoryMonitor, MemoryPressure, SessionBounds
 
 
 class TestMemoryMonitor:
     def test_default_thresholds(self):
         mm = MemoryMonitor()
-        assert mm._max_memory_mb == 2048.0
-        assert mm._warning_threshold == 0.8
+        assert mm._max_memory_mb == pytest.approx(2048.0)
+        assert mm._warning_threshold == pytest.approx(0.8)
 
     def test_custom_thresholds(self):
         mm = MemoryMonitor(max_memory_mb=1024.0, warning_threshold=0.7)
-        assert mm._max_memory_mb == 1024.0
-        assert mm._warning_threshold == 0.7
+        assert mm._max_memory_mb == pytest.approx(1024.0)
+        assert mm._warning_threshold == pytest.approx(0.7)
 
     @patch("core.memory_monitor._PSUTIL_AVAILABLE", False)
     def test_no_psutil_returns_normal(self):

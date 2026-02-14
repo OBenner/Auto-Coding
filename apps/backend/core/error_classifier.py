@@ -50,7 +50,7 @@ _AUTH_PATTERNS: list[re.Pattern[str]] = [
     re.compile(r"not\s+(yet\s+)?authenticated", re.IGNORECASE),
     re.compile(r"login\s+(is\s+)?required", re.IGNORECASE),
     re.compile(r"authentication\s+(is\s+)?required", re.IGNORECASE),
-    re.compile(r"please\s+(log\s*in|login|authenticate)", re.IGNORECASE),
+    re.compile(r"please\s+(log\s*in|authenticate)", re.IGNORECASE),
     re.compile(r"access\s+denied", re.IGNORECASE),
     re.compile(r"permission\s+denied", re.IGNORECASE),
     re.compile(r"API\s*Error:\s*401", re.IGNORECASE),

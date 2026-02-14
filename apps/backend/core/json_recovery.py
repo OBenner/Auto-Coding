@@ -75,7 +75,7 @@ def _extract_json_block(raw: str) -> str | None:
     """Extract the first JSON object/array from markdown fences or prose."""
 
     # Try markdown fenced JSON block: ```json ... ``` or ``` ... ```
-    fence_pattern = re.compile(r"```(?:json)?\s*\n(.*?)```", re.DOTALL)
+    fence_pattern = re.compile(r"```(?:json)?[ \t]*\n(.*?)```", re.DOTALL)
     match = fence_pattern.search(raw)
     if match:
         candidate = match.group(1).strip()
