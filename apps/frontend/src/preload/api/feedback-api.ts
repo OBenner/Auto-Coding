@@ -42,7 +42,7 @@ const VALID_FEEDBACK_TYPES = ['accepted', 'rejected', 'modified'] as const;
 export const createFeedbackAPI = (): FeedbackAPI => ({
   submitFeedback: (rawRequest) => {
     // Validate feedbackType
-    if (!VALID_FEEDBACK_TYPES.includes(rawRequest.feedbackType as typeof VALID_FEEDBACK_TYPES[number])) {
+    if (!(VALID_FEEDBACK_TYPES as readonly string[]).includes(rawRequest.feedbackType)) {
       return Promise.resolve({
         success: false,
         error: `Invalid feedbackType: ${rawRequest.feedbackType}`

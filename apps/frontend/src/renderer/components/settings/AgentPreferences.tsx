@@ -20,7 +20,72 @@ interface AgentPreferencesProps {
   onSettingsChange: (settings: AppSettings) => void;
 }
 
-const VERBOSITY_LEVELS: Array<{ value: AgentVerbosityLevel; label: string; descriptionKey: string }> = [
+interface OptionItem<T extends string> {
+  value: T;
+  label: string;
+  descriptionKey: string;
+}
+
+interface OptionButtonGroupProps<T extends string> {
+  options: OptionItem<T>[];
+  selectedValue: T;
+  onChange: (value: T) => void;
+  groupLabel: string;
+  groupName: string;
+  gridClassName: string;
+  icon?: React.ReactNode;
+  t: (key: string) => string;
+}
+
+function OptionButtonGroup<T extends string>({
+  options, selectedValue, onChange, groupLabel, groupName, gridClassName, icon, t,
+}: OptionButtonGroupProps<T>) {
+  return (
+    <div className={gridClassName} role="radiogroup" aria-label={groupLabel}>
+      {options.map((option, idx) => {
+        const isSelected = selectedValue === option.value;
+        return (
+          <label
+            key={option.value}
+            className={cn(
+              'flex flex-col items-center gap-2 p-3 rounded-lg border-2 transition-all cursor-pointer',
+              'has-[:focus-visible]:outline-none has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring has-[:focus-visible]:ring-offset-2',
+              isSelected
+                ? 'border-primary bg-primary/5'
+                : 'border-border hover:border-primary/50 hover:bg-accent/50'
+            )}
+          >
+            <input
+              type="radio"
+              name={groupName}
+              value={option.value}
+              checked={isSelected}
+              onChange={() => onChange(option.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+                  e.preventDefault();
+                  const direction = e.key === 'ArrowRight' ? 1 : -1;
+                  const newIndex = (idx + direction + options.length) % options.length;
+                  onChange(options[newIndex].value);
+                }
+              }}
+              className="sr-only"
+            />
+            {icon}
+            <div className="text-center">
+              <div className="text-sm font-medium">{option.label}</div>
+              <div className="text-xs text-muted-foreground">
+                {t(`agentPreferences.${option.descriptionKey}`)}
+              </div>
+            </div>
+          </label>
+        );
+      })}
+    </div>
+  );
+}
+
+const VERBOSITY_LEVELS: OptionItem<AgentVerbosityLevel>[] = [
   { value: 'minimal', label: 'Minimal', descriptionKey: 'verbosity.minimal' },
   { value: 'concise', label: 'Concise', descriptionKey: 'verbosity.concise' },
   { value: 'normal', label: 'Normal', descriptionKey: 'verbosity.normal' },
@@ -28,13 +93,13 @@ const VERBOSITY_LEVELS: Array<{ value: AgentVerbosityLevel; label: string; descr
   { value: 'verbose', label: 'Verbose', descriptionKey: 'verbosity.verbose' }
 ];
 
-const RISK_TOLERANCE_LEVELS: Array<{ value: AgentRiskTolerance; label: string; descriptionKey: string }> = [
+const RISK_TOLERANCE_LEVELS: OptionItem<AgentRiskTolerance>[] = [
   { value: 'cautious', label: 'Cautious', descriptionKey: 'riskTolerance.cautious' },
   { value: 'balanced', label: 'Balanced', descriptionKey: 'riskTolerance.balanced' },
   { value: 'aggressive', label: 'Aggressive', descriptionKey: 'riskTolerance.aggressive' }
 ];
 
-const PROJECT_TYPES: Array<{ value: AgentProjectType; label: string; descriptionKey: string }> = [
+const PROJECT_TYPES: OptionItem<AgentProjectType>[] = [
   { value: 'greenfield', label: 'Greenfield', descriptionKey: 'projectType.greenfield' },
   { value: 'established', label: 'Established', descriptionKey: 'projectType.established' },
   { value: 'legacy', label: 'Legacy', descriptionKey: 'projectType.legacy' }
@@ -93,46 +158,15 @@ export function AgentPreferences({ settings, onSettingsChange }: AgentPreference
           <p className="text-sm text-muted-foreground">
             {t('agentPreferences.verbosity.description')}
           </p>
-          <div
-            className="grid grid-cols-2 sm:grid-cols-5 gap-2 max-w-2xl pt-1"
-            role="radiogroup"
-            aria-label={t('agentPreferences.verbosity.label')}
-          >
-            {VERBOSITY_LEVELS.map((level, idx) => {
-              const isSelected = agentVerbosity === level.value;
-              return (
-                <button
-                  type="button"
-                  key={level.value}
-                  role="radio"
-                  aria-checked={isSelected}
-                  onClick={() => handleVerbosityChange(level.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
-                      e.preventDefault();
-                      const direction = e.key === 'ArrowRight' ? 1 : -1;
-                      const newIndex = (idx + direction + VERBOSITY_LEVELS.length) % VERBOSITY_LEVELS.length;
-                      handleVerbosityChange(VERBOSITY_LEVELS[newIndex].value);
-                    }
-                  }}
-                  className={cn(
-                    'flex flex-col items-center gap-2 p-3 rounded-lg border-2 transition-all',
-                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-                    isSelected
-                      ? 'border-primary bg-primary/5'
-                      : 'border-border hover:border-primary/50 hover:bg-accent/50'
-                  )}
-                >
-                  <div className="text-center">
-                    <div className="text-sm font-medium">{level.label}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {t(`agentPreferences.${level.descriptionKey}`)}
-                    </div>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
+          <OptionButtonGroup
+            options={VERBOSITY_LEVELS}
+            selectedValue={agentVerbosity}
+            onChange={handleVerbosityChange}
+            groupLabel={t('agentPreferences.verbosity.label')}
+            groupName="agent-verbosity"
+            gridClassName="grid grid-cols-2 sm:grid-cols-5 gap-2 max-w-2xl pt-1"
+            t={t}
+          />
         </div>
 
         {/* Risk Tolerance */}
@@ -143,47 +177,16 @@ export function AgentPreferences({ settings, onSettingsChange }: AgentPreference
           <p className="text-sm text-muted-foreground">
             {t('agentPreferences.riskTolerance.description')}
           </p>
-          <div
-            className="grid grid-cols-3 gap-3 max-w-md pt-1"
-            role="radiogroup"
-            aria-label={t('agentPreferences.riskTolerance.label')}
-          >
-            {RISK_TOLERANCE_LEVELS.map((level, idx) => {
-              const isSelected = agentRiskTolerance === level.value;
-              return (
-                <button
-                  type="button"
-                  key={level.value}
-                  role="radio"
-                  aria-checked={isSelected}
-                  onClick={() => handleRiskToleranceChange(level.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
-                      e.preventDefault();
-                      const direction = e.key === 'ArrowRight' ? 1 : -1;
-                      const newIndex = (idx + direction + RISK_TOLERANCE_LEVELS.length) % RISK_TOLERANCE_LEVELS.length;
-                      handleRiskToleranceChange(RISK_TOLERANCE_LEVELS[newIndex].value);
-                    }
-                  }}
-                  className={cn(
-                    'flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-all',
-                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-                    isSelected
-                      ? 'border-primary bg-primary/5'
-                      : 'border-border hover:border-primary/50 hover:bg-accent/50'
-                  )}
-                >
-                  <Bot className="h-4 w-4" />
-                  <div className="text-center">
-                    <div className="text-sm font-medium">{level.label}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {t(`agentPreferences.${level.descriptionKey}`)}
-                    </div>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
+          <OptionButtonGroup
+            options={RISK_TOLERANCE_LEVELS}
+            selectedValue={agentRiskTolerance}
+            onChange={handleRiskToleranceChange}
+            groupLabel={t('agentPreferences.riskTolerance.label')}
+            groupName="agent-risk-tolerance"
+            gridClassName="grid grid-cols-3 gap-3 max-w-md pt-1"
+            icon={<Bot className="h-4 w-4" />}
+            t={t}
+          />
         </div>
 
         {/* Project Type */}
@@ -194,46 +197,15 @@ export function AgentPreferences({ settings, onSettingsChange }: AgentPreference
           <p className="text-sm text-muted-foreground">
             {t('agentPreferences.projectType.description')}
           </p>
-          <div
-            className="grid grid-cols-3 gap-3 max-w-md pt-1"
-            role="radiogroup"
-            aria-label={t('agentPreferences.projectType.label')}
-          >
-            {PROJECT_TYPES.map((type, idx) => {
-              const isSelected = agentProjectType === type.value;
-              return (
-                <button
-                  type="button"
-                  key={type.value}
-                  role="radio"
-                  aria-checked={isSelected}
-                  onClick={() => handleProjectTypeChange(type.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
-                      e.preventDefault();
-                      const direction = e.key === 'ArrowRight' ? 1 : -1;
-                      const newIndex = (idx + direction + PROJECT_TYPES.length) % PROJECT_TYPES.length;
-                      handleProjectTypeChange(PROJECT_TYPES[newIndex].value);
-                    }
-                  }}
-                  className={cn(
-                    'flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-all',
-                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-                    isSelected
-                      ? 'border-primary bg-primary/5'
-                      : 'border-border hover:border-primary/50 hover:bg-accent/50'
-                  )}
-                >
-                  <div className="text-center">
-                    <div className="text-sm font-medium">{type.label}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {t(`agentPreferences.${type.descriptionKey}`)}
-                    </div>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
+          <OptionButtonGroup
+            options={PROJECT_TYPES}
+            selectedValue={agentProjectType}
+            onChange={handleProjectTypeChange}
+            groupLabel={t('agentPreferences.projectType.label')}
+            groupName="agent-project-type"
+            gridClassName="grid grid-cols-3 gap-3 max-w-md pt-1"
+            t={t}
+          />
         </div>
 
         {/* Coding Style Preferences */}
