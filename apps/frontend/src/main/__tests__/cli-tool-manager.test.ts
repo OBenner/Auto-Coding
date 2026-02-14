@@ -164,6 +164,7 @@ vi.mock('../platform/paths', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../platform/paths')>();
   return {
     ...actual,
+    WINDOWS_GIT_PATHS: { toolName: 'Git', executable: 'git.exe', patterns: [] },
     findWindowsExecutableViaWhere: vi.fn(() => null),
     findWindowsExecutableViaWhereAsync: vi.fn(() => Promise.resolve(null)),
     isSecurePath: vi.fn(() => true),
