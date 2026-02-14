@@ -22,7 +22,7 @@ import { readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { AUTO_BUILD_PATHS, getSpecsDir } from '../../../shared/constants';
 import type { TaskStatus, Project, Task } from '../../../shared/types';
 import { projectStore } from '../../project-store';
-import { atomicWriteFileSync } from '../../fs-utils';
+import { atomicWriteFile, atomicWriteFileSync } from '../../fs-utils';
 
 // In-memory locks for plan file operations
 // Key: plan file path, Value: Promise chain for serializing operations
@@ -112,7 +112,7 @@ export async function persistPlanStatus(planPath: string, status: TaskStatus, pr
       plan.planStatus = mapStatusToPlanStatus(status);
       plan.updated_at = new Date().toISOString();
 
-      atomicWriteFileSync(planPath, JSON.stringify(plan, null, 2));
+      await atomicWriteFile(planPath, JSON.stringify(plan, null, 2));
       console.warn(`[plan-file-utils] Successfully persisted status: ${status} to implementation_plan.json`);
 
       // Invalidate tasks cache since status changed
@@ -208,7 +208,7 @@ export async function updatePlanFile<T extends Record<string, unknown>>(
       // Add updated_at timestamp - use type assertion since T extends Record<string, unknown>
       (updatedPlan as Record<string, unknown>).updated_at = new Date().toISOString();
 
-      atomicWriteFileSync(planPath, JSON.stringify(updatedPlan, null, 2));
+      await atomicWriteFile(planPath, JSON.stringify(updatedPlan, null, 2));
       console.warn(`[plan-file-utils] Successfully updated implementation_plan.json`);
       return updatedPlan;
     } catch (err) {

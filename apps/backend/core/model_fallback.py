@@ -23,6 +23,12 @@ logger = logging.getLogger(__name__)
 # Per-model circuit breakers
 _model_breakers: dict[str, CircuitBreaker] = {}
 
+
+def reset_circuit_breakers() -> None:
+    """Reset all per-model circuit breakers. Useful for testing."""
+    _model_breakers.clear()
+
+
 # Model fallback chain mapping
 # Maps each model shorthand to its fallback sequence
 MODEL_FALLBACK_CHAIN: dict[str, list[str]] = {

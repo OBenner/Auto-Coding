@@ -80,6 +80,7 @@ export function GenerationProgressScreen({
       setIsUserScrolledUp(!isNearBottom);
     };
     viewport.addEventListener('scroll', onScroll, { passive: true });
+    onScroll(); // Initialize state from current scroll position
     return () => viewport.removeEventListener('scroll', onScroll);
   }, [showLogs]);
 

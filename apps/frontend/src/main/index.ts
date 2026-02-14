@@ -227,12 +227,22 @@ function createWindow(): void {
   });
 
   // Spell check context menu: show suggestions, "Add to Dictionary", and standard edit actions
-  mainWindow.webContents.on('context-menu', (_event, params) => {
+  mainWindow.webContents.on('context-menu', (event, params) => {
     if (!params.misspelledWord) return;
+    event.preventDefault();
+
     const menuItems: Electron.MenuItemConstructorOptions[] = params.dictionarySuggestions.map(
       (suggestion) => ({
         label: suggestion,
-        click: () => mainWindow?.webContents.replaceMisspelling(suggestion),
+        click: () => {
+          try {
+            if (mainWindow && typeof mainWindow.webContents.replaceMisspelling === 'function') {
+              mainWindow.webContents.replaceMisspelling(suggestion);
+            }
+          } catch (err) {
+            console.error('[Spellcheck] Failed to replace misspelling:', err);
+          }
+        },
       })
     );
     if (menuItems.length > 0) {
@@ -240,9 +250,18 @@ function createWindow(): void {
     }
     menuItems.push({
       label: 'Add to Dictionary',
-      click: () => mainWindow?.webContents.session.addWordToSpellCheckerDictionary(params.misspelledWord),
+      click: () => {
+        try {
+          const ses = mainWindow?.webContents?.session;
+          if (ses && typeof ses.addWordToSpellCheckerDictionary === 'function') {
+            ses.addWordToSpellCheckerDictionary(params.misspelledWord);
+          }
+        } catch (err) {
+          console.error('[Spellcheck] Failed to add word to dictionary:', err);
+        }
+      },
     });
-    Menu.buildFromTemplate(menuItems).popup();
+    Menu.buildFromTemplate(menuItems).popup({ window: mainWindow ?? undefined });
   });
 
   // Load the renderer

@@ -56,6 +56,7 @@ interface TaskMetadataProps {
 }
 
 const COLLAPSED_MAX_HEIGHT = 192; // ~8 lines at 24px line height
+const COLLAPSED_MAX_HEIGHT_CLASS = 'max-h-48'; // 48 * 0.25rem = 12rem = 192px
 
 export function TaskMetadata({ task }: TaskMetadataProps) {
   const { t } = useTranslation(['tasks', 'errors', 'common']);
@@ -63,12 +64,19 @@ export function TaskMetadata({ task }: TaskMetadataProps) {
   const [isOverflowing, setIsOverflowing] = useState(false);
   const descriptionRef = useRef<HTMLDivElement>(null);
 
-  // Detect if description overflows the collapsed height
+  // Detect if description overflows the collapsed height (using ResizeObserver for accuracy)
   useEffect(() => {
     const el = descriptionRef.current;
-    if (el) {
+    if (!el) return;
+
+    const updateOverflow = () => {
       setIsOverflowing(el.scrollHeight > COLLAPSED_MAX_HEIGHT);
-    }
+    };
+    updateOverflow();
+
+    const resizeObserver = new ResizeObserver(updateOverflow);
+    resizeObserver.observe(el);
+    return () => resizeObserver.disconnect();
   }, [task.description]);
 
   // Handle JSON error description with i18n
@@ -176,9 +184,9 @@ export function TaskMetadata({ task }: TaskMetadataProps) {
             ref={descriptionRef}
             className={cn(
               "prose prose-sm dark:prose-invert max-w-none overflow-hidden prose-p:text-foreground/90 prose-p:leading-relaxed prose-headings:text-foreground prose-strong:text-foreground prose-li:text-foreground/90 prose-ul:my-2 prose-li:my-0.5 prose-a:break-all prose-pre:overflow-x-auto prose-img:max-w-full [&_img]:!max-w-full [&_img]:h-auto [&_code]:break-all [&_code]:whitespace-pre-wrap [&_*]:max-w-full",
-              !isExpanded && isOverflowing && "max-h-48"
+              !isExpanded && isOverflowing && COLLAPSED_MAX_HEIGHT_CLASS
             )}
-            style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}
+            style={{ overflowWrap: 'anywhere' }}
           >
             <ReactMarkdown remarkPlugins={[remarkGfm]}>
               {displayDescription}

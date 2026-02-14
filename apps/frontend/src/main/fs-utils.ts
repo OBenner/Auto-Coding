@@ -148,21 +148,46 @@ export function safeReadFile(originalPath: string): string | null {
  * @param encoding - File encoding (default: 'utf-8')
  */
 export function atomicWriteFileSync(filePath: string, content: string, encoding: BufferEncoding = 'utf-8'): void {
-  const tmpPath = filePath + '.tmp';
-  fs.writeFileSync(tmpPath, content, encoding);
-  fs.renameSync(tmpPath, filePath);
+  const dir = path.dirname(filePath);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+
+  const uniqueSuffix = `${process.pid}-${Date.now()}`;
+  const tmpPath = path.join(dir, `${path.basename(filePath)}.${uniqueSuffix}.tmp`);
+
+  try {
+    fs.writeFileSync(tmpPath, content, encoding);
+    fs.renameSync(tmpPath, filePath);
+  } catch (err) {
+    try {
+      if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
+    } catch { /* ignore cleanup */ }
+    throw err;
+  }
 }
 
 /**
  * Write a file atomically (async version).
- * Writes to a temp file first, then renames to prevent 0-byte corruption.
+ * Writes to a uniquely-named temp file first, then renames to prevent
+ * 0-byte corruption and concurrent-write collisions.
  *
  * @param filePath - The target file path
  * @param content - The content to write
  * @param encoding - File encoding (default: 'utf-8')
  */
 export async function atomicWriteFile(filePath: string, content: string, encoding: BufferEncoding = 'utf-8'): Promise<void> {
-  const tmpPath = filePath + '.tmp';
-  await fsPromises.writeFile(tmpPath, content, encoding);
-  await fsPromises.rename(tmpPath, filePath);
+  const dir = path.dirname(filePath);
+  await fsPromises.mkdir(dir, { recursive: true });
+
+  const uniqueSuffix = `${process.pid}-${Date.now()}`;
+  const tmpPath = path.join(dir, `${path.basename(filePath)}.${uniqueSuffix}.tmp`);
+
+  try {
+    await fsPromises.writeFile(tmpPath, content, encoding);
+    await fsPromises.rename(tmpPath, filePath);
+  } catch (err) {
+    try { await fsPromises.unlink(tmpPath); } catch { /* ignore cleanup */ }
+    throw err;
+  }
 }

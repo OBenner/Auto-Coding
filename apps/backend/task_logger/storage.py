@@ -12,8 +12,8 @@ from pathlib import Path
 
 from .models import LogEntry, LogPhase
 
-# Regex to strip ANSI escape codes (CSI sequences like colors, cursor moves)
-_ANSI_ESCAPE_RE = re.compile(r"\033\[[0-9;]*[A-Za-z]")
+# Regex to strip ANSI escape codes (full CSI sequences including colors, cursor moves)
+_ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
 
 
 class LogStorage:

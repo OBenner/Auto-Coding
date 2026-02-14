@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   MessageSquare,
@@ -124,20 +124,28 @@ export function Insights({ projectId }: InsightsProps) {
     }
   }, [session?.messages?.length, streamingContent, isUserScrolledUp]);
 
-  // Track scroll position on messages viewport
+  // Track scroll position on messages viewport via callback ref
   const messagesViewportRef = useRef<HTMLDivElement | null>(null);
-  const handleMessagesViewportRef = (el: HTMLDivElement | null) => {
+  const scrollHandlerRef = useRef<(() => void) | null>(null);
+  const handleMessagesViewportRef = useCallback((el: HTMLDivElement | null) => {
+    // Detach listener from previous element
+    if (messagesViewportRef.current && scrollHandlerRef.current) {
+      messagesViewportRef.current.removeEventListener('scroll', scrollHandlerRef.current);
+    }
     messagesViewportRef.current = el;
-  };
-  useEffect(() => {
-    const viewport = messagesViewportRef.current;
-    if (!viewport) return;
-    const onScroll = () => {
-      const isNearBottom = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight < 100;
-      setIsUserScrolledUp(!isNearBottom);
-    };
-    viewport.addEventListener('scroll', onScroll, { passive: true });
-    return () => viewport.removeEventListener('scroll', onScroll);
+    // Attach listener to new element
+    if (el) {
+      const onScroll = () => {
+        const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 100;
+        setIsUserScrolledUp((prev) => {
+          const next = !isNearBottom;
+          return prev === next ? prev : next;
+        });
+      };
+      scrollHandlerRef.current = onScroll;
+      el.addEventListener('scroll', onScroll, { passive: true });
+      onScroll(); // Initialize state from current scroll position
+    }
   }, []);
 
   // Focus textarea on mount
