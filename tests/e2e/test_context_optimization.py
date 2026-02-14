@@ -224,7 +224,7 @@ class TestContentDeduplication:
         assert stats["original_count"] == 4
         assert stats["deduped_count"] == 3
         assert stats["removed_count"] == 1
-        assert stats["reduction_percent"] == 25.0
+        assert stats["reduction_percent"] == pytest.approx(25.0)
 
     def test_deduplicate_lines(self):
         """Test removing duplicate lines."""
@@ -665,8 +665,8 @@ class TestE2EOptimizationPipeline:
             else:
                 all_files.append(f.path)
 
-        # At minimum, should have found some files
-        assert len(all_files) >= 0  # May not find if semantic search fails
+        # Should return a list (may be empty if semantic search doesn't find matches)
+        assert isinstance(all_files, list)
 
     def test_e2e_ui_shows_context_breakdown(self, temp_project, project_index):
         """E2E test: Verify UI can display context breakdown.
@@ -695,7 +695,7 @@ class TestE2EOptimizationPipeline:
         assert stats["token_stats"]["total_usage"] >= 0
         assert breakdown["total"] >= 0
         assert prioritization["algorithm"] is not None
-        assert report["overall"]["target_percent"] == 30.0
+        assert report["overall"]["target_percent"] == pytest.approx(30.0)
 
     def test_e2e_prioritization_scores_verification(self, temp_project):
         """E2E test: Verify that files are properly prioritized based on task."""
