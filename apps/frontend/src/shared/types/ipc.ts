@@ -942,7 +942,7 @@ export interface ElectronAPI {
     agentType?: string;
     taskDescription?: string;
     context?: string;
-  }) => Promise<IPCResult<{ recorded: boolean }>>;
+  }) => Promise<IPCResult<{ recorded: boolean; reason?: string }>>;
 
 
   // Queue Routing API (rate limit recovery)

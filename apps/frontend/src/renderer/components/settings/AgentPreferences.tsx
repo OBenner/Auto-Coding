@@ -93,14 +93,28 @@ export function AgentPreferences({ settings, onSettingsChange }: AgentPreference
           <p className="text-sm text-muted-foreground">
             {t('agentPreferences.verbosity.description')}
           </p>
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 max-w-2xl pt-1">
-            {VERBOSITY_LEVELS.map((level) => {
+          <div
+            className="grid grid-cols-2 sm:grid-cols-5 gap-2 max-w-2xl pt-1"
+            role="radiogroup"
+            aria-label={t('agentPreferences.verbosity.label')}
+          >
+            {VERBOSITY_LEVELS.map((level, idx) => {
               const isSelected = agentVerbosity === level.value;
               return (
                 <button
                   type="button"
                   key={level.value}
+                  role="radio"
+                  aria-checked={isSelected}
                   onClick={() => handleVerbosityChange(level.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+                      e.preventDefault();
+                      const direction = e.key === 'ArrowRight' ? 1 : -1;
+                      const newIndex = (idx + direction + VERBOSITY_LEVELS.length) % VERBOSITY_LEVELS.length;
+                      handleVerbosityChange(VERBOSITY_LEVELS[newIndex].value);
+                    }
+                  }}
                   className={cn(
                     'flex flex-col items-center gap-2 p-3 rounded-lg border-2 transition-all',
                     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
@@ -129,14 +143,28 @@ export function AgentPreferences({ settings, onSettingsChange }: AgentPreference
           <p className="text-sm text-muted-foreground">
             {t('agentPreferences.riskTolerance.description')}
           </p>
-          <div className="grid grid-cols-3 gap-3 max-w-md pt-1">
-            {RISK_TOLERANCE_LEVELS.map((level) => {
+          <div
+            className="grid grid-cols-3 gap-3 max-w-md pt-1"
+            role="radiogroup"
+            aria-label={t('agentPreferences.riskTolerance.label')}
+          >
+            {RISK_TOLERANCE_LEVELS.map((level, idx) => {
               const isSelected = agentRiskTolerance === level.value;
               return (
                 <button
                   type="button"
                   key={level.value}
+                  role="radio"
+                  aria-checked={isSelected}
                   onClick={() => handleRiskToleranceChange(level.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+                      e.preventDefault();
+                      const direction = e.key === 'ArrowRight' ? 1 : -1;
+                      const newIndex = (idx + direction + RISK_TOLERANCE_LEVELS.length) % RISK_TOLERANCE_LEVELS.length;
+                      handleRiskToleranceChange(RISK_TOLERANCE_LEVELS[newIndex].value);
+                    }
+                  }}
                   className={cn(
                     'flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-all',
                     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
@@ -166,14 +194,28 @@ export function AgentPreferences({ settings, onSettingsChange }: AgentPreference
           <p className="text-sm text-muted-foreground">
             {t('agentPreferences.projectType.description')}
           </p>
-          <div className="grid grid-cols-3 gap-3 max-w-md pt-1">
-            {PROJECT_TYPES.map((type) => {
+          <div
+            className="grid grid-cols-3 gap-3 max-w-md pt-1"
+            role="radiogroup"
+            aria-label={t('agentPreferences.projectType.label')}
+          >
+            {PROJECT_TYPES.map((type, idx) => {
               const isSelected = agentProjectType === type.value;
               return (
                 <button
                   type="button"
                   key={type.value}
+                  role="radio"
+                  aria-checked={isSelected}
                   onClick={() => handleProjectTypeChange(type.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+                      e.preventDefault();
+                      const direction = e.key === 'ArrowRight' ? 1 : -1;
+                      const newIndex = (idx + direction + PROJECT_TYPES.length) % PROJECT_TYPES.length;
+                      handleProjectTypeChange(PROJECT_TYPES[newIndex].value);
+                    }
+                  }}
                   className={cn(
                     'flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-all',
                     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
