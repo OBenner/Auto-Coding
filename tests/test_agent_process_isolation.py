@@ -17,21 +17,19 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from agents.process_isolator import (
     AgentCrashError,
     AgentIsolationResult,
     AgentProcessError,
     AgentProcessIsolator,
-    ResourceLimits,
     ResourceLimitExceeded,
+    ResourceLimits,
 )
 from services.recovery import (
     FailureType,
     RecoveryAction,
     RecoveryManager,
 )
-
 
 # =============================================================================
 # TEST FIXTURES
@@ -173,13 +171,19 @@ class TestResourceLimits:
 
     def test_validation_rejects_invalid_cpu(self):
         """Rejects invalid CPU percentage limits."""
-        with pytest.raises(ValueError, match="max_cpu_percent must be between 1 and 100"):
+        with pytest.raises(
+            ValueError, match="max_cpu_percent must be between 1 and 100"
+        ):
             ResourceLimits(max_cpu_percent=0)
 
-        with pytest.raises(ValueError, match="max_cpu_percent must be between 1 and 100"):
+        with pytest.raises(
+            ValueError, match="max_cpu_percent must be between 1 and 100"
+        ):
             ResourceLimits(max_cpu_percent=101)
 
-        with pytest.raises(ValueError, match="max_cpu_percent must be between 1 and 100"):
+        with pytest.raises(
+            ValueError, match="max_cpu_percent must be between 1 and 100"
+        ):
             ResourceLimits(max_cpu_percent=-50)
 
     def test_validation_rejects_invalid_execution_time(self):
@@ -341,9 +345,7 @@ class TestAgentProcessIsolator:
     def test_initialization(self, temp_project_dir):
         """Initializes with project directory and limits."""
         limits = ResourceLimits(max_memory_mb=512)
-        isolator = AgentProcessIsolator(
-            project_dir=temp_project_dir, limits=limits
-        )
+        isolator = AgentProcessIsolator(project_dir=temp_project_dir, limits=limits)
 
         assert isolator.project_dir == temp_project_dir.resolve()
         assert isolator.limits.max_memory_mb == 512
@@ -383,9 +385,7 @@ class TestAgentProcessIsolator:
     def test_execute_agent_timeout(self, temp_project_dir, hanging_agent_script):
         """Terminates agent that exceeds execution time limit."""
         limits = ResourceLimits(max_execution_seconds=2)
-        isolator = AgentProcessIsolator(
-            project_dir=temp_project_dir, limits=limits
-        )
+        isolator = AgentProcessIsolator(project_dir=temp_project_dir, limits=limits)
         result = isolator.execute_agent(
             agent_script=str(hanging_agent_script),
         )
@@ -495,9 +495,7 @@ sys.exit(1)
         assert result.success is False
         assert True  # If we reach here, main process survived
 
-    def test_multiple_agents_can_fail_independently(
-        self, temp_project_dir
-    ):
+    def test_multiple_agents_can_fail_independently(self, temp_project_dir):
         """Multiple agents can fail without affecting each other."""
         crashing_script = temp_project_dir / "crash.py"
         crashing_script.write_text("import sys; sys.exit(1)")
@@ -514,9 +512,7 @@ sys.exit(1)
         assert all(r.success is False for r in results)
         assert len(results) == 3
 
-    def test_exception_during_execution_is_caught(
-        self, temp_project_dir
-    ):
+    def test_exception_during_execution_is_caught(self, temp_project_dir):
         """Exceptions during execution are caught and reported."""
         isolator = AgentProcessIsolator(project_dir=temp_project_dir)
 
@@ -537,9 +533,7 @@ class TestRecoveryManager:
 
     def test_initialization(self, temp_spec_dir, temp_project_dir):
         """Initializes with spec and project directories."""
-        manager = RecoveryManager(
-            spec_dir=temp_spec_dir, project_dir=temp_project_dir
-        )
+        manager = RecoveryManager(spec_dir=temp_spec_dir, project_dir=temp_project_dir)
 
         assert manager.spec_dir == temp_spec_dir
         assert manager.project_dir == temp_project_dir
@@ -547,35 +541,25 @@ class TestRecoveryManager:
 
     def test_classify_broken_build(self, temp_spec_dir, temp_project_dir):
         """Classifies broken build errors correctly."""
-        manager = RecoveryManager(
-            spec_dir=temp_spec_dir, project_dir=temp_project_dir
-        )
+        manager = RecoveryManager(spec_dir=temp_spec_dir, project_dir=temp_project_dir)
 
         error = "syntax error: invalid syntax"
         failure_type = manager.classify_failure(error, "subtask-1")
 
         assert failure_type == FailureType.BROKEN_BUILD
 
-    def test_classify_verification_failure(
-        self, temp_spec_dir, temp_project_dir
-    ):
+    def test_classify_verification_failure(self, temp_spec_dir, temp_project_dir):
         """Classifies verification failures correctly."""
-        manager = RecoveryManager(
-            spec_dir=temp_spec_dir, project_dir=temp_project_dir
-        )
+        manager = RecoveryManager(spec_dir=temp_spec_dir, project_dir=temp_project_dir)
 
         error = "AssertionError: Expected 'OK' but got 'FAIL'"
         failure_type = manager.classify_failure(error, "subtask-1")
 
         assert failure_type == FailureType.VERIFICATION_FAILED
 
-    def test_classify_context_exhausted(
-        self, temp_spec_dir, temp_project_dir
-    ):
+    def test_classify_context_exhausted(self, temp_spec_dir, temp_project_dir):
         """Classifies context exhaustion correctly."""
-        manager = RecoveryManager(
-            spec_dir=temp_spec_dir, project_dir=temp_project_dir
-        )
+        manager = RecoveryManager(spec_dir=temp_spec_dir, project_dir=temp_project_dir)
 
         error = "Context length exceeded: maximum tokens reached"
         failure_type = manager.classify_failure(error, "subtask-1")
@@ -584,33 +568,23 @@ class TestRecoveryManager:
 
     def test_classify_unknown_error(self, temp_spec_dir, temp_project_dir):
         """Classifies unknown errors correctly."""
-        manager = RecoveryManager(
-            spec_dir=temp_spec_dir, project_dir=temp_project_dir
-        )
+        manager = RecoveryManager(spec_dir=temp_spec_dir, project_dir=temp_project_dir)
 
         error = "Unknown error occurred"
         failure_type = manager.classify_failure(error, "subtask-1")
 
         assert failure_type == FailureType.UNKNOWN
 
-    def test_get_attempt_count_starts_at_zero(
-        self, temp_spec_dir, temp_project_dir
-    ):
+    def test_get_attempt_count_starts_at_zero(self, temp_spec_dir, temp_project_dir):
         """New subtask has zero attempts."""
-        manager = RecoveryManager(
-            spec_dir=temp_spec_dir, project_dir=temp_project_dir
-        )
+        manager = RecoveryManager(spec_dir=temp_spec_dir, project_dir=temp_project_dir)
 
         count = manager.get_attempt_count("new-subtask")
         assert count == 0
 
-    def test_record_attempt_increments_count(
-        self, temp_spec_dir, temp_project_dir
-    ):
+    def test_record_attempt_increments_count(self, temp_spec_dir, temp_project_dir):
         """Recording attempts increments count."""
-        manager = RecoveryManager(
-            spec_dir=temp_spec_dir, project_dir=temp_project_dir
-        )
+        manager = RecoveryManager(spec_dir=temp_spec_dir, project_dir=temp_project_dir)
 
         manager.record_attempt(
             subtask_id="subtask-1",
@@ -633,13 +607,9 @@ class TestRecoveryManager:
         count = manager.get_attempt_count("subtask-1")
         assert count == 2
 
-    def test_is_circular_fix_detects_repetition(
-        self, temp_spec_dir, temp_project_dir
-    ):
+    def test_is_circular_fix_detects_repetition(self, temp_spec_dir, temp_project_dir):
         """Detects circular fix attempts."""
-        manager = RecoveryManager(
-            spec_dir=temp_spec_dir, project_dir=temp_project_dir
-        )
+        manager = RecoveryManager(spec_dir=temp_spec_dir, project_dir=temp_project_dir)
         subtask_id = "subtask-1"
 
         # Record similar attempts
@@ -662,9 +632,7 @@ class TestRecoveryManager:
         self, temp_spec_dir, temp_project_dir
     ):
         """Allows different approaches without circular detection."""
-        manager = RecoveryManager(
-            spec_dir=temp_spec_dir, project_dir=temp_project_dir
-        )
+        manager = RecoveryManager(spec_dir=temp_spec_dir, project_dir=temp_project_dir)
         subtask_id = "subtask-1"
 
         # Record attempts with different approaches
@@ -692,9 +660,7 @@ class TestRecoveryManager:
         self, temp_spec_dir, temp_project_dir
     ):
         """Determines rollback action for broken build."""
-        manager = RecoveryManager(
-            spec_dir=temp_spec_dir, project_dir=temp_project_dir
-        )
+        manager = RecoveryManager(spec_dir=temp_spec_dir, project_dir=temp_project_dir)
 
         # Record a good commit first
         manager.record_good_commit("abc123", "subtask-0")
@@ -711,9 +677,7 @@ class TestRecoveryManager:
         self, temp_spec_dir, temp_project_dir
     ):
         """Determines retry action for verification failure."""
-        manager = RecoveryManager(
-            spec_dir=temp_spec_dir, project_dir=temp_project_dir
-        )
+        manager = RecoveryManager(spec_dir=temp_spec_dir, project_dir=temp_project_dir)
 
         action = manager.determine_recovery_action(
             FailureType.VERIFICATION_FAILED, "subtask-1"
@@ -726,9 +690,7 @@ class TestRecoveryManager:
         self, temp_spec_dir, temp_project_dir
     ):
         """Determines skip action for circular fix."""
-        manager = RecoveryManager(
-            spec_dir=temp_spec_dir, project_dir=temp_project_dir
-        )
+        manager = RecoveryManager(spec_dir=temp_spec_dir, project_dir=temp_project_dir)
 
         action = manager.determine_recovery_action(
             FailureType.CIRCULAR_FIX, "subtask-1"
@@ -739,9 +701,7 @@ class TestRecoveryManager:
 
     def test_record_good_commit(self, temp_spec_dir, temp_project_dir):
         """Records successful commits."""
-        manager = RecoveryManager(
-            spec_dir=temp_spec_dir, project_dir=temp_project_dir
-        )
+        manager = RecoveryManager(spec_dir=temp_spec_dir, project_dir=temp_project_dir)
 
         manager.record_good_commit("abc123", "subtask-1")
 
@@ -750,9 +710,7 @@ class TestRecoveryManager:
 
     def test_mark_subtask_stuck(self, temp_spec_dir, temp_project_dir):
         """Marks subtask as stuck."""
-        manager = RecoveryManager(
-            spec_dir=temp_spec_dir, project_dir=temp_project_dir
-        )
+        manager = RecoveryManager(spec_dir=temp_spec_dir, project_dir=temp_project_dir)
 
         manager.mark_subtask_stuck("subtask-1", "Cannot fix this issue")
 
@@ -763,9 +721,7 @@ class TestRecoveryManager:
 
     def test_get_recovery_hints(self, temp_spec_dir, temp_project_dir):
         """Provides recovery hints based on history."""
-        manager = RecoveryManager(
-            spec_dir=temp_spec_dir, project_dir=temp_project_dir
-        )
+        manager = RecoveryManager(spec_dir=temp_spec_dir, project_dir=temp_project_dir)
 
         # Record some attempts
         manager.record_attempt(
@@ -791,14 +747,10 @@ class TestRecoveryManager:
 class TestProcessIsolationIntegration:
     """Integration tests for process isolation system."""
 
-    def test_full_crash_and_recovery_cycle(
-        self, temp_spec_dir, temp_project_dir
-    ):
+    def test_full_crash_and_recovery_cycle(self, temp_spec_dir, temp_project_dir):
         """Tests complete crash detection and recovery cycle."""
         # Create a manager
-        manager = RecoveryManager(
-            spec_dir=temp_spec_dir, project_dir=temp_project_dir
-        )
+        manager = RecoveryManager(spec_dir=temp_spec_dir, project_dir=temp_project_dir)
 
         # Simulate a failure
         error = "AssertionError: Test failed"
@@ -825,9 +777,7 @@ class TestProcessIsolationIntegration:
     ):
         """Tests successful execution with recovery tracking."""
         isolator = AgentProcessIsolator(project_dir=temp_project_dir)
-        manager = RecoveryManager(
-            spec_dir=temp_spec_dir, project_dir=temp_project_dir
-        )
+        manager = RecoveryManager(spec_dir=temp_spec_dir, project_dir=temp_project_dir)
 
         # Execute agent successfully
         result = isolator.execute_agent(agent_script=str(dummy_agent_script))
@@ -846,9 +796,7 @@ class TestProcessIsolationIntegration:
         # Verify
         assert result.success is True
         assert manager.get_last_good_commit() == "abc123"
-        assert (
-            manager.get_subtask_history("subtask-1")["status"] == "completed"
-        )
+        assert manager.get_subtask_history("subtask-1")["status"] == "completed"
 
 
 class TestAgentProcessExceptions:

@@ -422,13 +422,17 @@ async def run_autonomous_agent(
             task_logger.set_session(iteration)
 
         # Check if process isolation is enabled
-        use_process_isolation = os.getenv("AGENT_PROCESS_ISOLATION", "").lower() == "true"
+        use_process_isolation = (
+            os.getenv("AGENT_PROCESS_ISOLATION", "").lower() == "true"
+        )
 
         if use_process_isolation:
             # Run in isolated subprocess for crash resistance
             agent_type = "planner" if first_run else "coder"
             if verbose or iteration == 1:
-                print_status("Process isolation: ENABLED (crash-resistant mode)", "info")
+                print_status(
+                    "Process isolation: ENABLED (crash-resistant mode)", "info"
+                )
             status, response, usage_metadata = await run_agent_session_isolated(
                 project_dir=project_dir,
                 spec_dir=spec_dir,

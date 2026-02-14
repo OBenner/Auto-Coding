@@ -145,8 +145,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--message",
         type=str,
-        required=True,
+        default=None,
         help="Starting message for the agent session",
+    )
+    parser.add_argument(
+        "--message-file",
+        type=str,
+        default=None,
+        help="Path to file containing the starting message (alternative to --message)",
     )
     parser.add_argument(
         "--system-prompt",
@@ -226,7 +232,7 @@ async def run_agent_session(
 
         response = await client.create_agent_session(**session_kwargs)
 
-        _debug_success(f"Agent session completed successfully")
+        _debug_success("Agent session completed successfully")
 
         return {
             "success": True,
@@ -247,7 +253,6 @@ async def run_agent_session(
             "success": False,
             "output": None,
             "error": error_msg,
-            "traceback": traceback.format_exc(),
         }
 
 
@@ -265,7 +270,14 @@ def output_result(result: dict[str, Any], execution_time: float) -> None:
     }
 
     # Write JSON to stdout (single line for easy parsing)
-    json_output = json.dumps(output, indent=None)
+    try:
+        json_output = json.dumps(output, indent=None, default=str)
+    except TypeError:
+        # Fallback: serialize with minimal info if output contains non-serializable objects
+        json_output = json.dumps(
+            {"success": False, "error": "Failed to serialize output", "output": None},
+            indent=None,
+        )
     print(json_output, file=sys.stdout, flush=True)
 
 
@@ -296,6 +308,16 @@ def run_isolated_agent() -> int:
 
         _debug(f"Running isolated agent: {args.agent_type}")
 
+        # Resolve starting message from --message or --message-file
+        starting_message = args.message
+        if args.message_file:
+            message_path = Path(args.message_file)
+            if not message_path.exists():
+                raise ValueError(f"Message file not found: {message_path}")
+            starting_message = message_path.read_text(encoding="utf-8")
+        if not starting_message:
+            raise ValueError("Either --message or --message-file is required")
+
         # Run agent session
         result = asyncio.run(
             run_agent_session(
@@ -303,7 +325,7 @@ def run_isolated_agent() -> int:
                 spec_dir=spec_dir,
                 agent_type=args.agent_type,
                 model=args.model,
-                starting_message=args.message,
+                starting_message=starting_message,
                 system_prompt=args.system_prompt,
                 max_thinking_tokens=args.max_thinking_tokens,
                 session_name=args.session_name,
@@ -325,7 +347,6 @@ def run_isolated_agent() -> int:
             "success": False,
             "output": None,
             "error": f"Fatal error: {str(e)}",
-            "traceback": traceback.format_exc(),
         }
 
         logger.error(f"Fatal error in agent subprocess: {e}")

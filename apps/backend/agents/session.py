@@ -1262,8 +1262,6 @@ async def run_agent_session_isolated(
     isolator = AgentProcessIsolator(project_dir=project_dir, limits=limits)
 
     # Build command-line arguments for subprocess
-    import sys
-
     agent_script = Path(__file__).parent / "agent_subprocess.py"
 
     if not agent_script.exists():
@@ -1299,6 +1297,12 @@ async def run_agent_session_isolated(
                 previous_rounds=len(conversation_history.rounds),
             )
 
+        # Write message to temp file to avoid OS command-line length limits
+        import tempfile
+
+        message_file = Path(tempfile.mktemp(suffix=".txt", dir=spec_dir))
+        message_file.write_text(starting_message, encoding="utf-8")
+
         args = [
             "--project-dir",
             str(project_dir),
@@ -1308,8 +1312,8 @@ async def run_agent_session_isolated(
             agent_type,
             "--model",
             model,
-            "--message",
-            starting_message,
+            "--message-file",
+            str(message_file),
             "--session-name",
             f"{session_name}_attempt{attempt}",
         ]
@@ -1320,7 +1324,7 @@ async def run_agent_session_isolated(
         if max_thinking_tokens:
             args.extend(["--max-thinking-tokens", str(max_thinking_tokens)])
 
-        debug_verbose(
+        debug_detailed(
             "session",
             f"Executing agent in isolated subprocess{attempt_suffix}",
             script=agent_script.name,
@@ -1365,7 +1369,9 @@ async def run_agent_session_isolated(
                 error_details = []
 
                 if result.crashed:
-                    error_details.append(f"Agent process crashed (exit code: {result.return_code})")
+                    error_details.append(
+                        f"Agent process crashed (exit code: {result.return_code})"
+                    )
 
                 if result.violated_limits:
                     limits_str = ", ".join(result.violated_limits)
@@ -1379,8 +1385,14 @@ async def run_agent_session_isolated(
 
                 error_msg = "\n".join(error_details)
                 last_error = error_msg
-                debug_error("session", f"Isolated agent session failed (attempt {attempt})", error=error_msg)
-                print(f"\n[ERROR] Agent subprocess failed (attempt {attempt}/{max_retries}):\n{error_msg}\n")
+                debug_error(
+                    "session",
+                    f"Isolated agent session failed (attempt {attempt})",
+                    error=error_msg,
+                )
+                print(
+                    f"\n[ERROR] Agent subprocess failed (attempt {attempt}/{max_retries}):\n{error_msg}\n"
+                )
 
                 # Determine recovery action using RecoveryManager
                 if subtask_id and attempt < max_retries:
@@ -1417,7 +1429,10 @@ async def run_agent_session_isolated(
                         # Continue to next iteration of retry loop
                         continue
                     elif recovery_action.action == "rollback":
-                        print_status(f"Crash recovery: rolling back ({recovery_action.reason})", "warning")
+                        print_status(
+                            f"Crash recovery: rolling back ({recovery_action.reason})",
+                            "warning",
+                        )
                         # Perform rollback and retry
                         if recovery_manager.rollback_to_commit(recovery_action.target):
                             continue
@@ -1454,8 +1469,14 @@ async def run_agent_session_isolated(
                 if not agent_success:
                     error_msg = agent_error or "Agent session failed (no error message)"
                     last_error = error_msg
-                    debug_error("session", f"Agent reported failure (attempt {attempt})", error=error_msg)
-                    print(f"\n[ERROR] Agent session failed (attempt {attempt}): {error_msg}\n")
+                    debug_error(
+                        "session",
+                        f"Agent reported failure (attempt {attempt})",
+                        error=error_msg,
+                    )
+                    print(
+                        f"\n[ERROR] Agent session failed (attempt {attempt}): {error_msg}\n"
+                    )
 
                     # Record failed attempt and check for retry
                     if subtask_id and attempt < max_retries:
@@ -1475,7 +1496,10 @@ async def run_agent_session_isolated(
                         )
 
                         if recovery_action.action in ("retry", "continue"):
-                            print_status(f"Agent failed, retrying ({recovery_action.reason})", "warning")
+                            print_status(
+                                f"Agent failed, retrying ({recovery_action.reason})",
+                                "warning",
+                            )
                             continue
 
                     return "error", error_msg, None
@@ -1540,3 +1564,8 @@ async def run_agent_session_isolated(
             )
             print(f"\n[ERROR] {error_msg}\n")
             return "error", error_msg, None
+
+        finally:
+            # Clean up temp message file
+            if message_file.exists():
+                message_file.unlink(missing_ok=True)

@@ -247,6 +247,7 @@ class AgentProcessIsolator:
         self._process: subprocess.Popen | None = None
         self._start_time: float = 0.0
         self._peak_memory_mb: float = 0.0
+        self._violated_limits: list[str] = []
 
         logger.debug(f"Initialized agent isolator for project: {self.project_dir}")
         _debug_verbose(f"Resource limits: {self.limits.to_dict()}")
@@ -340,6 +341,7 @@ class AgentProcessIsolator:
         result = AgentIsolationResult(success=False)
         self._start_time = time.time()
         self._peak_memory_mb = 0.0
+        self._violated_limits = []
 
         try:
             # Start process
@@ -376,7 +378,9 @@ class AgentProcessIsolator:
                     try:
                         result.agent_output = json.loads(stdout.strip())
                     except json.JSONDecodeError:
-                        _debug_verbose("Agent output is not JSON, treating as plain text")
+                        _debug_verbose(
+                            "Agent output is not JSON, treating as plain text"
+                        )
 
                 # Check for crash indicators
                 if result.return_code != 0 and result.return_code not in [-1, 1]:
@@ -397,20 +401,20 @@ class AgentProcessIsolator:
 
             except subprocess.TimeoutExpired:
                 self._process.kill()
+                stdout, stderr = self._process.communicate(timeout=5)
+                result.stdout = stdout or ""
+                result.stderr = stderr or ""
+                result.return_code = self._process.returncode or -1
                 result.error = (
                     f"Execution timeout ({self.limits.max_execution_seconds}s exceeded)"
                 )
                 result.violated_limits.append("max_execution_seconds")
                 result.crashed = True
+                result.execution_time = time.time() - self._start_time
                 _debug_error(f"Agent execution timeout: {result.error}")
 
-                # Still try to get output
-                try:
-                    stdout, stderr = self._process.communicate(timeout=5)
-                    result.stdout = stdout
-                    result.stderr = stderr
-                except subprocess.TimeoutExpired:
-                    pass
+            # Collect violated limits recorded by the monitor thread
+            result.violated_limits.extend(self._violated_limits)
 
         except Exception as e:
             result.error = f"Agent execution failed: {str(e)}"
@@ -464,18 +468,19 @@ class AgentProcessIsolator:
                         _debug_error(
                             f"Agent exceeded memory limit: {memory_mb:.0f}MB > {self.limits.max_memory_mb}MB"
                         )
+                        self._violated_limits.append("max_memory_mb")
                         self._process.kill()
                         break
 
-                    # Check CPU usage (averaged over 1 second)
-                    cpu_percent = process.cpu_percent(interval=1.0)
+                    # Check CPU usage (non-blocking, returns since last call)
+                    cpu_percent = process.cpu_percent(interval=None)
                     if cpu_percent > self.limits.max_cpu_percent:
                         _debug_warning(
                             f"Agent high CPU usage: {cpu_percent:.0f}% > {self.limits.max_cpu_percent}%"
                         )
                         # Note: We warn but don't kill on CPU - it's often bursty
 
-                    time.sleep(0.5)
+                    time.sleep(1.0)
 
                 except (psutil.NoSuchProcess, psutil.AccessDenied):
                     break

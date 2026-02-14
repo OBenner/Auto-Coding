@@ -400,7 +400,7 @@ while True:
 
         if not result.success and "timeout" in (result.error or "").lower():
             print_success(f"Timeout limit enforced (stopped at ~{actual_time:.1f}s)")
-            print_info(f"Limits: max_execution_seconds=2s ✓")
+            print_info("Limits: max_execution_seconds=2s ✓")
             return True
         else:
             print_warning(f"Timeout not enforced or unclear result: {result.error}")
@@ -482,7 +482,9 @@ def run_verification() -> bool:
     Returns:
         True if all verifications pass
     """
-    print(f"\n{Colors.BOLD}END-TO-END VERIFICATION: AGENT PROCESS ISOLATION{Colors.RESET}")
+    print(
+        f"\n{Colors.BOLD}END-TO-END VERIFICATION: AGENT PROCESS ISOLATION{Colors.RESET}"
+    )
     print("=" * 70)
 
     # Get project directory
@@ -506,7 +508,11 @@ def run_verification() -> bool:
     total = len(results)
 
     for name, result in results:
-        status = f"{Colors.GREEN}PASS{Colors.RESET}" if result else f"{Colors.RED}FAIL{Colors.RESET}"
+        status = (
+            f"{Colors.GREEN}PASS{Colors.RESET}"
+            if result
+            else f"{Colors.RED}FAIL{Colors.RESET}"
+        )
         print(f"{status:8s} {name}")
 
     print()
