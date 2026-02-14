@@ -7,7 +7,8 @@
 Describe what you want. Auto Code creates the spec, writes the code, runs QA, and hands you a clean branch to review.
 
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-green?style=flat-square)](./LICENSE)
-[![CI](https://img.shields.io/github/actions/workflow/status/OBenner/Auto-Coding/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/OBenner/Auto-Coding/actions)
+[![CI](https://img.shields.io/github/actions/workflow/status/OBenner/Auto-Coding/ci.yml?branch=develop&style=flat-square&label=CI)](https://github.com/OBenner/Auto-Coding/actions/workflows/ci.yml?query=branch%3Adevelop)
+[![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=OBenner_Auto-Coding&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=OBenner_Auto-Coding)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue?style=flat-square)]()
 [![Version](https://img.shields.io/badge/version-3.0.0-orange?style=flat-square)](https://github.com/OBenner/Auto-Coding/releases)
 
