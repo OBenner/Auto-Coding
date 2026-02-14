@@ -209,6 +209,13 @@ export const IPC_CHANNELS = {
   CONTEXT_GET_PATTERN_SUGGESTIONS: 'context:getPatternSuggestions',
   CONTEXT_CONFIRM_PATTERN: 'context:confirmPattern',
 
+  // Context viewer operations
+  CONTEXT_GET_STATS: 'context:getStats',
+  CONTEXT_GET_TOKEN_BREAKDOWN: 'context:getTokenBreakdown',
+  CONTEXT_GET_PRIORITIZATION_SCORES: 'context:getPrioritizationScores',
+  CONTEXT_GET_OPTIMIZATION_REPORT: 'context:getOptimizationReport',
+  CONTEXT_EXPORT_SNAPSHOT: 'context:exportSnapshot',
+
   // Session context operations (conversation history tracking)
   SESSION_CONTEXT_GET_HISTORY: 'sessionContext:getHistory',
   SESSION_CONTEXT_GET_SUMMARIES: 'sessionContext:getSummaries',

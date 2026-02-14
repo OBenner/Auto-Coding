@@ -16,6 +16,7 @@ import { ProfileAPI, createProfileAPI } from './profile-api';
 import { ScreenshotAPI, createScreenshotAPI } from './screenshot-api';
 import { QueueAPI, createQueueAPI } from './queue-api';
 import { PluginAPI, createPluginAPI } from './plugin-api';
+import { ContextViewerAPI, createContextViewerAPI } from './modules/context-viewer-api';
 import { SchedulerAPI, createSchedulerAPI } from './scheduler-api';
 import { FeedbackAPI, createFeedbackAPI } from './feedback-api';
 
@@ -36,6 +37,7 @@ export interface ElectronAPI extends
   ProfileAPI,
   ScreenshotAPI,
   PluginAPI,
+  ContextViewerAPI,
   FeedbackAPI {
   github: GitHubAPI;
   /** Queue routing API for rate limit recovery */
@@ -58,6 +60,7 @@ export const createElectronAPI = (): ElectronAPI => ({
   ...createProfileAPI(),
   ...createScreenshotAPI(),
   ...createPluginAPI(),
+  ...createContextViewerAPI(),
   ...createFeedbackAPI(),
   github: createGitHubAPI(),
   queue: createQueueAPI(),  // Queue routing for rate limit recovery
@@ -82,6 +85,7 @@ export {
   createScreenshotAPI,
   createQueueAPI,
   createPluginAPI,
+  createContextViewerAPI,
   createSchedulerAPI,
   createFeedbackAPI
 };
@@ -105,6 +109,7 @@ export type {
   ScreenshotAPI,
   QueueAPI,
   PluginAPI,
+  ContextViewerAPI,
   SchedulerAPI,
   FeedbackAPI
 };
