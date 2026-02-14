@@ -106,6 +106,7 @@ export function Insights({ projectId }: InsightsProps) {
   const [taskCreated, setTaskCreated] = useState<Set<string>>(new Set());
   const [showSidebar, setShowSidebar] = useState(true);
 
+  const [isUserScrolledUp, setIsUserScrolledUp] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -116,9 +117,27 @@ export function Insights({ projectId }: InsightsProps) {
     return cleanup;
   }, [projectId]);
 
-  // Auto-scroll to bottom when messages change
+  // Smart auto-scroll: only scroll to bottom if user is near bottom
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (!isUserScrolledUp && messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [session?.messages?.length, streamingContent, isUserScrolledUp]);
+
+  // Track scroll position on messages viewport
+  const messagesViewportRef = useRef<HTMLDivElement | null>(null);
+  const handleMessagesViewportRef = (el: HTMLDivElement | null) => {
+    messagesViewportRef.current = el;
+  };
+  useEffect(() => {
+    const viewport = messagesViewportRef.current;
+    if (!viewport) return;
+    const onScroll = () => {
+      const isNearBottom = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight < 100;
+      setIsUserScrolledUp(!isNearBottom);
+    };
+    viewport.addEventListener('scroll', onScroll, { passive: true });
+    return () => viewport.removeEventListener('scroll', onScroll);
   }, []);
 
   // Focus textarea on mount
@@ -259,7 +278,7 @@ export function Insights({ projectId }: InsightsProps) {
         </div>
 
       {/* Messages */}
-      <ScrollArea className="flex-1 px-6 py-4">
+      <ScrollArea className="flex-1 px-6 py-4" onViewportRef={handleMessagesViewportRef}>
         {messages.length === 0 && !streamingContent ? (
           <div className="flex h-full flex-col items-center justify-center text-center">
             <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">

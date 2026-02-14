@@ -50,7 +50,9 @@ export function GenerationProgressScreen({
   onStop
 }: GenerationProgressScreenProps) {
   const logsEndRef = useRef<HTMLDivElement>(null);
+  const logsViewportRef = useRef<HTMLDivElement | null>(null);
   const [showLogs, setShowLogs] = useState(false);
+  const [isUserScrolledUp, setIsUserScrolledUp] = useState(false);
   const [isStopping, setIsStopping] = useState(false);
 
   /**
@@ -69,12 +71,24 @@ export function GenerationProgressScreen({
     }
   };
 
-  // Auto-scroll to bottom when logs update
+  // Track scroll position on logs viewport
   useEffect(() => {
-    if (logsEndRef.current && showLogs) {
+    const viewport = logsViewportRef.current;
+    if (!viewport) return;
+    const onScroll = () => {
+      const isNearBottom = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight < 100;
+      setIsUserScrolledUp(!isNearBottom);
+    };
+    viewport.addEventListener('scroll', onScroll, { passive: true });
+    return () => viewport.removeEventListener('scroll', onScroll);
+  }, [showLogs]);
+
+  // Smart auto-scroll: only scroll to bottom when logs update if user is near bottom
+  useEffect(() => {
+    if (logsEndRef.current && showLogs && !isUserScrolledUp) {
       logsEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [showLogs]);
+  }, [logs, showLogs, isUserScrolledUp]);
 
   const getStreamingIdeasByType = (type: IdeationType): Idea[] => {
     if (!session) return [];
@@ -160,7 +174,7 @@ export function GenerationProgressScreen({
       {/* Logs Panel (collapsible) */}
       {showLogs && logs.length > 0 && (
         <div className="shrink-0 border-b border-border p-4 bg-muted/20">
-          <ScrollArea className="h-32 rounded-md border border-border bg-muted/30">
+          <ScrollArea className="h-32 rounded-md border border-border bg-muted/30" onViewportRef={(el) => { logsViewportRef.current = el; }}>
             <div className="p-3 space-y-1 font-mono text-xs">
               {logs.map((log, index) => (
                 /* biome-ignore lint/suspicious/noArrayIndexKey: Log lines don't have unique IDs */

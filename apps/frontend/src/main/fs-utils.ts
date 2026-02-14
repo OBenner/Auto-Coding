@@ -7,6 +7,7 @@
  */
 
 import * as fs from 'fs';
+import { promises as fsPromises } from 'fs';
 import * as path from 'path';
 import { getAppPath, isImmutableEnvironment, getMemoriesDir } from './config-paths';
 
@@ -97,7 +98,7 @@ export function safeWriteFile(filePath: string, content: string): string {
   const writablePath = getWritablePath(filePath, filename);
 
   try {
-    fs.writeFileSync(writablePath, content, 'utf-8');
+    atomicWriteFileSync(writablePath, content, 'utf-8');
     return writablePath;
   } catch (error) {
     console.error(`[fs-utils] Failed to write file ${writablePath}:`, error);
@@ -136,4 +137,32 @@ export function safeReadFile(originalPath: string): string | null {
   }
 
   return null;
+}
+
+/**
+ * Write a file atomically by writing to a temp file first, then renaming.
+ * This prevents 0-byte corruption if the process crashes mid-write.
+ *
+ * @param filePath - The target file path
+ * @param content - The content to write
+ * @param encoding - File encoding (default: 'utf-8')
+ */
+export function atomicWriteFileSync(filePath: string, content: string, encoding: BufferEncoding = 'utf-8'): void {
+  const tmpPath = filePath + '.tmp';
+  fs.writeFileSync(tmpPath, content, encoding);
+  fs.renameSync(tmpPath, filePath);
+}
+
+/**
+ * Write a file atomically (async version).
+ * Writes to a temp file first, then renames to prevent 0-byte corruption.
+ *
+ * @param filePath - The target file path
+ * @param content - The content to write
+ * @param encoding - File encoding (default: 'utf-8')
+ */
+export async function atomicWriteFile(filePath: string, content: string, encoding: BufferEncoding = 'utf-8'): Promise<void> {
+  const tmpPath = filePath + '.tmp';
+  await fsPromises.writeFile(tmpPath, content, encoding);
+  await fsPromises.rename(tmpPath, filePath);
 }

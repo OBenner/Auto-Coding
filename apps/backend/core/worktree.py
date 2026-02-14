@@ -649,6 +649,18 @@ class WorktreeManager:
 
         print(f"Created worktree: {worktree_path.name} on branch {branch_name}")
 
+        # Auto-push branch with tracking (-u) to simplify later push/PR operations.
+        # Non-fatal: if push fails (e.g., no remote, offline), just warn and continue.
+        if not branch_exists:
+            push_result = self._run_git(["push", "-u", "origin", branch_name])
+            if push_result.returncode == 0:
+                print(f"Auto-pushed branch {branch_name} with upstream tracking")
+            else:
+                print(
+                    f"Warning: Could not auto-push branch {branch_name}: "
+                    f"{push_result.stderr.strip()}"
+                )
+
         return WorktreeInfo(
             path=worktree_path,
             branch=branch_name,

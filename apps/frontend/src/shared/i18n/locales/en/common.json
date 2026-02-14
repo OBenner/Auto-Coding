@@ -73,6 +73,8 @@
     "stop": "Stop",
     "refresh": "Refresh",
     "refreshing": "Refreshing...",
+    "showMore": "Show more",
+    "showLess": "Show less",
     "merge": "Merge",
     "discard": "Discard",
     "switch": "Switch",

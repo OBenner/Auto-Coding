@@ -35,7 +35,7 @@ for (const envPath of possibleEnvPaths) {
   }
 }
 
-import { app, BrowserWindow, shell, nativeImage, session, screen } from 'electron';
+import { app, BrowserWindow, shell, nativeImage, session, screen, Menu } from 'electron';
 import { join } from 'path';
 import { accessSync, readFileSync, writeFileSync, rmSync, cpSync, readdirSync, mkdirSync } from 'fs';
 import { electronApp, optimizer, is } from '@electron-toolkit/utils';
@@ -195,7 +195,8 @@ function createWindow(): void {
       sandbox: true,
       contextIsolation: true,
       nodeIntegration: false,
-      backgroundThrottling: false // Prevent terminal lag when window loses focus
+      backgroundThrottling: false, // Prevent terminal lag when window loses focus
+      spellcheck: true
     }
   });
 
@@ -223,6 +224,25 @@ function createWindow(): void {
       console.warn('[main] Failed to open external URL:', details.url, error);
     });
     return { action: 'deny' };
+  });
+
+  // Spell check context menu: show suggestions, "Add to Dictionary", and standard edit actions
+  mainWindow.webContents.on('context-menu', (_event, params) => {
+    if (!params.misspelledWord) return;
+    const menuItems: Electron.MenuItemConstructorOptions[] = params.dictionarySuggestions.map(
+      (suggestion) => ({
+        label: suggestion,
+        click: () => mainWindow?.webContents.replaceMisspelling(suggestion),
+      })
+    );
+    if (menuItems.length > 0) {
+      menuItems.push({ type: 'separator' });
+    }
+    menuItems.push({
+      label: 'Add to Dictionary',
+      click: () => mainWindow?.webContents.session.addWordToSpellCheckerDictionary(params.misspelledWord),
+    });
+    Menu.buildFromTemplate(menuItems).popup();
   });
 
   // Load the renderer

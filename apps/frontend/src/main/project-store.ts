@@ -1,6 +1,7 @@
 import { app } from 'electron';
 import { existsSync, Dirent, promises as fsPromises } from 'fs';
 import path from 'path';
+import { atomicWriteFile } from './fs-utils';
 import { v4 as uuidv4 } from 'uuid';
 import type { Project, ProjectSettings, Task, TaskStatus, TaskMetadata, ImplementationPlan, ReviewReason, PlanSubtask } from '../shared/types';
 import { DEFAULT_PROJECT_SETTINGS, AUTO_BUILD_PATHS, getSpecsDir, JSON_ERROR_PREFIX, JSON_ERROR_TITLE_SUFFIX } from '../shared/constants';
@@ -127,7 +128,7 @@ export class ProjectStore {
     this.writeInProgress = true;
     try {
       const content = JSON.stringify(this.data, null, 2);
-      await fsPromises.writeFile(this.storePath, content);
+      await atomicWriteFile(this.storePath, content);
 
       // Reset failure counter on success
       this.consecutiveFailures = 0;
