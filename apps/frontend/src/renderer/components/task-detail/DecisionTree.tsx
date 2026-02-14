@@ -17,6 +17,12 @@ import { cn } from '../../lib/utils';
 import type { DecisionPoint, DecisionType, ConfidenceLevel } from '../../../shared/types';
 import { getDecisionTypeMeta, getConfidenceMeta, DECISION_TYPE_META, CONFIDENCE_META } from '../../../shared/constants/decision-meta';
 
+interface DecisionTreeProps {
+  decisions: DecisionPoint[];
+  className?: string;
+  groupBy?: 'phase' | 'type' | 'confidence';
+}
+
 // Tree node structure
 interface TreeNode {
   id: string;

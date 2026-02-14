@@ -741,7 +741,7 @@ function LogEntry({ entry, isExpanded, onToggleExpand }: LogEntryProps) {
   }
 
   if (entry.type === 'decision' && entry.decision_data) {
-    const decision = entry.decision_data as DecisionPoint;
+    const decision = entry.decision_data as unknown as DecisionPoint;
     const typeMeta = getDecisionTypeMeta(decision.decision_type);
     const confidenceMeta = getConfidenceMeta(decision.confidence_level);
     const TypeIcon = typeMeta.icon;
