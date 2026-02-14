@@ -109,24 +109,27 @@ export async function readQAReport(project: Project, task: Task): Promise<string
  * [Rest of markdown content]
  */
 function parseQAEscalationFrontmatter(content: string): Partial<QAEscalation> | null {
-  const frontmatterRegex = /^---\s*\n([\s\S]*?)\n---/;
-  const match = content.match(frontmatterRegex);
+  // Extract frontmatter between --- delimiters using indexOf (avoids ReDoS)
+  const firstDelim = content.indexOf('---');
+  if (firstDelim === -1) return null;
 
-  if (!match) {
-    return null;
-  }
+  const afterFirst = content.indexOf('\n', firstDelim);
+  if (afterFirst === -1) return null;
 
-  const frontmatter = match[1];
+  const secondDelim = content.indexOf('\n---', afterFirst);
+  if (secondDelim === -1) return null;
+
+  const frontmatter = content.slice(afterFirst + 1, secondDelim);
   const metadata: Partial<QAEscalation> = {};
 
-  // Parse YAML-like frontmatter
+  // Parse YAML-like frontmatter line by line
   const lines = frontmatter.split('\n');
   for (const line of lines) {
-    const [key, ...valueParts] = line.split(':');
-    if (!key || valueParts.length === 0) continue;
+    const colonIdx = line.indexOf(':');
+    if (colonIdx === -1) continue;
 
-    const value = valueParts.join(':').trim().replace(/^["']|["']$/g, '');
-    const trimmedKey = key.trim();
+    const trimmedKey = line.slice(0, colonIdx).trim();
+    const value = line.slice(colonIdx + 1).trim().replace(/(^["'])|(['"]$)/g, '');
 
     if (trimmedKey === 'generated') {
       metadata.generated = value;
@@ -146,19 +149,42 @@ function parseQAEscalationFrontmatter(content: string): Partial<QAEscalation> | 
  * Parse QA escalation summary section from markdown content
  */
 function parseQAEscalationSummary(content: string): QAEscalation['summary'] | null {
-  const summaryRegex = /## Summary\s*\n\s*-\s*Total iterations:\s*(\d+)\s*\n\s*-\s*Total issues found:\s*(\d+)\s*\n\s*-\s*Unique issues:\s*(\d+)\s*\n\s*-\s*Fix success rate:\s*([\d.]+)%/i;
-  const match = content.match(summaryRegex);
+  // Find "## Summary" section and parse bullet points (avoids ReDoS)
+  const summaryIdx = content.search(/## Summary/i);
+  if (summaryIdx === -1) return null;
 
-  if (!match) {
-    return null;
+  const sectionEnd = content.indexOf('\n## ', summaryIdx + 1);
+  const section = sectionEnd === -1
+    ? content.slice(summaryIdx)
+    : content.slice(summaryIdx, sectionEnd);
+
+  const lines = section.split('\n');
+  let totalIterations = 0;
+  let totalIssues = 0;
+  let uniqueIssues = 0;
+  let fixSuccessRate = 0;
+  let found = 0;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith('- Total iterations:')) {
+      totalIterations = parseInt(trimmed.split(':')[1].trim(), 10);
+      found++;
+    } else if (trimmed.startsWith('- Total issues found:')) {
+      totalIssues = parseInt(trimmed.split(':')[1].trim(), 10);
+      found++;
+    } else if (trimmed.startsWith('- Unique issues:')) {
+      uniqueIssues = parseInt(trimmed.split(':')[1].trim(), 10);
+      found++;
+    } else if (trimmed.startsWith('- Fix success rate:')) {
+      fixSuccessRate = parseFloat(trimmed.split(':')[1].trim()) / 100;
+      found++;
+    }
   }
 
-  return {
-    totalIterations: parseInt(match[1], 10),
-    totalIssues: parseInt(match[2], 10),
-    uniqueIssues: parseInt(match[3], 10),
-    fixSuccessRate: parseFloat(match[4]) / 100 // Convert percentage to decimal
-  };
+  if (found < 4) return null;
+
+  return { totalIterations, totalIssues, uniqueIssues, fixSuccessRate };
 }
 
 /**
@@ -166,25 +192,73 @@ function parseQAEscalationSummary(content: string): QAEscalation['summary'] | nu
  */
 function parseRecurringIssues(content: string): QAEscalation['recurringIssues'] {
   const issues: QAEscalation['recurringIssues'] = [];
-  const sectionRegex = /## Recurring Issues.*?\n([\s\S]*?)(?=\n## |\n---|\n$)/i;
-  const sectionMatch = content.match(sectionRegex);
 
-  if (!sectionMatch) {
-    return issues;
+  // Find "## Recurring Issues" section using indexOf (avoids ReDoS)
+  const sectionIdx = content.search(/## Recurring Issues/i);
+  if (sectionIdx === -1) return issues;
+
+  const sectionEnd = content.indexOf('\n## ', sectionIdx + 1);
+  const section = sectionEnd === -1
+    ? content.slice(sectionIdx)
+    : content.slice(sectionIdx, sectionEnd);
+
+  const lines = section.split('\n');
+  let currentTitle = '';
+  let currentFile = '';
+  let currentLine = 0;
+  let currentType = '';
+  let currentOccurrences = 0;
+  let currentDescription = '';
+  let inIssue = false;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith('### ')) {
+      if (inIssue && currentTitle) {
+        issues.push({
+          title: currentTitle,
+          file: currentFile || undefined,
+          line: currentLine,
+          type: currentType,
+          occurrences: currentOccurrences,
+          description: currentDescription
+        });
+      }
+      currentTitle = trimmed.slice(4).trim();
+      currentFile = '';
+      currentLine = 0;
+      currentType = '';
+      currentOccurrences = 0;
+      currentDescription = '';
+      inIssue = true;
+    } else if (inIssue) {
+      if (trimmed.startsWith('- File:')) {
+        const backtickStart = trimmed.indexOf('`');
+        const backtickEnd = trimmed.lastIndexOf('`');
+        currentFile = backtickStart >= 0 && backtickEnd > backtickStart
+          ? trimmed.slice(backtickStart + 1, backtickEnd)
+          : '';
+      } else if (trimmed.startsWith('- Line:')) {
+        currentLine = parseInt(trimmed.split(':')[1].trim(), 10);
+      } else if (trimmed.startsWith('- Type:')) {
+        currentType = trimmed.slice(trimmed.indexOf(':') + 1).trim();
+      } else if (trimmed.startsWith('- Occurrences:')) {
+        currentOccurrences = parseInt(trimmed.split(':')[1].trim(), 10);
+      } else if (trimmed.startsWith('- Description:')) {
+        currentDescription = trimmed.slice(trimmed.indexOf(':') + 1).trim();
+      }
+    }
   }
 
-  const issuesContent = sectionMatch[1];
-  const issueRegex = /###\s*(.+?)\s*\n\s*-\s*File:\s*`([^`]*)`\s*\n\s*-\s*Line:\s*(\d+)\s*\n\s*-\s*Type:\s*(.+?)\s*\n\s*-\s*Occurrences:\s*(\d+)\s*\n\s*-\s*Description:\s*(.+?)(?=\n###|\n##|\n---|\n$)/gs;
-
-  let match;
-  while ((match = issueRegex.exec(issuesContent)) !== null) {
+  // Push last issue
+  if (inIssue && currentTitle) {
     issues.push({
-      title: match[1].trim(),
-      file: match[2].trim() || undefined,
-      line: parseInt(match[3], 10),
-      type: match[4].trim(),
-      occurrences: parseInt(match[5], 10),
-      description: match[6].trim()
+      title: currentTitle,
+      file: currentFile || undefined,
+      line: currentLine,
+      type: currentType,
+      occurrences: currentOccurrences,
+      description: currentDescription
     });
   }
 
@@ -196,23 +270,44 @@ function parseRecurringIssues(content: string): QAEscalation['recurringIssues'] 
  */
 function parseMostCommonIssues(content: string): QAEscalation['mostCommonIssues'] {
   const issues: QAEscalation['mostCommonIssues'] = [];
-  const sectionRegex = /## Most Common Issues.*?\n([\s\S]*?)(?=\n## |\n---|\n$)/i;
-  const sectionMatch = content.match(sectionRegex);
 
-  if (!sectionMatch) {
-    return issues;
-  }
+  // Find "## Most Common Issues" section using indexOf (avoids ReDoS)
+  const sectionIdx = content.search(/## Most Common Issues/i);
+  if (sectionIdx === -1) return issues;
 
-  const issuesContent = sectionMatch[1];
-  const issueRegex = /\d+\.\s*\*\*(.+?)\*\*\s*\((\d+)\s*occurrences?\)(?:\s*-\s*File:\s*`([^`]+)`)?/g;
+  const sectionEnd = content.indexOf('\n## ', sectionIdx + 1);
+  const section = sectionEnd === -1
+    ? content.slice(sectionIdx)
+    : content.slice(sectionIdx, sectionEnd);
 
-  let match;
-  while ((match = issueRegex.exec(issuesContent)) !== null) {
-    issues.push({
-      title: match[1].trim(),
-      occurrences: parseInt(match[2], 10),
-      file: match[3]?.trim() || undefined
-    });
+  // Parse numbered list items: "1. **Title** (N occurrences) - File: `path`"
+  const lines = section.split('\n');
+  for (const line of lines) {
+    const trimmed = line.trim();
+    // Match lines starting with a number and dot
+    if (!/^\d+\./.test(trimmed)) continue;
+
+    const boldStart = trimmed.indexOf('**');
+    const boldEnd = trimmed.indexOf('**', boldStart + 2);
+    if (boldStart === -1 || boldEnd === -1) continue;
+
+    const title = trimmed.slice(boldStart + 2, boldEnd).trim();
+
+    const parenStart = trimmed.indexOf('(', boldEnd);
+    const parenEnd = trimmed.indexOf(')', parenStart);
+    let occurrences = 0;
+    if (parenStart >= 0 && parenEnd >= 0) {
+      occurrences = parseInt(trimmed.slice(parenStart + 1, parenEnd), 10);
+    }
+
+    let file: string | undefined;
+    const backtickStart = trimmed.indexOf('`', parenEnd);
+    const backtickEnd = trimmed.indexOf('`', backtickStart + 1);
+    if (backtickStart >= 0 && backtickEnd > backtickStart) {
+      file = trimmed.slice(backtickStart + 1, backtickEnd).trim() || undefined;
+    }
+
+    issues.push({ title, occurrences, file });
   }
 
   return issues;
