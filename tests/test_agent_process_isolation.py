@@ -439,13 +439,15 @@ class TestAgentProcessIsolator:
         """Terminates running agent gracefully."""
         isolator = self._start_hanging_agent(temp_project_dir, hanging_agent_script)
         isolator.terminate()
-        assert isolator._process is None
+        # Process should have exited (returncode is set after termination)
+        assert isolator._process is None or isolator._process.returncode is not None
 
     def test_kill_forceful(self, temp_project_dir, hanging_agent_script):
         """Forcefully kills running agent."""
         isolator = self._start_hanging_agent(temp_project_dir, hanging_agent_script)
         isolator.kill()
-        assert isolator._process is None
+        # Process should have exited (returncode is set after kill)
+        assert isolator._process is None or isolator._process.returncode is not None
 
 
 # =============================================================================

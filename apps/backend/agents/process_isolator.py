@@ -25,65 +25,12 @@ from typing import Any
 # Configure logging
 logger = logging.getLogger(__name__)
 
-# Import debug utilities - wrapped with source module name for CodeQL compliance
-_SOURCE = "agents.process_isolator"
-try:
-    from debug import (
-        debug as _raw_debug,
-    )
-    from debug import (
-        debug_error as _raw_debug_error,
-    )
-    from debug import (
-        debug_success as _raw_debug_success,
-    )
-    from debug import (
-        debug_verbose as _raw_debug_verbose,
-    )
-    from debug import (
-        debug_warning as _raw_debug_warning,
-    )
-except ImportError:
+# Import debug utilities via shared helper
+from agents.debug_helpers import create_debug_helpers
 
-    def _raw_debug(*_args, **_kwargs):
-        """No-op fallback when debug module is unavailable."""
-
-    def _raw_debug_error(*_args, **_kwargs):
-        """No-op fallback when debug module is unavailable."""
-
-    def _raw_debug_success(*_args, **_kwargs):
-        """No-op fallback when debug module is unavailable."""
-
-    def _raw_debug_verbose(*_args, **_kwargs):
-        """No-op fallback when debug module is unavailable."""
-
-    def _raw_debug_warning(*_args, **_kwargs):
-        """No-op fallback when debug module is unavailable."""
-
-
-def _debug(msg: str, **kwargs) -> None:
-    """Debug log with source module."""
-    _raw_debug(_SOURCE, msg, **kwargs)
-
-
-def _debug_verbose(msg: str, **kwargs) -> None:
-    """Verbose debug log with source module."""
-    _raw_debug_verbose(_SOURCE, msg, **kwargs)
-
-
-def _debug_success(msg: str, **kwargs) -> None:
-    """Success debug log with source module."""
-    _raw_debug_success(_SOURCE, msg, **kwargs)
-
-
-def _debug_error(msg: str, **kwargs) -> None:
-    """Error debug log with source module."""
-    _raw_debug_error(_SOURCE, msg, **kwargs)
-
-
-def _debug_warning(msg: str, **kwargs) -> None:
-    """Warning debug log with source module."""
-    _raw_debug_warning(_SOURCE, msg, **kwargs)
+_debug, _debug_error, _debug_success, _debug_verbose, _debug_warning = (
+    create_debug_helpers("agents.process_isolator")
+)
 
 
 @dataclass
