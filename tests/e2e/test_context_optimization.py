@@ -15,13 +15,13 @@ Comprehensive tests for the context optimization pipeline including:
 These tests verify the 30% token reduction goal and overall effectiveness.
 """
 
+import sys
 import tempfile
 from pathlib import Path
+
 import pytest
 
 # Ensure parent directory is in path for imports
-import sys
-
 _PARENT_DIR = Path(__file__).parent.parent
 if str(_PARENT_DIR) not in sys.path:
     sys.path.insert(0, str(_PARENT_DIR))

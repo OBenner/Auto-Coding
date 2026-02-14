@@ -319,9 +319,9 @@ class ContextBuilder:
                     match.path
                 )
                 # Boost relevance by 10% of impact score (0-1 range)
-                if impact_score > 0:
+                if impact_score > 0 and hasattr(match, "relevance_score"):
                     match.relevance_score += impact_score * 0.1
-            except (FileNotFoundError, ValueError):
+            except (FileNotFoundError, ValueError, AttributeError):
                 # File might not be Python or not analyzable - skip
                 continue
 

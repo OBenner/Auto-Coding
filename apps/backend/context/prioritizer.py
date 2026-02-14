@@ -7,11 +7,14 @@ developed code. Uses git timestamps when available, falls back to
 filesystem modification times.
 """
 
+import logging
 import subprocess
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from .models import FileMatch
+
+logger = logging.getLogger(__name__)
 
 
 class FilePrioritizer:
@@ -88,7 +91,7 @@ class FilePrioritizer:
             return 0.0
 
         # Calculate age in days
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         age_days = (now - timestamp).total_seconds() / 86400  # seconds in a day
 
         # Exponential decay scoring
@@ -120,6 +123,14 @@ class FilePrioritizer:
         Returns:
             Datetime of last modification, or None if file doesn't exist
         """
+        # Normalize to relative path for project operations
+        file_path_obj = Path(file_path)
+        if file_path_obj.is_absolute():
+            try:
+                file_path = str(file_path_obj.relative_to(self.project_dir))
+            except ValueError:
+                return None
+
         full_path = self.project_dir / file_path
 
         if not full_path.exists():
@@ -134,7 +145,7 @@ class FilePrioritizer:
         # Fallback to filesystem mtime
         try:
             mtime = full_path.stat().st_mtime
-            return datetime.fromtimestamp(mtime, tz=timezone.utc)
+            return datetime.fromtimestamp(mtime, tz=UTC)
         except OSError:
             return None
 
@@ -167,10 +178,10 @@ class FilePrioritizer:
 
             if result.returncode == 0 and result.stdout.strip():
                 timestamp = int(result.stdout.strip())
-                return datetime.fromtimestamp(timestamp, tz=timezone.utc)
+                return datetime.fromtimestamp(timestamp, tz=UTC)
 
         except (subprocess.TimeoutExpired, subprocess.SubprocessError, ValueError):
-            pass  # Fall through to return None when git log fails
+            logger.debug("git log failed for %s, falling back to mtime", file_path)
 
         return None
 

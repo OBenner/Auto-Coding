@@ -16,19 +16,26 @@ Usage:
 from __future__ import annotations
 
 import logging
-import sys
+from datetime import UTC
 from pathlib import Path
 from typing import Any
-
-# Ensure parent directory is in path for imports (before other imports)
-_PARENT_DIR = Path(__file__).parent.parent
-if str(_PARENT_DIR) not in sys.path:
-    sys.path.insert(0, str(_PARENT_DIR))
 
 logger = logging.getLogger(__name__)
 
 
-def get_context_stats(spec_dir: Path | None = None) -> dict[str, Any]:
+def _ensure_backend_on_path() -> None:
+    """Add the backend directory to sys.path if not already present."""
+    import sys
+
+    parent_dir = str(Path(__file__).parent.parent)
+    if parent_dir not in sys.path:
+        sys.path.insert(0, parent_dir)
+
+
+def get_context_stats(
+    spec_dir: Path | None = None,
+    project_dir: Path | None = None,
+) -> dict[str, Any]:
     """
     Get comprehensive context window statistics.
 
@@ -37,6 +44,7 @@ def get_context_stats(spec_dir: Path | None = None) -> dict[str, Any]:
 
     Args:
         spec_dir: Spec directory path (optional, for history tracking)
+        project_dir: Project directory path (defaults to cwd if not provided)
 
     Returns:
         Dictionary containing:
@@ -45,6 +53,7 @@ def get_context_stats(spec_dir: Path | None = None) -> dict[str, Any]:
         - optimization_stats: Deduplication and prioritization metrics
         - files_stats: File-level context information
     """
+    _ensure_backend_on_path()
     from context.builder import ContextBuilder
     from context.history_tracker import get_history_tracker
 
@@ -58,8 +67,8 @@ def get_context_stats(spec_dir: Path | None = None) -> dict[str, Any]:
     try:
         # Get token budget statistics
         # Create a temporary builder to access token counting capabilities
-        project_dir = Path.cwd()
-        builder = ContextBuilder(project_dir)
+        effective_project_dir = project_dir or Path.cwd()
+        builder = ContextBuilder(effective_project_dir)
 
         stats["token_stats"] = builder.get_budget_stats()
 
@@ -120,6 +129,7 @@ def get_token_breakdown(spec_dir: Path | None = None) -> dict[str, Any]:
         - by_category: Token count by category (to_modify, to_reference, etc.)
         - total: Total token count
     """
+    _ensure_backend_on_path()
     from context.history_tracker import get_history_tracker
 
     breakdown = {
@@ -165,6 +175,7 @@ def get_prioritization_scores(
         - algorithm: Prioritization algorithm used
         - factors: Weighting factors applied
     """
+    _ensure_backend_on_path()
     from context.prioritizer import FilePrioritizer
 
     result = {
@@ -178,11 +189,25 @@ def get_prioritization_scores(
     }
 
     try:
-        FilePrioritizer(project_dir)
-
-        # For now, return algorithm info
-        # Actual file scoring would require a full context build
+        prioritizer = FilePrioritizer(project_dir)
         result["algorithm"] = "exponential_decay_recency"
+
+        # Get scored files for recently modified Python files
+        python_files = [
+            str(p.relative_to(project_dir))
+            for p in project_dir.rglob("*.py")
+            if not any(
+                part.startswith(".")
+                or part in ("venv", "env", ".venv", "__pycache__", "node_modules")
+                for part in p.parts
+            )
+        ][:50]  # Limit to 50 files
+
+        if python_files:
+            scored = prioritizer.get_most_recent_files(python_files, max_results=20)
+            result["scored_files"] = [
+                {"file": f, "recency_score": s} for f, s in scored
+            ]
 
     except Exception as e:
         logger.error(f"Error getting prioritization scores: {e}", exc_info=True)
@@ -245,6 +270,7 @@ def export_context_snapshot(spec_dir: Path) -> dict[str, Any]:
     Returns:
         Complete context snapshot with all metadata
     """
+    _ensure_backend_on_path()
     from context.history_tracker import get_history_tracker
 
     snapshot = {
@@ -277,9 +303,9 @@ def export_context_snapshot(spec_dir: Path) -> dict[str, Any]:
             ]
 
         # Add timestamp
-        from datetime import datetime, timezone
+        from datetime import datetime
 
-        snapshot["timestamp"] = datetime.now(timezone.utc).isoformat()
+        snapshot["timestamp"] = datetime.now(UTC).isoformat()
 
     except Exception as e:
         logger.error(f"Error exporting context snapshot: {e}", exc_info=True)

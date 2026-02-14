@@ -140,7 +140,7 @@ class EmbeddingGenerator:
         if self.use_cache:
             cache_key = self._get_cache_key(text)
             if cache_key in self._cache:
-                return self._cache[cache_key]
+                return list(self._cache[cache_key])
 
         # Generate embedding
         if self._using_openai:

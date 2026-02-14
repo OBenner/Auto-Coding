@@ -37,7 +37,7 @@ import hashlib
 import json
 import logging
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -67,9 +67,7 @@ class ContextEntry:
     content_hash: str
     token_count: int
     turn_number: int
-    timestamp: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
+    timestamp: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
     sent_count: int = 1
     last_modified: str | None = None
     summary: str | None = None
@@ -107,6 +105,7 @@ class HistoryTracker:
         self.current_turn = 0
         self.history: dict[str, ContextEntry] = {}  # file_path -> latest entry
         self.turn_history: list[list[str]] = []  # turn_number -> list of file_paths
+        self._dirty = False
 
         # Load persisted history if available
         if spec_dir:
@@ -164,7 +163,7 @@ class HistoryTracker:
                     for file_path, entry in self.history.items()
                 },
                 "turn_history": self.turn_history,
-                "updated_at": datetime.now(timezone.utc).isoformat(),
+                "updated_at": datetime.now(UTC).isoformat(),
             }
 
             history_file = self.spec_dir / "context_history.json"
@@ -182,6 +181,11 @@ class HistoryTracker:
         Returns:
             The new turn number
         """
+        # Persist any pending changes from previous turn
+        if self._dirty:
+            self._save_history()
+            self._dirty = False
+
         self.current_turn += 1
         self.turn_history.append([])
 
@@ -191,6 +195,12 @@ class HistoryTracker:
 
         logger.debug(f"Started turn {self.current_turn}")
         return self.current_turn
+
+    def flush(self) -> None:
+        """Persist any pending changes to disk."""
+        if self._dirty:
+            self._save_history()
+            self._dirty = False
 
     def add_context(
         self,
@@ -219,7 +229,7 @@ class HistoryTracker:
         if content_hash is None and content is not None:
             content_hash = self._compute_hash(content)
         elif content_hash is None:
-            content_hash = "unknown"
+            content_hash = f"no-content-{file_path}"
 
         # Estimate token count if not provided
         if token_count is None and content is not None:
@@ -252,7 +262,7 @@ class HistoryTracker:
                 # Same content - update existing entry
                 existing.turn_number = self.current_turn
                 existing.sent_count += 1
-                existing.timestamp = datetime.now(timezone.utc).isoformat()
+                existing.timestamp = datetime.now(UTC).isoformat()
                 if summary:
                     existing.summary = summary
                 entry = existing
@@ -272,8 +282,8 @@ class HistoryTracker:
         if self.turn_history:
             self.turn_history[-1].append(file_path)
 
-        # Persist
-        self._save_history()
+        # Mark dirty (persisted on next turn start or explicit flush)
+        self._dirty = True
 
         return entry
 
@@ -295,7 +305,7 @@ class HistoryTracker:
         if file_path not in self.history:
             return False
 
-        turns_ago = turns_ago or self.resend_threshold
+        turns_ago = self.resend_threshold if turns_ago is None else turns_ago
         entry = self.history[file_path]
 
         return (self.current_turn - entry.turn_number) <= turns_ago

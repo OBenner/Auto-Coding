@@ -355,7 +355,7 @@ class ContentDeduplicator:
             0.333...
         """
         if not set1 and not set2:
-            return 1.0
+            return 0.0
 
         if not set1 or not set2:
             return 0.0

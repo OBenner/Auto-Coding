@@ -147,7 +147,10 @@ class DependencyAnalyzer:
         external_modules = []
 
         # Resolve imports to file paths
-        relative_path = str(path.relative_to(self.project_dir))
+        try:
+            relative_path = str(path.relative_to(self.project_dir))
+        except ValueError:
+            raise ValueError(f"File is outside the project directory: {file_path}")
         for import_info in imports:
             resolved = self._resolve_import(import_info, relative_path)
             if resolved:
@@ -395,6 +398,11 @@ class DependencyAnalyzer:
             target = parent / Path(*module_parts)
         else:
             target = parent
+
+        # Validate that resolved target stays within project root
+        resolved_target = (self.project_dir / target).resolve()
+        if not str(resolved_target).startswith(str(self.project_dir)):
+            return None
 
         # Try as package
         candidate = self.project_dir / target / "__init__.py"

@@ -13,7 +13,12 @@ const execFileAsync = promisify(execFile);
  * Escape a string for safe embedding in Python string literals
  */
 function escapePythonString(str: string): string {
-  return str.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  return str
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'")
+    .replace(/\n/g, '\\n')
+    .replace(/\r/g, '\\r')
+    .replace(/\0/g, '\\0');
 }
 
 /**
