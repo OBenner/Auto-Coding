@@ -66,9 +66,7 @@ def notify_stuck_subtask(
     print()
     print(muted("  The agent will pause after completing other subtasks."))
     print(
-        muted(
-            "  Please review the issue and either fix manually or skip this subtask."
-        )
+        muted("  Please review the issue and either fix manually or skip this subtask.")
     )
     print()
 

@@ -658,9 +658,7 @@ async def post_session_processing(
         attempt_count = recovery_manager.get_attempt_count(subtask_id)
         recovery_hints = recovery_manager.get_recovery_hints(subtask_id)
         if recovery_hints and attempt_count > 0:
-            print_status(
-                f"Recovery hints available ({attempt_count} attempts)", "info"
-            )
+            print_status(f"Recovery hints available ({attempt_count} attempts)", "info")
 
         # Record Linear session result (if enabled)
         if linear_enabled:

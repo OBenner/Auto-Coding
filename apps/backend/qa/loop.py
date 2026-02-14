@@ -19,7 +19,6 @@ from analysis.failure_analyzer import analyze_failure, is_analysis_enabled
 from core.client import create_client
 from debug import debug, debug_error, debug_section, debug_success, debug_warning
 from integrations.graphiti.memory import get_graphiti_memory, is_graphiti_enabled
-from services.recovery import RecoveryManager
 from linear_updater import (
     LinearTaskState,
     is_linear_enabled,
@@ -32,6 +31,7 @@ from phase_config import get_phase_model, get_phase_thinking_budget
 from phase_event import ExecutionPhase, emit_phase
 from progress import count_subtasks, is_build_complete
 from security.constants import PROJECT_DIR_ENV_VAR
+from services.recovery import RecoveryManager
 from task_logger import (
     LogPhase,
     get_task_logger,
@@ -795,11 +795,16 @@ async def run_qa_validation_loop(
 
                 # Classify the failure type based on issues
                 from services.recovery import FailureType
-                failure_type = FailureType.VERIFICATION_FAILED  # QA rejections are verification failures
+
+                failure_type = (
+                    FailureType.VERIFICATION_FAILED
+                )  # QA rejections are verification failures
 
                 # Check if we should escalate early (before max iterations)
-                should_escalate, escalation_reason = recovery_manager.should_escalate_early(
-                    qa_subtask_id, failure_type, error_description
+                should_escalate, escalation_reason = (
+                    recovery_manager.should_escalate_early(
+                        qa_subtask_id, failure_type, error_description
+                    )
                 )
 
                 if should_escalate:
@@ -810,9 +815,11 @@ async def run_qa_validation_loop(
                         iteration=qa_iteration,
                         max_iterations=MAX_QA_ITERATIONS,
                     )
-                    print(f"\n⚠️  Early Escalation Triggered")
+                    print("\n⚠️  Early Escalation Triggered")
                     print(f"   Reason: {escalation_reason}")
-                    print(f"   Escalating at iteration {qa_iteration}/{MAX_QA_ITERATIONS}...")
+                    print(
+                        f"   Escalating at iteration {qa_iteration}/{MAX_QA_ITERATIONS}..."
+                    )
 
                     # Create escalation file
                     await escalate_to_human(spec_dir, current_issues, qa_iteration)
@@ -828,7 +835,9 @@ async def run_qa_validation_loop(
                     # Update Linear
                     if linear_task and linear_task.task_id:
                         await linear_qa_max_iterations(spec_dir, qa_iteration)
-                        print("\nLinear: Task marked as needing human intervention (early escalation)")
+                        print(
+                            "\nLinear: Task marked as needing human intervention (early escalation)"
+                        )
 
                     return False
 

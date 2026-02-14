@@ -250,10 +250,7 @@ class RecoveryManager:
             )
 
         # Context exhaustion with moderate attempt count warrants early escalation
-        if (
-            failure_type == FailureType.CONTEXT_EXHAUSTED
-            and attempt_count >= 2
-        ):
+        if failure_type == FailureType.CONTEXT_EXHAUSTED and attempt_count >= 2:
             return (
                 True,
                 f"Context exhausted after {attempt_count} attempts. "
