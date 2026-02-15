@@ -235,7 +235,9 @@ export function SessionComparison({
                   >
                     <span className="text-xs">
                       {t(
-                        `sessionList.status${comparisonData.metrics?.completion_status?.[session1.session_id] === 'completed' ? 'Completed' : 'InProgress'}`
+                        comparisonData.metrics?.completion_status?.[session1.session_id] === 'completed'
+                          ? 'sessionList.statusCompleted'
+                          : 'sessionList.statusInProgress'
                       )}
                     </span>
                   </Badge>
@@ -249,7 +251,9 @@ export function SessionComparison({
                   >
                     <span className="text-xs">
                       {t(
-                        `sessionList.status${comparisonData.metrics?.completion_status?.[session2.session_id] === 'completed' ? 'Completed' : 'InProgress'}`
+                        comparisonData.metrics?.completion_status?.[session2.session_id] === 'completed'
+                          ? 'sessionList.statusCompleted'
+                          : 'sessionList.statusInProgress'
                       )}
                     </span>
                   </Badge>
@@ -417,9 +421,9 @@ export function SessionComparison({
                           key={dp.id}
                           className="p-2 rounded border border-primary/20 bg-primary/5"
                         >
-                          <div className="text-xs font-medium mb-1">{dp.reasoning?.slice(0, 80)}...</div>
+                          <div className="text-xs font-medium mb-1">{dp.reasoning && dp.reasoning.length > 80 ? `${dp.reasoning.slice(0, 80)}...` : dp.reasoning}</div>
                           <div className="text-xs text-muted-foreground">
-                            {t('sessionPlayer.chosen')}: {dp.chosen_approach?.slice(0, 60)}...
+                            {t('sessionPlayer.chosen')}: {dp.chosen_approach && dp.chosen_approach.length > 60 ? `${dp.chosen_approach.slice(0, 60)}...` : dp.chosen_approach}
                           </div>
                         </div>
                       ))
@@ -445,9 +449,9 @@ export function SessionComparison({
                           key={dp.id}
                           className="p-2 rounded border border-primary/20 bg-primary/5"
                         >
-                          <div className="text-xs font-medium mb-1">{dp.reasoning?.slice(0, 80)}...</div>
+                          <div className="text-xs font-medium mb-1">{dp.reasoning && dp.reasoning.length > 80 ? `${dp.reasoning.slice(0, 80)}...` : dp.reasoning}</div>
                           <div className="text-xs text-muted-foreground">
-                            {t('sessionPlayer.chosen')}: {dp.chosen_approach?.slice(0, 60)}...
+                            {t('sessionPlayer.chosen')}: {dp.chosen_approach && dp.chosen_approach.length > 60 ? `${dp.chosen_approach.slice(0, 60)}...` : dp.chosen_approach}
                           </div>
                         </div>
                       ))

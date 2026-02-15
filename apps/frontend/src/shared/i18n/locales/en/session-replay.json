@@ -66,7 +66,12 @@
     "expandDetails": "Expand decision details",
     "collapseDetails": "Collapse decision details",
     "showDetails": "Show details",
-    "session": "Session"
+    "session": "Session",
+    "pressKey": "Press",
+    "spaceKey": "Space",
+    "toStartPlayback": "to start playback",
+    "entriesAvailable_one": "{{count}} entry available",
+    "entriesAvailable_other": "{{count}} entries available"
   },
   "sessionComparison": {
     "title": "Compare Sessions",

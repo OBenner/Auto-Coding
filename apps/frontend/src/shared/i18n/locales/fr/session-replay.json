@@ -66,7 +66,12 @@
     "expandDetails": "Développer les détails de la décision",
     "collapseDetails": "Réduire les détails de la décision",
     "showDetails": "Afficher les détails",
-    "session": "Session"
+    "session": "Session",
+    "pressKey": "Appuyez sur",
+    "spaceKey": "Espace",
+    "toStartPlayback": "pour démarrer la lecture",
+    "entriesAvailable_one": "{{count}} entrée disponible",
+    "entriesAvailable_other": "{{count}} entrées disponibles"
   },
   "sessionComparison": {
     "title": "Comparer les Sessions",

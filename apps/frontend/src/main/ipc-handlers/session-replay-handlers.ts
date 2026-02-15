@@ -388,16 +388,26 @@ export function registerSessionReplayHandlers(): void {
           return { success: false, error: 'No logs found' };
         }
 
-        // Generate unique ID for bookmark
-        const newBookmark: Bookmark = {
-          ...bookmark,
-          id: `bookmark-${Date.now()}-${crypto.randomUUID().slice(0, 9)}`,
-        };
-
         // Add bookmark to logs
         if (!logs.bookmarks) {
           logs.bookmarks = [];
         }
+
+        // Check for duplicate bookmark (same entry_timestamp and session)
+        const existingBookmark = logs.bookmarks.find(
+          (b) =>
+            b.entry_timestamp === bookmark.entry_timestamp &&
+            b.session === bookmark.session
+        );
+        if (existingBookmark) {
+          return { success: true, data: existingBookmark };
+        }
+
+        // Generate unique ID for new bookmark
+        const newBookmark: Bookmark = {
+          ...bookmark,
+          id: `bookmark-${Date.now()}-${crypto.randomUUID().slice(0, 9)}`,
+        };
         logs.bookmarks.push(newBookmark);
 
         // Save updated logs atomically to prevent corruption
@@ -684,8 +694,8 @@ export function registerSessionReplayHandlers(): void {
           };
         } else {
           // Markdown export
-          const numericSessionId2 = parseInt(sessionId, 10);
-          const session = logs.sessions.find((s) => s.session_id === numericSessionId2);
+          const numericSessionId = parseInt(sessionId, 10);
+          const session = logs.sessions.find((s) => s.session_id === numericSessionId);
           if (!session) {
             return { success: false, error: 'Session not found' };
           }
@@ -699,7 +709,7 @@ export function registerSessionReplayHandlers(): void {
           const allEntries: LogEntry[] = [];
           for (const phaseData of Object.values(logs.phases)) {
             const sessionEntries = phaseData.entries.filter(
-              (entry) => entry.session === parseInt(sessionId, 10)
+              (entry) => entry.session === numericSessionId
             );
             allEntries.push(...sessionEntries);
           }

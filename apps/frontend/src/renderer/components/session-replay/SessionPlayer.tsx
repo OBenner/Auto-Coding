@@ -476,12 +476,11 @@ export function SessionPlayer({
             <Play className="h-12 w-12 mb-3 opacity-50" />
             <div className="text-sm mb-1">{t('sessionPlayer.title')}</div>
             <div className="text-xs">
-              Press <kbd className="px-1.5 py-0.5 bg-secondary rounded text-xs">Space</kbd> to
-              start playback
+              {t('sessionPlayer.pressKey')} <kbd className="px-1.5 py-0.5 bg-secondary rounded text-xs">{t('sessionPlayer.spaceKey')}</kbd> {t('sessionPlayer.toStartPlayback')}
             </div>
             {entries.length > 0 && (
               <div className="text-xs mt-2">
-                {entries.length} {t('sessionPlayer.entries')} available
+                {t('sessionPlayer.entriesAvailable', { count: entries.length })}
               </div>
             )}
           </div>

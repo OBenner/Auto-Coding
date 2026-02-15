@@ -72,7 +72,7 @@ export const Timeline = memo(function Timeline({
       ([entry]) => {
         const nowVisible = entry.isIntersecting;
 
-        if (prevVisibleRef.current !== nowVisible && window.DEBUG) {
+        if (prevVisibleRef.current !== nowVisible && typeof (window as unknown as Record<string, unknown>).DEBUG === 'boolean' && (window as unknown as Record<string, unknown>).DEBUG) {
           console.log(`[Timeline] Visibility changed: ${prevVisibleRef.current} -> ${nowVisible}, animations ${nowVisible ? 'resumed' : 'paused'}`);
         }
 
