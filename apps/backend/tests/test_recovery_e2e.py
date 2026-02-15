@@ -114,7 +114,7 @@ def test_record_attempt_and_retrieve():
     )
 
     print(f"✓ Attempt count: {attempt_count}")
-    print(f"✓ Recovery hints retrieved:")
+    print("✓ Recovery hints retrieved:")
     for hint in recovery_hints:
         print(f"  - {hint}")
 
@@ -237,10 +237,10 @@ def test_recovery_context_in_prompts():
         spec_dir, project_dir, test_subtask_id
     )
 
-    print(f"\n📋 Recovery Context for Prompt Generation:")
+    print("\n📋 Recovery Context for Prompt Generation:")
     print("-" * 70)
     print(f"Attempt Count: {attempt_count}")
-    print(f"Recovery Hints:")
+    print("Recovery Hints:")
     for hint in recovery_hints:
         print(f"  {hint}")
     print("-" * 70)
