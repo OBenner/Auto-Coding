@@ -5,7 +5,7 @@
  * Shows session status, duration, subtask count, and relative time.
  */
 
-import { memo, useMemo } from 'react';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Clock, CheckCircle2, Loader2 } from 'lucide-react';
 import { Card, CardContent } from '../ui/card';
@@ -38,8 +38,9 @@ function sessionCardPropsAreEqual(prevProps: SessionCardProps, nextProps: Sessio
     prevSession.completed_at === nextSession.completed_at &&
     prevSession.duration_seconds === nextSession.duration_seconds &&
     prevSession.session_number === nextSession.session_number &&
-    prevSession.subtasks.length === nextSession.subtasks.length &&
-    JSON.stringify(prevSession.subtasks) === JSON.stringify(nextSession.subtasks)
+    (prevSession.subtasks === nextSession.subtasks ||
+     (prevSession.subtasks.length === nextSession.subtasks.length &&
+      prevSession.subtasks.every((st, i) => st === nextSession.subtasks[i])))
   );
 }
 
@@ -49,21 +50,15 @@ export const SessionCard = memo(function SessionCard({
 }: SessionCardProps) {
   const { t } = useTranslation('session-replay');
 
-  // Memoize computed values to avoid recalculating on every render
-  const isCompleted = useMemo(() => session.completed_at !== null, [session.completed_at]);
+  const isCompleted = session.completed_at !== null;
 
-  const duration = useMemo(() => {
-    if (session.duration_seconds == null) return null;
-    const minutes = Math.floor(session.duration_seconds / 60);
-    return `${minutes}m`;
-  }, [session.duration_seconds]);
+  const duration = session.duration_seconds != null
+    ? `${Math.floor(session.duration_seconds / 60)}m`
+    : null;
 
-  const relativeTime = useMemo(
-    () => formatRelativeTime(session.started_at),
-    [session.started_at]
-  );
+  const relativeTime = formatRelativeTime(session.started_at);
 
-  const hasSubtasks = useMemo(() => session.subtasks.length > 0, [session.subtasks.length]);
+  const hasSubtasks = session.subtasks.length > 0;
 
   return (
     <Card

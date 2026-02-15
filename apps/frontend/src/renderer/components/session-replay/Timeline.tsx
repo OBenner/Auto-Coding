@@ -8,7 +8,7 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
 import { memo, useRef, useState, useEffect, useCallback } from 'react';
-import { Star, Circle } from 'lucide-react';
+import { Star } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 // LogEntry interface matching SessionPlayer
@@ -166,7 +166,7 @@ export const Timeline = memo(function Timeline({
                 data-timeline-marker
                 onClick={() => handleEntryClick(index)}
                 className={cn(
-                  'relative shrink-0 z-10 transition-all',
+                  'group relative shrink-0 z-10 transition-all',
                   'focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2',
                   'rounded-full',
                   isCurrent

@@ -236,6 +236,7 @@ class LogStorage:
                     duration = (completed - started).total_seconds()
                     session["duration_seconds"] = duration
                 except (ValueError, KeyError):
+                    # Gracefully handle missing or malformed timestamps in session data
                     pass
 
                 self.save()
@@ -318,7 +319,15 @@ class LogStorage:
         if "bookmarks" not in self._data:
             self._data["bookmarks"] = []
 
-        self._data["bookmarks"].append(bookmark.to_dict())
+        # Prevent duplicate bookmarks with the same ID
+        bookmark_dict = bookmark.to_dict()
+        bookmark_id = bookmark_dict.get("id")
+        if bookmark_id:
+            for existing in self._data["bookmarks"]:
+                if existing.get("id") == bookmark_id:
+                    return
+
+        self._data["bookmarks"].append(bookmark_dict)
         self.save()
 
     def get_bookmarks(

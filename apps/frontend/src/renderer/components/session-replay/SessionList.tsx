@@ -225,35 +225,8 @@ export function SessionList({
     setFilters({ searchQuery: '', status: [] });
   }, []);
 
-  // Filter sessions based on current filters
-  const filteredSessions = useMemo(() => {
-    return sessions.filter((session) => {
-      // Filter by search query
-      if (filters.searchQuery) {
-        const query = filters.searchQuery.toLowerCase();
-        const matchesSessionId = session.session_id.toLowerCase().includes(query);
-        const matchesSubtasks = session.subtasks.some((st) =>
-          st.toLowerCase().includes(query)
-        );
-        if (!matchesSessionId && !matchesSubtasks) {
-          return false;
-        }
-      }
-
-      // Filter by status
-      if (filters.status.length > 0) {
-        const isCompleted = session.completed_at !== null;
-        const matchesStatus =
-          (isCompleted && filters.status.includes('completed')) ||
-          (!isCompleted && filters.status.includes('in-progress'));
-        if (!matchesStatus) {
-          return false;
-        }
-      }
-
-      return true;
-    });
-  }, [sessions, filters]);
+  // Backend already filters sessions via the IPC handler; no need to duplicate filtering here
+  const filteredSessions = sessions;
 
   // Check if there are active filters
   const hasActiveFilters = useMemo(() => {

@@ -35,7 +35,7 @@ function formatTimestamp(timestamp: string | undefined | null): string {
   if (!timestamp) return '-';
   const date = new Date(timestamp);
   if (Number.isNaN(date.getTime())) return '-';
-  return date.toLocaleTimeString('en-US', {
+  return date.toLocaleTimeString(undefined, {
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',

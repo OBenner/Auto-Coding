@@ -39,7 +39,9 @@ function decisionPointPropsAreEqual(prevProps: DecisionPointProps, nextProps: De
     prevDecision.reasoning === nextDecision.reasoning &&
     prevDecision.chosen_approach === nextDecision.chosen_approach &&
     prevDecision.expected_outcome === nextDecision.expected_outcome &&
-    JSON.stringify(prevDecision.options_considered) === JSON.stringify(nextDecision.options_considered)
+    (prevDecision.options_considered === nextDecision.options_considered ||
+     (prevDecision.options_considered?.length === nextDecision.options_considered?.length &&
+      (prevDecision.options_considered?.every((opt, i) => opt === nextDecision.options_considered[i]) ?? true)))
   );
 }
 

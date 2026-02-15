@@ -23,45 +23,39 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuTrigger,
-  DropdownMenuItem,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
 } from '../ui/dropdown-menu';
 import { cn } from '../../lib/utils';
-import type { SessionMetadata } from '../../../shared/types';
+import type { SessionMetadata, LogEntry } from '../../../shared/types';
 
-// Mock LogEntry type based on backend model
-interface LogEntry {
-  timestamp: string;
-  type: string;
-  content: string;
-  phase: string;
-  tool_name: string | null;
-  tool_input: string | null;
-  subtask_id: string | null;
-  session: number | null;
-  detail: string | null;
-  subphase: string | null;
-  collapsed: boolean | null;
-  is_decision_point: boolean | null;
-  reasoning: string | null;
-  alternatives: string[] | null;
-  decision: string | null;
+/**
+ * Extended log entry fields used by the player but not in the base LogEntry type.
+ * These are optional fields from the backend model.
+ */
+interface PlayerLogEntry extends LogEntry {
+  tool_input?: string | null;
+  detail?: string | null;
+  subphase?: string | null;
+  collapsed?: boolean | null;
+  reasoning?: string | null;
+  alternatives?: string[] | null;
+  decision?: string | null;
 }
 
 interface SessionPlayerProps {
   /** Session to play back */
   session: SessionMetadata;
   /** Timeline entries for the session */
-  entries: LogEntry[];
+  entries: PlayerLogEntry[];
   /** Callback when playback state changes */
   onPlaybackChange?: (isPlaying: boolean) => void;
   /** Callback when current entry changes */
-  onEntryChange?: (entry: LogEntry | null) => void;
+  onEntryChange?: (entry: PlayerLogEntry | null) => void;
   /** Callback when speed changes */
   onSpeedChange?: (speed: number) => void;
   /** Callback when bookmark is added */
-  onAddBookmark?: (entry: LogEntry) => void;
+  onAddBookmark?: (entry: PlayerLogEntry) => void;
 }
 
 /** Playback speed options */
@@ -80,7 +74,7 @@ function formatSpeed(speed: PlaybackSpeed): string {
  */
 function formatTimestamp(timestamp: string): string {
   const date = new Date(timestamp);
-  return date.toLocaleTimeString('en-US', {
+  return date.toLocaleTimeString(undefined, {
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
@@ -117,9 +111,11 @@ export function SessionPlayer({
   const [currentEntryIndex, setCurrentEntryIndex] = useState<number | null>(null);
   const [speed, setSpeed] = useState<PlaybackSpeed>(1);
 
-  // Refs for playback interval and timing
+  // Ref for playback interval
   const playbackIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const currentStartTimeRef = useRef<number | null>(null);
+  // Ref to always have the latest speed value (avoids stale closure in handleSpeedChange)
+  const speedRef = useRef<PlaybackSpeed>(speed);
+  speedRef.current = speed;
 
   // Computed values
   const currentEntry = useMemo(() => {
@@ -133,7 +129,6 @@ export function SessionPlayer({
   const canGoBack = currentEntryIndex !== null && currentEntryIndex > 0;
   const canGoForward =
     currentEntryIndex !== null && currentEntryIndex < entries.length - 1;
-  const isAtStart = currentEntryIndex === null || currentEntryIndex === 0;
   const isAtEnd = currentEntryIndex === entries.length - 1;
 
   // Notify parent of state changes
@@ -228,17 +223,38 @@ export function SessionPlayer({
     setCurrentEntryIndex((prevIndex) => (prevIndex !== null ? prevIndex + 1 : null));
   }, [canGoForward, pausePlayback]);
 
-  // Handle speed change
+  // Handle speed change - restarts the interval inline using speedRef for the latest value
   const handleSpeedChange = useCallback(
     (newSpeed: PlaybackSpeed) => {
       setSpeed(newSpeed);
-      // Restart playback if playing to apply new speed
-      if (isPlaying) {
-        pausePlayback();
-        startPlayback();
+      speedRef.current = newSpeed;
+
+      // Restart playback interval inline if currently playing
+      if (playbackIntervalRef.current) {
+        clearInterval(playbackIntervalRef.current);
+        playbackIntervalRef.current = null;
+
+        const baseDelay = 2000;
+        const delay = baseDelay / newSpeed;
+
+        playbackIntervalRef.current = setInterval(() => {
+          setCurrentEntryIndex((prevIndex) => {
+            if (prevIndex === null) return 0;
+            const nextIndex = prevIndex + 1;
+            if (nextIndex >= entries.length) {
+              setIsPlaying(false);
+              if (playbackIntervalRef.current) {
+                clearInterval(playbackIntervalRef.current);
+                playbackIntervalRef.current = null;
+              }
+              return prevIndex;
+            }
+            return nextIndex;
+          });
+        }, delay);
       }
     },
-    [isPlaying, pausePlayback, startPlayback]
+    [entries.length]
   );
 
   // Handle add bookmark
@@ -540,7 +556,7 @@ export function SessionPlayer({
               <details className="group">
                 <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground list-none flex items-center gap-1">
                   <span className="transform group-open:rotate-90 transition-transform">▶</span>
-                  Show details
+                  {t('sessionPlayer.showDetails')}
                 </summary>
                 <pre className="mt-2 text-xs bg-secondary/50 rounded p-3 overflow-x-auto">
                   {currentEntry.detail}

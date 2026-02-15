@@ -8,8 +8,8 @@
  * Session metadata captured during task execution
  */
 export interface SessionMetadata {
-  /** Unique session identifier */
-  session_id: string;
+  /** Unique session identifier (integer from backend) */
+  session_id: number;
   /** When the session started */
   started_at: string;
   /** When the session completed (null if in progress) */
@@ -67,8 +67,8 @@ export interface Bookmark {
   label: string;
   /** Optional notes about the bookmark */
   note: string | null;
-  /** Session identifier */
-  session: string;
+  /** Session identifier (integer from backend, passed as string over IPC) */
+  session: number;
   /** Subtask ID where bookmark was created */
   subtask_id: string;
 }

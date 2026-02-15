@@ -99,7 +99,10 @@ def compare_sessions(
     common_subtasks = []
     if len(subtask_sets) > 1:
         # Find intersection of all session subtasks
-        common_subtasks = list(set.intersection(*subtask_sets.values()))
+        # Guard: filter out empty sets to avoid meaningless empty intersection
+        non_empty_sets = [s for s in subtask_sets.values() if s]
+        if non_empty_sets:
+            common_subtasks = list(set.intersection(*non_empty_sets))
 
     unique_subtasks = {}
     for session_id, subtasks in subtask_sets.items():

@@ -2,6 +2,7 @@
 Main TaskLogger class for logging task execution.
 """
 
+import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -150,12 +151,14 @@ class TaskLogger:
         """
         # Detect transition
         if subtask_id != self.current_subtask:
-            # Record the transition
-            self.storage.add_subtask_transition(
-                from_subtask=self.current_subtask,
-                to_subtask=subtask_id,
-                session=self.current_session,
-            )
+            # Only record transitions when at least one side is a valid subtask ID;
+            # skip meaningless None -> None transitions.
+            if self.current_subtask or subtask_id:
+                self.storage.add_subtask_transition(
+                    from_subtask=self.current_subtask,
+                    to_subtask=subtask_id,
+                    session=self.current_session,
+                )
 
             # Add subtask to session
             if subtask_id and self.current_session is not None:
@@ -609,8 +612,6 @@ class TaskLogger:
         Returns:
             The bookmark ID
         """
-        import uuid
-
         bookmark_id = str(uuid.uuid4())
         phase_key = (self.current_phase or LogPhase.CODING).value
 

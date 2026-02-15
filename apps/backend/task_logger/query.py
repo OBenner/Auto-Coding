@@ -42,6 +42,16 @@ def query_sessions(
     if session_id is not None:
         sessions = [s for s in sessions if s.get("session_id") == session_id]
 
+    if status is not None:
+        if status == "completed":
+            sessions = [s for s in sessions if s.get("completed_at") is not None]
+        elif status == "active":
+            sessions = [s for s in sessions if s.get("completed_at") is None]
+        elif status == "failed":
+            sessions = [s for s in sessions if s.get("status") == "failed"]
+        else:
+            sessions = [s for s in sessions if s.get("status") == status]
+
     if completed is not None:
         if completed:
             sessions = [s for s in sessions if s.get("completed_at") is not None]
@@ -58,6 +68,7 @@ def query_sessions(
                 and datetime.fromisoformat(s["started_at"]) > after_dt
             ]
         except (ValueError, TypeError):
+            # Gracefully handle malformed or unparseable timestamp filters
             pass
 
     if started_before is not None:
@@ -70,6 +81,7 @@ def query_sessions(
                 and datetime.fromisoformat(s["started_at"]) < before_dt
             ]
         except (ValueError, TypeError):
+            # Gracefully handle malformed or unparseable timestamp filters
             pass
 
     if has_subtask is not None:
@@ -150,7 +162,7 @@ def query_entries(
             or search_lower in e.get("detail", "").lower()
             or search_lower in e.get("reasoning", "").lower()
             or search_lower in e.get("decision", "").lower()
-            or search_lower in " ".join(e.get("alternatives", [])).lower()
+            or search_lower in " ".join(e.get("alternatives") or []).lower()
         ]
 
     if timestamp_after is not None:
@@ -163,6 +175,7 @@ def query_entries(
                 and datetime.fromisoformat(e["timestamp"]) > after_dt
             ]
         except (ValueError, TypeError):
+            # Gracefully handle malformed or unparseable timestamp filters
             pass
 
     if timestamp_before is not None:
@@ -175,6 +188,7 @@ def query_entries(
                 and datetime.fromisoformat(e["timestamp"]) < before_dt
             ]
         except (ValueError, TypeError):
+            # Gracefully handle malformed or unparseable timestamp filters
             pass
 
     if is_decision_point is not None:
@@ -267,6 +281,7 @@ def query_subtask_transitions(
                 and datetime.fromisoformat(t["timestamp"]) > after_dt
             ]
         except (ValueError, TypeError):
+            # Gracefully handle malformed or unparseable timestamp filters
             pass
 
     if timestamp_before is not None:
@@ -279,6 +294,7 @@ def query_subtask_transitions(
                 and datetime.fromisoformat(t["timestamp"]) < before_dt
             ]
         except (ValueError, TypeError):
+            # Gracefully handle malformed or unparseable timestamp filters
             pass
 
     return transitions
@@ -330,10 +346,12 @@ def search_all(
                     or search_term in detail
                     or search_term in reasoning
                 ):
+                    # Shallow copy to avoid mutating the original stored data
+                    entry_copy = {**entry}
                     # Add phase to entry if not present
-                    if "phase" not in entry:
-                        entry["phase"] = phase_name
-                    results["entries"].append(entry)
+                    if "phase" not in entry_copy:
+                        entry_copy["phase"] = phase_name
+                    results["entries"].append(entry_copy)
 
     # Search bookmarks
     if include_bookmarks:

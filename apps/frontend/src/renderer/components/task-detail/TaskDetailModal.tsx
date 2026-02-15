@@ -625,9 +625,12 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
               <Button
                 variant="ghost"
                 size="sm"
-                className="text-muted-foreground hover:text-primary hover:bg-primary/10"
+                className={cn(
+                  "text-muted-foreground hover:text-primary hover:bg-primary/10",
+                  !onViewSessions && "opacity-50 cursor-not-allowed"
+                )}
                 onClick={() => onViewSessions?.()}
-                disabled={state.isRunning && !state.isStuck}
+                disabled={!onViewSessions || (state.isRunning && !state.isStuck)}
               >
                 <Eye className="mr-2 h-4 w-4" />
                 {t('tasks:taskDetail.viewSessionReplay')}

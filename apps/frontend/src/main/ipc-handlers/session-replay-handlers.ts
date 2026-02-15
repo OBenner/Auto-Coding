@@ -116,7 +116,7 @@ function filterSessions(
     const query = filter.searchQuery.toLowerCase();
     filtered = filtered.filter(
       (session) =>
-        session.session_id.toLowerCase().includes(query) ||
+        String(session.session_id).includes(query) ||
         session.subtasks.some((subtask) => subtask.toLowerCase().includes(query))
     );
   }
@@ -210,7 +210,8 @@ export function registerSessionReplayHandlers(): void {
           return { success: true, data: null };
         }
 
-        const session = logs.sessions.find((s) => s.session_id === sessionId);
+        const numericSessionId = parseInt(sessionId, 10);
+        const session = logs.sessions.find((s) => s.session_id === numericSessionId);
 
         return { success: true, data: session || null };
       } catch (error) {
@@ -351,7 +352,8 @@ export function registerSessionReplayHandlers(): void {
 
         // Filter by session if provided
         if (sessionId) {
-          bookmarks = bookmarks.filter((b) => b.session === sessionId);
+          const numericSessionId = parseInt(sessionId, 10);
+          bookmarks = bookmarks.filter((b) => b.session === numericSessionId);
         }
 
         return { success: true, data: bookmarks };
@@ -512,6 +514,7 @@ export function registerSessionReplayHandlers(): void {
         }
 
         // Apply filters
+        // Empty sessionId returns all entries (no session filtering)
         if (filters.session !== undefined) {
           entries = entries.filter(
             (entry) => entry.session === parseInt(filters.session!, 10)
@@ -589,7 +592,15 @@ export function registerSessionReplayHandlers(): void {
         for (const phaseData of Object.values(logs.phases)) {
           for (const entry of phaseData.entries) {
             const content = entry.content.toLowerCase();
-            if (content.includes(query)) {
+            const toolName = (entry.tool_name ?? '').toLowerCase();
+            const phase = (entry.phase ?? '').toLowerCase();
+            const subtaskId = (entry.subtask_id ?? '').toLowerCase();
+            if (
+              content.includes(query) ||
+              toolName.includes(query) ||
+              phase.includes(query) ||
+              subtaskId.includes(query)
+            ) {
               results.push(entry);
             }
           }
@@ -638,18 +649,33 @@ export function registerSessionReplayHandlers(): void {
         }
 
         if (format === 'json') {
-          const session = logs.sessions.find((s) => s.session_id === sessionId);
+          const numericSessionId = parseInt(sessionId, 10);
+          const session = logs.sessions.find((s) => s.session_id === numericSessionId);
           if (!session) {
             return { success: false, error: 'Session not found' };
           }
 
+          // Collect all entries for this session from all phases
+          const sessionEntries: LogEntry[] = [];
+          if (logs.phases) {
+            for (const phaseData of Object.values(logs.phases)) {
+              const phaseEntries = phaseData.entries.filter(
+                (entry) => entry.session === numericSessionId
+              );
+              sessionEntries.push(...phaseEntries);
+            }
+          }
+          sessionEntries.sort(
+            (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+          );
+
           const sessionData = {
             session,
-            entries: [],
+            entries: sessionEntries,
             transitions: logs.subtask_transitions.filter(
-              (t) => t.session === parseInt(sessionId, 10)
+              (t) => t.session === numericSessionId
             ),
-            bookmarks: (logs.bookmarks ?? []).filter((b) => b.session === sessionId),
+            bookmarks: (logs.bookmarks ?? []).filter((b) => b.session === numericSessionId),
           };
 
           return {
@@ -658,7 +684,8 @@ export function registerSessionReplayHandlers(): void {
           };
         } else {
           // Markdown export
-          const session = logs.sessions.find((s) => s.session_id === sessionId);
+          const numericSessionId2 = parseInt(sessionId, 10);
+          const session = logs.sessions.find((s) => s.session_id === numericSessionId2);
           if (!session) {
             return { success: false, error: 'Session not found' };
           }

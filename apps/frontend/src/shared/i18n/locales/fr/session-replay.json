@@ -64,7 +64,9 @@
     "bookmarkCreated": "Signet créé",
     "bookmarkRemoved": "Signet supprimé",
     "expandDetails": "Développer les détails de la décision",
-    "collapseDetails": "Réduire les détails de la décision"
+    "collapseDetails": "Réduire les détails de la décision",
+    "showDetails": "Afficher les détails",
+    "session": "Session"
   },
   "sessionComparison": {
     "title": "Comparer les Sessions",

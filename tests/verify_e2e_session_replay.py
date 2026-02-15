@@ -732,13 +732,9 @@ def main():
         / "specs"
         / "083-session-replay-learning"
     )
-    if not spec_dir.exists():
-        print(f"❌ Spec directory not found: {spec_dir}")
-        return False
-
     print(f"\n📁 Spec directory: {spec_dir}")
 
-    # Step 1: Create test data
+    # Step 1: Create test data (always recreate fresh data for reliable testing)
     create_test_data(spec_dir)
 
     # Step 2: Test backend APIs

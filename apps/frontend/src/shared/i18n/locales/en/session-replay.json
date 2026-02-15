@@ -64,7 +64,9 @@
     "bookmarkCreated": "Bookmark created",
     "bookmarkRemoved": "Bookmark removed",
     "expandDetails": "Expand decision details",
-    "collapseDetails": "Collapse decision details"
+    "collapseDetails": "Collapse decision details",
+    "showDetails": "Show details",
+    "session": "Session"
   },
   "sessionComparison": {
     "title": "Compare Sessions",

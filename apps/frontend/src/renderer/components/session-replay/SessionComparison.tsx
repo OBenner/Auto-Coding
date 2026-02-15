@@ -5,14 +5,12 @@
  * Displays metrics, common/unique subtasks, tool usage, and decision points.
  */
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ArrowLeft,
-  ArrowRight,
   Clock,
   CheckCircle2,
-  AlertCircle,
   TrendingUp,
   Wrench,
   Lightbulb,
@@ -25,11 +23,9 @@ import { Separator } from '../ui/separator';
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from '../ui/card';
-import { cn } from '../../lib/utils';
 import type {
   SessionComparisonData,
   SessionApproachComparison,
@@ -99,8 +95,7 @@ export function SessionComparison({
     });
   }, []);
 
-  // Computed values
-  const sessions = useMemo(() => comparisonData.sessions, [comparisonData.sessions]);
+  const sessions = comparisonData.sessions;
 
   // Early return if sessions array doesn't have at least 2 entries
   if (!sessions || sessions.length < 2) {
@@ -474,7 +469,7 @@ export function SessionComparison({
             variant="outline"
             size="sm"
             className="flex-1"
-            onClick={() => onSelectSession?.(session1.session_id)}
+            onClick={() => onSelectSession?.(String(session1.session_id))}
           >
             {t('sessionComparison.viewSession1')} #{session1.session_number}
           </Button>
@@ -482,7 +477,7 @@ export function SessionComparison({
             variant="outline"
             size="sm"
             className="flex-1"
-            onClick={() => onSelectSession?.(session2.session_id)}
+            onClick={() => onSelectSession?.(String(session2.session_id))}
           >
             {t('sessionComparison.viewSession2')} #{session2.session_number}
           </Button>

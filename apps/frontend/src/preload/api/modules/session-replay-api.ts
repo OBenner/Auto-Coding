@@ -73,6 +73,7 @@ export interface SessionReplayAPI {
     specId: string,
     filters: {
       phase?: string;
+      /** Session ID as string - the IPC handler converts to int via parseInt */
       session?: string;
       subtask_id?: string;
       tool_name?: string;
