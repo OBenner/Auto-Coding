@@ -967,13 +967,15 @@ async def track_improvement(
                     ):
                         delta = after_val - before_val
                         percent_change = (
-                            ((delta / before_val) * 100) if before_val != 0 else 0
+                            round(((delta / before_val) * 100), 2)
+                            if before_val != 0
+                            else None
                         )
                         improvement_delta[key] = {
                             "before": before_val,
                             "after": after_val,
                             "delta": delta,
-                            "percent_change": round(percent_change, 2),
+                            "percent_change": percent_change,
                         }
 
         # Store improvement in Graphiti as an episode

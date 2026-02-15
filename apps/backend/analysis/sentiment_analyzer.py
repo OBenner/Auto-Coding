@@ -22,8 +22,7 @@ logger = logging.getLogger(__name__)
 
 # Check for Claude SDK availability
 try:
-    import claude_agent_sdk  # noqa: F401
-
+    __import__("claude_agent_sdk")
     SDK_AVAILABLE = True
 except ImportError:
     SDK_AVAILABLE = False
@@ -341,13 +340,13 @@ def get_neutral_sentiment(reason: str = "analysis_disabled") -> SentimentResult:
         Neutral SentimentResult
     """
     logger.debug(f"Using neutral sentiment fallback: {reason}")
-    return SentimentResult(
-        sentiment=Sentiment.NEUTRAL,
-        confidence=0.0,
-        key_phrases=[],
-        category="general",
-        severity=None,
-    )
+    return {
+        "sentiment": Sentiment.NEUTRAL,
+        "confidence": 0.0,
+        "key_phrases": [],
+        "category": "general",
+        "severity": None,
+    }
 
 
 # =============================================================================
@@ -424,21 +423,20 @@ def analyze_sentiment_sync(
     import asyncio
 
     try:
-        # Try to get the current event loop
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            # We're in an async context already, need to create a new thread
-            import concurrent.futures
-
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                future = executor.submit(
-                    asyncio.run,
-                    analyze_sentiment(feedback_text, context, project_dir),
-                )
-                return future.result()
-        else:
-            # No running loop, can use asyncio.run
-            return asyncio.run(analyze_sentiment(feedback_text, context, project_dir))
+        loop = asyncio.get_running_loop()
     except RuntimeError:
-        # No event loop exists, create one
+        loop = None
+
+    if loop is not None and loop.is_running():
+        # We're in an async context already, need to run in a new thread
+        import concurrent.futures
+
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            future = executor.submit(
+                asyncio.run,
+                analyze_sentiment(feedback_text, context, project_dir),
+            )
+            return future.result()
+    else:
+        # No running loop, can use asyncio.run directly
         return asyncio.run(analyze_sentiment(feedback_text, context, project_dir))

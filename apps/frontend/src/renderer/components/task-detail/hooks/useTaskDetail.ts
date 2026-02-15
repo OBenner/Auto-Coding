@@ -184,11 +184,20 @@ export function useTaskDetail({ task }: UseTaskDetailOptions) {
   }, []);
 
   // Track previous task status to detect transitions to 'done'
+  // Initialize to a sentinel value to distinguish "never set" from actual status
   const prevTaskStatusRef = useRef<string | null>(null);
+  const isFirstRenderRef = useRef(true);
 
   // Automatically show feedback dialog when task completes to 'done' status
   // Only shows if user has opted in to feedback collection (feedbackEnabled = true)
   useEffect(() => {
+    // Skip the first render to avoid showing feedback dialog for already-completed tasks
+    if (isFirstRenderRef.current) {
+      isFirstRenderRef.current = false;
+      prevTaskStatusRef.current = task.status;
+      return;
+    }
+
     const feedbackEnabled = useSettingsStore.getState().settings.feedbackEnabled ?? true;
 
     // Only trigger on transition from non-done to done status
@@ -425,7 +434,9 @@ export function useTaskDetail({ task }: UseTaskDetailOptions) {
   }, [task.id, selectedProject]);
 
   /**
-   * Submits user feedback for the task to the backend
+   * Submits user feedback for the task to the backend.
+   * TODO: Implement actual backend IPC call in subtask-3-4 (feedback-handlers.ts).
+   * Currently a placeholder that logs and closes the dialog without showing success toast.
    */
   const handleSubmitFeedback = useCallback(async (rating: FeedbackRating, comment: string): Promise<void> => {
     if (!selectedProject) {
@@ -436,9 +447,9 @@ export function useTaskDetail({ task }: UseTaskDetailOptions) {
     try {
       // TODO: Call backend IPC handler to record feedback
       // This will be implemented in subtask-3-4 (feedback-handlers.ts)
-      console.log('[handleSubmitFeedback] Submitting feedback:', { rating, comment, taskId: task.id });
+      console.log('[handleSubmitFeedback] Feedback recorded (placeholder):', { rating, comment, taskId: task.id });
 
-      // For now, just close the dialog (actual implementation will come in subtask-3-4)
+      // Close the dialog — no success toast since this is a placeholder
       setShowFeedbackDialog(false);
     } catch (err) {
       console.error('[handleSubmitFeedback] Failed to submit feedback:', err);

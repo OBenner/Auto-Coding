@@ -258,6 +258,12 @@ export function ImprovementTracker({ projectId = '.' }: ImprovementTrackerProps)
 
         if (result?.success && result?.data) {
           setImprovements(result.data);
+          if (showRefreshToast) {
+            toast({
+              title: t('common:success'),
+              description: 'Improvements refreshed',
+            });
+          }
         } else {
           console.error('Failed to load improvements:', result?.error);
           // Don't show error toast on first load, just log it
@@ -270,13 +276,6 @@ export function ImprovementTracker({ projectId = '.' }: ImprovementTrackerProps)
           }
           // Set empty array if no data
           setImprovements([]);
-        }
-
-        if (showRefreshToast) {
-          toast({
-            title: t('common:success'),
-            description: 'Improvements refreshed',
-          });
         }
       } catch (error) {
         console.error('Error loading improvements data:', error);
@@ -322,10 +321,10 @@ export function ImprovementTracker({ projectId = '.' }: ImprovementTrackerProps)
       // Apply search filter
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
-        const matchesDescription = improvement.improvement_description
+        const matchesDescription = (improvement.improvement_description ?? '')
           .toLowerCase()
           .includes(q);
-        const matchesAgent = improvement.agent_type?.toLowerCase().includes(q);
+        const matchesAgent = (improvement.agent_type ?? '').toLowerCase().includes(q);
         const matchesMetrics = Object.keys(improvement.improvement_delta).some((metric) =>
           metric.toLowerCase().includes(q)
         );

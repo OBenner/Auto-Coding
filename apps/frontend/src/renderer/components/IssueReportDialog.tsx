@@ -90,15 +90,17 @@ export function IssueReportDialog({
     }
   };
 
-  const handleClose = () => {
+  const handleClose = (newOpen: boolean) => {
     if (isSubmitting) return;
 
-    // Reset form state when closing
-    setTitle(defaultTitle);
-    setDescription(defaultDescription);
-    setSeverity('medium');
-    setError(null);
-    onOpenChange(false);
+    // Only reset form when closing, not when opening
+    if (!newOpen) {
+      setTitle(defaultTitle);
+      setDescription(defaultDescription);
+      setSeverity('medium');
+      setError(null);
+    }
+    onOpenChange(newOpen);
   };
 
   // Severity options with translations
@@ -208,7 +210,7 @@ export function IssueReportDialog({
         <DialogFooter>
           <Button
             variant="outline"
-            onClick={handleClose}
+            onClick={() => handleClose(false)}
             disabled={isSubmitting}
           >
             {t('common:buttons.cancel', 'Cancel')}

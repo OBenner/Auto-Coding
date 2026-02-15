@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ThumbsUp,
-  ThumbsDown,
   MessageSquare,
   TrendingUp,
   AlertTriangle,
@@ -211,8 +210,6 @@ interface TopIssuesProps {
 }
 
 function TopIssues({ issues }: TopIssuesProps) {
-  const { t } = useTranslation(['feedback']);
-
   if (issues.length === 0) {
     return (
       <div className="flex items-center justify-center h-32 text-muted-foreground">
@@ -324,6 +321,12 @@ export function FeedbackDashboard({ projectId = '.' }: FeedbackDashboardProps) {
 
         if (result?.success && result?.data) {
           setSummary(result.data);
+          if (showRefreshToast) {
+            toast({
+              title: t('common:success'),
+              description: t('feedback:messages.submitted'),
+            });
+          }
         } else {
           console.error('Failed to load feedback summary:', result?.error);
           // Don't show error toast on first load, just log it
@@ -334,13 +337,6 @@ export function FeedbackDashboard({ projectId = '.' }: FeedbackDashboardProps) {
               variant: 'destructive',
             });
           }
-        }
-
-        if (showRefreshToast) {
-          toast({
-            title: t('common:success'),
-            description: t('feedback:messages.submitted'),
-          });
         }
       } catch (error) {
         console.error('Error loading feedback data:', error);
@@ -422,12 +418,15 @@ export function FeedbackDashboard({ projectId = '.' }: FeedbackDashboardProps) {
       };
     }
 
+    const totalFeedback = Number(summary.total_feedback ?? 0);
+    const positiveCount = Number(summary.positive_sentiment_count ?? 0);
+
     return {
-      totalFeedback: summary.total_feedback,
-      satisfactionRate: summary.satisfaction_rate * 100,
-      averageRating: summary.average_rating || 0,
-      positiveRate: summary.total_feedback > 0
-        ? (summary.positive_sentiment_count / summary.total_feedback) * 100
+      totalFeedback,
+      satisfactionRate: Number(summary.satisfaction_rate ?? 0) * 100,
+      averageRating: Number(summary.average_rating ?? 0),
+      positiveRate: totalFeedback > 0
+        ? (positiveCount / totalFeedback) * 100
         : 0,
     };
   }, [summary]);

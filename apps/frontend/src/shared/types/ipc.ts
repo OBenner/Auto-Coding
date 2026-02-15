@@ -152,6 +152,7 @@ import type {
 } from './integrations';
 import type { APIProfile, ProfilesFile, TestConnectionResult, DiscoverModelsResult } from './profile';
 import type { TemplateInfo, TemplateCategory, GeneratedSpec } from './template';
+import type { FeedbackSummary, ImprovementData } from '../../preload/api/feedback-api';
 
 // Electron API exposed via contextBridge
 // Tab state interface (persisted in main process)
@@ -946,9 +947,9 @@ export interface ElectronAPI {
 
 
   // Feedback analytics operations
-  getFeedbackSummary?: (projectId: string, days: number) => Promise<IPCResult<import('../../preload/api/feedback-api').FeedbackSummary>>;
+  getFeedbackSummary?: (projectId: string, days: number) => Promise<IPCResult<FeedbackSummary>>;
   exportFeedbackData?: (projectId: string, format: 'json' | 'csv', days: number) => Promise<IPCResult<string>>;
-  getImprovements?: (projectId: string, days: number) => Promise<IPCResult<import('../../preload/api/feedback-api').ImprovementData[]>>;
+  getImprovements?: (projectId: string, days: number) => Promise<IPCResult<ImprovementData[]>>;
 
   // Queue Routing API (rate limit recovery)
   queue: import('../../preload/api/queue-api').QueueAPI;

@@ -343,7 +343,11 @@ export interface AppSettings {
   keyboardShortcuts?: Record<KeyboardShortcutAction, KeyCombination>;
   // Recent actions for quick actions menu (persisted between sessions)
   recentActions?: RecentAction[];
-  // Feedback collection opt-out (enabled by default)
+  /**
+   * Whether feedback collection is enabled.
+   * Defaults to `true` (opt-out model: feedback is collected unless the user disables it).
+   * When `undefined`, callers should treat it as `true`.
+   */
   feedbackEnabled?: boolean;
 }
 

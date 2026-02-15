@@ -78,7 +78,7 @@ async def feedback_dashboard(project_dir: Path, days: int = 30) -> None:
     print_header("Satisfaction Metrics")
     print()
 
-    satisfaction_pct = summary.satisfaction_rate * 100
+    satisfaction_pct = (summary.satisfaction_rate or 0.0) * 100
     print_key_value(
         "Satisfaction Rate",
         success(f"{satisfaction_pct:.1f}%")
@@ -106,34 +106,30 @@ async def feedback_dashboard(project_dir: Path, days: int = 30) -> None:
     print()
 
     # === SENTIMENT DISTRIBUTION ===
-    if (
-        summary.positive_sentiment_count
-        or summary.negative_sentiment_count
-        or summary.neutral_sentiment_count
-    ):
+    pos = int(summary.positive_sentiment_count or 0)
+    neg = int(summary.negative_sentiment_count or 0)
+    neu = int(summary.neutral_sentiment_count or 0)
+
+    if pos or neg or neu:
         print(divider())
         print_header("Sentiment Distribution")
         print()
 
-        total_sentiment = (
-            summary.positive_sentiment_count
-            + summary.negative_sentiment_count
-            + summary.neutral_sentiment_count
-        )
+        total_sentiment = pos + neg + neu
 
         if total_sentiment > 0:
-            pos_pct = (summary.positive_sentiment_count / total_sentiment) * 100
-            neg_pct = (summary.negative_sentiment_count / total_sentiment) * 100
-            neu_pct = (summary.neutral_sentiment_count / total_sentiment) * 100
+            pos_pct = (pos / total_sentiment) * 100
+            neg_pct = (neg / total_sentiment) * 100
+            neu_pct = (neu / total_sentiment) * 100
 
             print_key_value(
                 "Positive",
-                success(f"{summary.positive_sentiment_count} ({pos_pct:.1f}%)"),
+                success(f"{pos} ({pos_pct:.1f}%)"),
             )
-            print_key_value("Neutral", f"{summary.neutral_sentiment_count} ({neu_pct:.1f}%)")
+            print_key_value("Neutral", f"{neu} ({neu_pct:.1f}%)")
             print_key_value(
                 "Negative",
-                warning(f"{summary.negative_sentiment_count} ({neg_pct:.1f}%)"),
+                warning(f"{neg} ({neg_pct:.1f}%)"),
             )
 
         print()
@@ -178,7 +174,9 @@ async def feedback_dashboard(project_dir: Path, days: int = 30) -> None:
 
         for i, issue in enumerate(summary.top_issues[:5], 1):  # Show top 5
             severity = issue.get("severity", "unknown")
-            severity_icon = "🔴" if severity == "high" else "🟡" if severity == "medium" else "⚪"
+            severity_icon = (
+                "🔴" if severity == "high" else "🟡" if severity == "medium" else "⚪"
+            )
             agent = issue.get("agent_type", "unknown")
             task = issue.get("task", "No description")[:100]
 
@@ -211,7 +209,11 @@ async def feedback_dashboard(project_dir: Path, days: int = 30) -> None:
         # Rating insights
         if summary.average_rating is not None:
             if summary.average_rating >= 4.5:
-                print(success(f"• Outstanding average rating ({summary.average_rating:.1f}/5)"))
+                print(
+                    success(
+                        f"• Outstanding average rating ({summary.average_rating:.1f}/5)"
+                    )
+                )
             elif summary.average_rating < 3.0:
                 print(
                     warning(
@@ -235,13 +237,19 @@ async def feedback_dashboard(project_dir: Path, days: int = 30) -> None:
         # Category insights
         if summary.feedback_by_category:
             top_category = max(summary.feedback_by_category.items(), key=lambda x: x[1])
-            if top_category[0] == "bug_report" and top_category[1] > summary.total_feedback * 0.3:
+            if (
+                top_category[0] == "bug_report"
+                and top_category[1] > summary.total_feedback * 0.3
+            ):
                 print(
                     warning(
                         f"• High bug report rate ({top_category[1]} reports) - focus on quality improvements"
                     )
                 )
-            elif top_category[0] == "feature_request" and top_category[1] > summary.total_feedback * 0.3:
+            elif (
+                top_category[0] == "feature_request"
+                and top_category[1] > summary.total_feedback * 0.3
+            ):
                 print(
                     info(
                         f"• Many feature requests ({top_category[1]}) - users are actively engaged"
@@ -285,7 +293,9 @@ async def show_feedback_trends(
         return
 
     # Display trend data
-    print(f"{'Period':<20} {'Accepted':>10} {'Modified':>10} {'Rejected':>10} {'Total':>10}")
+    print(
+        f"{'Period':<20} {'Accepted':>10} {'Modified':>10} {'Rejected':>10} {'Total':>10}"
+    )
     print("─" * 62)
 
     for entry in trends_data["data"]:
@@ -360,7 +370,11 @@ async def export_feedback_data(
     # Export
     try:
         export_feedback_summary(summary, output_path, format=format)
-        print(success(f"✓ Exported {summary.total_feedback} feedback items to {output_path}"))
+        print(
+            success(
+                f"✓ Exported {summary.total_feedback} feedback items to {output_path}"
+            )
+        )
         print()
         print_key_value("Format", format.upper())
         print_key_value("Period", f"{days} days")

@@ -52,7 +52,9 @@ export function FeedbackDialog({
       setComment('');
       onOpenChange(false);
     } catch (error) {
-      // Error handling - could be enhanced with toast notifications
+      console.error('[FeedbackDialog] Submission error:', error);
+      // Re-throw so parent can handle (e.g., show toast notification)
+      throw error;
     } finally {
       setIsSubmitting(false);
     }

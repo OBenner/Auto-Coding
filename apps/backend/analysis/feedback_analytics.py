@@ -174,7 +174,8 @@ class FeedbackSummary:
             "neutral_sentiment_count": self.neutral_sentiment_count,
             "feedback_by_agent": self.feedback_by_agent,
             "ratings_by_agent": {
-                agent: round(rating, 2) for agent, rating in self.ratings_by_agent.items()
+                agent: round(rating, 2)
+                for agent, rating in self.ratings_by_agent.items()
             },
             "top_issues": self.top_issues,
             "feedback_by_category": self.feedback_by_category,
@@ -207,7 +208,8 @@ class FeedbackSummary:
             satisfaction_rate=data.get("satisfaction_rate", 0.0),
             net_promoter_score=data.get("net_promoter_score"),
             feedback_items=[
-                FeedbackMetrics.from_dict(item) for item in data.get("feedback_items", [])
+                FeedbackMetrics.from_dict(item)
+                for item in data.get("feedback_items", [])
             ],
         )
 
@@ -235,14 +237,14 @@ async def collect_feedback_from_graphiti(
     Returns:
         List of FeedbackMetrics
     """
-    from integrations.graphiti.queries_pkg.graphiti import GraphitiMemory
+    from integrations.graphiti.memory import get_graphiti_memory
     from integrations.graphiti.queries_pkg.schema import EPISODE_TYPE_USER_FEEDBACK
 
     feedback_list = []
 
     try:
-        # Initialize Graphiti memory
-        memory = GraphitiMemory(spec_dir or project_dir, project_dir)
+        # Initialize Graphiti memory via helper for consistency
+        memory = get_graphiti_memory(spec_dir or project_dir, project_dir)
 
         # Query feedback episodes
         # For now, we use search with a broad query to get all feedback
@@ -447,19 +449,16 @@ def aggregate_feedback(
 
     # Top issues (negative feedback with severity)
     negative_items = [
-        f
-        for f in feedback_items
-        if f.is_negative or f.sentiment == "negative"
+        f for f in feedback_items if f.is_negative or f.sentiment == "negative"
     ]
-    # Sort by severity (high > medium > low) and then by date
+    # Sort by severity (high first) and then by most recent date
     severity_order = {"high": 0, "medium": 1, "low": 2, None: 3}
     sorted_issues = sorted(
         negative_items,
         key=lambda f: (
             severity_order.get(f.severity, 3),
-            f.created_at or datetime.min.replace(tzinfo=UTC),
+            -(f.created_at or datetime.min.replace(tzinfo=UTC)).timestamp(),
         ),
-        reverse=True,
     )
 
     summary.top_issues = [
@@ -483,9 +482,7 @@ def aggregate_feedback(
     if ratings and max(ratings) >= 9:  # Looks like 0-10 scale
         promoters = sum(1 for r in ratings if r >= 9)
         detractors = sum(1 for r in ratings if r <= 6)
-        summary.net_promoter_score = (
-            (promoters - detractors) / len(ratings)
-        ) * 100
+        summary.net_promoter_score = ((promoters - detractors) / len(ratings)) * 100
 
     return summary
 
@@ -564,9 +561,7 @@ def export_feedback_summary(
             writer.writerow(["Rejected", summary.rejected_count])
             writer.writerow(["Modified", summary.modified_count])
             writer.writerow(["Average Rating", summary.average_rating or "N/A"])
-            writer.writerow(
-                ["Satisfaction Rate", f"{summary.satisfaction_rate:.1%}"]
-            )
+            writer.writerow(["Satisfaction Rate", f"{summary.satisfaction_rate:.1%}"])
             writer.writerow(
                 [
                     "Net Promoter Score",
@@ -618,7 +613,5 @@ def get_feedback_trends(
     sorted_trends = sorted(trends.items())
     return {
         "interval": interval,
-        "data": [
-            {"period": period, **counts} for period, counts in sorted_trends
-        ],
+        "data": [{"period": period, **counts} for period, counts in sorted_trends],
     }

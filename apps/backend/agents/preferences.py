@@ -270,6 +270,7 @@ class PreferenceProfile:
                     "task_description": f.task_description,
                     "agent_type": f.agent_type,
                     "context": f.context,
+                    "rating": f.rating,
                 }
                 for f in self.feedback_history
             ],
@@ -309,6 +310,7 @@ class PreferenceProfile:
                 task_description=f["task_description"],
                 agent_type=f["agent_type"],
                 context=f.get("context", {}),
+                rating=f.get("rating"),
             )
             for f in data.get("feedback_history", [])
         ]

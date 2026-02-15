@@ -152,8 +152,8 @@ export const createFeedbackAPI = (): FeedbackAPI => ({
 
     return ipcRenderer.invoke(IPC_CHANNELS.FEEDBACK_SUBMIT, request);
   },
-  // Note: getFeedbackSummary, exportFeedbackData, and getImprovements are optional and will be implemented when backend support is ready
-  getFeedbackSummary: undefined,
-  exportFeedbackData: undefined,
-  getImprovements: undefined,
+  // Stub implementations — reject until backend support is ready
+  getFeedbackSummary: () => Promise.reject(new Error('getFeedbackSummary not implemented')),
+  exportFeedbackData: () => Promise.reject(new Error('exportFeedbackData not implemented')),
+  getImprovements: () => Promise.reject(new Error('getImprovements not implemented')),
 });
