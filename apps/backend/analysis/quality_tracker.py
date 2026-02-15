@@ -19,54 +19,16 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from analysis.metrics_tracker import (
+    _load_implementation_plan,
+    _load_qa_iteration_history,
+)
 from analysis.quality_models import QualityScore, QualityTrend
 
 # Configuration
 DEFAULT_ALERT_THRESHOLD = 10.0  # Alert at 10% quality drop
 MIN_SESSIONS_FOR_BASELINE = 5  # Minimum sessions to establish baseline
 TREND_WINDOW_SIZE = 5  # Number of recent sessions to analyze
-
-
-# =============================================================================
-# DATA LOADING
-# =============================================================================
-
-
-def _load_implementation_plan(spec_dir: Path) -> dict[str, Any] | None:
-    """
-    Load implementation plan from spec directory.
-
-    Args:
-        spec_dir: Spec directory path
-
-    Returns:
-        Implementation plan dict or None if not found
-    """
-    plan_file = spec_dir / "implementation_plan.json"
-    if not plan_file.exists():
-        return None
-
-    try:
-        with open(plan_file, encoding="utf-8") as f:
-            return json.load(f)
-    except (OSError, json.JSONDecodeError, UnicodeDecodeError):
-        return None
-
-
-def _load_qa_iteration_history(spec_dir: Path) -> list[dict[str, Any]]:
-    """
-    Load QA iteration history from implementation plan.
-
-    Args:
-        spec_dir: Spec directory path
-
-    Returns:
-        List of QA iteration records
-    """
-    plan = _load_implementation_plan(spec_dir)
-    if not plan:
-        return []
-    return plan.get("qa_iteration_history", [])
 
 
 def _load_subtasks(spec_dir: Path) -> list[dict[str, Any]]:

@@ -370,8 +370,7 @@ def create_statistics_tools(spec_dir: Path, project_dir: Path) -> list:
             }
 
         try:
-            with open(plan_file, encoding="utf-8") as f:
-                plan = json.load(f)
+            plan = json.loads(plan_file.read_text(encoding="utf-8"))
 
             # Calculate basic stats
             total_subtasks = 0
@@ -504,8 +503,7 @@ Phase Durations:"""
             }
 
         try:
-            with open(plan_file, encoding="utf-8") as f:
-                plan = json.load(f)
+            plan = json.loads(plan_file.read_text(encoding="utf-8"))
 
             # Calculate quality metrics
             quality = _calculate_quality_metrics(plan)

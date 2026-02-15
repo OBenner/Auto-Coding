@@ -224,16 +224,14 @@ export async function loadQualityScores(specId: string): Promise<void> {
   try {
     // TODO: Call IPC to get quality scores from backend
     // const scores = await window.electronAPI.getQualityScores(specId);
+    // const parsedScores = scores.map((score) => ({
+    //   ...score,
+    //   timestamp: new Date(score.timestamp)
+    // }));
+    // store.setScores(parsedScores);
+
     // For now, return empty array until IPC is implemented
-    const scores: any[] = [];
-
-    // Convert ISO strings to Date objects
-    const parsedScores = scores.map((score: any) => ({
-      ...score,
-      timestamp: new Date(score.timestamp)
-    }));
-
-    store.setScores(parsedScores);
+    store.setScores([]);
   } catch (error) {
     console.error('Failed to load quality scores:', error);
     store.setScores([]);

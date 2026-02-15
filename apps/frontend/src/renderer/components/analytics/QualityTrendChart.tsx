@@ -1,6 +1,12 @@
 import { useMemo } from 'react';
 import { TrendingUp, AlertTriangle } from 'lucide-react';
 import type { QualityScore } from '../../stores/quality-store';
+import {
+  type ChartMetricConfig,
+  createChartDimensions,
+  buildMetricPaths,
+} from './chart-utils';
+import { ChartGrid, MetricSeries } from './ChartSvg';
 
 interface QualityTrendChartProps {
   scores: QualityScore[];
@@ -9,97 +15,52 @@ interface QualityTrendChartProps {
 
 type MetricType = 'composite_score' | 'test_pass_rate' | 'acceptance_criteria_met' | 'user_approval_rate';
 
-interface ChartMetric {
-  key: MetricType;
-  label: string;
-  color: string;
-  formatValue: (value: number) => string;
-}
-
-const CHART_METRICS: ChartMetric[] = [
+const QUALITY_METRICS: ChartMetricConfig<MetricType>[] = [
   {
     key: 'composite_score',
     label: 'Overall Quality',
-    color: 'rgb(34, 197, 94)', // green-500
-    formatValue: (value: number) => (value * 100).toFixed(1) + '%',
+    color: 'rgb(34, 197, 94)',
+    formatValue: (v) => (v * 100).toFixed(1) + '%',
   },
   {
     key: 'test_pass_rate',
     label: 'Test Pass Rate',
-    color: 'rgb(59, 130, 246)', // blue-500
-    formatValue: (value: number) => (value * 100).toFixed(1) + '%',
+    color: 'rgb(59, 130, 246)',
+    formatValue: (v) => (v * 100).toFixed(1) + '%',
   },
   {
     key: 'acceptance_criteria_met',
     label: 'Acceptance Criteria',
-    color: 'rgb(168, 85, 247)', // purple-500
-    formatValue: (value: number) => (value * 100).toFixed(1) + '%',
+    color: 'rgb(168, 85, 247)',
+    formatValue: (v) => (v * 100).toFixed(1) + '%',
   },
   {
     key: 'user_approval_rate',
     label: 'User Approval',
-    color: 'rgb(245, 158, 11)', // amber-500
-    formatValue: (value: number) => (value * 100).toFixed(1) + '%',
+    color: 'rgb(245, 158, 11)',
+    formatValue: (v) => (v * 100).toFixed(1) + '%',
   },
 ];
 
 export function QualityTrendChart({ scores, isLoading = false }: QualityTrendChartProps) {
-  // Calculate chart dimensions and data
   const chartData = useMemo(() => {
     if (!scores || scores.length === 0) return null;
 
-    const width = 800;
-    const height = 300;
-    const padding = { top: 20, right: 20, bottom: 40, left: 60 };
-    const chartWidth = width - padding.left - padding.right;
-    const chartHeight = height - padding.top - padding.bottom;
+    const dims = createChartDimensions();
 
     // Sort scores by timestamp
     const sortedScores = [...scores].sort(
       (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
     );
 
-    // Process data for each metric
-    // Values are kept in their original scale (0..1);
-    // conversion to display units (percentage) happens only in formatValue.
-    const processedMetrics = CHART_METRICS.map((metric) => {
+    // Build metric paths using shared utility
+    const metrics = QUALITY_METRICS.map((metric) => {
       const values = sortedScores.map((score) => {
         const raw = score[metric.key];
         const v = Number(raw ?? 0);
         return Number.isFinite(v) ? v : 0;
       });
-
-      const maxValue = Math.max(...values);
-      const minValue = Math.min(...values);
-      const range = maxValue - minValue || 1; // Avoid division by zero
-
-      // Generate SVG path
-      const points = sortedScores.map((score, index) => {
-        const x = padding.left + (index / (sortedScores.length - 1 || 1)) * chartWidth;
-        const raw = score[metric.key];
-        const value = Number.isFinite(Number(raw)) ? Number(raw) : 0;
-        const y = padding.top + chartHeight - ((value - minValue) / range) * chartHeight;
-        return { x, y, value };
-      });
-
-      const pathData = points
-        .map((point, index) => {
-          const command = index === 0 ? 'M' : 'L';
-          return `${command} ${point.x} ${point.y}`;
-        })
-        .join(' ');
-
-      // Create area path (for fill)
-      const areaPath = `${pathData} L ${points[points.length - 1].x} ${height - padding.bottom} L ${padding.left} ${height - padding.bottom} Z`;
-
-      return {
-        ...metric,
-        points,
-        pathData,
-        areaPath,
-        maxValue,
-        minValue,
-      };
+      return buildMetricPaths(metric, values, dims);
     });
 
     // Format dates for x-axis
@@ -108,21 +69,14 @@ export function QualityTrendChart({ scores, isLoading = false }: QualityTrendCha
       return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     });
 
-    // Calculate quality status
     const latestScore = sortedScores[sortedScores.length - 1];
-    const isHighQuality = latestScore.is_high_quality;
-    const isLowQuality = latestScore.is_low_quality;
 
     return {
-      width,
-      height,
-      padding,
-      chartWidth,
-      chartHeight,
-      metrics: processedMetrics,
+      dims,
+      metrics,
       dateLabels,
-      isHighQuality,
-      isLowQuality,
+      isHighQuality: latestScore.is_high_quality,
+      isLowQuality: latestScore.is_low_quality,
     };
   }, [scores]);
 
@@ -161,6 +115,8 @@ export function QualityTrendChart({ scores, isLoading = false }: QualityTrendCha
     );
   }
 
+  const { dims } = chartData;
+
   return (
     <div className="rounded-lg border border-border bg-card p-6">
       {/* Header */}
@@ -182,7 +138,7 @@ export function QualityTrendChart({ scores, isLoading = false }: QualityTrendCha
 
         {/* Legend */}
         <div className="flex items-center gap-4">
-          {CHART_METRICS.map((metric) => (
+          {QUALITY_METRICS.map((metric) => (
             <div key={metric.key} className="flex items-center gap-2">
               <div
                 className="h-3 w-3 rounded-full"
@@ -194,116 +150,32 @@ export function QualityTrendChart({ scores, isLoading = false }: QualityTrendCha
         </div>
       </div>
 
-      {/* Chart Container */}
+      {/* Chart */}
       <div className="w-full overflow-x-auto">
         <svg
-          viewBox={`0 0 ${chartData.width} ${chartData.height}`}
+          viewBox={`0 0 ${dims.width} ${dims.height}`}
           className="w-full h-auto"
           style={{ minHeight: '300px' }}
         >
-          {/* Grid lines */}
-          {[0, 0.25, 0.5, 0.75, 1].map((fraction) => {
-            const y = chartData.padding.top + chartData.chartHeight * (1 - fraction);
-            return (
-              <line
-                key={fraction}
-                x1={chartData.padding.left}
-                y1={y}
-                x2={chartData.width - chartData.padding.right}
-                y2={y}
-                stroke="currentColor"
-                strokeWidth="1"
-                opacity="0.1"
-                className="text-muted-foreground"
-              />
-            );
-          })}
-
-          {/* X-axis */}
-          <line
-            x1={chartData.padding.left}
-            y1={chartData.height - chartData.padding.bottom}
-            x2={chartData.width - chartData.padding.right}
-            y2={chartData.height - chartData.padding.bottom}
-            stroke="currentColor"
-            strokeWidth="2"
-            className="text-border"
+          <ChartGrid
+            dims={dims}
+            formatYLabel={(f) => `${(f * 100).toFixed(0)}%`}
           />
 
-          {/* Y-axis */}
-          <line
-            x1={chartData.padding.left}
-            y1={chartData.padding.top}
-            x2={chartData.padding.left}
-            y2={chartData.height - chartData.padding.bottom}
-            stroke="currentColor"
-            strokeWidth="2"
-            className="text-border"
-          />
-
-          {/* Y-axis labels */}
-          {[0, 0.25, 0.5, 0.75, 1].map((fraction) => {
-            const y = chartData.padding.top + chartData.chartHeight * (1 - fraction);
-            return (
-              <text
-                key={fraction}
-                x={chartData.padding.left - 10}
-                y={y}
-                textAnchor="end"
-                dominantBaseline="middle"
-                className="text-xs fill-muted-foreground"
-              >
-                {(fraction * 100).toFixed(0)}%
-              </text>
-            );
-          })}
-
-          {/* Chart lines and areas */}
           {chartData.metrics.map((metric) => (
-            <g key={metric.key}>
-              {/* Area fill */}
-              <path
-                d={metric.areaPath}
-                fill={metric.color}
-                opacity="0.1"
-              />
-
-              {/* Line */}
-              <path
-                d={metric.pathData}
-                fill="none"
-                stroke={metric.color}
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-
-              {/* Data points */}
-              {metric.points.map((point, index) => (
-                <circle
-                  key={index}
-                  cx={point.x}
-                  cy={point.y}
-                  r="4"
-                  fill={metric.color}
-                  className="cursor-pointer transition-transform hover:scale-125"
-                >
-                  <title>{`${metric.label}: ${metric.formatValue(point.value)}`}</title>
-                </circle>
-              ))}
-            </g>
+            <MetricSeries key={metric.key} metric={metric} dateLabels={chartData.dateLabels} />
           ))}
 
           {/* X-axis labels */}
           {chartData.dateLabels.map((label, index) => {
             const x =
-              chartData.padding.left +
-              (index / (chartData.dateLabels.length - 1 || 1)) * chartData.chartWidth;
+              dims.padding.left +
+              (index / (chartData.dateLabels.length - 1 || 1)) * dims.chartWidth;
             return (
               <text
                 key={index}
                 x={x}
-                y={chartData.height - chartData.padding.bottom + 20}
+                y={dims.height - dims.padding.bottom + 20}
                 textAnchor="middle"
                 className="text-xs fill-muted-foreground"
               >
@@ -316,7 +188,7 @@ export function QualityTrendChart({ scores, isLoading = false }: QualityTrendCha
 
       {/* Summary Stats */}
       <div className="mt-6 grid grid-cols-4 gap-4">
-        {CHART_METRICS.map((metric) => {
+        {QUALITY_METRICS.map((metric) => {
           const metricData = chartData.metrics.find((m) => m.key === metric.key);
           if (!metricData) return null;
 

@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Download, Loader2, RefreshCw, BarChart3, FileText, Calendar } from 'lucide-react';
+import { Loader2, BarChart3, Calendar } from 'lucide-react';
 import { Button } from '../ui/button';
 import { ScrollArea } from '../ui/scroll-area';
 import { useToast } from '../../hooks/use-toast';
 import { QualityTrendChart } from './QualityTrendChart';
 import { QualityAlertCard } from './QualityAlertCard';
+import { DashboardActions } from './DashboardActions';
 import { useQualityStore, type QualityScore } from '../../stores/quality-store';
 import type {
   ProductivitySummary,
@@ -239,35 +240,13 @@ export function ProductivityDashboard({ projectId }: ProductivityDashboardProps)
               </Button>
             </div>
 
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleRefresh}
-              disabled={isRefreshing}
-            >
-              <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
-              Refresh
-            </Button>
-
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handleExport('json')}
-              disabled={isExporting}
-            >
-              <FileText className="h-4 w-4 mr-2" />
-              Export JSON
-            </Button>
-
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handleExport('csv')}
-              disabled={isExporting}
-            >
-              <Download className="h-4 w-4 mr-2" />
-              Export CSV
-            </Button>
+            <DashboardActions
+              onRefresh={handleRefresh}
+              onExportJson={() => handleExport('json')}
+              onExportCsv={() => handleExport('csv')}
+              isRefreshing={isRefreshing}
+              isExporting={isExporting}
+            />
           </div>
         </div>
       </div>
