@@ -5,12 +5,10 @@ import {
   MessageSquare,
   TrendingUp,
   AlertTriangle,
-  Calendar,
   Smile,
   Frown,
   Meh,
   Download,
-  RefreshCw,
   BarChart3,
   FileText,
 } from 'lucide-react';
@@ -19,6 +17,14 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
 import { ScrollArea } from './ui/scroll-area';
 import { useToast } from '../hooks/use-toast';
+import {
+  type TimeRange,
+  getDaysFromTimeRange,
+  TimeRangeFilter,
+  RefreshButton,
+  LoadingSpinner,
+  EmptyState,
+} from './feedback/shared';
 
 // =============================================================================
 // TYPES
@@ -70,8 +76,6 @@ interface FeedbackSummary {
 interface FeedbackDashboardProps {
   projectId?: string;
 }
-
-type TimeRange = 'all' | '7d' | '30d' | '90d';
 
 // =============================================================================
 // STAT CARD COMPONENT
@@ -289,22 +293,6 @@ export function FeedbackDashboard({ projectId = '.' }: FeedbackDashboardProps) {
   const [isExporting, setIsExporting] = useState(false);
   const [timeRange, setTimeRange] = useState<TimeRange>('30d');
 
-  // Calculate days from time range
-  const getDaysFromTimeRange = useCallback((): number => {
-    switch (timeRange) {
-      case '7d':
-        return 7;
-      case '30d':
-        return 30;
-      case '90d':
-        return 90;
-      case 'all':
-        return 365; // Default to 1 year for "all"
-      default:
-        return 30;
-    }
-  }, [timeRange]);
-
   // Load feedback data
   const loadFeedbackData = useCallback(
     async (showRefreshToast = false) => {
@@ -312,7 +300,7 @@ export function FeedbackDashboard({ projectId = '.' }: FeedbackDashboardProps) {
         const loadingState = showRefreshToast ? setIsRefreshing : setIsLoading;
         loadingState(true);
 
-        const days = getDaysFromTimeRange();
+        const days = getDaysFromTimeRange(timeRange);
 
         // Call backend API to get feedback summary
         // Note: This assumes a window.electronAPI.getFeedbackSummary method exists
@@ -352,7 +340,7 @@ export function FeedbackDashboard({ projectId = '.' }: FeedbackDashboardProps) {
         setIsRefreshing(false);
       }
     },
-    [projectId, timeRange, getDaysFromTimeRange, toast, t]
+    [projectId, timeRange, toast, t]
   );
 
   // Initial load
@@ -371,7 +359,7 @@ export function FeedbackDashboard({ projectId = '.' }: FeedbackDashboardProps) {
       try {
         setIsExporting(true);
 
-        const days = getDaysFromTimeRange();
+        const days = getDaysFromTimeRange(timeRange);
 
         // Call backend API to export feedback
         const result = await window.electronAPI.exportFeedbackData?.(projectId, format, days);
@@ -399,7 +387,7 @@ export function FeedbackDashboard({ projectId = '.' }: FeedbackDashboardProps) {
         setIsExporting(false);
       }
     },
-    [projectId, getDaysFromTimeRange, toast, t]
+    [projectId, timeRange, toast, t]
   );
 
   // Handle time range change
@@ -433,16 +421,7 @@ export function FeedbackDashboard({ projectId = '.' }: FeedbackDashboardProps) {
 
   // Loading state
   if (isLoading) {
-    return (
-      <div className="flex h-full items-center justify-center">
-        <div className="flex flex-col items-center gap-3">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-border border-t-accent" />
-          <p className="text-sm text-muted-foreground">
-            {t('feedback:dashboard.description')}
-          </p>
-        </div>
-      </div>
-    );
+    return <LoadingSpinner message={t('feedback:dashboard.description')} />;
   }
 
   const hasData = summary && summary.total_feedback > 0;
@@ -465,54 +444,8 @@ export function FeedbackDashboard({ projectId = '.' }: FeedbackDashboardProps) {
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Time Range Filter */}
-            <div className="flex items-center gap-1 border border-border rounded-md p-1">
-              <Button
-                variant={timeRange === '7d' ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => handleTimeRangeChange('7d')}
-                className="h-7"
-              >
-                <Calendar className="h-3 w-3 mr-1" />
-                7d
-              </Button>
-              <Button
-                variant={timeRange === '30d' ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => handleTimeRangeChange('30d')}
-                className="h-7"
-              >
-                <Calendar className="h-3 w-3 mr-1" />
-                30d
-              </Button>
-              <Button
-                variant={timeRange === '90d' ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => handleTimeRangeChange('90d')}
-                className="h-7"
-              >
-                <Calendar className="h-3 w-3 mr-1" />
-                90d
-              </Button>
-              <Button
-                variant={timeRange === 'all' ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => handleTimeRangeChange('all')}
-                className="h-7"
-              >
-                All
-              </Button>
-            </div>
-
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleRefresh}
-              disabled={isRefreshing}
-            >
-              <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
-              Refresh
-            </Button>
+            <TimeRangeFilter value={timeRange} onChange={handleTimeRangeChange} />
+            <RefreshButton onClick={handleRefresh} isRefreshing={isRefreshing} />
 
             <Button
               variant="outline"
@@ -645,16 +578,11 @@ export function FeedbackDashboard({ projectId = '.' }: FeedbackDashboardProps) {
               )}
             </>
           ) : (
-            /* Empty State */
-            <div className="flex flex-col items-center justify-center h-[60vh] text-center">
-              <MessageSquare className="h-16 w-16 text-muted-foreground/50 mb-4" />
-              <h2 className="text-xl font-semibold text-foreground mb-2">
-                {t('feedback:dashboard.noFeedback')}
-              </h2>
-              <p className="text-sm text-muted-foreground max-w-md">
-                {t('feedback:dashboard.noFeedbackDescription')}
-              </p>
-            </div>
+            <EmptyState
+              icon={MessageSquare}
+              title={t('feedback:dashboard.noFeedback')}
+              description={t('feedback:dashboard.noFeedbackDescription')}
+            />
           )}
         </div>
       </ScrollArea>

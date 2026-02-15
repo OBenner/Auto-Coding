@@ -5,7 +5,6 @@ import {
   TrendingDown,
   Minus,
   Calendar,
-  RefreshCw,
   FileText,
   CheckCircle2,
   AlertCircle,
@@ -19,6 +18,14 @@ import { ScrollArea } from './ui/scroll-area';
 import { Input } from './ui/input';
 import { useToast } from '../hooks/use-toast';
 import { cn } from '../lib/utils';
+import {
+  type TimeRange,
+  getDaysFromTimeRange,
+  TimeRangeFilter,
+  RefreshButton,
+  LoadingSpinner,
+  EmptyState,
+} from './feedback/shared';
 
 // =============================================================================
 // TYPES
@@ -45,7 +52,6 @@ interface ImprovementTrackerProps {
   projectId?: string;
 }
 
-type TimeRange = 'all' | '7d' | '30d' | '90d';
 type FilterType = 'all' | 'planner' | 'coder' | 'qa_reviewer' | 'qa_fixer';
 
 // =============================================================================
@@ -227,22 +233,6 @@ export function ImprovementTracker({ projectId = '.' }: ImprovementTrackerProps)
   const [agentFilter, setAgentFilter] = useState<FilterType>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Calculate days from time range
-  const getDaysFromTimeRange = useCallback((): number => {
-    switch (timeRange) {
-      case '7d':
-        return 7;
-      case '30d':
-        return 30;
-      case '90d':
-        return 90;
-      case 'all':
-        return 365;
-      default:
-        return 30;
-    }
-  }, [timeRange]);
-
   // Load improvements data
   const loadImprovementsData = useCallback(
     async (showRefreshToast = false) => {
@@ -250,10 +240,9 @@ export function ImprovementTracker({ projectId = '.' }: ImprovementTrackerProps)
         const loadingState = showRefreshToast ? setIsRefreshing : setIsLoading;
         loadingState(true);
 
-        const days = getDaysFromTimeRange();
+        const days = getDaysFromTimeRange(timeRange);
 
         // Call backend API to get improvements
-        // TODO: Add IPC handler for getImprovements
         const result = await window.electronAPI.getImprovements?.(projectId, days);
 
         if (result?.success && result?.data) {
@@ -292,7 +281,7 @@ export function ImprovementTracker({ projectId = '.' }: ImprovementTrackerProps)
         setIsRefreshing(false);
       }
     },
-    [projectId, timeRange, getDaysFromTimeRange, toast, t]
+    [projectId, timeRange, toast, t]
   );
 
   // Initial load
@@ -357,16 +346,7 @@ export function ImprovementTracker({ projectId = '.' }: ImprovementTrackerProps)
 
   // Loading state
   if (isLoading) {
-    return (
-      <div className="flex h-full items-center justify-center">
-        <div className="flex flex-col items-center gap-3">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-border border-t-accent" />
-          <p className="text-sm text-muted-foreground">
-            {t('feedback:improvement.description')}
-          </p>
-        </div>
-      </div>
-    );
+    return <LoadingSpinner message={t('feedback:improvement.description')} />;
   }
 
   const hasData = filteredImprovements.length > 0;
@@ -389,54 +369,8 @@ export function ImprovementTracker({ projectId = '.' }: ImprovementTrackerProps)
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Time Range Filter */}
-            <div className="flex items-center gap-1 border border-border rounded-md p-1">
-              <Button
-                variant={timeRange === '7d' ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => handleTimeRangeChange('7d')}
-                className="h-7"
-              >
-                <Calendar className="h-3 w-3 mr-1" />
-                7d
-              </Button>
-              <Button
-                variant={timeRange === '30d' ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => handleTimeRangeChange('30d')}
-                className="h-7"
-              >
-                <Calendar className="h-3 w-3 mr-1" />
-                30d
-              </Button>
-              <Button
-                variant={timeRange === '90d' ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => handleTimeRangeChange('90d')}
-                className="h-7"
-              >
-                <Calendar className="h-3 w-3 mr-1" />
-                90d
-              </Button>
-              <Button
-                variant={timeRange === 'all' ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => handleTimeRangeChange('all')}
-                className="h-7"
-              >
-                All
-              </Button>
-            </div>
-
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleRefresh}
-              disabled={isRefreshing}
-            >
-              <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
-              Refresh
-            </Button>
+            <TimeRangeFilter value={timeRange} onChange={handleTimeRangeChange} />
+            <RefreshButton onClick={handleRefresh} isRefreshing={isRefreshing} />
           </div>
         </div>
       </div>
@@ -519,16 +453,11 @@ export function ImprovementTracker({ projectId = '.' }: ImprovementTrackerProps)
               ))}
             </>
           ) : (
-            /* Empty State */
-            <div className="flex flex-col items-center justify-center h-[60vh] text-center">
-              <AlertCircle className="h-16 w-16 text-muted-foreground/50 mb-4" />
-              <h2 className="text-xl font-semibold text-foreground mb-2">
-                {t('feedback:improvement.noImprovements')}
-              </h2>
-              <p className="text-sm text-muted-foreground max-w-md">
-                {t('feedback:improvement.noImprovementsDescription')}
-              </p>
-            </div>
+            <EmptyState
+              icon={AlertCircle}
+              title={t('feedback:improvement.noImprovements')}
+              description={t('feedback:improvement.noImprovementsDescription')}
+            />
           )}
         </div>
       </ScrollArea>
