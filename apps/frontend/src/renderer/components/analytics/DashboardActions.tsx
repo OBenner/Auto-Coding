@@ -15,7 +15,7 @@ export function DashboardActions({
   onExportCsv,
   isRefreshing = false,
   isExporting = false,
-}: DashboardActionsProps) {
+}: Readonly<DashboardActionsProps>) {
   return (
     <>
       <Button

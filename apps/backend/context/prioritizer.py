@@ -180,7 +180,7 @@ class FilePrioritizer:
                 timestamp = int(result.stdout.strip())
                 return datetime.fromtimestamp(timestamp, tz=UTC)
 
-        except (subprocess.TimeoutExpired, subprocess.SubprocessError, ValueError):
+        except (subprocess.SubprocessError, ValueError):
             logger.debug("git log failed for %s, falling back to mtime", file_path)
 
         return None

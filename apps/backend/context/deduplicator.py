@@ -174,7 +174,7 @@ class ContentDeduplicator:
                 continue
 
             # Convert to set of lines for comparison
-            lines = set(line.strip() for line in item.split("\n") if line.strip())
+            lines = {line.strip() for line in item.split("\n") if line.strip()}
 
             # Check similarity against all unique items
             is_duplicate = False

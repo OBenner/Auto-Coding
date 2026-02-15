@@ -26,7 +26,7 @@ interface AlertItemProps {
 
 const VALID_SEVERITIES = new Set(['critical', 'warning']);
 
-function AlertItem({ alert, onDismiss, locale = 'en-US' }: AlertItemProps) {
+function AlertItem({ alert, onDismiss, locale = 'en-US' }: Readonly<AlertItemProps>) {
   const { t } = useTranslation('quality');
   const severity = VALID_SEVERITIES.has(alert.severity?.toLowerCase?.())
     ? (alert.severity.toLowerCase() as 'critical' | 'warning')
@@ -107,7 +107,7 @@ function AlertItem({ alert, onDismiss, locale = 'en-US' }: AlertItemProps) {
   );
 }
 
-export function QualityAlertCard({ alerts: propAlerts, isLoading = false }: QualityAlertCardProps) {
+export function QualityAlertCard({ alerts: propAlerts, isLoading = false }: Readonly<QualityAlertCardProps>) {
   const { t, i18n } = useTranslation('quality');
   const storeAlerts = useQualityStore((state) => state.alerts);
   const dismissAlert = useQualityStore((state) => state.dismissAlert);
@@ -163,12 +163,13 @@ export function QualityAlertCard({ alerts: propAlerts, isLoading = false }: Qual
         </div>
       </CardHeader>
       <CardContent>
-        {isLoading ? (
+        {isLoading && (
           <div className="flex items-center justify-center py-8 text-muted-foreground">
             <Clock className="h-5 w-5 animate-spin mr-2" />
             {t('alerts.loading')}
           </div>
-        ) : sortedAlerts.length === 0 ? (
+        )}
+        {!isLoading && sortedAlerts.length === 0 && (
           <div className="flex flex-col items-center justify-center py-8 text-center">
             <div className="p-3 rounded-full bg-success/10 mb-3">
               <Bell className="h-8 w-8 text-success" />
@@ -178,7 +179,8 @@ export function QualityAlertCard({ alerts: propAlerts, isLoading = false }: Qual
               {t('alerts.empty.subtitle')}
             </p>
           </div>
-        ) : (
+        )}
+        {!isLoading && sortedAlerts.length > 0 && (
           <div className="space-y-3">
             {sortedAlerts.map((alert) => (
               <AlertItem key={alert.id} alert={alert} onDismiss={dismissAlert} locale={i18n.language} />

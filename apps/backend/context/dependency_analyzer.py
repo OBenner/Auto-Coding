@@ -290,7 +290,7 @@ class DependencyAnalyzer:
     # INTERNAL METHODS
     # =========================================================================
 
-    def _extract_imports(self, source: str, file_path: str) -> list[ImportInfo]:
+    def _extract_imports(self, source: str, _file_path: str) -> list[ImportInfo]:
         """
         Extract import statements from source code.
 
@@ -310,7 +310,7 @@ class DependencyAnalyzer:
 
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
-                # import foo, bar as baz
+                # Handle plain imports (e.g. "import foo, bar as baz")
                 for alias in node.names:
                     imports.append(
                         ImportInfo(
@@ -320,7 +320,7 @@ class DependencyAnalyzer:
                         )
                     )
             elif isinstance(node, ast.ImportFrom):
-                # from foo import bar, baz
+                # Handle from-imports (e.g. "from foo import bar, baz")
                 module = node.module or ""
                 names = [alias.name for alias in node.names] if node.names else []
                 imports.append(

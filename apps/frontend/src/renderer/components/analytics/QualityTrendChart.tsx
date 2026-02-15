@@ -29,7 +29,7 @@ const METRIC_DEFS: MetricDef[] = [
   { key: 'user_approval_rate', labelKey: 'trends.metrics.userApproval', color: 'rgb(245, 158, 11)' },
 ];
 
-export function QualityTrendChart({ scores, isLoading = false }: QualityTrendChartProps) {
+export function QualityTrendChart({ scores, isLoading = false }: Readonly<QualityTrendChartProps>) {
   const { t, i18n } = useTranslation('quality');
 
   const qualityMetrics: ChartMetricConfig<MetricType>[] = useMemo(
@@ -69,7 +69,7 @@ export function QualityTrendChart({ scores, isLoading = false }: QualityTrendCha
       return date.toLocaleDateString(i18n.language, { month: 'short', day: 'numeric' });
     });
 
-    const latestScore = sortedScores[sortedScores.length - 1];
+    const latestScore = sortedScores.at(-1)!;
 
     return {
       dims,
@@ -173,7 +173,7 @@ export function QualityTrendChart({ scores, isLoading = false }: QualityTrendCha
               (index / (chartData.dateLabels.length - 1 || 1)) * dims.chartWidth;
             return (
               <text
-                key={index}
+                key={`${label}-${x}`}
                 x={x}
                 y={dims.height - dims.padding.bottom + 20}
                 textAnchor="middle"

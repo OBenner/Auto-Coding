@@ -219,6 +219,49 @@ def _count_unique_sessions(plan: dict[str, Any]) -> int:
     return len(session_ids)
 
 
+def _count_subtasks_by_status(
+    plan: dict[str, Any],
+) -> tuple[int, int, int]:
+    """Count total, completed, and failed subtasks across all phases."""
+    total = 0
+    completed = 0
+    failed = 0
+    for phase in plan.get("phases", []):
+        for subtask in phase.get("subtasks", []):
+            total += 1
+            status = subtask.get("status", "pending")
+            if status == "completed":
+                completed += 1
+            elif status == "failed":
+                failed += 1
+    return total, completed, failed
+
+
+def _parse_qa_metrics(plan: dict[str, Any]) -> tuple[int, str]:
+    """Extract QA iterations and status from the plan's qa_signoff."""
+    qa_signoff = plan.get("qa_signoff", {})
+    raw_iterations = qa_signoff.get("qa_iterations", qa_signoff.get("qa_session", 0))
+    try:
+        qa_iterations = int(raw_iterations)
+    except (TypeError, ValueError):
+        qa_iterations = 0
+    raw_status = qa_signoff.get("status", "pending")
+    qa_status = str(raw_status).strip().lower() if raw_status else "pending"
+    return qa_iterations, qa_status
+
+
+def _compute_qa_score(qa_status: str, qa_iterations: int) -> float:
+    """Compute the QA component score (0-40 points)."""
+    if qa_status == "approved":
+        value = 40.0
+        if qa_iterations > 1:
+            value -= min((qa_iterations - 1) * 5, 20)
+        return max(value, 20.0)
+    if qa_status == "in_progress":
+        return 10.0
+    return 0.0
+
+
 def _calculate_quality_metrics(plan: dict[str, Any]) -> dict[str, Any]:
     """
     Calculate quality metrics based on completion rates and QA performance.
@@ -229,32 +272,12 @@ def _calculate_quality_metrics(plan: dict[str, Any]) -> dict[str, Any]:
     Returns:
         Dict with quality metrics
     """
-    # Count subtasks by status
-    total_subtasks = 0
-    completed_subtasks = 0
-    failed_subtasks = 0
-
-    for phase in plan.get("phases", []):
-        for subtask in phase.get("subtasks", []):
-            total_subtasks += 1
-            status = subtask.get("status", "pending")
-            if status == "completed":
-                completed_subtasks += 1
-            elif status == "failed":
-                failed_subtasks += 1
-
-    # Calculate completion rate (0.0 to 1.0)
+    total_subtasks, completed_subtasks, failed_subtasks = _count_subtasks_by_status(
+        plan
+    )
     completion_rate = completed_subtasks / total_subtasks if total_subtasks > 0 else 0.0
 
-    # QA metrics
-    qa_signoff = plan.get("qa_signoff", {})
-    raw_iterations = qa_signoff.get("qa_iterations", qa_signoff.get("qa_session", 0))
-    try:
-        qa_iterations = int(raw_iterations)
-    except (TypeError, ValueError):
-        qa_iterations = 0
-    raw_status = qa_signoff.get("status", "pending")
-    qa_status = str(raw_status).strip().lower() if raw_status else "pending"
+    qa_iterations, qa_status = _parse_qa_metrics(plan)
 
     # Determine if spec is completed (aligned with productivity_analytics.py)
     status = plan.get("status", "")
@@ -264,37 +287,14 @@ def _calculate_quality_metrics(plan: dict[str, Any]) -> dict[str, Any]:
         and qa_status == "approved"
     )
 
-    # Calculate first-attempt success (QA approved on first iteration)
     first_attempt_success = (
         is_completed and qa_status == "approved" and qa_iterations == 1
     )
 
-    # Calculate quality score (0-100)
-    # Based on:
-    # - Completion rate (40%)
-    # - QA success (40%)
-    # - Low failure rate (20%)
-    quality_score = 0.0
-
-    # Completion component (0-40 points)
-    quality_score += completion_rate * 40
-
-    # QA component (0-40 points)
-    qa_value = 0.0
-    if qa_status == "approved":
-        qa_value = 40.0
-        # Reduce points for multiple QA iterations
-        if qa_iterations > 1:
-            qa_value -= min((qa_iterations - 1) * 5, 20)
-        qa_value = max(qa_value, 20)  # Minimum 20 points if approved
-    elif qa_status == "in_progress":
-        qa_value = 10.0
-    quality_score += qa_value
-
-    # Failure rate component (0-20 points)
+    # Quality score (0-100): completion 40% + QA 40% + low failure 20%
+    qa_value = _compute_qa_score(qa_status, qa_iterations)
     failure_rate = failed_subtasks / total_subtasks if total_subtasks > 0 else 0.0
-    failure_component = (1 - failure_rate) * 20
-    quality_score += failure_component
+    quality_score = completion_rate * 40 + qa_value + (1 - failure_rate) * 20
 
     return {
         "completion_rate": round(completion_rate, 3),

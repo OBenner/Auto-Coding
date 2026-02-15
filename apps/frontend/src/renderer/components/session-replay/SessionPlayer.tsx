@@ -45,17 +45,17 @@ interface PlayerLogEntry extends LogEntry {
 
 interface SessionPlayerProps {
   /** Session to play back */
-  session: SessionMetadata;
+  readonly session: SessionMetadata;
   /** Timeline entries for the session */
-  entries: PlayerLogEntry[];
+  readonly entries: PlayerLogEntry[];
   /** Callback when playback state changes */
-  onPlaybackChange?: (isPlaying: boolean) => void;
+  readonly onPlaybackChange?: (isPlaying: boolean) => void;
   /** Callback when current entry changes */
-  onEntryChange?: (entry: PlayerLogEntry | null) => void;
+  readonly onEntryChange?: (entry: PlayerLogEntry | null) => void;
   /** Callback when speed changes */
-  onSpeedChange?: (speed: number) => void;
+  readonly onSpeedChange?: (speed: number) => void;
   /** Callback when bookmark is added */
-  onAddBookmark?: (entry: PlayerLogEntry) => void;
+  readonly onAddBookmark?: (entry: PlayerLogEntry) => void;
 }
 
 /** Playback speed options */
@@ -163,10 +163,8 @@ export function SessionPlayer({
       playbackIntervalRef.current = null;
     }
 
-    // Start at beginning if not at end
-    if (isAtEnd) {
-      setCurrentEntryIndex(0);
-    } else if (currentEntryIndex === null) {
+    // Start at beginning if at end or not started yet
+    if (isAtEnd || currentEntryIndex === null) {
       setCurrentEntryIndex(0);
     }
 
@@ -213,14 +211,14 @@ export function SessionPlayer({
   const goPrevious = useCallback(() => {
     if (!canGoBack) return;
     pausePlayback();
-    setCurrentEntryIndex((prevIndex) => (prevIndex !== null ? prevIndex - 1 : null));
+    setCurrentEntryIndex((prevIndex) => (prevIndex === null ? null : prevIndex - 1));
   }, [canGoBack, pausePlayback]);
 
   // Go to next entry
   const goNext = useCallback(() => {
     if (!canGoForward) return;
     pausePlayback();
-    setCurrentEntryIndex((prevIndex) => (prevIndex !== null ? prevIndex + 1 : null));
+    setCurrentEntryIndex((prevIndex) => (prevIndex === null ? null : prevIndex + 1));
   }, [canGoForward, pausePlayback]);
 
   // Handle speed change - restarts the interval inline using speedRef for the latest value
@@ -305,8 +303,8 @@ export function SessionPlayer({
       }
     };
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    globalThis.addEventListener('keydown', handleKeyDown);
+    return () => globalThis.removeEventListener('keydown', handleKeyDown);
   }, [isPlaying, startPlayback, pausePlayback, goPrevious, goNext, stopPlayback, entries.length]);
 
   return (
@@ -411,7 +409,7 @@ export function SessionPlayer({
               <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
                 {t('sessionPlayer.speed')}
               </div>
-              <DropdownMenuRadioGroup value={String(speed)} onValueChange={(value) => handleSpeedChange(parseFloat(value) as PlaybackSpeed)}>
+              <DropdownMenuRadioGroup value={String(speed)} onValueChange={(value) => handleSpeedChange(Number.parseFloat(value) as PlaybackSpeed)}>
                 {SPEED_OPTIONS.map((speedOption) => (
                   <DropdownMenuRadioItem
                     key={speedOption}
@@ -443,13 +441,13 @@ export function SessionPlayer({
           <div className="mt-3">
             <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
               <span>
-                {currentEntryIndex !== null ? currentEntryIndex + 1 : 0} / {entries.length}{' '}
+                {currentEntryIndex === null ? 0 : currentEntryIndex + 1} / {entries.length}{' '}
                 {t('sessionPlayer.entries')}
               </span>
               <span>
-                {currentEntryIndex !== null
-                  ? Math.round((currentEntryIndex / entries.length) * 100)
-                  : 0}
+                {currentEntryIndex === null
+                  ? 0
+                  : Math.round((currentEntryIndex / entries.length) * 100)}
                 %
               </span>
             </div>
@@ -458,9 +456,9 @@ export function SessionPlayer({
                 className="h-full bg-primary transition-all duration-200 ease-in-out"
                 style={{
                   width: `${
-                    currentEntryIndex !== null
-                      ? (currentEntryIndex / entries.length) * 100
-                      : 0
+                    currentEntryIndex === null
+                      ? 0
+                      : (currentEntryIndex / entries.length) * 100
                   }%`,
                 }}
               />
@@ -471,20 +469,7 @@ export function SessionPlayer({
 
       {/* Entry Display Area */}
       <div className="flex-1 overflow-y-auto custom-scrollbar p-4">
-        {!currentEntry ? (
-          <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground">
-            <Play className="h-12 w-12 mb-3 opacity-50" />
-            <div className="text-sm mb-1">{t('sessionPlayer.title')}</div>
-            <div className="text-xs">
-              {t('sessionPlayer.pressKey')} <kbd className="px-1.5 py-0.5 bg-secondary rounded text-xs">{t('sessionPlayer.spaceKey')}</kbd> {t('sessionPlayer.toStartPlayback')}
-            </div>
-            {entries.length > 0 && (
-              <div className="text-xs mt-2">
-                {t('sessionPlayer.entriesAvailable', { count: entries.length })}
-              </div>
-            )}
-          </div>
-        ) : (
+        {currentEntry ? (
           <div className="max-w-4xl mx-auto space-y-4">
             {/* Entry Header */}
             <div className="flex items-start gap-3">
@@ -535,8 +520,8 @@ export function SessionPlayer({
                       {t('sessionPlayer.options')}:
                     </div>
                     <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1">
-                      {currentEntry.alternatives.map((alt, idx) => (
-                        <li key={idx}>{alt}</li>
+                      {currentEntry.alternatives.map((alt) => (
+                        <li key={alt}>{alt}</li>
                       ))}
                     </ul>
                   </div>
@@ -561,6 +546,19 @@ export function SessionPlayer({
                   {currentEntry.detail}
                 </pre>
               </details>
+            )}
+          </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground">
+            <Play className="h-12 w-12 mb-3 opacity-50" />
+            <div className="text-sm mb-1">{t('sessionPlayer.title')}</div>
+            <div className="text-xs">
+              {t('sessionPlayer.pressKey')} <kbd className="px-1.5 py-0.5 bg-secondary rounded text-xs">{t('sessionPlayer.spaceKey')}</kbd> {t('sessionPlayer.toStartPlayback')}
+            </div>
+            {entries.length > 0 && (
+              <div className="text-xs mt-2">
+                {t('sessionPlayer.entriesAvailable', { count: entries.length })}
+              </div>
             )}
           </div>
         )}

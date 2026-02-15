@@ -258,6 +258,46 @@ class MergeOrchestrator:
             )
             return content, True
 
+    @staticmethod
+    def _emit_progress(
+        callback: ProgressCallback | None, phase: str, current: int, total: int, file: str = ""
+    ) -> None:
+        """Safely invoke a progress callback, ignoring exceptions."""
+        if callback is None:
+            return
+        try:
+            callback({"phase": phase, "current": current, "total": total, "file": file})
+        except Exception:
+            logger.debug("progress_callback raised; ignoring")
+
+    def _resolve_worktree(self, task_id: str) -> Path | None:
+        """Auto-detect the worktree path for a task, returning None on failure."""
+        debug_detailed(MODULE, "Auto-detecting worktree path...")
+        worktree_path = find_worktree(self.project_dir, task_id)
+        if worktree_path:
+            debug_detailed(MODULE, f"Found worktree: {worktree_path}")
+        else:
+            debug_error(MODULE, f"Could not find worktree for task {task_id}")
+        return worktree_path
+
+    def _merge_single_file(self, file_path, snapshot, target_branch, worktree_path):
+        """Merge a single file and resolve DIRECT_COPY if needed."""
+        result = self._merge_file(
+            file_path=file_path,
+            task_snapshots=[snapshot],
+            target_branch=target_branch,
+        )
+        if result.decision == MergeDecision.DIRECT_COPY:
+            content, success = self._read_worktree_file_for_direct_copy(
+                file_path, worktree_path
+            )
+            if success:
+                result.merged_content = content
+            else:
+                result.decision = MergeDecision.FAILED
+                result.error = "Worktree file not found for DIRECT_COPY"
+        return result
+
     def merge_task(
         self,
         task_id: str,
@@ -292,14 +332,11 @@ class MergeOrchestrator:
         try:
             # Find worktree if not provided
             if worktree_path is None:
-                debug_detailed(MODULE, "Auto-detecting worktree path...")
-                worktree_path = find_worktree(self.project_dir, task_id)
+                worktree_path = self._resolve_worktree(task_id)
                 if not worktree_path:
-                    debug_error(MODULE, f"Could not find worktree for task {task_id}")
                     report.success = False
                     report.error = f"Could not find worktree for task {task_id}"
                     return report
-                debug_detailed(MODULE, f"Found worktree: {worktree_path}")
 
             # Ensure evolution data is up to date
             debug(MODULE, "Refreshing evolution data from git...")
@@ -321,56 +358,21 @@ class MergeOrchestrator:
                 return report
 
             total_files = len(modifications)
-            if progress_callback:
-                try:
-                    progress_callback(
-                        {
-                            "phase": "analyzing",
-                            "current": 0,
-                            "total": total_files,
-                            "file": "",
-                        }
-                    )
-                except Exception:
-                    logger.debug("progress_callback raised; ignoring")
+            self._emit_progress(progress_callback, "analyzing", 0, total_files)
 
             # Process each modified file
             for file_idx, (file_path, snapshot) in enumerate(modifications):
-                if progress_callback:
-                    try:
-                        progress_callback(
-                            {
-                                "phase": "merging",
-                                "current": file_idx + 1,
-                                "total": total_files,
-                                "file": file_path,
-                            }
-                        )
-                    except Exception:
-                        logger.debug("progress_callback raised; ignoring")
+                self._emit_progress(
+                    progress_callback, "merging", file_idx + 1, total_files, file_path
+                )
                 debug_detailed(
                     MODULE,
                     f"Processing file: {file_path}",
                     changes=len(snapshot.semantic_changes),
                 )
-                result = self._merge_file(
-                    file_path=file_path,
-                    task_snapshots=[snapshot],
-                    target_branch=target_branch,
+                result = self._merge_single_file(
+                    file_path, snapshot, target_branch, worktree_path
                 )
-
-                # Handle DIRECT_COPY: read file directly from worktree
-                # This happens when file has modifications but semantic analysis
-                # couldn't parse the changes (body modifications, unsupported languages)
-                if result.decision == MergeDecision.DIRECT_COPY:
-                    content, success = self._read_worktree_file_for_direct_copy(
-                        file_path, worktree_path
-                    )
-                    if success:
-                        result.merged_content = content
-                    else:
-                        result.decision = MergeDecision.FAILED
-                        result.error = "Worktree file not found for DIRECT_COPY"
 
                 report.file_results[file_path] = result
                 self._update_stats(report.stats, result)

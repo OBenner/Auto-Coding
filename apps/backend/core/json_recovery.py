@@ -71,6 +71,62 @@ def _repair_json_syntax(raw: str) -> str | None:
         return None
 
 
+def _try_parse_or_repair(candidate: str) -> str | None:
+    """Try to parse JSON directly, then attempt syntax repair on failure."""
+    try:
+        json.loads(candidate)
+        return candidate
+    except json.JSONDecodeError:
+        return _repair_json_syntax(candidate)
+
+
+def _find_matching_bracket(
+    raw: str, start_idx: int, start_char: str, end_char: str
+) -> int:
+    """Find the index of the matching closing bracket, or -1 if not found.
+
+    Tracks string context and escape sequences to avoid counting brackets
+    inside JSON string values.
+    """
+    depth = 0
+    in_string = False
+    escape_next = False
+    for i in range(start_idx, len(raw)):
+        ch = raw[i]
+        if escape_next:
+            escape_next = False
+            continue
+        if ch == "\\":
+            escape_next = True
+            continue
+        if ch == '"':
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if ch == start_char:
+            depth += 1
+        elif ch == end_char:
+            depth -= 1
+            if depth == 0:
+                return i
+    return -1
+
+
+def _extract_bracket_block(raw: str, start_char: str, end_char: str) -> str | None:
+    """Extract and validate a JSON block delimited by start_char/end_char."""
+    start_idx = raw.find(start_char)
+    if start_idx == -1:
+        return None
+
+    end_idx = _find_matching_bracket(raw, start_idx, start_char, end_char)
+    if end_idx == -1:
+        return None
+
+    candidate = raw[start_idx : end_idx + 1]
+    return _try_parse_or_repair(candidate)
+
+
 def _extract_json_block(raw: str) -> str | None:
     """Extract the first JSON object/array from markdown fences or prose."""
 
@@ -78,53 +134,15 @@ def _extract_json_block(raw: str) -> str | None:
     fence_pattern = re.compile(r"```(?:json)?[ \t]*\n(.*?)```", re.DOTALL)
     match = fence_pattern.search(raw)
     if match:
-        candidate = match.group(1).strip()
-        try:
-            json.loads(candidate)
-            return candidate
-        except json.JSONDecodeError:
-            # Try repairing the fenced block
-            repaired = _repair_json_syntax(candidate)
-            if repaired:
-                return repaired
+        result = _try_parse_or_repair(match.group(1).strip())
+        if result is not None:
+            return result
 
     # Try to find the first { ... } or [ ... ] block in the text
     for start_char, end_char in [("{", "}"), ("[", "]")]:
-        start_idx = raw.find(start_char)
-        if start_idx == -1:
-            continue
-
-        # Walk forward counting brackets to find the matching close
-        depth = 0
-        in_string = False
-        escape_next = False
-        for i in range(start_idx, len(raw)):
-            ch = raw[i]
-            if escape_next:
-                escape_next = False
-                continue
-            if ch == "\\":
-                escape_next = True
-                continue
-            if ch == '"':
-                in_string = not in_string
-                continue
-            if in_string:
-                continue
-            if ch == start_char:
-                depth += 1
-            elif ch == end_char:
-                depth -= 1
-                if depth == 0:
-                    candidate = raw[start_idx : i + 1]
-                    try:
-                        json.loads(candidate)
-                        return candidate
-                    except json.JSONDecodeError:
-                        repaired = _repair_json_syntax(candidate)
-                        if repaired:
-                            return repaired
-                    break
+        result = _extract_bracket_block(raw, start_char, end_char)
+        if result is not None:
+            return result
 
     return None
 
