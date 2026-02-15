@@ -126,7 +126,7 @@ def _save_quality_history(spec_dir: Path, scores: list[dict[str, Any]]) -> None:
         try:
             tmp_file.unlink(missing_ok=True)
         except OSError:
-            pass
+            pass  # Best-effort cleanup of temp file
 
 
 # =============================================================================

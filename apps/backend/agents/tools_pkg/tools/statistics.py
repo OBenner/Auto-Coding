@@ -421,7 +421,11 @@ def create_statistics_tools(spec_dir: Path, project_dir: Path) -> list:
 
             # QA iterations
             qa_signoff = plan.get("qa_signoff", {})
-            qa_iterations = qa_signoff.get("qa_session", 0)
+            raw_iter = qa_signoff.get("qa_iterations", qa_signoff.get("qa_session", 0))
+            try:
+                qa_iterations = int(raw_iter)
+            except (TypeError, ValueError):
+                qa_iterations = 0
             qa_status = qa_signoff.get("status", "pending")
 
             # Completion rate
