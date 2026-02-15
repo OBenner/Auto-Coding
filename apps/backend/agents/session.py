@@ -68,7 +68,6 @@ from .utils import (
 logger = logging.getLogger(__name__)
 
 # Module-level resilience singletons (shared across sessions)
-_error_classifier = ErrorClassifier()
 _memory_monitor = MemoryMonitor()
 _GC_MESSAGE_INTERVAL = 50  # Run GC check every N messages
 _api_circuit_breaker = CircuitBreaker(
@@ -919,8 +918,8 @@ async def run_agent_session(
         "session", "Created conversation round", round_number=current_round.round_number
     )
 
-    # Reset error classifier for new session and check preconditions
-    _error_classifier.reset()
+    # Session-scoped error classifier (avoids cross-session state leaking)
+    error_classifier = ErrorClassifier()
 
     # Check memory pressure before starting
     pressure = _memory_monitor.check_pressure()
@@ -1134,7 +1133,7 @@ async def run_agent_session(
         _api_circuit_breaker.record_success()
 
         # Check response for error signals (auth failures, stuck loops, etc.)
-        classified = _error_classifier.classify_response(response_text)
+        classified = error_classifier.classify_response(response_text)
         if classified and classified.is_fatal:
             error_msg = classified.message
             debug_error(
@@ -1249,7 +1248,7 @@ async def run_agent_session(
 
     except Exception as e:
         # Classify the exception for structured error reporting
-        classified = _error_classifier.classify_exception(e)
+        classified = error_classifier.classify_exception(e)
         _api_circuit_breaker.record_failure(e)
 
         debug_error(

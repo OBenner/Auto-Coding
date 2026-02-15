@@ -79,9 +79,11 @@ class MemoryMonitor:
     def maybe_gc(self) -> bool:
         """Run gc.collect() if memory pressure warrants it. Returns True if GC ran."""
         if self.should_gc():
+            pre_gc = self.get_usage_mb()
             gc.collect()
             logger.debug(
-                "GC triggered at %.1f MB (limit %.1f MB)",
+                "GC triggered: %.1f MB -> %.1f MB (limit %.1f MB)",
+                pre_gc,
                 self.get_usage_mb(),
                 self._max_memory_mb,
             )

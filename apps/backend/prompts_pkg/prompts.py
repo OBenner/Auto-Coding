@@ -198,7 +198,7 @@ The project root is the parent of auto-claude/. Implement code in the project ro
     return spec_context + prompt
 
 
-def _get_worktree_isolation_warning(spec_dir: Path) -> str:
+def _get_worktree_isolation_info(spec_dir: Path) -> tuple[str | None, str]:
     """
     Generate a worktree isolation warning if the spec is running inside a worktree.
 
@@ -209,7 +209,8 @@ def _get_worktree_isolation_warning(spec_dir: Path) -> str:
         spec_dir: The spec directory path
 
     Returns:
-        Isolation warning string, or empty string if not in a worktree
+        Tuple of (worktree_root, isolation_warning). Both are None/"" if not
+        in a worktree.
     """
     spec_dir_str = str(spec_dir).replace("\\", "/")
 
@@ -232,9 +233,9 @@ def _get_worktree_isolation_warning(spec_dir: Path) -> str:
             break
 
     if not worktree_root or not parent_project:
-        return ""
+        return None, ""
 
-    return f"""## 🔒 WORKTREE ISOLATION — READ THIS CAREFULLY
+    warning = f"""## 🔒 WORKTREE ISOLATION — READ THIS CAREFULLY
 
 You are working inside an **isolated git worktree**, NOT the main project.
 
@@ -251,6 +252,7 @@ imports, resolve them relative to your worktree — do NOT follow them outside.
 ---
 
 """
+    return worktree_root, warning
 
 
 def get_coding_prompt(spec_dir: Path) -> str:
@@ -275,14 +277,9 @@ def get_coding_prompt(spec_dir: Path) -> str:
 
     # Detect worktree isolation — if inside a worktree the "project root"
     # becomes the worktree root, NOT the parent of auto-claude/.
-    isolation_warning = _get_worktree_isolation_warning(spec_dir)
+    worktree_root, isolation_warning = _get_worktree_isolation_info(spec_dir)
 
     if isolation_warning:
-        # Extract worktree root from the warning text for use in spec_context
-        import re as _re
-
-        _wt_match = _re.search(r"Worktree root:\*\* `([^`]+)`", isolation_warning)
-        worktree_root = _wt_match.group(1) if _wt_match else str(spec_dir)
         project_root_note = (
             f"The project root (your worktree) is `{worktree_root}`. "
             "All code goes in the worktree root, not in the spec directory."

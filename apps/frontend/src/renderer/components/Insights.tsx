@@ -107,6 +107,8 @@ export function Insights({ projectId }: InsightsProps) {
   const [showSidebar, setShowSidebar] = useState(true);
 
   const [isUserScrolledUp, setIsUserScrolledUp] = useState(false);
+  const isUserScrolledUpRef = useRef(isUserScrolledUp);
+  isUserScrolledUpRef.current = isUserScrolledUp;
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -119,10 +121,10 @@ export function Insights({ projectId }: InsightsProps) {
 
   // Smart auto-scroll: only scroll to bottom if user is near bottom
   useEffect(() => {
-    if (!isUserScrolledUp && messagesEndRef.current) {
+    if (!isUserScrolledUpRef.current && messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [session?.messages?.length, streamingContent, isUserScrolledUp]);
+  }, [session?.messages?.length, streamingContent]);
 
   // Track scroll position on messages viewport via callback ref
   const messagesViewportRef = useRef<HTMLDivElement | null>(null);

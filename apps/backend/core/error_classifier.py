@@ -71,8 +71,9 @@ _AUTH_EXPIRED_PATTERNS: list[re.Pattern[str]] = [
 _BILLING_PATTERNS: list[re.Pattern[str]] = [
     re.compile(r"\b402\b"),
     re.compile(r"payment\s+required", re.IGNORECASE),
-    re.compile(r"billing", re.IGNORECASE),
-    re.compile(r"credit", re.IGNORECASE),
+    re.compile(r"billing\s+(issue|error|required|problem)", re.IGNORECASE),
+    re.compile(r"credit\s+card\s+(declined|expired|invalid|limit)", re.IGNORECASE),
+    re.compile(r"card\s+(declined|expired)", re.IGNORECASE),
     re.compile(r"insufficient\s+funds", re.IGNORECASE),
     re.compile(r"quota\s+exceeded", re.IGNORECASE),
 ]

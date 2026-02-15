@@ -106,7 +106,7 @@ def _extract_json_block(raw: str) -> str | None:
             if ch == "\\":
                 escape_next = True
                 continue
-            if ch == '"' and not escape_next:
+            if ch == '"':
                 in_string = not in_string
                 continue
             if in_string:
@@ -163,20 +163,14 @@ def parse_json_with_recovery(
     # --- Tier 2: syntax repair -------------------------------------------------
     repaired = _repair_json_syntax(raw_text)
     if repaired is not None:
-        try:
-            logger.info("JSON tier-2 (repair) succeeded%s", ctx)
-            return json.loads(repaired), "tier2_repair"
-        except json.JSONDecodeError:
-            pass  # fall through to tier 3
+        logger.info("JSON tier-2 (repair) succeeded%s", ctx)
+        return json.loads(repaired), "tier2_repair"
 
     # --- Tier 3: extract from surrounding text / fences ------------------------
     extracted = _extract_json_block(raw_text)
     if extracted is not None:
-        try:
-            logger.info("JSON tier-3 (extract) succeeded%s", ctx)
-            return json.loads(extracted), "tier3_extract"
-        except json.JSONDecodeError:
-            pass
+        logger.info("JSON tier-3 (extract) succeeded%s", ctx)
+        return json.loads(extracted), "tier3_extract"
 
     # All tiers failed
     raise json.JSONDecodeError(
