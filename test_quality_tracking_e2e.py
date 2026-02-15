@@ -20,7 +20,7 @@ from pathlib import Path
 backend_path = Path(__file__).parent / "apps" / "backend"
 sys.path.insert(0, str(backend_path))
 
-from analysis.quality_models import QualityScore, QualityTrend
+from analysis.quality_models import QualityScore
 from analysis.quality_tracker import (
     analyze_quality_trend,
     calculate_quality_score,
