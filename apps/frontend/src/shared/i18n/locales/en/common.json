@@ -73,6 +73,8 @@
     "stop": "Stop",
     "refresh": "Refresh",
     "refreshing": "Refreshing...",
+    "showMore": "Show more",
+    "showLess": "Show less",
     "merge": "Merge",
     "discard": "Discard",
     "switch": "Switch",
@@ -615,7 +617,8 @@
       "description": "Please re-authenticate your Claude profile to continue using Auto-Coding.",
       "taskAffected": "Task affected",
       "technicalDetails": "Technical details",
-      "goToSettings": "Go to Settings"
+      "goToSettings": "Go to Settings",
+      "badgeTooltip": "Authentication issue — click to resolve"
     }
   },
   "roadmapProgress": {

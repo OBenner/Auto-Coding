@@ -14,6 +14,9 @@ from pathlib import Path
 from typing import Any
 
 from claude_agent_sdk import ClaudeSDKClient
+from core.circuit_breaker import CircuitBreaker
+from core.error_classifier import ErrorClassifier
+from core.memory_monitor import MemoryMonitor, MemoryPressure, SessionBounds
 from core.token_stats import PhaseTokenStats, PhaseType, TaskTokenStats
 from debug import (
     debug,
@@ -63,6 +66,13 @@ from .utils import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Module-level resilience singletons (shared across sessions)
+_memory_monitor = MemoryMonitor()
+_GC_MESSAGE_INTERVAL = 50  # Run GC check every N messages
+_api_circuit_breaker = CircuitBreaker(
+    name="sdk_api", failure_threshold=3, recovery_timeout=60.0
+)
 
 
 # ============================================================================
@@ -908,6 +918,29 @@ async def run_agent_session(
         "session", "Created conversation round", round_number=current_round.round_number
     )
 
+    # Session-scoped error classifier (avoids cross-session state leaking)
+    error_classifier = ErrorClassifier()
+
+    # Check memory pressure before starting
+    pressure = _memory_monitor.check_pressure()
+    if pressure == MemoryPressure.CRITICAL:
+        msg = "Cannot start session: memory pressure is CRITICAL"
+        debug_error("session", msg, usage_mb=_memory_monitor.get_usage_mb())
+        if task_logger:
+            task_logger.log_error(msg, phase)
+        return "error", msg, None, decision_tracker
+
+    # Check circuit breaker
+    if not _api_circuit_breaker.can_execute():
+        msg = (
+            f"API circuit breaker is OPEN ({_api_circuit_breaker.name}). "
+            "Too many consecutive failures — waiting for recovery."
+        )
+        debug_error("session", msg)
+        if task_logger:
+            task_logger.log_error(msg, phase)
+        return "error", msg, None, decision_tracker
+
     try:
         # Send the query
         debug("session", "Sending query to Claude SDK...")
@@ -925,6 +958,19 @@ async def run_agent_session(
                 f"Received message #{message_count}",
                 msg_type=msg_type,
             )
+
+            # Session bounds safety check
+            if SessionBounds.check(current_round.round_number, message_count):
+                reason = SessionBounds.reason(current_round.round_number, message_count)
+                debug_error("session", reason)
+                if task_logger:
+                    task_logger.log_error(reason, phase)
+                _memory_monitor.maybe_gc()
+                return "error", reason, None, decision_tracker
+
+            # Periodic GC under memory pressure
+            if message_count % _GC_MESSAGE_INTERVAL == 0:
+                _memory_monitor.maybe_gc()
 
             # Handle AssistantMessage (text and tool use)
             if msg_type == "AssistantMessage" and hasattr(msg, "content"):
@@ -1083,6 +1129,26 @@ async def run_agent_session(
 
         print("\n" + "-" * 70 + "\n")
 
+        # Record successful API interaction
+        _api_circuit_breaker.record_success()
+
+        # Check response for error signals (auth failures, stuck loops, etc.)
+        classified = error_classifier.classify_response(response_text)
+        if classified and classified.is_fatal:
+            error_msg = classified.message
+            debug_error(
+                "session",
+                f"Fatal error detected in response: [{classified.category.value}] {error_msg}",
+            )
+            print(f"\n[{classified.category.value.upper()}] {error_msg}")
+            if classified.action_hint:
+                print(f"  Action: {classified.action_hint}")
+            if task_logger:
+                task_logger.log_error(
+                    f"[{classified.category.value.upper()}] {error_msg}", phase
+                )
+            return "error", error_msg, None, decision_tracker
+
         # Extract usage metadata from Claude SDK client
         usage_metadata = None
         try:
@@ -1181,22 +1247,37 @@ async def run_agent_session(
         return "continue", response_text, usage_metadata, decision_tracker
 
     except Exception as e:
+        # Classify the exception for structured error reporting
+        classified = error_classifier.classify_exception(e)
+        _api_circuit_breaker.record_failure(e)
+
         debug_error(
             "session",
-            f"Session error: {e}",
+            f"Session error [{classified.category.value}]: {e}",
             exception_type=type(e).__name__,
+            is_fatal=classified.is_fatal,
+            is_retryable=classified.is_retryable,
             message_count=message_count,
             tool_count=tool_count,
         )
-        print(f"Error during agent session: {e}")
+
+        # Print structured error message matching frontend AUTH_FAILURE_PATTERNS
+        error_msg = classified.message
+        print(f"\n[{classified.category.value.upper()}] {error_msg}")
+        if classified.action_hint:
+            print(f"  Action: {classified.action_hint}")
+
         if task_logger:
-            task_logger.log_error(f"Session error: {e}", phase)
+            task_logger.log_error(
+                f"[{classified.category.value.upper()}] {error_msg}", phase
+            )
+
         # Save conversation history even on error for debugging
         try:
             conversation_history.save()
         except Exception as save_err:
             logger.debug(f"Failed to save conversation history after error: {save_err}")
-        return "error", str(e), None, decision_tracker
+        return "error", error_msg, None, decision_tracker
 
 
 def _assess_and_record_failure(
@@ -1279,6 +1360,21 @@ async def run_agent_session_isolated(
         session_name=session_name,
         subtask_id=subtask_id,
     )
+
+    # Pre-checks: fail fast if system is unhealthy (matches run_agent_session)
+    pressure = _memory_monitor.check_pressure()
+    if pressure == MemoryPressure.CRITICAL:
+        msg = "Cannot start isolated session: memory pressure is CRITICAL"
+        debug_error("session", msg, usage_mb=_memory_monitor.get_usage_mb())
+        return "error", msg, None
+
+    if not _api_circuit_breaker.can_execute():
+        msg = (
+            f"API circuit breaker is OPEN ({_api_circuit_breaker.name}). "
+            "Too many consecutive failures — waiting for recovery."
+        )
+        debug_error("session", msg)
+        return "error", msg, None
 
     # Initialize recovery manager for automatic crash recovery
     recovery_manager = RecoveryManager(spec_dir=spec_dir, project_dir=project_dir)

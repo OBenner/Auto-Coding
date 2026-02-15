@@ -404,5 +404,17 @@
     "recurringIssues": "Problèmes récurrents",
     "commonIssues": "Problèmes courants",
     "noDataAvailable": "Aucune donnée de vue d'ensemble disponible"
+  },
+  "merge": {
+    "progress": "Fusion des fichiers...",
+    "analyzing": "Analyse des modifications...",
+    "fileProgress": "{{current}} / {{total}} fichiers",
+    "currentFile": "Traitement : {{file}}",
+    "conflicts": "{{count}} conflit(s) détecté(s)",
+    "complete": "Fusion terminée",
+    "autoResolved": "{{count}} fichier(s) résolu(s) automatiquement"
+  },
+  "prPolling": {
+    "autoRefreshing": "Actualisation automatique"
   }
 }
