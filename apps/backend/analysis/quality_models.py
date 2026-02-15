@@ -13,7 +13,7 @@ Provides models for:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 # =============================================================================
@@ -78,11 +78,17 @@ class QualityScore:
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> QualityScore:
         """Create from dictionary."""
+        raw_ts = data["timestamp"]
+        if isinstance(raw_ts, str) and raw_ts.endswith("Z"):
+            raw_ts = raw_ts[:-1] + "+00:00"
+        ts = datetime.fromisoformat(raw_ts)
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=timezone.utc)
         return cls(
             session_id=data["session_id"],
             spec_id=data["spec_id"],
             agent_type=data["agent_type"],
-            timestamp=datetime.fromisoformat(data["timestamp"]),
+            timestamp=ts,
             test_pass_rate=data.get("test_pass_rate", 0.0),
             acceptance_criteria_met=data.get("acceptance_criteria_met", 0.0),
             user_approval_rate=data.get("user_approval_rate", 0.0),

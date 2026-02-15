@@ -21,6 +21,12 @@
       "subtitle": "Complétez plus de sessions pour voir les tendances"
     },
     "lowQuality": "Qualité faible détectée",
-    "highQuality": "Haute qualité"
+    "highQuality": "Haute qualité",
+    "metrics": {
+      "compositeScore": "Qualité globale",
+      "testPassRate": "Taux de réussite des tests",
+      "acceptanceCriteria": "Critères d'acceptation",
+      "userApproval": "Approbation utilisateur"
+    }
   }
 }

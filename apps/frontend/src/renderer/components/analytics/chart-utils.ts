@@ -71,6 +71,17 @@ export function buildMetricPaths<K extends string>(
   dims: ChartDimensions,
   fixedRange?: [number, number],
 ): ProcessedMetric<K> {
+  if (values.length === 0) {
+    return {
+      ...metric,
+      points: [],
+      pathData: '',
+      areaPath: '',
+      maxValue: fixedRange ? fixedRange[1] : 0,
+      minValue: fixedRange ? fixedRange[0] : 0,
+    };
+  }
+
   const maxValue = fixedRange ? fixedRange[1] : Math.max(...values);
   const minValue = fixedRange ? fixedRange[0] : Math.min(...values);
   const range = maxValue - minValue || 1;
@@ -89,7 +100,8 @@ export function buildMetricPaths<K extends string>(
     .map((pt, i) => `${i === 0 ? 'M' : 'L'} ${pt.x} ${pt.y}`)
     .join(' ');
 
-  const areaPath = `${pathData} L ${points[points.length - 1].x} ${dims.height - dims.padding.bottom} L ${dims.padding.left} ${dims.height - dims.padding.bottom} Z`;
+  const lastPt = points[points.length - 1];
+  const areaPath = `${pathData} L ${lastPt.x} ${dims.height - dims.padding.bottom} L ${dims.padding.left} ${dims.height - dims.padding.bottom} Z`;
 
   return { ...metric, points, pathData, areaPath, maxValue, minValue };
 }

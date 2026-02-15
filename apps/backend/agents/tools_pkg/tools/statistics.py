@@ -253,7 +253,8 @@ def _calculate_quality_metrics(plan: dict[str, Any]) -> dict[str, Any]:
         qa_iterations = int(raw_iterations)
     except (TypeError, ValueError):
         qa_iterations = 0
-    qa_status = qa_signoff.get("status", "pending")
+    raw_status = qa_signoff.get("status", "pending")
+    qa_status = str(raw_status).strip().lower() if raw_status else "pending"
 
     # Determine if spec is completed (aligned with productivity_analytics.py)
     status = plan.get("status", "")
@@ -426,7 +427,8 @@ def create_statistics_tools(spec_dir: Path, project_dir: Path) -> list:
                 qa_iterations = int(raw_iter)
             except (TypeError, ValueError):
                 qa_iterations = 0
-            qa_status = qa_signoff.get("status", "pending")
+            raw_qs = qa_signoff.get("status", "pending")
+            qa_status = str(raw_qs).strip().lower() if raw_qs else "pending"
 
             # Completion rate
             completion_rate = (

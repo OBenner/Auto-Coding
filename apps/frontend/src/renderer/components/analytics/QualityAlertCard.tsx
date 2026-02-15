@@ -69,7 +69,7 @@ function AlertItem({ alert, onDismiss, locale = 'en-US' }: AlertItemProps) {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-2">
             <Badge variant="outline" className={styles.badge}>
-              {alert.severity.toUpperCase()}
+              {t(`alerts.${alert.severity.toLowerCase()}`)}
             </Badge>
             <div className="flex items-center gap-1 text-xs text-muted-foreground">
               <Clock className="h-3 w-3" />

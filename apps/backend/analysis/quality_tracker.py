@@ -167,6 +167,12 @@ def calculate_quality_score(
     if agent_type not in VALID_AGENT_TYPES:
         _logger.warning("Unknown agent_type %r, normalizing", agent_type)
         agent_type = agent_type.lower().strip()
+        if agent_type not in VALID_AGENT_TYPES:
+            _logger.warning(
+                "agent_type %r still invalid after normalization, using 'unknown'",
+                agent_type,
+            )
+            agent_type = "unknown"
 
     # Load plan once to avoid repeated IO
     plan = _load_implementation_plan(spec_dir)
@@ -187,7 +193,8 @@ def calculate_quality_score(
     user_approval_rate, user_approved = _calculate_user_approval(qa_history, iteration)
 
     # Skip persistence when no meaningful data is available
-    has_meaningful_data = total_tests > 0 or total_criteria > 0
+    has_qa_record = any(r.get("iteration") == iteration for r in qa_history)
+    has_meaningful_data = total_tests > 0 or total_criteria > 0 or has_qa_record
 
     # Create quality score
     score = QualityScore(

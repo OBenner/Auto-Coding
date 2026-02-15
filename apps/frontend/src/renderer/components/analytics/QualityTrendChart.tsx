@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { TrendingUp, AlertTriangle } from 'lucide-react';
 import type { QualityScore } from '../../stores/quality-store';
 import {
@@ -15,34 +16,33 @@ interface QualityTrendChartProps {
 
 type MetricType = 'composite_score' | 'test_pass_rate' | 'acceptance_criteria_met' | 'user_approval_rate';
 
-const QUALITY_METRICS: ChartMetricConfig<MetricType>[] = [
-  {
-    key: 'composite_score',
-    label: 'Overall Quality',
-    color: 'rgb(34, 197, 94)',
-    formatValue: (v) => (v * 100).toFixed(1) + '%',
-  },
-  {
-    key: 'test_pass_rate',
-    label: 'Test Pass Rate',
-    color: 'rgb(59, 130, 246)',
-    formatValue: (v) => (v * 100).toFixed(1) + '%',
-  },
-  {
-    key: 'acceptance_criteria_met',
-    label: 'Acceptance Criteria',
-    color: 'rgb(168, 85, 247)',
-    formatValue: (v) => (v * 100).toFixed(1) + '%',
-  },
-  {
-    key: 'user_approval_rate',
-    label: 'User Approval',
-    color: 'rgb(245, 158, 11)',
-    formatValue: (v) => (v * 100).toFixed(1) + '%',
-  },
+interface MetricDef {
+  key: MetricType;
+  labelKey: string;
+  color: string;
+}
+
+const METRIC_DEFS: MetricDef[] = [
+  { key: 'composite_score', labelKey: 'trends.metrics.compositeScore', color: 'rgb(34, 197, 94)' },
+  { key: 'test_pass_rate', labelKey: 'trends.metrics.testPassRate', color: 'rgb(59, 130, 246)' },
+  { key: 'acceptance_criteria_met', labelKey: 'trends.metrics.acceptanceCriteria', color: 'rgb(168, 85, 247)' },
+  { key: 'user_approval_rate', labelKey: 'trends.metrics.userApproval', color: 'rgb(245, 158, 11)' },
 ];
 
 export function QualityTrendChart({ scores, isLoading = false }: QualityTrendChartProps) {
+  const { t, i18n } = useTranslation('quality');
+
+  const qualityMetrics: ChartMetricConfig<MetricType>[] = useMemo(
+    () =>
+      METRIC_DEFS.map((def) => ({
+        key: def.key,
+        label: t(def.labelKey),
+        color: def.color,
+        formatValue: (v: number) => (v * 100).toFixed(1) + '%',
+      })),
+    [t],
+  );
+
   const chartData = useMemo(() => {
     if (!scores || scores.length === 0) return null;
 
@@ -54,7 +54,7 @@ export function QualityTrendChart({ scores, isLoading = false }: QualityTrendCha
     );
 
     // Build metric paths using shared utility
-    const metrics = QUALITY_METRICS.map((metric) => {
+    const metrics = qualityMetrics.map((metric) => {
       const values = sortedScores.map((score) => {
         const raw = score[metric.key];
         const v = Number(raw ?? 0);
@@ -63,10 +63,10 @@ export function QualityTrendChart({ scores, isLoading = false }: QualityTrendCha
       return buildMetricPaths(metric, values, dims, [0, 1]);
     });
 
-    // Format dates for x-axis
+    // Format dates for x-axis using i18n locale
     const dateLabels = sortedScores.map((score) => {
       const date = new Date(score.timestamp);
-      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      return date.toLocaleDateString(i18n.language, { month: 'short', day: 'numeric' });
     });
 
     const latestScore = sortedScores[sortedScores.length - 1];
@@ -78,19 +78,19 @@ export function QualityTrendChart({ scores, isLoading = false }: QualityTrendCha
       isHighQuality: latestScore.is_high_quality,
       isLowQuality: latestScore.is_low_quality,
     };
-  }, [scores]);
+  }, [scores, qualityMetrics, i18n.language]);
 
   if (isLoading) {
     return (
       <div className="rounded-lg border border-border bg-card p-6">
         <div className="flex items-center gap-2 mb-4">
           <TrendingUp className="h-5 w-5 text-accent" />
-          <h2 className="text-lg font-semibold text-foreground">Quality Trends Over Time</h2>
+          <h2 className="text-lg font-semibold text-foreground">{t('trends.title')}</h2>
         </div>
         <div className="h-80 flex items-center justify-center">
           <div className="flex flex-col items-center gap-2">
             <div className="h-8 w-8 animate-spin rounded-full border-4 border-border border-t-accent" />
-            <p className="text-sm text-muted-foreground">Loading quality trends...</p>
+            <p className="text-sm text-muted-foreground">{t('trends.loading')}</p>
           </div>
         </div>
       </div>
@@ -102,13 +102,13 @@ export function QualityTrendChart({ scores, isLoading = false }: QualityTrendCha
       <div className="rounded-lg border border-border bg-card p-6">
         <div className="flex items-center gap-2 mb-4">
           <TrendingUp className="h-5 w-5 text-accent" />
-          <h2 className="text-lg font-semibold text-foreground">Quality Trends Over Time</h2>
+          <h2 className="text-lg font-semibold text-foreground">{t('trends.title')}</h2>
         </div>
         <div className="h-80 flex items-center justify-center">
           <div className="flex flex-col items-center gap-2 text-muted-foreground">
             <AlertTriangle className="h-12 w-12 opacity-50" />
-            <p className="text-sm">No quality data available</p>
-            <p className="text-xs">Complete more sessions to see quality trends</p>
+            <p className="text-sm">{t('trends.empty.title')}</p>
+            <p className="text-xs">{t('trends.empty.subtitle')}</p>
           </div>
         </div>
       </div>
@@ -123,22 +123,22 @@ export function QualityTrendChart({ scores, isLoading = false }: QualityTrendCha
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-2">
           <TrendingUp className="h-5 w-5 text-accent" />
-          <h2 className="text-lg font-semibold text-foreground">Quality Trends Over Time</h2>
+          <h2 className="text-lg font-semibold text-foreground">{t('trends.title')}</h2>
           {chartData.isLowQuality && (
             <span className="ml-2 px-2 py-1 text-xs font-medium rounded-full bg-destructive/10 text-destructive">
-              Low Quality Detected
+              {t('trends.lowQuality')}
             </span>
           )}
           {chartData.isHighQuality && (
             <span className="ml-2 px-2 py-1 text-xs font-medium rounded-full bg-green-500/10 text-green-500">
-              High Quality
+              {t('trends.highQuality')}
             </span>
           )}
         </div>
 
         {/* Legend */}
         <div className="flex items-center gap-4">
-          {QUALITY_METRICS.map((metric) => (
+          {qualityMetrics.map((metric) => (
             <div key={metric.key} className="flex items-center gap-2">
               <div
                 className="h-3 w-3 rounded-full"
@@ -188,7 +188,7 @@ export function QualityTrendChart({ scores, isLoading = false }: QualityTrendCha
 
       {/* Summary Stats */}
       <div className="mt-6 grid grid-cols-4 gap-4">
-        {QUALITY_METRICS.map((metric) => {
+        {qualityMetrics.map((metric) => {
           const metricData = chartData.metrics.find((m) => m.key === metric.key);
           if (!metricData) return null;
 

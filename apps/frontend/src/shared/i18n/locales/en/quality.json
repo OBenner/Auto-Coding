@@ -21,6 +21,12 @@
       "subtitle": "Complete more sessions to see quality trends"
     },
     "lowQuality": "Low Quality Detected",
-    "highQuality": "High Quality"
+    "highQuality": "High Quality",
+    "metrics": {
+      "compositeScore": "Overall Quality",
+      "testPassRate": "Test Pass Rate",
+      "acceptanceCriteria": "Acceptance Criteria",
+      "userApproval": "User Approval"
+    }
   }
 }
