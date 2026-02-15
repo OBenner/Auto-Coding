@@ -29,6 +29,11 @@ export const IPC_CHANNELS = {
   TASK_RECOVER_STUCK: 'task:recoverStuck',
   TASK_CHECK_RUNNING: 'task:checkRunning',
 
+  // Task spec file reading (for task overview display)
+  TASK_SPEC_IMPLEMENTATION_PLAN_GET: 'task:spec:implementationPlanGet',
+  TASK_SPEC_QA_REPORT_GET: 'task:spec:qaReportGet',
+  TASK_SPEC_QA_ESCALATION_GET: 'task:spec:qaEscalationGet',
+
   // Workspace management (for human review)
   // Per-spec architecture: Each spec has its own worktree at .worktrees/{spec-name}/
   TASK_WORKTREE_STATUS: 'task:worktreeStatus',
@@ -43,10 +48,14 @@ export const IPC_CHANNELS = {
   TASK_LIST_WORKTREES: 'task:listWorktrees',
   TASK_ARCHIVE: 'task:archive',
   TASK_UNARCHIVE: 'task:unarchive',
+  TASK_EXPORT: 'task:export',
   TASK_CLEAR_STAGED_STATE: 'task:clearStagedState',
 
   // Task token statistics
   TASK_TOKEN_STATS_GET: 'task:tokenStats:get',
+
+  // Batch operations
+  TASK_BATCH_RUN_QA: 'task:batchRunQA',
 
   // Task events (main -> renderer)
   TASK_PROGRESS: 'task:progress',
@@ -199,6 +208,19 @@ export const IPC_CHANNELS = {
   CONTEXT_GET_MEMORIES: 'context:getMemories',
   CONTEXT_GET_PATTERN_SUGGESTIONS: 'context:getPatternSuggestions',
   CONTEXT_CONFIRM_PATTERN: 'context:confirmPattern',
+
+  // Context viewer operations
+  CONTEXT_GET_STATS: 'context:getStats',
+  CONTEXT_GET_TOKEN_BREAKDOWN: 'context:getTokenBreakdown',
+  CONTEXT_GET_PRIORITIZATION_SCORES: 'context:getPrioritizationScores',
+  CONTEXT_GET_OPTIMIZATION_REPORT: 'context:getOptimizationReport',
+  CONTEXT_EXPORT_SNAPSHOT: 'context:exportSnapshot',
+
+  // Session context operations (conversation history tracking)
+  SESSION_CONTEXT_GET_HISTORY: 'sessionContext:getHistory',
+  SESSION_CONTEXT_GET_SUMMARIES: 'sessionContext:getSummaries',
+  SESSION_CONTEXT_GET_CODE_REFS: 'sessionContext:getCodeRefs',
+  SESSION_CONTEXT_GET_ALL_SESSIONS: 'sessionContext:getAllSessions',
 
   // Environment configuration
   ENV_GET: 'env:get',
@@ -444,6 +466,11 @@ export const IPC_CHANNELS = {
   MERGE_ANALYTICS_GET_PATTERNS: 'mergeAnalytics:getPatterns',
   MERGE_ANALYTICS_EXPORT: 'mergeAnalytics:export',
 
+  // Productivity Analytics operations
+  PRODUCTIVITY_ANALYTICS_GET_SUMMARY: 'productivityAnalytics:getSummary',
+  PRODUCTIVITY_ANALYTICS_GET_TRENDS: 'productivityAnalytics:getTrends',
+  PRODUCTIVITY_ANALYTICS_EXPORT: 'productivityAnalytics:export',
+
   // Memory Infrastructure status (LadybugDB - no Docker required)
   MEMORY_STATUS: 'memory:status',
   MEMORY_LIST_DATABASES: 'memory:listDatabases',
@@ -608,5 +635,24 @@ export const IPC_CHANNELS = {
   SESSION_REPLAY_GET_ENTRIES: 'sessionReplay:getEntries',
   SESSION_REPLAY_SEARCH: 'sessionReplay:search',
   SESSION_REPLAY_EXPORT_SESSION: 'sessionReplay:exportSession',
-  SESSION_REPLAY_EXPORT_ALL: 'sessionReplay:exportAll'
+  SESSION_REPLAY_EXPORT_ALL: 'sessionReplay:exportAll',
+
+  // Feedback submission (adaptive agent learning)
+  FEEDBACK_SUBMIT: 'feedback:submit',
+
+  // Scheduler operations
+  SCHEDULER_SCHEDULE_BUILD: 'scheduler:scheduleBuild',
+  SCHEDULER_GET_STATUS: 'scheduler:getStatus',
+  SCHEDULER_CANCEL_BUILD: 'scheduler:cancelBuild',
+  SCHEDULER_START: 'scheduler:start',
+  SCHEDULER_STOP: 'scheduler:stop',
+  SCHEDULER_GET_BUILDS: 'scheduler:getBuilds',
+
+  // Scheduler events (main -> renderer)
+  SCHEDULER_BUILD_SCHEDULED: 'scheduler:buildScheduled',
+  SCHEDULER_BUILD_CANCELLED: 'scheduler:buildCancelled',
+  SCHEDULER_STATUS_CHANGED: 'scheduler:statusChanged',
+  SCHEDULER_BUILD_PROGRESS: 'scheduler:buildProgress',
+  SCHEDULER_BUILD_COMPLETE: 'scheduler:buildComplete',
+  SCHEDULER_BUILD_FAILED: 'scheduler:buildFailed'
 } as const;

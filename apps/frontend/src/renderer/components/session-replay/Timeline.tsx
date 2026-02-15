@@ -5,7 +5,7 @@
  * Provides visual navigation through recorded session events.
  */
 
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
 import { memo, useRef, useState, useEffect, useCallback } from 'react';
 import { Star, Circle } from 'lucide-react';

@@ -162,6 +162,12 @@ export function SessionPlayer({
   const startPlayback = useCallback(() => {
     if (!canPlay) return;
 
+    // Clear any existing interval before creating a new one
+    if (playbackIntervalRef.current) {
+      clearInterval(playbackIntervalRef.current);
+      playbackIntervalRef.current = null;
+    }
+
     // Start at beginning if not at end
     if (isAtEnd) {
       setCurrentEntryIndex(0);
@@ -184,6 +190,7 @@ export function SessionPlayer({
           setIsPlaying(false);
           if (playbackIntervalRef.current) {
             clearInterval(playbackIntervalRef.current);
+            playbackIntervalRef.current = null;
           }
           return prevIndex;
         }
@@ -244,8 +251,9 @@ export function SessionPlayer({
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Ignore if typing in input
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+      // Ignore if typing in input, textarea, select, or contentEditable elements
+      const target = e.target as HTMLElement;
+      if (target.closest('input, textarea, select, [contenteditable="true"]')) {
         return;
       }
 

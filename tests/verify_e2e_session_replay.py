@@ -16,42 +16,36 @@ from pathlib import Path
 # Add apps/backend to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "apps" / "backend"))
 
+from task_logger.comparison import (
+    compare_session_metrics,
+    compare_sessions,
+    find_similar_sessions,
+    get_session_summary,
+)
+from task_logger.export import (
+    export_all_sessions,
+    export_decision_points,
+    export_session,
+)
 from task_logger.models import (
-    Bookmark,
     LogEntry,
     LogEntryType,
     LogPhase,
-    SessionMetadata,
-    SubtaskTransition,
 )
-from task_logger.storage import load_task_logs
 from task_logger.query import (
-    query_sessions,
-    query_entries,
+    get_phase_summary,
+    get_session_timeline,
     query_decision_points,
+    query_entries,
+    query_sessions,
     query_subtask_transitions,
     search_all,
-    get_session_timeline,
-    get_subtask_timeline,
-    get_phase_summary,
-)
-from task_logger.comparison import (
-    compare_sessions,
-    compare_session_approaches,
-    get_session_summary,
-    compare_session_metrics,
-    find_similar_sessions,
-)
-from task_logger.export import (
-    export_session,
-    export_all_sessions,
-    export_phase,
-    export_decision_points,
 )
 
 
 def create_test_data(spec_dir: Path) -> None:
     """Create comprehensive test session data with decision points and bookmarks."""
+    spec_dir.mkdir(parents=True, exist_ok=True)
     print("📝 Creating test session data...")
 
     # Base timestamp
@@ -103,6 +97,7 @@ def create_test_data(spec_dir: Path) -> None:
             "subtasks": [
                 "subtask-1-1",
                 "subtask-1-2",
+                "subtask-1-3",
                 "subtask-2-1",
                 "subtask-2-2",
             ],
@@ -347,13 +342,15 @@ def create_test_data(spec_dir: Path) -> None:
         json.dump(test_data, f, indent=2)
 
     print(f"✅ Created test data in {log_file}")
-    print(f"   - 2 sessions with {len(entries_session1) + len(entries_session2)} entries")
-    print(f"   - 3 decision points")
-    print(f"   - 3 bookmarks")
-    print(f"   - 4 subtask transitions")
+    print(
+        f"   - 2 sessions with {len(entries_session1) + len(entries_session2)} entries"
+    )
+    print("   - 3 decision points")
+    print("   - 3 bookmarks")
+    print("   - 4 subtask transitions")
 
 
-def test_query_apis(spec_dir: Path) -> bool:
+def _verify_query_apis(spec_dir: Path) -> bool:
     """Test all query API functions."""
     print("\n🔍 Testing Query APIs...")
 
@@ -375,7 +372,9 @@ def test_query_apis(spec_dir: Path) -> bool:
     tests_total += 1
     try:
         completed = query_sessions(spec_dir, completed=True)
-        assert len(completed) == 2, f"Expected 2 completed sessions, got {len(completed)}"
+        assert len(completed) == 2, (
+            f"Expected 2 completed sessions, got {len(completed)}"
+        )
         session1 = query_sessions(spec_dir, session_id=1)
         assert len(session1) == 1
         assert session1[0]["session_id"] == 1
@@ -399,7 +398,9 @@ def test_query_apis(spec_dir: Path) -> bool:
     try:
         coding_entries = query_entries(spec_dir, phase="coding")
         assert len(coding_entries) > 0, "Expected some coding entries"
-        print(f"  ✅ query_entries: Phase filter works ({len(coding_entries)} coding entries)")
+        print(
+            f"  ✅ query_entries: Phase filter works ({len(coding_entries)} coding entries)"
+        )
         tests_passed += 1
     except Exception as e:
         print(f"  ❌ query_entries phase filter failed: {e}")
@@ -409,7 +410,9 @@ def test_query_apis(spec_dir: Path) -> bool:
     try:
         decisions = query_decision_points(spec_dir)
         assert len(decisions) == 3, f"Expected 3 decision points, got {len(decisions)}"
-        assert decisions[0].get("reasoning") is not None, "Decision point missing reasoning"
+        assert decisions[0].get("reasoning") is not None, (
+            "Decision point missing reasoning"
+        )
         print(f"  ✅ query_decision_points: Found {len(decisions)} decision points")
         tests_passed += 1
     except Exception as e:
@@ -440,7 +443,9 @@ def test_query_apis(spec_dir: Path) -> bool:
     try:
         timeline = get_session_timeline(spec_dir, session_id=1)
         assert len(timeline) > 0, "Expected session 1 timeline"
-        print(f"  ✅ get_session_timeline: Session 1 has {len(timeline)} timeline entries")
+        print(
+            f"  ✅ get_session_timeline: Session 1 has {len(timeline)} timeline entries"
+        )
         tests_passed += 1
     except Exception as e:
         print(f"  ❌ get_session_timeline failed: {e}")
@@ -451,7 +456,9 @@ def test_query_apis(spec_dir: Path) -> bool:
         summary = get_phase_summary(spec_dir, "coding")
         assert summary["phase"] == "coding"
         assert summary["entry_count"] > 0
-        print(f"  ✅ get_phase_summary: Coding phase has {summary['entry_count']} entries")
+        print(
+            f"  ✅ get_phase_summary: Coding phase has {summary['entry_count']} entries"
+        )
         tests_passed += 1
     except Exception as e:
         print(f"  ❌ get_phase_summary failed: {e}")
@@ -464,7 +471,7 @@ def test_query_apis(spec_dir: Path) -> bool:
     return success
 
 
-def test_comparison_apis(spec_dir: Path) -> bool:
+def _verify_comparison_apis(spec_dir: Path) -> bool:
     """Test all comparison API functions."""
     print("\n🔄 Testing Comparison APIs...")
 
@@ -529,7 +536,7 @@ def test_comparison_apis(spec_dir: Path) -> bool:
     return success
 
 
-def test_export_apis(spec_dir: Path) -> bool:
+def _verify_export_apis(spec_dir: Path) -> bool:
     """Test all export API functions."""
     print("\n💾 Testing Export APIs...")
 
@@ -719,7 +726,12 @@ def main():
     print("=" * 70)
 
     # Get spec directory
-    spec_dir = Path(__file__).parent.parent / ".auto-claude" / "specs" / "083-session-replay-learning"
+    spec_dir = (
+        Path(__file__).parent.parent
+        / ".auto-claude"
+        / "specs"
+        / "083-session-replay-learning"
+    )
     if not spec_dir.exists():
         print(f"❌ Spec directory not found: {spec_dir}")
         return False
@@ -732,13 +744,13 @@ def main():
     # Step 2: Test backend APIs
     all_passed = True
 
-    query_passed = test_query_apis(spec_dir)
+    query_passed = _verify_query_apis(spec_dir)
     all_passed = all_passed and query_passed
 
-    comparison_passed = test_comparison_apis(spec_dir)
+    comparison_passed = _verify_comparison_apis(spec_dir)
     all_passed = all_passed and comparison_passed
 
-    export_passed = test_export_apis(spec_dir)
+    export_passed = _verify_export_apis(spec_dir)
     all_passed = all_passed and export_passed
 
     # Step 3: Print frontend checklist
@@ -748,10 +760,14 @@ def main():
     print("\n" + "=" * 70)
     if all_passed:
         print("✅ ALL BACKEND TESTS PASSED")
-        print("\n🎉 Backend verification complete! Follow the manual checklist above to verify the frontend.")
+        print(
+            "\n🎉 Backend verification complete! Follow the manual checklist above to verify the frontend."
+        )
     else:
         print("❌ SOME TESTS FAILED")
-        print("\n⚠️  Please review the failed tests above and fix issues before proceeding.")
+        print(
+            "\n⚠️  Please review the failed tests above and fix issues before proceeding."
+        )
 
     print("=" * 70)
     return all_passed

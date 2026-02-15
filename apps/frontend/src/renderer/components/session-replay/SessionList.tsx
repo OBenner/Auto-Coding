@@ -165,12 +165,16 @@ export function SessionList({
     status: [],
   });
 
-  // Load sessions when project or specId changes
+  // Load sessions when project, specId, or filters change
   useEffect(() => {
+    let cancelled = false;
+
     const loadSessions = async () => {
       if (!project) {
-        setSessions([]);
-        setIsLoading(false);
+        if (!cancelled) {
+          setSessions([]);
+          setIsLoading(false);
+        }
         return;
       }
 
@@ -181,6 +185,7 @@ export function SessionList({
           specId || '',
           filters
         );
+        if (cancelled) return;
         if (result.success && result.data) {
           setSessions(result.data);
         } else {
@@ -188,35 +193,37 @@ export function SessionList({
           setSessions([]);
         }
       } catch (error) {
+        if (cancelled) return;
         console.error('Error loading sessions:', error);
         setSessions([]);
       } finally {
-        setIsLoading(false);
+        if (!cancelled) {
+          setIsLoading(false);
+        }
       }
     };
 
     loadSessions();
-  }, [project, specId]);
 
-  // Update filters
-  const updateFilters = useCallback((newFilters: SessionFilterState) => {
-    setFilters(newFilters);
-  }, []);
+    return () => {
+      cancelled = true;
+    };
+  }, [project, specId, filters]);
 
   // Handle search query change
   const handleSearchChange = useCallback((query: string) => {
-    updateFilters({ ...filters, searchQuery: query });
-  }, [filters, updateFilters]);
+    setFilters(prev => ({ ...prev, searchQuery: query }));
+  }, []);
 
   // Handle status filter change
   const handleStatusChange = useCallback((statuses: SessionStatusFilter[]) => {
-    updateFilters({ ...filters, status: statuses });
-  }, [filters, updateFilters]);
+    setFilters(prev => ({ ...prev, status: statuses }));
+  }, []);
 
   // Clear all filters
   const handleClearFilters = useCallback(() => {
-    updateFilters({ searchQuery: '', status: [] });
-  }, [updateFilters]);
+    setFilters({ searchQuery: '', status: [] });
+  }, []);
 
   // Filter sessions based on current filters
   const filteredSessions = useMemo(() => {

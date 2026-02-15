@@ -31,16 +31,16 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle
-} from './ui/dialog';
-import { Button } from './ui/button';
-import { Label } from './ui/label';
+} from '../ui/dialog';
+import { Button } from '../ui/button';
+import { Label } from '../ui/label';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue
-} from './ui/select';
+} from '../ui/select';
 
 /**
  * Export format options
@@ -100,7 +100,7 @@ export function ExportDialog({
       }
 
       // Create a blob and trigger download
-      const content = result.data;
+      const content = typeof result.data === 'string' ? result.data : JSON.stringify(result.data, null, 2);
       const blob = new Blob([content], {
         type: format === 'json' ? 'application/json' : 'text/markdown'
       });

@@ -3,7 +3,6 @@ Export functionality for task logs.
 """
 
 import json
-from datetime import datetime
 from pathlib import Path
 
 from .query import get_session_timeline
@@ -40,7 +39,7 @@ def export_session(
         raise ValueError(f"Unsupported format: {format}. Use 'json' or 'markdown'.")
 
     timeline = get_session_timeline(spec_dir, session_id)
-    if not timeline.get("session"):
+    if not timeline or not isinstance(timeline, dict) or not timeline.get("session"):
         raise FileNotFoundError(f"Session {session_id} not found")
 
     # Build export data
@@ -288,7 +287,9 @@ def _format_session_markdown(data: dict) -> str:
                     if entry.get("decision"):
                         lines.append(f"- **Decision:** {entry['decision']}")
                     if entry.get("alternatives"):
-                        lines.append(f"- **Alternatives:** {', '.join(entry['alternatives'])}")
+                        lines.append(
+                            f"- **Alternatives:** {', '.join(entry['alternatives'])}"
+                        )
 
                 # Add tool details if present
                 if entry.get("tool_name"):

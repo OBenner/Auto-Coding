@@ -25,6 +25,10 @@
     "decisionPoints": "Decision Points",
     "noDecisionPoints": "No decision points"
   },
+  "bookmarks": {
+    "moreBookmarks_one": "{{count}} more bookmark",
+    "moreBookmarks_other": "{{count}} more bookmarks"
+  },
   "sessionPlayer": {
     "title": "Session Replay",
     "play": "Play",

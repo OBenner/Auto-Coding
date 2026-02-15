@@ -16,6 +16,7 @@ export function IssueList({
   error,
   onSelectIssue,
   onInvestigate,
+  onQuickCreate,
   onLoadMore
 }: IssueListProps) {
   const { t } = useTranslation('common');
@@ -84,6 +85,7 @@ export function IssueList({
             isSelected={selectedIssueNumber === issue.number}
             onClick={() => onSelectIssue(issue.number)}
             onInvestigate={() => onInvestigate(issue)}
+            onQuickCreate={onQuickCreate ? () => onQuickCreate(issue) : undefined}
           />
         ))}
 

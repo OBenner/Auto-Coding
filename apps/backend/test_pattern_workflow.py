@@ -15,17 +15,14 @@ Usage:
 """
 
 import asyncio
-import hashlib
-import json
 import logging
 import sys
-from datetime import datetime, timezone
 from pathlib import Path
 
 # Add backend to path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from graphiti_config import is_graphiti_enabled
+from integrations.graphiti.config import is_graphiti_enabled
 from integrations.graphiti.pattern_categorizer import categorize_pattern
 from integrations.graphiti.pattern_suggester import suggest_patterns
 from memory.graphiti_helpers import get_graphiti_memory

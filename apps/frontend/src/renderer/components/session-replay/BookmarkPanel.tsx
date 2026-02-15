@@ -31,8 +31,10 @@ interface BookmarkPanelProps {
 /**
  * Format timestamp for display
  */
-function formatTimestamp(timestamp: string): string {
+function formatTimestamp(timestamp: string | undefined | null): string {
+  if (!timestamp) return '-';
   const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) return '-';
   return date.toLocaleTimeString('en-US', {
     hour: '2-digit',
     minute: '2-digit',
@@ -125,10 +127,11 @@ export function BookmarkPanel({
       {/* Bookmark list */}
       <div className="space-y-2">
         {displayBookmarks.map((bookmark) => (
-          <div
+          <button
+            type="button"
             key={bookmark.id}
             className={cn(
-              'group relative',
+              'group relative w-full text-left',
               onBookmarkClick && 'cursor-pointer hover:bg-muted/50 transition-colors'
             )}
             onClick={() => handleBookmarkClick(bookmark)}
@@ -151,10 +154,10 @@ export function BookmarkPanel({
                 {/* Label and phase badge */}
                 <div className="flex items-center gap-2 mb-1">
                   <span className="text-sm font-medium text-foreground truncate">
-                    {bookmark.label}
+                    {bookmark.label ?? ''}
                   </span>
-                  <Badge className={cn('gap-1 shrink-0', getPhaseBadgeColor(bookmark.phase))}>
-                    <span className="text-xs uppercase">{bookmark.phase}</span>
+                  <Badge className={cn('gap-1 shrink-0', getPhaseBadgeColor(bookmark.phase ?? ''))}>
+                    <span className="text-xs uppercase">{bookmark.phase ?? ''}</span>
                   </Badge>
                 </div>
 
@@ -224,19 +227,16 @@ export function BookmarkPanel({
                 </Button>
               )}
             </div>
-          </div>
+          </button>
         ))}
       </div>
 
       {/* More indicator */}
       {hasMoreBookmarks && (
         <div className="text-xs text-muted-foreground text-center pt-2">
-          {t('sessionList.selectedCount', {
+          {t('bookmarks.moreBookmarks', {
             count: bookmarks.length - maxBookmarks,
-          })}{' '}
-          {t('sessionList.noResultsFound', {
-            count: bookmarks.length - maxBookmarks,
-          }).toLowerCase()}
+          })}
         </div>
       )}
     </div>

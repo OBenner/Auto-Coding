@@ -25,6 +25,10 @@
     "decisionPoints": "Points de décision",
     "noDecisionPoints": "Aucun point de décision"
   },
+  "bookmarks": {
+    "moreBookmarks_one": "{{count}} signet de plus",
+    "moreBookmarks_other": "{{count}} signets de plus"
+  },
   "sessionPlayer": {
     "title": "Relecture de Session",
     "play": "Lecture",

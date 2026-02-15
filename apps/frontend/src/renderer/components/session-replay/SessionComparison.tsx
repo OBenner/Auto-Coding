@@ -34,7 +34,6 @@ import type {
   SessionComparisonData,
   SessionApproachComparison,
   SessionMetadata,
-  DecisionPoint,
 } from '../../../shared/types';
 
 interface SessionComparisonProps {
@@ -102,6 +101,16 @@ export function SessionComparison({
 
   // Computed values
   const sessions = useMemo(() => comparisonData.sessions, [comparisonData.sessions]);
+
+  // Early return if sessions array doesn't have at least 2 entries
+  if (!sessions || sessions.length < 2) {
+    return (
+      <div className="flex items-center justify-center h-full text-muted-foreground">
+        <span className="text-sm">{t('sessionComparison.selectSessions')}</span>
+      </div>
+    );
+  }
+
   const session1 = sessions[0];
   const session2 = sessions[1];
 
@@ -173,10 +182,10 @@ export function SessionComparison({
                   {t('sessionComparison.duration')}
                 </div>
                 <div className="text-sm font-medium text-center">
-                  {formatDuration(comparisonData.metrics.durations[session1.session_id])}
+                  {formatDuration(comparisonData.metrics?.durations?.[session1.session_id] ?? null)}
                 </div>
                 <div className="text-sm font-medium text-center">
-                  {formatDuration(comparisonData.metrics.durations[session2.session_id])}
+                  {formatDuration(comparisonData.metrics?.durations?.[session2.session_id] ?? null)}
                 </div>
               </div>
 
@@ -186,10 +195,10 @@ export function SessionComparison({
                   {t('sessionComparison.subtasks')}
                 </div>
                 <div className="text-sm font-medium text-center">
-                  {comparisonData.metrics.subtask_counts[session1.session_id]}
+                  {comparisonData.metrics?.subtask_counts?.[session1.session_id] ?? 0}
                 </div>
                 <div className="text-sm font-medium text-center">
-                  {comparisonData.metrics.subtask_counts[session2.session_id]}
+                  {comparisonData.metrics?.subtask_counts?.[session2.session_id] ?? 0}
                 </div>
               </div>
 
@@ -225,13 +234,13 @@ export function SessionComparison({
                 <div className="flex justify-center">
                   <Badge
                     variant={getStatusBadgeVariant(
-                      comparisonData.metrics.completion_status[session1.session_id]
+                      comparisonData.metrics?.completion_status?.[session1.session_id] ?? 'in-progress'
                     )}
                     className="gap-1"
                   >
                     <span className="text-xs">
                       {t(
-                        `sessionList.status${comparisonData.metrics.completion_status[session1.session_id] === 'completed' ? 'Completed' : 'InProgress'}`
+                        `sessionList.status${comparisonData.metrics?.completion_status?.[session1.session_id] === 'completed' ? 'Completed' : 'InProgress'}`
                       )}
                     </span>
                   </Badge>
@@ -239,13 +248,13 @@ export function SessionComparison({
                 <div className="flex justify-center">
                   <Badge
                     variant={getStatusBadgeVariant(
-                      comparisonData.metrics.completion_status[session2.session_id]
+                      comparisonData.metrics?.completion_status?.[session2.session_id] ?? 'in-progress'
                     )}
                     className="gap-1"
                   >
                     <span className="text-xs">
                       {t(
-                        `sessionList.status${comparisonData.metrics.completion_status[session2.session_id] === 'completed' ? 'Completed' : 'InProgress'}`
+                        `sessionList.status${comparisonData.metrics?.completion_status?.[session2.session_id] === 'completed' ? 'Completed' : 'InProgress'}`
                       )}
                     </span>
                   </Badge>

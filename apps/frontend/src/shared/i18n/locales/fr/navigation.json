@@ -10,7 +10,9 @@
     "roadmap": "Feuille de route",
     "ideation": "Idéation",
     "changelog": "Journal des modifications",
+    "scheduler": "Planificateur",
     "context": "Contexte",
+    "sessionContext": "Contexte de session",
     "githubIssues": "Issues GitHub",
     "githubPRs": "PRs GitHub",
     "gitlabIssues": "Issues GitLab",
@@ -18,6 +20,7 @@
     "plugins": "Plugins",
     "worktrees": "Worktrees",
     "agentTools": "Aperçu MCP",
+    "analytics": "Analytique",
     "mergeAnalytics": "Analyse des fusions",
     "sessions": "Relecture de session"
   },

@@ -73,11 +73,7 @@ def query_sessions(
             pass
 
     if has_subtask is not None:
-        sessions = [
-            s
-            for s in sessions
-            if has_subtask in s.get("subtasks", [])
-        ]
+        sessions = [s for s in sessions if has_subtask in s.get("subtasks", [])]
 
     return sessions
 
@@ -120,13 +116,14 @@ def query_entries(
 
     entries = []
 
-    # Collect all entries from all phases
+    # Collect all entries from all phases (shallow copy to avoid mutating stored data)
     for phase_name, phase_data in logs["phases"].items():
         for entry in phase_data.get("entries", []):
+            entry_copy = dict(entry)
             # Add phase to entry if not present
-            if "phase" not in entry:
-                entry["phase"] = phase_name
-            entries.append(entry)
+            if "phase" not in entry_copy:
+                entry_copy["phase"] = phase_name
+            entries.append(entry_copy)
 
     # Apply filters
     if phase is not None:
@@ -151,6 +148,9 @@ def query_entries(
             for e in entries
             if search_lower in e.get("content", "").lower()
             or search_lower in e.get("detail", "").lower()
+            or search_lower in e.get("reasoning", "").lower()
+            or search_lower in e.get("decision", "").lower()
+            or search_lower in " ".join(e.get("alternatives", [])).lower()
         ]
 
     if timestamp_after is not None:
@@ -178,7 +178,12 @@ def query_entries(
             pass
 
     if is_decision_point is not None:
-        entries = [e for e in entries if e.get("is_decision_point") == is_decision_point]
+        entries = [
+            e for e in entries if e.get("is_decision_point") == is_decision_point
+        ]
+
+    # Deterministic sort by timestamp before applying limit
+    entries.sort(key=lambda e: e.get("timestamp", ""))
 
     # Apply limit
     if limit is not None and limit > 0:

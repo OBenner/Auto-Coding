@@ -9,11 +9,12 @@ import { ipcMain } from 'electron';
 import path from 'path';
 import { promises as fsPromises } from 'fs';
 import { IPC_CHANNELS, AUTO_BUILD_PATHS } from '../../shared/constants';
+import { atomicWriteFile } from '../fs-utils';
 import type { IPCResult } from '../../shared/types';
 import type {
   SessionMetadata,
   Bookmark,
-  DecisionPoint,
+  ReplayDecisionPoint,
   SubtaskTransition,
   SessionFilterState,
 } from '../../shared/types/session-replay';
@@ -55,7 +56,7 @@ interface LogEntry {
   session?: number;
   tool_name?: string;
   is_decision_point?: boolean;
-  decision_point?: DecisionPoint;
+  decision_point?: ReplayDecisionPoint;
 }
 
 /**
@@ -125,7 +126,7 @@ function filterSessions(
 /**
  * Get decision points from log entries
  */
-function extractDecisionPoints(entries: LogEntry[]): DecisionPoint[] {
+function extractDecisionPoints(entries: LogEntry[]): ReplayDecisionPoint[] {
   return entries
     .filter((entry) => entry.is_decision_point && entry.decision_point)
     .map((entry) => entry.decision_point!)
@@ -134,10 +135,17 @@ function extractDecisionPoints(entries: LogEntry[]): DecisionPoint[] {
     );
 }
 
+/** Guard to prevent double-registration of IPC handlers */
+let sessionReplayHandlersRegistered = false;
+
 /**
  * Register all session replay IPC handlers
  */
 export function registerSessionReplayHandlers(): void {
+  if (sessionReplayHandlersRegistered) {
+    return;
+  }
+  sessionReplayHandlersRegistered = true;
   // ============================================
   // Session List Operations
   // ============================================
@@ -275,7 +283,7 @@ export function registerSessionReplayHandlers(): void {
       projectPath: string,
       specId: string,
       sessionId?: string
-    ): Promise<IPCResult<DecisionPoint[]>> => {
+    ): Promise<IPCResult<ReplayDecisionPoint[]>> => {
       try {
         const specDir = path.join(
           projectPath,
@@ -389,9 +397,9 @@ export function registerSessionReplayHandlers(): void {
         }
         logs.bookmarks.push(newBookmark);
 
-        // Save updated logs
+        // Save updated logs atomically to prevent corruption
         const logsPath = path.join(specDir, 'task_logs.json');
-        await fsPromises.writeFile(
+        await atomicWriteFile(
           logsPath,
           JSON.stringify(logs, null, 2),
           'utf-8'
@@ -437,9 +445,9 @@ export function registerSessionReplayHandlers(): void {
 
         logs.bookmarks.splice(index, 1);
 
-        // Save updated logs
+        // Save updated logs atomically to prevent corruption
         const logsPath = path.join(specDir, 'task_logs.json');
-        await fsPromises.writeFile(
+        await atomicWriteFile(
           logsPath,
           JSON.stringify(logs, null, 2),
           'utf-8'
@@ -640,7 +648,7 @@ export function registerSessionReplayHandlers(): void {
             transitions: logs.subtask_transitions.filter(
               (t) => t.session === parseInt(sessionId, 10)
             ),
-            bookmarks: logs.bookmarks.filter((b) => b.session === sessionId),
+            bookmarks: (logs.bookmarks ?? []).filter((b) => b.session === sessionId),
           };
 
           return {
@@ -730,9 +738,10 @@ export function registerSessionReplayHandlers(): void {
           }
 
           // Add bookmarks section
-          if (logs.bookmarks.length > 0) {
+          const bookmarks = logs.bookmarks ?? [];
+          if (bookmarks.length > 0) {
             markdown += `## Bookmarks\n\n`;
-            for (const bookmark of logs.bookmarks) {
+            for (const bookmark of bookmarks) {
               markdown += `### ${bookmark.label}\n`;
               markdown += `**Phase:** ${bookmark.phase}\n`;
               markdown += `**Timestamp:** ${bookmark.timestamp}\n`;

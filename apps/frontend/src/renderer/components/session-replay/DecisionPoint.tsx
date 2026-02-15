@@ -10,11 +10,11 @@ import { useTranslation } from 'react-i18next';
 import { ChevronDown, ChevronUp, Lightbulb, CheckCircle2 } from 'lucide-react';
 import { Badge } from '../ui/badge';
 import { cn } from '../../lib/utils';
-import type { DecisionPoint } from '../../../shared/types/session-replay';
+import type { ReplayDecisionPoint } from '../../../shared/types/session-replay';
 
 interface DecisionPointProps {
   /** Decision point data to display */
-  decision: DecisionPoint;
+  decision: ReplayDecisionPoint;
   /** Whether the details are expanded by default */
   defaultExpanded?: boolean;
   /** Optional CSS class name */
@@ -39,8 +39,7 @@ function decisionPointPropsAreEqual(prevProps: DecisionPointProps, nextProps: De
     prevDecision.reasoning === nextDecision.reasoning &&
     prevDecision.chosen_approach === nextDecision.chosen_approach &&
     prevDecision.expected_outcome === nextDecision.expected_outcome &&
-    prevDecision.options_considered.length === nextDecision.options_considered.length &&
-    prevDecision.options_considered.every((opt, i) => opt === nextDecision.options_considered[i]?.toString())
+    JSON.stringify(prevDecision.options_considered) === JSON.stringify(nextDecision.options_considered)
   );
 }
 
@@ -98,8 +97,8 @@ export const DecisionPoint = memo(function DecisionPoint({
             )}
           </div>
           <div className="text-sm font-medium line-clamp-1">
-            {decision.reasoning.slice(0, 100)}
-            {decision.reasoning.length > 100 && '...'}
+            {(decision.reasoning ?? '').slice(0, 100)}
+            {(decision.reasoning ?? '').length > 100 && '...'}
           </div>
         </div>
 
@@ -123,7 +122,7 @@ export const DecisionPoint = memo(function DecisionPoint({
               <h4 className="text-sm font-medium">{t('sessionPlayer.reasoning')}</h4>
             </div>
             <p className="text-sm text-muted-foreground pl-6">
-              {decision.reasoning}
+              {decision.reasoning ?? ''}
             </p>
           </div>
 

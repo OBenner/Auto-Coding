@@ -13,7 +13,7 @@ import type {
   SessionMetadata,
   SessionFilterState,
   LogEntry,
-  DecisionPoint,
+  ReplayDecisionPoint,
   Bookmark,
 } from '../../../shared/types';
 
@@ -44,7 +44,7 @@ export interface SessionReplayAPI {
     projectPath: string,
     specId: string,
     sessionId?: string
-  ) => Promise<IPCResult<DecisionPoint[]>>;
+  ) => Promise<IPCResult<ReplayDecisionPoint[]>>;
 
   /** Get bookmarks (optionally filtered by session) */
   getBookmarks: (

@@ -45,7 +45,9 @@ class TaskLogger:
         self.current_phase: LogPhase | None = None
         self.current_session: int | None = None
         self.current_subtask: str | None = None
-        self.last_subtask: str | None = None  # Track last subtask for transition detection
+        self.last_subtask: str | None = (
+            None  # Track last subtask for transition detection
+        )
         self.storage = LogStorage(spec_dir)
 
     @property
@@ -135,9 +137,7 @@ class TaskLogger:
             self.storage.end_session(self.current_session)
 
             # Debug log (when DEBUG=true)
-            self._debug_log(
-                f"Session {self.current_session} ended", LogEntryType.INFO
-            )
+            self._debug_log(f"Session {self.current_session} ended", LogEntryType.INFO)
 
     def set_subtask(self, subtask_id: str | None) -> None:
         """
@@ -339,6 +339,10 @@ class TaskLogger:
     def log_info(self, content: str, phase: LogPhase | None = None) -> None:
         """Log an info message."""
         self.log(content, LogEntryType.INFO, phase)
+
+    def log_decision(self, content: str, phase: LogPhase | None = None) -> None:
+        """Log a decision made by the AI agent."""
+        self.log(content, LogEntryType.DECISION, phase)
 
     def log_with_detail(
         self,

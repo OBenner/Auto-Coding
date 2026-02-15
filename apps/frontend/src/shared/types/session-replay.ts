@@ -74,9 +74,9 @@ export interface Bookmark {
 }
 
 /**
- * Decision point with agent reasoning
+ * Decision point with agent reasoning (session-replay specific)
  */
-export interface DecisionPoint {
+export interface ReplayDecisionPoint {
   /** Unique identifier */
   id: string;
   /** Timestamp of decision */
@@ -93,6 +93,30 @@ export interface DecisionPoint {
   chosen_approach: string;
   /** Expected outcome */
   expected_outcome: string;
+}
+
+/**
+ * Log entry from session recording
+ */
+export interface LogEntry {
+  /** Timestamp of the log entry */
+  timestamp: string;
+  /** Type of log entry */
+  type: string;
+  /** Log content */
+  content: string;
+  /** Phase where entry occurred */
+  phase: string;
+  /** Associated subtask ID */
+  subtask_id?: string;
+  /** Session number */
+  session?: number;
+  /** Tool name if tool-related */
+  tool_name?: string;
+  /** Whether this entry is a decision point */
+  is_decision_point?: boolean;
+  /** Decision point data if applicable */
+  decision_point?: ReplayDecisionPoint;
 }
 
 /**
@@ -138,7 +162,7 @@ export interface SessionApproachComparison {
   /** Tool usage comparison across sessions */
   tool_usage_comparison: Record<string, Record<string, number>>;
   /** Decision points by session */
-  decision_points: Record<string, DecisionPoint[]>;
+  decision_points: Record<string, ReplayDecisionPoint[]>;
 }
 
 /**
@@ -152,7 +176,7 @@ export interface SessionApproach {
   /** Tool usage counts */
   tool_usage: Record<string, number>;
   /** Decision points in this session */
-  decision_points: DecisionPoint[];
+  decision_points: ReplayDecisionPoint[];
   /** Start time */
   start_time: string | null;
   /** End time */

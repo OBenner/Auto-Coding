@@ -2,10 +2,33 @@
 Session comparison utilities for analyzing and learning from agent behavior.
 """
 
+import logging
 from datetime import datetime
 from pathlib import Path
 
 from .storage import load_task_logs
+
+logger = logging.getLogger(__name__)
+
+
+def _normalize_subtasks(subtasks: list) -> set[str]:
+    """Extract string IDs from a list of subtasks.
+
+    Handles both plain string IDs and dict objects with an "id" key.
+
+    Args:
+        subtasks: List of subtask identifiers (strings or dicts with "id").
+
+    Returns:
+        Set of string subtask IDs.
+    """
+    result: set[str] = set()
+    for item in subtasks:
+        if isinstance(item, str):
+            result.add(item)
+        elif isinstance(item, dict) and "id" in item:
+            result.add(str(item["id"]))
+    return result
 
 
 def compare_sessions(
@@ -70,7 +93,7 @@ def compare_sessions(
 
     # Find common and unique subtasks
     subtask_sets = {
-        s["session_id"]: set(s.get("subtasks", [])) for s in sessions
+        s["session_id"]: _normalize_subtasks(s.get("subtasks", [])) for s in sessions
     }
 
     common_subtasks = []
@@ -82,9 +105,7 @@ def compare_sessions(
     for session_id, subtasks in subtask_sets.items():
         other_sessions = [sid for sid in subtask_sets if sid != session_id]
         if other_sessions:
-            other_subtasks = set.union(
-                *[subtask_sets[sid] for sid in other_sessions]
-            )
+            other_subtasks = set.union(*[subtask_sets[sid] for sid in other_sessions])
             unique = subtasks - other_subtasks
             unique_subtasks[session_id] = list(unique)
         else:
@@ -153,22 +174,26 @@ def compare_session_approaches(
 
                 # Collect decision points
                 if entry.get("is_decision_point"):
-                    decision_points.append({
-                        "timestamp": entry.get("timestamp"),
-                        "content": entry.get("content"),
-                        "reasoning": entry.get("reasoning"),
-                        "decision": entry.get("decision"),
-                        "alternatives": entry.get("alternatives", []),
-                    })
+                    decision_points.append(
+                        {
+                            "timestamp": entry.get("timestamp"),
+                            "content": entry.get("content"),
+                            "reasoning": entry.get("reasoning"),
+                            "decision": entry.get("decision"),
+                            "alternatives": entry.get("alternatives", []),
+                        }
+                    )
 
-            session_approaches.append({
-                "session_id": session_id,
-                "entry_count": len(entries),
-                "tool_usage": tool_usage,
-                "decision_points": decision_points,
-                "start_time": entries[0].get("timestamp") if entries else None,
-                "end_time": entries[-1].get("timestamp") if entries else None,
-            })
+            session_approaches.append(
+                {
+                    "session_id": session_id,
+                    "entry_count": len(entries),
+                    "tool_usage": tool_usage,
+                    "decision_points": decision_points,
+                    "start_time": entries[0].get("timestamp") if entries else None,
+                    "end_time": entries[-1].get("timestamp") if entries else None,
+                }
+            )
 
     # Compare tool usage across sessions
     tool_usage_comparison = {}
@@ -241,11 +266,12 @@ def get_session_summary(
             error_count += 1
 
     # Calculate time spent per subtask
-    subtask_times = {}
+    subtask_times: dict[str, float] = {}
     transitions = logs.get("subtask_transitions", [])
-    session_transitions = [
-        t for t in transitions if t.get("session") == session_id
-    ]
+    session_transitions = [t for t in transitions if t.get("session") == session_id]
+
+    # Sort transitions by timestamp for correct duration calculation
+    session_transitions.sort(key=lambda t: t.get("timestamp", ""))
 
     for i, transition in enumerate(session_transitions):
         to_subtask = transition.get("to_subtask")
@@ -255,9 +281,16 @@ def get_session_summary(
                 start = datetime.fromisoformat(transition["timestamp"])
                 end = datetime.fromisoformat(session_transitions[i + 1]["timestamp"])
                 duration = (end - start).total_seconds()
-                subtask_times[to_subtask] = duration
-            except (ValueError, KeyError):
-                pass
+                # Accumulate durations for subtasks visited multiple times
+                subtask_times[to_subtask] = subtask_times.get(to_subtask, 0) + duration
+            except (ValueError, KeyError) as exc:
+                logger.warning(
+                    "Skipping transition with invalid timestamp "
+                    "(session=%s, to_subtask=%s): %s",
+                    session_id,
+                    to_subtask,
+                    exc,
+                )
 
     return {
         "session": session,
@@ -367,7 +400,7 @@ def find_similar_sessions(
     if not ref_session:
         return []
 
-    ref_subtasks = set(ref_session.get("subtasks", []))
+    ref_subtasks = _normalize_subtasks(ref_session.get("subtasks", []))
     if not ref_subtasks:
         return []
 
@@ -377,7 +410,7 @@ def find_similar_sessions(
         if session["session_id"] == session_id:
             continue
 
-        session_subtasks = set(session.get("subtasks", []))
+        session_subtasks = _normalize_subtasks(session.get("subtasks", []))
         if not session_subtasks:
             continue
 
@@ -389,12 +422,14 @@ def find_similar_sessions(
             similarity = intersection / union
 
             if similarity >= similarity_threshold:
-                similar_sessions.append({
-                    "session": session,
-                    "similarity_score": round(similarity, 3),
-                    "common_subtasks": list(ref_subtasks & session_subtasks),
-                    "unique_subtasks": list(session_subtasks - ref_subtasks),
-                })
+                similar_sessions.append(
+                    {
+                        "session": session,
+                        "similarity_score": round(similarity, 3),
+                        "common_subtasks": list(ref_subtasks & session_subtasks),
+                        "unique_subtasks": list(session_subtasks - ref_subtasks),
+                    }
+                )
 
     # Sort by similarity score descending
     similar_sessions.sort(key=lambda x: x["similarity_score"], reverse=True)

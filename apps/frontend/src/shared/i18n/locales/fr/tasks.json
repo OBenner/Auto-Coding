@@ -112,7 +112,9 @@
     "lockColumn": "Verrouiller la largeur de la colonne",
     "unlockColumn": "Déverrouiller la largeur de la colonne",
     "columnLocked": "La largeur de la colonne est verrouillée",
-    "expandAll": "Développer toutes les colonnes"
+    "expandAll": "Développer toutes les colonnes",
+    "searchPlaceholder": "Rechercher des tâches...",
+    "clearFilters": "Effacer les filtres"
   },
   "queue": {
     "limitReached": "Limite de tâches parallèles atteinte ({{current}}/{{max}}). Tâche déplacée vers la file d'attente.",
@@ -390,5 +392,32 @@
   "referenceImages": {
     "title": "Images de référence (facultatif)",
     "description": "Ajoutez des références visuelles comme des captures d'écran ou des conceptions pour aider l'IA à comprendre vos exigences."
+  },
+  "overview": {
+    "implementationPlan": "Plan d'implémentation",
+    "phaseNumber": "Phase {{number}}",
+    "subtasksCompleted": "sous-tâches terminées",
+    "verification": "Vérification",
+    "qaReport": "Rapport QA",
+    "qaEscalation": "Escalade QA",
+    "totalIterations": "Itérations totales",
+    "totalIssues": "Problèmes totaux",
+    "uniqueIssues": "Problèmes uniques",
+    "fixSuccessRate": "Taux de réussite des corrections",
+    "recurringIssues": "Problèmes récurrents",
+    "commonIssues": "Problèmes courants",
+    "noDataAvailable": "Aucune donnée de vue d'ensemble disponible"
+  },
+  "merge": {
+    "progress": "Fusion des fichiers...",
+    "analyzing": "Analyse des modifications...",
+    "fileProgress": "{{current}} / {{total}} fichiers",
+    "currentFile": "Traitement : {{file}}",
+    "conflicts": "{{count}} conflit(s) détecté(s)",
+    "complete": "Fusion terminée",
+    "autoResolved": "{{count}} fichier(s) résolu(s) automatiquement"
+  },
+  "prPolling": {
+    "autoRefreshing": "Actualisation automatique"
   }
 }

@@ -42,32 +42,24 @@ try:
         debug_detailed,
         debug_error,
         debug_success,
-        debug_verbose,
         debug_warning,
-        is_debug_enabled,
     )
 except ImportError:
 
     def debug(*args, **kwargs):
-        pass
+        """No-op fallback when debug module is unavailable."""
 
     def debug_detailed(*args, **kwargs):
-        pass
-
-    def debug_verbose(*args, **kwargs):
-        pass
+        """No-op fallback when debug module is unavailable."""
 
     def debug_success(*args, **kwargs):
-        pass
+        """No-op fallback when debug module is unavailable."""
 
     def debug_error(*args, **kwargs):
-        pass
+        """No-op fallback when debug module is unavailable."""
 
     def debug_warning(*args, **kwargs):
-        pass
-
-    def is_debug_enabled():
-        return False
+        """No-op fallback when debug module is unavailable."""
 
 
 # Import merge system
@@ -1019,9 +1011,7 @@ def _check_git_conflicts(project_dir: Path, spec_name: str) -> dict:
             debug_warning(MODULE, "Could not find merge base")
             return result
 
-        _merge_base = (
-            merge_base_result.stdout.strip()
-        )  # Reserved for future conflict detection
+        # merge_base_result.stdout.strip() available for future conflict detection
 
         # Get commit hashes
         main_commit_result = run_git(

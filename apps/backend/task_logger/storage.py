@@ -4,12 +4,16 @@ Storage functionality for task logs.
 
 import json
 import os
+import re
 import sys
 import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
 
 from .models import Bookmark, LogEntry, LogPhase, SessionMetadata, SubtaskTransition
+
+# Regex to strip ANSI escape codes (full CSI sequences including colors, cursor moves)
+_ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
 
 
 class LogStorage:
@@ -34,7 +38,11 @@ class LogStorage:
             try:
                 with open(self.log_file, encoding="utf-8") as f:
                     data = json.load(f)
-                    # Ensure bookmarks array exists (for backward compatibility)
+                    # Ensure required keys exist (for backward compatibility)
+                    if "sessions" not in data:
+                        data["sessions"] = []
+                    if "subtask_transitions" not in data:
+                        data["subtask_transitions"] = []
                     if "bookmarks" not in data:
                         data["bookmarks"] = []
                     return data
@@ -100,9 +108,15 @@ class LogStorage:
         """Get current timestamp in ISO format."""
         return datetime.now(UTC).isoformat()
 
+    @staticmethod
+    def _strip_ansi(text: str) -> str:
+        """Strip ANSI escape codes from text for clean storage and UI display."""
+        return _ANSI_ESCAPE_RE.sub("", text)
+
     def add_entry(self, entry: LogEntry) -> None:
         """
         Add an entry to the specified phase.
+        ANSI escape codes are stripped from content, detail, and tool_input fields before storage.
 
         Args:
             entry: The log entry to add
@@ -118,7 +132,16 @@ class LogStorage:
                 "entries": [],
             }
 
-        self._data["phases"][phase_key]["entries"].append(entry.to_dict())
+        entry_dict = entry.to_dict()
+        # Strip ANSI escape codes from text fields before persisting
+        if "content" in entry_dict and isinstance(entry_dict["content"], str):
+            entry_dict["content"] = self._strip_ansi(entry_dict["content"])
+        if "detail" in entry_dict and isinstance(entry_dict["detail"], str):
+            entry_dict["detail"] = self._strip_ansi(entry_dict["detail"])
+        if "tool_input" in entry_dict and isinstance(entry_dict["tool_input"], str):
+            entry_dict["tool_input"] = self._strip_ansi(entry_dict["tool_input"])
+
+        self._data["phases"][phase_key]["entries"].append(entry_dict)
         self.save()
 
     def update_phase_status(
@@ -169,12 +192,19 @@ class LogStorage:
         """
         Start a new session.
 
+        If a session with the given ID already exists, this is a no-op.
+
         Args:
             session_id: Session number
         """
         # Initialize sessions list if it doesn't exist (for backward compatibility)
         if "sessions" not in self._data:
             self._data["sessions"] = []
+
+        # Check for existing session with the same ID to prevent duplicates
+        for existing in self._data["sessions"]:
+            if existing.get("session_id") == session_id:
+                return
 
         session = SessionMetadata(
             session_id=session_id,

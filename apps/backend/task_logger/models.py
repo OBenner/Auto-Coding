@@ -25,6 +25,7 @@ class LogEntryType(str, Enum):
     ERROR = "error"
     SUCCESS = "success"
     INFO = "info"
+    DECISION = "decision"
 
 
 @dataclass
@@ -51,12 +52,8 @@ class LogEntry:
     is_decision_point: bool | None = (
         None  # Whether this entry represents an important decision point
     )
-    reasoning: str | None = (
-        None  # Agent's reasoning/thinking at this decision point
-    )
-    alternatives: list[str] | None = (
-        None  # Alternative options that were considered
-    )
+    reasoning: str | None = None  # Agent's reasoning/thinking at this decision point
+    alternatives: list[str] | None = None  # Alternative options that were considered
     decision: str | None = None  # The final decision or choice made
 
     def to_dict(self) -> dict:

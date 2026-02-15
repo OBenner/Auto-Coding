@@ -2,7 +2,7 @@ import { execSync, execFileSync } from 'child_process';
 import { existsSync, accessSync, constants } from 'fs';
 import path from 'path';
 import { app } from 'electron';
-import { findHomebrewPython as findHomebrewPythonUtil } from './utils/homebrew-python';
+import { findHomebrewPython as findHomebrewPythonUtil } from './platform/paths';
 import { isWindows } from './platform';
 
 /**

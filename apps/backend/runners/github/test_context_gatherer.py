@@ -6,10 +6,10 @@ Tests the context gathering functionality without requiring actual GitHub API ca
 """
 
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
-from context_gatherer import ChangedFile, PRContext, PRContextGatherer
+from context_gatherer import PRContextGatherer
 
 
 @pytest.mark.asyncio
@@ -20,26 +20,6 @@ async def test_gather_basic_pr_context(tmp_path):
     project_dir.mkdir()
 
     # Mock the subprocess calls
-    pr_metadata = {
-        "number": 123,
-        "title": "Add new feature",
-        "body": "This PR adds a new feature",
-        "author": {"login": "testuser"},
-        "baseRefName": "main",
-        "headRefName": "feature/new-feature",
-        "files": [
-            {
-                "path": "src/app.ts",
-                "status": "modified",
-                "additions": 10,
-                "deletions": 5,
-            }
-        ],
-        "additions": 10,
-        "deletions": 5,
-        "changedFiles": 1,
-        "labels": [{"name": "feature"}],
-    }
 
     with patch("subprocess.run") as mock_run:
         # Mock metadata fetch

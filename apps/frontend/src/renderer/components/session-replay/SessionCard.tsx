@@ -38,7 +38,8 @@ function sessionCardPropsAreEqual(prevProps: SessionCardProps, nextProps: Sessio
     prevSession.completed_at === nextSession.completed_at &&
     prevSession.duration_seconds === nextSession.duration_seconds &&
     prevSession.session_number === nextSession.session_number &&
-    prevSession.subtasks.length === nextSession.subtasks.length
+    prevSession.subtasks.length === nextSession.subtasks.length &&
+    JSON.stringify(prevSession.subtasks) === JSON.stringify(nextSession.subtasks)
   );
 }
 
@@ -52,7 +53,7 @@ export const SessionCard = memo(function SessionCard({
   const isCompleted = useMemo(() => session.completed_at !== null, [session.completed_at]);
 
   const duration = useMemo(() => {
-    if (!session.duration_seconds) return null;
+    if (session.duration_seconds == null) return null;
     const minutes = Math.floor(session.duration_seconds / 60);
     return `${minutes}m`;
   }, [session.duration_seconds]);
