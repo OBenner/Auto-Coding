@@ -180,12 +180,12 @@ class GitProvider(Protocol):
     @property
     def provider_type(self) -> ProviderType:
         """Get the provider type."""
-        pass
+        pass  # Protocol method - no implementation needed
 
     @property
     def repo(self) -> str:
         """Get the repository in owner/repo format."""
-        pass
+        pass  # Protocol method - no implementation needed
 
     # -------------------------------------------------------------------------
     # Pull Request Operations
@@ -201,7 +201,7 @@ class GitProvider(Protocol):
         Returns:
             PRData with full PR details including diff
         """
-        pass
+        pass  # Protocol method - no implementation needed
 
     async def fetch_prs(self, filters: PRFilters | None = None) -> list[PRData]:
         """
@@ -213,7 +213,7 @@ class GitProvider(Protocol):
         Returns:
             List of PRData
         """
-        pass
+        pass  # Protocol method - no implementation needed
 
     async def fetch_pr_diff(self, number: int) -> str:
         """
@@ -225,7 +225,7 @@ class GitProvider(Protocol):
         Returns:
             Unified diff string
         """
-        pass
+        pass  # Protocol method - no implementation needed
 
     async def post_review(
         self,
@@ -242,7 +242,7 @@ class GitProvider(Protocol):
         Returns:
             Review ID
         """
-        pass
+        pass  # Protocol method - no implementation needed
 
     async def merge_pr(
         self,
@@ -261,7 +261,7 @@ class GitProvider(Protocol):
         Returns:
             True if merged successfully
         """
-        pass
+        pass  # Protocol method - no implementation needed
 
     async def close_pr(
         self,
@@ -278,7 +278,7 @@ class GitProvider(Protocol):
         Returns:
             True if closed successfully
         """
-        pass
+        pass  # Protocol method - no implementation needed
 
     # -------------------------------------------------------------------------
     # Issue Operations
@@ -294,7 +294,7 @@ class GitProvider(Protocol):
         Returns:
             IssueData with full issue details
         """
-        pass
+        pass  # Protocol method - no implementation needed
 
     async def fetch_issues(
         self, filters: IssueFilters | None = None
@@ -308,7 +308,7 @@ class GitProvider(Protocol):
         Returns:
             List of IssueData
         """
-        pass
+        pass  # Protocol method - no implementation needed
 
     async def create_issue(
         self,
@@ -329,7 +329,7 @@ class GitProvider(Protocol):
         Returns:
             Created IssueData
         """
-        pass
+        pass  # Protocol method - no implementation needed
 
     async def close_issue(
         self,
@@ -346,7 +346,7 @@ class GitProvider(Protocol):
         Returns:
             True if closed successfully
         """
-        pass
+        pass  # Protocol method - no implementation needed
 
     async def add_comment(
         self,
@@ -363,7 +363,7 @@ class GitProvider(Protocol):
         Returns:
             Comment ID
         """
-        pass
+        pass  # Protocol method - no implementation needed
 
     # -------------------------------------------------------------------------
     # Label Operations
@@ -381,7 +381,7 @@ class GitProvider(Protocol):
             issue_or_pr_number: Issue/PR number
             labels: Labels to apply
         """
-        pass
+        pass  # Protocol method - no implementation needed
 
     async def remove_labels(
         self,
@@ -395,7 +395,7 @@ class GitProvider(Protocol):
             issue_or_pr_number: Issue/PR number
             labels: Labels to remove
         """
-        pass
+        pass  # Protocol method - no implementation needed
 
     async def create_label(
         self,
@@ -407,7 +407,7 @@ class GitProvider(Protocol):
         Args:
             label: Label data
         """
-        pass
+        pass  # Protocol method - no implementation needed
 
     async def list_labels(self) -> list[LabelData]:
         """
@@ -416,7 +416,7 @@ class GitProvider(Protocol):
         Returns:
             List of LabelData
         """
-        pass
+        pass  # Protocol method - no implementation needed
 
     # -------------------------------------------------------------------------
     # Repository Operations
@@ -429,7 +429,7 @@ class GitProvider(Protocol):
         Returns:
             Repository metadata
         """
-        pass
+        pass  # Protocol method - no implementation needed
 
     async def get_default_branch(self) -> str:
         """

@@ -79,6 +79,12 @@ export const taskMock = {
   archiveTasks: async () => ({ success: true, data: true }),
   unarchiveTasks: async () => ({ success: true, data: true }),
 
+  // Task export operation
+  exportTask: async (projectId: string, taskId: string) => {
+    console.log('[Browser Mock] exportTask:', projectId, taskId);
+    return { success: true, data: '/mock/path/to/spec.zip' };
+  },
+
   // Task status operations
   updateTaskStatus: async (_taskId: string, _status: string, _options?: { forceCleanup?: boolean }) => ({ success: true }),
 
@@ -113,6 +119,22 @@ export const taskMock = {
   watchTaskLogs: async () => ({ success: true }),
 
   unwatchTaskLogs: async () => ({ success: true }),
+
+  // Task spec file reading (for task overview display)
+  getImplementationPlan: async () => ({
+    success: true,
+    data: null
+  }),
+
+  getQAReport: async () => ({
+    success: true,
+    data: null
+  }),
+
+  getQAEscalation: async () => ({
+    success: true,
+    data: null
+  }),
 
   // Event Listeners (no-op in browser)
   onTaskProgress: () => () => {},

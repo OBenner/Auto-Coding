@@ -34,12 +34,12 @@ from typing import Any
 _IS_WINDOWS = os.name == "nt"
 _WINDOWS_LOCK_SIZE = 1024 * 1024
 
-try:
+try:  # Platform-specific
     import fcntl  # type: ignore
 except ImportError:  # pragma: no cover
     fcntl = None
 
-try:
+try:  # Platform-specific
     import msvcrt  # type: ignore
 except ImportError:  # pragma: no cover
     msvcrt = None
@@ -157,7 +157,7 @@ class FileLock:
                 # Non-blocking lock attempt
                 _try_lock(self._fd, self.exclusive)
                 return  # Lock acquired
-            except (BlockingIOError, OSError):
+            except OSError:
                 # Lock held by another process
                 elapsed = time.time() - start_time
                 if elapsed >= self.timeout:

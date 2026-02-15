@@ -2,16 +2,15 @@ import { ipcMain } from 'electron';
 import { IPC_CHANNELS, AUTO_BUILD_PATHS, getSpecsDir } from '../../../shared/constants';
 import type { IPCResult, Task, TaskMetadata } from '../../../shared/types';
 import path from 'path';
-import { existsSync, promises as fsPromises, Dirent } from 'fs';
+import { promises as fsPromises, Dirent } from 'fs';
 import { projectStore } from '../../project-store';
 import { titleGenerator } from '../../title-generator';
 import { AgentManager } from '../../agent';
 import { findTaskAndProject } from './shared';
-import { findAllSpecPaths } from '../../utils/spec-path-helpers';
+import { findAllSpecPathsAsync } from '../../utils/spec-path-helpers';
 import { withSpecNumberLock } from '../../utils/spec-number-lock';
 import { runPythonSubprocess } from '../github/utils/subprocess-runner';
 import { getRunnerEnv } from '../github/utils/runner-env';
-import { getConfiguredPythonPath } from '../../python-env-manager';
 
 /**
  * Helper to get the backend directory path
@@ -26,7 +25,7 @@ function getBackendDir(): string {
  */
 async function getPythonEnv(): Promise<{ pythonPath: string; env: Record<string, string> }> {
   const env = await getRunnerEnv();
-  const pythonPath = getConfiguredPythonPath();
+  const pythonPath = 'python';
   return { pythonPath, env };
 }
 
@@ -128,7 +127,7 @@ export function registerTaskCRUDHandlers(agentManager: AgentManager): void {
 
       // Find next available spec number
       let specNumber = 1;
-      if (existsSync(specsDir)) {
+      if (await fileExists(specsDir)) {
         const existingDirs = (await fsPromises.readdir(specsDir, { withFileTypes: true }))
           .filter((d: Dirent) => d.isDirectory())
           .map((d: Dirent) => d.name);
@@ -282,7 +281,7 @@ export function registerTaskCRUDHandlers(agentManager: AgentManager): void {
       // Find ALL locations where this task exists (main + worktrees)
       // Following the archiveTasks() pattern from project-store.ts
       const specsBaseDir = getSpecsDir(project.autoBuildPath);
-      const specPaths = findAllSpecPaths(project.path, specsBaseDir, task.specId);
+      const specPaths = await findAllSpecPathsAsync(project.path, specsBaseDir, task.specId);
 
       // If spec directory doesn't exist anywhere, return success (already removed)
       if (specPaths.length === 0) {
@@ -344,7 +343,7 @@ export function registerTaskCRUDHandlers(agentManager: AgentManager): void {
         const autoBuildDir = project.autoBuildPath || '.auto-claude';
         const specDir = path.join(project.path, autoBuildDir, 'specs', task.specId);
 
-        if (!existsSync(specDir)) {
+        if (!(await fileExists(specDir))) {
           return { success: false, error: 'Spec directory not found' };
         }
 
@@ -375,7 +374,7 @@ export function registerTaskCRUDHandlers(agentManager: AgentManager): void {
 
         // Update implementation_plan.json
         const planPath = path.join(specDir, AUTO_BUILD_PATHS.IMPLEMENTATION_PLAN);
-        if (existsSync(planPath)) {
+        if (await fileExists(planPath)) {
           try {
             const planContent = await fsPromises.readFile(planPath, 'utf-8');
             const plan = JSON.parse(planContent);
@@ -396,7 +395,7 @@ export function registerTaskCRUDHandlers(agentManager: AgentManager): void {
 
         // Update spec.md if it exists
         const specPath = path.join(specDir, AUTO_BUILD_PATHS.SPEC_FILE);
-        if (existsSync(specPath)) {
+        if (await fileExists(specPath)) {
           try {
             let specContent = await fsPromises.readFile(specPath, 'utf-8');
 
@@ -472,7 +471,7 @@ export function registerTaskCRUDHandlers(agentManager: AgentManager): void {
 
           // Update requirements.json if it exists
           const requirementsPath = path.join(specDir, 'requirements.json');
-          if (existsSync(requirementsPath)) {
+          if (await fileExists(requirementsPath)) {
             try {
               const requirementsContent = await fsPromises.readFile(requirementsPath, 'utf-8');
               const requirements = JSON.parse(requirementsContent);
