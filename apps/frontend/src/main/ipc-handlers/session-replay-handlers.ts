@@ -6,6 +6,7 @@
  */
 
 import { ipcMain } from 'electron';
+import crypto from 'crypto';
 import path from 'path';
 import { promises as fsPromises } from 'fs';
 import { IPC_CHANNELS, AUTO_BUILD_PATHS } from '../../shared/constants';
@@ -388,7 +389,7 @@ export function registerSessionReplayHandlers(): void {
         // Generate unique ID for bookmark
         const newBookmark: Bookmark = {
           ...bookmark,
-          id: `bookmark-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          id: `bookmark-${Date.now()}-${crypto.randomUUID().slice(0, 9)}`,
         };
 
         // Add bookmark to logs
