@@ -63,7 +63,11 @@ export function QualityTrendChart({ scores, isLoading = false }: QualityTrendCha
     // Values are kept in their original scale (0..1);
     // conversion to display units (percentage) happens only in formatValue.
     const processedMetrics = CHART_METRICS.map((metric) => {
-      const values = sortedScores.map((score) => score[metric.key] as number);
+      const values = sortedScores.map((score) => {
+        const raw = score[metric.key];
+        const v = Number(raw ?? 0);
+        return Number.isFinite(v) ? v : 0;
+      });
 
       const maxValue = Math.max(...values);
       const minValue = Math.min(...values);
@@ -72,7 +76,8 @@ export function QualityTrendChart({ scores, isLoading = false }: QualityTrendCha
       // Generate SVG path
       const points = sortedScores.map((score, index) => {
         const x = padding.left + (index / (sortedScores.length - 1 || 1)) * chartWidth;
-        const value = score[metric.key] as number;
+        const raw = score[metric.key];
+        const value = Number.isFinite(Number(raw)) ? Number(raw) : 0;
         const y = padding.top + chartHeight - ((value - minValue) / range) * chartHeight;
         return { x, y, value };
       });
@@ -281,7 +286,7 @@ export function QualityTrendChart({ scores, isLoading = false }: QualityTrendCha
                   cy={point.y}
                   r="4"
                   fill={metric.color}
-                  className="cursor-pointer hover:r-6 transition-all"
+                  className="cursor-pointer transition-transform hover:scale-125"
                 >
                   <title>{`${metric.label}: ${metric.formatValue(point.value)}`}</title>
                 </circle>

@@ -15,7 +15,7 @@ Provides functionality for:
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -125,12 +125,17 @@ def _save_quality_history(spec_dir: Path, scores: list[dict[str, Any]]) -> None:
     try:
         with open(quality_file, "w", encoding="utf-8") as f:
             json.dump(
-                {"scores": scores, "updated_at": datetime.now(UTC).isoformat()},
+                {
+                    "scores": scores,
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                },
                 f,
                 indent=2,
             )
-    except (OSError, UnicodeEncodeError):
-        pass
+    except (OSError, UnicodeEncodeError) as exc:
+        import logging
+
+        logging.getLogger(__name__).warning("Failed to write %s: %s", quality_file, exc)
 
 
 # =============================================================================
@@ -185,7 +190,7 @@ def calculate_quality_score(
         session_id=session_id,
         spec_id=spec_id,
         agent_type=agent_type,
-        timestamp=datetime.now(UTC),
+        timestamp=datetime.now(timezone.utc),
         test_pass_rate=test_pass_rate,
         acceptance_criteria_met=criteria_met,
         user_approval_rate=user_approval_rate,
@@ -262,9 +267,7 @@ def _calculate_acceptance_criteria(
         return 0.0, 0, 0
 
     # Find the QA iteration record
-    qa_record = next(
-        (r for r in qa_history if r.get("iteration") == iteration), None
-    )
+    qa_record = next((r for r in qa_history if r.get("iteration") == iteration), None)
 
     if not qa_record:
         return 0.0, 0, 0
@@ -296,9 +299,7 @@ def _calculate_user_approval(spec_dir: Path, iteration: int) -> tuple[float, boo
         return 0.0, False
 
     # Find the QA iteration record
-    qa_record = next(
-        (r for r in qa_history if r.get("iteration") == iteration), None
-    )
+    qa_record = next((r for r in qa_history if r.get("iteration") == iteration), None)
 
     if not qa_record:
         return 0.0, False
@@ -351,8 +352,8 @@ def analyze_quality_trend(
         # Return empty trend
         return QualityTrend(
             spec_id=spec_id,
-            period_start=datetime.now(UTC),
-            period_end=datetime.now(UTC),
+            period_start=datetime.now(timezone.utc),
+            period_end=datetime.now(timezone.utc),
             alert_threshold_percent=alert_threshold,
             minimum_sessions_for_trend=min_sessions,
         )
@@ -361,8 +362,8 @@ def analyze_quality_trend(
     scores = [QualityScore.from_dict(s) for s in history]
 
     # Create trend with scores
-    period_start = scores[0].timestamp if scores else datetime.now(UTC)
-    period_end = scores[-1].timestamp if scores else datetime.now(UTC)
+    period_start = scores[0].timestamp if scores else datetime.now(timezone.utc)
+    period_end = scores[-1].timestamp if scores else datetime.now(timezone.utc)
 
     trend = QualityTrend(
         spec_id=spec_id,

@@ -31,9 +31,12 @@ export function ProductivityDashboard({ projectId }: ProductivityDashboardProps)
   const [timeRange, setTimeRange] = useState<TimeRange>('30d');
 
   // Quality store
-  const qualityScores = useQualityStore((state) => state.scores);
-  const qualityAlerts = useQualityStore((state) => state.alerts);
-  const isLoadingQuality = useQualityStore((state) => state.isLoadingScores);
+  const { scores: qualityScores, alerts: qualityAlerts, isLoadingScores: isLoadingQuality } =
+    useQualityStore((state) => ({
+      scores: state.scores,
+      alerts: state.alerts,
+      isLoadingScores: state.isLoadingScores,
+    }));
 
   // Calculate date filter based on time range
   const getDateFilter = useCallback((): Pick<ProductivityAnalyticsFilter, 'start_date' | 'end_date'> => {

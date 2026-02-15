@@ -7,7 +7,7 @@ session counts, subtask completion rates, QA iterations, and phase durations.
 """
 
 import json
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -125,7 +125,7 @@ def _calculate_phase_durations(
         if phase_start:
             # If phase is completed, use latest completion time
             # Otherwise, use current time for in-progress phases
-            end_time = phase_end if phase_end else datetime.now(UTC)
+            end_time = phase_end if phase_end else datetime.now(timezone.utc)
             duration_seconds = (end_time - phase_start).total_seconds()
 
         phase_stats[phase_id] = {
@@ -170,7 +170,7 @@ def _calculate_completion_velocity(
                 completed += 1
 
     # Calculate elapsed time
-    now = datetime.now(UTC)
+    now = datetime.now(timezone.utc)
     elapsed_seconds = (now - created_at).total_seconds()
     elapsed_hours = elapsed_seconds / 3600
 
@@ -244,13 +244,15 @@ def _calculate_quality_metrics(plan: dict[str, Any]) -> dict[str, Any]:
                 failed_subtasks += 1
 
     # Calculate completion rate (0.0 to 1.0)
-    completion_rate = (
-        completed_subtasks / total_subtasks if total_subtasks > 0 else 0.0
-    )
+    completion_rate = completed_subtasks / total_subtasks if total_subtasks > 0 else 0.0
 
     # QA metrics
     qa_signoff = plan.get("qa_signoff", {})
-    qa_iterations = qa_signoff.get("qa_session", 0)
+    raw_iterations = qa_signoff.get("qa_iterations", qa_signoff.get("qa_session", 0))
+    try:
+        qa_iterations = int(raw_iterations)
+    except (TypeError, ValueError):
+        qa_iterations = 0
     qa_status = qa_signoff.get("status", "pending")
 
     # Determine if spec is completed
@@ -261,7 +263,9 @@ def _calculate_quality_metrics(plan: dict[str, Any]) -> dict[str, Any]:
     )
 
     # Calculate first-attempt success (QA approved on first iteration)
-    first_attempt_success = is_completed and qa_iterations <= 1
+    first_attempt_success = (
+        is_completed and qa_status == "approved" and qa_iterations == 1
+    )
 
     # Calculate quality score (0-100)
     # Based on:
@@ -389,7 +393,7 @@ def create_statistics_tools(spec_dir: Path, project_dir: Path) -> list:
             # Calculate time metrics
             created_at = _parse_timestamp(plan.get("created_at"))
             last_updated = _parse_timestamp(plan.get("last_updated"))
-            now = datetime.now(UTC)
+            now = datetime.now(timezone.utc)
 
             if created_at:
                 # Total build time (from start to now)

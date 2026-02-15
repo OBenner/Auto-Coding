@@ -206,7 +206,7 @@ export const useQualityStore = create<QualityState>((set) => ({
       filterEndDate: null
     }),
 
-  reset: () => set(initialState)
+  reset: () => set(() => ({ ...initialState }))
 }));
 
 // ============================================

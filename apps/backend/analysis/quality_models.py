@@ -13,9 +13,8 @@ Provides models for:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Any
-
 
 # =============================================================================
 # DATA MODELS

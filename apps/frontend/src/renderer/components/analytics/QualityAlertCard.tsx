@@ -39,9 +39,12 @@ function AlertItem({ alert, onDismiss }: AlertItemProps) {
     }
   };
 
-  const styles = severityStyles[alert.severity];
+  const styles = severityStyles[alert.severity] ?? severityStyles.warning;
 
-  const formatDate = (date: Date) => {
+  const formatDate = (timestamp: Date | string) => {
+    const date = timestamp instanceof Date ? timestamp : new Date(timestamp);
+    if (Number.isNaN(date.getTime())) return '';
+
     return new Intl.DateTimeFormat('en-US', {
       month: 'short',
       day: 'numeric',
@@ -114,7 +117,11 @@ export function QualityAlertCard({ alerts: propAlerts, isLoading = false }: Qual
       if (a.severity === 'critical' && b.severity !== 'critical') return -1;
       if (a.severity !== 'critical' && b.severity === 'critical') return 1;
       // Then by timestamp (newest first)
-      return b.timestamp.getTime() - a.timestamp.getTime();
+      const aDate = a.timestamp instanceof Date ? a.timestamp : new Date(a.timestamp);
+      const bDate = b.timestamp instanceof Date ? b.timestamp : new Date(b.timestamp);
+      const aTime = Number.isNaN(aDate.getTime()) ? 0 : aDate.getTime();
+      const bTime = Number.isNaN(bDate.getTime()) ? 0 : bDate.getTime();
+      return bTime - aTime;
     });
   }, [activeAlerts]);
 
