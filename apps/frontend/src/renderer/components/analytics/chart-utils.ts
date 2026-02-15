@@ -61,14 +61,18 @@ export function createChartDimensions(
 
 /**
  * Build SVG line-path and area-path for a series of numeric values.
+ *
+ * @param fixedRange - When provided, use a fixed [min, max] range for Y-axis
+ *   instead of auto-scaling. Useful for quality scores that are always 0-1.
  */
 export function buildMetricPaths<K extends string>(
   metric: ChartMetricConfig<K>,
   values: number[],
   dims: ChartDimensions,
+  fixedRange?: [number, number],
 ): ProcessedMetric<K> {
-  const maxValue = Math.max(...values);
-  const minValue = Math.min(...values);
+  const maxValue = fixedRange ? fixedRange[1] : Math.max(...values);
+  const minValue = fixedRange ? fixedRange[0] : Math.min(...values);
   const range = maxValue - minValue || 1;
 
   const points: ChartPoint[] = values.map((value, index) => {

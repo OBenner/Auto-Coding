@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   AlertTriangle,
   AlertCircle,
@@ -20,9 +21,11 @@ interface QualityAlertCardProps {
 interface AlertItemProps {
   alert: QualityAlert;
   onDismiss: (alertId: string) => void;
+  locale?: string;
 }
 
-function AlertItem({ alert, onDismiss }: AlertItemProps) {
+function AlertItem({ alert, onDismiss, locale = 'en-US' }: AlertItemProps) {
+  const { t } = useTranslation('quality');
   const isCritical = alert.severity === 'critical';
   const Icon = isCritical ? AlertCircle : AlertTriangle;
 
@@ -45,7 +48,7 @@ function AlertItem({ alert, onDismiss }: AlertItemProps) {
     const date = timestamp instanceof Date ? timestamp : new Date(timestamp);
     if (Number.isNaN(date.getTime())) return '';
 
-    return new Intl.DateTimeFormat('en-US', {
+    return new Intl.DateTimeFormat(locale, {
       month: 'short',
       day: 'numeric',
       hour: '2-digit',
@@ -79,10 +82,10 @@ function AlertItem({ alert, onDismiss }: AlertItemProps) {
           <div className="flex items-center gap-4 text-xs text-muted-foreground">
             <div className="flex items-center gap-1">
               <TrendingDown className="h-3 w-3" />
-              <span>Drop: {alert.quality_drop_percent.toFixed(1)}%</span>
+              <span>{t('alerts.drop')}: {alert.quality_drop_percent.toFixed(1)}%</span>
             </div>
-            <div>Current: {formatScore(alert.current_score)}</div>
-            <div>Baseline: {formatScore(alert.baseline_score)}</div>
+            <div>{t('alerts.current')}: {formatScore(alert.current_score)}</div>
+            <div>{t('alerts.baseline')}: {formatScore(alert.baseline_score)}</div>
           </div>
         </div>
         <Button
@@ -90,6 +93,7 @@ function AlertItem({ alert, onDismiss }: AlertItemProps) {
           size="sm"
           onClick={() => onDismiss(alert.id)}
           className="h-8 w-8 p-0 hover:bg-destructive/20"
+          aria-label={t('alerts.dismiss')}
         >
           <X className="h-4 w-4" />
         </Button>
@@ -99,6 +103,7 @@ function AlertItem({ alert, onDismiss }: AlertItemProps) {
 }
 
 export function QualityAlertCard({ alerts: propAlerts, isLoading = false }: QualityAlertCardProps) {
+  const { t, i18n } = useTranslation('quality');
   const storeAlerts = useQualityStore((state) => state.alerts);
   const dismissAlert = useQualityStore((state) => state.dismissAlert);
 
@@ -134,18 +139,18 @@ export function QualityAlertCard({ alerts: propAlerts, isLoading = false }: Qual
         <div className="flex items-center justify-between">
           <CardTitle className="text-lg font-semibold flex items-center gap-2">
             <Bell className="h-5 w-5 text-accent" />
-            Quality Alerts
+            {t('alerts.title')}
           </CardTitle>
           {sortedAlerts.length > 0 && (
             <div className="flex items-center gap-2">
               {criticalCount > 0 && (
                 <Badge variant="outline" className="bg-destructive/20 text-destructive text-xs">
-                  {criticalCount} Critical
+                  {criticalCount} {t('alerts.critical')}
                 </Badge>
               )}
               {warningCount > 0 && (
                 <Badge variant="outline" className="bg-warning/20 text-warning text-xs">
-                  {warningCount} Warning
+                  {warningCount} {t('alerts.warning')}
                 </Badge>
               )}
             </div>
@@ -156,22 +161,22 @@ export function QualityAlertCard({ alerts: propAlerts, isLoading = false }: Qual
         {isLoading ? (
           <div className="flex items-center justify-center py-8 text-muted-foreground">
             <Clock className="h-5 w-5 animate-spin mr-2" />
-            Loading alerts...
+            {t('alerts.loading')}
           </div>
         ) : sortedAlerts.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-8 text-center">
             <div className="p-3 rounded-full bg-success/10 mb-3">
               <Bell className="h-8 w-8 text-success" />
             </div>
-            <p className="text-sm font-medium text-foreground">No quality alerts</p>
+            <p className="text-sm font-medium text-foreground">{t('alerts.empty.title')}</p>
             <p className="text-xs text-muted-foreground/70 mt-1">
-              All systems operating within expected quality thresholds
+              {t('alerts.empty.subtitle')}
             </p>
           </div>
         ) : (
           <div className="space-y-3">
             {sortedAlerts.map((alert) => (
-              <AlertItem key={alert.id} alert={alert} onDismiss={dismissAlert} />
+              <AlertItem key={alert.id} alert={alert} onDismiss={dismissAlert} locale={i18n.language} />
             ))}
           </div>
         )}

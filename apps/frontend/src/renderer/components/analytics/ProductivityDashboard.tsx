@@ -6,7 +6,7 @@ import { useToast } from '../../hooks/use-toast';
 import { QualityTrendChart } from './QualityTrendChart';
 import { QualityAlertCard } from './QualityAlertCard';
 import { DashboardActions } from './DashboardActions';
-import { useQualityStore, type QualityScore } from '../../stores/quality-store';
+import { useQualityStore, type QualityScore, loadAllQualityData } from '../../stores/quality-store';
 import type {
   ProductivitySummary,
   ProductivityTrendPoint,
@@ -102,6 +102,9 @@ export function ProductivityDashboard({ projectId }: ProductivityDashboardProps)
       } else {
         console.error('Failed to load productivity trends:', trendsResult.error);
       }
+
+      // Load quality data for quality trend chart and alerts
+      await loadAllQualityData(projectId);
 
       if (showRefreshToast) {
         toast({

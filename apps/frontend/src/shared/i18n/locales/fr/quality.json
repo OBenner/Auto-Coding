@@ -1,0 +1,26 @@
+{
+  "alerts": {
+    "title": "Alertes de qualité",
+    "critical": "Critique",
+    "warning": "Avertissement",
+    "loading": "Chargement des alertes...",
+    "empty": {
+      "title": "Aucune alerte de qualité",
+      "subtitle": "Tous les systèmes fonctionnent dans les seuils de qualité attendus"
+    },
+    "dismiss": "Ignorer l'alerte",
+    "drop": "Baisse",
+    "current": "Actuel",
+    "baseline": "Référence"
+  },
+  "trends": {
+    "title": "Tendances de qualité dans le temps",
+    "loading": "Chargement des tendances de qualité...",
+    "empty": {
+      "title": "Aucune donnée de qualité disponible",
+      "subtitle": "Complétez plus de sessions pour voir les tendances"
+    },
+    "lowQuality": "Qualité faible détectée",
+    "highQuality": "Haute qualité"
+  }
+}

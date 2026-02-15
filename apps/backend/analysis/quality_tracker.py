@@ -15,40 +15,54 @@ Provides functionality for:
 from __future__ import annotations
 
 import json
+import logging
+import os
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from analysis.metrics_tracker import (
-    _load_implementation_plan,
-    _load_qa_iteration_history,
-)
+from analysis.metrics_tracker import _load_implementation_plan
 from analysis.quality_models import QualityScore, QualityTrend
+
+_logger = logging.getLogger(__name__)
 
 # Configuration
 DEFAULT_ALERT_THRESHOLD = 10.0  # Alert at 10% quality drop
 MIN_SESSIONS_FOR_BASELINE = 5  # Minimum sessions to establish baseline
 TREND_WINDOW_SIZE = 5  # Number of recent sessions to analyze
+VALID_AGENT_TYPES = {"planner", "coder", "qa_reviewer", "qa_fixer"}
+
+_quality_history_lock = threading.Lock()
 
 
-def _load_subtasks(spec_dir: Path) -> list[dict[str, Any]]:
+def _extract_subtasks(plan: dict[str, Any]) -> list[dict[str, Any]]:
     """
-    Load subtasks from implementation plan.
+    Extract subtasks from an already-loaded implementation plan.
 
     Args:
-        spec_dir: Spec directory path
+        plan: Implementation plan dict
 
     Returns:
         List of all subtasks from all phases
     """
-    plan = _load_implementation_plan(spec_dir)
-    if not plan:
-        return []
-
     subtasks = []
     for phase in plan.get("phases", []):
         subtasks.extend(phase.get("subtasks", []))
     return subtasks
+
+
+def _extract_qa_history(plan: dict[str, Any]) -> list[dict[str, Any]]:
+    """
+    Extract QA iteration history from an already-loaded plan.
+
+    Args:
+        plan: Implementation plan dict
+
+    Returns:
+        List of QA iteration records
+    """
+    return plan.get("qa_iteration_history", [])
 
 
 def _load_quality_history(spec_dir: Path) -> list[dict[str, Any]]:
@@ -68,36 +82,51 @@ def _load_quality_history(spec_dir: Path) -> list[dict[str, Any]]:
     try:
         with open(quality_file, encoding="utf-8") as f:
             data = json.load(f)
-            return data.get("scores", [])
-    except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+            if not isinstance(data, dict):
+                _logger.warning("Invalid %s format (expected object)", quality_file)
+                return []
+            scores = data.get("scores", [])
+            if not isinstance(scores, list):
+                _logger.warning(
+                    "Invalid %s format (scores is not a list)", quality_file
+                )
+                return []
+            return scores
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError) as exc:
+        _logger.warning("Failed to read %s: %s", quality_file, exc)
         return []
 
 
 def _save_quality_history(spec_dir: Path, scores: list[dict[str, Any]]) -> None:
     """
-    Save quality score history to spec directory.
+    Save quality score history atomically to spec directory.
+
+    Uses write-to-temp + os.replace to prevent corruption on crash.
 
     Args:
         spec_dir: Spec directory path
         scores: List of quality score records to save
     """
     quality_file = spec_dir / "quality_history.json"
+    tmp_file = quality_file.with_name(f"{quality_file.name}.tmp")
     spec_dir.mkdir(parents=True, exist_ok=True)
 
     try:
-        with open(quality_file, "w", encoding="utf-8") as f:
-            json.dump(
-                {
-                    "scores": scores,
-                    "updated_at": datetime.now(timezone.utc).isoformat(),
-                },
-                f,
-                indent=2,
-            )
+        payload = {
+            "scores": scores,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        with open(tmp_file, "w", encoding="utf-8") as f:
+            json.dump(payload, f, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_file, quality_file)
     except (OSError, UnicodeEncodeError) as exc:
-        import logging
-
-        logging.getLogger(__name__).warning("Failed to write %s: %s", quality_file, exc)
+        _logger.warning("Failed to write %s: %s", quality_file, exc)
+        try:
+            tmp_file.unlink(missing_ok=True)
+        except OSError:
+            pass
 
 
 # =============================================================================
@@ -134,18 +163,31 @@ def calculate_quality_score(
     """
     spec_id = spec_dir.name
 
+    # Validate agent_type
+    if agent_type not in VALID_AGENT_TYPES:
+        _logger.warning("Unknown agent_type %r, normalizing", agent_type)
+        agent_type = agent_type.lower().strip()
+
+    # Load plan once to avoid repeated IO
+    plan = _load_implementation_plan(spec_dir)
+    subtasks = _extract_subtasks(plan) if plan else []
+    qa_history = _extract_qa_history(plan) if plan else []
+
     # Calculate test pass rate
     test_pass_rate, total_tests, passed_tests = _calculate_test_pass_rate(
-        spec_dir, subtask_id
+        subtasks, subtask_id
     )
 
     # Calculate acceptance criteria
     criteria_met, total_criteria, met_criteria = _calculate_acceptance_criteria(
-        spec_dir, iteration
+        qa_history, iteration
     )
 
     # Determine user approval
-    user_approval_rate, user_approved = _calculate_user_approval(spec_dir, iteration)
+    user_approval_rate, user_approved = _calculate_user_approval(qa_history, iteration)
+
+    # Skip persistence when no meaningful data is available
+    has_meaningful_data = total_tests > 0 or total_criteria > 0
 
     # Create quality score
     score = QualityScore(
@@ -166,20 +208,25 @@ def calculate_quality_score(
         user_approved=user_approved,
     )
 
-    # Persist to history
-    _persist_quality_score(spec_dir, score)
+    # Only persist scores with meaningful data to avoid polluting trends
+    if has_meaningful_data:
+        _persist_quality_score(spec_dir, score)
+    else:
+        _logger.debug(
+            "Skipping persistence: no test/criteria data for session %s", session_id
+        )
 
     return score
 
 
 def _calculate_test_pass_rate(
-    spec_dir: Path, subtask_id: str | None
+    subtasks: list[dict[str, Any]], subtask_id: str | None
 ) -> tuple[float, int, int]:
     """
     Calculate test pass rate from subtask verification.
 
     Args:
-        spec_dir: Spec directory path
+        subtasks: List of subtask dicts from the plan
         subtask_id: Optional subtask ID to check
 
     Returns:
@@ -188,7 +235,6 @@ def _calculate_test_pass_rate(
     if not subtask_id:
         return 0.0, 0, 0
 
-    subtasks = _load_subtasks(spec_dir)
     subtask = next((s for s in subtasks if s.get("id") == subtask_id), None)
 
     if not subtask:
@@ -199,32 +245,49 @@ def _calculate_test_pass_rate(
     if not verification:
         return 0.0, 0, 0
 
+    # Normalize verification type
+    v_type = str(verification.get("type", "")).lower().strip()
+
     # For command-based verification, assume 1 test
-    if verification.get("type") == "command":
-        status = subtask.get("status", "pending")
+    if v_type == "command":
+        status = str(subtask.get("status", "pending")).lower().strip()
         if status == "completed":
             return 1.0, 1, 1
         return 0.0, 1, 0
 
-    # For test-based verification, parse test results
-    # This would be enhanced with actual test result parsing
+    # For test-based verification, parse stored test results if available
+    if "test" in v_type:
+        results = verification.get("results", {})
+        total = results.get("total", results.get("total_tests", 0))
+        passed = results.get(
+            "passed", results.get("passed_tests", results.get("passed_count", 0))
+        )
+        try:
+            total = int(total)
+            passed = int(passed)
+        except (TypeError, ValueError):
+            return 0.0, 0, 0
+        if total > 0:
+            passed = max(0, min(passed, total))
+            return passed / total, total, passed
+
+    # Unknown verification type — treat as "no data"
     return 0.0, 0, 0
 
 
 def _calculate_acceptance_criteria(
-    spec_dir: Path, iteration: int
+    qa_history: list[dict[str, Any]], iteration: int
 ) -> tuple[float, int, int]:
     """
     Calculate acceptance criteria met from QA iterations.
 
     Args:
-        spec_dir: Spec directory path
+        qa_history: List of QA iteration records
         iteration: QA iteration number
 
     Returns:
         Tuple of (criteria_rate, total_criteria, met_criteria)
     """
-    qa_history = _load_qa_iteration_history(spec_dir)
     if not qa_history:
         return 0.0, 0, 0
 
@@ -234,29 +297,35 @@ def _calculate_acceptance_criteria(
     if not qa_record:
         return 0.0, 0, 0
 
-    # Extract criteria information
-    total_criteria = qa_record.get("total_criteria", 0)
-    met_criteria = qa_record.get("met_criteria", 0)
-
-    if total_criteria == 0:
+    # Extract and validate criteria information
+    try:
+        total_criteria = int(qa_record.get("total_criteria", 0))
+        met_criteria = int(qa_record.get("met_criteria", 0))
+    except (TypeError, ValueError):
         return 0.0, 0, 0
 
+    if total_criteria <= 0:
+        return 0.0, 0, 0
+
+    # Clamp met_criteria within valid range
+    met_criteria = max(0, min(met_criteria, total_criteria))
     criteria_rate = met_criteria / total_criteria
     return criteria_rate, total_criteria, met_criteria
 
 
-def _calculate_user_approval(spec_dir: Path, iteration: int) -> tuple[float, bool]:
+def _calculate_user_approval(
+    qa_history: list[dict[str, Any]], iteration: int
+) -> tuple[float, bool]:
     """
     Calculate user approval rate from QA status.
 
     Args:
-        spec_dir: Spec directory path
+        qa_history: List of QA iteration records
         iteration: QA iteration number
 
     Returns:
         Tuple of (approval_rate, approved_bool)
     """
-    qa_history = _load_qa_iteration_history(spec_dir)
     if not qa_history:
         return 0.0, False
 
@@ -266,8 +335,8 @@ def _calculate_user_approval(spec_dir: Path, iteration: int) -> tuple[float, boo
     if not qa_record:
         return 0.0, False
 
-    # Check approval status
-    status = qa_record.get("status", "pending")
+    # Check approval status (normalize to handle case differences)
+    status = str(qa_record.get("status", "pending")).lower().strip()
     approved = status == "approved"
 
     return 1.0 if approved else 0.0, approved
@@ -277,13 +346,16 @@ def _persist_quality_score(spec_dir: Path, score: QualityScore) -> None:
     """
     Persist quality score to history file.
 
+    Uses an in-process lock to guard the read-modify-write cycle.
+
     Args:
         spec_dir: Spec directory path
         score: QualityScore to persist
     """
-    history = _load_quality_history(spec_dir)
-    history.append(score.to_dict())
-    _save_quality_history(spec_dir, history)
+    with _quality_history_lock:
+        history = _load_quality_history(spec_dir)
+        history.append(score.to_dict())
+        _save_quality_history(spec_dir, history)
 
 
 # =============================================================================
@@ -320,12 +392,29 @@ def analyze_quality_trend(
             minimum_sessions_for_trend=min_sessions,
         )
 
-    # Convert history to QualityScore objects
-    scores = [QualityScore.from_dict(s) for s in history]
+    # Convert history to QualityScore objects, skipping malformed entries
+    scores: list[QualityScore] = []
+    for entry in history:
+        try:
+            scores.append(QualityScore.from_dict(entry))
+        except (KeyError, ValueError, TypeError) as exc:
+            _logger.warning("Skipping malformed quality score entry: %s", exc)
+
+    if not scores:
+        return QualityTrend(
+            spec_id=spec_id,
+            period_start=datetime.now(timezone.utc),
+            period_end=datetime.now(timezone.utc),
+            alert_threshold_percent=alert_threshold,
+            minimum_sessions_for_trend=min_sessions,
+        )
+
+    # Sort by timestamp to ensure chronological order
+    scores.sort(key=lambda s: s.timestamp)
 
     # Create trend with scores
-    period_start = scores[0].timestamp if scores else datetime.now(timezone.utc)
-    period_end = scores[-1].timestamp if scores else datetime.now(timezone.utc)
+    period_start = scores[0].timestamp
+    period_end = scores[-1].timestamp
 
     trend = QualityTrend(
         spec_id=spec_id,
@@ -400,7 +489,15 @@ def get_quality_by_agent_type(spec_dir: Path) -> dict[str, dict[str, Any]]:
     if not history:
         return {}
 
-    scores = [QualityScore.from_dict(s) for s in history]
+    scores: list[QualityScore] = []
+    for entry in history:
+        try:
+            scores.append(QualityScore.from_dict(entry))
+        except (KeyError, ValueError, TypeError):
+            continue
+
+    # Sort by timestamp for consistent trend analysis
+    scores.sort(key=lambda s: s.timestamp)
 
     # Group by agent type
     by_agent_type: dict[str, list[QualityScore]] = {}

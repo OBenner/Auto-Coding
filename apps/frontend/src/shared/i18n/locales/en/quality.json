@@ -1,0 +1,26 @@
+{
+  "alerts": {
+    "title": "Quality Alerts",
+    "critical": "Critical",
+    "warning": "Warning",
+    "loading": "Loading alerts...",
+    "empty": {
+      "title": "No quality alerts",
+      "subtitle": "All systems operating within expected quality thresholds"
+    },
+    "dismiss": "Dismiss alert",
+    "drop": "Drop",
+    "current": "Current",
+    "baseline": "Baseline"
+  },
+  "trends": {
+    "title": "Quality Trends Over Time",
+    "loading": "Loading quality trends...",
+    "empty": {
+      "title": "No quality data available",
+      "subtitle": "Complete more sessions to see quality trends"
+    },
+    "lowQuality": "Low Quality Detected",
+    "highQuality": "High Quality"
+  }
+}

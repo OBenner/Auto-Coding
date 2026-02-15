@@ -71,6 +71,8 @@ class QualityScore:
             "met_criteria": self.met_criteria,
             "user_approved": self.user_approved,
             "composite_score": self.composite_score,
+            "is_high_quality": self.is_high_quality,
+            "is_low_quality": self.is_low_quality,
         }
 
     @classmethod
@@ -94,21 +96,38 @@ class QualityScore:
             user_approved=data.get("user_approved", False),
         )
 
+    @staticmethod
+    def _clamp01(v: float) -> float:
+        """Clamp value to [0.0, 1.0]."""
+        return max(0.0, min(1.0, v))
+
     @property
     def composite_score(self) -> float:
         """
         Calculate composite quality score (0.0 to 1.0).
 
-        Weighted average of:
-        - Test pass rate (40%)
-        - Acceptance criteria (40%)
-        - User approval (20%)
+        Weighted average of applicable components:
+        - Test pass rate (40%) — only when total_tests > 0
+        - Acceptance criteria (40%) — only when total_criteria > 0
+        - User approval (20%) — always included
+
+        When a component has no data, its weight is redistributed
+        among the remaining components.
         """
-        return (
-            self.test_pass_rate * 0.4
-            + self.acceptance_criteria_met * 0.4
-            + self.user_approval_rate * 0.2
-        )
+        weighted = 0.0
+        weight_sum = 0.0
+
+        if self.total_tests > 0:
+            weighted += self._clamp01(self.test_pass_rate) * 0.4
+            weight_sum += 0.4
+        if self.total_criteria > 0:
+            weighted += self._clamp01(self.acceptance_criteria_met) * 0.4
+            weight_sum += 0.4
+
+        weighted += self._clamp01(self.user_approval_rate) * 0.2
+        weight_sum += 0.2
+
+        return weighted / weight_sum if weight_sum else 0.0
 
     @property
     def is_high_quality(self) -> bool:
@@ -260,7 +279,8 @@ class QualityTrend:
 
         # Determine trend direction
         if self.has_sufficient_data:
-            recent_scores = self.scores[-5:]
+            recent_window = min(self.minimum_sessions_for_trend, len(self.scores))
+            recent_scores = self.scores[-recent_window:]
             recent_avg = sum(s.composite_score for s in recent_scores) / len(
                 recent_scores
             )
@@ -269,11 +289,13 @@ class QualityTrend:
                 diff = recent_avg - self.baseline_score
                 if diff > 0.05:
                     self.trend_direction = "improving"
+                    self.degradation_detected = False
                 elif diff < -0.05:
                     self.trend_direction = "degrading"
                     self.degradation_detected = True
                 else:
                     self.trend_direction = "stable"
+                    self.degradation_detected = False
 
     def get_scores_by_agent_type(self, agent_type: str) -> list[QualityScore]:
         """Filter scores by agent type."""

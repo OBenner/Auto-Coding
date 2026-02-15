@@ -255,8 +255,9 @@ def _calculate_quality_metrics(plan: dict[str, Any]) -> dict[str, Any]:
         qa_iterations = 0
     qa_status = qa_signoff.get("status", "pending")
 
-    # Determine if spec is completed
-    is_completed = (
+    # Determine if spec is completed (aligned with productivity_analytics.py)
+    status = plan.get("status", "")
+    is_completed = status == "completed" or (
         total_subtasks > 0
         and completed_subtasks == total_subtasks
         and qa_status == "approved"

@@ -60,7 +60,7 @@ export function QualityTrendChart({ scores, isLoading = false }: QualityTrendCha
         const v = Number(raw ?? 0);
         return Number.isFinite(v) ? v : 0;
       });
-      return buildMetricPaths(metric, values, dims);
+      return buildMetricPaths(metric, values, dims, [0, 1]);
     });
 
     // Format dates for x-axis
