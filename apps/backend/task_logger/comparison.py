@@ -31,6 +31,56 @@ def _normalize_subtasks(subtasks: list) -> set[str]:
     return result
 
 
+def _empty_comparison() -> dict:
+    """Return an empty comparison result."""
+    return {
+        "sessions": [],
+        "metrics": {},
+        "common_subtasks": [],
+        "unique_subtasks": {},
+    }
+
+
+def _build_session_metrics(sessions: list[dict]) -> dict:
+    """Build comparison metrics for the given sessions."""
+    metrics = {
+        "durations": {},
+        "subtask_counts": {},
+        "completion_status": {},
+    }
+    for session in sessions:
+        session_id = session["session_id"]
+        metrics["durations"][session_id] = session.get("duration_seconds")
+        metrics["subtask_counts"][session_id] = len(session.get("subtasks", []))
+        metrics["completion_status"][session_id] = (
+            "completed" if session.get("completed_at") else "in_progress"
+        )
+    return metrics
+
+
+def _find_common_subtasks(subtask_sets: dict[int, set[str]]) -> list[str]:
+    """Find subtasks common to all sessions."""
+    if len(subtask_sets) <= 1:
+        return []
+    non_empty_sets = [s for s in subtask_sets.values() if s]
+    if not non_empty_sets:
+        return []
+    return list(set.intersection(*non_empty_sets))
+
+
+def _find_unique_subtasks(subtask_sets: dict[int, set[str]]) -> dict[int, list[str]]:
+    """Find subtasks unique to each session."""
+    unique_subtasks = {}
+    for session_id, subtasks in subtask_sets.items():
+        other_sessions = [sid for sid in subtask_sets if sid != session_id]
+        if not other_sessions:
+            unique_subtasks[session_id] = list(subtasks)
+            continue
+        other_subtasks = set.union(*[subtask_sets[sid] for sid in other_sessions])
+        unique_subtasks[session_id] = list(subtasks - other_subtasks)
+    return unique_subtasks
+
+
 def compare_sessions(
     spec_dir: Path,
     session_ids: list[int],
@@ -51,12 +101,7 @@ def compare_sessions(
     """
     logs = load_task_logs(spec_dir)
     if not logs or "sessions" not in logs:
-        return {
-            "sessions": [],
-            "metrics": {},
-            "common_subtasks": [],
-            "unique_subtasks": {},
-        }
+        return _empty_comparison()
 
     # Find requested sessions
     sessions = []
@@ -69,57 +114,77 @@ def compare_sessions(
             sessions.append(session_data)
 
     if not sessions:
-        return {
-            "sessions": [],
-            "metrics": {},
-            "common_subtasks": [],
-            "unique_subtasks": {},
-        }
+        return _empty_comparison()
 
-    # Compare metrics
-    metrics = {
-        "durations": {},
-        "subtask_counts": {},
-        "completion_status": {},
-    }
+    metrics = _build_session_metrics(sessions)
 
-    for session in sessions:
-        session_id = session["session_id"]
-        metrics["durations"][session_id] = session.get("duration_seconds")
-        metrics["subtask_counts"][session_id] = len(session.get("subtasks", []))
-        metrics["completion_status"][session_id] = (
-            "completed" if session.get("completed_at") else "in_progress"
-        )
-
-    # Find common and unique subtasks
     subtask_sets = {
         s["session_id"]: _normalize_subtasks(s.get("subtasks", [])) for s in sessions
     }
 
-    common_subtasks = []
-    if len(subtask_sets) > 1:
-        # Find intersection of all session subtasks
-        # Guard: filter out empty sets to avoid meaningless empty intersection
-        non_empty_sets = [s for s in subtask_sets.values() if s]
-        if non_empty_sets:
-            common_subtasks = list(set.intersection(*non_empty_sets))
-
-    unique_subtasks = {}
-    for session_id, subtasks in subtask_sets.items():
-        other_sessions = [sid for sid in subtask_sets if sid != session_id]
-        if other_sessions:
-            other_subtasks = set.union(*[subtask_sets[sid] for sid in other_sessions])
-            unique = subtasks - other_subtasks
-            unique_subtasks[session_id] = list(unique)
-        else:
-            unique_subtasks[session_id] = list(subtasks)
-
     return {
         "sessions": sessions,
         "metrics": metrics,
-        "common_subtasks": sorted(common_subtasks),
-        "unique_subtasks": unique_subtasks,
+        "common_subtasks": sorted(_find_common_subtasks(subtask_sets)),
+        "unique_subtasks": _find_unique_subtasks(subtask_sets),
     }
+
+
+def _collect_session_entries(
+    logs: dict,
+    session_id: int,
+    subtask_id: str | None,
+) -> list[dict]:
+    """Collect log entries for a given session, optionally filtered by subtask."""
+    entries = []
+    for phase_data in logs.get("phases", {}).values():
+        for entry in phase_data.get("entries", []):
+            if entry.get("session") != session_id:
+                continue
+            if subtask_id is not None and entry.get("subtask_id") != subtask_id:
+                continue
+            entries.append(entry)
+    return entries
+
+
+def _analyze_entries(entries: list[dict]) -> tuple[dict[str, int], list[dict]]:
+    """Analyze entries to extract tool usage counts and decision points.
+
+    Returns:
+        A tuple of (tool_usage_dict, decision_points_list).
+    """
+    tool_usage: dict[str, int] = {}
+    decision_points: list[dict] = []
+
+    for entry in entries:
+        if entry.get("type") == "tool_start":
+            tool_name = entry.get("tool_name", "unknown")
+            tool_usage[tool_name] = tool_usage.get(tool_name, 0) + 1
+
+        if entry.get("is_decision_point"):
+            decision_points.append(
+                {
+                    "timestamp": entry.get("timestamp"),
+                    "content": entry.get("content"),
+                    "reasoning": entry.get("reasoning"),
+                    "decision": entry.get("decision"),
+                    "alternatives": entry.get("alternatives", []),
+                }
+            )
+
+    return tool_usage, decision_points
+
+
+def _build_tool_usage_comparison(session_approaches: list[dict]) -> dict:
+    """Build tool usage comparison across sessions."""
+    tool_usage_comparison: dict[str, dict] = {}
+    for approach in session_approaches:
+        session_id = approach["session_id"]
+        for tool, count in approach["tool_usage"].items():
+            if tool not in tool_usage_comparison:
+                tool_usage_comparison[tool] = {}
+            tool_usage_comparison[tool][session_id] = count
+    return tool_usage_comparison
 
 
 def compare_session_approaches(
@@ -151,63 +216,26 @@ def compare_session_approaches(
             "decision_points": {},
         }
 
-    # Collect entries for each session
     session_approaches = []
 
     for session_id in session_ids:
-        # Find entries for this session
-        entries = []
-        for phase_data in logs.get("phases", {}).values():
-            for entry in phase_data.get("entries", []):
-                if entry.get("session") == session_id:
-                    # Filter by subtask if specified
-                    if subtask_id is None or entry.get("subtask_id") == subtask_id:
-                        entries.append(entry)
+        entries = _collect_session_entries(logs, session_id, subtask_id)
+        if not entries:
+            continue
 
-        if entries:
-            # Analyze tool usage
-            tool_usage = {}
-            decision_points = []
+        tool_usage, decision_points = _analyze_entries(entries)
 
-            for entry in entries:
-                # Count tool usage
-                if entry.get("type") == "tool_start":
-                    tool_name = entry.get("tool_name", "unknown")
-                    tool_usage[tool_name] = tool_usage.get(tool_name, 0) + 1
+        session_approaches.append(
+            {
+                "session_id": session_id,
+                "entry_count": len(entries),
+                "tool_usage": tool_usage,
+                "decision_points": decision_points,
+                "start_time": entries[0].get("timestamp"),
+                "end_time": entries[-1].get("timestamp"),
+            }
+        )
 
-                # Collect decision points
-                if entry.get("is_decision_point"):
-                    decision_points.append(
-                        {
-                            "timestamp": entry.get("timestamp"),
-                            "content": entry.get("content"),
-                            "reasoning": entry.get("reasoning"),
-                            "decision": entry.get("decision"),
-                            "alternatives": entry.get("alternatives", []),
-                        }
-                    )
-
-            session_approaches.append(
-                {
-                    "session_id": session_id,
-                    "entry_count": len(entries),
-                    "tool_usage": tool_usage,
-                    "decision_points": decision_points,
-                    "start_time": entries[0].get("timestamp") if entries else None,
-                    "end_time": entries[-1].get("timestamp") if entries else None,
-                }
-            )
-
-    # Compare tool usage across sessions
-    tool_usage_comparison = {}
-    for approach in session_approaches:
-        session_id = approach["session_id"]
-        for tool, count in approach["tool_usage"].items():
-            if tool not in tool_usage_comparison:
-                tool_usage_comparison[tool] = {}
-            tool_usage_comparison[tool][session_id] = count
-
-    # Collect all decision points by session
     decision_points_by_session = {
         approach["session_id"]: approach["decision_points"]
         for approach in session_approaches
@@ -216,9 +244,70 @@ def compare_session_approaches(
     return {
         "subtask_id": subtask_id,
         "sessions": session_approaches,
-        "tool_usage_comparison": tool_usage_comparison,
+        "tool_usage_comparison": _build_tool_usage_comparison(session_approaches),
         "decision_points": decision_points_by_session,
     }
+
+
+def _collect_entries_for_session(logs: dict, session_id: int) -> list[dict]:
+    """Collect all entries for a session, annotated with phase name."""
+    entries = []
+    for phase_name, phase_data in logs.get("phases", {}).items():
+        for entry in phase_data.get("entries", []):
+            if entry.get("session") == session_id:
+                entries.append({**entry, "phase": phase_name})
+    return entries
+
+
+def _count_entry_stats(entries: list[dict]) -> tuple[dict[str, int], int, int]:
+    """Count tool usage, decision points, and errors from entries.
+
+    Returns:
+        A tuple of (tool_usage, decision_count, error_count).
+    """
+    tool_usage: dict[str, int] = {}
+    decision_count = 0
+    error_count = 0
+
+    for entry in entries:
+        if entry.get("type") == "tool_start":
+            tool_name = entry.get("tool_name", "unknown")
+            tool_usage[tool_name] = tool_usage.get(tool_name, 0) + 1
+        if entry.get("is_decision_point"):
+            decision_count += 1
+        if entry.get("type") == "error":
+            error_count += 1
+
+    return tool_usage, decision_count, error_count
+
+
+def _calculate_subtask_times(
+    transitions: list[dict],
+    session_id: int,
+) -> dict[str, float]:
+    """Calculate time spent per subtask from transitions."""
+    session_transitions = [t for t in transitions if t.get("session") == session_id]
+    session_transitions.sort(key=lambda t: t.get("timestamp", ""))
+
+    subtask_times: dict[str, float] = {}
+    for i, transition in enumerate(session_transitions):
+        to_subtask = transition.get("to_subtask")
+        if not to_subtask or i + 1 >= len(session_transitions):
+            continue
+        try:
+            start = datetime.fromisoformat(transition["timestamp"])
+            end = datetime.fromisoformat(session_transitions[i + 1]["timestamp"])
+            duration = (end - start).total_seconds()
+            subtask_times[to_subtask] = subtask_times.get(to_subtask, 0) + duration
+        except (ValueError, KeyError) as exc:
+            logger.warning(
+                "Skipping transition with invalid timestamp "
+                "(session=%s, to_subtask=%s): %s",
+                session_id,
+                to_subtask,
+                exc,
+            )
+    return subtask_times
 
 
 def get_session_summary(
@@ -239,7 +328,6 @@ def get_session_summary(
     if not logs or "sessions" not in logs:
         return None
 
-    # Find the session
     session = next(
         (s for s in logs["sessions"] if s.get("session_id") == session_id),
         None,
@@ -247,53 +335,12 @@ def get_session_summary(
     if not session:
         return None
 
-    # Collect all entries for this session
-    entries = []
-    for phase_name, phase_data in logs.get("phases", {}).items():
-        for entry in phase_data.get("entries", []):
-            if entry.get("session") == session_id:
-                entries.append({**entry, "phase": phase_name})
-
-    # Analyze tool usage
-    tool_usage = {}
-    decision_count = 0
-    error_count = 0
-
-    for entry in entries:
-        if entry.get("type") == "tool_start":
-            tool_name = entry.get("tool_name", "unknown")
-            tool_usage[tool_name] = tool_usage.get(tool_name, 0) + 1
-        if entry.get("is_decision_point"):
-            decision_count += 1
-        if entry.get("type") == "error":
-            error_count += 1
-
-    # Calculate time spent per subtask
-    subtask_times: dict[str, float] = {}
-    transitions = logs.get("subtask_transitions", [])
-    session_transitions = [t for t in transitions if t.get("session") == session_id]
-
-    # Sort transitions by timestamp for correct duration calculation
-    session_transitions.sort(key=lambda t: t.get("timestamp", ""))
-
-    for i, transition in enumerate(session_transitions):
-        to_subtask = transition.get("to_subtask")
-        if to_subtask and i + 1 < len(session_transitions):
-            # Calculate time until next transition
-            try:
-                start = datetime.fromisoformat(transition["timestamp"])
-                end = datetime.fromisoformat(session_transitions[i + 1]["timestamp"])
-                duration = (end - start).total_seconds()
-                # Accumulate durations for subtasks visited multiple times
-                subtask_times[to_subtask] = subtask_times.get(to_subtask, 0) + duration
-            except (ValueError, KeyError) as exc:
-                logger.warning(
-                    "Skipping transition with invalid timestamp "
-                    "(session=%s, to_subtask=%s): %s",
-                    session_id,
-                    to_subtask,
-                    exc,
-                )
+    entries = _collect_entries_for_session(logs, session_id)
+    tool_usage, decision_count, error_count = _count_entry_stats(entries)
+    subtask_times = _calculate_subtask_times(
+        logs.get("subtask_transitions", []),
+        session_id,
+    )
 
     return {
         "session": session,

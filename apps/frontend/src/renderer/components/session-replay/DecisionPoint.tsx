@@ -139,7 +139,7 @@ export const DecisionPoint = memo(function DecisionPoint({
               </div>
               <ul className="space-y-2 pl-4">
                 {decision.options_considered.map((option, index) => (
-                  <li key={index} className="flex items-start gap-2">
+                  <li key={`${decision.id}-option-${option}`} className="flex items-start gap-2">
                     <span className="text-xs text-muted-foreground mt-0.5 shrink-0">
                       {index + 1}.
                     </span>

@@ -72,14 +72,14 @@ function FilterDropdown<T extends string>({
   selected,
   onChange,
   renderItem,
-}: {
+}: Readonly<{
   title: string;
   icon: typeof Filter;
   items: T[];
   selected: T[];
   onChange: (selected: T[]) => void;
   renderItem?: (item: T) => React.ReactNode;
-}) {
+}>) {
   const { t } = useTranslation('session-replay');
 
   const toggleItem = useCallback((item: T) => {
@@ -149,7 +149,7 @@ export function SessionList({
   projectId,
   specId,
   onSessionClick,
-}: SessionListProps) {
+}: Readonly<SessionListProps>) {
   const { t } = useTranslation('session-replay');
   const project = useProjectStore((state) =>
     state.projects.find((p) => p.id === projectId)
@@ -180,7 +180,7 @@ export function SessionList({
 
       setIsLoading(true);
       try {
-        const result = await window.electronAPI.sessionReplay.listSessions(
+        const result = await (globalThis as unknown as Window).electronAPI.sessionReplay.listSessions(
           project.path,
           specId || '',
           filters
@@ -304,12 +304,13 @@ export function SessionList({
 
       {/* Session List */}
       <div className="flex-1 overflow-y-auto custom-scrollbar p-4">
-        {isLoading ? (
+        {isLoading && (
           <div className="flex items-center justify-center h-full text-muted-foreground">
             <Loader2 className="h-6 w-6 animate-spin mr-2" />
             <span>{t('sessionList.loading')}</span>
           </div>
-        ) : filteredSessions.length === 0 ? (
+        )}
+        {!isLoading && filteredSessions.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-center p-8">
             <div className="text-muted-foreground mb-2">
               {hasActiveFilters
@@ -322,7 +323,8 @@ export function SessionList({
               </div>
             )}
           </div>
-        ) : (
+        )}
+        {!isLoading && filteredSessions.length > 0 && (
           <div className="space-y-3">
             {filteredSessions.map((session) => (
               <SessionCard

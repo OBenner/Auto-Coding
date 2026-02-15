@@ -6,9 +6,9 @@
  */
 
 import { ipcMain } from 'electron';
-import crypto from 'crypto';
-import path from 'path';
-import { promises as fsPromises } from 'fs';
+import crypto from 'node:crypto';
+import path from 'node:path';
+import { promises as fsPromises } from 'node:fs';
 import { IPC_CHANNELS, AUTO_BUILD_PATHS } from '../../shared/constants';
 import { atomicWriteFile } from '../fs-utils';
 import type { IPCResult } from '../../shared/types';
@@ -136,6 +136,185 @@ function extractDecisionPoints(entries: LogEntry[]): ReplayDecisionPoint[] {
     );
 }
 
+/**
+ * Collect entries from specified phase or all phases
+ */
+function collectEntries(
+  phases: Record<string, PhaseData>,
+  phaseName?: string
+): LogEntry[] {
+  if (phaseName) {
+    const phaseData = phases[phaseName];
+    return phaseData ? [...phaseData.entries] : [];
+  }
+
+  const entries: LogEntry[] = [];
+  for (const phaseData of Object.values(phases)) {
+    entries.push(...phaseData.entries);
+  }
+  return entries;
+}
+
+/**
+ * Apply entry filters for session, subtask, tool, and decision point
+ */
+function applyEntryFilters(
+  entries: LogEntry[],
+  filters: {
+    session?: string;
+    subtask_id?: string;
+    tool_name?: string;
+    is_decision_point?: boolean;
+    limit?: number;
+  }
+): LogEntry[] {
+  let filtered = entries;
+
+  if (filters.session !== undefined) {
+    filtered = filtered.filter(
+      (entry) => entry.session === Number.parseInt(filters.session!, 10)
+    );
+  }
+
+  if (filters.subtask_id) {
+    filtered = filtered.filter(
+      (entry) => entry.subtask_id === filters.subtask_id
+    );
+  }
+
+  if (filters.tool_name) {
+    filtered = filtered.filter(
+      (entry) => entry.tool_name === filters.tool_name
+    );
+  }
+
+  if (filters.is_decision_point !== undefined) {
+    filtered = filtered.filter(
+      (entry) => entry.is_decision_point === filters.is_decision_point
+    );
+  }
+
+  return filtered;
+}
+
+/**
+ * Sort entries by timestamp ascending
+ */
+function sortEntriesByTimestamp(entries: LogEntry[]): void {
+  entries.sort(
+    (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+  );
+}
+
+/**
+ * Collect entries for a specific session from all phases
+ */
+function collectSessionEntries(
+  phases: Record<string, PhaseData>,
+  numericSessionId: number
+): LogEntry[] {
+  const entries: LogEntry[] = [];
+  for (const phaseData of Object.values(phases)) {
+    const phaseEntries = phaseData.entries.filter(
+      (entry) => entry.session === numericSessionId
+    );
+    entries.push(...phaseEntries);
+  }
+  sortEntriesByTimestamp(entries);
+  return entries;
+}
+
+/**
+ * Export a single session as JSON
+ */
+function exportSessionAsJson(logs: TaskLogs, numericSessionId: number): IPCResult<string> {
+  const session = logs.sessions.find((s) => s.session_id === numericSessionId);
+  if (!session) {
+    return { success: false, error: 'Session not found' };
+  }
+
+  const sessionEntries = logs.phases
+    ? collectSessionEntries(logs.phases, numericSessionId)
+    : [];
+
+  const sessionData = {
+    session,
+    entries: sessionEntries,
+    transitions: logs.subtask_transitions.filter(
+      (t) => t.session === numericSessionId
+    ),
+    bookmarks: (logs.bookmarks ?? []).filter((b) => b.session === numericSessionId),
+  };
+
+  return {
+    success: true,
+    data: JSON.stringify(sessionData, null, 2),
+  };
+}
+
+/**
+ * Export a single session as Markdown
+ */
+function exportSessionAsMarkdown(logs: TaskLogs, numericSessionId: number): IPCResult<string> {
+  const session = logs.sessions.find((s) => s.session_id === numericSessionId);
+  if (!session) {
+    return { success: false, error: 'Session not found' };
+  }
+
+  let markdown = `# Session ${session.session_id}\n\n`;
+  markdown += `**Started:** ${session.started_at}\n`;
+  markdown += `**Duration:** ${session.duration_seconds}s\n`;
+  markdown += `**Subtasks:** ${session.subtasks.join(', ')}\n\n`;
+
+  const allEntries = logs.phases
+    ? collectSessionEntries(logs.phases, numericSessionId)
+    : [];
+
+  const decisionPoints = extractDecisionPoints(allEntries);
+  if (decisionPoints.length > 0) {
+    markdown += `## Decision Points\n\n`;
+    for (const dp of decisionPoints) {
+      markdown += `### ${dp.phase} - ${dp.subtask}\n`;
+      markdown += `**Reasoning:** ${dp.reasoning}\n\n`;
+      markdown += `**Chosen Approach:** ${dp.chosen_approach}\n\n`;
+    }
+  }
+
+  return { success: true, data: markdown };
+}
+
+/**
+ * Export all sessions as Markdown
+ */
+function exportAllAsMarkdown(logs: TaskLogs): string {
+  let markdown = `# Task Logs: ${logs.spec_id}\n\n`;
+  markdown += `**Created:** ${logs.created_at}\n`;
+  markdown += `**Updated:** ${logs.updated_at}\n\n`;
+
+  for (const session of logs.sessions) {
+    markdown += `## Session ${session.session_id}\n\n`;
+    markdown += `**Started:** ${session.started_at}\n`;
+    markdown += `**Duration:** ${session.duration_seconds}s\n`;
+    markdown += `**Subtasks:** ${session.subtasks.join(', ')}\n\n`;
+  }
+
+  const bookmarks = logs.bookmarks ?? [];
+  if (bookmarks.length > 0) {
+    markdown += `## Bookmarks\n\n`;
+    for (const bookmark of bookmarks) {
+      markdown += `### ${bookmark.label}\n`;
+      markdown += `**Phase:** ${bookmark.phase}\n`;
+      markdown += `**Timestamp:** ${bookmark.timestamp}\n`;
+      if (bookmark.note) {
+        markdown += `**Note:** ${bookmark.note}\n`;
+      }
+      markdown += '\n';
+    }
+  }
+
+  return markdown;
+}
+
 /** Guard to prevent double-registration of IPC handlers */
 let sessionReplayHandlersRegistered = false;
 
@@ -168,7 +347,7 @@ export function registerSessionReplayHandlers(): void {
 
         const logs = await loadTaskLogs(specDir);
 
-        if (!logs || !logs.sessions) {
+        if (!logs?.sessions) {
           return { success: true, data: [] };
         }
 
@@ -206,11 +385,11 @@ export function registerSessionReplayHandlers(): void {
 
         const logs = await loadTaskLogs(specDir);
 
-        if (!logs || !logs.sessions) {
+        if (!logs?.sessions) {
           return { success: true, data: null };
         }
 
-        const numericSessionId = parseInt(sessionId, 10);
+        const numericSessionId = Number.parseInt(sessionId, 10);
         const session = logs.sessions.find((s) => s.session_id === numericSessionId);
 
         return { success: true, data: session || null };
@@ -245,7 +424,7 @@ export function registerSessionReplayHandlers(): void {
 
         const logs = await loadTaskLogs(specDir);
 
-        if (!logs || !logs.phases) {
+        if (!logs?.phases) {
           return { success: true, data: [] };
         }
 
@@ -253,7 +432,7 @@ export function registerSessionReplayHandlers(): void {
         const allEntries: LogEntry[] = [];
         for (const phaseData of Object.values(logs.phases)) {
           const sessionEntries = phaseData.entries.filter(
-            (entry) => !sessionId || entry.session === parseInt(sessionId, 10)
+            (entry) => !sessionId || entry.session === Number.parseInt(sessionId, 10)
           );
           allEntries.push(...sessionEntries);
         }
@@ -295,7 +474,7 @@ export function registerSessionReplayHandlers(): void {
 
         const logs = await loadTaskLogs(specDir);
 
-        if (!logs || !logs.phases) {
+        if (!logs?.phases) {
           return { success: true, data: [] };
         }
 
@@ -304,7 +483,7 @@ export function registerSessionReplayHandlers(): void {
         for (const phaseData of Object.values(logs.phases)) {
           const sessionEntries = sessionId
             ? phaseData.entries.filter(
-                (entry) => entry.session === parseInt(sessionId, 10)
+                (entry) => entry.session === Number.parseInt(sessionId, 10)
               )
             : phaseData.entries;
           allEntries.push(...sessionEntries);
@@ -344,7 +523,7 @@ export function registerSessionReplayHandlers(): void {
 
         const logs = await loadTaskLogs(specDir);
 
-        if (!logs || !logs.bookmarks) {
+        if (!logs?.bookmarks) {
           return { success: true, data: [] };
         }
 
@@ -352,7 +531,7 @@ export function registerSessionReplayHandlers(): void {
 
         // Filter by session if provided
         if (sessionId) {
-          const numericSessionId = parseInt(sessionId, 10);
+          const numericSessionId = Number.parseInt(sessionId, 10);
           bookmarks = bookmarks.filter((b) => b.session === numericSessionId);
         }
 
@@ -446,7 +625,7 @@ export function registerSessionReplayHandlers(): void {
 
         const logs = await loadTaskLogs(specDir);
 
-        if (!logs || !logs.bookmarks) {
+        if (!logs?.bookmarks) {
           return { success: false, error: 'No bookmarks found' };
         }
 
@@ -505,54 +684,13 @@ export function registerSessionReplayHandlers(): void {
 
         const logs = await loadTaskLogs(specDir);
 
-        if (!logs || !logs.phases) {
+        if (!logs?.phases) {
           return { success: true, data: [] };
         }
 
-        // Collect entries from specified phase or all phases
-        let entries: LogEntry[] = [];
-
-        if (filters.phase) {
-          const phaseData = logs.phases[filters.phase];
-          if (phaseData) {
-            entries = [...phaseData.entries];
-          }
-        } else {
-          for (const phaseData of Object.values(logs.phases)) {
-            entries.push(...phaseData.entries);
-          }
-        }
-
-        // Apply filters
-        // Empty sessionId returns all entries (no session filtering)
-        if (filters.session !== undefined) {
-          entries = entries.filter(
-            (entry) => entry.session === parseInt(filters.session!, 10)
-          );
-        }
-
-        if (filters.subtask_id) {
-          entries = entries.filter(
-            (entry) => entry.subtask_id === filters.subtask_id
-          );
-        }
-
-        if (filters.tool_name) {
-          entries = entries.filter(
-            (entry) => entry.tool_name === filters.tool_name
-          );
-        }
-
-        if (filters.is_decision_point !== undefined) {
-          entries = entries.filter(
-            (entry) => entry.is_decision_point === filters.is_decision_point
-          );
-        }
-
-        // Sort by timestamp
-        entries.sort(
-          (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-        );
+        let entries = collectEntries(logs.phases, filters.phase);
+        entries = applyEntryFilters(entries, filters);
+        sortEntriesByTimestamp(entries);
 
         // Apply limit
         if (filters.limit && filters.limit > 0) {
@@ -591,7 +729,7 @@ export function registerSessionReplayHandlers(): void {
 
         const logs = await loadTaskLogs(specDir);
 
-        if (!logs || !logs.phases) {
+        if (!logs?.phases) {
           return { success: true, data: [] };
         }
 
@@ -658,74 +796,11 @@ export function registerSessionReplayHandlers(): void {
           return { success: false, error: 'No logs found to export' };
         }
 
-        if (format === 'json') {
-          const numericSessionId = parseInt(sessionId, 10);
-          const session = logs.sessions.find((s) => s.session_id === numericSessionId);
-          if (!session) {
-            return { success: false, error: 'Session not found' };
-          }
+        const numericSessionId = Number.parseInt(sessionId, 10);
 
-          // Collect all entries for this session from all phases
-          const sessionEntries: LogEntry[] = [];
-          if (logs.phases) {
-            for (const phaseData of Object.values(logs.phases)) {
-              const phaseEntries = phaseData.entries.filter(
-                (entry) => entry.session === numericSessionId
-              );
-              sessionEntries.push(...phaseEntries);
-            }
-          }
-          sessionEntries.sort(
-            (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-          );
-
-          const sessionData = {
-            session,
-            entries: sessionEntries,
-            transitions: logs.subtask_transitions.filter(
-              (t) => t.session === numericSessionId
-            ),
-            bookmarks: (logs.bookmarks ?? []).filter((b) => b.session === numericSessionId),
-          };
-
-          return {
-            success: true,
-            data: JSON.stringify(sessionData, null, 2),
-          };
-        } else {
-          // Markdown export
-          const numericSessionId = parseInt(sessionId, 10);
-          const session = logs.sessions.find((s) => s.session_id === numericSessionId);
-          if (!session) {
-            return { success: false, error: 'Session not found' };
-          }
-
-          let markdown = `# Session ${session.session_id}\n\n`;
-          markdown += `**Started:** ${session.started_at}\n`;
-          markdown += `**Duration:** ${session.duration_seconds}s\n`;
-          markdown += `**Subtasks:** ${session.subtasks.join(', ')}\n\n`;
-
-          // Add decision points
-          const allEntries: LogEntry[] = [];
-          for (const phaseData of Object.values(logs.phases)) {
-            const sessionEntries = phaseData.entries.filter(
-              (entry) => entry.session === numericSessionId
-            );
-            allEntries.push(...sessionEntries);
-          }
-
-          const decisionPoints = extractDecisionPoints(allEntries);
-          if (decisionPoints.length > 0) {
-            markdown += `## Decision Points\n\n`;
-            for (const dp of decisionPoints) {
-              markdown += `### ${dp.phase} - ${dp.subtask}\n`;
-              markdown += `**Reasoning:** ${dp.reasoning}\n\n`;
-              markdown += `**Chosen Approach:** ${dp.chosen_approach}\n\n`;
-            }
-          }
-
-          return { success: true, data: markdown };
-        }
+        return format === 'json'
+          ? exportSessionAsJson(logs, numericSessionId)
+          : exportSessionAsMarkdown(logs, numericSessionId);
       } catch (error) {
         debugError('[Session Replay] Failed to export session:', error);
         return {
@@ -762,36 +837,9 @@ export function registerSessionReplayHandlers(): void {
             success: true,
             data: JSON.stringify(logs, null, 2),
           };
-        } else {
-          // Markdown export for all sessions
-          let markdown = `# Task Logs: ${logs.spec_id}\n\n`;
-          markdown += `**Created:** ${logs.created_at}\n`;
-          markdown += `**Updated:** ${logs.updated_at}\n\n`;
-
-          for (const session of logs.sessions) {
-            markdown += `## Session ${session.session_id}\n\n`;
-            markdown += `**Started:** ${session.started_at}\n`;
-            markdown += `**Duration:** ${session.duration_seconds}s\n`;
-            markdown += `**Subtasks:** ${session.subtasks.join(', ')}\n\n`;
-          }
-
-          // Add bookmarks section
-          const bookmarks = logs.bookmarks ?? [];
-          if (bookmarks.length > 0) {
-            markdown += `## Bookmarks\n\n`;
-            for (const bookmark of bookmarks) {
-              markdown += `### ${bookmark.label}\n`;
-              markdown += `**Phase:** ${bookmark.phase}\n`;
-              markdown += `**Timestamp:** ${bookmark.timestamp}\n`;
-              if (bookmark.note) {
-                markdown += `**Note:** ${bookmark.note}\n`;
-              }
-              markdown += '\n';
-            }
-          }
-
-          return { success: true, data: markdown };
         }
+
+        return { success: true, data: exportAllAsMarkdown(logs) };
       } catch (error) {
         debugError('[Session Replay] Failed to export all sessions:', error);
         return {

@@ -52,9 +52,9 @@ export const SessionCard = memo(function SessionCard({
 
   const isCompleted = session.completed_at !== null;
 
-  const duration = session.duration_seconds != null
-    ? `${Math.floor(session.duration_seconds / 60)}m`
-    : null;
+  const duration = session.duration_seconds == null
+    ? null
+    : `${Math.floor(session.duration_seconds / 60)}m`;
 
   const relativeTime = formatRelativeTime(session.started_at);
 

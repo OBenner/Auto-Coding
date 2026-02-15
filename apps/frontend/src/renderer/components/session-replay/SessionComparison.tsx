@@ -29,7 +29,6 @@ import {
 import type {
   SessionComparisonData,
   SessionApproachComparison,
-  SessionMetadata,
 } from '../../../shared/types';
 
 interface SessionComparisonProps {
@@ -74,7 +73,7 @@ export function SessionComparison({
   approachComparison,
   onBack,
   onSelectSession,
-}: SessionComparisonProps) {
+}: Readonly<SessionComparisonProps>) {
   const { t } = useTranslation('session-replay');
 
   // Local state for expandable sections
@@ -204,10 +203,10 @@ export function SessionComparison({
                     {t('sessionComparison.efficiency')}
                   </div>
                   <div className="text-sm font-medium text-center">
-                    {efficiency1 !== null ? `${efficiency1}/h` : '—'}
+                    {efficiency1 === null ? '—' : `${efficiency1}/h`}
                   </div>
                   <div className="text-sm font-medium text-center">
-                    {efficiency2 !== null ? `${efficiency2}/h` : '—'}
+                    {efficiency2 === null ? '—' : `${efficiency2}/h`}
                     {efficiencyDiff !== null && efficiencyDiff !== 0 && (
                       <Badge
                         variant={efficiencyDiff > 0 ? 'success' : 'warning'}

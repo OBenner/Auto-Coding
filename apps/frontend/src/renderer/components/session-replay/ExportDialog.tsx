@@ -70,7 +70,7 @@ export function ExportDialog({
   projectPath,
   specId,
   sessionId
-}: ExportDialogProps) {
+}: Readonly<ExportDialogProps>) {
   const { t } = useTranslation(['session-replay', 'dialogs']);
 
   // Form state
@@ -85,8 +85,8 @@ export function ExportDialog({
     try {
       // Call appropriate export function based on whether sessionId is provided
       const result = sessionId
-        ? await window.electronAPI.sessionReplay.exportSession(projectPath, specId, sessionId, format)
-        : await window.electronAPI.sessionReplay.exportAll(projectPath, specId, format);
+        ? await (globalThis as unknown as Window).electronAPI.sessionReplay.exportSession(projectPath, specId, sessionId, format)
+        : await (globalThis as unknown as Window).electronAPI.sessionReplay.exportAll(projectPath, specId, format);
 
       if (!result.success) {
         throw new Error(result.error || t('session-replay:errors.exportFailed'));
@@ -102,15 +102,16 @@ export function ExportDialog({
       link.href = url;
 
       // Generate filename
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const timestamp = new Date().toISOString().replaceAll(/[:.]/g, '-');
+      const extension = format === 'json' ? 'json' : 'md';
       const filename = sessionId
-        ? `session-${sessionId}-${timestamp}.${format === 'json' ? 'json' : 'md'}`
-        : `all-sessions-${timestamp}.${format === 'json' ? 'json' : 'md'}`;
+        ? `session-${sessionId}-${timestamp}.${extension}`
+        : `all-sessions-${timestamp}.${extension}`;
 
       link.download = filename;
       document.body.appendChild(link);
       link.click();
-      document.body.removeChild(link);
+      link.remove();
       URL.revokeObjectURL(url);
 
       // Close dialog on success

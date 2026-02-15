@@ -8,6 +8,61 @@ from pathlib import Path
 from .storage import load_task_logs
 
 
+def _filter_by_status(sessions: list[dict], status: str) -> list[dict]:
+    """Filter sessions by status string."""
+    status_filters = {
+        "completed": lambda s: s.get("completed_at") is not None,
+        "active": lambda s: s.get("completed_at") is None,
+        "failed": lambda s: s.get("status") == "failed",
+    }
+    filter_fn = status_filters.get(status, lambda s: s.get("status") == status)
+    return [s for s in sessions if filter_fn(s)]
+
+
+def _filter_by_timestamp(
+    items: list[dict],
+    timestamp_field: str,
+    after: str | None,
+    before: str | None,
+) -> list[dict]:
+    """Filter items by timestamp range.
+
+    Args:
+        items: List of dicts containing timestamps.
+        timestamp_field: Key name for the timestamp field.
+        after: ISO timestamp lower bound (exclusive), or None.
+        before: ISO timestamp upper bound (exclusive), or None.
+
+    Returns:
+        Filtered list of items.
+    """
+    if after is not None:
+        try:
+            after_dt = datetime.fromisoformat(after)
+            items = [
+                item
+                for item in items
+                if item.get(timestamp_field)
+                and datetime.fromisoformat(item[timestamp_field]) > after_dt
+            ]
+        except (ValueError, TypeError):
+            pass
+
+    if before is not None:
+        try:
+            before_dt = datetime.fromisoformat(before)
+            items = [
+                item
+                for item in items
+                if item.get(timestamp_field)
+                and datetime.fromisoformat(item[timestamp_field]) < before_dt
+            ]
+        except (ValueError, TypeError):
+            pass
+
+    return items
+
+
 def query_sessions(
     spec_dir: Path,
     session_id: int | None = None,
@@ -38,19 +93,11 @@ def query_sessions(
 
     sessions = logs["sessions"]
 
-    # Apply filters
     if session_id is not None:
         sessions = [s for s in sessions if s.get("session_id") == session_id]
 
     if status is not None:
-        if status == "completed":
-            sessions = [s for s in sessions if s.get("completed_at") is not None]
-        elif status == "active":
-            sessions = [s for s in sessions if s.get("completed_at") is None]
-        elif status == "failed":
-            sessions = [s for s in sessions if s.get("status") == "failed"]
-        else:
-            sessions = [s for s in sessions if s.get("status") == status]
+        sessions = _filter_by_status(sessions, status)
 
     if completed is not None:
         if completed:
@@ -58,36 +105,65 @@ def query_sessions(
         else:
             sessions = [s for s in sessions if s.get("completed_at") is None]
 
-    if started_after is not None:
-        try:
-            after_dt = datetime.fromisoformat(started_after)
-            sessions = [
-                s
-                for s in sessions
-                if s.get("started_at")
-                and datetime.fromisoformat(s["started_at"]) > after_dt
-            ]
-        except (ValueError, TypeError):
-            # Gracefully handle malformed or unparseable timestamp filters
-            pass
-
-    if started_before is not None:
-        try:
-            before_dt = datetime.fromisoformat(started_before)
-            sessions = [
-                s
-                for s in sessions
-                if s.get("started_at")
-                and datetime.fromisoformat(s["started_at"]) < before_dt
-            ]
-        except (ValueError, TypeError):
-            # Gracefully handle malformed or unparseable timestamp filters
-            pass
+    sessions = _filter_by_timestamp(
+        sessions, "started_at", started_after, started_before
+    )
 
     if has_subtask is not None:
         sessions = [s for s in sessions if has_subtask in s.get("subtasks", [])]
 
     return sessions
+
+
+def _collect_all_entries(logs: dict) -> list[dict]:
+    """Collect all entries from all phases, annotating with phase name."""
+    entries = []
+    for phase_name, phase_data in logs["phases"].items():
+        for entry in phase_data.get("entries", []):
+            entry_copy = dict(entry)
+            if "phase" not in entry_copy:
+                entry_copy["phase"] = phase_name
+            entries.append(entry_copy)
+    return entries
+
+
+def _apply_entry_filters(
+    entries: list[dict],
+    phase: str | None,
+    entry_type: str | None,
+    session: int | None,
+    subtask_id: str | None,
+    tool_name: str | None,
+    is_decision_point: bool | None,
+) -> list[dict]:
+    """Apply simple equality filters to entries."""
+    filter_specs = [
+        ("phase", phase),
+        ("type", entry_type),
+        ("session", session),
+        ("subtask_id", subtask_id),
+        ("tool_name", tool_name),
+        ("is_decision_point", is_decision_point),
+    ]
+    for field, value in filter_specs:
+        if value is not None:
+            entries = [e for e in entries if e.get(field) == value]
+    return entries
+
+
+def _filter_by_search_text(entries: list[dict], search_text: str) -> list[dict]:
+    """Filter entries by case-insensitive text search across multiple fields."""
+    search_lower = search_text.lower()
+    return [e for e in entries if _entry_matches_search(e, search_lower)]
+
+
+def _entry_matches_search(entry: dict, search_lower: str) -> bool:
+    """Check if an entry matches the search text in any searchable field."""
+    searchable_fields = ("content", "detail", "reasoning", "decision")
+    for field in searchable_fields:
+        if search_lower in entry.get(field, "").lower():
+            return True
+    return search_lower in " ".join(entry.get("alternatives") or []).lower()
 
 
 def query_entries(
@@ -126,75 +202,18 @@ def query_entries(
     if not logs or "phases" not in logs:
         return []
 
-    entries = []
+    entries = _collect_all_entries(logs)
 
-    # Collect all entries from all phases (shallow copy to avoid mutating stored data)
-    for phase_name, phase_data in logs["phases"].items():
-        for entry in phase_data.get("entries", []):
-            entry_copy = dict(entry)
-            # Add phase to entry if not present
-            if "phase" not in entry_copy:
-                entry_copy["phase"] = phase_name
-            entries.append(entry_copy)
-
-    # Apply filters
-    if phase is not None:
-        entries = [e for e in entries if e.get("phase") == phase]
-
-    if entry_type is not None:
-        entries = [e for e in entries if e.get("type") == entry_type]
-
-    if session is not None:
-        entries = [e for e in entries if e.get("session") == session]
-
-    if subtask_id is not None:
-        entries = [e for e in entries if e.get("subtask_id") == subtask_id]
-
-    if tool_name is not None:
-        entries = [e for e in entries if e.get("tool_name") == tool_name]
+    entries = _apply_entry_filters(
+        entries, phase, entry_type, session, subtask_id, tool_name, is_decision_point
+    )
 
     if search_text is not None:
-        search_lower = search_text.lower()
-        entries = [
-            e
-            for e in entries
-            if search_lower in e.get("content", "").lower()
-            or search_lower in e.get("detail", "").lower()
-            or search_lower in e.get("reasoning", "").lower()
-            or search_lower in e.get("decision", "").lower()
-            or search_lower in " ".join(e.get("alternatives") or []).lower()
-        ]
+        entries = _filter_by_search_text(entries, search_text)
 
-    if timestamp_after is not None:
-        try:
-            after_dt = datetime.fromisoformat(timestamp_after)
-            entries = [
-                e
-                for e in entries
-                if e.get("timestamp")
-                and datetime.fromisoformat(e["timestamp"]) > after_dt
-            ]
-        except (ValueError, TypeError):
-            # Gracefully handle malformed or unparseable timestamp filters
-            pass
-
-    if timestamp_before is not None:
-        try:
-            before_dt = datetime.fromisoformat(timestamp_before)
-            entries = [
-                e
-                for e in entries
-                if e.get("timestamp")
-                and datetime.fromisoformat(e["timestamp"]) < before_dt
-            ]
-        except (ValueError, TypeError):
-            # Gracefully handle malformed or unparseable timestamp filters
-            pass
-
-    if is_decision_point is not None:
-        entries = [
-            e for e in entries if e.get("is_decision_point") == is_decision_point
-        ]
+    entries = _filter_by_timestamp(
+        entries, "timestamp", timestamp_after, timestamp_before
+    )
 
     # Deterministic sort by timestamp before applying limit
     entries.sort(key=lambda e: e.get("timestamp", ""))
@@ -261,43 +280,73 @@ def query_subtask_transitions(
 
     transitions = logs["subtask_transitions"]
 
-    # Apply filters
-    if session is not None:
-        transitions = [t for t in transitions if t.get("session") == session]
+    # Apply simple equality filters
+    equality_filters = [
+        ("session", session),
+        ("from_subtask", from_subtask),
+        ("to_subtask", to_subtask),
+    ]
+    for field, value in equality_filters:
+        if value is not None:
+            transitions = [t for t in transitions if t.get(field) == value]
 
-    if from_subtask is not None:
-        transitions = [t for t in transitions if t.get("from_subtask") == from_subtask]
-
-    if to_subtask is not None:
-        transitions = [t for t in transitions if t.get("to_subtask") == to_subtask]
-
-    if timestamp_after is not None:
-        try:
-            after_dt = datetime.fromisoformat(timestamp_after)
-            transitions = [
-                t
-                for t in transitions
-                if t.get("timestamp")
-                and datetime.fromisoformat(t["timestamp"]) > after_dt
-            ]
-        except (ValueError, TypeError):
-            # Gracefully handle malformed or unparseable timestamp filters
-            pass
-
-    if timestamp_before is not None:
-        try:
-            before_dt = datetime.fromisoformat(timestamp_before)
-            transitions = [
-                t
-                for t in transitions
-                if t.get("timestamp")
-                and datetime.fromisoformat(t["timestamp"]) < before_dt
-            ]
-        except (ValueError, TypeError):
-            # Gracefully handle malformed or unparseable timestamp filters
-            pass
+    transitions = _filter_by_timestamp(
+        transitions, "timestamp", timestamp_after, timestamp_before
+    )
 
     return transitions
+
+
+def _entry_matches_text(
+    entry: dict,
+    search_term: str,
+    case_sensitive: bool,
+) -> bool:
+    """Check if a log entry matches the search term."""
+    fields = ("content", "detail", "reasoning")
+    for field in fields:
+        value = entry.get(field, "")
+        if not case_sensitive:
+            value = value.lower()
+        if search_term in value:
+            return True
+    return False
+
+
+def _search_entries(
+    logs: dict,
+    search_term: str,
+    case_sensitive: bool,
+) -> list[dict]:
+    """Search log entries across all phases."""
+    results = []
+    for phase_name, phase_data in logs.get("phases", {}).items():
+        for entry in phase_data.get("entries", []):
+            if not _entry_matches_text(entry, search_term, case_sensitive):
+                continue
+            entry_copy = {**entry}
+            if "phase" not in entry_copy:
+                entry_copy["phase"] = phase_name
+            results.append(entry_copy)
+    return results
+
+
+def _search_bookmarks(
+    logs: dict,
+    search_term: str,
+    case_sensitive: bool,
+) -> list[dict]:
+    """Search bookmarks for matching text."""
+    results = []
+    for bookmark in logs.get("bookmarks", []):
+        label = bookmark.get("label", "")
+        note = bookmark.get("note", "")
+        if not case_sensitive:
+            label = label.lower()
+            note = note.lower()
+        if search_term in label or search_term in note:
+            results.append(bookmark)
+    return results
 
 
 def search_all(
@@ -320,7 +369,7 @@ def search_all(
     Returns:
         Dictionary with 'entries' and 'bookmarks' keys containing matching results
     """
-    results = {"entries": [], "bookmarks": []}
+    results: dict[str, list] = {"entries": [], "bookmarks": []}
 
     logs = load_task_logs(spec_dir)
     if not logs:
@@ -328,43 +377,11 @@ def search_all(
 
     search_term = search_text if case_sensitive else search_text.lower()
 
-    # Search entries
     if include_entries:
-        for phase_name, phase_data in logs.get("phases", {}).items():
-            for entry in phase_data.get("entries", []):
-                content = entry.get("content", "")
-                detail = entry.get("detail", "")
-                reasoning = entry.get("reasoning", "")
+        results["entries"] = _search_entries(logs, search_term, case_sensitive)
 
-                if not case_sensitive:
-                    content = content.lower()
-                    detail = detail.lower()
-                    reasoning = reasoning.lower()
-
-                if (
-                    search_term in content
-                    or search_term in detail
-                    or search_term in reasoning
-                ):
-                    # Shallow copy to avoid mutating the original stored data
-                    entry_copy = {**entry}
-                    # Add phase to entry if not present
-                    if "phase" not in entry_copy:
-                        entry_copy["phase"] = phase_name
-                    results["entries"].append(entry_copy)
-
-    # Search bookmarks
     if include_bookmarks:
-        for bookmark in logs.get("bookmarks", []):
-            label = bookmark.get("label", "")
-            note = bookmark.get("note", "")
-
-            if not case_sensitive:
-                label = label.lower()
-                note = note.lower()
-
-            if search_term in label or search_term in note:
-                results["bookmarks"].append(bookmark)
+        results["bookmarks"] = _search_bookmarks(logs, search_term, case_sensitive)
 
     return results
 

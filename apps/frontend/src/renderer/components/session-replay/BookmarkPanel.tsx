@@ -65,7 +65,7 @@ export function BookmarkPanel({
   maxBookmarks = 50,
   disabled = false,
   className,
-}: BookmarkPanelProps) {
+}: Readonly<BookmarkPanelProps>) {
   const { t } = useTranslation('session-replay');
   const [expandedBookmark, setExpandedBookmark] = useState<string | null>(null);
 
@@ -127,21 +127,14 @@ export function BookmarkPanel({
       {/* Bookmark list */}
       <div className="space-y-2">
         {displayBookmarks.map((bookmark) => (
-          <div
+          <button
+            type="button"
             key={bookmark.id}
-            role="button"
-            tabIndex={0}
             className={cn(
               'group relative w-full text-left',
               onBookmarkClick && 'cursor-pointer hover:bg-muted/50 transition-colors'
             )}
             onClick={() => handleBookmarkClick(bookmark)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                handleBookmarkClick(bookmark);
-              }
-            }}
           >
             {/* Main bookmark card */}
             <div
@@ -234,7 +227,7 @@ export function BookmarkPanel({
                 </Button>
               )}
             </div>
-          </div>
+          </button>
         ))}
       </div>
 

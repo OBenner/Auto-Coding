@@ -148,6 +148,18 @@ def export_phase(
         return _format_phase_markdown(phase_data)
 
 
+def _matches_decision_point_filters(
+    entry: dict,
+    session_id: int | None,
+) -> bool:
+    """Check if a decision point entry matches the session filter."""
+    if not entry.get("is_decision_point"):
+        return False
+    if session_id is not None and entry.get("session") != session_id:
+        return False
+    return True
+
+
 def export_decision_points(
     spec_dir: Path,
     format: str = "json",
@@ -178,22 +190,16 @@ def export_decision_points(
 
     decision_points = []
 
-    # Collect decision points from all phases
     for phase_name, phase_data in logs["phases"].items():
-        # Apply phase filter
         if phase and phase_name != phase:
             continue
 
         for entry in phase_data.get("entries", []):
-            if entry.get("is_decision_point"):
-                # Apply session filter
-                if session_id is not None and entry.get("session") != session_id:
-                    continue
-
-                # Add phase to entry if not present
-                if "phase" not in entry:
-                    entry = {**entry, "phase": phase_name}
-                decision_points.append(entry)
+            if not _matches_decision_point_filters(entry, session_id):
+                continue
+            if "phase" not in entry:
+                entry = {**entry, "phase": phase_name}
+            decision_points.append(entry)
 
     if format == "json":
         return json.dumps(decision_points, indent=2, ensure_ascii=False)
@@ -201,16 +207,10 @@ def export_decision_points(
         return _format_decision_points_markdown(decision_points)
 
 
-def _format_session_markdown(data: dict) -> str:
-    """Format session data as markdown."""
-    session = data["session"]
-    lines = []
-
-    # Header
+def _format_session_metadata(session: dict, lines: list[str]) -> None:
+    """Append session metadata lines."""
     lines.append(f"# Session {session['session_id']}")
     lines.append("")
-
-    # Metadata
     lines.append("## Session Metadata")
     lines.append("")
     lines.append(f"- **Started At:** {session.get('started_at', 'N/A')}")
@@ -226,87 +226,104 @@ def _format_session_markdown(data: dict) -> str:
 
     lines.append("")
 
-    # Bookmarks
-    bookmarks = data.get("bookmarks", [])
-    if bookmarks:
-        lines.append("## Bookmarks")
-        lines.append("")
-        for bookmark in bookmarks:
-            lines.append(f"### {bookmark['label']}")
-            lines.append(f"- **Timestamp:** {bookmark['entry_timestamp']}")
-            lines.append(f"- **Phase:** {bookmark['phase']}")
-            if bookmark.get("note"):
-                lines.append(f"- **Note:** {bookmark['note']}")
-            lines.append("")
 
-    # Transitions
-    transitions = data.get("transitions", [])
-    if transitions:
-        lines.append("## Subtask Transitions")
-        lines.append("")
-        for transition in transitions:
-            from_subtask = transition.get("from_subtask") or "None"
-            to_subtask = transition.get("to_subtask") or "None"
-            timestamp = transition.get("timestamp", "N/A")
-            lines.append(f"- **{timestamp}**: {from_subtask} → {to_subtask}")
+def _format_bookmarks_section(bookmarks: list[dict], lines: list[str]) -> None:
+    """Append bookmarks section lines."""
+    if not bookmarks:
+        return
+    lines.append("## Bookmarks")
+    lines.append("")
+    for bookmark in bookmarks:
+        lines.append(f"### {bookmark['label']}")
+        lines.append(f"- **Timestamp:** {bookmark['entry_timestamp']}")
+        lines.append(f"- **Phase:** {bookmark['phase']}")
+        if bookmark.get("note"):
+            lines.append(f"- **Note:** {bookmark['note']}")
         lines.append("")
 
-    # Entries
-    entries = data.get("entries", [])
-    if entries:
-        lines.append("## Log Entries")
+
+def _format_transitions_section(transitions: list[dict], lines: list[str]) -> None:
+    """Append transitions section lines."""
+    if not transitions:
+        return
+    lines.append("## Subtask Transitions")
+    lines.append("")
+    for transition in transitions:
+        from_subtask = transition.get("from_subtask") or "None"
+        to_subtask = transition.get("to_subtask") or "None"
+        timestamp = transition.get("timestamp", "N/A")
+        lines.append(f"- **{timestamp}**: {from_subtask} \u2192 {to_subtask}")
+    lines.append("")
+
+
+def _format_entry_details(entry: dict, lines: list[str]) -> None:
+    """Append detail lines for a single log entry."""
+    timestamp = entry.get("timestamp", "N/A")
+    entry_type = entry.get("type", "unknown")
+    content = entry.get("content", "")
+
+    lines.append(f"#### [{timestamp}] {entry_type}")
+    if content:
+        lines.append(f"{content}")
+
+    if entry.get("is_decision_point"):
+        _format_entry_decision_point(entry, lines)
+
+    if entry.get("tool_name"):
+        lines.append(f"- **Tool:** {entry['tool_name']}")
+    if entry.get("subtask_id"):
+        lines.append(f"- **Subtask:** {entry['subtask_id']}")
+
+    lines.append("")
+
+
+def _format_entry_decision_point(entry: dict, lines: list[str]) -> None:
+    """Append decision point details for an entry."""
+    lines.append("")
+    lines.append("**Decision Point:**")
+    if entry.get("reasoning"):
+        lines.append(f"- **Reasoning:** {entry['reasoning']}")
+    if entry.get("decision"):
+        lines.append(f"- **Decision:** {entry['decision']}")
+    if entry.get("alternatives"):
+        lines.append(f"- **Alternatives:** {', '.join(entry['alternatives'])}")
+
+
+def _format_entries_section(entries: list[dict], lines: list[str]) -> None:
+    """Append log entries section grouped by phase."""
+    if not entries:
+        return
+    lines.append("## Log Entries")
+    lines.append("")
+
+    by_phase: dict[str, list[dict]] = {}
+    for entry in entries:
+        phase = entry.get("phase", "unknown")
+        if phase not in by_phase:
+            by_phase[phase] = []
+        by_phase[phase].append(entry)
+
+    for phase, phase_entries in by_phase.items():
+        lines.append(f"### Phase: {phase.title()}")
         lines.append("")
+        for entry in phase_entries:
+            _format_entry_details(entry, lines)
 
-        # Group by phase
-        by_phase = {}
-        for entry in entries:
-            phase = entry.get("phase", "unknown")
-            if phase not in by_phase:
-                by_phase[phase] = []
-            by_phase[phase].append(entry)
 
-        for phase, phase_entries in by_phase.items():
-            lines.append(f"### Phase: {phase.title()}")
-            lines.append("")
+def _format_session_markdown(data: dict) -> str:
+    """Format session data as markdown."""
+    lines: list[str] = []
 
-            for entry in phase_entries:
-                timestamp = entry.get("timestamp", "N/A")
-                entry_type = entry.get("type", "unknown")
-                content = entry.get("content", "")
-
-                lines.append(f"#### [{timestamp}] {entry_type}")
-                if content:
-                    lines.append(f"{content}")
-
-                # Add decision point details if present
-                if entry.get("is_decision_point"):
-                    lines.append("")
-                    lines.append("**Decision Point:**")
-                    if entry.get("reasoning"):
-                        lines.append(f"- **Reasoning:** {entry['reasoning']}")
-                    if entry.get("decision"):
-                        lines.append(f"- **Decision:** {entry['decision']}")
-                    if entry.get("alternatives"):
-                        lines.append(
-                            f"- **Alternatives:** {', '.join(entry['alternatives'])}"
-                        )
-
-                # Add tool details if present
-                if entry.get("tool_name"):
-                    lines.append(f"- **Tool:** {entry['tool_name']}")
-                if entry.get("subtask_id"):
-                    lines.append(f"- **Subtask:** {entry['subtask_id']}")
-
-                lines.append("")
+    _format_session_metadata(data["session"], lines)
+    _format_bookmarks_section(data.get("bookmarks", []), lines)
+    _format_transitions_section(data.get("transitions", []), lines)
+    _format_entries_section(data.get("entries", []), lines)
 
     return "\n".join(lines)
 
 
-def _format_all_sessions_markdown(data: dict) -> str:
-    """Format all sessions data as markdown."""
-    lines = []
-
-    # Header
+def _format_all_sessions_header(data: dict, lines: list[str]) -> None:
+    """Append the header section for all-sessions export."""
     spec_id = data.get("spec_id", "Unknown")
     lines.append(f"# Task Log Export: {spec_id}")
     lines.append("")
@@ -314,54 +331,65 @@ def _format_all_sessions_markdown(data: dict) -> str:
     lines.append(f"**Updated At:** {data.get('updated_at', 'N/A')}")
     lines.append("")
 
-    # Sessions summary
-    sessions = data.get("sessions", [])
+
+def _format_sessions_list(sessions: list[dict], lines: list[str]) -> None:
+    """Append individual session summaries."""
     lines.append(f"## Sessions ({len(sessions)})")
     lines.append("")
 
     for session in sessions:
-        session_id = session["session_id"]
-        started = session.get("started_at", "N/A")
-        completed = session.get("completed_at", "N/A")
+        lines.append(f"### Session {session['session_id']}")
+        lines.append(f"- **Started:** {session.get('started_at', 'N/A')}")
+        lines.append(f"- **Completed:** {session.get('completed_at', 'N/A')}")
         duration = session.get("duration_seconds")
-        subtasks = session.get("subtasks", [])
-
-        lines.append(f"### Session {session_id}")
-        lines.append(f"- **Started:** {started}")
-        lines.append(f"- **Completed:** {completed}")
         if duration is not None:
             lines.append(f"- **Duration:** {duration:.2f} seconds")
+        subtasks = session.get("subtasks", [])
         if subtasks:
             lines.append(f"- **Subtasks:** {', '.join(subtasks)}")
         lines.append("")
 
-    # Phases summary
-    phases = data.get("phases", {})
-    if phases:
-        lines.append("## Phases")
-        lines.append("")
-        for phase_name, phase_data in phases.items():
-            status = phase_data.get("status", "unknown")
-            entry_count = len(phase_data.get("entries", []))
-            lines.append(f"### {phase_name.title()}")
-            lines.append(f"- **Status:** {status}")
-            lines.append(f"- **Entries:** {entry_count}")
-            lines.append("")
 
-    # Bookmarks
-    bookmarks = data.get("bookmarks", [])
-    if bookmarks:
-        lines.append(f"## Bookmarks ({len(bookmarks)})")
+def _format_phases_summary(phases: dict, lines: list[str]) -> None:
+    """Append phases summary section."""
+    if not phases:
+        return
+    lines.append("## Phases")
+    lines.append("")
+    for phase_name, phase_data in phases.items():
+        status = phase_data.get("status", "unknown")
+        entry_count = len(phase_data.get("entries", []))
+        lines.append(f"### {phase_name.title()}")
+        lines.append(f"- **Status:** {status}")
+        lines.append(f"- **Entries:** {entry_count}")
         lines.append("")
-        for bookmark in bookmarks:
-            lines.append(f"### {bookmark['label']}")
-            lines.append(f"- **Phase:** {bookmark['phase']}")
-            lines.append(f"- **Timestamp:** {bookmark['entry_timestamp']}")
-            if bookmark.get("session"):
-                lines.append(f"- **Session:** {bookmark['session']}")
-            if bookmark.get("note"):
-                lines.append(f"- **Note:** {bookmark['note']}")
-            lines.append("")
+
+
+def _format_all_bookmarks_section(bookmarks: list[dict], lines: list[str]) -> None:
+    """Append bookmarks section for all-sessions export."""
+    if not bookmarks:
+        return
+    lines.append(f"## Bookmarks ({len(bookmarks)})")
+    lines.append("")
+    for bookmark in bookmarks:
+        lines.append(f"### {bookmark['label']}")
+        lines.append(f"- **Phase:** {bookmark['phase']}")
+        lines.append(f"- **Timestamp:** {bookmark['entry_timestamp']}")
+        if bookmark.get("session"):
+            lines.append(f"- **Session:** {bookmark['session']}")
+        if bookmark.get("note"):
+            lines.append(f"- **Note:** {bookmark['note']}")
+        lines.append("")
+
+
+def _format_all_sessions_markdown(data: dict) -> str:
+    """Format all sessions data as markdown."""
+    lines: list[str] = []
+
+    _format_all_sessions_header(data, lines)
+    _format_sessions_list(data.get("sessions", []), lines)
+    _format_phases_summary(data.get("phases", {}), lines)
+    _format_all_bookmarks_section(data.get("bookmarks", []), lines)
 
     return "\n".join(lines)
 
@@ -407,48 +435,53 @@ def _format_phase_markdown(phase_data: dict) -> str:
     return "\n".join(lines)
 
 
+def _format_single_decision_point(dp: dict, lines: list[str]) -> None:
+    """Format a single decision point as markdown."""
+    timestamp = dp.get("timestamp", "N/A")
+    phase = dp.get("phase", "unknown")
+    content = dp.get("content", "")
+
+    lines.append(f"## [{timestamp}] Phase: {phase.title()}")
+    lines.append("")
+
+    if content:
+        lines.append(f"**Summary:** {content}")
+        lines.append("")
+
+    if dp.get("reasoning"):
+        lines.append("### Reasoning")
+        lines.append(dp["reasoning"])
+        lines.append("")
+
+    if dp.get("decision"):
+        lines.append("### Decision")
+        lines.append(dp["decision"])
+        lines.append("")
+
+    if dp.get("alternatives"):
+        lines.append("### Alternatives Considered")
+        for alt in dp["alternatives"]:
+            lines.append(f"- {alt}")
+        lines.append("")
+
+    if dp.get("session"):
+        lines.append(f"**Session:** {dp['session']}")
+    if dp.get("subtask_id"):
+        lines.append(f"**Subtask:** {dp['subtask_id']}")
+
+    lines.append("")
+    lines.append("---")
+    lines.append("")
+
+
 def _format_decision_points_markdown(decision_points: list[dict]) -> str:
     """Format decision points as markdown."""
-    lines = []
+    lines: list[str] = []
 
     lines.append(f"# Decision Points ({len(decision_points)})")
     lines.append("")
 
     for dp in decision_points:
-        timestamp = dp.get("timestamp", "N/A")
-        phase = dp.get("phase", "unknown")
-        content = dp.get("content", "")
-
-        lines.append(f"## [{timestamp}] Phase: {phase.title()}")
-        lines.append("")
-
-        if content:
-            lines.append(f"**Summary:** {content}")
-            lines.append("")
-
-        if dp.get("reasoning"):
-            lines.append("### Reasoning")
-            lines.append(dp["reasoning"])
-            lines.append("")
-
-        if dp.get("decision"):
-            lines.append("### Decision")
-            lines.append(dp["decision"])
-            lines.append("")
-
-        if dp.get("alternatives"):
-            lines.append("### Alternatives Considered")
-            for alt in dp["alternatives"]:
-                lines.append(f"- {alt}")
-            lines.append("")
-
-        if dp.get("session"):
-            lines.append(f"**Session:** {dp['session']}")
-        if dp.get("subtask_id"):
-            lines.append(f"**Subtask:** {dp['subtask_id']}")
-
-        lines.append("")
-        lines.append("---")
-        lines.append("")
+        _format_single_decision_point(dp, lines)
 
     return "\n".join(lines)
