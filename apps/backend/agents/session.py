@@ -1361,6 +1361,21 @@ async def run_agent_session_isolated(
         subtask_id=subtask_id,
     )
 
+    # Pre-checks: fail fast if system is unhealthy (matches run_agent_session)
+    pressure = _memory_monitor.check_pressure()
+    if pressure == MemoryPressure.CRITICAL:
+        msg = "Cannot start isolated session: memory pressure is CRITICAL"
+        debug_error("session", msg, usage_mb=_memory_monitor.get_usage_mb())
+        return "error", msg, None
+
+    if not _api_circuit_breaker.can_execute():
+        msg = (
+            f"API circuit breaker is OPEN ({_api_circuit_breaker.name}). "
+            "Too many consecutive failures — waiting for recovery."
+        )
+        debug_error("session", msg)
+        return "error", msg, None
+
     # Initialize recovery manager for automatic crash recovery
     recovery_manager = RecoveryManager(spec_dir=spec_dir, project_dir=project_dir)
 

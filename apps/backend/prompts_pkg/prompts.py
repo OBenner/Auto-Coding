@@ -229,6 +229,8 @@ def _get_worktree_isolation_info(spec_dir: Path) -> tuple[str | None, str]:
             # Worktree root is the directory immediately under the marker
             after_marker = spec_dir_str[idx + len(marker) :]
             worktree_name = after_marker.split("/")[0] if after_marker else ""
+            if not worktree_name:
+                continue
             worktree_root = spec_dir_str[: idx + len(marker)] + worktree_name
             break
 
