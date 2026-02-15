@@ -31,6 +31,7 @@ from phase_config import get_phase_model, get_phase_thinking_budget
 from phase_event import ExecutionPhase, emit_phase
 from progress import count_subtasks, is_build_complete
 from security.constants import PROJECT_DIR_ENV_VAR
+from services.recovery import RecoveryManager
 from task_logger import (
     LogPhase,
     get_task_logger,
@@ -620,9 +621,6 @@ async def run_qa_validation_loop(
 
         if status == "approved":
             emit_phase(ExecutionPhase.COMPLETE, "QA validation passed")
-            # Reset error tracking on success
-            consecutive_errors = 0
-            last_error_context = None
 
             # Record successful iteration
             debug_success(
@@ -777,6 +775,76 @@ async def run_qa_validation_loop(
                     )
 
                 return False
+
+            # Enhanced escalation: Check for early escalation signals
+            # This uses the RecoveryManager to proactively identify high-risk situations
+            should_escalate = False
+            escalation_reason = ""
+
+            try:
+                recovery_manager = RecoveryManager(spec_dir, project_dir)
+
+                # Build error description from QA issues for escalation analysis
+                error_description = f"QA rejection with {len(current_issues)} issue(s)"
+                if current_issues:
+                    # Include first issue description for pattern matching
+                    error_description += f": {current_issues[0].get('title', '')}"
+
+                # Map QA iteration to a pseudo-subtask for recovery tracking
+                qa_subtask_id = f"qa_iteration_{qa_iteration}"
+
+                # Classify the failure type based on issues
+                from services.recovery import FailureType
+
+                failure_type = (
+                    FailureType.VERIFICATION_FAILED
+                )  # QA rejections are verification failures
+
+                # Check if we should escalate early (before max iterations)
+                should_escalate, escalation_reason = (
+                    recovery_manager.should_escalate_early(
+                        qa_subtask_id, failure_type, error_description
+                    )
+                )
+
+                if should_escalate:
+                    debug_error(
+                        "qa_loop",
+                        "Early escalation triggered by enhanced recovery logic",
+                        reason=escalation_reason,
+                        iteration=qa_iteration,
+                        max_iterations=MAX_QA_ITERATIONS,
+                    )
+                    print("\n⚠️  Early Escalation Triggered")
+                    print(f"   Reason: {escalation_reason}")
+                    print(
+                        f"   Escalating at iteration {qa_iteration}/{MAX_QA_ITERATIONS}..."
+                    )
+
+                    # Create escalation file
+                    await escalate_to_human(spec_dir, current_issues, qa_iteration)
+
+                    # End validation phase
+                    if task_logger:
+                        task_logger.end_phase(
+                            LogPhase.VALIDATION,
+                            success=False,
+                            message=f"QA escalated to human after {qa_iteration} iterations: {escalation_reason}",
+                        )
+
+                    # Update Linear
+                    if linear_task and linear_task.task_id:
+                        await linear_qa_max_iterations(spec_dir, qa_iteration)
+                        print(
+                            "\nLinear: Task marked as needing human intervention (early escalation)"
+                        )
+
+                    return False
+
+            except Exception as e:
+                # Don't fail the QA loop if escalation check fails
+                debug_warning("qa_loop", f"Early escalation check failed: {e}")
+                # Continue with normal fixer loop
 
             # Record rejection in Linear
             if linear_task and linear_task.task_id:

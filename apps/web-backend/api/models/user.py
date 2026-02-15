@@ -6,7 +6,6 @@ authentication, and profile management.
 """
 
 from datetime import datetime, UTC
-from typing import Optional
 
 from pydantic import BaseModel, EmailStr, Field, ConfigDict
 from sqlalchemy import Boolean, Column, DateTime, Integer, String

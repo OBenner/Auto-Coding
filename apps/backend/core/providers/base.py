@@ -180,6 +180,8 @@ class AIEngineProvider(ABC):
         """
         return self.validate_config()
 
+    # Abstract base class: optional cleanup hook with default no-op.
+    # Not marked @abstractmethod since cleanup is optional.
     def close(self) -> None:  # noqa: B027
         """Clean up provider resources.
 

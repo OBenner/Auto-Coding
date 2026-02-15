@@ -1,12 +1,13 @@
 import { app } from 'electron';
 import { existsSync, Dirent, promises as fsPromises } from 'fs';
 import path from 'path';
+import { atomicWriteFile } from './fs-utils';
 import { v4 as uuidv4 } from 'uuid';
 import type { Project, ProjectSettings, Task, TaskStatus, TaskMetadata, ImplementationPlan, ReviewReason, PlanSubtask } from '../shared/types';
 import { DEFAULT_PROJECT_SETTINGS, AUTO_BUILD_PATHS, getSpecsDir, JSON_ERROR_PREFIX, JSON_ERROR_TITLE_SUFFIX } from '../shared/constants';
 import { getAutoBuildPath, isInitialized } from './project-initializer';
 import { getTaskWorktreeDir } from './worktree-paths';
-import { findAllSpecPaths } from './utils/spec-path-helpers';
+import { findAllSpecPathsAsync } from './utils/spec-path-helpers';
 
 interface TabState {
   openProjectIds: string[];
@@ -79,7 +80,7 @@ export class ProjectStore {
    * Load store from disk (async version)
    */
   private async loadAsync(): Promise<StoreData> {
-    if (existsSync(this.storePath)) {
+    if (await this.fileExists(this.storePath)) {
       try {
         const content = await fsPromises.readFile(this.storePath, 'utf-8');
         const data = JSON.parse(content);
@@ -127,7 +128,7 @@ export class ProjectStore {
     this.writeInProgress = true;
     try {
       const content = JSON.stringify(this.data, null, 2);
-      await fsPromises.writeFile(this.storePath, content);
+      await atomicWriteFile(this.storePath, content);
 
       // Reset failure counter on success
       this.consecutiveFailures = 0;
@@ -261,7 +262,7 @@ export class ProjectStore {
    *
    * @returns Array of project IDs that were reset due to missing .auto-claude folder
    */
-  validateProjects(): string[] {
+  async validateProjects(): Promise<string[]> {
     const resetProjectIds: string[] = [];
     let hasChanges = false;
 
@@ -272,7 +273,7 @@ export class ProjectStore {
       }
 
       // Check if the project path still exists
-      if (!existsSync(project.path)) {
+      if (!(await this.fileExists(project.path))) {
         console.warn(`[ProjectStore] Project path no longer exists: ${project.path}`);
         continue; // Don't reset - let user handle this case
       }
@@ -342,7 +343,7 @@ export class ProjectStore {
     // 1. Scan main project specs directory (source of truth for task existence)
     const mainSpecsDir = path.join(project.path, specsBaseDir);
     const mainSpecIds = new Set<string>();
-    if (existsSync(mainSpecsDir)) {
+    if (await this.fileExists(mainSpecsDir)) {
       const mainTasks = await this.loadTasksFromSpecsDir(mainSpecsDir, project.path, 'main', projectId, specsBaseDir);
       allTasks.push(...mainTasks);
       // Track which specs exist in main project
@@ -353,14 +354,14 @@ export class ProjectStore {
     // NOTE FOR MAINTAINERS: Worktree tasks are only included if the spec also exists in main.
     // This prevents deleted tasks from "coming back" when the worktree isn't cleaned up.
     const worktreesDir = getTaskWorktreeDir(project.path);
-    if (existsSync(worktreesDir)) {
+    if (await this.fileExists(worktreesDir)) {
       try {
         const worktrees = await fsPromises.readdir(worktreesDir, { withFileTypes: true });
         for (const worktree of worktrees) {
           if (!worktree.isDirectory()) continue;
 
           const worktreeSpecsDir = path.join(worktreesDir, worktree.name, specsBaseDir);
-          if (existsSync(worktreeSpecsDir)) {
+          if (await this.fileExists(worktreeSpecsDir)) {
             const worktreeTasks = await this.loadTasksFromSpecsDir(
               worktreeSpecsDir,
               path.join(worktreesDir, worktree.name),
@@ -753,7 +754,7 @@ export class ProjectStore {
 
     for (const taskId of taskIds) {
       // Find ALL locations where this task exists (main + worktrees)
-      const specPaths = findAllSpecPaths(project.path, specsBaseDir, taskId);
+      const specPaths = await findAllSpecPathsAsync(project.path, specsBaseDir, taskId);
 
       // If spec directory doesn't exist anywhere, skip gracefully
       if (specPaths.length === 0) {
@@ -815,7 +816,7 @@ export class ProjectStore {
 
     for (const taskId of taskIds) {
       // Find ALL locations where this task exists (main + worktrees)
-      const specPaths = findAllSpecPaths(project.path, specsBaseDir, taskId);
+      const specPaths = await findAllSpecPathsAsync(project.path, specsBaseDir, taskId);
 
       if (specPaths.length === 0) {
         console.warn(`[ProjectStore] unarchiveTasks: Spec directory not found for task ${taskId}`);

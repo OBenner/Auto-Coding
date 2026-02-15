@@ -22,7 +22,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "apps" / "backend"))
 
 from ci_discovery import (
     CIConfig,
-    CIWorkflow,
     CIDiscovery,
     discover_ci,
     get_ci_test_commands,

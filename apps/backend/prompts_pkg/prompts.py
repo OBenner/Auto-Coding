@@ -198,6 +198,65 @@ The project root is the parent of auto-claude/. Implement code in the project ro
     return spec_context + prompt
 
 
+def _get_worktree_isolation_info(spec_dir: Path) -> tuple[str | None, str]:
+    """
+    Generate a worktree isolation warning if the spec is running inside a worktree.
+
+    Detects the worktree pattern (.auto-claude/worktrees/tasks/{spec-name}/) and
+    produces a prominent warning to prevent agents from escaping to the main project.
+
+    Args:
+        spec_dir: The spec directory path
+
+    Returns:
+        Tuple of (worktree_root, isolation_warning). Both are None/"" if not
+        in a worktree.
+    """
+    spec_dir_str = str(spec_dir).replace("\\", "/")
+
+    # Detect worktree patterns
+    worktree_markers = [
+        ".auto-claude/worktrees/tasks/",
+        ".worktrees/",
+    ]
+
+    worktree_root = None
+    parent_project = None
+    for marker in worktree_markers:
+        idx = spec_dir_str.find(marker)
+        if idx != -1:
+            parent_project = spec_dir_str[:idx].rstrip("/")
+            # Worktree root is the directory immediately under the marker
+            after_marker = spec_dir_str[idx + len(marker) :]
+            worktree_name = after_marker.split("/")[0] if after_marker else ""
+            if not worktree_name:
+                continue
+            worktree_root = spec_dir_str[: idx + len(marker)] + worktree_name
+            break
+
+    if not worktree_root or not parent_project:
+        return None, ""
+
+    warning = f"""## 🔒 WORKTREE ISOLATION — READ THIS CAREFULLY
+
+You are working inside an **isolated git worktree**, NOT the main project.
+
+- **Worktree root:** `{worktree_root}`
+- **Forbidden parent:** `{parent_project}`
+
+🚫 **DO NOT** `cd` to `{parent_project}` or any path outside your worktree.
+🚫 **DO NOT** read or write files in the parent project directory.
+✅ **ALL** your work must stay within `{worktree_root}`.
+
+If you see absolute paths referencing the parent project in error messages or
+imports, resolve them relative to your worktree — do NOT follow them outside.
+
+---
+
+"""
+    return worktree_root, warning
+
+
 def get_coding_prompt(spec_dir: Path) -> str:
     """
     Load the coding agent prompt with spec path injected.
@@ -218,6 +277,21 @@ def get_coding_prompt(spec_dir: Path) -> str:
 
     prompt = prompt_file.read_text(encoding="utf-8")
 
+    # Detect worktree isolation — if inside a worktree the "project root"
+    # becomes the worktree root, NOT the parent of auto-claude/.
+    worktree_root, isolation_warning = _get_worktree_isolation_info(spec_dir)
+
+    if isolation_warning:
+        project_root_note = (
+            f"The project root (your worktree) is `{worktree_root}`. "
+            "All code goes in the worktree root, not in the spec directory."
+        )
+    else:
+        project_root_note = (
+            "The project root is the parent of auto-claude/. "
+            "All code goes in the project root, not in the spec directory."
+        )
+
     spec_context = f"""## SPEC LOCATION
 
 Your spec and progress files are located at:
@@ -226,11 +300,14 @@ Your spec and progress files are located at:
 - Progress notes: `{spec_dir}/build-progress.txt`
 - Recovery context: `{spec_dir}/memory/attempt_history.json`
 
-The project root is the parent of auto-claude/. All code goes in the project root, not in the spec directory.
+{project_root_note}
 
 ---
 
 """
+
+    if isolation_warning:
+        spec_context += isolation_warning
 
     # Check for recovery context (stuck subtasks, retry hints)
     recovery_context = _get_recovery_context(spec_dir)
@@ -267,8 +344,6 @@ def _get_recovery_context(spec_dir: Path) -> str:
     Returns:
         Recovery context string or empty string
     """
-    import json
-
     attempt_history_file = spec_dir / "memory" / "attempt_history.json"
 
     if not attempt_history_file.exists():

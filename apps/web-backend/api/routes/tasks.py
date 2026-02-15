@@ -22,6 +22,12 @@ from core.config import settings
 
 logger = logging.getLogger(__name__)
 
+
+def _sanitize_log(value: str) -> str:
+    """Sanitize value for safe logging (prevent log injection)."""
+    return str(value).replace("\n", "\\n").replace("\r", "\\r")
+
+
 # Create router for task endpoints
 router = APIRouter(prefix="/api/tasks", tags=["tasks"])
 
@@ -360,7 +366,7 @@ async def get_task_detail(task_id: str):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error getting task detail for {task_id}: {e}", exc_info=True)
+        logger.error(f"Error getting task detail for {_sanitize_log(task_id)}: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to get task detail: {str(e)}",

@@ -16,7 +16,18 @@ import logging
 from collections.abc import Callable
 from typing import TypeVar
 
+from core.circuit_breaker import CircuitBreaker
+
 logger = logging.getLogger(__name__)
+
+# Per-model circuit breakers
+_model_breakers: dict[str, CircuitBreaker] = {}
+
+
+def reset_circuit_breakers() -> None:
+    """Reset all per-model circuit breakers. Useful for testing."""
+    _model_breakers.clear()
+
 
 # Model fallback chain mapping
 # Maps each model shorthand to its fallback sequence
@@ -81,6 +92,24 @@ def retry_with_fallback[T](
         # Determine if this is the initial attempt or a fallback
         is_fallback = attempt_num > 1
 
+        # Get or create a circuit breaker for this model
+        model_key = _extract_model_shorthand(current_model)
+        if model_key not in _model_breakers:
+            _model_breakers[model_key] = CircuitBreaker(
+                name=f"model_{model_key}",
+                failure_threshold=3,
+                recovery_timeout=60.0,
+            )
+        breaker = _model_breakers[model_key]
+
+        # Skip this model if its circuit breaker is open
+        if not breaker.can_execute():
+            logger.warning(
+                f"[SKIP] Circuit breaker open for model '{current_model}' — "
+                f"skipping to next fallback"
+            )
+            continue
+
         if is_fallback:
             # Log fallback transition with cost implications
             logger.warning(
@@ -95,6 +124,9 @@ def retry_with_fallback[T](
         for retry in range(max_retries_per_model):
             try:
                 result = callable_fn(current_model)
+
+                # Record success on the circuit breaker
+                breaker.record_success()
 
                 # Log success with appropriate context for cost analysis
                 if is_fallback:
@@ -122,6 +154,7 @@ def retry_with_fallback[T](
                 is_retryable = _is_retryable_error(e)
 
                 if is_retryable:
+                    breaker.record_failure(e)
                     if retry < max_retries_per_model - 1:
                         logger.warning(
                             f"[RETRY] API error with model '{current_model}' ({error_type}: {error_msg}). "

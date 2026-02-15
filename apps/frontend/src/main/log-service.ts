@@ -1,5 +1,6 @@
 import path from 'path';
 import { existsSync, mkdirSync, appendFileSync, readdirSync, readFileSync, writeFileSync, statSync } from 'fs';
+import { stripAnsiCodes } from '../shared/utils/ansi-sanitizer';
 
 export interface LogSession {
   sessionId: string;
@@ -96,9 +97,12 @@ export class LogService {
       return;
     }
 
+    // Strip ANSI escape codes before persisting to prevent color noise in log files
+    const cleanContent = stripAnsiCodes(content);
+
     // Add timestamp prefix for each line
     const timestamp = new Date().toISOString();
-    const lines = content.split('\n').filter(line => line.length > 0);
+    const lines = cleanContent.split('\n').filter(line => line.length > 0);
     const timestampedLines = lines.map(line => `[${timestamp}] ${line}`);
 
     // Add to buffer
