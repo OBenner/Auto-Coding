@@ -987,26 +987,10 @@ export function isSecurePath(pathStr: string): boolean {
  * @returns Expanded path or null if variables cannot be resolved
  */
 export function expandWindowsPath(pathPattern: string): string | null {
-  const envVars: Record<string, string | undefined> = {
-    '%PROGRAMFILES%': process.env.ProgramFiles || 'C:\\Program Files',
-    '%PROGRAMFILES(X86)%': process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)',
-    '%LOCALAPPDATA%': process.env.LOCALAPPDATA,
-    '%APPDATA%': process.env.APPDATA,
-    '%USERPROFILE%': process.env.USERPROFILE || os.homedir(),
-  };
+  // Reuse expandWindowsEnvVars for the actual expansion
+  const expandedPath = expandWindowsEnvVars(pathPattern);
 
-  let expandedPath = pathPattern;
-
-  for (const [placeholder, value] of Object.entries(envVars)) {
-    if (expandedPath.includes(placeholder)) {
-      if (!value) {
-        return null;
-      }
-      expandedPath = expandedPath.replace(placeholder, value);
-    }
-  }
-
-  // Verify no unexpanded placeholders remain (indicates unknown variable)
+  // Check if any required variables couldn't be resolved (still contain %VAR% patterns)
   if (/%[^%]+%/.test(expandedPath)) {
     return null;
   }
@@ -1025,37 +1009,31 @@ export function expandWindowsPath(pathPattern: string): string | null {
  * @param logPrefix - Prefix for console logging
  * @returns Array of valid executable paths found
  */
+/**
+ * Expand and validate Windows tool paths, returning candidate paths.
+ * Shared logic for both sync and async versions.
+ */
+function resolveWindowsToolCandidates(toolPaths: WindowsToolPaths): string[] {
+  if (!isWindows()) return [];
+
+  const candidates: string[] = [];
+  for (const pattern of toolPaths.patterns) {
+    const expandedDir = expandWindowsPath(pattern);
+    if (!expandedDir) continue;
+
+    const fullPath = path.join(expandedDir, toolPaths.executable);
+    if (isSecurePath(fullPath)) {
+      candidates.push(fullPath);
+    }
+  }
+  return candidates;
+}
+
 export function getWindowsExecutablePaths(
   toolPaths: WindowsToolPaths,
   _logPrefix: string = '[Windows Paths]'
 ): string[] {
-  // Only run on Windows
-  if (!isWindows()) {
-    return [];
-  }
-
-  const validPaths: string[] = [];
-
-  for (const pattern of toolPaths.patterns) {
-    const expandedDir = expandWindowsPath(pattern);
-
-    if (!expandedDir) {
-      continue;
-    }
-
-    const fullPath = path.join(expandedDir, toolPaths.executable);
-
-    // Security validation - reject potentially dangerous paths
-    if (!isSecurePath(fullPath)) {
-      continue;
-    }
-
-    if (existsSync(fullPath)) {
-      validPaths.push(fullPath);
-    }
-  }
-
-  return validPaths;
+  return resolveWindowsToolCandidates(toolPaths).filter(p => existsSync(p));
 }
 
 /**
@@ -1071,27 +1049,10 @@ export async function getWindowsExecutablePathsAsync(
   toolPaths: WindowsToolPaths,
   _logPrefix: string = '[Windows Paths]'
 ): Promise<string[]> {
-  // Only run on Windows
-  if (!isWindows()) {
-    return [];
-  }
-
+  const candidates = resolveWindowsToolCandidates(toolPaths);
   const validPaths: string[] = [];
 
-  for (const pattern of toolPaths.patterns) {
-    const expandedDir = expandWindowsPath(pattern);
-
-    if (!expandedDir) {
-      continue;
-    }
-
-    const fullPath = path.join(expandedDir, toolPaths.executable);
-
-    // Security validation - reject potentially dangerous paths
-    if (!isSecurePath(fullPath)) {
-      continue;
-    }
-
+  for (const fullPath of candidates) {
     try {
       await access(fullPath, constants.F_OK);
       validPaths.push(fullPath);
@@ -1104,41 +1065,33 @@ export async function getWindowsExecutablePathsAsync(
 }
 
 /**
+ * Get macOS Homebrew detection paths for a given executable.
+ * Returns paths where the tool might be installed via Homebrew on macOS.
+ */
+function getHomebrewDetectionPaths(executable: string): string[] {
+  if (!isMacOS()) return [];
+  return [
+    `/opt/homebrew/bin/${executable}`, // Apple Silicon
+    `/usr/local/bin/${executable}`,    // Intel Mac
+  ];
+}
+
+/**
  * Get Git detection paths for macOS Homebrew installations
- *
- * Returns paths where Git might be installed via Homebrew on macOS.
- * For Windows/Linux, use standard PATH or findExecutable instead.
  *
  * @returns Array of Git executable paths to check
  */
 export function getGitDetectionPaths(): string[] {
-  if (!isMacOS()) {
-    return [];
-  }
-
-  return [
-    '/opt/homebrew/bin/git', // Apple Silicon
-    '/usr/local/bin/git',    // Intel Mac
-  ];
+  return getHomebrewDetectionPaths('git');
 }
 
 /**
  * Get GitHub CLI detection paths for macOS Homebrew installations
  *
- * Returns paths where GitHub CLI (gh) might be installed via Homebrew on macOS.
- * For Windows/Linux, use standard PATH or findExecutable instead.
- *
  * @returns Array of gh executable paths to check
  */
 export function getGitHubCLIDetectionPaths(): string[] {
-  if (!isMacOS()) {
-    return [];
-  }
-
-  return [
-    '/opt/homebrew/bin/gh', // Apple Silicon
-    '/usr/local/bin/gh',    // Intel Mac
-  ];
+  return getHomebrewDetectionPaths('gh');
 }
 
 /**
@@ -1184,58 +1137,34 @@ export function getCommonBinPaths(): Record<string, string[]> {
 }
 
 /**
- * Find a Windows executable using the `where` command
- *
- * This is the most reliable method as it searches:
- * - All directories in PATH
- * - App Paths registry entries
- * - Current directory
- *
- * Works regardless of where the tool is installed (custom paths, different drives, etc.)
- *
- * @param executable - The executable name (e.g., 'git', 'gh', 'python')
- * @param logPrefix - Prefix for console logging
- * @returns The full path to the executable, or null if not found
+ * Select the best executable path from 'where' command output.
+ * Prefers .cmd/.bat/.exe extensions, validates path security.
  */
+function selectBestWherePath(rawOutput: string): string | null {
+  const paths = rawOutput.trim().split(/\r?\n/).filter(p => p.trim());
+  if (paths.length === 0) return null;
+
+  const foundPath = (paths.find(p => /\.(cmd|bat|exe)$/i.test(p)) || paths[0]).trim();
+  return isSecurePath(foundPath) ? foundPath : null;
+}
+
 export function findWindowsExecutableViaWhere(
   executable: string,
   _logPrefix: string = '[Windows Where]'
 ): string | null {
-  if (!isWindows()) {
-    return null;
-  }
-
-  // Security: Only allow simple executable names (alphanumeric, dash, underscore, dot)
-  if (!/^[\w.-]+$/.test(executable)) {
-    return null;
-  }
+  if (!isWindows()) return null;
+  if (!/^[\w.-]+$/.test(executable)) return null;
 
   try {
-    // Use 'where' command to find the executable
-    // where.exe is a built-in Windows command that finds executables
     const result = execFileSync('where.exe', [executable], {
       encoding: 'utf-8',
       timeout: 5000,
       windowsHide: true,
     }).trim();
 
-    // 'where' returns multiple paths separated by newlines if found in multiple locations
-    // Prefer paths with .cmd or .exe extensions (executable files)
-    const paths = result.split(/\r?\n/).filter(p => p.trim());
-
-    if (paths.length > 0) {
-      // Prefer .cmd, .bat, or .exe extensions, otherwise take first path
-      const foundPath = (paths.find(p => /\.(cmd|bat|exe)$/i.test(p)) || paths[0]).trim();
-
-      // Validate the path exists and is secure
-      if (existsSync(foundPath) && isSecurePath(foundPath)) {
-        return foundPath;
-      }
-    }
-
-    return null;
+    const foundPath = selectBestWherePath(result);
+    return foundPath && existsSync(foundPath) ? foundPath : null;
   } catch {
-    // 'where' returns exit code 1 if not found, which throws an error
     return null;
   }
 }
@@ -1245,14 +1174,6 @@ export function findWindowsExecutableViaWhere(
  *
  * Use this in async contexts to avoid blocking the main process.
  *
- * Find a Windows executable using the `where` command.
- * This is the most reliable method as it searches:
- * - All directories in PATH
- * - App Paths registry entries
- * - Current directory
- *
- * Works regardless of where the tool is installed (custom paths, different drives, etc.)
- *
  * @param executable - The executable name (e.g., 'git', 'gh', 'python')
  * @param logPrefix - Prefix for console logging
  * @returns Promise resolving to the full path or null if not found
@@ -1261,46 +1182,26 @@ export async function findWindowsExecutableViaWhereAsync(
   executable: string,
   _logPrefix: string = '[Windows Where]'
 ): Promise<string | null> {
-  if (!isWindows()) {
-    return null;
-  }
-
-  // Security: Only allow simple executable names (alphanumeric, dash, underscore, dot)
-  if (!/^[\w.-]+$/.test(executable)) {
-    return null;
-  }
+  if (!isWindows()) return null;
+  if (!/^[\w.-]+$/.test(executable)) return null;
 
   try {
-    // Use 'where' command to find the executable
-    // where.exe is a built-in Windows command that finds executables
     const { stdout } = await execFileAsync('where.exe', [executable], {
       encoding: 'utf-8',
       timeout: 5000,
       windowsHide: true,
     });
 
-    // 'where' returns multiple paths separated by newlines if found in multiple locations
-    // Prefer paths with .cmd, .bat, or .exe extensions (executable files)
-    const paths = stdout.trim().split(/\r?\n/).filter(p => p.trim());
+    const foundPath = selectBestWherePath(stdout);
+    if (!foundPath) return null;
 
-    if (paths.length > 0) {
-      // Prefer .cmd, .bat, or .exe extensions, otherwise take first path
-      const foundPath = (paths.find(p => /\.(cmd|bat|exe)$/i.test(p)) || paths[0]).trim();
-
-      // Validate the path exists and is secure
-      try {
-        await access(foundPath, constants.F_OK);
-        if (isSecurePath(foundPath)) {
-          return foundPath;
-        }
-      } catch {
-        // Path doesn't exist
-      }
+    try {
+      await access(foundPath, constants.F_OK);
+      return foundPath;
+    } catch {
+      return null;
     }
-
-    return null;
   } catch {
-    // 'where' returns exit code 1 if not found, which throws an error
     return null;
   }
 }

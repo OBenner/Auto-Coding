@@ -504,3 +504,33 @@ def modify_prompt_for_preferences(prompt: str, profile: PreferenceProfile) -> st
 
     # No final section found, append at the end
     return prompt + adaptive_section
+
+
+def app_settings_to_profile(settings: dict) -> PreferenceProfile:
+    """
+    Convert frontend AppSettings dict to a backend PreferenceProfile.
+
+    Field mapping:
+    - agentVerbosity        -> verbosity_level
+    - agentRiskTolerance    -> risk_tolerance
+    - agentProjectType      -> project_type
+    - agentCodingStyle.*    -> coding_style.*
+    - agentUserInstructions -> user_instructions
+    """
+    coding_style_data = settings.get("agentCodingStyle", {}) or {}
+    coding_style = CodingStylePreferences(
+        indentation=coding_style_data.get("indentation", "auto"),
+        quote_style=coding_style_data.get("quoteStyle", "auto"),
+        line_length=coding_style_data.get("lineLength"),
+        naming_convention=coding_style_data.get("namingConvention", "auto"),
+        comment_density=coding_style_data.get("commentDensity", "normal"),
+        type_hints=coding_style_data.get("typeHints", True),
+    )
+
+    return PreferenceProfile(
+        verbosity_level=VerbosityLevel(settings.get("agentVerbosity", "normal")),
+        risk_tolerance=RiskTolerance(settings.get("agentRiskTolerance", "balanced")),
+        project_type=ProjectType(settings.get("agentProjectType", "established")),
+        coding_style=coding_style,
+        user_instructions=settings.get("agentUserInstructions", []),
+    )

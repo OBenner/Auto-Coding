@@ -369,6 +369,21 @@ const browserMockAPI: ElectronAPI = {
     onQueueBlockedNoProfiles: () => () => {}
   },
 
+  // Session Replay API
+  sessionReplay: {
+    listSessions: async () => ({ success: true, data: [] }),
+    getSession: async () => ({ success: true, data: null }),
+    getTimeline: async () => ({ success: true, data: [] }),
+    getDecisionPoints: async () => ({ success: true, data: [] }),
+    getBookmarks: async () => ({ success: true, data: [] }),
+    addBookmark: async () => ({ success: true, data: { id: 'mock', timestamp: '', entry_timestamp: '', phase: '', label: '', note: null, session: 0, subtask_id: '' } }),
+    removeBookmark: async () => ({ success: true, data: undefined }),
+    getEntries: async () => ({ success: true, data: [] }),
+    search: async () => ({ success: true, data: [] }),
+    exportSession: async () => ({ success: true, data: '' }),
+    exportAll: async () => ({ success: true, data: '' }),
+  },
+
   // Scheduler API (build scheduling and queue management)
   scheduler: {
     scheduleBuild: async () => ({ success: true, data: { buildId: 'mock-build-1' } }),
@@ -533,6 +548,13 @@ const browserMockAPI: ElectronAPI = {
   disablePlugin: async () => ({ success: true, data: { success: true } }),
   installPlugin: async () => ({ success: true, data: { success: true } }),
   uninstallPlugin: async () => ({ success: true, data: { success: true } }),
+
+  // Context Viewer API
+  getContextStats: async () => ({ success: true, data: null }),
+  getTokenBreakdown: async () => ({ success: true, data: null }),
+  getPrioritizationScores: async () => ({ success: true, data: null }),
+  getOptimizationReport: async () => ({ success: true, data: null }),
+  exportContextSnapshot: async () => ({ success: true, data: null }),
 
   // Productivity analytics operations
   getProductivitySummary: async (

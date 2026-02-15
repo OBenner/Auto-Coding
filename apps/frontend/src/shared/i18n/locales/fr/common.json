@@ -73,6 +73,8 @@
     "stop": "Arrêter",
     "refresh": "Actualiser",
     "refreshing": "Actualisation...",
+    "showMore": "Afficher plus",
+    "showLess": "Afficher moins",
     "merge": "Fusionner",
     "discard": "Abandonner",
     "switch": "Changer",
@@ -610,7 +612,8 @@
       "description": "Veuillez vous ré-authentifier pour continuer à utiliser Auto-Coding.",
       "taskAffected": "Tâche affectée",
       "technicalDetails": "Détails techniques",
-      "goToSettings": "Aller aux paramètres"
+      "goToSettings": "Aller aux paramètres",
+      "badgeTooltip": "Problème d'authentification — cliquez pour résoudre"
     }
   },
   "roadmapProgress": {
@@ -705,6 +708,44 @@
     "deleteMemory": "Supprimer la mémoire",
     "exportMemories": "Exporter les mémoires"
   },
+  "contextViewer": {
+    "title": "Visionneuse de contexte",
+    "description": "Afficher et gérer la fenêtre de contexte IA",
+    "tokenStats": "Statistiques de jetons",
+    "sessionStats": "Statistiques de session",
+    "tokenBreakdown": "Répartition des jetons",
+    "optimization": "Optimisation",
+    "totalBudget": "Budget total",
+    "used": "Utilisé",
+    "remaining": "Restant",
+    "utilization": "Utilisation",
+    "currentTurn": "Tour actuel",
+    "totalTokensSent": "Total des jetons envoyés",
+    "uniqueFilesSent": "Fichiers uniques envoyés",
+    "files": "fichiers",
+    "toModify": "À modifier",
+    "toReference": "À référence",
+    "patterns": "Modèles",
+    "summaries": "Résumés",
+    "tokensSaved": "Jetons économisés",
+    "optimizationPercent": "Optimisation",
+    "targetPercent": "Objectif",
+    "deduplication": "Déduplication",
+    "filesProcessed": "Fichiers traités",
+    "duplicatesFound": "Doublons trouvés",
+    "savings": "Économies",
+    "noData": "Aucune donnée de contexte",
+    "noDataDescription": "Démarrez un agent IA pour voir les statistiques de contexte",
+    "loading": "Chargement...",
+    "failedToLoadStats": "Échec du chargement des statistiques",
+    "load": "Charger les données"
+  },
+  "status": {
+    "completed": "Terminé",
+    "inProgress": "En cours",
+    "failed": "Échoué",
+    "pending": "En attente"
+  },
   "commands": {
     "newTask": "Nouvelle Tâche",
     "newTaskDescription": "Créer une nouvelle tâche ou spec",
@@ -778,5 +819,10 @@
     "issueDescriptionPlaceholder": "Description détaillée du problème, y compris les étapes pour reproduire si applicable...",
     "issueSeverity": "Gravité",
     "submitReport": "Soumettre le rapport"
+  },
+  "quality": {
+    "score": "Score de qualité",
+    "trend": "Tendance",
+    "alert": "Alerte de qualité"
   }
 }

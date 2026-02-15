@@ -15,7 +15,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from core.sentry import capture_exception
-from graphiti_config import GraphitiConfig, GraphitiState
+from integrations.graphiti.config import GraphitiConfig, GraphitiState
 
 from .client import GraphitiClient
 from .code_relationships import CodeRelationshipQueries

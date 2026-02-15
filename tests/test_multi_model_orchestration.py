@@ -317,6 +317,15 @@ class TestCostTracking:
 class TestModelFallback:
     """Tests for model fallback when models are unavailable."""
 
+    @pytest.fixture(autouse=True)
+    def _reset_breakers(self):
+        """Reset circuit breakers between tests to avoid cross-test state."""
+        from core.model_fallback import reset_circuit_breakers
+
+        reset_circuit_breakers()
+        yield
+        reset_circuit_breakers()
+
     def test_fallback_chain_defined(self, test_env):
         """Test that MODEL_FALLBACK_CHAIN is properly defined."""
         from core.model_fallback import MODEL_FALLBACK_CHAIN

@@ -67,7 +67,7 @@ class TimingHistory:
             with open(self.history_file, encoding="utf-8") as f:
                 data = json.load(f)
                 self._records = data.get("records", [])
-        except (OSError, json.JSONDecodeError, UnicodeDecodeError, ValueError):
+        except (OSError, ValueError):
             # Corrupted or missing file - start fresh
             self._records = []
 
@@ -82,7 +82,7 @@ class TimingHistory:
             }
             with open(self.history_file, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2)
-        except (OSError, UnicodeEncodeError, ValueError):
+        except (OSError, ValueError):
             pass  # Silent failure - timing history is non-critical
 
     def record_completion(
