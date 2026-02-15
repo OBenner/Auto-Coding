@@ -947,6 +947,8 @@ export interface ElectronAPI {
 
   // Queue Routing API (rate limit recovery)
   queue: import('../../preload/api/queue-api').QueueAPI;
+  // Session Replay API for learning and review
+  sessionReplay: import('../../preload/api/modules/session-replay-api').SessionReplayAPI;
   // Scheduler API for build scheduling and queue management
   scheduler: import('../../preload/api/scheduler-api').SchedulerAPI;
 }

@@ -21,6 +21,7 @@ export * from './merge-analytics';
 export * from './session-context';
 export * from './productivity-analytics';
 export * from './template';
+export * from './session-replay';
 export * from './scheduler';
 export * from './decision';
 

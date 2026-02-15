@@ -25,6 +25,9 @@
     "showMetadata": "Show metadata",
     "hideMetadata": "Hide metadata"
   },
+  "taskDetail": {
+    "viewSessionReplay": "View Session Replay"
+  },
   "labels": {
     "running": "Running",
     "aiReview": "AI Review",
