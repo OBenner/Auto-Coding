@@ -534,6 +534,13 @@ const browserMockAPI: ElectronAPI = {
   installPlugin: async () => ({ success: true, data: { success: true } }),
   uninstallPlugin: async () => ({ success: true, data: { success: true } }),
 
+  // Context Viewer API
+  getContextStats: async () => ({ success: true, data: null }),
+  getTokenBreakdown: async () => ({ success: true, data: null }),
+  getPrioritizationScores: async () => ({ success: true, data: null }),
+  getOptimizationReport: async () => ({ success: true, data: null }),
+  exportContextSnapshot: async () => ({ success: true, data: null }),
+
   // Productivity analytics operations
   getProductivitySummary: async (
     _projectId?: string,

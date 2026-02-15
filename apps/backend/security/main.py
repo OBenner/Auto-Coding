@@ -24,6 +24,7 @@ See project_analyzer.py for the detection logic.
 """
 
 # Import from the security module to maintain backward compatibility
+# Optional: re-exported for backward compatibility facade
 from security import (  # noqa: F401
     BASE_COMMANDS,
     VALIDATORS,

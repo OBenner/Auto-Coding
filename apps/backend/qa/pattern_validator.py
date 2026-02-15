@@ -18,7 +18,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from graphiti_config import is_graphiti_enabled
+from integrations.graphiti.config import is_graphiti_enabled
 from memory.graphiti_helpers import get_graphiti_memory
 from memory.patterns import load_patterns
 

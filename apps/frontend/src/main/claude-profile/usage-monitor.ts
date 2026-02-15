@@ -425,6 +425,27 @@ export class UsageMonitor extends EventEmitter {
         needsReauthentication: this.needsReauthProfiles.has(profile.id)
       }));
 
+      // Also include API profiles in the startup minimal response
+      try {
+        const profilesFile = await loadProfilesFile();
+        for (const apiProfile of profilesFile.profiles) {
+          if (!apiProfile.apiKey) continue;
+          allProfiles.push({
+            profileId: apiProfile.id,
+            profileName: apiProfile.name,
+            sessionPercent: 0,
+            weeklyPercent: 0,
+            isAuthenticated: true,
+            isRateLimited: false,
+            availabilityScore: 100,
+            isActive: apiProfile.id === activeProfileId,
+            needsReauthentication: false
+          });
+        }
+      } catch (error) {
+        this.debugLog('[UsageMonitor:getAllProfilesUsage] Failed to load API profiles on startup:', error);
+      }
+
       // Return minimal data with auth status - don't return null!
       return {
         activeProfile: {
@@ -462,7 +483,10 @@ export class UsageMonitor extends EventEmitter {
       }
 
       // For active profile, use the current detailed usage (always fresh from last poll)
-      if (profile.id === activeProfileId && this.currentUsage) {
+      // IMPORTANT: Also verify currentUsageProfileId matches to prevent cross-contamination
+      // when an API profile is active but currentUsage was fetched for that API profile,
+      // not this OAuth profile
+      if (profile.id === activeProfileId && this.currentUsage && this.currentUsageProfileId === profile.id) {
         const summary = this.buildProfileUsageSummary(profile, this.currentUsage);
         profileResults[i] = summary;
         this.allProfilesUsageCache.set(profile.id, { usage: summary, fetchedAt: now });
@@ -558,11 +582,71 @@ export class UsageMonitor extends EventEmitter {
       }
     }
 
-    // Collect non-null results
+    // Collect non-null OAuth profile results
     for (const result of profileResults) {
       if (result) {
         allProfiles.push(result);
       }
+    }
+
+    // Include API profiles in the allProfiles list
+    // API profiles are stored separately from OAuth profiles and must be iterated independently
+    try {
+      const profilesFile = await loadProfilesFile();
+      for (const apiProfile of profilesFile.profiles) {
+        if (!apiProfile.apiKey) continue; // Skip profiles without API keys
+
+        // Check if this API profile is the active one and we have its usage data
+        if (apiProfile.id === activeProfileId && this.currentUsage && this.currentUsageProfileId === apiProfile.id) {
+          const summary: ProfileUsageSummary = {
+            profileId: apiProfile.id,
+            profileName: apiProfile.name,
+            sessionPercent: this.currentUsage.sessionPercent,
+            weeklyPercent: this.currentUsage.weeklyPercent,
+            sessionResetTimestamp: this.currentUsage.sessionResetTimestamp,
+            weeklyResetTimestamp: this.currentUsage.weeklyResetTimestamp,
+            isAuthenticated: true,
+            isRateLimited: false,
+            availabilityScore: this.calculateAvailabilityScore(
+              this.currentUsage.sessionPercent,
+              this.currentUsage.weeklyPercent,
+              false,
+              undefined,
+              true
+            ),
+            isActive: true,
+            lastFetchedAt: this.currentUsage.fetchedAt?.toISOString(),
+            needsReauthentication: false
+          };
+          this.allProfilesUsageCache.set(apiProfile.id, { usage: summary, fetchedAt: now });
+          allProfiles.push(summary);
+        } else {
+          // Inactive API profile or no current usage - use cached data or defaults
+          const cached = this.allProfilesUsageCache.get(apiProfile.id);
+          if (cached && (now - cached.fetchedAt) < UsageMonitor.PROFILE_USAGE_CACHE_TTL_MS) {
+            allProfiles.push({
+              ...cached.usage,
+              isActive: apiProfile.id === activeProfileId
+            });
+          } else {
+            // No cached data available - show defaults (0%)
+            const summary: ProfileUsageSummary = {
+              profileId: apiProfile.id,
+              profileName: apiProfile.name,
+              sessionPercent: 0,
+              weeklyPercent: 0,
+              isAuthenticated: true,
+              isRateLimited: false,
+              availabilityScore: 100,
+              isActive: apiProfile.id === activeProfileId,
+              needsReauthentication: false
+            };
+            allProfiles.push(summary);
+          }
+        }
+      }
+    } catch (error) {
+      this.debugLog('[UsageMonitor:getAllProfilesUsage] Failed to load API profiles:', error);
     }
 
     // Sort by availability score (highest first = most available)
@@ -1300,14 +1384,21 @@ export class UsageMonitor extends EventEmitter {
     // Per-profile tracking: if API fails for one profile, it only affects that profile
     if (this.shouldUseApiMethod(profileId) && credential) {
       this.debugLog('[UsageMonitor:FETCH] Attempting API fetch method');
-      const apiUsage = await this.fetchUsageViaAPI(credential, profileId, profileName, profileEmail, activeProfile);
-      if (apiUsage) {
-        this.debugLog('[UsageMonitor] Successfully fetched via API');
-        this.debugLog('[UsageMonitor:FETCH] API fetch successful:', {
-          sessionPercent: apiUsage.sessionPercent,
-          weeklyPercent: apiUsage.weeklyPercent
-        });
-        return apiUsage;
+      try {
+        const apiUsage = await this.fetchUsageViaAPI(credential, profileId, profileName, profileEmail, activeProfile);
+        if (apiUsage) {
+          this.debugLog('[UsageMonitor] Successfully fetched via API');
+          this.debugLog('[UsageMonitor:FETCH] API fetch successful:', {
+            sessionPercent: apiUsage.sessionPercent,
+            weeklyPercent: apiUsage.weeklyPercent
+          });
+          return apiUsage;
+        }
+      } catch (apiError) {
+        // Auth failures (401/403) and network errors should not prevent CLI fallback.
+        // The usage API is non-critical - gracefully degrade instead of triggering
+        // auth failure recovery (token refresh, profile marking, swap attempts).
+        this.debugLog('[UsageMonitor:FETCH] API fetch error, falling through to CLI fallback:', apiError);
       }
 
       // API failed - record timestamp for cooldown-based retry
@@ -1460,7 +1551,7 @@ export class UsageMonitor extends EventEmitter {
       });
 
       if (!response.ok) {
-        console.error('[UsageMonitor] API error:', response.status, response.statusText, {
+        console.warn('[UsageMonitor] API error:', response.status, response.statusText, {
           provider,
           endpoint: usageEndpoint
         });

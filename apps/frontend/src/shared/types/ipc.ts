@@ -205,6 +205,7 @@ export interface ElectronAPI {
   // Task archive operations
   archiveTasks: (projectId: string, taskIds: string[], version?: string) => Promise<IPCResult<boolean>>;
   unarchiveTasks: (projectId: string, taskIds: string[]) => Promise<IPCResult<boolean>>;
+  exportTask: (projectId: string, taskId: string) => Promise<IPCResult<string>>;
 
   // Merge analytics operations
   getMergeHistory: (projectId: string, filter?: MergeAnalyticsFilter) => Promise<IPCResult<MergeOperationRecord[]>>;
@@ -896,12 +897,24 @@ export interface ElectronAPI {
   // Token statistics
   getTokenStats: (projectPath: string, specId: string) => Promise<IPCResult<import('./task').TaskTokenStats | null>>;
 
+  // Task spec file reading (for task overview display)
+  getImplementationPlan: (taskId: string) => Promise<IPCResult<ImplementationPlan | null>>;
+  getQAReport: (taskId: string) => Promise<IPCResult<string | null>>;
+  getQAEscalation: (taskId: string) => Promise<IPCResult<import('./task').QAEscalation | null>>;
+
   // Plugin management
   listPlugins: (options?: { pluginType?: string; enabledOnly?: boolean }) => Promise<IPCResult<import('../../main/plugins/types').PluginInfo[]>>;
   enablePlugin: (pluginName: string) => Promise<IPCResult<{ success: boolean }>>;
   disablePlugin: (pluginName: string) => Promise<IPCResult<{ success: boolean }>>;
   installPlugin: (source: { type: string; path?: string; marketplace_id?: string }) => Promise<IPCResult<{ success: boolean; plugin?: { name: string; version: string } }>>;
   uninstallPlugin: (pluginName: string) => Promise<IPCResult<{ success: boolean }>>;
+
+  // Context Viewer API
+  getContextStats: (projectId: string, specId?: string) => Promise<IPCResult<any>>;
+  getTokenBreakdown: (projectId: string, specId?: string) => Promise<IPCResult<any>>;
+  getPrioritizationScores: (projectId: string, task?: string) => Promise<IPCResult<any>>;
+  getOptimizationReport: (projectId: string, specId: string) => Promise<IPCResult<any>>;
+  exportContextSnapshot: (projectId: string, specId: string) => Promise<IPCResult<any>>;
 
   // Productivity analytics operations
   getProductivitySummary: (projectId: string, filter?: ProductivityAnalyticsFilter) => Promise<IPCResult<ProductivitySummary>>;
@@ -929,7 +942,8 @@ export interface ElectronAPI {
     agentType?: string;
     taskDescription?: string;
     context?: string;
-  }) => Promise<IPCResult<{ recorded: boolean }>>;
+  }) => Promise<IPCResult<{ recorded: boolean; reason?: string }>>;
+
 
   // Queue Routing API (rate limit recovery)
   queue: import('../../preload/api/queue-api').QueueAPI;

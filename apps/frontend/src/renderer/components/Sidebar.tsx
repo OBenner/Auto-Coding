@@ -56,6 +56,7 @@ import { AddProjectModal } from './AddProjectModal';
 import { GitSetupModal } from './GitSetupModal';
 import { RateLimitIndicator } from './RateLimitIndicator';
 import { ClaudeCodeStatusBadge } from './ClaudeCodeStatusBadge';
+import { useAuthFailureStore } from '../stores/auth-failure-store';
 import { UpdateBanner } from './UpdateBanner';
 import { SessionContextIndicator } from './SessionContextIndicator';
 import { NavIndicator } from './NavIndicator';
@@ -116,6 +117,7 @@ export function Sidebar({
   const projects = useProjectStore((state) => state.projects);
   const selectedProjectId = useProjectStore((state) => state.selectedProjectId);
   const settings = useSettingsStore((state) => state.settings);
+  const hasPendingAuthFailure = useAuthFailureStore((state) => state.hasPendingAuthFailure);
 
   const [showAddProjectModal, setShowAddProjectModal] = useState(false);
   const [showInitDialog, setShowInitDialog] = useState(false);
@@ -513,14 +515,25 @@ export function Sidebar({
                 <Button
                   variant="ghost"
                   size={isCollapsed ? "icon" : "sm"}
-                  className={isCollapsed ? "" : "flex-1 justify-start gap-2"}
+                  className={cn(isCollapsed ? "relative" : "relative flex-1 justify-start gap-2")}
                   onClick={onSettingsClick}
+                  aria-label={isCollapsed ? t('actions.settings') : undefined}
                 >
                   <Settings className="h-4 w-4" />
                   {!isCollapsed && t('actions.settings')}
+                  {hasPendingAuthFailure && (
+                    <span
+                      className="absolute top-1 right-1 h-2 w-2 rounded-full bg-destructive"
+                      aria-label={t('common:auth.failure.badgeTooltip')}
+                    />
+                  )}
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side={isCollapsed ? "right" : "top"}>{t('tooltips.settings')}</TooltipContent>
+              <TooltipContent side={isCollapsed ? "right" : "top"}>
+                {hasPendingAuthFailure
+                  ? t('common:auth.failure.badgeTooltip')
+                  : t('tooltips.settings')}
+              </TooltipContent>
             </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
