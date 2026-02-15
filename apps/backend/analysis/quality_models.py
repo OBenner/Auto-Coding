@@ -16,6 +16,17 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
+
+def _parse_iso_datetime(raw: str) -> datetime:
+    """Parse ISO datetime string, normalizing 'Z' suffix and naive timestamps to UTC."""
+    if isinstance(raw, str) and raw.endswith("Z"):
+        raw = raw[:-1] + "+00:00"
+    dt = datetime.fromisoformat(raw)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
 # =============================================================================
 # DATA MODELS
 # =============================================================================
@@ -78,17 +89,11 @@ class QualityScore:
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> QualityScore:
         """Create from dictionary."""
-        raw_ts = data["timestamp"]
-        if isinstance(raw_ts, str) and raw_ts.endswith("Z"):
-            raw_ts = raw_ts[:-1] + "+00:00"
-        ts = datetime.fromisoformat(raw_ts)
-        if ts.tzinfo is None:
-            ts = ts.replace(tzinfo=timezone.utc)
         return cls(
             session_id=data["session_id"],
             spec_id=data["spec_id"],
             agent_type=data["agent_type"],
-            timestamp=ts,
+            timestamp=_parse_iso_datetime(data["timestamp"]),
             test_pass_rate=data.get("test_pass_rate", 0.0),
             acceptance_criteria_met=data.get("acceptance_criteria_met", 0.0),
             user_approval_rate=data.get("user_approval_rate", 0.0),
@@ -206,8 +211,8 @@ class QualityTrend:
         """Create from dictionary."""
         return cls(
             spec_id=data["spec_id"],
-            period_start=datetime.fromisoformat(data["period_start"]),
-            period_end=datetime.fromisoformat(data["period_end"]),
+            period_start=_parse_iso_datetime(data["period_start"]),
+            period_end=_parse_iso_datetime(data["period_end"]),
             scores=[QualityScore.from_dict(s) for s in data.get("scores", [])],
             baseline_score=data.get("baseline_score", 0.0),
             baseline_calculated=data.get("baseline_calculated", False),

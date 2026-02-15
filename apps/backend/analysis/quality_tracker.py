@@ -513,30 +513,24 @@ def get_quality_by_agent_type(spec_dir: Path) -> dict[str, dict[str, Any]]:
             by_agent_type[score.agent_type] = []
         by_agent_type[score.agent_type].append(score)
 
-    # Calculate metrics per agent type
+    # Calculate metrics per agent type using QualityTrend
     results = {}
     for agent_type, agent_scores in by_agent_type.items():
-        avg_quality = sum(s.composite_score for s in agent_scores) / len(agent_scores)
+        agent_trend = QualityTrend(
+            spec_id=spec_dir.name,
+            period_start=agent_scores[0].timestamp,
+            period_end=agent_scores[-1].timestamp,
+            scores=agent_scores,
+            minimum_sessions_for_trend=MIN_SESSIONS_FOR_BASELINE,
+        )
 
-        # Simple trend: compare recent vs older
-        if len(agent_scores) >= MIN_SESSIONS_FOR_BASELINE:
-            recent = agent_scores[-TREND_WINDOW_SIZE:]
-            recent_avg = sum(s.composite_score for s in recent) / len(recent)
-
-            baseline = agent_scores[:MIN_SESSIONS_FOR_BASELINE]
-            baseline_avg = sum(s.composite_score for s in baseline) / len(baseline)
-
-            if recent_avg > baseline_avg + 0.05:
-                trend = "improving"
-            elif recent_avg < baseline_avg - 0.05:
-                trend = "degrading"
-            else:
-                trend = "stable"
-        else:
+        if not agent_trend.has_sufficient_data:
             trend = "insufficient_data"
+        else:
+            trend = agent_trend.trend_direction
 
         results[agent_type] = {
-            "average_quality": round(avg_quality, 3),
+            "average_quality": round(agent_trend.average_score, 3),
             "session_count": len(agent_scores),
             "trend": trend,
         }

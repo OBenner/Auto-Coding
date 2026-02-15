@@ -24,9 +24,14 @@ interface AlertItemProps {
   locale?: string;
 }
 
+const VALID_SEVERITIES = new Set(['critical', 'warning']);
+
 function AlertItem({ alert, onDismiss, locale = 'en-US' }: AlertItemProps) {
   const { t } = useTranslation('quality');
-  const isCritical = alert.severity === 'critical';
+  const severity = VALID_SEVERITIES.has(alert.severity?.toLowerCase?.())
+    ? (alert.severity.toLowerCase() as 'critical' | 'warning')
+    : 'warning';
+  const isCritical = severity === 'critical';
   const Icon = isCritical ? AlertCircle : AlertTriangle;
 
   const severityStyles = {
@@ -42,7 +47,7 @@ function AlertItem({ alert, onDismiss, locale = 'en-US' }: AlertItemProps) {
     }
   };
 
-  const styles = severityStyles[alert.severity] ?? severityStyles.warning;
+  const styles = severityStyles[severity];
 
   const formatDate = (timestamp: Date | string) => {
     const date = timestamp instanceof Date ? timestamp : new Date(timestamp);
@@ -69,7 +74,7 @@ function AlertItem({ alert, onDismiss, locale = 'en-US' }: AlertItemProps) {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-2">
             <Badge variant="outline" className={styles.badge}>
-              {t(`alerts.${alert.severity.toLowerCase()}`)}
+              {t(`alerts.${severity}`)}
             </Badge>
             <div className="flex items-center gap-1 text-xs text-muted-foreground">
               <Clock className="h-3 w-3" />

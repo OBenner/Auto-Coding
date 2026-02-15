@@ -280,20 +280,21 @@ def _calculate_quality_metrics(plan: dict[str, Any]) -> dict[str, Any]:
     quality_score += completion_rate * 40
 
     # QA component (0-40 points)
+    qa_value = 0.0
     if qa_status == "approved":
-        qa_component = 40.0
+        qa_value = 40.0
         # Reduce points for multiple QA iterations
         if qa_iterations > 1:
-            qa_component -= min((qa_iterations - 1) * 5, 20)
-        quality_score += max(qa_component, 20)  # Minimum 20 points if approved
+            qa_value -= min((qa_iterations - 1) * 5, 20)
+        qa_value = max(qa_value, 20)  # Minimum 20 points if approved
     elif qa_status == "in_progress":
-        quality_score += 10
+        qa_value = 10.0
+    quality_score += qa_value
 
     # Failure rate component (0-20 points)
-    if total_subtasks > 0:
-        failure_rate = failed_subtasks / total_subtasks
-        failure_component = (1 - failure_rate) * 20
-        quality_score += failure_component
+    failure_rate = failed_subtasks / total_subtasks if total_subtasks > 0 else 0.0
+    failure_component = (1 - failure_rate) * 20
+    quality_score += failure_component
 
     return {
         "completion_rate": round(completion_rate, 3),
@@ -302,12 +303,11 @@ def _calculate_quality_metrics(plan: dict[str, Any]) -> dict[str, Any]:
         "quality_score": round(quality_score, 1),
         "qa_iterations": qa_iterations,
         "qa_status": qa_status,
+        "qa_value": round(qa_value, 1),
         "total_subtasks": total_subtasks,
         "completed_subtasks": completed_subtasks,
         "failed_subtasks": failed_subtasks,
-        "failure_rate": round(
-            failed_subtasks / total_subtasks if total_subtasks > 0 else 0.0, 3
-        ),
+        "failure_rate": round(failure_rate, 3),
     }
 
 
@@ -534,7 +534,7 @@ Overall Quality Score: {quality["quality_score"]}/100
 
 Quality Score Breakdown:
   - Completion Rate (40%): {quality["completion_rate"] * 40:.1f}/40
-  - QA Success (40%): Based on QA status and iterations
+  - QA Success (40%): {quality["qa_value"]}/40
   - Low Failure Rate (20%): {(1 - quality["failure_rate"]) * 20:.1f}/20
 
 Quality Assessment:
