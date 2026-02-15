@@ -10,7 +10,6 @@ import asyncio
 import logging
 import sys
 from pathlib import Path
-from typing import Dict, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -36,10 +35,11 @@ def _init_websocket_broadcast():
     try:
         # Lazy import to avoid circular dependencies
         from api.websocket import (
+            broadcast_error_event,
             broadcast_execution_event,
             broadcast_log_event,
-            broadcast_error_event,
         )
+
         _broadcast_execution_event = broadcast_execution_event
         _broadcast_log_event = broadcast_log_event
         _broadcast_error_event = broadcast_error_event
@@ -63,7 +63,7 @@ def _sanitize_log(value: str) -> str:
 
 
 # Keep track of running agent tasks
-_running_tasks: Dict[str, asyncio.Task] = {}
+_running_tasks: dict[str, asyncio.Task] = {}
 
 
 def _get_backend_path() -> Path:
@@ -96,10 +96,10 @@ def _ensure_backend_in_path():
 async def run_agent_async(
     spec_id: str,
     agent_type: str,
-    project_dir: Optional[Path] = None,
+    project_dir: Path | None = None,
     model: str = "claude-sonnet-4-5-20250929",
     verbose: bool = False,
-) -> Dict[str, any]:
+) -> dict[str, any]:
     """
     Run an agent asynchronously.
 
@@ -179,7 +179,7 @@ async def run_agent_async(
             phase_progress=0.0,
             overall_progress=0.0,
             message=f"Starting {agent_type} agent",
-            current_subtask=None
+            current_subtask=None,
         )
 
     try:
@@ -189,7 +189,7 @@ async def run_agent_async(
             await _broadcast_log_event(
                 spec_id=canonical_spec_id,
                 log_line=f"Running planner agent with model {model}",
-                level="info"
+                level="info",
             ) if _broadcast_log_event else None
 
             success = await run_followup_planner(
@@ -206,7 +206,7 @@ async def run_agent_async(
                     phase_progress=100.0,
                     overall_progress=100.0,
                     message="Planner execution completed successfully",
-                    current_subtask=None
+                    current_subtask=None,
                 ) if _broadcast_execution_event else None
             else:
                 await _broadcast_execution_event(
@@ -215,14 +215,16 @@ async def run_agent_async(
                     phase_progress=0.0,
                     overall_progress=0.0,
                     message="Planner execution failed",
-                    current_subtask=None
+                    current_subtask=None,
                 ) if _broadcast_execution_event else None
 
             return {
                 "success": success,
                 "agent_type": agent_type,
                 "spec_id": canonical_spec_id,
-                "message": "Planner execution completed" if success else "Planner execution failed"
+                "message": "Planner execution completed"
+                if success
+                else "Planner execution failed",
             }
 
         elif agent_type in ["coder", "qa_reviewer", "qa_fixer"]:
@@ -230,7 +232,7 @@ async def run_agent_async(
             await _broadcast_log_event(
                 spec_id=canonical_spec_id,
                 log_line=f"Running {agent_type} agent with model {model}",
-                level="info"
+                level="info",
             ) if _broadcast_log_event else None
 
             await run_autonomous_agent(
@@ -248,14 +250,14 @@ async def run_agent_async(
                 phase_progress=100.0,
                 overall_progress=100.0,
                 message=f"{agent_type} execution completed successfully",
-                current_subtask=None
+                current_subtask=None,
             ) if _broadcast_execution_event else None
 
             return {
                 "success": True,
                 "agent_type": agent_type,
                 "spec_id": canonical_spec_id,
-                "message": f"{agent_type} execution completed"
+                "message": f"{agent_type} execution completed",
             }
 
         else:
@@ -270,7 +272,7 @@ async def run_agent_async(
                 spec_id=canonical_spec_id,
                 error_message=str(e),
                 error_type=type(e).__name__,
-                traceback=None  # Could add traceback if needed
+                traceback=None,  # Could add traceback if needed
             )
 
         return {
@@ -278,14 +280,14 @@ async def run_agent_async(
             "agent_type": agent_type,
             "spec_id": canonical_spec_id,
             "error": str(e),
-            "message": f"Agent execution failed: {e}"
+            "message": f"Agent execution failed: {e}",
         }
 
 
 def start_agent_task(
     spec_id: str,
     agent_type: str,
-    project_dir: Optional[Path] = None,
+    project_dir: Path | None = None,
     model: str = "claude-sonnet-4-5-20250929",
     verbose: bool = False,
 ) -> str:
@@ -334,7 +336,7 @@ def start_agent_task(
     return task_id
 
 
-def get_task_status(task_id: str) -> Optional[Dict[str, any]]:
+def get_task_status(task_id: str) -> dict[str, any] | None:
     """
     Get the status of a running task.
 
@@ -393,10 +395,7 @@ def cancel_task(task_id: str) -> bool:
 
 def cleanup_completed_tasks():
     """Remove completed tasks from tracking"""
-    completed = [
-        task_id for task_id, task in _running_tasks.items()
-        if task.done()
-    ]
+    completed = [task_id for task_id, task in _running_tasks.items() if task.done()]
 
     for task_id in completed:
         del _running_tasks[task_id]

@@ -5,7 +5,7 @@
  * in a drag-and-drop Kanban layout.
  */
 
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { TASK_STATUS_COLUMNS, TASK_STATUS_LABELS } from "../../shared/constants";
 import type { Task } from "../../shared/types";

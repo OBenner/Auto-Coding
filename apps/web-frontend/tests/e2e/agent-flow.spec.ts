@@ -15,20 +15,6 @@ import { expect, test } from "@playwright/test";
 // ============================================================================
 
 /**
- * Mock authentication token for testing
- */
-const MOCK_AUTH_TOKEN = "test-jwt-token-for-e2e-testing";
-
-/**
- * Helper to set up authenticated state
- */
-async function setupAuth(page: import("@playwright/test").Page) {
-	await page.evaluate((token: string) => {
-		localStorage.setItem("auth_token", token);
-	}, MOCK_AUTH_TOKEN);
-}
-
-/**
  * Wait for page to stabilize (loading states to resolve)
  */
 async function waitForPageLoad(page: import("@playwright/test").Page, maxWaitMs = 5000) {

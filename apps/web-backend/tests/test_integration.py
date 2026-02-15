@@ -13,44 +13,33 @@ from API request through WebSocket event delivery.
 """
 
 import asyncio
-import pytest
 from datetime import datetime
-from pathlib import Path
-from unittest.mock import patch, MagicMock, AsyncMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
-from fastapi import WebSocket
-
-# Import agent components
-from api.routes.agents import (
-    AgentRunRequest,
-    AgentRunResponse,
-    AgentStatusResponse,
-    AgentCancelResponse,
-)
+import pytest
 from api.models.agent_event import (
+    ErrorEvent,
     ExecutionEvent,
     ExecutionProgressData,
     LogEvent,
-    ErrorEvent,
 )
 from api.websocket import (
     ConnectionManager,
-    manager,
+    broadcast_error_event,
     broadcast_execution_event,
     broadcast_log_event,
-    broadcast_error_event,
-)
-from services.agent_runner import (
-    _sanitize_log,
-    _running_tasks,
-    get_task_status,
-    cancel_task,
-    cleanup_completed_tasks,
-    start_agent_task,
-    run_agent_async,
+    manager,
 )
 from core.security import create_access_token
-
+from fastapi import WebSocket
+from services.agent_runner import (
+    _running_tasks,
+    _sanitize_log,
+    cancel_task,
+    cleanup_completed_tasks,
+    get_task_status,
+    start_agent_task,
+)
 
 # ============================================================================
 # Agent Execution Flow Integration Tests
@@ -73,8 +62,7 @@ class TestAgentExecutionFlowIntegration:
         mock_start.return_value = "001:planner"
 
         start_response = test_client.post(
-            "/api/agents/run",
-            json={"spec_id": "001", "agent_type": "planner"}
+            "/api/agents/run", json={"spec_id": "001", "agent_type": "planner"}
         )
 
         assert start_response.status_code == 202
@@ -93,14 +81,15 @@ class TestAgentExecutionFlowIntegration:
     @patch("api.routes.agents.start_agent_task")
     @patch("api.routes.agents.cleanup_completed_tasks")
     @patch("api.routes.agents.cancel_task")
-    def test_start_agent_and_cancel(self, mock_cancel, mock_cleanup, mock_start, test_client):
+    def test_start_agent_and_cancel(
+        self, mock_cancel, mock_cleanup, mock_start, test_client
+    ):
         """Test starting an agent and then cancelling it."""
         # Start agent
         mock_start.return_value = "001:coder"
 
         start_response = test_client.post(
-            "/api/agents/run",
-            json={"spec_id": "001", "agent_type": "coder"}
+            "/api/agents/run", json={"spec_id": "001", "agent_type": "coder"}
         )
 
         assert start_response.status_code == 202
@@ -122,8 +111,7 @@ class TestAgentExecutionFlowIntegration:
 
         # Start agent
         start_response = test_client.post(
-            "/api/agents/run",
-            json={"spec_id": "001", "agent_type": "qa_reviewer"}
+            "/api/agents/run", json={"spec_id": "001", "agent_type": "qa_reviewer"}
         )
 
         assert start_response.status_code == 202
@@ -133,7 +121,7 @@ class TestAgentExecutionFlowIntegration:
         with patch("api.routes.agents.get_task_status") as mock_status:
             mock_status.return_value = {
                 "status": "completed",
-                "result": {"success": True, "message": "QA review passed"}
+                "result": {"success": True, "message": "QA review passed"},
             }
 
             status_response = test_client.get(f"/api/agents/status/{task_id}")
@@ -150,8 +138,7 @@ class TestAgentExecutionFlowIntegration:
                 # Start first agent
                 mock_start.return_value = "001:planner"
                 resp1 = test_client.post(
-                    "/api/agents/run",
-                    json={"spec_id": "001", "agent_type": "planner"}
+                    "/api/agents/run", json={"spec_id": "001", "agent_type": "planner"}
                 )
                 assert resp1.status_code == 202
                 assert resp1.json()["task_id"] == "001:planner"
@@ -159,8 +146,7 @@ class TestAgentExecutionFlowIntegration:
                 # Start second agent for different spec
                 mock_start.return_value = "002:planner"
                 resp2 = test_client.post(
-                    "/api/agents/run",
-                    json={"spec_id": "002", "agent_type": "planner"}
+                    "/api/agents/run", json={"spec_id": "002", "agent_type": "planner"}
                 )
                 assert resp2.status_code == 202
                 assert resp2.json()["task_id"] == "002:planner"
@@ -212,8 +198,8 @@ class TestWebSocketBroadcastIntegration:
                 phase_progress=50.0,
                 overall_progress=25.0,
                 message="Implementing feature",
-                current_subtask="subtask-1-1"
-            )
+                current_subtask="subtask-1-1",
+            ),
         )
 
         await connection_manager.broadcast_to_spec("spec-001", event)
@@ -238,7 +224,7 @@ class TestWebSocketBroadcastIntegration:
             spec_id="spec-001",
             log_line="[Coder] Starting implementation of authentication module",
             level="info",
-            data=None
+            data=None,
         )
 
         await connection_manager.broadcast_to_spec("spec-001", event)
@@ -262,7 +248,7 @@ class TestWebSocketBroadcastIntegration:
             error_message="Agent execution timed out after 30 minutes",
             error_type="TimeoutError",
             traceback="Traceback: ...",
-            data=None
+            data=None,
         )
 
         await connection_manager.broadcast_to_spec("spec-001", event)
@@ -287,10 +273,8 @@ class TestWebSocketBroadcastIntegration:
             timestamp=datetime.now().isoformat(),
             spec_id="spec-001",
             data=ExecutionProgressData(
-                phase="planning",
-                phase_progress=10.0,
-                overall_progress=5.0
-            )
+                phase="planning", phase_progress=10.0, overall_progress=5.0
+            ),
         )
 
         await connection_manager.broadcast_to_spec("spec-001", event)
@@ -331,8 +315,8 @@ class TestWebSocketBroadcastIntegration:
                 phase="qa_review",
                 phase_progress=100.0,
                 overall_progress=75.0,
-                message="QA review complete"
-            )
+                message="QA review complete",
+            ),
         )
 
         await connection_manager.broadcast_to_spec("spec-001", event)
@@ -358,6 +342,7 @@ class TestAgentRunnerServiceIntegration:
 
     def test_task_lifecycle_simulation(self):
         """Test simulated task lifecycle (create, status, complete)."""
+
         async def run_test():
             async def mock_agent_task():
                 await asyncio.sleep(0.01)
@@ -375,7 +360,8 @@ class TestAgentRunnerServiceIntegration:
                 assert status["status"] == "running"
 
                 # Run until complete
-                await task
+                result = await task
+                assert result is not None
 
                 # Check status after completion
                 status = get_task_status(task_id)
@@ -386,6 +372,7 @@ class TestAgentRunnerServiceIntegration:
 
     def test_task_cancellation_flow(self):
         """Test task cancellation flow."""
+
         async def long_running_task():
             try:
                 await asyncio.sleep(10)  # Long sleep
@@ -411,7 +398,7 @@ class TestAgentRunnerServiceIntegration:
                 try:
                     await task
                 except asyncio.CancelledError:
-                    pass
+                    pass  # Expected: task was intentionally cancelled
 
                 # Verify task is cancelled
                 assert task.cancelled()
@@ -420,6 +407,7 @@ class TestAgentRunnerServiceIntegration:
 
     def test_cleanup_removes_completed_tasks(self):
         """Test that cleanup_completed_tasks removes finished tasks."""
+
         async def run_test():
             async def quick_task():
                 return {"done": True}
@@ -427,7 +415,7 @@ class TestAgentRunnerServiceIntegration:
             with patch.dict(_running_tasks, {}, clear=True):
                 # Create a completed task
                 task = asyncio.create_task(quick_task())
-                await task  # Wait for completion
+                _result = await task  # Wait for completion
                 _running_tasks["completed-task"] = task
 
                 # Create a running task
@@ -453,7 +441,7 @@ class TestAgentRunnerServiceIntegration:
                 try:
                     await running
                 except asyncio.CancelledError:
-                    pass
+                    pass  # Expected: cleanup of running task
 
         asyncio.run(run_test())
 
@@ -489,7 +477,9 @@ class TestWebSocketAgentEventIntegration:
         """Test the complete WebSocket subscription flow for agent events."""
         token = create_access_token({"sub": "test@example.com"})
 
-        with test_client.websocket_connect(f"/ws/agent-events?token={token}") as websocket:
+        with test_client.websocket_connect(
+            f"/ws/agent-events?token={token}"
+        ) as websocket:
             # Receive connection confirmation
             data = websocket.receive_json()
             assert data["status"] == "connected"
@@ -509,7 +499,9 @@ class TestWebSocketAgentEventIntegration:
         """Test ping/pong keepalive during long agent executions."""
         token = create_access_token({"sub": "test@example.com"})
 
-        with test_client.websocket_connect(f"/ws/agent-events?token={token}") as websocket:
+        with test_client.websocket_connect(
+            f"/ws/agent-events?token={token}"
+        ) as websocket:
             # Receive connection confirmation
             websocket.receive_json()
 
@@ -525,14 +517,18 @@ class TestWebSocketAgentEventIntegration:
         token = create_access_token({"sub": "test@example.com"})
 
         # First connection
-        with test_client.websocket_connect(f"/ws/agent-events?token={token}") as websocket:
+        with test_client.websocket_connect(
+            f"/ws/agent-events?token={token}"
+        ) as websocket:
             websocket.receive_json()
             websocket.send_json({"action": "subscribe", "spec_id": "001"})
             data = websocket.receive_json()
             assert data["status"] == "subscribed"
 
         # Reconnect and resubscribe
-        with test_client.websocket_connect(f"/ws/agent-events?token={token}") as websocket:
+        with test_client.websocket_connect(
+            f"/ws/agent-events?token={token}"
+        ) as websocket:
             websocket.receive_json()
             websocket.send_json({"action": "subscribe", "spec_id": "001"})
             data = websocket.receive_json()
@@ -584,8 +580,8 @@ class TestAgentPhaseTransitionIntegration:
                     phase=phase,
                     phase_progress=phase_progress,
                     overall_progress=overall_progress,
-                    message=f"Phase: {phase}"
-                )
+                    message=f"Phase: {phase}",
+                ),
             )
             await conn_manager.broadcast_to_spec("spec-001", event)
 
@@ -625,8 +621,8 @@ class TestAgentPhaseTransitionIntegration:
                     phase_progress=progress,
                     overall_progress=progress * 0.5,  # 50% weight for coding
                     message=f"Working on {subtask_id}",
-                    current_subtask=subtask_id
-                )
+                    current_subtask=subtask_id,
+                ),
             )
             await conn_manager.broadcast_to_spec("spec-001", event)
 
@@ -657,8 +653,7 @@ class TestAgentErrorHandlingIntegration:
             mock_start.side_effect = FileNotFoundError("Spec not found: 999")
 
             response = test_client.post(
-                "/api/agents/run",
-                json={"spec_id": "999", "agent_type": "planner"}
+                "/api/agents/run", json={"spec_id": "999", "agent_type": "planner"}
             )
 
             assert response.status_code == 404
@@ -672,8 +667,7 @@ class TestAgentErrorHandlingIntegration:
             )
 
             response = test_client.post(
-                "/api/agents/run",
-                json={"spec_id": "001", "agent_type": "coder"}
+                "/api/agents/run", json={"spec_id": "001", "agent_type": "coder"}
             )
 
             assert response.status_code == 409
@@ -698,7 +692,7 @@ class TestAgentErrorHandlingIntegration:
             error_message="Build failed: Test suite not passing",
             error_type="BuildError",
             traceback="Traceback details...",
-            data=None
+            data=None,
         )
 
         await conn_manager.broadcast_to_spec("spec-001", error_event)
@@ -733,7 +727,7 @@ class TestAgentTypeIntegration:
 
                     response = test_client.post(
                         "/api/agents/run",
-                        json={"spec_id": "001", "agent_type": agent_type}
+                        json={"spec_id": "001", "agent_type": agent_type},
                     )
 
                     assert response.status_code == 202, f"Failed for {agent_type}"
@@ -751,8 +745,13 @@ class TestAgentTypeIntegration:
         for agent_type, expected_phase in phase_map.items():
             # Verify the mapping is consistent with event broadcasting
             assert expected_phase in [
-                "planning", "coding", "qa_review", "qa_fixing",
-                "idle", "complete", "failed"
+                "planning",
+                "coding",
+                "qa_review",
+                "qa_fixing",
+                "idle",
+                "complete",
+                "failed",
             ]
 
 
@@ -777,7 +776,7 @@ class TestBroadcastHelperIntegration:
 
         manager.active_connections[mock_ws] = {
             "subscriptions": {"test-spec"},
-            "user": {"sub": "test@example.com"}
+            "user": {"sub": "test@example.com"},
         }
         manager.spec_subscriptions["test-spec"] = {mock_ws}
 
@@ -788,7 +787,7 @@ class TestBroadcastHelperIntegration:
                 phase_progress=75.0,
                 overall_progress=50.0,
                 message="Implementation in progress",
-                current_subtask="subtask-2-1"
+                current_subtask="subtask-2-1",
             )
 
             mock_ws.send_json.assert_called_once()
@@ -808,7 +807,7 @@ class TestBroadcastHelperIntegration:
 
         manager.active_connections[mock_ws] = {
             "subscriptions": {"test-spec"},
-            "user": {}
+            "user": {},
         }
         manager.spec_subscriptions["test-spec"] = {mock_ws}
 
@@ -816,7 +815,7 @@ class TestBroadcastHelperIntegration:
             await broadcast_log_event(
                 spec_id="test-spec",
                 log_line="[Coder] Writing tests for authentication module",
-                level="debug"
+                level="debug",
             )
 
             mock_ws.send_json.assert_called_once()
@@ -835,7 +834,7 @@ class TestBroadcastHelperIntegration:
 
         manager.active_connections[mock_ws] = {
             "subscriptions": {"test-spec"},
-            "user": {}
+            "user": {},
         }
         manager.spec_subscriptions["test-spec"] = {mock_ws}
 
@@ -844,7 +843,7 @@ class TestBroadcastHelperIntegration:
                 spec_id="test-spec",
                 error_message="API rate limit exceeded",
                 error_type="RateLimitError",
-                traceback="Stack trace here..."
+                traceback="Stack trace here...",
             )
 
             mock_ws.send_json.assert_called_once()

@@ -37,7 +37,7 @@ interface TaskCreateProps {
 }
 
 export function TaskCreate({ onCreateSuccess }: TaskCreateProps) {
-	const { t } = useTranslation(["common", "tasks"]);
+	useTranslation(["common", "tasks"]);
 	const navigate = useNavigate();
 
 	// Form state

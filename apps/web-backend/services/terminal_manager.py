@@ -12,10 +12,8 @@ Platform Support:
 import asyncio
 import logging
 import os
-import sys
 import platform
 from pathlib import Path
-from typing import Optional, Dict
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +32,7 @@ PTYPROCESS_AVAILABLE = False
 if IS_UNIX:
     try:
         import ptyprocess
+
         PTYPROCESS_AVAILABLE = True
     except ImportError:
         logger.warning(
@@ -55,9 +54,9 @@ class TerminalSession:
         session_id: str,
         working_dir: str,
         shell: str = None,
-        env: Optional[Dict[str, str]] = None,
+        env: dict[str, str] | None = None,
         rows: int = 24,
-        cols: int = 80
+        cols: int = 80,
     ):
         """
         Initialize a terminal session.
@@ -121,7 +120,7 @@ class TerminalSession:
                     cwd=self.working_dir,
                     env=self.env,
                     rows=self.rows,
-                    cols=self.cols
+                    cols=self.cols,
                 )
                 return proc
 
@@ -136,7 +135,9 @@ class TerminalSession:
             return True
 
         except (ptyprocess.PtyProcessError, OSError) as e:
-            logger.error(f"Failed to create PTY for session {_sanitize_log(self.session_id)}: {e}")
+            logger.error(
+                f"Failed to create PTY for session {_sanitize_log(self.session_id)}: {e}"
+            )
             return False
 
     async def _start_subprocess(self) -> bool:
@@ -150,7 +151,7 @@ class TerminalSession:
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,  # Merge stderr into stdout
-                creationflags=asyncio.subprocess.CREATE_NO_WINDOW if IS_WINDOWS else 0
+                creationflags=asyncio.subprocess.CREATE_NO_WINDOW if IS_WINDOWS else 0,
             )
 
             # Start stdout reader task
@@ -165,7 +166,9 @@ class TerminalSession:
             return True
 
         except OSError as e:
-            logger.error(f"Failed to create subprocess for session {_sanitize_log(self.session_id)}: {e}")
+            logger.error(
+                f"Failed to create subprocess for session {_sanitize_log(self.session_id)}: {e}"
+            )
             return False
 
     def resize(self, rows: int, cols: int):
@@ -183,7 +186,10 @@ class TerminalSession:
             try:
                 self.pty_process.setwinsize(rows, cols)
                 logger.debug(
-                    f"Resized PTY terminal {_sanitize_log(self.session_id)} to {rows}x{cols}"
+                    "Resized PTY terminal %s to %dx%d",
+                    _sanitize_log(self.session_id),
+                    int(rows),
+                    int(cols),
                 )
             except (OSError, ptyprocess.PtyProcessError) as e:
                 logger.warning(f"Failed to set terminal size: {e}")
@@ -250,12 +256,11 @@ class TerminalSession:
             while self.process and self.process.stdout:
                 try:
                     data = await asyncio.wait_for(
-                        self.process.stdout.read(1024),
-                        timeout=0.1
+                        self.process.stdout.read(1024), timeout=0.1
                     )
                     if data:
                         self._output_buffer += data.decode("utf-8", errors="replace")
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     continue
         except Exception as e:
             if self._is_running:
@@ -296,7 +301,7 @@ class TerminalSession:
             try:
                 self.pty_process.terminate(force=True)
             except ptyprocess.PtyProcessError:
-                pass
+                logger.debug("Failed to terminate PTY process during cleanup")
         self.pty_process = None
 
         # Close subprocess
@@ -304,7 +309,7 @@ class TerminalSession:
             try:
                 self.process.terminate()
             except Exception:
-                pass
+                logger.debug("Failed to terminate subprocess during cleanup")
         self.process = None
 
         # Cancel reader task
@@ -343,7 +348,7 @@ class TerminalManager:
     def __init__(self):
         """Initialize the terminal manager."""
         # Active sessions: {session_id: TerminalSession}
-        self.sessions: Dict[str, TerminalSession] = {}
+        self.sessions: dict[str, TerminalSession] = {}
 
         # Log platform support
         if IS_UNIX and PTYPROCESS_AVAILABLE:
@@ -364,10 +369,10 @@ class TerminalManager:
         session_id: str,
         working_dir: str,
         shell: str = None,
-        env: Optional[Dict[str, str]] = None,
+        env: dict[str, str] | None = None,
         rows: int = 24,
-        cols: int = 80
-    ) -> Optional[TerminalSession]:
+        cols: int = 80,
+    ) -> TerminalSession | None:
         """
         Create a new terminal session.
 
@@ -401,7 +406,7 @@ class TerminalManager:
             shell=shell,
             env=env,
             rows=rows,
-            cols=cols
+            cols=cols,
         )
 
         # Note: start() is async, but we call it synchronously here
@@ -411,7 +416,7 @@ class TerminalManager:
 
         return session
 
-    def get_session(self, session_id: str) -> Optional[TerminalSession]:
+    def get_session(self, session_id: str) -> TerminalSession | None:
         """
         Get an existing terminal session.
 

@@ -270,7 +270,7 @@ export function KanbanBoard({
 	isRefreshing,
 	onStatusChange,
 }: KanbanBoardProps) {
-	const { t } = useTranslation(["common"]);
+	useTranslation(["common"]);
 	const [activeTask, setActiveTask] = useState<Task | null>(null);
 	const [overColumnId, setOverColumnId] = useState<string | null>(null);
 

@@ -5,10 +5,9 @@ Provides endpoints for viewing usage statistics and metrics.
 """
 
 import logging
-from typing import Dict, List, Optional
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
-
 from services.usage_tracker import UsageTracker
 
 logger = logging.getLogger(__name__)
@@ -28,8 +27,12 @@ class UsagePeriodStats(BaseModel):
     """Usage statistics for a specific time period"""
 
     period: str = Field(..., description="Time period identifier (e.g., '2026-02-04')")
-    total_requests: int = Field(default=0, description="Total number of requests in this period")
-    metrics: Dict = Field(default_factory=dict, description="Additional metrics for this period")
+    total_requests: int = Field(
+        default=0, description="Total number of requests in this period"
+    )
+    metrics: dict = Field(
+        default_factory=dict, description="Additional metrics for this period"
+    )
 
 
 class EndpointStats(BaseModel):
@@ -37,28 +40,44 @@ class EndpointStats(BaseModel):
 
     endpoint: str = Field(..., description="API endpoint path")
     period: str = Field(..., description="Time period (hourly, daily, monthly)")
-    total_requests: int = Field(default=0, description="Total requests to this endpoint")
-    methods: Dict[str, int] = Field(default_factory=dict, description="Request counts by HTTP method")
+    total_requests: int = Field(
+        default=0, description="Total requests to this endpoint"
+    )
+    methods: dict[str, int] = Field(
+        default_factory=dict, description="Request counts by HTTP method"
+    )
 
 
 class UsageStatsResponse(BaseModel):
     """Response model for usage statistics"""
 
-    user_id: Optional[int] = Field(None, description="User ID (if authenticated)")
+    user_id: int | None = Field(None, description="User ID (if authenticated)")
     period: str = Field(..., description="Time period type (hourly, daily, monthly)")
     days_back: int = Field(default=7, description="Number of days/periods included")
-    usage_data: List[UsagePeriodStats] = Field(default_factory=list, description="Usage data over time")
-    total_requests: int = Field(default=0, description="Total requests across all periods")
-    redis_healthy: bool = Field(default=True, description="Redis connection health status")
+    usage_data: list[UsagePeriodStats] = Field(
+        default_factory=list, description="Usage data over time"
+    )
+    total_requests: int = Field(
+        default=0, description="Total requests across all periods"
+    )
+    redis_healthy: bool = Field(
+        default=True, description="Redis connection health status"
+    )
 
 
 class UsageDashboardResponse(BaseModel):
     """Response model for usage dashboard overview"""
 
     total_requests_today: int = Field(default=0, description="Total requests today")
-    total_requests_this_month: int = Field(default=0, description="Total requests this month")
-    endpoints: List[EndpointStats] = Field(default_factory=list, description="Top endpoints by usage")
-    redis_healthy: bool = Field(default=True, description="Redis connection health status")
+    total_requests_this_month: int = Field(
+        default=0, description="Total requests this month"
+    )
+    endpoints: list[EndpointStats] = Field(
+        default_factory=list, description="Top endpoints by usage"
+    )
+    redis_healthy: bool = Field(
+        default=True, description="Redis connection health status"
+    )
 
 
 def get_usage_tracker() -> UsageTracker:
@@ -91,16 +110,18 @@ async def usage_info():
     return {
         "status": "ok",
         "service": "usage-tracking",
-        "description": "API usage tracking and analytics"
+        "description": "API usage tracking and analytics",
     }
 
 
 @router.get("/stats", status_code=status.HTTP_200_OK, response_model=UsageStatsResponse)
 async def get_usage_stats(
-    user_id: Optional[int] = Query(None, description="User ID to query (defaults to 1 for demo)"),
+    user_id: int | None = Query(
+        None, description="User ID to query (defaults to 1 for demo)"
+    ),
     period: str = Query("daily", description="Time period: hourly, daily, or monthly"),
     days_back: int = Query(7, ge=1, le=90, description="Number of days to look back"),
-    tracker: UsageTracker = Depends(get_usage_tracker)
+    tracker: UsageTracker = Depends(get_usage_tracker),
 ):
     """
     Get usage statistics for a user over time.
@@ -128,7 +149,7 @@ async def get_usage_stats(
         if period not in ["hourly", "daily", "monthly"]:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid period: {period}. Must be hourly, daily, or monthly"
+                detail=f"Invalid period: {period}. Must be hourly, daily, or monthly",
             )
 
         # Check Redis health
@@ -141,7 +162,7 @@ async def get_usage_stats(
                 days_back=days_back,
                 usage_data=[],
                 total_requests=0,
-                redis_healthy=False
+                redis_healthy=False,
             )
 
         # Default to user_id 1 for demo purposes if not provided
@@ -151,9 +172,7 @@ async def get_usage_stats(
 
         # Fetch usage data from tracker
         usage_data = tracker.get_user_usage(
-            user_id=user_id,
-            period=period,
-            days_back=days_back
+            user_id=user_id, period=period, days_back=days_back
         )
 
         # Convert to Pydantic models
@@ -161,7 +180,7 @@ async def get_usage_stats(
             UsagePeriodStats(
                 period=item["period"],
                 total_requests=item["total_requests"],
-                metrics=item["metrics"]
+                metrics=item["metrics"],
             )
             for item in usage_data
         ]
@@ -180,7 +199,7 @@ async def get_usage_stats(
             days_back=days_back,
             usage_data=usage_periods,
             total_requests=total_requests,
-            redis_healthy=redis_healthy
+            redis_healthy=redis_healthy,
         )
 
     except HTTPException:
@@ -189,14 +208,18 @@ async def get_usage_stats(
         logger.error(f"Error fetching usage stats: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to fetch usage statistics: {str(e)}"
+            detail=f"Failed to fetch usage statistics: {str(e)}",
         )
 
 
-@router.get("/dashboard", status_code=status.HTTP_200_OK, response_model=UsageDashboardResponse)
+@router.get(
+    "/dashboard", status_code=status.HTTP_200_OK, response_model=UsageDashboardResponse
+)
 async def get_usage_dashboard(
-    user_id: Optional[int] = Query(None, description="User ID to query (defaults to 1 for demo)"),
-    tracker: UsageTracker = Depends(get_usage_tracker)
+    user_id: int | None = Query(
+        None, description="User ID to query (defaults to 1 for demo)"
+    ),
+    tracker: UsageTracker = Depends(get_usage_tracker),
 ):
     """
     Get usage dashboard overview.
@@ -226,7 +249,7 @@ async def get_usage_dashboard(
                 total_requests_today=0,
                 total_requests_this_month=0,
                 endpoints=[],
-                redis_healthy=False
+                redis_healthy=False,
             )
 
         # Default to user_id 1 for demo purposes if not provided
@@ -235,12 +258,18 @@ async def get_usage_dashboard(
             logger.info("No user_id provided, defaulting to user_id=1 for demo")
 
         # Get today's usage
-        daily_usage = tracker.get_user_usage(user_id=user_id, period="daily", days_back=1)
+        daily_usage = tracker.get_user_usage(
+            user_id=user_id, period="daily", days_back=1
+        )
         total_requests_today = daily_usage[0]["total_requests"] if daily_usage else 0
 
         # Get monthly usage
-        monthly_usage = tracker.get_user_usage(user_id=user_id, period="monthly", days_back=1)
-        total_requests_this_month = monthly_usage[0]["total_requests"] if monthly_usage else 0
+        monthly_usage = tracker.get_user_usage(
+            user_id=user_id, period="monthly", days_back=1
+        )
+        total_requests_this_month = (
+            monthly_usage[0]["total_requests"] if monthly_usage else 0
+        )
 
         logger.info(
             f"Dashboard stats for user {_sanitize_log(str(user_id))}: "
@@ -251,21 +280,19 @@ async def get_usage_dashboard(
             total_requests_today=total_requests_today,
             total_requests_this_month=total_requests_this_month,
             endpoints=[],  # Endpoint breakdown can be added later
-            redis_healthy=redis_healthy
+            redis_healthy=redis_healthy,
         )
 
     except Exception as e:
         logger.error(f"Error fetching dashboard data: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to fetch dashboard data: {str(e)}"
+            detail=f"Failed to fetch dashboard data: {str(e)}",
         )
 
 
 @router.get("/health", status_code=status.HTTP_200_OK)
-async def usage_health_check(
-    tracker: UsageTracker = Depends(get_usage_tracker)
-):
+async def usage_health_check(tracker: UsageTracker = Depends(get_usage_tracker)):
     """
     Check health of usage tracking system (Redis connection).
 
@@ -284,7 +311,7 @@ async def usage_health_check(
         return {
             "status": "healthy" if redis_healthy else "unhealthy",
             "redis": "connected" if redis_healthy else "disconnected",
-            "service": "usage-tracking"
+            "service": "usage-tracking",
         }
 
     except Exception as e:

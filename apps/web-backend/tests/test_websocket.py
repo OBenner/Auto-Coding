@@ -6,30 +6,25 @@ including the ConnectionManager class, authentication, message handling,
 and event broadcasting.
 """
 
-import pytest
-import json
 from datetime import datetime
-from unittest.mock import patch, MagicMock, AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
-from fastapi import WebSocket, status
-from fastapi.testclient import TestClient
-
-# Import WebSocket components
-from api.websocket import (
-    ConnectionManager,
-    manager,
-    broadcast_execution_event,
-    broadcast_log_event,
-    broadcast_error_event,
-)
+import pytest
 from api.models.agent_event import (
     ExecutionEvent,
     ExecutionProgressData,
     LogEvent,
-    ErrorEvent,
+)
+
+# Import WebSocket components
+from api.websocket import (
+    ConnectionManager,
+    broadcast_error_event,
+    broadcast_execution_event,
+    broadcast_log_event,
 )
 from core.security import create_access_token
-
+from fastapi import WebSocket
 
 # ============================================================================
 # ConnectionManager Unit Tests
@@ -62,8 +57,13 @@ class TestConnectionManager:
 
         mock_websocket.accept.assert_called_once()
         assert mock_websocket in connection_manager.active_connections
-        assert connection_manager.active_connections[mock_websocket]["user"] == user_claims
-        assert connection_manager.active_connections[mock_websocket]["subscriptions"] == set()
+        assert (
+            connection_manager.active_connections[mock_websocket]["user"] == user_claims
+        )
+        assert (
+            connection_manager.active_connections[mock_websocket]["subscriptions"]
+            == set()
+        )
 
     @pytest.mark.asyncio
     async def test_connect_anonymous(self, connection_manager, mock_websocket):
@@ -78,7 +78,7 @@ class TestConnectionManager:
         # Manually add connection
         connection_manager.active_connections[mock_websocket] = {
             "subscriptions": {"spec-001"},
-            "user": {"sub": "test@example.com"}
+            "user": {"sub": "test@example.com"},
         }
         connection_manager.spec_subscriptions["spec-001"] = {mock_websocket}
 
@@ -98,25 +98,30 @@ class TestConnectionManager:
         # Set up connection
         connection_manager.active_connections[mock_websocket] = {
             "subscriptions": set(),
-            "user": {}
+            "user": {},
         }
 
         connection_manager.subscribe(mock_websocket, "spec-001")
 
-        assert "spec-001" in connection_manager.active_connections[mock_websocket]["subscriptions"]
+        assert (
+            "spec-001"
+            in connection_manager.active_connections[mock_websocket]["subscriptions"]
+        )
         assert mock_websocket in connection_manager.spec_subscriptions["spec-001"]
 
     def test_subscribe_multiple_specs(self, connection_manager, mock_websocket):
         """Test subscribing to multiple spec IDs."""
         connection_manager.active_connections[mock_websocket] = {
             "subscriptions": set(),
-            "user": {}
+            "user": {},
         }
 
         connection_manager.subscribe(mock_websocket, "spec-001")
         connection_manager.subscribe(mock_websocket, "spec-002")
 
-        subscriptions = connection_manager.active_connections[mock_websocket]["subscriptions"]
+        subscriptions = connection_manager.active_connections[mock_websocket][
+            "subscriptions"
+        ]
         assert "spec-001" in subscriptions
         assert "spec-002" in subscriptions
 
@@ -124,15 +129,23 @@ class TestConnectionManager:
         """Test unsubscribing from a spec ID."""
         connection_manager.active_connections[mock_websocket] = {
             "subscriptions": {"spec-001", "spec-002"},
-            "user": {}
+            "user": {},
         }
         connection_manager.spec_subscriptions["spec-001"] = {mock_websocket}
         connection_manager.spec_subscriptions["spec-002"] = {mock_websocket}
 
         connection_manager.unsubscribe(mock_websocket, "spec-001")
 
-        assert "spec-001" not in connection_manager.active_connections[mock_websocket]["subscriptions"]
-        assert "spec-002" in connection_manager.active_connections[mock_websocket]["subscriptions"]
+        assert (
+            "spec-001"
+            not in connection_manager.active_connections[mock_websocket][
+                "subscriptions"
+            ]
+        )
+        assert (
+            "spec-002"
+            in connection_manager.active_connections[mock_websocket]["subscriptions"]
+        )
         assert "spec-001" not in connection_manager.spec_subscriptions
 
     @pytest.mark.asyncio
@@ -145,7 +158,9 @@ class TestConnectionManager:
         mock_websocket.send_json.assert_called_once_with(message)
 
     @pytest.mark.asyncio
-    async def test_send_personal_message_error_handling(self, connection_manager, mock_websocket):
+    async def test_send_personal_message_error_handling(
+        self, connection_manager, mock_websocket
+    ):
         """Test that errors in personal message sending are handled."""
         mock_websocket.send_json.side_effect = Exception("Connection lost")
 
@@ -158,7 +173,7 @@ class TestConnectionManager:
         # Set up connection and subscription
         connection_manager.active_connections[mock_websocket] = {
             "subscriptions": {"spec-001"},
-            "user": {}
+            "user": {},
         }
         connection_manager.spec_subscriptions["spec-001"] = {mock_websocket}
 
@@ -170,8 +185,8 @@ class TestConnectionManager:
                 phase="coding",
                 phase_progress=50.0,
                 overall_progress=25.0,
-                message="Test message"
-            )
+                message="Test message",
+            ),
         )
 
         await connection_manager.broadcast_to_spec("spec-001", event)
@@ -189,10 +204,8 @@ class TestConnectionManager:
             timestamp=datetime.now().isoformat(),
             spec_id="spec-nonexistent",
             data=ExecutionProgressData(
-                phase="coding",
-                phase_progress=50.0,
-                overall_progress=25.0
-            )
+                phase="coding", phase_progress=50.0, overall_progress=25.0
+            ),
         )
 
         # Should not raise an error
@@ -207,8 +220,14 @@ class TestConnectionManager:
         ws2 = MagicMock(spec=WebSocket)
         ws2.send_json = AsyncMock()
 
-        connection_manager.active_connections[ws1] = {"subscriptions": set(), "user": {}}
-        connection_manager.active_connections[ws2] = {"subscriptions": set(), "user": {}}
+        connection_manager.active_connections[ws1] = {
+            "subscriptions": set(),
+            "user": {},
+        }
+        connection_manager.active_connections[ws2] = {
+            "subscriptions": set(),
+            "user": {},
+        }
 
         event = LogEvent(
             event_type="log",
@@ -216,7 +235,7 @@ class TestConnectionManager:
             spec_id="spec-001",
             log_line="Test log message",
             level="info",
-            data=None
+            data=None,
         )
 
         await connection_manager.broadcast_to_all(event)
@@ -244,7 +263,9 @@ def test_websocket_requires_token(test_client):
 def test_websocket_invalid_token(test_client):
     """Test that invalid token causes connection closure."""
     # WebSocket accepts connection first, then closes with policy violation
-    with test_client.websocket_connect("/ws/agent-events?token=invalid-token") as websocket:
+    with test_client.websocket_connect(
+        "/ws/agent-events?token=invalid-token"
+    ) as websocket:
         # The connection is accepted but closed immediately due to auth failure
         pass
     # Test passes if no exception - connection is properly handled
@@ -385,7 +406,7 @@ async def test_broadcast_execution_event():
     # Set up subscription
     global_manager.active_connections[mock_ws] = {
         "subscriptions": {"spec-test"},
-        "user": {}
+        "user": {},
     }
     global_manager.spec_subscriptions["spec-test"] = {mock_ws}
 
@@ -396,7 +417,7 @@ async def test_broadcast_execution_event():
             phase_progress=50.0,
             overall_progress=25.0,
             message="Test execution",
-            current_subtask="subtask-1"
+            current_subtask="subtask-1",
         )
 
         # Verify the broadcast was called
@@ -421,15 +442,13 @@ async def test_broadcast_log_event():
 
     global_manager.active_connections[mock_ws] = {
         "subscriptions": {"spec-test"},
-        "user": {}
+        "user": {},
     }
     global_manager.spec_subscriptions["spec-test"] = {mock_ws}
 
     try:
         await broadcast_log_event(
-            spec_id="spec-test",
-            log_line="Test log line",
-            level="info"
+            spec_id="spec-test", log_line="Test log line", level="info"
         )
 
         mock_ws.send_json.assert_called_once()
@@ -451,7 +470,7 @@ async def test_broadcast_error_event():
 
     global_manager.active_connections[mock_ws] = {
         "subscriptions": {"spec-test"},
-        "user": {}
+        "user": {},
     }
     global_manager.spec_subscriptions["spec-test"] = {mock_ws}
 
@@ -460,7 +479,7 @@ async def test_broadcast_error_event():
             spec_id="spec-test",
             error_message="Test error",
             error_type="TestError",
-            traceback="traceback info"
+            traceback="traceback info",
         )
 
         mock_ws.send_json.assert_called_once()

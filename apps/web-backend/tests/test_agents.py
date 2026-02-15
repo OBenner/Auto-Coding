@@ -8,20 +8,15 @@ Tests the agent execution API endpoints including:
 - GET /api/agents/health - Agent API health check
 """
 
-import pytest
-from unittest.mock import patch, MagicMock, AsyncMock
-from pathlib import Path
-
-from fastapi.testclient import TestClient
+from unittest.mock import MagicMock, patch
 
 # Import agent route models
 from api.routes.agents import (
+    AgentCancelResponse,
     AgentRunRequest,
     AgentRunResponse,
     AgentStatusResponse,
-    AgentCancelResponse,
 )
-
 
 # ============================================================================
 # Agent Request/Response Model Tests
@@ -37,34 +32,25 @@ class TestAgentModels:
             spec_id="001",
             agent_type="planner",
             model="claude-sonnet-4-5-20250929",
-            verbose=False
+            verbose=False,
         )
         assert request.spec_id == "001"
         assert request.agent_type == "planner"
 
     def test_agent_run_request_with_name_suffix(self):
         """Test agent run request with spec ID including name suffix."""
-        request = AgentRunRequest(
-            spec_id="001-feature-auth",
-            agent_type="coder"
-        )
+        request = AgentRunRequest(spec_id="001-feature-auth", agent_type="coder")
         assert request.spec_id == "001-feature-auth"
 
     def test_agent_run_request_all_agent_types(self):
         """Test all valid agent types."""
         for agent_type in ["planner", "coder", "qa_reviewer", "qa_fixer"]:
-            request = AgentRunRequest(
-                spec_id="001",
-                agent_type=agent_type
-            )
+            request = AgentRunRequest(spec_id="001", agent_type=agent_type)
             assert request.agent_type == agent_type
 
     def test_agent_run_request_default_values(self):
         """Test default values for agent run request."""
-        request = AgentRunRequest(
-            spec_id="001",
-            agent_type="planner"
-        )
+        request = AgentRunRequest(spec_id="001", agent_type="planner")
         assert request.model == "claude-sonnet-4-5-20250929"
         assert request.verbose is False
 
@@ -75,7 +61,7 @@ class TestAgentModels:
             spec_id="001",
             agent_type="planner",
             status="started",
-            message="Agent task started"
+            message="Agent task started",
         )
         assert response.task_id == "001:planner"
         assert response.status == "started"
@@ -83,10 +69,7 @@ class TestAgentModels:
     def test_agent_status_response_running(self):
         """Test agent status response for running task."""
         response = AgentStatusResponse(
-            task_id="001:planner",
-            status="running",
-            result=None,
-            error=None
+            task_id="001:planner", status="running", result=None, error=None
         )
         assert response.status == "running"
 
@@ -96,7 +79,7 @@ class TestAgentModels:
             task_id="001:planner",
             status="completed",
             result={"success": True},
-            error=None
+            error=None,
         )
         assert response.status == "completed"
         assert response.result["success"] is True
@@ -107,7 +90,7 @@ class TestAgentModels:
             task_id="001:planner",
             status="failed",
             result=None,
-            error="Task failed due to timeout"
+            error="Task failed due to timeout",
         )
         assert response.status == "failed"
         assert "timeout" in response.error.lower()
@@ -115,9 +98,7 @@ class TestAgentModels:
     def test_agent_cancel_response(self):
         """Test agent cancel response model."""
         response = AgentCancelResponse(
-            task_id="001:planner",
-            cancelled=True,
-            message="Task cancelled"
+            task_id="001:planner", cancelled=True, message="Task cancelled"
         )
         assert response.cancelled is True
 
@@ -147,11 +128,7 @@ class TestAgentRoutes:
         mock_start.return_value = "001:planner"
 
         response = test_client.post(
-            "/api/agents/run",
-            json={
-                "spec_id": "001",
-                "agent_type": "planner"
-            }
+            "/api/agents/run", json={"spec_id": "001", "agent_type": "planner"}
         )
 
         assert response.status_code == 202
@@ -168,11 +145,7 @@ class TestAgentRoutes:
         mock_start.side_effect = FileNotFoundError("Spec not found: 999")
 
         response = test_client.post(
-            "/api/agents/run",
-            json={
-                "spec_id": "999",
-                "agent_type": "planner"
-            }
+            "/api/agents/run", json={"spec_id": "999", "agent_type": "planner"}
         )
 
         assert response.status_code == 404
@@ -184,11 +157,7 @@ class TestAgentRoutes:
         mock_start.side_effect = RuntimeError("Task already running")
 
         response = test_client.post(
-            "/api/agents/run",
-            json={
-                "spec_id": "001",
-                "agent_type": "planner"
-            }
+            "/api/agents/run", json={"spec_id": "001", "agent_type": "planner"}
         )
 
         assert response.status_code == 409
@@ -200,11 +169,7 @@ class TestAgentRoutes:
         mock_start.side_effect = ValueError("Invalid agent_type")
 
         response = test_client.post(
-            "/api/agents/run",
-            json={
-                "spec_id": "001",
-                "agent_type": "invalid_type"
-            }
+            "/api/agents/run", json={"spec_id": "001", "agent_type": "invalid_type"}
         )
 
         # Pydantic validation catches invalid agent_type before reaching route
@@ -216,11 +181,7 @@ class TestAgentRoutes:
         mock_start.side_effect = Exception("Unexpected error")
 
         response = test_client.post(
-            "/api/agents/run",
-            json={
-                "spec_id": "001",
-                "agent_type": "planner"
-            }
+            "/api/agents/run", json={"spec_id": "001", "agent_type": "planner"}
         )
 
         assert response.status_code == 500
@@ -243,7 +204,7 @@ class TestAgentRoutes:
         """Test getting status of a completed task."""
         mock_status.return_value = {
             "status": "completed",
-            "result": {"success": True, "message": "Task completed"}
+            "result": {"success": True, "message": "Task completed"},
         }
 
         response = test_client.get("/api/agents/status/001:planner")
@@ -258,7 +219,7 @@ class TestAgentRoutes:
         """Test getting status of a failed task."""
         mock_status.return_value = {
             "status": "failed",
-            "error": "Agent execution timed out"
+            "error": "Agent execution timed out",
         }
 
         response = test_client.get("/api/agents/status/001:planner")
@@ -300,7 +261,10 @@ class TestAgentRoutes:
         assert response.status_code == 200
         data = response.json()
         assert data["cancelled"] is False
-        assert "not found" in data["message"].lower() or "completed" in data["message"].lower()
+        assert (
+            "not found" in data["message"].lower()
+            or "completed" in data["message"].lower()
+        )
 
     @patch("api.routes.agents.cancel_task")
     def test_cancel_agent_server_error(self, mock_cancel, test_client):
@@ -377,7 +341,7 @@ class TestAgentRunnerService:
         mock_tasks.__iter__ = lambda self: iter(["001:done", "002:running"])
         mock_tasks.items.return_value = [
             ("001:done", done_task),
-            ("002:running", running_task)
+            ("002:running", running_task),
         ]
         mock_tasks.__delitem__ = MagicMock()
         mock_tasks.__contains__ = lambda self, key: key in ["001:done", "002:running"]
@@ -398,30 +362,20 @@ class TestAgentValidation:
 
     def test_run_agent_missing_spec_id(self, test_client):
         """Test running agent without spec_id."""
-        response = test_client.post(
-            "/api/agents/run",
-            json={"agent_type": "planner"}
-        )
+        response = test_client.post("/api/agents/run", json={"agent_type": "planner"})
 
         assert response.status_code == 422
 
     def test_run_agent_missing_agent_type(self, test_client):
         """Test running agent without agent_type."""
-        response = test_client.post(
-            "/api/agents/run",
-            json={"spec_id": "001"}
-        )
+        response = test_client.post("/api/agents/run", json={"spec_id": "001"})
 
         assert response.status_code == 422
 
     def test_run_agent_invalid_agent_type(self, test_client):
         """Test running agent with invalid agent_type."""
         response = test_client.post(
-            "/api/agents/run",
-            json={
-                "spec_id": "001",
-                "agent_type": "invalid"
-            }
+            "/api/agents/run", json={"spec_id": "001", "agent_type": "invalid"}
         )
 
         assert response.status_code == 422
@@ -438,8 +392,8 @@ class TestAgentValidation:
                         "spec_id": "001",
                         "agent_type": "coder",
                         "model": "claude-sonnet-4-5-20250929",
-                        "verbose": True
-                    }
+                        "verbose": True,
+                    },
                 )
 
                 assert response.status_code == 202

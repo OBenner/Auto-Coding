@@ -1,7 +1,6 @@
 import React from "react";
 import {
 	BrowserRouter,
-	NavigateFunction,
 	Route,
 	Routes,
 	useParams,

@@ -118,19 +118,18 @@ if (typeof window !== 'undefined') {
   };
 }
 
+// Sanitize a value for safe logging - strips control characters and truncates
+function sanitizeForLog(value: unknown): string {
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: Intentional sanitization for log injection prevention
+  return String(value).replace(/[\x00-\x1f\x7f\x80-\x9f]/g, '').slice(0, 500);
+}
+
 // Suppress console errors in tests unless explicitly testing error scenarios
 const originalConsoleError = console.error;
 console.error = (...args: unknown[]) => {
-  // Allow certain error messages through for debugging
-  // biome-ignore lint/suspicious/noControlCharactersInRegex: Sanitizing for log injection
-  const message = String(args[0] ?? '').replace(/[\x00-\x1f\x7f]/g, '');
+  const message = sanitizeForLog(args[0] ?? '');
   if (message.includes('[TEST]')) {
-    // Sanitize each arg individually before logging to prevent log injection
-    const safeArgs: string[] = [];
-    for (const a of args) {
-      // biome-ignore lint/suspicious/noControlCharactersInRegex: Sanitizing for log injection
-      safeArgs.push(String(a).replace(/[\x00-\x1f\x7f]/g, '').slice(0, 500));
-    }
-    originalConsoleError(...safeArgs);
+    // Join into single sanitized string to prevent log injection
+    originalConsoleError(args.map(sanitizeForLog).join(' '));
   }
 };

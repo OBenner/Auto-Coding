@@ -90,7 +90,7 @@ export class WebSocketClient {
 					.replace(/[\x00-\x1f\x7f]/g, "")
 					.slice(0, 200),
 			);
-			console.log("[WebSocketClient] " + safeMsg, ...sanitizedArgs);
+			console.log("[WebSocketClient] " + safeMsg, sanitizedArgs.join(" "));
 		}
 	}
 
@@ -294,11 +294,11 @@ export class WebSocketClient {
 					handler(event);
 				} catch (error) {
 					// eslint-disable-next-line no-control-regex
+					const safeType = String(event.event_type)
+						.replace(/[\x00-\x1f\x7f]/g, "")
+						.slice(0, 50);
 					console.error(
-						"Error in event handler for type:",
-						String(event.event_type)
-							.replace(/[\x00-\x1f\x7f]/g, "")
-							.slice(0, 50),
+						`Error in event handler for type: ${safeType}`,
 						error,
 					);
 				}

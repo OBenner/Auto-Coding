@@ -8,8 +8,8 @@ Tasks and specs are synonymous in Auto Code.
 import json
 import logging
 from pathlib import Path
-from typing import List, Optional, Tuple
 
+from core.config import settings
 from fastapi import APIRouter, HTTPException, status
 
 from api.models.task import (
@@ -18,7 +18,6 @@ from api.models.task import (
     TaskProgressDetail,
     TaskSummary,
 )
-from core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +47,7 @@ def _get_specs_dir() -> Path:
     return project_dir / ".auto-claude" / "specs"
 
 
-def _count_subtasks(spec_dir: Path) -> Tuple[int, int]:
+def _count_subtasks(spec_dir: Path) -> tuple[int, int]:
     """
     Count completed and total subtasks in implementation_plan.json.
 
@@ -135,7 +134,7 @@ def _get_progress_percentage(spec_dir: Path) -> float:
     return (completed / total) * 100
 
 
-def _list_specs() -> List[dict]:
+def _list_specs() -> list[dict]:
     """
     List all specs in the project.
 
@@ -204,7 +203,7 @@ def _list_specs() -> List[dict]:
     return specs
 
 
-def _get_spec_dir(task_id: str) -> Optional[Path]:
+def _get_spec_dir(task_id: str) -> Path | None:
     """
     Get spec directory for a given task ID.
 
@@ -387,7 +386,10 @@ async def get_task_detail(task_id: str):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error getting task detail for {_sanitize_log(task_id)}: {e}", exc_info=True)
+        logger.error(
+            f"Error getting task detail for {_sanitize_log(task_id)}: {e}",
+            exc_info=True,
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to get task detail: {str(e)}",

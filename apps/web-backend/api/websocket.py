@@ -10,13 +10,14 @@ import json
 import logging
 import os
 from datetime import datetime
-from typing import Dict, Optional, Set
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, status
+
 from core.security import verify_websocket_token
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, status
+
 from api.models.agent_event import (
     AgentEvent,
-    LogEvent,
     ErrorEvent,
+    LogEvent,
 )
 
 logger = logging.getLogger(__name__)
@@ -40,11 +41,11 @@ class ConnectionManager:
 
     def __init__(self):
         # Active connections: {websocket: {"subscriptions": set of spec_ids, "user": user_claims}}
-        self.active_connections: Dict[WebSocket, Dict] = {}
+        self.active_connections: dict[WebSocket, dict] = {}
         # Reverse index: {spec_id: set of subscribed websockets}
-        self.spec_subscriptions: Dict[str, Set[WebSocket]] = {}
+        self.spec_subscriptions: dict[str, set[WebSocket]] = {}
 
-    async def connect(self, websocket: WebSocket, user_claims: Optional[dict] = None):
+    async def connect(self, websocket: WebSocket, user_claims: dict | None = None):
         """
         Accept a new WebSocket connection.
 
@@ -55,10 +56,12 @@ class ConnectionManager:
         await websocket.accept()
         self.active_connections[websocket] = {
             "subscriptions": set(),
-            "user": user_claims or {}
+            "user": user_claims or {},
         }
         user_id = user_claims.get("sub", "anonymous") if user_claims else "anonymous"
-        logger.info(f"WebSocket connected: {id(websocket)} (user: {_sanitize_log(user_id)})")
+        logger.info(
+            f"WebSocket connected: {id(websocket)} (user: {_sanitize_log(user_id)})"
+        )
 
     def disconnect(self, websocket: WebSocket):
         """Remove a WebSocket connection and clean up subscriptions"""
@@ -71,9 +74,13 @@ class ConnectionManager:
                         del self.spec_subscriptions[spec_id]
 
             # Remove connection
-            user_id = self.active_connections[websocket].get("user", {}).get("sub", "unknown")
+            user_id = (
+                self.active_connections[websocket].get("user", {}).get("sub", "unknown")
+            )
             del self.active_connections[websocket]
-            logger.info(f"WebSocket disconnected: {id(websocket)} (user: {_sanitize_log(user_id)})")
+            logger.info(
+                f"WebSocket disconnected: {id(websocket)} (user: {_sanitize_log(user_id)})"
+            )
 
     def subscribe(self, websocket: WebSocket, spec_id: str):
         """Subscribe a WebSocket to a specific spec ID"""
@@ -82,7 +89,9 @@ class ConnectionManager:
             if spec_id not in self.spec_subscriptions:
                 self.spec_subscriptions[spec_id] = set()
             self.spec_subscriptions[spec_id].add(websocket)
-            logger.info(f"WebSocket {id(websocket)} subscribed to spec {_sanitize_log(spec_id)}")
+            logger.info(
+                f"WebSocket {id(websocket)} subscribed to spec {_sanitize_log(spec_id)}"
+            )
 
     def unsubscribe(self, websocket: WebSocket, spec_id: str):
         """Unsubscribe a WebSocket from a specific spec ID"""
@@ -92,7 +101,9 @@ class ConnectionManager:
                 self.spec_subscriptions[spec_id].discard(websocket)
                 if not self.spec_subscriptions[spec_id]:
                     del self.spec_subscriptions[spec_id]
-            logger.info(f"WebSocket {id(websocket)} unsubscribed from spec {_sanitize_log(spec_id)}")
+            logger.info(
+                f"WebSocket {id(websocket)} unsubscribed from spec {_sanitize_log(spec_id)}"
+            )
 
     async def send_personal_message(self, message: dict, websocket: WebSocket):
         """Send a message to a specific WebSocket"""
@@ -118,7 +129,9 @@ class ConnectionManager:
             return
 
         message = event.model_dump(mode="json")
-        logger.debug(f"Broadcasting to {len(subscribers)} subscribers of spec {_sanitize_log(spec_id)}: {event.event_type}")
+        logger.debug(
+            f"Broadcasting to {len(subscribers)} subscribers of spec {_sanitize_log(spec_id)}: {event.event_type}"
+        )
 
         disconnected = []
         for websocket in subscribers:
@@ -145,7 +158,9 @@ class ConnectionManager:
             return
 
         message = event.model_dump(mode="json")
-        logger.debug(f"Broadcasting to all {len(self.active_connections)} clients: {event.event_type}")
+        logger.debug(
+            f"Broadcasting to all {len(self.active_connections)} clients: {event.event_type}"
+        )
 
         disconnected = []
         for websocket in list(self.active_connections.keys()):
@@ -219,9 +234,9 @@ async def agent_events_websocket(websocket: WebSocket):
         {
             "status": "connected",
             "user": user_id,
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
         },
-        websocket
+        websocket,
     )
 
     try:
@@ -241,17 +256,17 @@ async def agent_events_websocket(websocket: WebSocket):
                             {
                                 "status": "subscribed",
                                 "spec_id": spec_id,
-                                "timestamp": datetime.now().isoformat()
+                                "timestamp": datetime.now().isoformat(),
                             },
-                            websocket
+                            websocket,
                         )
                     else:
                         await manager.send_personal_message(
                             {
                                 "status": "error",
-                                "message": "spec_id is required for subscribe action"
+                                "message": "spec_id is required for subscribe action",
                             },
-                            websocket
+                            websocket,
                         )
 
                 elif action == "unsubscribe":
@@ -262,45 +277,31 @@ async def agent_events_websocket(websocket: WebSocket):
                             {
                                 "status": "unsubscribed",
                                 "spec_id": spec_id,
-                                "timestamp": datetime.now().isoformat()
+                                "timestamp": datetime.now().isoformat(),
                             },
-                            websocket
+                            websocket,
                         )
 
                 elif action == "ping":
                     await manager.send_personal_message(
-                        {
-                            "status": "pong",
-                            "timestamp": datetime.now().isoformat()
-                        },
-                        websocket
+                        {"status": "pong", "timestamp": datetime.now().isoformat()},
+                        websocket,
                     )
 
                 else:
                     await manager.send_personal_message(
-                        {
-                            "status": "error",
-                            "message": f"Unknown action: {action}"
-                        },
-                        websocket
+                        {"status": "error", "message": f"Unknown action: {action}"},
+                        websocket,
                     )
 
             except json.JSONDecodeError:
                 await manager.send_personal_message(
-                    {
-                        "status": "error",
-                        "message": "Invalid JSON"
-                    },
-                    websocket
+                    {"status": "error", "message": "Invalid JSON"}, websocket
                 )
             except Exception as e:
                 logger.error(f"Error processing message: {e}")
                 await manager.send_personal_message(
-                    {
-                        "status": "error",
-                        "message": str(e)
-                    },
-                    websocket
+                    {"status": "error", "message": str(e)}, websocket
                 )
 
     except WebSocketDisconnect:
@@ -313,13 +314,14 @@ async def agent_events_websocket(websocket: WebSocket):
 
 # Helper functions for broadcasting events from other parts of the application
 
+
 async def broadcast_execution_event(
     spec_id: str,
     phase: str,
     phase_progress: float = 0.0,
     overall_progress: float = 0.0,
     message: str = None,
-    current_subtask: str = None
+    current_subtask: str = None,
 ):
     """
     Helper function to broadcast execution progress events.
@@ -337,17 +339,13 @@ async def broadcast_execution_event(
             phase_progress=phase_progress,
             overall_progress=overall_progress,
             message=message,
-            current_subtask=current_subtask
-        )
+            current_subtask=current_subtask,
+        ),
     )
     await manager.broadcast_to_spec(spec_id, event)
 
 
-async def broadcast_log_event(
-    spec_id: str,
-    log_line: str,
-    level: str = "info"
-):
+async def broadcast_log_event(spec_id: str, log_line: str, level: str = "info"):
     """
     Helper function to broadcast log events.
 
@@ -359,16 +357,13 @@ async def broadcast_log_event(
         spec_id=spec_id,
         log_line=log_line,
         level=level,
-        data=None
+        data=None,
     )
     await manager.broadcast_to_spec(spec_id, event)
 
 
 async def broadcast_error_event(
-    spec_id: str,
-    error_message: str,
-    error_type: str = None,
-    traceback: str = None
+    spec_id: str, error_message: str, error_type: str = None, traceback: str = None
 ):
     """
     Helper function to broadcast error events.
@@ -382,7 +377,7 @@ async def broadcast_error_event(
         error_message=error_message,
         error_type=error_type,
         traceback=traceback,
-        data=None
+        data=None,
     )
     await manager.broadcast_to_spec(spec_id, event)
 
@@ -466,26 +461,29 @@ async def terminal_websocket(websocket: WebSocket):
             working_dir=working_dir,
             shell=os.environ.get("SHELL", "/bin/bash"),  # nosec B604 - Intentional: terminal feature requires shell
             rows=24,
-            cols=80
+            cols=80,
         )
 
         if not session:
-            await websocket.send_json({
-                "type": "error",
-                "message": "Failed to create terminal session"
-            })
+            await websocket.send_json(
+                {"type": "error", "message": "Failed to create terminal session"}
+            )
             await websocket.close(code=status.WS_1011_INTERNAL_ERROR)
             return
 
     # Send connection confirmation
     user_id = user_claims.get("sub", "unknown")
-    await websocket.send_json({
-        "type": "status",
-        "status": "connected",
-        "session_id": session_id,
-        "timestamp": datetime.now().isoformat()
-    })
-    logger.info(f"Terminal WebSocket connected: session={_sanitize_log(session_id)} user={_sanitize_log(user_id)}")
+    await websocket.send_json(
+        {
+            "type": "status",
+            "status": "connected",
+            "session_id": session_id,
+            "timestamp": datetime.now().isoformat(),
+        }
+    )
+    logger.info(
+        f"Terminal WebSocket connected: session={_sanitize_log(session_id)} user={_sanitize_log(user_id)}"
+    )
 
     # Start output reader task
     read_task = asyncio.create_task(_read_terminal_output(session, websocket))
@@ -510,36 +508,35 @@ async def terminal_websocket(websocket: WebSocket):
                     cols = message.get("cols", 80)
                     session.resize(rows, cols)
                     logger.debug(
-                        f"Terminal resized: session={_sanitize_log(session_id)} "
-                        f"size={rows}x{cols}"
+                        "Terminal resized: session=%s size=%dx%d",
+                        _sanitize_log(session_id),
+                        int(rows),
+                        int(cols),
                     )
 
                 elif msg_type == "ping":
-                    await websocket.send_json({
-                        "type": "pong",
-                        "timestamp": datetime.now().isoformat()
-                    })
+                    await websocket.send_json(
+                        {"type": "pong", "timestamp": datetime.now().isoformat()}
+                    )
 
                 else:
-                    await websocket.send_json({
-                        "type": "error",
-                        "message": f"Unknown message type: {msg_type}"
-                    })
+                    await websocket.send_json(
+                        {
+                            "type": "error",
+                            "message": f"Unknown message type: {msg_type}",
+                        }
+                    )
 
             except json.JSONDecodeError:
-                await websocket.send_json({
-                    "type": "error",
-                    "message": "Invalid JSON"
-                })
+                await websocket.send_json({"type": "error", "message": "Invalid JSON"})
             except Exception as e:
                 logger.error(f"Error processing terminal message: {e}")
-                await websocket.send_json({
-                    "type": "error",
-                    "message": str(e)
-                })
+                await websocket.send_json({"type": "error", "message": str(e)})
 
     except WebSocketDisconnect:
-        logger.info(f"Terminal WebSocket disconnected: session={_sanitize_log(session_id)}")
+        logger.info(
+            f"Terminal WebSocket disconnected: session={_sanitize_log(session_id)}"
+        )
     except Exception as e:
         logger.error(f"Terminal WebSocket error: {e}")
     finally:
@@ -548,16 +545,18 @@ async def terminal_websocket(websocket: WebSocket):
         try:
             await read_task
         except asyncio.CancelledError:
-            pass
+            pass  # Expected: read_task was intentionally cancelled
 
         # Send close status
         try:
-            await websocket.send_json({
-                "type": "status",
-                "status": "closed",
-                "session_id": session_id,
-                "timestamp": datetime.now().isoformat()
-            })
+            await websocket.send_json(
+                {
+                    "type": "status",
+                    "status": "closed",
+                    "session_id": session_id,
+                    "timestamp": datetime.now().isoformat(),
+                }
+            )
         except Exception:  # nosec B110 - Cleanup handler: ignore send errors on disconnect
             pass
 
@@ -577,15 +576,14 @@ async def _read_terminal_output(session, websocket: WebSocket):
         while session.is_alive():
             output = await session.read_output()
             if output:
-                await websocket.send_json({
-                    "type": "output",
-                    "data": output
-                })
+                await websocket.send_json({"type": "output", "data": output})
             else:
                 # Small delay to avoid busy waiting
                 await asyncio.sleep(0.01)
     except asyncio.CancelledError:
-        logger.debug(f"Terminal output reader cancelled for session {_sanitize_log(session.session_id)}")
+        logger.debug(
+            f"Terminal output reader cancelled for session {_sanitize_log(session.session_id)}"
+        )
     except Exception as e:
         logger.error(f"Error reading terminal output: {e}")
 

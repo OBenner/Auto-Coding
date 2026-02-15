@@ -6,12 +6,11 @@ Provides endpoints for starting and managing agent execution.
 
 import logging
 from pathlib import Path
-from typing import Literal, Optional
-
-from fastapi import APIRouter, HTTPException, status
-from pydantic import BaseModel, Field
+from typing import Literal
 
 from core.config import settings
+from fastapi import APIRouter, HTTPException, status
+from pydantic import BaseModel, Field
 from services.agent_runner import (
     cancel_task,
     cleanup_completed_tasks,
@@ -39,13 +38,9 @@ class AgentRunRequest(BaseModel):
         ..., description="Type of agent to run"
     )
     model: str = Field(
-        default="claude-sonnet-4-5-20250929",
-        description="Claude model to use"
+        default="claude-sonnet-4-5-20250929", description="Claude model to use"
     )
-    verbose: bool = Field(
-        default=False,
-        description="Enable verbose output"
-    )
+    verbose: bool = Field(default=False, description="Enable verbose output")
 
 
 class AgentRunResponse(BaseModel):
@@ -65,8 +60,8 @@ class AgentStatusResponse(BaseModel):
     status: Literal["running", "completed", "failed", "not_found"] = Field(
         ..., description="Current task status"
     )
-    result: Optional[dict] = Field(None, description="Task result (if completed)")
-    error: Optional[str] = Field(None, description="Error message (if failed)")
+    result: dict | None = Field(None, description="Task result (if completed)")
+    error: str | None = Field(None, description="Error message (if failed)")
 
 
 class AgentCancelResponse(BaseModel):
@@ -87,7 +82,9 @@ def _get_project_dir() -> Path:
     return Path(__file__).parent.parent.parent.parent.parent
 
 
-@router.post("/run", response_model=AgentRunResponse, status_code=status.HTTP_202_ACCEPTED)
+@router.post(
+    "/run", response_model=AgentRunResponse, status_code=status.HTTP_202_ACCEPTED
+)
 async def run_agent(request: AgentRunRequest):
     """
     Start an agent execution task.
@@ -139,7 +136,7 @@ async def run_agent(request: AgentRunRequest):
             spec_id=request.spec_id,
             agent_type=request.agent_type,
             status="started",
-            message=f"Agent task started: {request.agent_type} for spec {request.spec_id}"
+            message=f"Agent task started: {request.agent_type} for spec {request.spec_id}",
         )
 
     except FileNotFoundError as e:
@@ -168,7 +165,11 @@ async def run_agent(request: AgentRunRequest):
         )
 
 
-@router.get("/status/{task_id}", response_model=AgentStatusResponse, status_code=status.HTTP_200_OK)
+@router.get(
+    "/status/{task_id}",
+    response_model=AgentStatusResponse,
+    status_code=status.HTTP_200_OK,
+)
 async def get_agent_status(task_id: str):
     """
     Get the status of a running agent task.
@@ -215,7 +216,11 @@ async def get_agent_status(task_id: str):
         )
 
 
-@router.post("/cancel/{task_id}", response_model=AgentCancelResponse, status_code=status.HTTP_200_OK)
+@router.post(
+    "/cancel/{task_id}",
+    response_model=AgentCancelResponse,
+    status_code=status.HTTP_200_OK,
+)
 async def cancel_agent(task_id: str):
     """
     Cancel a running agent task.
@@ -238,15 +243,13 @@ async def cancel_agent(task_id: str):
 
         if cancelled:
             return AgentCancelResponse(
-                task_id=task_id,
-                cancelled=True,
-                message=f"Task cancelled: {task_id}"
+                task_id=task_id, cancelled=True, message=f"Task cancelled: {task_id}"
             )
         else:
             return AgentCancelResponse(
                 task_id=task_id,
                 cancelled=False,
-                message=f"Task not found or already completed: {task_id}"
+                message=f"Task not found or already completed: {task_id}",
             )
 
     except Exception as e:

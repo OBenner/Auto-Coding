@@ -7,12 +7,11 @@ Provides endpoints for GitHub and GitLab OAuth authentication to access user rep
 import logging
 import secrets
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
-from sqlalchemy.orm import Session
-
 from core.config import settings
 from core.database import get_db
 from core.oauth import oauth
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
 
@@ -42,11 +41,13 @@ async def github_authorize(request: Request):
         ```
     """
     # Check if GitHub OAuth is configured
-    if not hasattr(oauth, 'github') or oauth.github is None:
-        logger.error("GitHub OAuth not configured - missing GITHUB_CLIENT_ID or GITHUB_CLIENT_SECRET")
+    if not hasattr(oauth, "github") or oauth.github is None:
+        logger.error(
+            "GitHub OAuth not configured - missing GITHUB_CLIENT_ID or GITHUB_CLIENT_SECRET"
+        )
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="GitHub OAuth is not configured. Please set GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET."
+            detail="GitHub OAuth is not configured. Please set GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET.",
         )
 
     # Generate state token for CSRF protection
@@ -54,20 +55,19 @@ async def github_authorize(request: Request):
 
     # Store state in session (in production, use Redis or database)
     # For now, we'll pass it through the OAuth flow
-    request.session['oauth_state'] = state
+    request.session["oauth_state"] = state
 
     # Build redirect URI for GitHub callback
-    redirect_uri = f"{settings.OAUTH_REDIRECT_URI.rsplit('/callback', 1)[0]}/github/callback"
+    redirect_uri = (
+        f"{settings.OAUTH_REDIRECT_URI.rsplit('/callback', 1)[0]}/github/callback"
+    )
 
     # Redirect to GitHub OAuth authorization page
     return await oauth.github.authorize_redirect(request, redirect_uri, state=state)
 
 
 @router.get("/github/callback")
-async def github_callback(
-    request: Request,
-    db: Session = Depends(get_db)
-):
+async def github_callback(request: Request, db: Session = Depends(get_db)):
     """
     Handle GitHub OAuth callback.
 
@@ -92,34 +92,34 @@ async def github_callback(
         ```
     """
     # Check if GitHub OAuth is configured
-    if not hasattr(oauth, 'github') or oauth.github is None:
+    if not hasattr(oauth, "github") or oauth.github is None:
         logger.error("GitHub OAuth not configured")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="GitHub OAuth is not configured"
+            detail="GitHub OAuth is not configured",
         )
 
     try:
         # Verify state token for CSRF protection
-        state = request.query_params.get('state')
-        stored_state = request.session.get('oauth_state')
+        state = request.query_params.get("state")
+        stored_state = request.session.get("oauth_state")
 
         if not state or state != stored_state:
             logger.error("OAuth state mismatch - possible CSRF attack")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid state parameter"
+                detail="Invalid state parameter",
             )
 
         # Exchange authorization code for access token
         token = await oauth.github.authorize_access_token(request)
 
         # Get user information from GitHub
-        resp = await oauth.github.get('user', token=token)
+        resp = await oauth.github.get("user", token=token)
         user_info = resp.json()
 
         # Clear the state from session
-        request.session.pop('oauth_state', None)
+        request.session.pop("oauth_state", None)
 
         logger.info(f"GitHub OAuth successful for user: {user_info.get('login')}")
 
@@ -128,20 +128,20 @@ async def github_callback(
         return {
             "status": "success",
             "provider": "github",
-            "access_token": token.get('access_token'),
+            "access_token": token.get("access_token"),
             "user": {
-                "id": user_info.get('id'),
-                "login": user_info.get('login'),
-                "email": user_info.get('email'),
-                "name": user_info.get('name'),
-            }
+                "id": user_info.get("id"),
+                "login": user_info.get("login"),
+                "email": user_info.get("email"),
+                "name": user_info.get("name"),
+            },
         }
 
     except Exception as e:
         logger.error(f"GitHub OAuth callback error: {e}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"OAuth authentication failed: {str(e)}"
+            detail=f"OAuth authentication failed: {str(e)}",
         )
 
 
@@ -167,31 +167,32 @@ async def gitlab_authorize(request: Request):
         ```
     """
     # Check if GitLab OAuth is configured
-    if not hasattr(oauth, 'gitlab') or oauth.gitlab is None:
-        logger.error("GitLab OAuth not configured - missing GITLAB_CLIENT_ID or GITLAB_CLIENT_SECRET")
+    if not hasattr(oauth, "gitlab") or oauth.gitlab is None:
+        logger.error(
+            "GitLab OAuth not configured - missing GITLAB_CLIENT_ID or GITLAB_CLIENT_SECRET"
+        )
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="GitLab OAuth is not configured. Please set GITLAB_CLIENT_ID and GITLAB_CLIENT_SECRET."
+            detail="GitLab OAuth is not configured. Please set GITLAB_CLIENT_ID and GITLAB_CLIENT_SECRET.",
         )
 
     # Generate state token for CSRF protection
     state = secrets.token_urlsafe(32)
 
     # Store state in session
-    request.session['oauth_state'] = state
+    request.session["oauth_state"] = state
 
     # Build redirect URI for GitLab callback
-    redirect_uri = f"{settings.OAUTH_REDIRECT_URI.rsplit('/callback', 1)[0]}/gitlab/callback"
+    redirect_uri = (
+        f"{settings.OAUTH_REDIRECT_URI.rsplit('/callback', 1)[0]}/gitlab/callback"
+    )
 
     # Redirect to GitLab OAuth authorization page
     return await oauth.gitlab.authorize_redirect(request, redirect_uri, state=state)
 
 
 @router.get("/gitlab/callback")
-async def gitlab_callback(
-    request: Request,
-    db: Session = Depends(get_db)
-):
+async def gitlab_callback(request: Request, db: Session = Depends(get_db)):
     """
     Handle GitLab OAuth callback.
 
@@ -216,34 +217,34 @@ async def gitlab_callback(
         ```
     """
     # Check if GitLab OAuth is configured
-    if not hasattr(oauth, 'gitlab') or oauth.gitlab is None:
+    if not hasattr(oauth, "gitlab") or oauth.gitlab is None:
         logger.error("GitLab OAuth not configured")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="GitLab OAuth is not configured"
+            detail="GitLab OAuth is not configured",
         )
 
     try:
         # Verify state token for CSRF protection
-        state = request.query_params.get('state')
-        stored_state = request.session.get('oauth_state')
+        state = request.query_params.get("state")
+        stored_state = request.session.get("oauth_state")
 
         if not state or state != stored_state:
             logger.error("OAuth state mismatch - possible CSRF attack")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid state parameter"
+                detail="Invalid state parameter",
             )
 
         # Exchange authorization code for access token
         token = await oauth.gitlab.authorize_access_token(request)
 
         # Get user information from GitLab
-        resp = await oauth.gitlab.get('user', token=token)
+        resp = await oauth.gitlab.get("user", token=token)
         user_info = resp.json()
 
         # Clear the state from session
-        request.session.pop('oauth_state', None)
+        request.session.pop("oauth_state", None)
 
         logger.info(f"GitLab OAuth successful for user: {user_info.get('username')}")
 
@@ -252,20 +253,20 @@ async def gitlab_callback(
         return {
             "status": "success",
             "provider": "gitlab",
-            "access_token": token.get('access_token'),
+            "access_token": token.get("access_token"),
             "user": {
-                "id": user_info.get('id'),
-                "username": user_info.get('username'),
-                "email": user_info.get('email'),
-                "name": user_info.get('name'),
-            }
+                "id": user_info.get("id"),
+                "username": user_info.get("username"),
+                "email": user_info.get("email"),
+                "name": user_info.get("name"),
+            },
         }
 
     except Exception as e:
         logger.error(f"GitLab OAuth callback error: {e}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"OAuth authentication failed: {str(e)}"
+            detail=f"OAuth authentication failed: {str(e)}",
         )
 
 
@@ -280,20 +281,14 @@ async def git_oauth_status():
         Dictionary with OAuth system status
     """
     # Check if OAuth providers are configured
-    github_configured = hasattr(oauth, 'github') and oauth.github is not None
-    gitlab_configured = hasattr(oauth, 'gitlab') and oauth.gitlab is not None
+    github_configured = hasattr(oauth, "github") and oauth.github is not None
+    gitlab_configured = hasattr(oauth, "gitlab") and oauth.gitlab is not None
 
     return {
         "status": "ok",
         "providers": {
-            "github": {
-                "configured": github_configured,
-                "available": github_configured
-            },
-            "gitlab": {
-                "configured": gitlab_configured,
-                "available": gitlab_configured
-            }
+            "github": {"configured": github_configured, "available": github_configured},
+            "gitlab": {"configured": gitlab_configured, "available": gitlab_configured},
         },
-        "message": "Git OAuth system is operational"
+        "message": "Git OAuth system is operational",
     }

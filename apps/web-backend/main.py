@@ -3,14 +3,14 @@ Web Backend - FastAPI Application
 Main entry point for the FastAPI web service
 """
 
-import os
 import logging
+import os
 from contextlib import asynccontextmanager
 
+from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
-from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
@@ -19,7 +19,7 @@ load_dotenv()
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 logging.basicConfig(
     level=getattr(logging, LOG_LEVEL.upper()),
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
 
@@ -46,7 +46,9 @@ async def lifespan(app: FastAPI):
 
     # Validate required configuration
     if not SECRET_KEY or SECRET_KEY == "your-secret-key-here-change-in-production":
-        logger.warning("⚠️  SECRET_KEY not configured! Using default - DO NOT use in production!")
+        logger.warning(
+            "⚠️  SECRET_KEY not configured! Using default - DO NOT use in production!"
+        )
 
     yield
 
@@ -60,7 +62,7 @@ app = FastAPI(
     description="FastAPI backend service for Auto Code web interface",
     version="1.0.0",
     debug=DEBUG,
-    lifespan=lifespan
+    lifespan=lifespan,
 )
 
 # Configure CORS
@@ -74,8 +76,7 @@ app.add_middleware(
 
 # Configure session middleware for OAuth state management
 app.add_middleware(
-    SessionMiddleware,
-    secret_key=SECRET_KEY or "dev-secret-key-change-in-production"
+    SessionMiddleware, secret_key=SECRET_KEY or "dev-secret-key-change-in-production"
 )
 
 # Configure usage tracking middleware
@@ -85,7 +86,7 @@ app.add_middleware(
     UsageTrackingMiddleware,
     rate_limit_enabled=False,  # Disable rate limiting by default (can be enabled in production)
     rate_limit_requests=1000,
-    rate_limit_period="hourly"
+    rate_limit_period="hourly",
 )
 
 # Import and register API routes
@@ -109,27 +110,19 @@ async def root():
         "name": "Web Backend API",
         "version": "1.0.0",
         "status": "running",
-        "docs": "/docs"
+        "docs": "/docs",
     }
 
 
 @app.get("/health")
 async def health_check():
     """Health check endpoint for monitoring"""
-    return {
-        "status": "healthy",
-        "service": "web-backend",
-        "debug": DEBUG
-    }
+    return {"status": "healthy", "service": "web-backend", "debug": DEBUG}
 
 
 if __name__ == "__main__":
     import uvicorn
 
     uvicorn.run(
-        "main:app",
-        host=HOST,
-        port=PORT,
-        reload=DEBUG,
-        log_level=LOG_LEVEL.lower()
+        "main:app", host=HOST, port=PORT, reload=DEBUG, log_level=LOG_LEVEL.lower()
     )

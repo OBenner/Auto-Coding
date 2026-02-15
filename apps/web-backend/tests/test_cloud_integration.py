@@ -17,12 +17,13 @@ NOTE: Some tests require bcrypt backend to be properly configured.
 If bcrypt tests fail, ensure bcrypt is installed: pip install bcrypt
 """
 
+from datetime import UTC, datetime
+
 import pytest
-from datetime import datetime, UTC
+from api.models.repository import GitRepository
 
 # Import application components
 from api.models.user import User
-from api.models.repository import GitRepository
 from services.usage_tracker import UsageTracker
 
 
@@ -31,6 +32,7 @@ def check_bcrypt_available():
     """Check if bcrypt backend is available and working."""
     try:
         from passlib.context import CryptContext
+
         pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
         # Try a simple hash to see if it works
         pwd_context.hash("test")
@@ -46,13 +48,11 @@ bcrypt_available = check_bcrypt_available()
 # Database Model Integration Tests
 # ============================================================================
 
+
 @pytest.mark.skipif(not bcrypt_available, reason="bcrypt backend not available")
 def test_user_model_creation(test_db):
     """Test creating a user in the database."""
-    user = User(
-        email="test@example.com",
-        hashed_password="hashed_password_here"
-    )
+    user = User(email="test@example.com", hashed_password="hashed_password_here")
     user.set_password("testpass123")
 
     test_db.add(user)
@@ -100,7 +100,7 @@ def test_user_repository_relationship(test_db):
         repository_url="https://github.com/test/repo",
         repository_name="repo",
         repository_owner="test",
-        access_token="fake_token_123"
+        access_token="fake_token_123",
     )
     test_db.add(repo)
     test_db.commit()
@@ -128,7 +128,7 @@ def test_user_cascade_delete_repositories(test_db):
         repository_url="https://gitlab.com/test/project",
         repository_name="project",
         repository_owner="test",
-        access_token="fake_token_456"
+        access_token="fake_token_456",
     )
     test_db.add(repo)
     test_db.commit()
@@ -148,6 +148,7 @@ def test_user_cascade_delete_repositories(test_db):
 # Usage Tracking Service Integration Tests
 # ============================================================================
 
+
 def test_usage_tracker_initialization(test_redis):
     """Test UsageTracker initialization with Redis."""
     tracker = UsageTracker(redis_client=test_redis)
@@ -161,10 +162,7 @@ def test_usage_tracker_record_request(test_redis):
 
     # Record a request
     tracker.record_request(
-        user_id=1,
-        endpoint="/api/users/register",
-        method="POST",
-        status_code=201
+        user_id=1, endpoint="/api/users/register", method="POST", status_code=201
     )
 
     # Verify usage was recorded
@@ -190,9 +188,7 @@ def test_usage_tracker_rate_limiting(test_redis):
 
         # Check rate limit
         allowed, current_count = tracker.check_rate_limit(
-            user_id=user_id,
-            limit=limit,
-            period="hourly"
+            user_id=user_id, limit=limit, period="hourly"
         )
 
         # First 4 requests should be allowed, 5th should hit limit
@@ -204,9 +200,7 @@ def test_usage_tracker_rate_limiting(test_redis):
 
     # Next check should still be denied
     allowed, current_count = tracker.check_rate_limit(
-        user_id=user_id,
-        limit=limit,
-        period="hourly"
+        user_id=user_id, limit=limit, period="hourly"
     )
     assert allowed is False
     assert current_count == limit
@@ -225,9 +219,7 @@ def test_usage_tracker_endpoint_stats(test_redis):
 
     # Get endpoint stats for register endpoint
     register_stats = tracker.get_endpoint_stats(
-        user_id=user_id,
-        endpoint="/api/users/register",
-        period="daily"
+        user_id=user_id, endpoint="/api/users/register", period="daily"
     )
 
     # Verify stats were recorded
@@ -238,9 +230,7 @@ def test_usage_tracker_endpoint_stats(test_redis):
 
     # Get endpoint stats for login endpoint
     login_stats = tracker.get_endpoint_stats(
-        user_id=user_id,
-        endpoint="/api/users/login",
-        period="daily"
+        user_id=user_id, endpoint="/api/users/login", period="daily"
     )
 
     assert login_stats["endpoint"] == "/api/users/login"
@@ -274,6 +264,7 @@ def test_usage_tracker_multiple_periods(test_redis):
 # API Endpoint Integration Tests
 # ============================================================================
 
+
 def test_health_endpoint(test_client):
     """Test the health check endpoint."""
     response = test_client.get("/health")
@@ -287,10 +278,7 @@ def test_user_registration_endpoint(test_client):
     """Test user registration via API."""
     response = test_client.post(
         "/api/users/register",
-        json={
-            "email": "newuser@example.com",
-            "password": "securepass123"
-        }
+        json={"email": "newuser@example.com", "password": "securepass123"},
     )
 
     assert response.status_code == 201
@@ -315,10 +303,7 @@ def test_user_registration_duplicate_email(test_client, test_db):
     # Try to register with same email
     response = test_client.post(
         "/api/users/register",
-        json={
-            "email": "duplicate@test.com",
-            "password": "anotherpass123"
-        }
+        json={"email": "duplicate@test.com", "password": "anotherpass123"},
     )
 
     assert response.status_code == 400
@@ -336,11 +321,7 @@ def test_user_login_endpoint(test_client, test_db):
 
     # Login
     response = test_client.post(
-        "/api/users/login",
-        json={
-            "email": "login@test.com",
-            "password": "mypassword"
-        }
+        "/api/users/login", json={"email": "login@test.com", "password": "mypassword"}
     )
 
     assert response.status_code == 200
@@ -362,10 +343,7 @@ def test_user_login_wrong_password(test_client, test_db):
     # Try login with wrong password
     response = test_client.post(
         "/api/users/login",
-        json={
-            "email": "wrongpass@test.com",
-            "password": "wrongpass"
-        }
+        json={"email": "wrongpass@test.com", "password": "wrongpass"},
     )
 
     assert response.status_code == 401
@@ -376,10 +354,7 @@ def test_user_login_nonexistent_user(test_client):
     """Test login with non-existent user."""
     response = test_client.post(
         "/api/users/login",
-        json={
-            "email": "nonexistent@test.com",
-            "password": "anypass"
-        }
+        json={"email": "nonexistent@test.com", "password": "anypass"},
     )
 
     assert response.status_code == 401
@@ -446,6 +421,7 @@ def test_usage_health_endpoint(test_client):
 # Integration Test Summary
 # ============================================================================
 
+
 def test_integration_summary():
     """
     Integration test coverage summary.
@@ -456,33 +432,33 @@ def test_integration_summary():
         "database_models": [
             "User creation and password hashing",
             "User-Repository relationship",
-            "Cascade delete functionality"
+            "Cascade delete functionality",
         ],
         "services": [
             "UsageTracker initialization",
             "Request recording",
             "Rate limiting",
             "Endpoint statistics",
-            "Multiple time periods"
+            "Multiple time periods",
         ],
         "api_endpoints": [
             "Health check",
             "User registration (success and duplicate)",
             "User login (success, wrong password, non-existent)",
             "OAuth status and authorize",
-            "Usage dashboard and statistics"
-        ]
+            "Usage dashboard and statistics",
+        ],
     }
 
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("INTEGRATION TEST COVERAGE SUMMARY")
-    print("="*70)
+    print("=" * 70)
 
     for category, tests in coverage.items():
         print(f"\n{category.upper().replace('_', ' ')}:")
         for test in tests:
             print(f"  ✓ {test}")
 
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
 
     assert True  # Always pass - this is just documentation
