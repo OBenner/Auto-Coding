@@ -478,9 +478,13 @@ def format_context_for_prompt(context: dict) -> str:
     if context.get("token_summary"):
         summary = context["token_summary"]
         sections.append("## Token Usage Summary\n")
-        sections.append(f"- **Total Estimated Tokens:** {summary.get('total_tokens', 'N/A')}")
+        sections.append(
+            f"- **Total Estimated Tokens:** {summary.get('total_tokens', 'N/A')}"
+        )
         sections.append(f"- **Files Included:** {summary.get('file_count', 'N/A')}")
-        sections.append(f"- **Compression Applied:** {summary.get('compression_method', 'None')}")
+        sections.append(
+            f"- **Compression Applied:** {summary.get('compression_method', 'None')}"
+        )
         sections.append("")  # Add spacing after token summary
 
     if context.get("patterns"):

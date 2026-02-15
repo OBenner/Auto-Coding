@@ -11,15 +11,17 @@ Tests the TokenEstimator class for accurate token counting in text and files.
 import sys
 from pathlib import Path
 
-# Remove tests directories from path if they were added
-tests_dirs = [p for p in sys.path if "tests" in p]
-for td in tests_dirs:
-    if td in sys.path:
-        sys.path.remove(td)
 
-# Add backend root to path
-backend_root = Path(__file__).parent.parent.parent
-sys.path.insert(0, str(backend_root))
+def _configure_sys_path() -> None:
+    """Configure sys.path to import from the actual context module."""
+    for td in [p for p in sys.path if "tests" in p]:
+        if td in sys.path:
+            sys.path.remove(td)
+    backend_root = Path(__file__).parent.parent.parent
+    sys.path.insert(0, str(backend_root))
+
+
+_configure_sys_path()
 
 from unittest.mock import patch
 

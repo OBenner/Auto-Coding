@@ -169,6 +169,10 @@ class RedundancyDetector:
         """
         Compute a hash of the content for exact duplicate detection.
 
+        Note: SHA256 is used here for content deduplication only, not for
+        any security purpose (e.g., not for signature verification or
+        password hashing). This is safe for identifying identical content.
+
         Args:
             content: File content to hash
 
@@ -177,7 +181,7 @@ class RedundancyDetector:
         """
         import hashlib
 
-        # Use SHA256 for exact matching
+        # Use SHA256 for exact matching (content deduplication, not security)
         return hashlib.sha256(content.encode("utf-8")).hexdigest()
 
     def _compute_content_signature(self, content: str) -> str:
@@ -188,6 +192,10 @@ class RedundancyDetector:
         - Removing whitespace variations
         - Lowercasing
         - Removing comments (basic)
+
+        Note: MD5 is used here for content deduplication/bucketing only,
+        not for any security purpose. Collision resistance is not required;
+        this is a fast fingerprint for grouping similar files.
 
         Args:
             content: File content to analyze

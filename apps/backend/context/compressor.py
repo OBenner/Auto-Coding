@@ -123,17 +123,42 @@ class ContextCompressor:
         if not path.exists():
             raise FileNotFoundError(f"File not found: {file_path}")
 
-        # Guard against extremely large files to avoid OOM
-        max_bytes = 5 * 1024 * 1024  # 5 MB
+        # Guard against extremely large files to avoid OOM / excessive API cost
+        max_bytes = 1 * 1024 * 1024  # 1 MB
         try:
             size = path.stat().st_size
         except OSError as e:
             raise OSError(f"Failed to stat file {file_path}: {e}")
 
         if size > max_bytes:
-            raise OSError(
-                f"File {file_path} is too large to compress ({size} bytes > {max_bytes} bytes). "
-                "Consider splitting the file or using a streaming strategy."
+            logger.warning(
+                "File %s is too large to compress (%d bytes > %d bytes), "
+                "returning truncated version",
+                file_path,
+                size,
+                max_bytes,
+            )
+            try:
+                content = path.read_text(encoding="utf-8")
+            except Exception as e:
+                raise OSError(f"Failed to read file {file_path}: {e}")
+            original_tokens = self.token_estimator.count_tokens(content)
+            target_tokens = int(original_tokens * self.target_ratio)
+            truncated = self._truncate_content(content, target_tokens)
+            truncated += (
+                f"\n\n[NOTE: File too large for AI compression "
+                f"({size} bytes). Content truncated.]"
+            )
+            compressed_tokens = self.token_estimator.count_tokens(truncated)
+            return CompressionResult(
+                original_content=content,
+                compressed_content=truncated,
+                original_tokens=original_tokens,
+                compressed_tokens=compressed_tokens,
+                compression_ratio=(
+                    compressed_tokens / original_tokens if original_tokens > 0 else 1.0
+                ),
+                method="truncated",
             )
 
         # Read file content

@@ -45,6 +45,10 @@ class TokenEstimator:
             self._tiktoken_available = True
         except ImportError:
             self._tiktoken_available = False
+        except Exception:
+            # Handle cases where tiktoken is installed but encoding
+            # initialization fails (e.g., bad encoding name, corrupted data)
+            self._tiktoken_available = False
 
     def count_tokens(self, text: str) -> int:
         """
@@ -65,7 +69,8 @@ class TokenEstimator:
             return len(tokens)
         else:
             # Fallback: rough estimate (4 chars per token)
-            return len(text) // 4
+            # Use max(1, ...) to ensure non-empty text always returns at least 1 token
+            return max(1, len(text) // 4)
 
     def count_tokens_in_file(self, file_path: str | Path) -> int:
         """

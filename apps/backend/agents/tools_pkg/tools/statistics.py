@@ -7,7 +7,7 @@ session counts, subtask completion rates, QA iterations, and phase durations.
 """
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -125,7 +125,7 @@ def _calculate_phase_durations(
         if phase_start:
             # If phase is completed, use latest completion time
             # Otherwise, use current time for in-progress phases
-            end_time = phase_end if phase_end else datetime.now(timezone.utc)
+            end_time = phase_end if phase_end else datetime.now(UTC)
             duration_seconds = (end_time - phase_start).total_seconds()
 
         phase_stats[phase_id] = {
@@ -170,7 +170,7 @@ def _calculate_completion_velocity(
                 completed += 1
 
     # Calculate elapsed time
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     elapsed_seconds = (now - created_at).total_seconds()
     elapsed_hours = elapsed_seconds / 3600
 
@@ -394,7 +394,7 @@ def create_statistics_tools(spec_dir: Path, project_dir: Path) -> list:
             # Calculate time metrics
             created_at = _parse_timestamp(plan.get("created_at"))
             last_updated = _parse_timestamp(plan.get("last_updated"))
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
 
             if created_at:
                 # Total build time (from start to now)

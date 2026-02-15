@@ -227,8 +227,9 @@ class ContextBuilder:
                         fetch_graph_hints(task, str(self.project_dir))
                     )
                 except Exception:
-                    # Graphiti is optional - fail gracefully
-                    graph_hints = []
+                    # Graphiti is optional - fail gracefully;
+                    # graph_hints remains [] from initial assignment
+                    pass
 
         return TaskContext(
             task_description=task,

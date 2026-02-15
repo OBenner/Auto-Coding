@@ -80,14 +80,17 @@ class PriorityManager:
         """
         rel_path = self._normalize_path(file_path)
 
-        # Check explicit file matches
-        if rel_path in self.priorities:
-            level = self.priorities[rel_path].get("priority", "normal")
-            return self.PRIORITY_LEVELS.get(level, 0)
+        # Check explicit file matches (normalize keys for consistent comparison)
+        for key, config in self.priorities.items():
+            normalized_key = self._normalize_path(key)
+            if rel_path == normalized_key:
+                level = config.get("priority", "normal")
+                return self.PRIORITY_LEVELS.get(level, 0)
 
-        # Check pattern matches
+        # Check pattern matches (normalize pattern keys)
         for pattern, config in self.priorities.items():
-            if fnmatch.fnmatch(rel_path, pattern):
+            normalized_pattern = self._normalize_path(pattern)
+            if fnmatch.fnmatch(rel_path, normalized_pattern):
                 level = config.get("priority", "normal")
                 return self.PRIORITY_LEVELS.get(level, 0)
 
@@ -170,18 +173,23 @@ class PriorityManager:
         Get detailed priority information for a file.
 
         Args:
-            file_path: Path to the file (relative to project root)
+            file_path: Path to the file (absolute or relative to project root)
 
         Returns:
             Dictionary with priority info, or None if no priority set
         """
-        # Check explicit file matches
-        if file_path in self.priorities:
-            return self.priorities[file_path]
+        rel_path = self._normalize_path(file_path)
 
-        # Check pattern matches
+        # Check explicit file matches (normalize keys for consistent comparison)
+        for key, config in self.priorities.items():
+            normalized_key = self._normalize_path(key)
+            if rel_path == normalized_key:
+                return config
+
+        # Check pattern matches (normalize pattern keys)
         for pattern, config in self.priorities.items():
-            if fnmatch.fnmatch(file_path, pattern):
+            normalized_pattern = self._normalize_path(pattern)
+            if fnmatch.fnmatch(rel_path, normalized_pattern):
                 return config
 
         return None

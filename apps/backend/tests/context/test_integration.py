@@ -13,15 +13,19 @@ and compression work together correctly.
 import sys
 from pathlib import Path
 
-# Remove tests directories from path if they were added
-tests_dirs = [p for p in sys.path if "tests" in p]
-for td in tests_dirs:
-    if td in sys.path:
-        sys.path.remove(td)
 
-# Add backend root to path
-backend_root = Path(__file__).parent.parent.parent
-sys.path.insert(0, str(backend_root))
+def _configure_sys_path() -> None:
+    """Configure sys.path to import from the actual context module."""
+    # Remove tests directories from path if they were added
+    for td in [p for p in sys.path if "tests" in p]:
+        if td in sys.path:
+            sys.path.remove(td)
+    # Add backend root to path
+    backend_root = Path(__file__).parent.parent.parent
+    sys.path.insert(0, str(backend_root))
+
+
+_configure_sys_path()
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -206,7 +210,7 @@ class TestSemanticScoringE2E:
             [0.6, 0.4, 0.0],  # api.py (relevant)
             [0.4, 0.6, 0.0],  # redis.py (somewhat relevant)
             [0.0, 0.0, 1.0],  # styles.css (not relevant)
-            "",  # Empty file (should return None or empty)
+            [0.0] * 3,  # Empty file (zero vector)
         ]
 
         scorer = SemanticScorer(mock_embedder)
@@ -326,7 +330,7 @@ class TestRedundancyDetectionE2E:
         ]
 
         # Detect redundancies
-        filtered, report = detector.detect_redundancies(
+        filtered, _report = detector.detect_redundancies(
             files, keep_highest_relevance=True
         )
 
