@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-02-16T17:39:01.706925+00:00",
+  "library": "simulation",
+  "hnsw": {
+    "index_build_time_ms": 250.0,
+    "index_memory_mb": 0.0732421875,
+    "avg_latency_ms": 13.34413871544556,
+    "queries_per_second": 74.93926894229007,
+    "p50_latency_ms": 13.05020628224252,
+    "p95_latency_ms": 20.17984648966423,
+    "p99_latency_ms": 23.475740607404703,
+    "min_latency_ms": 6.6152672656494165,
+    "max_latency_ms": 24.72335311429978,
+    "recall_at_k": 97.0
+  },
+  "comparison": {
+    "baseline_avg_latency_ms": 308.92288384666347,
+    "speedup_factor": 25.0,
+    "memory_overhead_mb": 0.03662109375
+  }
+}
