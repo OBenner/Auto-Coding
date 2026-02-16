@@ -17,12 +17,12 @@ Author: Auto-Claude (Subtask 4.3)
 Date: 2026-02-16
 """
 
+import json
 import os
 import sys
-import json
 import time
 from pathlib import Path
-from typing import Dict, List, Any, Optional
+from typing import Any
 
 # Add apps/backend to path for imports
 sys.path.insert(0, str(Path(__file__).parent))
@@ -35,14 +35,18 @@ except ImportError as e:
     sys.exit(1)
 
 
+DEFAULT_TEST_MODEL_ID = "claude-sonnet-4-5-20250929"
+
+
 class LLMInteractionTester:
     """Test LLM agent interaction with MCP server"""
 
     def __init__(self, project_dir: Path, spec_dir: Path):
         self.project_dir = project_dir
         self.spec_dir = spec_dir
-        self.test_results: List[tuple] = []
+        self.test_results: list[tuple] = []
         self.verbose = os.getenv("VERBOSE", "false").lower() == "true"
+        self.model_id = os.getenv("LLM_TEST_MODEL_ID", DEFAULT_TEST_MODEL_ID)
 
     def log(self, message: str, level: str = "info"):
         """Log message with level"""
@@ -99,7 +103,7 @@ class LLMInteractionTester:
                 project_dir=self.project_dir,
                 spec_dir=self.spec_dir,
                 agent_type="qa_reviewer",
-                model="claude-sonnet-4-5-20250929"
+                model=self.model_id,
             )
 
             self.log("Calling list_tools()...", "info")
@@ -113,7 +117,7 @@ class LLMInteractionTester:
                 "mcp__auto-claude-electron__take_screenshot",
                 "mcp__auto-claude-electron__send_command",
                 "mcp__auto-claude-electron__read_logs",
-                "mcp__auto-claude-electron__health_check"
+                "mcp__auto-claude-electron__health_check",
             ]
 
             found_tools = []
@@ -133,7 +137,7 @@ class LLMInteractionTester:
                 "mcp__electron__get_electron_window_info",
                 "mcp__electron__take_screenshot",
                 "mcp__electron__send_command_to_electron",
-                "mcp__electron__read_electron_logs"
+                "mcp__electron__read_electron_logs",
             ]
 
             cdp_found = [tool for tool in cdp_tools if tool in tools]
@@ -142,7 +146,10 @@ class LLMInteractionTester:
                 self.log("\n  CDP mode tools detected (fallback):", "warning")
                 for tool in cdp_found:
                     self.log(f"  {tool}", "info")
-                self.log("\n  Note: CDP mode detected. For embedded mode, set ELECTRON_MCP_MODE=embedded", "warning")
+                self.log(
+                    "\n  Note: CDP mode detected. For embedded mode, set ELECTRON_MCP_MODE=embedded",
+                    "warning",
+                )
 
             if missing_tools and not found_tools and not cdp_found:
                 self.log(f"\n  Missing {len(missing_tools)} expected tools", "error")
@@ -150,18 +157,25 @@ class LLMInteractionTester:
                 self.log("    1. Electron app is running", "error")
                 self.log("    2. ELECTRON_MCP_ENABLED=true", "error")
                 self.log("    3. MCP server initialized successfully", "error")
-                self.test_results.append(("test_1_tool_discovery", False, "No tools found"))
+                self.test_results.append(
+                    ("test_1_tool_discovery", False, "No tools found")
+                )
                 return False
 
             found_count = len(found_tools) if found_tools else len(cdp_found)
-            self.log(f"\n  Tool discovery successful: {found_count} tools found", "success")
-            self.test_results.append(("test_1_tool_discovery", True, f"{found_count} tools"))
+            self.log(
+                f"\n  Tool discovery successful: {found_count} tools found", "success"
+            )
+            self.test_results.append(
+                ("test_1_tool_discovery", True, f"{found_count} tools")
+            )
             return True
 
         except Exception as e:
             self.log(f"\n  Test failed with error: {e}", "error")
             if self.verbose:
                 import traceback
+
                 traceback.print_exc()
             self.test_results.append(("test_1_tool_discovery", False, str(e)))
             return False
@@ -177,13 +191,13 @@ class LLMInteractionTester:
             {
                 "name": "health_check",
                 "task": "Check the MCP server health status and report the metrics",
-                "expected_keywords": ["uptime", "status", "healthy"]
+                "expected_keywords": ["uptime", "status", "healthy"],
             },
             {
                 "name": "get_window_info",
                 "task": "Get information about all open windows",
-                "expected_keywords": ["window", "id", "title"]
-            }
+                "expected_keywords": ["window", "id", "title"],
+            },
         ]
 
         all_passed = True
@@ -198,22 +212,26 @@ class LLMInteractionTester:
                     project_dir=self.project_dir,
                     spec_dir=self.spec_dir,
                     agent_type="qa_reviewer",
-                    model="claude-sonnet-4-5-20250929"
+                    model=self.model_id,
                 )
 
                 start_time = time.time()
                 response = client.create_agent_session(
-                    name=f"test-{test_case['name']}",
-                    starting_message=test_case['task']
+                    name=f"test-{test_case['name']}", starting_message=test_case["task"]
                 )
                 duration = time.time() - start_time
 
                 # Check if response contains expected content
-                response_text = str(response.content).lower() if hasattr(response, 'content') else ""
+                response_text = (
+                    str(response.content).lower()
+                    if hasattr(response, "content")
+                    else ""
+                )
 
                 # Check for expected keywords
                 keywords_found = [
-                    kw for kw in test_case['expected_keywords']
+                    kw
+                    for kw in test_case["expected_keywords"]
                     if kw.lower() in response_text
                 ]
 
@@ -221,24 +239,38 @@ class LLMInteractionTester:
                 print(f"  Response length: {len(response_text)} chars")
 
                 if keywords_found:
-                    self.log(f"  {test_case['name']} succeeded - found keywords: {keywords_found}", "success")
-                    results.append((test_case['name'], True, duration))
+                    self.log(
+                        f"  {test_case['name']} succeeded - found keywords: {keywords_found}",
+                        "success",
+                    )
+                    results.append((test_case["name"], True, duration))
                 else:
-                    self.log(f"  {test_case['name']} completed but unexpected response", "warning")
-                    results.append((test_case['name'], True, duration))  # Still count as pass
+                    self.log(
+                        f"  {test_case['name']} completed but unexpected response",
+                        "warning",
+                    )
+                    results.append(
+                        (test_case["name"], True, duration)
+                    )  # Still count as pass
 
                 if self.verbose:
                     print(f"  Response preview: {response_text[:200]}...")
 
             except Exception as e:
                 self.log(f"  {test_case['name']} failed: {str(e)[:100]}", "error")
-                results.append((test_case['name'], False, 0))
+                results.append((test_case["name"], False, 0))
                 all_passed = False
 
         # Summary
         passed_count = sum(1 for _, passed, _ in results if passed)
         print(f"\n  Results: {passed_count}/{len(test_cases)} tests passed")
-        self.test_results.append(("test_2_single_tool_invocation", all_passed, f"{passed_count}/{len(test_cases)}"))
+        self.test_results.append(
+            (
+                "test_2_single_tool_invocation",
+                all_passed,
+                f"{passed_count}/{len(test_cases)}",
+            )
+        )
         return all_passed
 
     def test_3_multi_step_workflow(self) -> bool:
@@ -262,41 +294,65 @@ class LLMInteractionTester:
                 project_dir=self.project_dir,
                 spec_dir=self.spec_dir,
                 agent_type="qa_reviewer",
-                model="claude-sonnet-4-5-20250929"
+                model=self.model_id,
             )
 
             print("  Running multi-step workflow...")
             start_time = time.time()
             response = client.create_agent_session(
-                name="test-multi-step",
-                starting_message=task
+                name="test-multi-step", starting_message=task
             )
             duration = time.time() - start_time
 
-            response_text = str(response.content) if hasattr(response, 'content') else ""
+            response_text = (
+                str(response.content) if hasattr(response, "content") else ""
+            )
 
             print(f"\n  ⏱️  Duration: {duration:.2f}s")
             print(f"  Response length: {len(response_text)} chars")
 
             # Check if response indicates multiple operations
             multi_step_indicators = ["window", "health", "logs", "summary"]
-            indicators_found = sum(1 for ind in multi_step_indicators if ind.lower() in response_text.lower())
+            indicators_found = sum(
+                1
+                for ind in multi_step_indicators
+                if ind.lower() in response_text.lower()
+            )
 
             if indicators_found >= 2:
-                self.log(f"  Multi-step workflow completed successfully ({indicators_found}/4 indicators found)", "success")
+                self.log(
+                    f"  Multi-step workflow completed successfully ({indicators_found}/4 indicators found)",
+                    "success",
+                )
                 if self.verbose:
                     print(f"\n  Response preview:\n{response_text[:500]}...")
-                self.test_results.append(("test_3_multi_step_workflow", True, f"{duration:.2f}s, {indicators_found} indicators"))
+                self.test_results.append(
+                    (
+                        "test_3_multi_step_workflow",
+                        True,
+                        f"{duration:.2f}s, {indicators_found} indicators",
+                    )
+                )
                 return True
             else:
-                self.log(f"  Workflow completed but may have missed some steps ({indicators_found}/4 indicators)", "warning")
-                self.test_results.append(("test_3_multi_step_workflow", True, f"{duration:.2f}s, {indicators_found} indicators"))
+                self.log(
+                    f"  Workflow completed but may have missed some steps ({indicators_found}/4 indicators)",
+                    "warning",
+                )
+                self.test_results.append(
+                    (
+                        "test_3_multi_step_workflow",
+                        True,
+                        f"{duration:.2f}s, {indicators_found} indicators",
+                    )
+                )
                 return True  # Still pass as long as it completed
 
         except Exception as e:
             self.log(f"  Multi-step workflow failed: {e}", "error")
             if self.verbose:
                 import traceback
+
                 traceback.print_exc()
             self.test_results.append(("test_3_multi_step_workflow", False, str(e)))
             return False
@@ -311,13 +367,13 @@ class LLMInteractionTester:
             {
                 "name": "Invalid screenshot quality",
                 "task": "Take a screenshot with quality 150 (this is invalid, should be 1-100)",
-                "should_handle_gracefully": True
+                "should_handle_gracefully": True,
             },
             {
                 "name": "Non-existent element",
                 "task": "Click on a button with text 'ThisButtonDoesNotExist12345'",
-                "should_handle_gracefully": True
-            }
+                "should_handle_gracefully": True,
+            },
         ]
 
         all_passed = True
@@ -332,31 +388,38 @@ class LLMInteractionTester:
                     project_dir=self.project_dir,
                     spec_dir=self.spec_dir,
                     agent_type="qa_reviewer",
-                    model="claude-sonnet-4-5-20250929"
+                    model=self.model_id,
                 )
 
                 start_time = time.time()
                 response = client.create_agent_session(
-                    name=f"test-error-{i}",
-                    starting_message=test_case['task']
+                    name=f"test-error-{i}", starting_message=test_case["task"]
                 )
                 duration = time.time() - start_time
 
-                response_text = str(response.content).lower() if hasattr(response, 'content') else ""
+                response_text = (
+                    str(response.content).lower()
+                    if hasattr(response, "content")
+                    else ""
+                )
 
                 # Check if agent handled the error gracefully
                 error_indicators = ["error", "invalid", "not found", "failed", "cannot"]
-                found_error_indicator = any(ind in response_text for ind in error_indicators)
+                found_error_indicator = any(
+                    ind in response_text for ind in error_indicators
+                )
 
                 print(f"  ⏱️  Duration: {duration:.2f}s")
 
                 if found_error_indicator:
-                    self.log(f"  Error handled gracefully - agent reported issue", "success")
-                    results.append((test_case['name'], True, duration))
+                    self.log(
+                        "  Error handled gracefully - agent reported issue", "success"
+                    )
+                    results.append((test_case["name"], True, duration))
                 else:
                     # Agent may have recovered in a different way
-                    self.log(f"  Agent provided response (may have recovered)", "info")
-                    results.append((test_case['name'], True, duration))
+                    self.log("  Agent provided response (may have recovered)", "info")
+                    results.append((test_case["name"], True, duration))
 
                 if self.verbose:
                     print(f"  Response preview: {response_text[:200]}...")
@@ -364,18 +427,23 @@ class LLMInteractionTester:
             except Exception as e:
                 # Some errors are expected and OK
                 error_str = str(e).lower()
-                if any(ind in error_str for ind in ["error", "invalid", "not found", "failed"]):
+                if any(
+                    ind in error_str
+                    for ind in ["error", "invalid", "not found", "failed"]
+                ):
                     self.log(f"  Error detected and handled: {str(e)[:100]}", "success")
-                    results.append((test_case['name'], True, 0))
+                    results.append((test_case["name"], True, 0))
                 else:
                     self.log(f"  Unexpected error: {str(e)[:100]}", "error")
-                    results.append((test_case['name'], False, 0))
+                    results.append((test_case["name"], False, 0))
                     all_passed = False
 
         # Summary
         passed_count = sum(1 for _, passed, _ in results if passed)
         print(f"\n  Results: {passed_count}/{len(test_cases)} tests passed")
-        self.test_results.append(("test_4_error_handling", all_passed, f"{passed_count}/{len(test_cases)}"))
+        self.test_results.append(
+            ("test_4_error_handling", all_passed, f"{passed_count}/{len(test_cases)}")
+        )
         return all_passed
 
     def test_5_performance_benchmarks(self) -> bool:
@@ -387,7 +455,7 @@ class LLMInteractionTester:
         # Quick performance check (single call each for speed)
         tools_to_test = [
             ("health_check", "Check server health", 2000),  # 2 second target
-            ("get_window_info", "Get window info", 2000)
+            ("get_window_info", "Get window info", 2000),
         ]
 
         performance_results = {}
@@ -402,13 +470,12 @@ class LLMInteractionTester:
                     project_dir=self.project_dir,
                     spec_dir=self.spec_dir,
                     agent_type="qa_reviewer",
-                    model="claude-sonnet-4-5-20250929"
+                    model=self.model_id,
                 )
 
                 start_time = time.time()
-                response = client.create_agent_session(
-                    name=f"benchmark-{tool_name}",
-                    starting_message=task
+                client.create_agent_session(
+                    name=f"benchmark-{tool_name}", starting_message=task
                 )
                 end_time = time.time()
 
@@ -419,7 +486,10 @@ class LLMInteractionTester:
                 print(f"  {status} Latency: {duration_ms:.2f}ms")
 
                 if duration_ms >= target_ms:
-                    self.log(f"  Exceeds {target_ms}ms target (but test continues)", "warning")
+                    self.log(
+                        f"  Exceeds {target_ms}ms target (but test continues)",
+                        "warning",
+                    )
                     all_within_target = False
 
             except Exception as e:
@@ -428,16 +498,18 @@ class LLMInteractionTester:
                 all_within_target = False
 
         # Summary
-        print(f"\n  Performance Summary:")
+        print("\n  Performance Summary:")
         for tool, duration in performance_results.items():
             if duration:
                 status = "✅" if duration < 2000 else "⚠️"
                 print(f"    {status} {tool}: {duration:.2f}ms")
 
-        self.test_results.append(("test_5_performance_benchmarks", True, "Performance recorded"))
+        self.test_results.append(
+            ("test_5_performance_benchmarks", True, "Performance recorded")
+        )
         return True  # Always pass, just warn on slow performance
 
-    def run_all_tests(self) -> Dict[str, Any]:
+    def run_all_tests(self) -> dict[str, Any]:
         """Run all LLM interaction tests"""
         print("\n" + "=" * 70)
         print("RUNNING ALL TESTS")
@@ -446,11 +518,7 @@ class LLMInteractionTester:
         # Setup
         if not self.setup():
             self.log("\nSetup failed. Please check environment configuration.", "error")
-            return {
-                "success": False,
-                "error": "Setup failed",
-                "tests": []
-            }
+            return {"success": False, "error": "Setup failed", "tests": []}
 
         # Run tests
         test_methods = [
@@ -458,7 +526,7 @@ class LLMInteractionTester:
             ("Single Tool Invocation", self.test_2_single_tool_invocation),
             ("Multi-Step Workflow", self.test_3_multi_step_workflow),
             ("Error Handling", self.test_4_error_handling),
-            ("Performance Benchmarks", self.test_5_performance_benchmarks)
+            ("Performance Benchmarks", self.test_5_performance_benchmarks),
         ]
 
         for test_name, test_method in test_methods:
@@ -468,6 +536,7 @@ class LLMInteractionTester:
                 self.log(f"\nTest {test_name} crashed: {e}", "error")
                 if self.verbose:
                     import traceback
+
                     traceback.print_exc()
                 self.test_results.append((test_name, False, f"Crashed: {e}"))
 
@@ -483,13 +552,9 @@ class LLMInteractionTester:
             "failed": failed,
             "success_rate": (passed / total * 100) if total > 0 else 0,
             "tests": [
-                {
-                    "name": name,
-                    "passed": result,
-                    "notes": notes
-                }
+                {"name": name, "passed": result, "notes": notes}
                 for name, result, notes in self.test_results
-            ]
+            ],
         }
 
         # Print summary
@@ -503,14 +568,14 @@ class LLMInteractionTester:
 
         # Detailed results
         print("\nDetailed Results:")
-        for test in results['tests']:
-            status = "✅ PASS" if test['passed'] else "❌ FAIL"
+        for test in results["tests"]:
+            status = "✅ PASS" if test["passed"] else "❌ FAIL"
             print(f"  {status} - {test['name']}")
-            if test['notes']:
+            if test["notes"]:
                 print(f"      Notes: {test['notes']}")
 
         # Overall status
-        if results['success']:
+        if results["success"]:
             print("\n" + "=" * 70)
             self.log("ALL TESTS PASSED ✅", "success")
             print("=" * 70)
@@ -527,12 +592,22 @@ def main():
     # Determine directories
     script_dir = Path(__file__).parent
     project_dir = script_dir.parent
-    spec_dir = script_dir / ".auto-claude" / "specs" / "169-research-webmcp-integration-with-electron-frontend"
+    spec_dir = (
+        script_dir
+        / ".auto-claude"
+        / "specs"
+        / "169-research-webmcp-integration-with-electron-frontend"
+    )
 
     # Fallback spec directory if above doesn't exist (running in worktree)
     if not spec_dir.exists():
         # Try current directory's spec dir
-        spec_dir = Path.cwd() / ".auto-claude" / "specs" / "169-research-webmcp-integration-with-electron-frontend"
+        spec_dir = (
+            Path.cwd()
+            / ".auto-claude"
+            / "specs"
+            / "169-research-webmcp-integration-with-electron-frontend"
+        )
 
     print(f"Project directory: {project_dir}")
     print(f"Spec directory: {spec_dir}")
@@ -545,14 +620,14 @@ def main():
     # Save results to JSON
     results_file = script_dir / "test_llm_mcp_results.json"
     try:
-        with open(results_file, 'w') as f:
+        with open(results_file, "w") as f:
             json.dump(results, f, indent=2)
         print(f"\nResults saved to: {results_file}")
     except Exception as e:
         print(f"\nFailed to save results: {e}")
 
     # Exit with appropriate code
-    sys.exit(0 if results['success'] else 1)
+    sys.exit(0 if results["success"] else 1)
 
 
 if __name__ == "__main__":

@@ -37,19 +37,30 @@ const LOG_PREFIX = '[MCP-Wrapper]';
 // Utility Functions
 // ============================================================================
 
+/** Cached log level to avoid re-reading env on every log call */
+let cachedLogLevel: string | null = null;
+
 /**
- * Get log level from environment or default
+ * Get log level from environment or default.
+ * Caches the result to avoid repeated env reads and recursive log() calls.
  */
 function getLogLevel(): string {
+  if (cachedLogLevel !== null) {
+    return cachedLogLevel;
+  }
+
   const level = process.env.ELECTRON_MCP_LOG_LEVEL;
   const validLevels = ['debug', 'info', 'warn', 'error'];
 
   if (level && !validLevels.includes(level.toLowerCase())) {
-    log('warn', `Invalid log level: "${level}". Valid values: ${validLevels.join(', ')}. Using default: ${DEFAULT_LOG_LEVEL}`);
+    // Use console.warn directly to avoid recursive log() call
+    console.warn(`${LOG_PREFIX} Invalid log level: "${level}". Valid values: ${validLevels.join(', ')}. Using default: ${DEFAULT_LOG_LEVEL}`);
+    cachedLogLevel = DEFAULT_LOG_LEVEL;
     return DEFAULT_LOG_LEVEL;
   }
 
-  return level || DEFAULT_LOG_LEVEL;
+  cachedLogLevel = level || DEFAULT_LOG_LEVEL;
+  return cachedLogLevel;
 }
 
 /**
@@ -114,6 +125,12 @@ function handleError(error: Error): void {
 function setupShutdownHandlers(server: ElectronMCPServer): void {
   const shutdown = async (signal: string) => {
     log('info', `Received ${signal}, shutting down gracefully...`);
+
+    try {
+      await server.stop();
+    } catch {
+      // Best-effort cleanup
+    }
 
     // Give stdio buffers time to flush
     setTimeout(() => {

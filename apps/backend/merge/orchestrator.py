@@ -260,7 +260,11 @@ class MergeOrchestrator:
 
     @staticmethod
     def _emit_progress(
-        callback: ProgressCallback | None, phase: str, current: int, total: int, file: str = ""
+        callback: ProgressCallback | None,
+        phase: str,
+        current: int,
+        total: int,
+        file: str = "",
     ) -> None:
         """Safely invoke a progress callback, ignoring exceptions."""
         if callback is None:

@@ -198,15 +198,12 @@ export async function stopMCPServer(): Promise<void> {
   console.log('[MCP] Stopping server...');
 
   try {
-    // The MCP SDK's stdio transport doesn't have an explicit stop method
-    // The server will stop when the process exits
-    // We just need to clean up our state
-    mcpServer = null;
-    isRunning = false;
-
-    console.log('[MCP] Server stopped');
+    await mcpServer.stop();
   } catch (error) {
     console.error('[MCP] Error during shutdown:', error);
+  } finally {
+    mcpServer = null;
+    isRunning = false;
   }
 }
 

@@ -22,11 +22,11 @@
  * @see SECURITY_REQUIREMENTS_AND_CONTEXT_ISOLATION_1.3.md
  */
 
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
-import electron from 'electron';
-const { BrowserWindow, app, ipcMain } = electron;
+import { BrowserWindow, app, ipcMain } from 'electron';
 
 // ============================================================================
 // Constants
@@ -59,23 +59,12 @@ const RATE_LIMIT_WINDOW = 1000;
 /** Maximum message size for IPC (10MB) */
 const MAX_IPC_MESSAGE_SIZE = 10_000_000;
 
+/** MCP server startup timeout (ms) */
+const MCP_STARTUP_TIMEOUT = 10_000;
+
 // ============================================================================
 // Types
 // ============================================================================
-
-/** MCP tool response content */
-interface MCPContent {
-  type: 'text' | 'image' | 'resource';
-  text?: string;
-  data?: string;
-  mimeType?: string;
-}
-
-/** MCP tool response */
-interface MCPToolResponse {
-  content: MCPContent[];
-  isError?: boolean;
-}
 
 /** Window information */
 interface WindowInfo {
@@ -100,7 +89,7 @@ interface LogEntry {
 /** Command execution result */
 interface CommandResult {
   success: boolean;
-  result?: any;
+  result?: unknown;
   error?: string;
 }
 
@@ -173,12 +162,13 @@ const readLogsSchema = z.object({
  */
 class LogCollector {
   private logs: LogEntry[] = [];
+  // Constrained patterns with limited quantifiers to avoid ReDoS
   private readonly SENSITIVE_PATTERNS = [
-    /token["\s:=]+[a-zA-Z0-9\-_]+/gi,
-    /password["\s:=]+.+/gi,
-    /api[_-]?key["\s:=]+[a-zA-Z0-9\-_]+/gi,
-    /secret["\s:=]+.+/gi,
-    /authorization["\s:=]+.+/gi
+    /token["\s:=]+[a-zA-Z0-9\-_]{1,200}/gi,
+    /password["\s:=]+.{1,200}/gi,
+    /api[_-]?key["\s:=]+[a-zA-Z0-9\-_]{1,200}/gi,
+    /secret["\s:=]+.{1,200}/gi,
+    /authorization["\s:=]+.{1,200}/gi
   ];
 
   constructor() {
@@ -193,7 +183,7 @@ class LogCollector {
     BrowserWindow.getAllWindows().forEach(win => this.attachToWindow(win));
 
     // Attach to new windows
-    app.on('browser-window-created', (_event, win) => {
+    app.on('browser-window-created', (_event: Electron.Event, win: Electron.BrowserWindow) => {
       this.attachToWindow(win);
     });
   }
@@ -201,8 +191,8 @@ class LogCollector {
   /**
    * Attach log collector to a specific window
    */
-  attachToWindow(win: BrowserWindow): void {
-    win.webContents.on('console-message', (event, level, message, line, sourceId) => {
+  attachToWindow(win: Electron.BrowserWindow): void {
+    win.webContents.on('console-message', (_event: Electron.Event, level: number, message: string, line: number, sourceId: string) => {
       const filtered = this.filterLog(message);
 
       this.logs.push({
@@ -228,10 +218,13 @@ class LogCollector {
   }
 
   /**
-   * Filter sensitive information from log messages
+   * Filter sensitive information from log messages.
+   * Caps input length to prevent ReDoS on very large messages.
    */
   private filterLog(message: string): string {
-    let filtered = message;
+    // Cap input length to prevent regex performance issues
+    const capped = message.length > 10000 ? message.substring(0, 10000) : message;
+    let filtered = capped;
 
     for (const pattern of this.SENSITIVE_PATTERNS) {
       filtered = filtered.replace(pattern, '[REDACTED]');
@@ -319,8 +312,8 @@ class RateLimiter {
 /**
  * IPC bridge for communicating with renderer process
  * - Sends commands to renderer via IPC
- * - Handles timeouts and errors
- * - Validates responses
+ * - Handles timeouts with proper listener cleanup
+ * - Validates message size using byte length
  */
 class IPCBridge {
   /**
@@ -329,31 +322,34 @@ class IPCBridge {
    * @param args - Command arguments
    * @returns Command execution result
    */
-  async executeCommand(command: string, args: any = {}): Promise<CommandResult> {
+  async executeCommand(command: string, args: Record<string, unknown> = {}): Promise<CommandResult> {
     const win = BrowserWindow.getFocusedWindow();
     if (!win) {
       return { success: false, error: 'No focused window' };
     }
 
-    // Validate message size
-    const dataSize = JSON.stringify({ command, args }).length;
+    // Validate message size using byte length for accuracy
+    const json = JSON.stringify({ command, args });
+    const dataSize = Buffer.byteLength(json, 'utf8');
     if (dataSize > MAX_IPC_MESSAGE_SIZE) {
       return { success: false, error: `Message too large: ${dataSize} bytes` };
     }
 
-    return new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        reject(new Error('IPC timeout: renderer did not respond'));
-      }, IPC_TIMEOUT);
-
-      // Listen for response
+    return new Promise((resolve) => {
       const responseChannel = 'mcp-execute-command-response';
-      const handler = (_event: any, result: CommandResult) => {
+
+      const handler = (_event: Electron.IpcMainEvent, result: CommandResult) => {
         clearTimeout(timeout);
-        ipcMain.removeListener(responseChannel, handler);
         resolve(result);
       };
 
+      const timeout = setTimeout(() => {
+        // Remove listener on timeout to prevent memory leak
+        ipcMain.removeListener(responseChannel, handler);
+        resolve({ success: false, error: 'IPC timeout: renderer did not respond' });
+      }, IPC_TIMEOUT);
+
+      // Listen for response (once auto-removes after first call)
       ipcMain.once(responseChannel, handler);
 
       // Send command to renderer
@@ -390,6 +386,24 @@ function sanitizeError(error: unknown): string {
 }
 
 // ============================================================================
+// Blocked eval patterns
+// ============================================================================
+
+/** Patterns blocked in eval commands to prevent code execution escapes */
+const BLOCKED_EVAL_PATTERNS = [
+  'require(',
+  'import(',
+  'process.',
+  'child_process',
+  'global.',
+  '__dirname',
+  '__filename',
+  'Function(',
+  'new Function',
+  'window.eval',
+];
+
+// ============================================================================
 // MCP Server Implementation
 // ============================================================================
 
@@ -403,31 +417,49 @@ function sanitizeError(error: unknown): string {
  * - Enforces security policies
  */
 export class ElectronMCPServer {
-  private server: Server;
+  private server: McpServer;
   private logCollector: LogCollector;
   private ipcBridge: IPCBridge;
   private rateLimiter: RateLimiter;
   private startTime: number;
 
   constructor() {
-    this.server = new Server(MCP_SERVER_CONFIG);
+    this.server = new McpServer(MCP_SERVER_CONFIG);
     this.logCollector = new LogCollector();
     this.ipcBridge = new IPCBridge();
     this.rateLimiter = new RateLimiter();
     this.startTime = Date.now();
 
     this.registerTools();
-    this.setupIPCHandlers();
   }
 
   /**
-   * Start the MCP server with stdio transport
+   * Start the MCP server with stdio transport.
+   * Includes a startup timeout to prevent hanging.
    */
   async start(): Promise<void> {
     const transport = new StdioServerTransport();
-    await this.server.connect(transport);
+
+    const connectPromise = this.server.connect(transport);
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error(`MCP server startup timeout (${MCP_STARTUP_TIMEOUT}ms)`)), MCP_STARTUP_TIMEOUT);
+    });
+
+    await Promise.race([connectPromise, timeoutPromise]);
     console.log(`[MCP] Server started on stdio (PID: ${process.pid})`);
     console.log('[MCP] Transport: stdio (local only, no network exposure)');
+  }
+
+  /**
+   * Stop the MCP server and clean up resources.
+   */
+  async stop(): Promise<void> {
+    try {
+      await this.server.close();
+      console.log('[MCP] Server stopped');
+    } catch (error) {
+      console.error('[MCP] Error during shutdown:', error);
+    }
   }
 
   /**
@@ -447,7 +479,7 @@ export class ElectronMCPServer {
       'take_screenshot',
       'Capture screenshot of window (compressed to JPEG, max 1MB)',
       takeScreenshotSchema.shape,
-      async (params) => this.takeScreenshot(params)
+      async (params: z.infer<typeof takeScreenshotSchema>) => this.takeScreenshot(params)
     );
 
     // Tool 3: send_command
@@ -455,7 +487,7 @@ export class ElectronMCPServer {
       'send_command',
       'Execute UI interaction command in renderer process',
       sendCommandSchema.shape,
-      async (params) => this.sendCommand(params)
+      async (params: z.infer<typeof sendCommandSchema>) => this.sendCommand(params)
     );
 
     // Tool 4: read_logs
@@ -463,7 +495,7 @@ export class ElectronMCPServer {
       'read_logs',
       'Read console logs from renderer process (filtered for sensitive data)',
       readLogsSchema.shape,
-      async (params) => this.readLogs(params)
+      async (params: z.infer<typeof readLogsSchema>) => this.readLogs(params)
     );
 
     // Tool 5: health_check
@@ -478,20 +510,10 @@ export class ElectronMCPServer {
   }
 
   /**
-   * Setup IPC handlers for renderer communication
-   */
-  private setupIPCHandlers(): void {
-    // Handler for renderer responses
-    ipcMain.on('mcp-execute-command-response', (_event, result) => {
-      // Response is handled by IPCBridge.executeCommand via ipcMain.once
-    });
-  }
-
-  /**
    * Tool: get_window_info
    * Returns metadata about all Electron windows
    */
-  private async getWindowInfo(): Promise<MCPToolResponse> {
+  private async getWindowInfo(): Promise<CallToolResult> {
     try {
       const windows = BrowserWindow.getAllWindows();
       const windowInfo: WindowInfo[] = windows.map(w => ({
@@ -524,9 +546,10 @@ export class ElectronMCPServer {
 
   /**
    * Tool: take_screenshot
-   * Captures screenshot of window, compressed to JPEG
+   * Captures screenshot of window, compressed to JPEG.
+   * Uses recompressed buffer when initial size exceeds limit.
    */
-  private async takeScreenshot(params: z.infer<typeof takeScreenshotSchema>): Promise<MCPToolResponse> {
+  private async takeScreenshot(params: z.infer<typeof takeScreenshotSchema>): Promise<CallToolResult> {
     try {
       // Validate input
       const validated = takeScreenshotSchema.parse(params);
@@ -548,16 +571,22 @@ export class ElectronMCPServer {
       // Capture screenshot
       const image = await win.webContents.capturePage();
       const quality = validated.quality ?? DEFAULT_SCREENSHOT_QUALITY;
-      const buffer = image.toJPEG(quality);
+      let buffer = image.toJPEG(quality);
 
-      // Validate size
+      // Validate size and recompress if needed
       if (buffer.length > MAX_SCREENSHOT_SIZE) {
-        // Try higher compression
         const compressed = image.toJPEG(40);
         if (compressed.length > MAX_SCREENSHOT_SIZE) {
-          throw new Error(`Screenshot too large: ${buffer.length} bytes (max: ${MAX_SCREENSHOT_SIZE})`);
+          throw new Error(`Screenshot too large: ${compressed.length} bytes (max: ${MAX_SCREENSHOT_SIZE})`);
         }
         console.warn(`[MCP] Screenshot ${buffer.length} bytes compressed to ${compressed.length} bytes`);
+        buffer = compressed;
+      }
+
+      // Verify base64 size stays under limit (~33% larger than raw)
+      const base64Size = Math.ceil(buffer.length * 4 / 3);
+      if (base64Size > MAX_SCREENSHOT_SIZE) {
+        throw new Error(`Screenshot base64 too large: ${base64Size} bytes (max: ${MAX_SCREENSHOT_SIZE})`);
       }
 
       return {
@@ -582,7 +611,7 @@ export class ElectronMCPServer {
    * Tool: send_command
    * Sends a command to the renderer process for execution
    */
-  private async sendCommand(params: z.infer<typeof sendCommandSchema>): Promise<MCPToolResponse> {
+  private async sendCommand(params: z.infer<typeof sendCommandSchema>): Promise<CallToolResult> {
     try {
       // Validate input
       const validated = sendCommandSchema.parse(params);
@@ -595,8 +624,7 @@ export class ElectronMCPServer {
 
       // Check for blocked patterns in eval
       if (validated.command === 'eval' && validated.args?.code) {
-        const blocked = ['require(', 'import(', 'process.', 'child_process', 'global.', '__dirname', '__filename'];
-        for (const pattern of blocked) {
+        for (const pattern of BLOCKED_EVAL_PATTERNS) {
           if (validated.args.code.includes(pattern)) {
             throw new Error(`Blocked pattern: ${pattern}`);
           }
@@ -630,7 +658,7 @@ export class ElectronMCPServer {
    * Tool: read_logs
    * Reads console logs from renderer process
    */
-  private async readLogs(params: z.infer<typeof readLogsSchema>): Promise<MCPToolResponse> {
+  private async readLogs(params: z.infer<typeof readLogsSchema>): Promise<CallToolResult> {
     try {
       // Validate input
       const validated = readLogsSchema.parse(params);
@@ -668,7 +696,7 @@ export class ElectronMCPServer {
    * Tool: health_check
    * Returns MCP server health metrics
    */
-  private async healthCheck(): Promise<MCPToolResponse> {
+  private async healthCheck(): Promise<CallToolResult> {
     return {
       content: [{
         type: 'text',

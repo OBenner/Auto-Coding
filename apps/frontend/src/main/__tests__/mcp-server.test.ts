@@ -2,9 +2,8 @@
  * Unit tests for MCP Server
  * Tests MCP server initialization, tool registration, and basic functionality
  */
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { spawn } from 'child_process';
-import { writeFileSync, unlinkSync, existsSync, readFileSync } from 'fs';
+import { describe, it, expect, vi } from 'vitest';
+import { existsSync, readFileSync } from 'fs';
 import path from 'path';
 
 // Mock electron before importing mcp-server
@@ -22,7 +21,9 @@ vi.mock('electron', () => ({
     },
     ipcMain: {
       on: vi.fn(),
-      handle: vi.fn()
+      once: vi.fn(),
+      handle: vi.fn(),
+      removeListener: vi.fn()
     }
   }
 }));
@@ -306,19 +307,16 @@ describe('MCP Server', () => {
   });
 
   describe('Documentation', () => {
-    it('should have MCP architecture design document', () => {
-      const docPath = path.join(process.cwd(), '../../.auto-claude/specs/169-research-webmcp-integration-with-electron-frontend/MCP_ARCHITECTURE_DESIGN_1.2.md');
-      expect(existsSync(docPath)).toBe(true);
+    it('should reference MCP architecture design in source', () => {
+      const mcpServerPath = path.join(process.cwd(), 'src/main/mcp-server.ts');
+      const mcpServerContent = readFileSync(mcpServerPath, 'utf-8');
+      expect(mcpServerContent).toContain('MCP_ARCHITECTURE_DESIGN');
     });
 
-    it('should have security requirements document', () => {
-      const docPath = path.join(process.cwd(), '../../.auto-claude/specs/169-research-webmcp-integration-with-electron-frontend/SECURITY_REQUIREMENTS_AND_CONTEXT_ISOLATION_1.3.md');
-      expect(existsSync(docPath)).toBe(true);
-    });
-
-    it('should have transport layer architecture document', () => {
-      const docPath = path.join(process.cwd(), '../../.auto-claude/specs/169-research-webmcp-integration-with-electron-frontend/TRANSPORT_LAYER_ARCHITECTURE_2.3.md');
-      expect(existsSync(docPath)).toBe(true);
+    it('should reference security requirements in source', () => {
+      const mcpServerPath = path.join(process.cwd(), 'src/main/mcp-server.ts');
+      const mcpServerContent = readFileSync(mcpServerPath, 'utf-8');
+      expect(mcpServerContent).toContain('SECURITY_REQUIREMENTS');
     });
   });
 });

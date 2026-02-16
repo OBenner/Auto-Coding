@@ -412,6 +412,10 @@ def is_electron_mcp_enabled() -> bool:
     return os.environ.get("ELECTRON_MCP_ENABLED", "").lower() == "true"
 
 
+_VALID_ELECTRON_MCP_MODES: tuple[str, ...] = ("cdp", "embedded")
+_VALID_ELECTRON_MCP_LOG_LEVELS: tuple[str, ...] = ("debug", "info", "warn", "error")
+
+
 def get_electron_mcp_mode() -> str:
     """
     Get the Electron MCP server mode.
@@ -423,10 +427,13 @@ def get_electron_mcp_mode() -> str:
     Default: "cdp" for backward compatibility
     """
     mode = os.environ.get("ELECTRON_MCP_MODE", "cdp").lower()
-    valid_modes = ["cdp", "embedded"]
 
-    if mode not in valid_modes:
-        print(f"⚠️  Warning: Invalid ELECTRON_MCP_MODE '{mode}'. Valid values: {', '.join(valid_modes)}. Using default: cdp")
+    if mode not in _VALID_ELECTRON_MCP_MODES:
+        logger.warning(
+            "Invalid ELECTRON_MCP_MODE '%s'. Valid values: %s. Using default: cdp",
+            mode,
+            ", ".join(_VALID_ELECTRON_MCP_MODES),
+        )
         return "cdp"
 
     return mode
@@ -447,10 +454,14 @@ def get_electron_debug_port() -> int:
     try:
         port = int(port_str)
     except ValueError:
-        raise ValueError(f"Invalid ELECTRON_DEBUG_PORT: '{port_str}'. Must be a number.")
+        raise ValueError(
+            f"Invalid ELECTRON_DEBUG_PORT: '{port_str}'. Must be a number."
+        )
 
     if not (1024 <= port <= 65535):
-        raise ValueError(f"Invalid ELECTRON_DEBUG_PORT: {port}. Must be between 1024 and 65535.")
+        raise ValueError(
+            f"Invalid ELECTRON_DEBUG_PORT: {port}. Must be between 1024 and 65535."
+        )
 
     return port
 
@@ -465,10 +476,13 @@ def get_electron_mcp_log_level() -> str:
     Default: "info"
     """
     level = os.environ.get("ELECTRON_MCP_LOG_LEVEL", "info").lower()
-    valid_levels = ["debug", "info", "warn", "error"]
 
-    if level not in valid_levels:
-        print(f"⚠️  Warning: Invalid ELECTRON_MCP_LOG_LEVEL '{level}'. Valid values: {', '.join(valid_levels)}. Using default: info")
+    if level not in _VALID_ELECTRON_MCP_LOG_LEVELS:
+        logger.warning(
+            "Invalid ELECTRON_MCP_LOG_LEVEL '%s'. Valid values: %s. Using default: info",
+            level,
+            ", ".join(_VALID_ELECTRON_MCP_LOG_LEVELS),
+        )
         return "info"
 
     return level
@@ -898,9 +912,7 @@ def create_client(
     if "electron" in required_servers:
         electron_mode = get_electron_mcp_mode()
         mode_label = "embedded" if electron_mode == "embedded" else "CDP"
-        mcp_servers_list.append(
-            f"electron (desktop automation, {mode_label} mode)"
-        )
+        mcp_servers_list.append(f"electron (desktop automation, {mode_label} mode)")
     if "puppeteer" in required_servers:
         mcp_servers_list.append("puppeteer (browser automation)")
     if "linear" in required_servers:
