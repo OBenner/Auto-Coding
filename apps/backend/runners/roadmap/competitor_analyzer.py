@@ -3,11 +3,14 @@ Competitor analysis functionality for roadmap generation.
 """
 
 import json
+import logging
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from ui import muted, print_status
+
+logger = logging.getLogger(__name__)
 
 from .models import RoadmapPhaseResult
 
@@ -140,7 +143,7 @@ Output your findings to competitor_analysis.json.
                 )
 
         except json.JSONDecodeError:
-            pass
+            logger.debug("Failed to parse competitor analysis output")
 
         return None
 

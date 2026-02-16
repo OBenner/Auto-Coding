@@ -6,6 +6,30 @@ import type { NotificationSettings, GraphitiEmbeddingProvider } from './project'
 import type { ChangelogFormat, ChangelogAudience, ChangelogEmojiLevel } from './changelog';
 import type { SupportedLanguage } from '../constants/i18n';
 
+// ============================================
+// Recent Actions Types
+// ============================================
+
+/**
+ * Recent action entry for quick actions menu
+ */
+export interface RecentAction {
+  /** Unique identifier for this action instance */
+  id: string;
+  /** Type of action performed */
+  type: 'batch_qa' | 'batch_status_update' | 'create_task' | 'start_task' | 'stop_task';
+  /** Display label for the action */
+  label: string;
+  /** Timestamp when the action was performed */
+  timestamp: Date;
+  /** Number of items affected (for batch operations) */
+  itemCount?: number;
+  /** Target status (for status updates) */
+  targetStatus?: string;
+  /** Project ID where the action was performed */
+  projectId?: string;
+}
+
 // Color theme types for multi-theme support
 export type ColorTheme = 'default' | 'dusk' | 'lime' | 'ocean' | 'retro' | 'neo' | 'forest';
 
@@ -200,6 +224,25 @@ export interface FeatureThinkingConfig {
   utility: ThinkingLevel;
 }
 
+// Agent verbosity level for explanations and responses
+export type AgentVerbosityLevel = 'minimal' | 'concise' | 'normal' | 'detailed' | 'verbose';
+
+// Agent risk tolerance for decision-making
+export type AgentRiskTolerance = 'cautious' | 'balanced' | 'aggressive';
+
+// Project maturity level affecting risk decisions
+export type AgentProjectType = 'greenfield' | 'established' | 'legacy';
+
+// Coding style preferences learned from project conventions
+export interface AgentCodingStylePreferences {
+  indentation?: 'spaces' | 'tabs' | 'auto';
+  quoteStyle?: 'single' | 'double' | 'auto';
+  lineLength?: number | null;
+  namingConvention?: 'snake_case' | 'camelCase' | 'PascalCase' | 'auto';
+  commentDensity?: 'minimal' | 'normal' | 'verbose';
+  typeHints?: boolean;
+}
+
 // Agent profile for preset model/thinking configurations
 // All profiles have per-phase configuration (phaseModels/phaseThinking)
 export interface AgentProfile {
@@ -280,6 +323,12 @@ export interface AppSettings {
   customIDEPath?: string;      // For 'custom' IDE
   preferredTerminal?: SupportedTerminal;
   customTerminalPath?: string; // For 'custom' terminal
+  // Agent behavior preferences (adaptive personality system)
+  agentVerbosity?: AgentVerbosityLevel;
+  agentRiskTolerance?: AgentRiskTolerance;
+  agentProjectType?: AgentProjectType;
+  agentCodingStyle?: AgentCodingStylePreferences;
+  agentUserInstructions?: string[]; // Explicit user preferences (e.g., "be more cautious")
   // YOLO mode: invoke Claude with --dangerously-skip-permissions flag
   dangerouslySkipPermissions?: boolean;
   // Anonymous error reporting (Sentry) - enabled by default to help improve the app
@@ -290,6 +339,10 @@ export interface AppSettings {
   seenVersionWarnings?: string[];
   // Sidebar collapsed state (icons only when true)
   sidebarCollapsed?: boolean;
+  // Keyboard shortcuts customization
+  keyboardShortcuts?: Record<KeyboardShortcutAction, KeyCombination>;
+  // Recent actions for quick actions menu (persisted between sessions)
+  recentActions?: RecentAction[];
 }
 
 // Auto-Code Source Environment Configuration (for auto-claude repo .env)
@@ -308,3 +361,53 @@ export interface SourceEnvCheckResult {
   sourcePath?: string;
   error?: string;
 }
+
+// ============================================
+// Keyboard Shortcuts Types
+// ============================================
+
+/**
+ * Keyboard shortcut action identifiers
+ * Maps to specific commands in the application
+ */
+export type KeyboardShortcutAction =
+  | 'commandPalette'      // Open command palette
+  | 'quickActions'        // Open quick actions menu
+  | 'createTask'          // Create new task
+  | 'batchQA'             // Batch QA operation
+  | 'batchStatusUpdate';  // Batch status update
+
+/**
+ * Keyboard key combination format
+ * Examples: "Cmd+K", "Ctrl+K", "Cmd+Shift+P"
+ */
+export type KeyCombination = string;
+
+/**
+ * Keyboard shortcut definition
+ * Maps an action to its key combination
+ */
+export interface KeyboardShortcut {
+  action: KeyboardShortcutAction;
+  keyCombination: KeyCombination;
+  description: string;
+}
+
+/**
+ * Map of all keyboard shortcuts by action ID
+ */
+export interface KeyboardShortcuts {
+  shortcuts: Record<KeyboardShortcutAction, KeyCombination>;
+}
+
+/**
+ * Default keyboard shortcuts
+ * Can be customized by users in settings
+ */
+export const DEFAULT_KEYBOARD_SHORTCUTS: Record<KeyboardShortcutAction, KeyCombination> = {
+  commandPalette: 'Cmd+K',
+  quickActions: 'Cmd+.',
+  createTask: 'Cmd+N',
+  batchQA: 'Cmd+Shift+Q',
+  batchStatusUpdate: 'Cmd+Shift+S'
+};

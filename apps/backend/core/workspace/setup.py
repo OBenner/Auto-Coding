@@ -32,20 +32,29 @@ from worktree import WorktreeManager
 from .git_utils import has_uncommitted_changes
 from .models import WorkspaceMode
 
+__all__ = [
+    "choose_workspace",
+    "setup_workspace",
+    "ensure_timeline_hook_installed",
+    "initialize_timeline_tracking",
+    "_ensure_timeline_hook_installed",
+    "_initialize_timeline_tracking",
+]
+
 # Import debug utilities
 try:
     from debug import debug, debug_warning
 except ImportError:
 
     def debug(*args, **kwargs):
-        pass
+        """No-op fallback when debug module is unavailable."""
 
     def debug_warning(*args, **kwargs):
-        pass
+        """No-op fallback when debug module is unavailable."""
 
 
-# Track if we've already tried to install the git hook this session
-_git_hook_check_done = False
+# Session state dict to track one-time operations
+_session_state: dict = {"git_hook_check_done": False}
 
 MODULE = "workspace.setup"
 
@@ -396,7 +405,7 @@ def setup_workspace(
             try:
                 shutil.copy2(source_file, target_file)
                 security_files_copied.append(filename)
-            except (OSError, PermissionError) as e:
+            except OSError as e:
                 debug_warning(MODULE, f"Failed to copy {filename}: {e}")
                 print_status(
                     f"Warning: Could not copy {filename} to worktree", "warning"
@@ -462,11 +471,10 @@ def ensure_timeline_hook_installed(project_dir: Path) -> None:
     This enables tracking human commits to main branch for drift detection.
     Called once per session during first workspace setup.
     """
-    global _git_hook_check_done
-    if _git_hook_check_done:
+    if _session_state["git_hook_check_done"]:
         return
 
-    _git_hook_check_done = True
+    _session_state["git_hook_check_done"] = True
 
     try:
         git_dir = project_dir / ".git"

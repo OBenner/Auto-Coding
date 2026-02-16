@@ -5,6 +5,7 @@ name: Quality Security
 # Bandit is fast (5-10 min)
 
 on:
+  workflow_dispatch:
   push:
     branches: [main]
     paths:

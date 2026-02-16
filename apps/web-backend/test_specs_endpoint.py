@@ -11,7 +11,6 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 try:
     from api.routes import specs
-    from api.models import spec
     print("✓ Imports successful")
 
     # Test that router is configured correctly

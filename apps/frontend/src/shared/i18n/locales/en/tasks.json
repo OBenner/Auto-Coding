@@ -25,6 +25,9 @@
     "showMetadata": "Show metadata",
     "hideMetadata": "Hide metadata"
   },
+  "taskDetail": {
+    "viewSessionReplay": "View Session Replay"
+  },
   "labels": {
     "running": "Running",
     "aiReview": "AI Review",
@@ -109,7 +112,9 @@
     "lockColumn": "Lock column width",
     "unlockColumn": "Unlock column width",
     "columnLocked": "Column width is locked",
-    "expandAll": "Expand all columns"
+    "expandAll": "Expand all columns",
+    "searchPlaceholder": "Search tasks...",
+    "clearFilters": "Clear Filters"
   },
   "queue": {
     "limitReached": "Parallel task limit reached ({{current}}/{{max}}). Task moved to queue.",
@@ -387,5 +392,32 @@
   "referenceImages": {
     "title": "Reference Images (optional)",
     "description": "Add visual references like screenshots or designs to help the AI understand your requirements."
+  },
+  "overview": {
+    "implementationPlan": "Implementation Plan",
+    "phaseNumber": "Phase {{number}}",
+    "subtasksCompleted": "subtasks completed",
+    "verification": "Verification",
+    "qaReport": "QA Report",
+    "qaEscalation": "QA Escalation",
+    "totalIterations": "Total Iterations",
+    "totalIssues": "Total Issues",
+    "uniqueIssues": "Unique Issues",
+    "fixSuccessRate": "Fix Success Rate",
+    "recurringIssues": "Recurring Issues",
+    "commonIssues": "Common Issues",
+    "noDataAvailable": "No overview data available yet"
+  },
+  "merge": {
+    "progress": "Merging files...",
+    "analyzing": "Analyzing changes...",
+    "fileProgress": "{{current}} / {{total}} files",
+    "currentFile": "Processing: {{file}}",
+    "conflicts": "{{count}} conflict(s) detected",
+    "complete": "Merge complete",
+    "autoResolved": "{{count}} file(s) auto-resolved"
+  },
+  "prPolling": {
+    "autoRefreshing": "Auto-refreshing"
   }
 }
