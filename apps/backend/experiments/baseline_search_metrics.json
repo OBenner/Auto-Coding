@@ -1,0 +1,11 @@
+{
+  "timestamp": "2026-02-16T16:41:24.471984+00:00",
+  "avg_latency_ms": 308.92288384666347,
+  "queries_per_second": 3.23705381598198,
+  "p50_latency_ms": 309.0499273167952,
+  "p95_latency_ms": 480.2932052212406,
+  "p99_latency_ms": 490.6664564513569,
+  "min_latency_ms": 103.39736348800837,
+  "max_latency_ms": 494.39652620660144,
+  "total_queries": 150
+}
