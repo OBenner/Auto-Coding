@@ -36,9 +36,11 @@ from typing import Any
 try:
     from .gh_client import GHClient, GHCommandError
     from .command_parser import Command
+    from .permissions import GitHubPermissionChecker, PermissionError
 except (ImportError, ValueError, SystemError):
     from gh_client import GHClient, GHCommandError
     from command_parser import Command
+    from permissions import GitHubPermissionChecker, PermissionError
 
 # Configure logger
 logger = logging.getLogger(__name__)
@@ -121,6 +123,7 @@ class CommandExecutor:
         project_dir: Path,
         gh_client: GHClient | None = None,
         repo: str | None = None,
+        allowed_roles: list[str] | None = None,
     ):
         """
         Initialize the command executor.
@@ -130,6 +133,8 @@ class CommandExecutor:
             gh_client: Optional GHClient instance. If None, creates a new one.
             repo: Repository in 'owner/repo' format. If provided, uses -R flag
                   instead of inferring from git remotes.
+            allowed_roles: List of allowed roles for write operations
+                          (default: OWNER, MEMBER, COLLABORATOR)
         """
         self.project_dir = Path(project_dir)
 
@@ -141,6 +146,13 @@ class CommandExecutor:
                 project_dir=self.project_dir,
                 repo=repo,
             )
+
+        # Store repo for permission checking
+        self.repo = repo
+
+        # Initialize permission checker (will be created lazily when needed)
+        self._permission_checker: GitHubPermissionChecker | None = None
+        self.allowed_roles = allowed_roles or ["OWNER", "MEMBER", "COLLABORATOR"]
 
     async def execute(
         self,
@@ -264,7 +276,7 @@ class CommandExecutor:
         Check if user has permissions to execute a command.
 
         Write operations (merge, resolve) require write access to the repository.
-        Read operations (process) require read access.
+        Read operations (process) are allowed for any user with repo access.
 
         Args:
             command: The command to check permissions for
@@ -274,19 +286,85 @@ class CommandExecutor:
         Returns:
             True if user has permissions, False otherwise
         """
-        # TODO: Implement permission checking via gh CLI
-        # For now, return True to allow execution
         logger.debug(
             f"Checking permissions for user '{username}' to execute '/{command.type}'"
         )
 
-        # Write operations require write access
-        if command.type in ["merge", "resolve"]:
-            # Check if user has write access to the repository
-            # This can be done via: gh api repos/{owner}/{repo}/collaborators/{username}
-            pass
+        try:
+            # Get or create permission checker
+            checker = await self._get_permission_checker()
 
-        return True
+            # Write operations require write access
+            if command.type in ["merge", "resolve"]:
+                # Check if user has sufficient role for write operations
+                result = await checker.is_allowed_for_autofix(username)
+
+                if not result.allowed:
+                    logger.warning(
+                        f"Permission denied for user '{username}' (role: {result.role}) "
+                        f"to execute write command '/{command.type}': {result.reason}"
+                    )
+                    return False
+
+                logger.info(
+                    f"✓ User '{username}' (role: {result.role}) has permission "
+                    f"to execute '/{command.type}'"
+                )
+                return True
+
+            # Read operations (process) are allowed for anyone with repo access
+            # We still verify the user has at least read access
+            role = await checker.get_user_role(username)
+
+            # Allow if user has any relationship to the repo (even CONTRIBUTOR or NONE)
+            # We'll let the GitHub API itself reject if they truly can't access the repo
+            logger.info(
+                f"✓ User '{username}' (role: {role}) has permission to execute '/{command.type}'"
+            )
+            return True
+
+        except PermissionError as e:
+            logger.error(f"Permission check failed: {e}")
+            return False
+        except Exception as e:
+            logger.error(f"Unexpected error checking permissions: {e}")
+            # Fail open for read operations, fail closed for write operations
+            return command.type not in ["merge", "resolve"]
+
+    async def _get_permission_checker(self) -> GitHubPermissionChecker:
+        """
+        Get or create the permission checker instance.
+
+        Returns:
+            GitHubPermissionChecker instance
+
+        Raises:
+            PermissionError: If repo is not configured or checker cannot be initialized
+        """
+        if self._permission_checker is None:
+            # Infer repo from gh_client if not explicitly provided
+            repo = self.repo
+            if repo is None:
+                # Try to get repo from gh_client
+                repo = getattr(self.gh_client, 'repo', None)
+
+            if repo is None:
+                raise PermissionError(
+                    "Repository must be specified for permission checking. "
+                    "Provide 'repo' parameter when initializing CommandExecutor."
+                )
+
+            # Create permission checker
+            self._permission_checker = GitHubPermissionChecker(
+                gh_client=self.gh_client,
+                repo=repo,
+                allowed_roles=self.allowed_roles,
+            )
+
+            # Verify token has required scopes
+            await self._permission_checker.verify_token_scopes()
+
+        return self._permission_checker
 
     # =========================================================================
     # Command handlers
