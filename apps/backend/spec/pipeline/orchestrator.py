@@ -39,6 +39,7 @@ from ..compaction import (
     summarize_phase_output,
 )
 from ..validate_pkg.spec_validator import SpecValidator
+from ...actor_critic_config import validate_actor_critic_config
 from .agent_runner import AgentRunner
 from .models import (
     PHASE_DISPLAY,
@@ -293,6 +294,9 @@ class SpecOrchestrator:
 
         # Smart cache: refresh project index if dependency files have changed
         await self._ensure_fresh_project_index()
+
+        # Validate Actor-Critic MCP configuration (if enabled)
+        validate_actor_critic_config()
 
         # Create phase executor
         phase_executor = phases.PhaseExecutor(
