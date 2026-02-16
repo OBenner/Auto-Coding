@@ -659,28 +659,130 @@ class CommandExecutor:
 
         Processes outstanding PR comments and generates responses.
 
+        This command:
+        - Fetches all inline review comments from the PR
+        - Generates a summary of outstanding feedback
+        - Posts the summary as a PR comment
+        - Returns details about processed comments
+
         Args:
             command: The process command
             pr_number: The PR number
             username: The user who issued the command
 
         Returns:
-            CommandResult with processing status
+            CommandResult with processing status and comment summary
         """
         logger.info(f"Handling process command for PR #{pr_number}")
 
-        # TODO: Implement process logic
-        # - Fetch outstanding comments from the PR
-        # - Generate responses or summaries
-        # - Post responses to the PR
-        # - Return success/failure result
+        try:
+            # Fetch inline comments from the PR
+            comments = await self.gh_client.get_inline_comments(pr_number)
 
-        return CommandResult(
-            success=True,
-            command_type="process",
-            message="✓ Process command executed successfully",
-            data={"pr_number": pr_number},
-        )
+            if not comments:
+                logger.info(f"No inline comments found for PR #{pr_number}")
+                return CommandResult(
+                    success=True,
+                    command_type="process",
+                    message=f"✓ No outstanding comments to process on PR #{pr_number}",
+                    data={
+                        "pr_number": pr_number,
+                        "comment_count": 0,
+                        "processed_by": username,
+                    },
+                )
+
+            logger.info(f"Found {len(comments)} inline comments on PR #{pr_number}")
+
+            # Generate summary of comments
+            summary_lines = [
+                f"## Comment Summary for PR #{pr_number}",
+                f"",
+                f"Processed by: @{username}",
+                f"Total comments: {len(comments)}",
+                f"",
+                f"### Comment Breakdown",
+            ]
+
+            # Group comments by file
+            comments_by_file: dict[str, list[dict]] = {}
+            for comment in comments:
+                path = comment.get("path", "Unknown")
+                if path not in comments_by_file:
+                    comments_by_file[path] = []
+                comments_by_file[path].append(comment)
+
+            # Add per-file summary
+            for file_path, file_comments in sorted(comments_by_file.items()):
+                summary_lines.append(f"\n**{file_path}**: {len(file_comments)} comment(s)")
+
+                # Add brief excerpts from each comment
+                for comment in file_comments[:5]:  # Limit to 5 comments per file
+                    body = comment.get("body", "")[:100]
+                    if len(comment.get("body", "")) > 100:
+                        body += "..."
+                    commenter = comment.get("user", {}).get("login", "unknown")
+                    line = comment.get("line", "?")
+                    summary_lines.append(f"  - Line {line} (@{commenter}): {body}")
+
+                if len(file_comments) > 5:
+                    summary_lines.append(f"  - ... and {len(file_comments) - 5} more")
+
+            # Add actionable items section
+            summary_lines.extend([
+                "",
+                "### Next Steps",
+                "",
+                "Please review the comments above and address the feedback.",
+                "Use `/resolve` after making changes to update dependencies.",
+                "",
+            ])
+
+            summary = "\n".join(summary_lines)
+
+            # Post summary as PR comment
+            await self.gh_client.pr_comment(pr_number, summary)
+
+            logger.info(
+                f"Successfully processed {len(comments)} comments on PR #{pr_number}"
+            )
+
+            return CommandResult(
+                success=True,
+                command_type="process",
+                message=f"✓ Processed {len(comments)} comment(s) on PR #{pr_number}",
+                data={
+                    "pr_number": pr_number,
+                    "comment_count": len(comments),
+                    "files_affected": len(comments_by_file),
+                    "summary_posted": True,
+                    "processed_by": username,
+                },
+            )
+
+        except GHCommandError as e:
+            error_msg = str(e)
+            logger.error(f"Failed to process comments for PR #{pr_number}: {error_msg}")
+
+            return CommandResult(
+                success=False,
+                command_type="process",
+                message=f"✗ Failed to process comments on PR #{pr_number}",
+                error=error_msg,
+                data={"pr_number": pr_number, "processed_by": username},
+            )
+
+        except Exception as e:
+            error_msg = str(e)
+            logger.error(f"Unexpected error processing comments for PR #{pr_number}: {error_msg}")
+
+            return CommandResult(
+                success=False,
+                command_type="process",
+                message=f"✗ Unexpected error processing comments on PR #{pr_number}",
+                error=error_msg[:500],
+                data={"pr_number": pr_number, "processed_by": username},
+            )
 
     # =========================================================================
     # Feedback
