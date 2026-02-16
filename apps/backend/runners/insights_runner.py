@@ -30,14 +30,19 @@ env_file = Path(__file__).parent.parent / ".env"
 if env_file.exists():
     load_dotenv(env_file)
 
+# Import provider abstraction for multi-backend support
+# Claude Agent SDK remains the default and recommended provider
 try:
-    from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient
+    from core.providers import create_engine_provider
+    from core.providers.base import SessionConfig
+    from core.providers.config import ProviderConfig
 
-    SDK_AVAILABLE = True
+    PROVIDERS_AVAILABLE = True
 except ImportError:
-    SDK_AVAILABLE = False
-    ClaudeAgentOptions = None
-    ClaudeSDKClient = None
+    PROVIDERS_AVAILABLE = False
+    create_engine_provider = None
+    SessionConfig = None
+    ProviderConfig = None
 
 from core.auth import ensure_claude_code_oauth_token, get_auth_token
 from debug import (
@@ -145,9 +150,9 @@ async def run_with_sdk(
     thinking_level: str = "medium",
     provider: str = "claude",
 ) -> None:
-    """Run the chat using Claude SDK with streaming."""
-    if not SDK_AVAILABLE:
-        print("Claude SDK not available, falling back to simple mode", file=sys.stderr)
+    """Run the chat using AI provider with streaming."""
+    if not PROVIDERS_AVAILABLE:
+        print("Provider system not available, falling back to simple mode", file=sys.stderr)
         run_simple(project_dir, message, history)
         return
 
@@ -188,35 +193,56 @@ Current question: {message}"""
         model=model,
         thinking_level=thinking_level,
         max_thinking_tokens=max_thinking_tokens,
+        provider=provider,
     )
 
     try:
-        # Build options dict - only include max_thinking_tokens if not None
-        options_kwargs = {
-            "model": resolve_model_id(model),  # Resolve via API Profile if configured
-            "system_prompt": system_prompt,
-            "allowed_tools": ["Read", "Glob", "Grep"],
-            "max_turns": 30,  # Allow sufficient turns for codebase exploration
-            "cwd": str(project_path),
-        }
+        # Create provider config with specified provider and model
+        provider_config = ProviderConfig(
+            provider=provider,
+            anthropic_api_key="",  # Will use OAuth
+            claude_model=resolve_model_id(model),
+        )
 
-        # Only add thinking tokens if the thinking level is not "none"
-        if max_thinking_tokens is not None:
-            options_kwargs["max_thinking_tokens"] = max_thinking_tokens
+        # Create the provider instance
+        ai_provider = create_engine_provider(provider_config)
 
-        # Create Claude SDK client with appropriate settings for insights
-        client = ClaudeSDKClient(options=ClaudeAgentOptions(**options_kwargs))
+        # Create a temporary spec directory for the session (required by provider)
+        import tempfile
+        with tempfile.TemporaryDirectory() as temp_dir:
+            spec_dir = Path(temp_dir)
 
-        # Use async context manager pattern
-        async with client:
+            # Build session configuration
+            session_config = SessionConfig(
+                name="insights-session",
+                system_prompt=system_prompt,
+                model=resolve_model_id(model),
+                tools=["Read", "Glob", "Grep"],
+                working_directory=str(project_path),
+                extra={
+                    "agent_type": "coder",  # Use coder agent type for insights
+                    "max_turns": 30,  # Allow sufficient turns for codebase exploration
+                    "max_thinking_tokens": max_thinking_tokens,
+                },
+            )
+
+            # Create session
+            session = ai_provider.create_session(
+                config=session_config,
+                project_dir=project_path,
+                spec_dir=spec_dir,
+                agent_type="coder",
+                max_thinking_tokens=max_thinking_tokens,
+            )
+
             # Send the query
-            await client.query(full_prompt)
+            await session.query(full_prompt)
 
             # Stream the response
             response_text = ""
             current_tool = None
 
-            async for msg in client.receive_response():
+            async for msg in session.receive_response():
                 msg_type = type(msg).__name__
                 debug_detailed("insights_runner", "Received message", msg_type=msg_type)
 
@@ -279,8 +305,12 @@ Current question: {message}"""
                 response_length=len(response_text),
             )
 
+            # Clean up session
+            session.close()
+            ai_provider.close()
+
     except Exception as e:
-        print(f"Error using Claude SDK: {e}", file=sys.stderr)
+        print(f"Error using AI provider: {e}", file=sys.stderr)
         import traceback
 
         traceback.print_exc(file=sys.stderr)
