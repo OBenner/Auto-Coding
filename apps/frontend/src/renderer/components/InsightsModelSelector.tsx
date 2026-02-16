@@ -9,8 +9,15 @@ import {
   DropdownMenuTrigger,
   DropdownMenuLabel
 } from './ui/dropdown-menu';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from './ui/select';
 import { DEFAULT_AGENT_PROFILES, AVAILABLE_MODELS } from '../../shared/constants';
-import type { InsightsModelConfig } from '../../shared/types';
+import type { InsightsModelConfig, InsightsProvider } from '../../shared/types';
 import { CustomModelModal } from './CustomModelModal';
 
 interface InsightsModelSelectorProps {
@@ -26,12 +33,24 @@ const iconMap: Record<string, React.ElementType> = {
   Sparkles
 };
 
+// Provider options for Insights mode
+const INSIGHTS_PROVIDERS: Array<{ id: InsightsProvider; label: string; description: string }> = [
+  { id: 'claude', label: 'Claude (Anthropic)', description: 'Official Anthropic Claude models' },
+  { id: 'litellm', label: 'LiteLLM', description: '100+ models via LiteLLM' },
+  { id: 'openrouter', label: 'OpenRouter', description: '400+ models via OpenRouter' }
+];
+
 export function InsightsModelSelector({
   currentConfig,
   onConfigChange,
   disabled
 }: InsightsModelSelectorProps) {
   const [showCustomModal, setShowCustomModal] = useState(false);
+
+  // Provider state (default to 'claude' for backward compatibility)
+  const [selectedProvider, setSelectedProvider] = useState<InsightsProvider>(
+    currentConfig?.provider || 'claude'
+  );
 
   // Default to 'balanced' if no config, or if 'auto' profile was selected (not applicable for insights)
   const rawProfileId = currentConfig?.profileId || 'balanced';
@@ -54,13 +73,29 @@ export function InsightsModelSelector({
       onConfigChange({
         profileId: selected.id,
         model: selected.model,
-        thinkingLevel: selected.thinkingLevel
+        thinkingLevel: selected.thinkingLevel,
+        provider: selectedProvider
+      });
+    }
+  };
+
+  const handleProviderChange = (providerId: InsightsProvider) => {
+    setSelectedProvider(providerId);
+    // When provider changes, update the current config with the new provider
+    if (currentConfig) {
+      onConfigChange({
+        ...currentConfig,
+        provider: providerId
       });
     }
   };
 
   const handleCustomSave = (config: InsightsModelConfig) => {
-    onConfigChange(config);
+    // Ensure provider is included when saving custom config
+    onConfigChange({
+      ...config,
+      provider: config.provider || selectedProvider
+    });
     setShowCustomModal(false);
   };
 
@@ -68,13 +103,33 @@ export function InsightsModelSelector({
   const getDisplayText = () => {
     if (selectedProfileId === 'custom' && currentConfig) {
       const modelLabel = AVAILABLE_MODELS.find(m => m.value === currentConfig.model)?.label || currentConfig.model;
-      return `${modelLabel} + ${currentConfig.thinkingLevel}`;
+      const providerLabel = INSIGHTS_PROVIDERS.find(p => p.id === currentConfig.provider)?.label || currentConfig.provider;
+      return `${providerLabel}: ${modelLabel} + ${currentConfig.thinkingLevel}`;
     }
-    return profile?.name || 'Balanced';
+    const providerLabel = INSIGHTS_PROVIDERS.find(p => p.id === selectedProvider)?.label || selectedProvider;
+    return `${providerLabel} - ${profile?.name || 'Balanced'}`;
   };
 
   return (
-    <>
+    <div className="flex items-center gap-2">
+      {/* Provider Selector */}
+      <Select value={selectedProvider} onValueChange={(value) => handleProviderChange(value as InsightsProvider)} disabled={disabled}>
+        <SelectTrigger className="h-8 w-[140px]">
+          <SelectValue placeholder="Provider" />
+        </SelectTrigger>
+        <SelectContent align="end">
+          {INSIGHTS_PROVIDERS.map((provider) => (
+            <SelectItem key={provider.id} value={provider.id}>
+              <div className="flex flex-col">
+                <span className="font-medium">{provider.label}</span>
+                <span className="text-xs text-muted-foreground">{provider.description}</span>
+              </div>
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+
+      {/* Profile Selector */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
@@ -140,6 +195,6 @@ export function InsightsModelSelector({
         onSave={handleCustomSave}
         onClose={() => setShowCustomModal(false)}
       />
-    </>
+    </div>
   );
 }

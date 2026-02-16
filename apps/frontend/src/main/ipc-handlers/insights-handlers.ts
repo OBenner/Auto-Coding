@@ -56,6 +56,7 @@ async function getInsightsFeatureSettings(): Promise<InsightsModelConfig> {
         profileId: "balanced", // Default profile for settings-based config
         model: featureModels.insights ?? DEFAULT_FEATURE_MODELS.insights,
         thinkingLevel: featureThinking.insights ?? DEFAULT_FEATURE_THINKING.insights,
+        provider: "claude", // Default provider for backward compatibility
       };
     }
   } catch (error) {
@@ -67,6 +68,7 @@ async function getInsightsFeatureSettings(): Promise<InsightsModelConfig> {
     profileId: "balanced", // Default profile for settings-based config
     model: DEFAULT_FEATURE_MODELS.insights,
     thinkingLevel: DEFAULT_FEATURE_THINKING.insights,
+    provider: "claude", // Default provider for backward compatibility
   };
 }
 

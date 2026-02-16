@@ -18,7 +18,7 @@ import {
   SelectValue
 } from './ui/select';
 import { AVAILABLE_MODELS, THINKING_LEVELS } from '../../shared/constants';
-import type { InsightsModelConfig } from '../../shared/types';
+import type { InsightsModelConfig, InsightsProvider } from '../../shared/types';
 import type { ModelType, ThinkingLevel } from '../../shared/types';
 
 interface CustomModelModalProps {
@@ -28,6 +28,13 @@ interface CustomModelModalProps {
   open?: boolean;
 }
 
+// Provider options for Insights mode
+const INSIGHTS_PROVIDERS: Array<{ id: InsightsProvider; label: string; description: string }> = [
+  { id: 'claude', label: 'Claude (Anthropic)', description: 'Official Anthropic Claude models' },
+  { id: 'litellm', label: 'LiteLLM', description: '100+ models via LiteLLM' },
+  { id: 'openrouter', label: 'OpenRouter', description: '400+ models via OpenRouter' }
+];
+
 export function CustomModelModal({ currentConfig, onSave, onClose, open = true }: CustomModelModalProps) {
   const { t } = useTranslation('dialogs');
   const [model, setModel] = useState<ModelType>(
@@ -36,12 +43,16 @@ export function CustomModelModal({ currentConfig, onSave, onClose, open = true }
   const [thinkingLevel, setThinkingLevel] = useState<ThinkingLevel>(
     currentConfig?.thinkingLevel || 'medium'
   );
+  const [provider, setProvider] = useState<InsightsProvider>(
+    currentConfig?.provider || 'claude'
+  );
 
   // Sync internal state when modal opens or config changes
   useEffect(() => {
     if (open) {
       setModel(currentConfig?.model || 'sonnet');
       setThinkingLevel(currentConfig?.thinkingLevel || 'medium');
+      setProvider(currentConfig?.provider || 'claude');
     }
   }, [open, currentConfig]);
 
@@ -49,7 +60,8 @@ export function CustomModelModal({ currentConfig, onSave, onClose, open = true }
     onSave({
       profileId: 'custom',
       model,
-      thinkingLevel
+      thinkingLevel,
+      provider
     });
   };
 
@@ -64,6 +76,25 @@ export function CustomModelModal({ currentConfig, onSave, onClose, open = true }
         </DialogHeader>
 
         <div className="space-y-4 py-4">
+          <div className="space-y-2">
+            <Label htmlFor="provider-select">Provider</Label>
+            <Select value={provider} onValueChange={(v) => setProvider(v as InsightsProvider)}>
+              <SelectTrigger id="provider-select">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {INSIGHTS_PROVIDERS.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    <div className="flex flex-col">
+                      <span className="font-medium">{p.label}</span>
+                      <span className="text-xs text-muted-foreground">{p.description}</span>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
           <div className="space-y-2">
             <Label htmlFor="model-select">{t('customModel.model')}</Label>
             <Select value={model} onValueChange={(v) => setModel(v as ModelType)}>
