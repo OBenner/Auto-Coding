@@ -97,8 +97,14 @@ class CommandParser:
     SUPPORTED_COMMANDS = ["merge", "resolve", "process"]
 
     # Regex pattern to match commands: /command [args...]
-    # Captures the command name and optional arguments
-    COMMAND_PATTERN = re.compile(r"/(\w+)(?:\s+([^\n]*?))?(?=\s|$|/)")
+    # Captures the command name (including trailing special chars) and optional arguments
+    # Pattern: / followed by non-whitespace chars (command), then optional args, stops at whitespace, end, or another /
+    # Negative lookbehind (?<!/) prevents matching commands after another slash (e.g., //merge)
+    COMMAND_PATTERN = re.compile(r"(?<!/)/(\S+?)(?:\s+([^\n]*?))?(?=\s|$|/)")
+
+    # Pattern for detecting malformed commands (e.g., /@merge, /123, //merge)
+    # Matches: slash followed by non-word non-space, slash followed by digits, double slash
+    MALFORMED_PATTERN = re.compile(r"/[^\w\s]|/\d+|//+")
 
     def __init__(self, allowed_commands: list[str] | None = None):
         """
@@ -140,6 +146,10 @@ class CommandParser:
             logger.debug("Empty text provided to parser")
             return []
 
+        # Check for malformed command patterns and log warnings
+        if self.MALFORMED_PATTERN.search(text):
+            logger.debug("Detected potentially malformed command patterns in input")
+
         commands = []
 
         # Find all command matches in the text
@@ -149,12 +159,21 @@ class CommandParser:
             position = match.start()
             raw_text = match.group(0)
 
+            # Sanitize command type: remove trailing non-word characters
+            # This handles cases like "/merge!" or "/merge." by extracting "merge"
+            command_type = self._sanitize_command_type(command_type)
+
+            # Skip if command type is empty after sanitization
+            if not command_type:
+                logger.debug(f"Skipping empty command type at position {position}")
+                continue
+
             # Only process supported commands
             if command_type not in self.allowed_commands:
                 logger.debug(f"Ignoring unknown command: {command_type}")
                 continue
 
-            # Parse arguments
+            # Parse arguments with validation
             args = self._parse_args(args_text)
 
             command = Command(
@@ -168,15 +187,54 @@ class CommandParser:
 
         return commands
 
+    def _sanitize_command_type(self, command_type: str) -> str:
+        """
+        Sanitize command type by removing trailing special characters.
+
+        This handles edge cases like "/merge!" or "/merge." by extracting "merge".
+
+        Args:
+            command_type: The raw command type to sanitize
+
+        Returns:
+            Sanitized command type containing only word characters
+
+        Examples:
+            >>> parser = CommandParser()
+            >>> parser._sanitize_command_type("merge")
+            'merge'
+            >>> parser._sanitize_command_type("merge!")
+            'merge'
+            >>> parser._sanitize_command_type("merge.")
+            'merge'
+            >>> parser._sanitize_command_type("123")
+            ''
+        """
+        if not command_type:
+            return ""
+
+        # Remove any trailing non-word characters (anything that's not a-z, A-Z, 0-9, _, or unicode letters)
+        # Also remove purely numeric commands
+        sanitized = re.sub(r"\W+$", "", command_type, flags=re.UNICODE)
+
+        # Skip purely numeric commands (e.g., /123)
+        if sanitized.isdigit():
+            logger.debug(f"Skipping numeric command: {command_type}")
+            return ""
+
+        return sanitized
+
     def _parse_args(self, args_text: str) -> list[str]:
         """
-        Parse command arguments from text.
+        Parse command arguments from text with validation.
+
+        Handles special characters, empty arguments, and malformed input gracefully.
 
         Args:
             args_text: The arguments string to parse
 
         Returns:
-            List of argument strings
+            List of validated argument strings
 
         Examples:
             >>> parser = CommandParser()
@@ -186,13 +244,25 @@ class CommandParser:
             ['main']
             >>> parser._parse_args("main feature-branch")
             ['main', 'feature-branch']
+            >>> parser._parse_args("main! branch.")
+            ['main', 'branch']
         """
         if not args_text or not args_text.strip():
             return []
 
         # Split on whitespace and filter empty strings
         args = [arg.strip() for arg in args_text.split() if arg.strip()]
-        return args
+
+        # Sanitize each argument by removing trailing punctuation/special chars
+        # This handles cases like "main!" or "branch." by extracting "main", "branch"
+        sanitized_args = []
+        for arg in args:
+            # Remove trailing punctuation (but keep internal punctuation like hyphens, underscores)
+            sanitized = re.sub(r"[^\w-]+$", "", arg, flags=re.UNICODE)
+            if sanitized:  # Only add non-empty args
+                sanitized_args.append(sanitized)
+
+        return sanitized_args
 
     def is_supported_command(self, command_type: str) -> bool:
         """
