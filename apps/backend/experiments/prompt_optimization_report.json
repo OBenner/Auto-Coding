@@ -1,0 +1,55 @@
+{
+  "summary": {
+    "total_prompts_optimized": 4,
+    "total_original_tokens": 26424,
+    "total_optimized_tokens": 19959,
+    "tokens_saved": 6465,
+    "overall_reduction_pct": 24.5
+  },
+  "by_prompt": [
+    {
+      "path": "coder.md",
+      "original_tokens": 8229,
+      "optimized_tokens": 5903,
+      "reduction_pct": 28.3,
+      "techniques": [
+        "Shared content extraction"
+      ]
+    },
+    {
+      "path": "planner.md",
+      "original_tokens": 7582,
+      "optimized_tokens": 5406,
+      "reduction_pct": 28.7,
+      "techniques": [
+        "Content reduction"
+      ]
+    },
+    {
+      "path": "qa_reviewer.md",
+      "original_tokens": 5853,
+      "optimized_tokens": 5379,
+      "reduction_pct": 8.1,
+      "techniques": [
+        "Content reduction"
+      ]
+    },
+    {
+      "path": "qa_fixer.md",
+      "original_tokens": 4760,
+      "optimized_tokens": 3271,
+      "reduction_pct": 31.3,
+      "techniques": [
+        "Shared content extraction",
+        "Meta-instruction reduction"
+      ]
+    }
+  ],
+  "phase1_techniques": {
+    "shared_content_extraction": "Extract duplicated sections to references",
+    "bash_command_simplification": "Replace verbose examples with placeholders",
+    "meta_instruction_reduction": "Simplify TOKEN EFFICIENCY sections",
+    "validation_condensation": "Merge qa_reviewer validation subsections"
+  },
+  "recommendation": "EXCELLENT: 24.5% reduction exceeds Phase 1 target (10-15%). Proceed to implementation."
+}
