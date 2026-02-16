@@ -41,7 +41,33 @@ const LOG_PREFIX = '[MCP-Wrapper]';
  * Get log level from environment or default
  */
 function getLogLevel(): string {
-  return process.env.ELECTRON_MCP_LOG_LEVEL || DEFAULT_LOG_LEVEL;
+  const level = process.env.ELECTRON_MCP_LOG_LEVEL;
+  const validLevels = ['debug', 'info', 'warn', 'error'];
+
+  if (level && !validLevels.includes(level.toLowerCase())) {
+    log('warn', `Invalid log level: "${level}". Valid values: ${validLevels.join(', ')}. Using default: ${DEFAULT_LOG_LEVEL}`);
+    return DEFAULT_LOG_LEVEL;
+  }
+
+  return level || DEFAULT_LOG_LEVEL;
+}
+
+/**
+ * Get server startup timeout from environment or default
+ */
+function getStartupTimeout(): number {
+  const timeoutStr = process.env.ELECTRON_MCP_TIMEOUT;
+  if (!timeoutStr) {
+    return DEFAULT_STARTUP_TIMEOUT;
+  }
+
+  const timeout = parseInt(timeoutStr, 10);
+  if (isNaN(timeout) || timeout < 1000) {
+    log('warn', `Invalid timeout: "${timeoutStr}". Using default: ${DEFAULT_STARTUP_TIMEOUT}ms`);
+    return DEFAULT_STARTUP_TIMEOUT;
+  }
+
+  return timeout;
 }
 
 /**
@@ -132,7 +158,7 @@ async function main(): Promise<void> {
     setupShutdownHandlers(server);
 
     // Start server with timeout
-    const timeout = parseInt(process.env.ELECTRON_MCP_TIMEOUT || String(DEFAULT_STARTUP_TIMEOUT), 10);
+    const timeout = getStartupTimeout();
     log('info', `Starting MCP server (timeout: ${timeout}ms)...`);
 
     const startupPromise = server.start();

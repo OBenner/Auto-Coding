@@ -422,12 +422,56 @@ def get_electron_mcp_mode() -> str:
 
     Default: "cdp" for backward compatibility
     """
-    return os.environ.get("ELECTRON_MCP_MODE", "cdp").lower()
+    mode = os.environ.get("ELECTRON_MCP_MODE", "cdp").lower()
+    valid_modes = ["cdp", "embedded"]
+
+    if mode not in valid_modes:
+        print(f"⚠️  Warning: Invalid ELECTRON_MCP_MODE '{mode}'. Valid values: {', '.join(valid_modes)}. Using default: cdp")
+        return "cdp"
+
+    return mode
 
 
 def get_electron_debug_port() -> int:
-    """Get the Electron remote debugging port (default: 9222)."""
-    return int(os.environ.get("ELECTRON_DEBUG_PORT", "9222"))
+    """
+    Get the Electron remote debugging port (default: 9222).
+
+    Returns:
+        Port number for Chrome DevTools Protocol
+
+    Raises:
+        ValueError: If port is not a valid number or out of range
+    """
+    port_str = os.environ.get("ELECTRON_DEBUG_PORT", "9222")
+
+    try:
+        port = int(port_str)
+    except ValueError:
+        raise ValueError(f"Invalid ELECTRON_DEBUG_PORT: '{port_str}'. Must be a number.")
+
+    if not (1024 <= port <= 65535):
+        raise ValueError(f"Invalid ELECTRON_DEBUG_PORT: {port}. Must be between 1024 and 65535.")
+
+    return port
+
+
+def get_electron_mcp_log_level() -> str:
+    """
+    Get the Electron MCP server log level.
+
+    Returns:
+        Log level: "debug", "info", "warn", or "error"
+
+    Default: "info"
+    """
+    level = os.environ.get("ELECTRON_MCP_LOG_LEVEL", "info").lower()
+    valid_levels = ["debug", "info", "warn", "error"]
+
+    if level not in valid_levels:
+        print(f"⚠️  Warning: Invalid ELECTRON_MCP_LOG_LEVEL '{level}'. Valid values: {', '.join(valid_levels)}. Using default: info")
+        return "info"
+
+    return level
 
 
 def should_use_claude_md() -> bool:
@@ -905,9 +949,7 @@ def create_client(
                 "args": ["start"],
                 "env": {
                     "ELECTRON_MCP_ENABLED": "true",
-                    "ELECTRON_MCP_LOG_LEVEL": os.environ.get(
-                        "ELECTRON_MCP_LOG_LEVEL", "info"
-                    ),
+                    "ELECTRON_MCP_LOG_LEVEL": get_electron_mcp_log_level(),
                 },
             }
         else:

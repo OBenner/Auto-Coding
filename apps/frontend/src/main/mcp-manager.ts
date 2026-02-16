@@ -49,20 +49,52 @@ let isRunning = false;
 // Utility Functions
 // ============================================================================
 
+/** Valid log levels for MCP server */
+const VALID_LOG_LEVELS = ['debug', 'info', 'warn', 'error'] as const;
+type LogLevel = typeof VALID_LOG_LEVELS[number];
+
+/**
+ * Validate a log level value
+ * @param level - Log level to validate
+ * @returns true if valid, false otherwise
+ */
+function isValidLogLevel(level: string): level is LogLevel {
+  return VALID_LOG_LEVELS.includes(level as LogLevel);
+}
+
 /**
  * Check if MCP server should be enabled
  * @returns true if ELECTRON_MCP_ENABLED is set to "true"
  */
 export function isMCPServerEnabled(): boolean {
-  return process.env[MCP_ENABLED_ENV] === 'true';
+  const enabled = process.env[MCP_ENABLED_ENV];
+  if (enabled === undefined || enabled === '') {
+    return false;
+  }
+  const normalized = enabled.toLowerCase().trim();
+  if (normalized !== 'true' && normalized !== 'false') {
+    console.warn(`[MCP] Invalid value for ${MCP_ENABLED_ENV}: "${enabled}". Expected "true" or "false". Defaulting to false.`);
+    return false;
+  }
+  return normalized === 'true';
 }
 
 /**
  * Get the configured log level for MCP server
  * @returns Log level from environment or default
+ * @throws Error if log level is invalid
  */
 export function getMCPLogLevel(): string {
-  return process.env[MCP_LOG_LEVEL_ENV] || DEFAULT_LOG_LEVEL;
+  const level = process.env[MCP_LOG_LEVEL_ENV];
+  if (!level) {
+    return DEFAULT_LOG_LEVEL;
+  }
+  const normalized = level.toLowerCase().trim();
+  if (!isValidLogLevel(normalized)) {
+    console.warn(`[MCP] Invalid log level: "${level}". Valid values: ${VALID_LOG_LEVELS.join(', ')}. Using default: ${DEFAULT_LOG_LEVEL}`);
+    return DEFAULT_LOG_LEVEL;
+  }
+  return normalized;
 }
 
 /**
