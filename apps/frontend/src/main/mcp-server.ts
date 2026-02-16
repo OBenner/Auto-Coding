@@ -370,11 +370,14 @@ class IPCBridge {
  */
 function sanitizeError(error: unknown): string {
   if (error instanceof Error) {
-    return error.message
-      .replace(/at .*\(.*\)/g, '')
-      .replace(/\/.*\.js:\d+:\d+/g, '')
-      .replace(/C:\\.*\.js:\d+:\d+/g, '')
-      .replace(/I:\\.*\.ts:\d+:\d+/g, '')
+    // Cap input to prevent regex performance issues on very large messages
+    const msg = error.message.length > 2000 ? error.message.substring(0, 2000) : error.message;
+    return msg
+      // Use negated character classes instead of .* to prevent catastrophic backtracking
+      .replace(/at [^(]*\([^)]*\)/g, '')
+      .replace(/\/[^\s:]*\.js:\d+:\d+/g, '')
+      .replace(/C:\\[^\s:]*\.js:\d+:\d+/g, '')
+      .replace(/I:\\[^\s:]*\.ts:\d+:\d+/g, '')
       .trim();
   }
 
