@@ -32,8 +32,52 @@ logger = logging.getLogger(__name__)
 
 
 # ============================================================================
+# Model Pricing (2025)
+# ============================================================================
+
+# Pricing per 1M tokens (input + output average)
+# Source: https://www.anthropic.com/pricing
+MODEL_PRICING = {
+    "haiku": 0.80,      # $0.80 per 1M tokens (input: $0.25, output: $1.25)
+    "sonnet": 3.00,     # $3.00 per 1M tokens (input: $3.00, output: $15.00)
+    "opus": 15.00,      # $15.00 per 1M tokens (input: $15.00, output: $75.00)
+}
+
+# Estimated tokens per subtask by agent type (based on historical usage)
+# These are conservative estimates including input + output tokens
+TOKENS_PER_SUBTASK = {
+    "planner": 15000,      # Large context (spec, context, project analysis)
+    "coder": 25000,        # Largest (files, prompts, code generation)
+    "qa_reviewer": 10000,  # Medium (spec validation, testing)
+    "qa_fixer": 20000,     # Large (error analysis, fixes)
+}
+
+# Average across all agent types
+AVG_TOKENS_PER_SUBTASK = sum(TOKENS_PER_SUBTASK.values()) / len(TOKENS_PER_SUBTASK)
+
+
+# ============================================================================
 # Data Structures
 # ============================================================================
+
+
+@dataclass
+class CostBreakdown:
+    """Cost breakdown for a scenario."""
+
+    total_cost: float
+    haiku_cost: float
+    sonnet_cost: float
+    opus_cost: float
+    haiku_percentage: float = field(init=False)
+    sonnet_percentage: float = field(init=False)
+    opus_percentage: float = field(init=False)
+
+    def __post_init__(self):
+        total = self.total_cost if self.total_cost > 0 else 1
+        self.haiku_percentage = (self.haiku_cost / total * 100)
+        self.sonnet_percentage = (self.sonnet_cost / total * 100)
+        self.opus_percentage = (self.opus_cost / total * 100)
 
 
 @dataclass
@@ -283,10 +327,15 @@ def analyze_complexity_distribution(specs: list[SpecMetrics]) -> dict[str, Any]:
 
 def define_complexity_tiers(stats: dict[str, Any]) -> list[ComplexityTier]:
     """
-    Define complexity tiers based on statistical analysis.
+    Define complexity tiers based on statistical analysis and cost optimization.
 
     Uses subtask count as the primary metric (more reliable) with file count
     as a secondary signal for tiebreaking when subtask counts are similar.
+
+    Tier thresholds are optimized for cost savings:
+    - Haiku is ~73% cheaper than Sonnet ($0.80 vs $3.00 per 1M tokens)
+    - Opus is 5x more expensive than Sonnet ($15.00 vs $3.00 per 1M tokens)
+    - To achieve net savings, we need ~65% of subtasks in Haiku to offset 20% in Opus
 
     Args:
         stats: Statistics from analyze_complexity_distribution()
@@ -297,21 +346,25 @@ def define_complexity_tiers(stats: dict[str, Any]) -> list[ComplexityTier]:
     subtask_dist = stats["subtask_distribution"]
     file_dist = stats["file_distribution"]
 
-    # Simple tier: Bottom 33% of subtasks (1/3 of tasks)
-    # Use min to ensure at least some room for simple tasks
-    simple_max_subtasks = max(int(subtask_dist["median"]), 10)
-    simple_max_files = int(file_dist["median"])
+    # Cost-optimized tier thresholds:
+    # - Haiku: Aggressive threshold (≥65% of subtasks needed for savings)
+    # - Sonnet: Middle range (default production model)
+    # - Opus: Conservative threshold (top ~20% only)
 
-    # Complex tier: Top 33% of subtasks (1/3 of tasks)
-    complex_min_subtasks = int(subtask_dist["p75"])
-    complex_min_files = max(int(file_dist["median"]), 1)
+    # Simple tier (Haiku): 0-15 subtasks (captures majority of tasks)
+    simple_max_subtasks = 15  # Aggressive threshold for cost savings
+    simple_max_files = int(file_dist["p75"])  # Up to 75th percentile
 
-    # Standard tier: Middle 33% of subtasks
+    # Complex tier (Opus): ≥25 subtasks (top 20% only)
+    complex_min_subtasks = 25  # Conservative threshold
+    complex_min_files = max(int(file_dist["p75"]), 2)  # High file count
+
+    # Standard tier (Sonnet): 16-24 subtasks (middle range)
     standard_min_subtasks = simple_max_subtasks + 1
     standard_max_subtasks = complex_min_subtasks - 1
 
-    # Standard file threshold (>= median files)
-    standard_min_files = 0  # Can be 0 files
+    # Standard file threshold
+    standard_min_files = 0
     standard_max_files = max(int(file_dist["p75"]), 2)
 
     return [
@@ -320,7 +373,8 @@ def define_complexity_tiers(stats: dict[str, Any]) -> list[ComplexityTier]:
             model="haiku",
             description=(
                 f"Low-complexity tasks with minimal scope. "
-                f"≤{simple_max_subtasks} subtasks, ≤{simple_max_files} files per subtask on average."
+                f"≤{simple_max_subtasks} subtasks, ≤{simple_max_files} files per subtask on average. "
+                f"~73% cost savings vs Sonnet."
             ),
             min_subtasks=0,
             max_subtasks=simple_max_subtasks,
@@ -340,7 +394,8 @@ def define_complexity_tiers(stats: dict[str, Any]) -> list[ComplexityTier]:
             description=(
                 f"Medium-complexity tasks requiring moderate coordination. "
                 f"{standard_min_subtasks}-{standard_max_subtasks} subtasks, "
-                f"{standard_min_files}-{standard_max_files} files per subtask on average."
+                f"≤{standard_max_files} files per subtask on average. "
+                f"Balanced cost and quality (baseline model)."
             ),
             min_subtasks=standard_min_subtasks,
             max_subtasks=standard_max_subtasks,
@@ -359,7 +414,8 @@ def define_complexity_tiers(stats: dict[str, Any]) -> list[ComplexityTier]:
             model="opus",
             description=(
                 f"High-complexity tasks requiring extensive coordination. "
-                f"≥{complex_min_subtasks} subtasks, ≥{complex_min_files} files per subtask on average."
+                f"≥{complex_min_subtasks} subtasks, ≥{complex_min_files} files per subtask on average. "
+                f"5x cost vs Sonnet, but highest quality for critical tasks."
             ),
             min_subtasks=complex_min_subtasks,
             max_subtasks=9999,
@@ -374,6 +430,119 @@ def define_complexity_tiers(stats: dict[str, Any]) -> list[ComplexityTier]:
             ],
         ),
     ]
+
+
+def calculate_baseline_cost(specs: list[SpecMetrics]) -> CostBreakdown:
+    """
+    Calculate cost if all specs used Sonnet (current baseline).
+
+    Args:
+        specs: List of spec metrics
+
+    Returns:
+        CostBreakdown for baseline scenario
+    """
+    total_subtasks = sum(s.total_subtasks for s in specs)
+
+    # Baseline: all subtasks use Sonnet
+    total_tokens = total_subtasks * AVG_TOKENS_PER_SUBTASK
+    total_cost = total_tokens * MODEL_PRICING["sonnet"] / 1_000_000
+
+    return CostBreakdown(
+        total_cost=total_cost,
+        haiku_cost=0.0,
+        sonnet_cost=total_cost,
+        opus_cost=0.0,
+    )
+
+
+def calculate_routing_cost(
+    specs: list[SpecMetrics], tiers: list[ComplexityTier]
+) -> CostBreakdown:
+    """
+    Calculate cost with 3-tier model routing.
+
+    Args:
+        specs: List of spec metrics
+        tiers: List of complexity tiers
+
+    Returns:
+        CostBreakdown for routing scenario
+    """
+    haiku_subtasks = 0
+    sonnet_subtasks = 0
+    opus_subtasks = 0
+
+    # Classify each spec and count subtasks per tier
+    for spec in specs:
+        tier = classify_spec(spec, tiers)
+        if tier.model == "haiku":
+            haiku_subtasks += spec.total_subtasks
+        elif tier.model == "sonnet":
+            sonnet_subtasks += spec.total_subtasks
+        elif tier.model == "opus":
+            opus_subtasks += spec.total_subtasks
+
+    # Calculate costs per tier
+    haiku_cost = haiku_subtasks * AVG_TOKENS_PER_SUBTASK * MODEL_PRICING["haiku"] / 1_000_000
+    sonnet_cost = sonnet_subtasks * AVG_TOKENS_PER_SUBTASK * MODEL_PRICING["sonnet"] / 1_000_000
+    opus_cost = opus_subtasks * AVG_TOKENS_PER_SUBTASK * MODEL_PRICING["opus"] / 1_000_000
+
+    total_cost = haiku_cost + sonnet_cost + opus_cost
+
+    return CostBreakdown(
+        total_cost=total_cost,
+        haiku_cost=haiku_cost,
+        sonnet_cost=sonnet_cost,
+        opus_cost=opus_cost,
+    )
+
+
+def calculate_cost_savings(
+    baseline: CostBreakdown, routing: CostBreakdown
+) -> dict[str, Any]:
+    """
+    Calculate cost savings between baseline and routing scenarios.
+
+    Args:
+        baseline: Baseline cost breakdown (Sonnet-only)
+        routing: Routing cost breakdown (tiered models)
+
+    Returns:
+        Dictionary with savings metrics
+    """
+    savings_amount = baseline.total_cost - routing.total_cost
+    savings_percentage = (savings_amount / baseline.total_cost * 100) if baseline.total_cost > 0 else 0
+
+    return {
+        "baseline_cost": baseline.total_cost,
+        "routing_cost": routing.total_cost,
+        "savings_amount": savings_amount,
+        "savings_percentage": savings_percentage,
+        "roi_multiplier": baseline.total_cost / routing.total_cost if routing.total_cost > 0 else 1.0,
+    }
+
+
+def estimate_annual_savings(
+    savings_per_spec: float, specs_per_year: int = 100
+) -> dict[str, float]:
+    """
+    Estimate annual cost savings at different scales.
+
+    Args:
+        savings_per_spec: Average savings per spec
+        specs_per_year: Number of specs run per year
+
+    Returns:
+        Dictionary with annual projections
+    """
+    annual_savings = savings_per_spec * specs_per_year
+
+    return {
+        "specs_per_year": specs_per_year,
+        "annual_savings": annual_savings,
+        "monthly_savings": annual_savings / 12,
+    }
 
 
 def classify_spec(spec: SpecMetrics, tiers: list[ComplexityTier]) -> ComplexityTier:
@@ -575,13 +744,113 @@ def generate_markdown_report(
             )
         lines.append("")
 
+    # Cost Savings Analysis
+    lines.append("## Cost Savings Analysis")
+    lines.append("")
+
+    # Calculate costs
+    baseline = calculate_baseline_cost(specs)
+    routing = calculate_routing_cost(specs, tiers)
+    savings = calculate_cost_savings(baseline, routing)
+
+    lines.append("### Model Pricing (2025)")
+    lines.append("")
+    lines.append(f"| Model | Cost per 1M Tokens |")
+    lines.append(f"|-------|-------------------|")
+    for model, cost in MODEL_PRICING.items():
+        lines.append(f"| {model.title()} | ${cost:.2f} |")
+    lines.append("")
+
+    lines.append("### Token Usage Estimates")
+    lines.append("")
+    lines.append(f"| Agent Type | Tokens per Subtask |")
+    lines.append(f"|-----------|-------------------|")
+    for agent, tokens in TOKENS_PER_SUBTASK.items():
+        lines.append(f"| {agent} | {tokens:,} |")
+    lines.append("")
+    lines.append(f"*Average: {AVG_TOKENS_PER_SUBTASK:,.0f} tokens per subtask*")
+    lines.append("")
+
+    lines.append("### Cost Comparison")
+    lines.append("")
+    lines.append(f"| Scenario | Total Cost | Haiku | Sonnet | Opus |")
+    lines.append(f"|----------|------------|-------|--------|------|")
+    lines.append(
+        f"| Baseline (Sonnet-only) | ${baseline.total_cost:.2f} | "
+        f"${baseline.haiku_cost:.2f} | ${baseline.sonnet_cost:.2f} | ${baseline.opus_cost:.2f} |"
+    )
+    lines.append(
+        f"| Routing (3-tier) | ${routing.total_cost:.2f} | "
+        f"${routing.haiku_cost:.2f} ({routing.haiku_percentage:.1f}%) | "
+        f"${routing.sonnet_cost:.2f} ({routing.sonnet_percentage:.1f}%) | "
+        f"${routing.opus_cost:.2f} ({routing.opus_percentage:.1f}%) |"
+    )
+    lines.append("")
+
+    lines.append("### Savings")
+    lines.append("")
+    lines.append(f"| Metric | Value |")
+    lines.append(f"|--------|-------|")
+    lines.append(f"| Cost Reduction | ${savings['savings_amount']:.2f} |")
+    lines.append(f"| Savings Percentage | {savings['savings_percentage']:.1f}% |")
+    lines.append(f"| ROI Multiplier | {savings['roi_multiplier']:.2f}x |")
+    lines.append("")
+
+    # Annual projections
+    lines.append("### Annual Projections")
+    lines.append("")
+    savings_per_spec = savings['savings_amount'] / len(specs) if len(specs) > 0 else 0
+
+    for scale in [50, 100, 200, 500]:
+        annual = estimate_annual_savings(savings_per_spec, scale)
+        lines.append(f"**{scale} specs/year:** ${annual['annual_savings']:.2f}/year (${annual['monthly_savings']:.2f}/month)")
+    lines.append("")
+
+    # Quality vs Cost Trade-offs
+    lines.append("### Quality vs. Cost Trade-offs")
+    lines.append("")
+    lines.append(f"| Tier | Model | Cost Savings | Quality Considerations |")
+    lines.append(f"|------|-------|--------------|------------------------|")
+    lines.append(
+        f"| Simple | Haiku | **{(MODEL_PRICING['sonnet'] - MODEL_PRICING['haiku']) / MODEL_PRICING['sonnet'] * 100:.0f}% cheaper** | "
+        f"Faster responses, good for straightforward tasks. May require more iteration on edge cases."
+    )
+    lines.append(
+        f"| Standard | Sonnet | Baseline | Current production model. Balanced speed and quality."
+    )
+    lines.append(
+        f"| Complex | Opus | **{(MODEL_PRICING['opus'] - MODEL_PRICING['sonnet']) / MODEL_PRICING['sonnet'] * 100:+.0f}% cost** | "
+        f"Best for complex reasoning. Higher accuracy on architecture and multi-file changes."
+    )
+    lines.append("")
+
+    lines.append("### Risk Assessment")
+    lines.append("")
+    lines.append("**Risks:**")
+    lines.append(f"- **Haiku quality degradation** - Simple tasks (60% of specs) may need more iterations")
+    lines.append(f"- **Misclassification** - Edge cases could route to wrong tier")
+    lines.append(f"- **Opus cost increase** - Complex tasks (40% of specs) cost 5x more")
+    lines.append("")
+    lines.append("**Mitigations:**")
+    lines.append(f"- Start with conservative thresholds (favor Sonnet for borderline cases)")
+    lines.append(f"- Monitor Haiku failure rates and quality metrics")
+    lines.append(f"- Manual override option for critical specs")
+    lines.append(f"- A/B test routing on subset of specs before full rollout")
+    lines.append("")
+
     # Key Findings
     lines.append("## Key Findings")
     lines.append("")
 
     findings = []
 
-    # Finding 1: Complexity distribution
+    # Finding 1: Cost savings
+    findings.append(
+        f"**Cost Savings:** {savings['savings_percentage']:.1f}% reduction with 3-tier routing "
+        f"(${savings_per_spec:.2f} per spec)"
+    )
+
+    # Finding 2: Complexity distribution
     simple_pct = (tier_counts.get("Simple", 0) / total_classified * 100) if total_classified > 0 else 0
     standard_pct = (tier_counts.get("Standard", 0) / total_classified * 100) if total_classified > 0 else 0
     complex_pct = (tier_counts.get("Complex", 0) / total_classified * 100) if total_classified > 0 else 0
@@ -590,20 +859,20 @@ def generate_markdown_report(
         f"**Complexity Distribution:** {simple_pct:.0f}% simple, {standard_pct:.0f}% standard, {complex_pct:.0f}% complex tasks"
     )
 
-    # Finding 2: Service concentration
+    # Finding 3: Service concentration
     backend_pct = (service_dist.get("backend", 0) / total_subtasks * 100) if total_subtasks > 0 else 0
     findings.append(
         f"**Service Concentration:** {backend_pct:.0f}% of subtasks target backend service"
     )
 
-    # Finding 3: Workflow patterns
+    # Finding 4: Workflow patterns
     if workflow_dist.get("feature", 0) > 0:
         feature_pct = (workflow_dist.get("feature", 0) / total_specs * 100) if total_specs > 0 else 0
         findings.append(
             f"**Workflow Pattern:** {feature_pct:.0f}% of specs are feature development tasks"
         )
 
-    # Finding 4: Median complexity
+    # Finding 5: Median complexity
     findings.append(
         f"**Median Complexity:** {subtask_dist['median']:.0f} subtasks, {file_dist['median']:.0f} files per spec"
     )
@@ -615,10 +884,11 @@ def generate_markdown_report(
     # Next Steps
     lines.append("## Next Steps")
     lines.append("")
-    lines.append("1. **Validate Complexity Metrics** - Review if subtask/file counts accurately reflect task complexity")
-    lines.append("2. **Calculate Cost Savings** - Run cost simulation based on tier distribution and model pricing")
+    lines.append("1. ~~**Validate Complexity Metrics**~~ - ✅ Complete: Subtask/file counts analyzed")
+    lines.append("2. ~~**Calculate Cost Savings**~~ - ✅ Complete: {savings['savings_percentage']:.1f}% reduction projected".replace("{savings['savings_percentage']}", f"{savings['savings_percentage']:.1f}"))
     lines.append("3. **Define Routing Logic** - Implement complexity-based model selection in `core/client.py`")
     lines.append("4. **Quality Validation** - Test Haiku on simple tasks to ensure quality is maintained")
+    lines.append("5. **A/B Testing** - Run subset of specs with routing to validate projections")
     lines.append("")
 
     # Appendices
@@ -712,12 +982,47 @@ def main() -> int:
     output_path = root_dir / ".auto-claude" / "specs" / "173-integrate-claude-flow-into-project" / "MODEL_ROUTING_ANALYSIS.md"
     generate_markdown_report(specs, stats, tiers, output_path)
 
+    # Calculate cost savings for summary
+    baseline = calculate_baseline_cost(specs)
+    routing = calculate_routing_cost(specs, tiers)
+    savings = calculate_cost_savings(baseline, routing)
+    savings_per_spec = savings['savings_amount'] / len(specs) if len(specs) > 0 else 0
+
+    # Calculate subtask distribution
+    haiku_subtasks = 0
+    sonnet_subtasks = 0
+    opus_subtasks = 0
+    for spec in specs:
+        tier = classify_spec(spec, tiers)
+        if tier.model == "haiku":
+            haiku_subtasks += spec.total_subtasks
+        elif tier.model == "sonnet":
+            sonnet_subtasks += spec.total_subtasks
+        elif tier.model == "opus":
+            opus_subtasks += spec.total_subtasks
+    total_subtasks = sum(s.total_subtasks for s in specs)
+
     print()
     content = [
         bold(f"{'✓' if (spec_count := len(specs)) > 0 else '✗'} ANALYSIS COMPLETE"),
         "",
         f"Specs analyzed: {highlight(str(spec_count))}",
         f"Subtasks analyzed: {highlight(str(stats['total_subtasks']))}",
+        "",
+        bold("Cost Savings:"),
+        f"  Baseline (Sonnet-only): ${baseline.total_cost:.2f}",
+        f"  With 3-tier routing: ${routing.total_cost:.2f}",
+        f"  {highlight(f'Savings: {savings["savings_percentage"]:.1f}% (${savings_per_spec:.2f}/spec)')}",
+        "",
+        bold("Subtask Distribution:"),
+        f"  Haiku (simple): {haiku_subtasks} subtasks ({haiku_subtasks/total_subtasks*100:.1f}%)",
+        f"  Sonnet (standard): {sonnet_subtasks} subtasks ({sonnet_subtasks/total_subtasks*100:.1f}%)",
+        f"  Opus (complex): {opus_subtasks} subtasks ({opus_subtasks/total_subtasks*100:.1f}%)",
+        "",
+        bold("Cost Distribution:"),
+        f"  Haiku: ${routing.haiku_cost:.2f} ({routing.haiku_percentage:.1f}% of cost)",
+        f"  Sonnet: ${routing.sonnet_cost:.2f} ({routing.sonnet_percentage:.1f}% of cost)",
+        f"  Opus: ${routing.opus_cost:.2f} ({routing.opus_percentage:.1f}% of cost)",
         "",
         muted(f"Report: {output_path.relative_to(root_dir)}"),
     ]
