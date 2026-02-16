@@ -372,13 +372,15 @@ function sanitizeError(error: unknown): string {
   if (error instanceof Error) {
     // Cap input to prevent regex performance issues on very large messages
     const msg = error.message.length > 2000 ? error.message.substring(0, 2000) : error.message;
-    return msg
-      // Use negated character classes instead of .* to prevent catastrophic backtracking
-      .replace(/at [^(]*\([^)]*\)/g, '')
-      .replace(/\/[^\s:]*\.js:\d+:\d+/g, '')
-      .replace(/C:\\[^\s:]*\.js:\d+:\d+/g, '')
-      .replace(/I:\\[^\s:]*\.ts:\d+:\d+/g, '')
-      .trim();
+    // Strip "at func (...)" stack trace segments (safe: negated classes don't overlap)
+    let sanitized = msg.replace(/at [^(]*\([^)]*\)/g, '');
+    // Strip file path:line:col references using token replacement to avoid
+    // regex backtracking (SonarCloud S5852). Each whitespace-delimited token
+    // is checked independently with a simple anchored pattern.
+    sanitized = sanitized.replace(/\S+/g, (token) =>
+      /\.(js|ts|jsx|tsx):\d+:\d+$/.test(token) ? '' : token
+    );
+    return sanitized.replace(/ {2,}/g, ' ').trim();
   }
 
   if (typeof error === 'string') {

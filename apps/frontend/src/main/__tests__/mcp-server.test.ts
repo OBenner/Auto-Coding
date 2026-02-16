@@ -38,9 +38,19 @@ function readProjectFile(relativePath: string): string | null {
   return existsSync(fullPath) ? readFileSync(fullPath, 'utf-8') : null;
 }
 
-// Read all source files once at module level
-const mcpServerContent = readProjectFile('src/main/mcp-server.ts')!;
-const mcpManagerContent = readProjectFile('src/main/mcp-manager.ts')!;
+/** Read a required project file, throwing with a clear message if missing */
+function requireProjectFile(relativePath: string): string {
+  const content = readProjectFile(relativePath);
+  if (content === null) {
+    throw new Error(`Required file missing: ${relativePath} (cwd: ${process.cwd()})`);
+  }
+  return content;
+}
+
+// Read required source files once at module level (fail-fast if missing)
+const mcpServerContent = requireProjectFile('src/main/mcp-server.ts');
+const mcpManagerContent = requireProjectFile('src/main/mcp-manager.ts');
+// Optional files that may not exist in all environments
 const envExampleContent = readProjectFile('.env.example');
 const indexContent = readProjectFile('src/main/index.ts');
 const clientContent = readProjectFile('../backend/core/client.py');
