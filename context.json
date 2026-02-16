@@ -1,50 +1,71 @@
 {
-  "files_to_modify": {},
+  "files_to_modify": {
+    "frontend": [
+      "apps/frontend/src/renderer/components/KanbanBoard.tsx",
+      "apps/frontend/src/renderer/hooks/index.ts",
+      "apps/frontend/src/shared/i18n/locales/en/tasks.json",
+      "apps/frontend/src/shared/i18n/locales/fr/tasks.json"
+    ]
+  },
   "files_to_create": {
     "frontend": [
-      "apps/frontend/src/renderer/components/ui/__tests__/button.test.tsx",
-      "apps/frontend/src/renderer/components/ui/__tests__/input.test.tsx",
-      "apps/frontend/src/renderer/components/ui/__tests__/dialog.test.tsx",
-      "apps/frontend/src/renderer/components/ui/__tests__/badge.test.tsx",
-      "apps/frontend/src/renderer/components/__tests__/TaskCard.test.tsx",
-      "apps/frontend/src/renderer/components/__tests__/AddProjectModal.test.tsx",
-      "apps/frontend/src/renderer/components/__tests__/AgentProfileSelector.test.tsx",
-      "apps/frontend/src/renderer/stores/__tests__/settings-store.test.ts",
-      "apps/frontend/src/renderer/stores/__tests__/auth-failure-store.test.ts",
-      "apps/frontend/src/renderer/hooks/__tests__/useIpc.test.ts",
-      "apps/frontend/src/renderer/hooks/__tests__/useResolvedAgentSettings.test.ts"
+      "apps/frontend/src/renderer/components/KanbanBoard/utils/index.ts",
+      "apps/frontend/src/renderer/hooks/useTaskFiltering.ts"
     ]
   },
   "files_to_reference": [
-    "apps/frontend/src/renderer/components/AuthStatusIndicator.test.tsx",
-    "apps/frontend/src/renderer/components/github-prs/components/__tests__/PRDetail.test.tsx",
-    "apps/frontend/src/__tests__/setup.ts"
+    "apps/frontend/src/renderer/components/github-issues/hooks/useIssueFiltering.ts",
+    "apps/frontend/src/renderer/components/gitlab-issues/hooks/useIssueFiltering.ts",
+    "apps/frontend/src/renderer/components/linear-import/hooks/useIssueFiltering.ts",
+    "apps/frontend/src/renderer/components/github-issues/utils/index.ts",
+    "apps/frontend/src/renderer/components/github-issues/components/IssueList.tsx",
+    "apps/frontend/src/renderer/components/github-issues/components/IssueListHeader.tsx"
   ],
   "patterns": {
-    "test_file_pattern": "Use @vitest-environment jsdom directive, Testing Library render/screen, factory functions for test data",
-    "mock_pattern": "Mock Zustand stores with vi.mock(), mock i18n with react-i18next, mock window.electronAPI",
-    "assertion_pattern": "Use @testing-library/jest-dom matchers (toBeInTheDocument, toHaveAttribute, etc.)",
-    "naming_pattern": "Describe blocks for component name, nested describes for features, it() for specific behaviors"
+    "hook_pattern": "All useIssueFiltering hooks follow same pattern: useState for searchQuery, useMemo for filtered results, return { searchQuery, setSearchQuery, filteredIssues }",
+    "utility_pattern": "Utility functions in utils/index.ts handle actual filtering logic (filterIssuesBySearch)",
+    "integration_pattern": "Components import hook, destructure filteredResults, use filteredResults in render instead of raw data",
+    "i18n_pattern": "All user-facing text uses translation keys (e.g., t('tasks:search.placeholder'))"
   },
   "existing_implementations": {
-    "description": "Found 18 existing React test files with established patterns",
-    "test_coverage": "6% (18 tests / 295 components)",
-    "relevant_files": [
-      "apps/frontend/src/renderer/components/AuthStatusIndicator.test.tsx",
-      "apps/frontend/src/renderer/components/ProfileBadge.test.tsx",
-      "apps/frontend/src/renderer/components/github-prs/components/__tests__/PRDetail.test.tsx"
-    ],
-    "test_infrastructure": {
-      "framework": "Vitest",
-      "library": "Testing Library (React)",
-      "setup_file": "apps/frontend/src/__tests__/setup.ts",
-      "mocks": ["electron", "localStorage", "scrollIntoView", "requestAnimationFrame"]
+    "description": "Found 4 identical useIssueFiltering implementations following the same pattern",
+    "github_issues": {
+      "file": "apps/frontend/src/renderer/components/github-issues/hooks/useIssueFiltering.ts",
+      "features": ["searchQuery state", "filteredIssues memo", "onSearchStart/onSearchClear callbacks"],
+      "utility": "apps/frontend/src/renderer/components/github-issues/utils/index.ts"
+    },
+    "gitlab_issues": {
+      "file": "apps/frontend/src/renderer/components/gitlab-issues/hooks/useIssueFiltering.ts",
+      "features": ["searchQuery state", "filteredIssues memo"],
+      "utility": "apps/frontend/src/renderer/components/gitlab-issues/utils/index.ts"
+    },
+    "linear_import": {
+      "file": "apps/frontend/src/renderer/components/linear-import/hooks/useIssueFiltering.ts",
+      "features": ["searchQuery state", "filterState state", "filteredIssues memo", "uniqueStateTypes memo"],
+      "utility": "Inline filtering (no separate utility file)"
+    },
+    "kanban_current": {
+      "file": "apps/frontend/src/renderer/components/KanbanBoard.tsx",
+      "features": ["Inline filteredTasks memo on line 739-744"],
+      "issues": ["No dedicated hook", "No search functionality", "Only filters by archived status"]
     }
   },
-  "component_categories": {
-    "ui_components": "20+ reusable UI components (button, input, dialog, etc.)",
-    "feature_components": "100+ feature-specific components (TaskCard, ProfileBadge, etc.)",
-    "stores": "10+ Zustand stores for state management",
-    "hooks": "8+ custom React hooks"
+  "task_type_info": {
+    "file": "apps/frontend/src/shared/types/task.ts",
+    "filterable_fields": {
+      "basic": ["id", "title", "description", "status"],
+      "metadata": ["category", "priority", "complexity", "impact", "sourceType"],
+      "timestamps": ["createdAt", "updatedAt"]
+    },
+    "status_values": ["backlog", "queue", "in_progress", "ai_review", "human_review", "done", "pr_created", "error"],
+    "category_values": ["feature", "bug_fix", "refactoring", "documentation", "security", "performance", "ui_ux", "infrastructure", "testing"],
+    "priority_values": ["low", "medium", "high", "urgent"],
+    "complexity_values": ["trivial", "small", "medium", "large", "complex"],
+    "impact_values": ["low", "medium", "high", "critical"]
+  },
+  "tech_stack": {
+    "frontend": ["electron", "react", "typescript", "zustand", "i18next", "vitest"],
+    "testing_framework": "vitest + testing-library",
+    "i18n_framework": "react-i18next"
   }
 }

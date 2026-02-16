@@ -16,7 +16,6 @@ import subprocess
 from datetime import datetime
 from pathlib import Path
 
-import pytest
 
 from worktree import WorktreeManager
 

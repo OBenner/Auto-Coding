@@ -94,7 +94,7 @@ def _is_git_repo(project_dir: Path) -> bool:
             timeout=10,
         )
         return result.returncode == 0
-    except (subprocess.TimeoutExpired, Exception) as e:
+    except Exception as e:
         logger.debug("Git repo check failed: %s", e)
         return False
 
@@ -152,7 +152,7 @@ def _commit_gitignore(project_dir: Path) -> bool:
         combined_output = result.stdout + result.stderr
         return result.returncode == 0 or "nothing to commit" in combined_output
 
-    except (subprocess.TimeoutExpired, Exception) as e:
+    except Exception as e:
         logger.debug("Git commit failed: %s", e)
         return False
 

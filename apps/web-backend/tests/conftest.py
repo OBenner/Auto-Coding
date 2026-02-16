@@ -16,8 +16,11 @@ from unittest.mock import patch
 from core.database import Base, get_db
 
 # Import all models so Base.metadata knows about all tables
+# These imports register models with SQLAlchemy Base.metadata
 from api.models.user import User  # noqa: F401
 from api.models.repository import GitRepository  # noqa: F401
+
+__all__ = ["User", "GitRepository"]
 
 
 # Test database configuration (in-memory SQLite)

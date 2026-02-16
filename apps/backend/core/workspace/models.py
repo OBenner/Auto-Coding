@@ -6,9 +6,12 @@ Workspace Models
 Data classes and enums for workspace management.
 """
 
+import logging
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 class WorkspaceMode(Enum):
@@ -88,7 +91,7 @@ class MergeLock:
                 fd = os.open(
                     str(self.lock_file),
                     os.O_CREAT | os.O_EXCL | os.O_WRONLY,
-                    0o644,
+                    0o600,
                 )
                 os.close(fd)
 
@@ -108,14 +111,14 @@ class MergeLock:
                         try:
                             _os.kill(pid, 0)
                             is_running = True
-                        except (OSError, ProcessLookupError):
+                        except OSError:
                             is_running = False
 
                         if not is_running:
                             # Stale lock - remove it
                             self.lock_file.unlink()
                             continue
-                    except (ValueError, ProcessLookupError):
+                    except ValueError:
                         # Invalid PID or can't check - remove stale lock
                         self.lock_file.unlink()
                         continue
@@ -178,7 +181,7 @@ class SpecNumberLock:
                 fd = os.open(
                     str(self.lock_file),
                     os.O_CREAT | os.O_EXCL | os.O_WRONLY,
-                    0o644,
+                    0o600,
                 )
                 os.close(fd)
 
@@ -197,14 +200,14 @@ class SpecNumberLock:
                         try:
                             _os.kill(pid, 0)
                             is_running = True
-                        except (OSError, ProcessLookupError):
+                        except OSError:
                             is_running = False
 
                         if not is_running:
                             # Stale lock - remove it
                             self.lock_file.unlink()
                             continue
-                    except (ValueError, ProcessLookupError):
+                    except ValueError:
                         # Invalid PID or can't check - remove stale lock
                         self.lock_file.unlink()
                         continue
@@ -270,6 +273,6 @@ class SpecNumberLock:
                 num = int(folder.name[:3])
                 max_num = max(max_num, num)
             except ValueError:
-                pass
+                logger.debug("Non-numeric spec folder prefix: %s", folder.name)
 
         return max_num

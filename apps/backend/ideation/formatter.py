@@ -5,9 +5,12 @@ Formats and merges ideation outputs into a cohesive ideation.json file.
 """
 
 import json
+import logging
 import sys
 from datetime import datetime
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 # Add auto-claude to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -46,7 +49,7 @@ class IdeationFormatter:
                         f"Preserving {len(existing_ideas)} existing ideas", "info"
                     )
             except json.JSONDecodeError:
-                pass
+                logger.debug("Failed to parse existing ideation.json")
 
         # Collect new ideas from the enabled types
         new_ideas = []
@@ -62,7 +65,7 @@ class IdeationFormatter:
                         new_ideas.extend(ideas)
                         output_files.append(str(type_file))
                 except (json.JSONDecodeError, KeyError):
-                    pass
+                    logger.debug("Failed to parse %s ideas file", ideation_type)
 
         # In append mode, filter out ideas from types we're regenerating
         # (to avoid duplicates) and keep ideas from other types
@@ -142,5 +145,5 @@ class IdeationFormatter:
                 with open(context_file, encoding="utf-8") as f:
                     context_data = json.load(f)
             except json.JSONDecodeError:
-                pass
+                logger.debug("Failed to parse ideation_context.json")
         return context_data

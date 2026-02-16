@@ -29,7 +29,7 @@ try:
 except ImportError:
 
     def debug(*args, **kwargs):
-        pass
+        """No-op fallback when debug module is unavailable."""
 
 
 MODULE = "merge.timeline_persistence"

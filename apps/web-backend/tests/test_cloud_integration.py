@@ -18,10 +18,10 @@ If bcrypt tests fail, ensure bcrypt is installed: pip install bcrypt
 """
 
 import pytest
-from datetime import datetime, timedelta, UTC
+from datetime import datetime, UTC
 
 # Import application components
-from api.models.user import User, UserRegisterRequest, UserLoginRequest
+from api.models.user import User
 from api.models.repository import GitRepository
 from services.usage_tracker import UsageTracker
 

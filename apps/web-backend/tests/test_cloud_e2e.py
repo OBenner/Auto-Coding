@@ -56,7 +56,7 @@ class CloudE2ETest:
                     self.log(f"{service_name} is ready!", "SUCCESS")
                     return True
             except requests.exceptions.RequestException:
-                pass
+                self.log(f"{service_name} not ready yet, retrying...", "INFO")
             time.sleep(2)
 
         self.log(f"{service_name} did not become ready within {timeout}s", "ERROR")
@@ -166,7 +166,7 @@ class CloudE2ETest:
 
             if response.status_code == 302:
                 redirect_url = response.headers.get("Location", "")
-                if "github.com" in redirect_url:
+                if redirect_url.startswith("https://github.com/"):
                     self.log(f"GitHub OAuth redirect working: {redirect_url[:100]}...", "SUCCESS")
                     return True
                 else:

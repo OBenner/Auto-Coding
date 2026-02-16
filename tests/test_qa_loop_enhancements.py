@@ -11,7 +11,6 @@ Tests cover:
 
 import json
 import tempfile
-from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -38,7 +37,6 @@ from qa_loop import (
     ISSUE_SIMILARITY_THRESHOLD,
     # Implementation plan helpers
     load_implementation_plan,
-    save_implementation_plan,
 )
 
 
