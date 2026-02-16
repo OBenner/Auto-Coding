@@ -27,6 +27,7 @@ Usage:
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from dataclasses import dataclass
 from pathlib import Path
@@ -415,6 +416,19 @@ class CommandExecutor:
 
         Attempts to resolve dependency conflicts by running package manager commands.
 
+        Detects the project's package manager and runs the appropriate install/update
+        command to resolve dependencies.
+
+        Supported package managers:
+        - Node.js: npm, yarn, pnpm, bun
+        - Python: pip, poetry, uv, pdm, hatch, pipenv, conda
+        - Rust: cargo
+        - Go: go
+        - Ruby: gem, bundler
+        - PHP: composer
+        - Java: maven, gradle
+        - .NET: nuget, dotnet
+
         Args:
             command: The resolve command
             pr_number: The PR number
@@ -425,17 +439,214 @@ class CommandExecutor:
         """
         logger.info(f"Handling resolve command for PR #{pr_number}")
 
-        # TODO: Implement resolve logic
-        # - Detect project type (npm, pip, cargo, etc.)
-        # - Run package manager install/update commands
-        # - Return success/failure result with details
+        try:
+            # Detect package manager based on project files
+            package_manager = await self._detect_package_manager()
 
-        return CommandResult(
-            success=True,
-            command_type="resolve",
-            message="✓ Resolve command executed successfully",
-            data={"pr_number": pr_number},
-        )
+            if not package_manager:
+                logger.warning(f"No package manager detected in project")
+                return CommandResult(
+                    success=False,
+                    command_type="resolve",
+                    message="✗ No package manager detected in project",
+                    error="Could not find package.json, requirements.txt, Cargo.lock, or other package manager files",
+                    data={"pr_number": pr_number, "detected_manager": None},
+                )
+
+            logger.info(f"Detected package manager: {package_manager}")
+
+            # Run the appropriate install command
+            install_command, install_args = self._get_install_command(package_manager)
+
+            logger.info(f"Running package install: {install_command} {' '.join(install_args)}")
+
+            # Execute the install command using asyncio
+            process = await asyncio.create_subprocess_exec(
+                install_command,
+                *install_args,
+                cwd=self.project_dir,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+
+            stdout, stderr = await asyncio.wait_for(
+                process.communicate(),
+                timeout=120.0,  # 2 minute timeout for package installs
+            )
+
+            stdout_str = stdout.decode("utf-8", errors="replace")
+            stderr_str = stderr.decode("utf-8", errors="replace")
+
+            if process.returncode == 0:
+                logger.info(
+                    f"Successfully resolved dependencies using {package_manager}"
+                )
+
+                return CommandResult(
+                    success=True,
+                    command_type="resolve",
+                    message=f"✓ Resolved dependencies using {package_manager}",
+                    data={
+                        "pr_number": pr_number,
+                        "package_manager": package_manager,
+                        "install_command": f"{install_command} {' '.join(install_args)}",
+                        "stdout": stdout_str[-500:] if len(stdout_str) > 500 else stdout_str,
+                        "resolved_by": username,
+                    },
+                )
+            else:
+                error_msg = stderr_str or stdout_str
+                logger.error(
+                    f"Package install failed with return code {process.returncode}: {error_msg[:200]}"
+                )
+
+                return CommandResult(
+                    success=False,
+                    command_type="resolve",
+                    message=f"✗ Failed to resolve dependencies using {package_manager}",
+                    error=error_msg[:500] if error_msg else f"Command failed with exit code {process.returncode}",
+                    data={
+                        "pr_number": pr_number,
+                        "package_manager": package_manager,
+                        "install_command": f"{install_command} {' '.join(install_args)}",
+                        "returncode": process.returncode,
+                    },
+                )
+
+        except asyncio.TimeoutError:
+            logger.error(f"Package install timed out after 120s")
+            return CommandResult(
+                success=False,
+                command_type="resolve",
+                message=f"✗ Package install timed out (120s limit)",
+                error="Package installation exceeded timeout limit",
+                data={"pr_number": pr_number, "package_manager": package_manager},
+            )
+
+        except FileNotFoundError:
+            logger.error(f"Package manager executable not found: {install_command}")
+            return CommandResult(
+                success=False,
+                command_type="resolve",
+                message=f"✗ Package manager not found: {install_command}",
+                error=f"The {package_manager} executable is not installed or not in PATH",
+                data={"pr_number": pr_number, "package_manager": package_manager, "executable": install_command},
+            )
+
+        except Exception as e:
+            error_msg = str(e)
+            logger.error(f"Unexpected error resolving dependencies: {error_msg}")
+
+            return CommandResult(
+                success=False,
+                command_type="resolve",
+                message=f"✗ Failed to resolve dependencies",
+                error=error_msg[:500],
+                data={"pr_number": pr_number, "package_manager": package_manager if 'package_manager' in locals() else None},
+            )
+
+    async def _detect_package_manager(self) -> str | None:
+        """
+        Detect the project's package manager by checking for lock files and config files.
+
+        Returns:
+            Package manager name (e.g., "npm", "pip", "cargo") or None if not detected
+        """
+        # Check for package manager files in order of preference
+        package_managers = [
+            # Node.js (check for lock files to determine which one)
+            ("bun", ["bun.lockb", "bun.lock"]),
+            ("pnpm", ["pnpm-lock.yaml"]),
+            ("yarn", ["yarn.lock"]),
+            ("npm", ["package-lock.json", "package.json"]),
+            # Python
+            ("pipenv", ["Pipfile.lock", "Pipfile"]),
+            ("poetry", ["poetry.lock", "pyproject.toml"]),
+            ("hatch", ["pyproject.toml"]),  # hatch uses pyproject.toml
+            ("pdm", ["pdm.lock", "pyproject.toml"]),
+            ("uv", ["uv.lock"]),
+            ("conda", ["environment.yml", "conda.yml"]),
+            ("pip", ["requirements.txt", "setup.py", "pyproject.toml"]),
+            # Rust
+            ("cargo", ["Cargo.toml", "Cargo.lock"]),
+            # Go
+            ("go", ["go.mod", "go.sum"]),
+            # Ruby
+            ("bundler", ["Gemfile.lock", "Gemfile"]),
+            ("gem", ["Gemfile"]),
+            # PHP
+            ("composer", ["composer.json", "composer.lock"]),
+            # Java
+            ("gradle", ["build.gradle", "build.gradle.kts", "gradlew"]),
+            ("maven", ["pom.xml"]),
+            # .NET
+            ("dotnet", ["packages.config", "*.csproj"]),
+            # Dart/Flutter
+            ("pub", ["pubspec.lock", "pubspec.yaml"]),
+        ]
+
+        for pm_name, files in package_managers:
+            for file_name in files:
+                # Handle wildcards
+                if "*" in file_name:
+                    import glob
+                    matches = glob.glob(str(self.project_dir / file_name))
+                    if matches:
+                        return pm_name
+                else:
+                    file_path = self.project_dir / file_name
+                    if file_path.exists():
+                        return pm_name
+
+        return None
+
+    def _get_install_command(self, package_manager: str) -> tuple[str, list[str]]:
+        """
+        Get the install command and arguments for a package manager.
+
+        Args:
+            package_manager: The package manager name
+
+        Returns:
+            Tuple of (command, args) to run for installing dependencies
+        """
+        install_commands = {
+            # Node.js
+            "npm": ("npm", ["install"]),
+            "yarn": ("yarn", ["install"]),
+            "pnpm": ("pnpm", ["install"]),
+            "bun": ("bun", ["install"]),
+            # Python
+            "pip": ("pip", ["install", "-r", "requirements.txt"]),
+            "pipenv": ("pipenv", ["install"]),
+            "poetry": ("poetry", ["install"]),
+            "hatch": ("hatch", ["env", "create"]),
+            "pdm": ("pdm", ["install"]),
+            "uv": ("uv", ["sync"]),
+            "conda": ("conda", ["env", "update", "--file", "environment.yml", "--prune"]),
+            # Rust
+            "cargo": ("cargo", ["build", "--workspace"]),  # Build to fetch dependencies
+            # Go
+            "go": ("go", ["mod", "download"]),
+            # Ruby
+            "bundler": ("bundle", ["install"]),
+            "gem": ("bundle", ["install"]),  # Use bundler for Gemfile
+            # PHP
+            "composer": ("composer", ["install"]),
+            # Java
+            "gradle": ("gradle", ["build"]),  # or gradlew
+            "maven": ("mvn", ["dependency:resolve"]),
+            # .NET
+            "dotnet": ("dotnet", ["restore"]),
+            # Dart/Flutter
+            "pub": ("dart", ["pub", "get"]),
+        }
+
+        if package_manager in install_commands:
+            return install_commands[package_manager]
+
+        # Default fallback
+        return (package_manager, ["install"])
 
     async def _handle_process(
         self,
