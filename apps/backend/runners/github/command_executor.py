@@ -870,18 +870,118 @@ class CommandExecutor:
         """
         Post command execution feedback as a PR comment.
 
+        Formats the command result into a structured PR comment with:
+- Status indicator (✓/✗)
+- Command type
+- Execution message
+- Error details (if failed)
+- Additional context from result data
+
         Args:
             pr_number: The PR number
             result: The command execution result
         """
         logger.debug(f"Posting feedback for PR #{pr_number}: {result.message}")
 
-        # TODO: Implement feedback posting
-        # - Format result message for PR comment
-        # - Use gh_client.pr_comment() to post feedback
-        # - Include status (✓/✗), command type, and details/errors
-
-        # Skip if in testing mode or if gh_client is mocked
+        # Skip if gh_client doesn't have pr_comment method (mocked/testing)
         if not hasattr(self.gh_client, "pr_comment"):
             logger.debug("Skipping feedback posting (gh_client not available)")
             return
+
+        # Format the comment body
+        comment_body = self._format_feedback_comment(result)
+
+        # Post the comment
+        try:
+            await self.gh_client.pr_comment(pr_number, comment_body)
+            logger.info(f"Posted feedback comment for command '/{result.command_type}' on PR #{pr_number}")
+        except GHCommandError as e:
+            logger.error(f"Failed to post feedback comment on PR #{pr_number}: {e}")
+        except Exception as e:
+            logger.error(f"Unexpected error posting feedback comment: {e}")
+
+    def _format_feedback_comment(self, result: CommandResult) -> str:
+        """
+        Format a command result into a structured PR comment.
+
+        Args:
+            result: The command execution result
+
+        Returns:
+            Formatted comment body string
+        """
+        lines = [
+            f"### /{result.command_type} Command Result",
+            "",
+        ]
+
+        # Status line with emoji indicator
+        status_emoji = "✓" if result.success else "✗"
+        lines.append(f"**Status:** {status_emoji} {result.message}")
+        lines.append("")
+
+        # Add error details if command failed
+        if not result.success and result.error:
+            lines.append("**Error Details:**")
+            lines.append("```")
+            # Truncate very long errors to avoid comment size limits
+            error_text = result.error
+            if len(error_text) > 1000:
+                error_text = error_text[:1000] + "\n... (truncated)"
+            lines.append(error_text)
+            lines.append("```")
+            lines.append("")
+
+        # Add additional context from result data
+        if result.data:
+            lines.append("**Details:**")
+
+            # Format specific data fields based on command type
+            if result.command_type == "merge":
+                merge_method = result.data.get("merge_method", "unknown")
+                lines.append(f"- Merge method: `{merge_method}`")
+                if result.success:
+                    merged_by = result.data.get("merged_by")
+                    if merged_by:
+                        lines.append(f"- Merged by: @{merged_by}")
+
+            elif result.command_type == "resolve":
+                package_manager = result.data.get("package_manager")
+                if package_manager:
+                    lines.append(f"- Package manager: `{package_manager}`")
+                install_command = result.data.get("install_command")
+                if install_command:
+                    lines.append(f"- Command: `{install_command}`")
+                if result.success:
+                    resolved_by = result.data.get("resolved_by")
+                    if resolved_by:
+                        lines.append(f"- Resolved by: @{resolved_by}")
+                    # Add stdout snippet if available
+                    stdout = result.data.get("stdout", "")
+                    if stdout and stdout.strip():
+                        lines.append("")
+                        lines.append("**Output:**")
+                        lines.append("```")
+                        lines.append(stdout)
+                        lines.append("```")
+
+            elif result.command_type == "process":
+                comment_count = result.data.get("comment_count", 0)
+                lines.append(f"- Comments processed: {comment_count}")
+                if result.success and comment_count > 0:
+                    files_affected = result.data.get("files_affected", 0)
+                    lines.append(f"- Files affected: {files_affected}")
+                    lines.append("- Summary posted to PR")
+                    processed_by = result.data.get("processed_by")
+                    if processed_by:
+                        lines.append(f"- Processed by: @{processed_by}")
+
+            lines.append("")
+
+        # Add footer
+        lines.extend([
+            "---",
+            "*This comment was automatically generated by the command executor.*",
+        ])
+
+        return "\n".join(lines)
