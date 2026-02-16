@@ -11,7 +11,8 @@ export function IssueList({
   isLoading,
   error,
   onSelectIssue,
-  onInvestigate
+  onInvestigate,
+  onQuickCreate
 }: IssueListProps) {
   if (error) {
     return (
@@ -48,6 +49,7 @@ export function IssueList({
             isSelected={selectedIssueIid === issue.iid}
             onClick={() => onSelectIssue(issue.iid)}
             onInvestigate={() => onInvestigate(issue)}
+            onQuickCreate={() => onQuickCreate?.(issue)}
           />
         ))}
       </div>

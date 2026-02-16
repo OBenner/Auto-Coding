@@ -402,7 +402,7 @@ def _get_token_from_macos_keychain() -> str | None:
 
         return token
 
-    except (subprocess.TimeoutExpired, json.JSONDecodeError, KeyError, Exception):
+    except Exception:
         return None
 
 
@@ -430,7 +430,7 @@ def _get_token_from_windows_credential_files() -> str | None:
 
         return None
 
-    except (json.JSONDecodeError, KeyError, FileNotFoundError, Exception):
+    except Exception:
         return None
 
 
@@ -548,7 +548,7 @@ def _get_token_from_config_dir(config_dir: str) -> str | None:
                 ):
                     logger.debug(f"Found token in {cred_path}")
                     return token
-            except (json.JSONDecodeError, KeyError, Exception) as e:
+            except Exception as e:
                 logger.debug(f"Failed to read {cred_path}: {e}")
                 continue
 
@@ -719,7 +719,7 @@ def _find_git_bash_path() -> str | None:
             git_paths = result.stdout.strip().splitlines()
             if git_paths:
                 git_path = git_paths[0].strip()
-    except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.SubprocessError):
+    except (FileNotFoundError, subprocess.SubprocessError):
         # Intentionally suppress errors - best-effort detection with fallback to common paths
         pass
 
@@ -954,6 +954,19 @@ def _trigger_login_windows() -> bool:
     except Exception as e:
         print(f"\nLogin failed: {e}")
         return False
+
+
+def emit_rate_limit_marker(reset_time: str | None = None) -> None:
+    """Print a structured marker that the frontend can detect for rate-limit handling.
+
+    The frontend ``rate-limit-detector.ts`` scans process output for rate-limit
+    patterns.  This function prints a canonical marker line so the detection is
+    reliable regardless of the upstream error format.
+    """
+    parts = ["[RATE_LIMITED]"]
+    if reset_time:
+        parts.append(f"reset_time={reset_time}")
+    print(" ".join(parts), flush=True)
 
 
 def ensure_authenticated() -> str:

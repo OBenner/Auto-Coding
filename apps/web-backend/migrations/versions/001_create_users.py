@@ -10,6 +10,8 @@ from typing import Sequence, Union
 from alembic import op
 import sqlalchemy as sa
 
+# Alembic requires these module-level identifiers
+__all__ = ["revision", "down_revision", "branch_labels", "depends_on", "upgrade", "downgrade"]
 
 # revision identifiers, used by Alembic.
 revision: str = '001'

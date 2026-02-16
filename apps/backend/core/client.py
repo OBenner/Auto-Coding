@@ -522,6 +522,91 @@ def load_plugin_mcp_servers(project_dir: Path, spec_dir: Path) -> dict[str, Any]
     return plugin_servers
 
 
+def load_preferences(
+    base_prompt: str,
+    spec_dir: Path,
+    project_dir: Path,
+) -> str:
+    """
+    Load user preference profile and adapt the system prompt accordingly.
+
+    This function retrieves the user's preference profile from Graphiti memory
+    and applies adaptive behavior instructions to the prompt based on learned
+    patterns and explicit user settings.
+
+    Args:
+        base_prompt: Original system prompt
+        spec_dir: Directory containing the spec
+        project_dir: Project root directory
+
+    Returns:
+        Modified prompt with adaptive instructions, or original if no preferences found
+    """
+    try:
+        # Import here to avoid circular dependencies
+        from agents.preferences import PreferenceProfile, modify_prompt_for_preferences
+        from integrations.graphiti.memory import (
+            get_graphiti_memory,
+            is_graphiti_enabled,
+        )
+
+        # Only load preferences if Graphiti is enabled
+        if not is_graphiti_enabled():
+            logger.debug("Graphiti not enabled, skipping preference loading")
+            print("   - User preferences: Graphiti not enabled")
+            return base_prompt
+
+        # Get preference profile from Graphiti memory
+        memory = get_graphiti_memory(spec_dir, project_dir)
+
+        # Run async operation in sync context
+        import asyncio
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            profile_data = loop.run_until_complete(memory.get_preference_profile())
+        finally:
+            loop.close()
+
+        if not profile_data:
+            logger.debug("No preference profile found, using defaults")
+            print("   - User preferences: No profile found, using defaults")
+            return base_prompt
+
+        # Convert dict to PreferenceProfile object
+        profile = PreferenceProfile.from_dict(profile_data)
+
+        # Apply preferences to prompt
+        modified_prompt = modify_prompt_for_preferences(base_prompt, profile)
+
+        # Log preference application
+        verbosity = profile.get_effective_verbosity().value
+        risk = profile.get_effective_risk_tolerance().value
+        acceptance_rate = profile.get_feedback_acceptance_rate()
+
+        logger.info(
+            f"Applied user preferences: verbosity={verbosity}, risk={risk}, "
+            f"acceptance_rate={acceptance_rate:.1%}"
+        )
+        print(
+            f"   - User preferences: Applied (verbosity={verbosity}, risk={risk}, "
+            f"feedback={len(profile.feedback_history)} records)"
+        )
+
+        return modified_prompt
+
+    except ImportError as e:
+        logger.debug(f"Preference modules not available: {e}")
+        print("   - User preferences: Modules not available")
+        return base_prompt
+
+    except Exception as e:
+        logger.warning(f"Failed to load preferences: {e}")
+        print(f"   - User preferences: Failed to load ({type(e).__name__})")
+        return base_prompt
+
+
 def create_client(
     project_dir: Path,
     spec_dir: Path,
@@ -926,6 +1011,10 @@ def create_client(
             print("   - CLAUDE.md: not found in project root")
     else:
         print("   - CLAUDE.md: disabled by project settings")
+
+    # Load and apply user preferences to adapt agent behavior
+    base_prompt = load_preferences(base_prompt, spec_dir, project_dir)
+
     print()
 
     # Build options dict, conditionally including output_format

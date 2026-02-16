@@ -867,10 +867,10 @@ ${t('prReview.blockedStatusMessageFooter')}`;
     }
   };
 
-  const handleMerge = async () => {
+  const handleMerge = () => {
     setIsMerging(true);
     try {
-      await onMergePR('squash'); // Default to squash merge
+      onMergePR('squash'); // Default to squash merge
     } finally {
       setIsMerging(false);
     }

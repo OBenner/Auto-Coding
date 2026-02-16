@@ -180,5 +180,24 @@
     "step3": "Click \"Re-authenticate\" on your profile",
     "gotIt": "Got It",
     "goToSettings": "Go to Settings"
+  },
+  "scheduler": {
+    "title": "Schedule Build",
+    "description": "Schedule a task to build at a specific time. Set priority and dependencies to control execution order.",
+    "taskLabel": "Task",
+    "selectTask": "Select a task to schedule",
+    "taskRequired": "Please select a task to schedule",
+    "scheduledTime": "Scheduled Time",
+    "timePlaceholder": "e.g., 2024-02-15T14:30:00 or tonight 10pm",
+    "timeHelp": "Use ISO format (2024-02-15T14:30:00) or natural language (tonight 10pm, tomorrow 9am). Leave empty or use 'now' for immediate execution.",
+    "priorityLabel": "Priority",
+    "selectPriority": "Select priority",
+    "dependenciesLabel": "Dependencies",
+    "optional": "optional",
+    "dependenciesHelp": "Select tasks that must complete before this build starts.",
+    "dependenciesSelected": "{{count}} dependenc{{count, plural, one {y} other {ies}}} selected",
+    "scheduling": "Scheduling...",
+    "scheduleBuild": "Schedule Build",
+    "failedToSchedule": "Failed to schedule build. Please try again."
   }
 }
