@@ -25,7 +25,8 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
-import { BrowserWindow, app, ipcMain } from 'electron';
+import electron from 'electron';
+const { BrowserWindow, app, ipcMain } = electron;
 
 // ============================================================================
 // Constants
