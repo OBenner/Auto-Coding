@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Brain, Scale, Zap, Sparkles, Sliders, Check } from 'lucide-react';
 import { Button } from './ui/button';
 import {
@@ -17,7 +17,8 @@ import {
   SelectValue
 } from './ui/select';
 import { DEFAULT_AGENT_PROFILES, AVAILABLE_MODELS } from '../../shared/constants';
-import type { InsightsModelConfig, InsightsProvider } from '../../shared/types';
+import { getModelsForProvider } from '../../shared/constants/api-profiles';
+import type { InsightsModelConfig, InsightsProvider, ModelType } from '../../shared/types';
 import { CustomModelModal } from './CustomModelModal';
 
 interface InsightsModelSelectorProps {
@@ -40,6 +41,36 @@ const INSIGHTS_PROVIDERS: Array<{ id: InsightsProvider; label: string; descripti
   { id: 'openrouter', label: 'OpenRouter', description: '400+ models via OpenRouter' }
 ];
 
+// Map Insights provider IDs to API provider IDs
+const INSIGHTS_TO_API_PROVIDER: Record<InsightsProvider, string> = {
+  claude: 'anthropic',
+  litellm: 'litellm',  // LiteLLM is not in API profiles, will use generic tiers
+  openrouter: 'openrouter'
+};
+
+/**
+ * Get provider-specific model label for a model tier
+ */
+function getModelLabelForProvider(modelTier: ModelType, providerId: InsightsProvider): string {
+  const apiProviderId = INSIGHTS_TO_API_PROVIDER[providerId];
+
+  // LiteLLM doesn't have predefined models, use generic labels
+  if (providerId === 'litellm') {
+    return AVAILABLE_MODELS.find(m => m.value === modelTier)?.label || modelTier;
+  }
+
+  // Get provider-specific model label
+  const models = getModelsForProvider(apiProviderId);
+  const model = models.find(m => m.tier === modelTier);
+
+  if (model) {
+    return model.name;
+  }
+
+  // Fallback to generic label
+  return AVAILABLE_MODELS.find(m => m.value === modelTier)?.label || modelTier;
+}
+
 export function InsightsModelSelector({
   currentConfig,
   onConfigChange,
@@ -61,6 +92,14 @@ export function InsightsModelSelector({
   const Icon = selectedProfileId === 'custom'
     ? Sliders
     : (profile?.icon ? iconMap[profile.icon] : Scale);
+
+  // Get provider-specific model label for current profile
+  const providerModelLabel = useMemo(() => {
+    if (profile && profile.model) {
+      return getModelLabelForProvider(profile.model as ModelType, selectedProvider);
+    }
+    return null;
+  }, [profile, selectedProvider]);
 
   const handleSelectProfile = (profileId: string) => {
     if (profileId === 'custom') {
@@ -102,12 +141,13 @@ export function InsightsModelSelector({
   // Build display text for current selection
   const getDisplayText = () => {
     if (selectedProfileId === 'custom' && currentConfig) {
-      const modelLabel = AVAILABLE_MODELS.find(m => m.value === currentConfig.model)?.label || currentConfig.model;
+      const modelLabel = getModelLabelForProvider(currentConfig.model, currentConfig.provider);
       const providerLabel = INSIGHTS_PROVIDERS.find(p => p.id === currentConfig.provider)?.label || currentConfig.provider;
       return `${providerLabel}: ${modelLabel} + ${currentConfig.thinkingLevel}`;
     }
     const providerLabel = INSIGHTS_PROVIDERS.find(p => p.id === selectedProvider)?.label || selectedProvider;
-    return `${providerLabel} - ${profile?.name || 'Balanced'}`;
+    const modelLabel = providerModelLabel || profile?.name || 'Balanced';
+    return `${providerLabel} - ${profile?.name || modelLabel}`;
   };
 
   return (
@@ -150,7 +190,7 @@ export function InsightsModelSelector({
           {DEFAULT_AGENT_PROFILES.filter(p => !p.isAutoProfile).map((p) => {
             const ProfileIcon = iconMap[p.icon || 'Brain'];
             const isSelected = selectedProfileId === p.id;
-            const modelLabel = AVAILABLE_MODELS.find(m => m.value === p.model)?.label;
+            const modelLabel = getModelLabelForProvider(p.model as ModelType, selectedProvider);
             return (
               <DropdownMenuItem
                 key={p.id}

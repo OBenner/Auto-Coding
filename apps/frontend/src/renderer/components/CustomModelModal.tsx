@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Dialog,
@@ -18,6 +18,7 @@ import {
   SelectValue
 } from './ui/select';
 import { AVAILABLE_MODELS, THINKING_LEVELS } from '../../shared/constants';
+import { getModelsForProvider } from '../../shared/constants/api-profiles';
 import type { InsightsModelConfig, InsightsProvider } from '../../shared/types';
 import type { ModelType, ThinkingLevel } from '../../shared/types';
 
@@ -34,6 +35,36 @@ const INSIGHTS_PROVIDERS: Array<{ id: InsightsProvider; label: string; descripti
   { id: 'litellm', label: 'LiteLLM', description: '100+ models via LiteLLM' },
   { id: 'openrouter', label: 'OpenRouter', description: '400+ models via OpenRouter' }
 ];
+
+// Map Insights provider IDs to API provider IDs
+const INSIGHTS_TO_API_PROVIDER: Record<InsightsProvider, string> = {
+  claude: 'anthropic',
+  litellm: 'litellm',  // LiteLLM is not in API profiles, will use generic tiers
+  openrouter: 'openrouter'
+};
+
+/**
+ * Get provider-specific model label for a model tier
+ */
+function getModelLabelForProvider(modelTier: ModelType, providerId: InsightsProvider): string {
+  const apiProviderId = INSIGHTS_TO_API_PROVIDER[providerId];
+
+  // LiteLLM doesn't have predefined models, use generic labels
+  if (providerId === 'litellm') {
+    return AVAILABLE_MODELS.find(m => m.value === modelTier)?.label || modelTier;
+  }
+
+  // Get provider-specific model label
+  const models = getModelsForProvider(apiProviderId);
+  const model = models.find(m => m.tier === modelTier);
+
+  if (model) {
+    return model.name;
+  }
+
+  // Fallback to generic label
+  return AVAILABLE_MODELS.find(m => m.value === modelTier)?.label || modelTier;
+}
 
 export function CustomModelModal({ currentConfig, onSave, onClose, open = true }: CustomModelModalProps) {
   const { t } = useTranslation('dialogs');
@@ -55,6 +86,28 @@ export function CustomModelModal({ currentConfig, onSave, onClose, open = true }
       setProvider(currentConfig?.provider || 'claude');
     }
   }, [open, currentConfig]);
+
+  // Get available models for the selected provider
+  const availableModels = useMemo(() => {
+    if (provider === 'litellm') {
+      // LiteLLM supports all tiers, use generic labels
+      return AVAILABLE_MODELS;
+    }
+
+    // Get provider-specific models
+    const apiProviderId = INSIGHTS_TO_API_PROVIDER[provider];
+    const models = getModelsForProvider(apiProviderId);
+
+    // Filter to only models with known tiers (opus, sonnet, haiku)
+    const tieredModels = models.filter(m => m.tier === 'opus' || m.tier === 'sonnet' || m.tier === 'haiku');
+
+    // Map to the format expected by the select component
+    return tieredModels.map(m => ({
+      value: m.tier as ModelType,
+      label: m.name,
+      description: m.description
+    }));
+  }, [provider]);
 
   const handleSave = () => {
     onSave({
@@ -102,9 +155,14 @@ export function CustomModelModal({ currentConfig, onSave, onClose, open = true }
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {AVAILABLE_MODELS.map((m) => (
+                {availableModels.map((m) => (
                   <SelectItem key={m.value} value={m.value}>
-                    {m.label}
+                    <div className="flex flex-col">
+                      <span className="font-medium">{m.label}</span>
+                      {m.description && (
+                        <span className="text-xs text-muted-foreground">{m.description}</span>
+                      )}
+                    </div>
                   </SelectItem>
                 ))}
               </SelectContent>
