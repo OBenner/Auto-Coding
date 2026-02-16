@@ -30,6 +30,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -154,6 +155,75 @@ class CommandExecutor:
         self._permission_checker: GitHubPermissionChecker | None = None
         self.allowed_roles = allowed_roles or ["OWNER", "MEMBER", "COLLABORATOR"]
 
+    def _log_audit(
+        self,
+        event_type: str,
+        username: str,
+        command: Command,
+        pr_number: int,
+        result: CommandResult | None = None,
+        error: str | None = None,
+        additional_context: dict[str, Any] | None = None,
+    ) -> None:
+        """
+        Log structured audit trail entry for command execution.
+
+        Audit logs include:
+        - timestamp: ISO 8601 formatted timestamp
+        - event_type: Type of event (attempt, success, failure, permission_denied)
+        - username: GitHub username who executed the command
+        - command: Command type and arguments
+        - pr_number: PR number where command was executed
+        - result: Command execution result (if available)
+        - error: Error message (if any)
+        - additional_context: Any additional context for the audit trail
+
+        Args:
+            event_type: Type of audit event (attempt, success, failure, permission_denied)
+            username: GitHub username who executed the command
+            command: The command being executed
+            pr_number: PR number
+            result: Optional command result
+            error: Optional error message
+            additional_context: Optional additional context data
+        """
+        audit_entry = {
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "event_type": event_type,
+            "username": username,
+            "command": {
+                "type": command.type,
+                "args": command.args,
+                "position": command.position,
+                "raw_text": command.raw_text,
+            },
+            "pr_number": pr_number,
+        }
+
+        # Add result if available
+        if result:
+            audit_entry["result"] = {
+                "success": result.success,
+                "command_type": result.command_type,
+                "message": result.message,
+            }
+            if result.error:
+                audit_entry["result"]["error"] = result.error
+            if result.data:
+                audit_entry["result"]["data"] = result.data
+
+        # Add error if provided
+        if error:
+            audit_entry["error"] = error
+
+        # Add additional context if provided
+        if additional_context:
+            audit_entry["additional_context"] = additional_context
+
+        # Log as structured JSON for easy parsing
+        import json
+        logger.info(f"AUDIT: {json.dumps(audit_entry)}")
+
     async def execute(
         self,
         command: Command,
@@ -168,6 +238,7 @@ class CommandExecutor:
         2. Routes to the appropriate command handler
         3. Posts feedback to the PR via comments
         4. Returns a structured result
+        5. Logs all actions to audit trail
 
         Args:
             command: The command to execute
@@ -183,6 +254,14 @@ class CommandExecutor:
         """
         logger.info(
             f"Executing command '{command.type}' for user '{username}' on PR #{pr_number}"
+        )
+
+        # Log execution attempt to audit trail
+        self._log_audit(
+            event_type="attempt",
+            username=username,
+            command=command,
+            pr_number=pr_number,
         )
 
         try:
@@ -203,6 +282,15 @@ class CommandExecutor:
                 f"Command '{command.type}' completed successfully: {result.message}"
             )
 
+            # Log successful execution to audit trail
+            self._log_audit(
+                event_type="success",
+                username=username,
+                command=command,
+                pr_number=pr_number,
+                result=result,
+            )
+
             return result
 
         except PermissionDeniedError as e:
@@ -214,6 +302,17 @@ class CommandExecutor:
                 error=str(e),
             )
             await self._post_feedback(pr_number, result)
+
+            # Log permission denial to audit trail
+            self._log_audit(
+                event_type="permission_denied",
+                username=username,
+                command=command,
+                pr_number=pr_number,
+                result=result,
+                error=str(e),
+            )
+
             return result
 
         except Exception as e:
@@ -225,6 +324,17 @@ class CommandExecutor:
                 error=str(e),
             )
             await self._post_feedback(pr_number, result)
+
+            # Log execution failure to audit trail
+            self._log_audit(
+                event_type="failure",
+                username=username,
+                command=command,
+                pr_number=pr_number,
+                result=result,
+                error=str(e),
+            )
+
             return result
 
     async def execute_all(
@@ -290,6 +400,17 @@ class CommandExecutor:
             f"Checking permissions for user '{username}' to execute '/{command.type}'"
         )
 
+        # Log permission check attempt
+        self._log_audit(
+            event_type="permission_check",
+            username=username,
+            command=command,
+            pr_number=pr_number,
+            additional_context={
+                "command_requires_write": command.type in ["merge", "resolve"],
+            },
+        )
+
         try:
             # Get or create permission checker
             checker = await self._get_permission_checker()
@@ -304,12 +425,39 @@ class CommandExecutor:
                         f"Permission denied for user '{username}' (role: {result.role}) "
                         f"to execute write command '/{command.type}': {result.reason}"
                     )
+
+                    # Log permission denial
+                    self._log_audit(
+                        event_type="permission_denied",
+                        username=username,
+                        command=command,
+                        pr_number=pr_number,
+                        additional_context={
+                            "user_role": result.role,
+                            "reason": result.reason,
+                            "allowed_roles": self.allowed_roles,
+                        },
+                    )
+
                     return False
 
                 logger.info(
                     f"✓ User '{username}' (role: {result.role}) has permission "
                     f"to execute '/{command.type}'"
                 )
+
+                # Log permission granted for write operation
+                self._log_audit(
+                    event_type="permission_granted",
+                    username=username,
+                    command=command,
+                    pr_number=pr_number,
+                    additional_context={
+                        "user_role": result.role,
+                        "operation_type": "write",
+                    },
+                )
+
                 return True
 
             # Read operations (process) are allowed for anyone with repo access
@@ -321,13 +469,52 @@ class CommandExecutor:
             logger.info(
                 f"✓ User '{username}' (role: {role}) has permission to execute '/{command.type}'"
             )
+
+            # Log permission granted for read operation
+            self._log_audit(
+                event_type="permission_granted",
+                username=username,
+                command=command,
+                pr_number=pr_number,
+                additional_context={
+                    "user_role": role,
+                    "operation_type": "read",
+                },
+            )
+
             return True
 
         except PermissionError as e:
             logger.error(f"Permission check failed: {e}")
+
+            # Log permission check error
+            self._log_audit(
+                event_type="permission_check_error",
+                username=username,
+                command=command,
+                pr_number=pr_number,
+                error=str(e),
+                additional_context={
+                    "error_type": "permission_error",
+                },
+            )
+
             return False
         except Exception as e:
             logger.error(f"Unexpected error checking permissions: {e}")
+
+            # Log unexpected permission check error
+            self._log_audit(
+                event_type="permission_check_error",
+                username=username,
+                command=command,
+                pr_number=pr_number,
+                error=str(e),
+                additional_context={
+                    "error_type": "unexpected_error",
+                },
+            )
+
             # Fail open for read operations, fail closed for write operations
             return command.type not in ["merge", "resolve"]
 
@@ -425,6 +612,17 @@ class CommandExecutor:
                 if potential_method in ("merge", "squash", "rebase"):
                     merge_method = potential_method
 
+            # Log merge attempt with context
+            self._log_audit(
+                event_type="merge_attempt",
+                username=username,
+                command=command,
+                pr_number=pr_number,
+                additional_context={
+                    "merge_method": merge_method,
+                },
+            )
+
             # Execute the merge using GHClient
             await self.gh_client.pr_merge(
                 pr_number=pr_number,
@@ -433,7 +631,7 @@ class CommandExecutor:
 
             logger.info(f"Successfully merged PR #{pr_number} using {merge_method} method")
 
-            return CommandResult(
+            result = CommandResult(
                 success=True,
                 command_type="merge",
                 message=f"✓ Merged PR #{pr_number} using {merge_method} merge",
@@ -444,26 +642,46 @@ class CommandExecutor:
                 },
             )
 
+            # Log successful merge
+            self._log_audit(
+                event_type="merge_success",
+                username=username,
+                command=command,
+                pr_number=pr_number,
+                result=result,
+                additional_context={
+                    "merge_method": merge_method,
+                },
+            )
+
+            return result
+
         except GHCommandError as e:
             error_msg = str(e)
 
             # Check for specific merge errors
             if "not mergeable" in error_msg.lower():
                 message = f"✗ PR #{pr_number} is not mergeable (likely has conflicts)"
+                error_type = "not_mergeable"
             elif "merge conflict" in error_msg.lower():
                 message = f"✗ PR #{pr_number} has merge conflicts that must be resolved"
+                error_type = "merge_conflict"
             elif "required status" in error_msg.lower() or "checks" in error_msg.lower():
                 message = f"✗ PR #{pr_number} has failing CI checks that must pass"
+                error_type = "failing_checks"
             elif "approved" in error_msg.lower() or "review" in error_msg.lower():
                 message = f"✗ PR #{pr_number} requires approval before merging"
+                error_type = "approval_required"
             elif "draft" in error_msg.lower():
                 message = f"✗ PR #{pr_number} is in draft state and cannot be merged"
+                error_type = "draft_pr"
             else:
                 message = f"✗ Failed to merge PR #{pr_number}: {error_msg}"
+                error_type = "unknown"
 
             logger.error(f"Merge failed for PR #{pr_number}: {error_msg}")
 
-            return CommandResult(
+            result = CommandResult(
                 success=False,
                 command_type="merge",
                 message=message,
@@ -471,17 +689,48 @@ class CommandExecutor:
                 data={"pr_number": pr_number, "merge_method": merge_method},
             )
 
+            # Log merge failure with context
+            self._log_audit(
+                event_type="merge_failure",
+                username=username,
+                command=command,
+                pr_number=pr_number,
+                result=result,
+                error=error_msg,
+                additional_context={
+                    "merge_method": merge_method,
+                    "error_type": error_type,
+                },
+            )
+
+            return result
+
         except Exception as e:
             error_msg = str(e)
             logger.error(f"Unexpected error merging PR #{pr_number}: {error_msg}")
 
-            return CommandResult(
+            result = CommandResult(
                 success=False,
                 command_type="merge",
                 message=f"✗ Unexpected error merging PR #{pr_number}",
                 error=error_msg,
                 data={"pr_number": pr_number},
             )
+
+            # Log unexpected merge error
+            self._log_audit(
+                event_type="merge_error",
+                username=username,
+                command=command,
+                pr_number=pr_number,
+                result=result,
+                error=error_msg,
+                additional_context={
+                    "error_type": "unexpected_error",
+                },
+            )
+
+            return result
 
     async def _handle_resolve(
         self,
@@ -517,13 +766,21 @@ class CommandExecutor:
         """
         logger.info(f"Handling resolve command for PR #{pr_number}")
 
+        # Log resolve attempt
+        self._log_audit(
+            event_type="resolve_attempt",
+            username=username,
+            command=command,
+            pr_number=pr_number,
+        )
+
         try:
             # Detect package manager based on project files
             package_manager = await self._detect_package_manager()
 
             if not package_manager:
                 logger.warning(f"No package manager detected in project")
-                return CommandResult(
+                result = CommandResult(
                     success=False,
                     command_type="resolve",
                     message="✗ No package manager detected in project",
@@ -531,12 +788,37 @@ class CommandExecutor:
                     data={"pr_number": pr_number, "detected_manager": None},
                 )
 
+                # Log detection failure
+                self._log_audit(
+                    event_type="resolve_failure",
+                    username=username,
+                    command=command,
+                    pr_number=pr_number,
+                    result=result,
+                    error="No package manager detected",
+                    additional_context={"error_type": "no_package_manager"},
+                )
+
+                return result
+
             logger.info(f"Detected package manager: {package_manager}")
 
             # Run the appropriate install command
             install_command, install_args = self._get_install_command(package_manager)
 
             logger.info(f"Running package install: {install_command} {' '.join(install_args)}")
+
+            # Log package manager detection
+            self._log_audit(
+                event_type="package_manager_detected",
+                username=username,
+                command=command,
+                pr_number=pr_number,
+                additional_context={
+                    "package_manager": package_manager,
+                    "install_command": f"{install_command} {' '.join(install_args)}",
+                },
+            )
 
             # Execute the install command using asyncio
             process = await asyncio.create_subprocess_exec(
@@ -560,7 +842,7 @@ class CommandExecutor:
                     f"Successfully resolved dependencies using {package_manager}"
                 )
 
-                return CommandResult(
+                result = CommandResult(
                     success=True,
                     command_type="resolve",
                     message=f"✓ Resolved dependencies using {package_manager}",
@@ -572,13 +854,28 @@ class CommandExecutor:
                         "resolved_by": username,
                     },
                 )
+
+                # Log successful resolution
+                self._log_audit(
+                    event_type="resolve_success",
+                    username=username,
+                    command=command,
+                    pr_number=pr_number,
+                    result=result,
+                    additional_context={
+                        "package_manager": package_manager,
+                        "returncode": process.returncode,
+                    },
+                )
+
+                return result
             else:
                 error_msg = stderr_str or stdout_str
                 logger.error(
                     f"Package install failed with return code {process.returncode}: {error_msg[:200]}"
                 )
 
-                return CommandResult(
+                result = CommandResult(
                     success=False,
                     command_type="resolve",
                     message=f"✗ Failed to resolve dependencies using {package_manager}",
@@ -591,19 +888,52 @@ class CommandExecutor:
                     },
                 )
 
+                # Log resolution failure
+                self._log_audit(
+                    event_type="resolve_failure",
+                    username=username,
+                    command=command,
+                    pr_number=pr_number,
+                    result=result,
+                    error=error_msg[:500] if error_msg else "Command failed",
+                    additional_context={
+                        "package_manager": package_manager,
+                        "returncode": process.returncode,
+                        "error_type": "install_failed",
+                    },
+                )
+
+                return result
+
         except asyncio.TimeoutError:
             logger.error(f"Package install timed out after 120s")
-            return CommandResult(
+            result = CommandResult(
                 success=False,
                 command_type="resolve",
                 message=f"✗ Package install timed out (120s limit)",
                 error="Package installation exceeded timeout limit",
-                data={"pr_number": pr_number, "package_manager": package_manager},
+                data={"pr_number": pr_number, "package_manager": package_manager if 'package_manager' in locals() else None},
             )
+
+            # Log timeout
+            self._log_audit(
+                event_type="resolve_timeout",
+                username=username,
+                command=command,
+                pr_number=pr_number,
+                result=result,
+                error="Package install timed out",
+                additional_context={
+                    "timeout_seconds": 120,
+                    "package_manager": package_manager if 'package_manager' in locals() else None,
+                },
+            )
+
+            return result
 
         except FileNotFoundError:
             logger.error(f"Package manager executable not found: {install_command}")
-            return CommandResult(
+            result = CommandResult(
                 success=False,
                 command_type="resolve",
                 message=f"✗ Package manager not found: {install_command}",
@@ -611,17 +941,50 @@ class CommandExecutor:
                 data={"pr_number": pr_number, "package_manager": package_manager, "executable": install_command},
             )
 
+            # Log executable not found
+            self._log_audit(
+                event_type="resolve_failure",
+                username=username,
+                command=command,
+                pr_number=pr_number,
+                result=result,
+                error=f"Executable not found: {install_command}",
+                additional_context={
+                    "package_manager": package_manager,
+                    "executable": install_command,
+                    "error_type": "executable_not_found",
+                },
+            )
+
+            return result
+
         except Exception as e:
             error_msg = str(e)
             logger.error(f"Unexpected error resolving dependencies: {error_msg}")
 
-            return CommandResult(
+            result = CommandResult(
                 success=False,
                 command_type="resolve",
                 message=f"✗ Failed to resolve dependencies",
                 error=error_msg[:500],
                 data={"pr_number": pr_number, "package_manager": package_manager if 'package_manager' in locals() else None},
             )
+
+            # Log unexpected error
+            self._log_audit(
+                event_type="resolve_error",
+                username=username,
+                command=command,
+                pr_number=pr_number,
+                result=result,
+                error=error_msg[:500],
+                additional_context={
+                    "error_type": "unexpected_error",
+                    "package_manager": package_manager if 'package_manager' in locals() else None,
+                },
+            )
+
+            return result
 
     async def _detect_package_manager(self) -> str | None:
         """
@@ -753,13 +1116,21 @@ class CommandExecutor:
         """
         logger.info(f"Handling process command for PR #{pr_number}")
 
+        # Log process attempt
+        self._log_audit(
+            event_type="process_attempt",
+            username=username,
+            command=command,
+            pr_number=pr_number,
+        )
+
         try:
             # Fetch inline comments from the PR
             comments = await self.gh_client.get_inline_comments(pr_number)
 
             if not comments:
                 logger.info(f"No inline comments found for PR #{pr_number}")
-                return CommandResult(
+                result = CommandResult(
                     success=True,
                     command_type="process",
                     message=f"✓ No outstanding comments to process on PR #{pr_number}",
@@ -769,6 +1140,22 @@ class CommandExecutor:
                         "processed_by": username,
                     },
                 )
+
+                # Log no comments found
+                self._log_audit(
+                    event_type="process_success",
+                    username=username,
+                    command=command,
+                    pr_number=pr_number,
+                    result=result,
+                    additional_context={
+                        "comment_count": 0,
+                        "files_affected": 0,
+                        "summary_posted": False,
+                    },
+                )
+
+                return result
 
             logger.info(f"Found {len(comments)} inline comments on PR #{pr_number}")
 
@@ -825,7 +1212,7 @@ class CommandExecutor:
                 f"Successfully processed {len(comments)} comments on PR #{pr_number}"
             )
 
-            return CommandResult(
+            result = CommandResult(
                 success=True,
                 command_type="process",
                 message=f"✓ Processed {len(comments)} comment(s) on PR #{pr_number}",
@@ -838,11 +1225,27 @@ class CommandExecutor:
                 },
             )
 
+            # Log successful processing
+            self._log_audit(
+                event_type="process_success",
+                username=username,
+                command=command,
+                pr_number=pr_number,
+                result=result,
+                additional_context={
+                    "comment_count": len(comments),
+                    "files_affected": len(comments_by_file),
+                    "summary_posted": True,
+                },
+            )
+
+            return result
+
         except GHCommandError as e:
             error_msg = str(e)
             logger.error(f"Failed to process comments for PR #{pr_number}: {error_msg}")
 
-            return CommandResult(
+            result = CommandResult(
                 success=False,
                 command_type="process",
                 message=f"✗ Failed to process comments on PR #{pr_number}",
@@ -850,17 +1253,47 @@ class CommandExecutor:
                 data={"pr_number": pr_number, "processed_by": username},
             )
 
+            # Log GitHub API error
+            self._log_audit(
+                event_type="process_failure",
+                username=username,
+                command=command,
+                pr_number=pr_number,
+                result=result,
+                error=error_msg,
+                additional_context={
+                    "error_type": "github_api_error",
+                },
+            )
+
+            return result
+
         except Exception as e:
             error_msg = str(e)
             logger.error(f"Unexpected error processing comments for PR #{pr_number}: {error_msg}")
 
-            return CommandResult(
+            result = CommandResult(
                 success=False,
                 command_type="process",
                 message=f"✗ Unexpected error processing comments on PR #{pr_number}",
                 error=error_msg[:500],
                 data={"pr_number": pr_number, "processed_by": username},
             )
+
+            # Log unexpected error
+            self._log_audit(
+                event_type="process_error",
+                username=username,
+                command=command,
+                pr_number=pr_number,
+                result=result,
+                error=error_msg[:500],
+                additional_context={
+                    "error_type": "unexpected_error",
+                },
+            )
+
+            return result
 
     # =========================================================================
     # Feedback
