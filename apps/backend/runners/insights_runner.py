@@ -143,6 +143,7 @@ async def run_with_sdk(
     history: list,
     model: str = "sonnet",  # Shorthand - resolved via API Profile if configured
     thinking_level: str = "medium",
+    provider: str = "claude",
 ) -> None:
     """Run the chat using Claude SDK with streaming."""
     if not SDK_AVAILABLE:
@@ -359,6 +360,12 @@ def main():
         choices=["none", "low", "medium", "high", "ultrathink"],
         help="Thinking level for extended reasoning (default: medium)",
     )
+    parser.add_argument(
+        "--provider",
+        default="claude",
+        choices=["claude", "litellm", "openrouter"],
+        help="LLM provider to use (default: claude)",
+    )
     args = parser.parse_args()
 
     debug_section("insights_runner", "Starting Insights Chat")
@@ -367,6 +374,7 @@ def main():
     user_message = args.message
     model = args.model
     thinking_level = args.thinking_level
+    provider = args.provider
 
     debug(
         "insights_runner",
@@ -375,6 +383,7 @@ def main():
         message_length=len(user_message),
         model=model,
         thinking_level=thinking_level,
+        provider=provider,
     )
 
     # Load history from file if provided, otherwise parse inline JSON
@@ -401,7 +410,9 @@ def main():
 
     # Run the async SDK function
     debug("insights_runner", "Running SDK query")
-    asyncio.run(run_with_sdk(project_dir, user_message, history, model, thinking_level))
+    asyncio.run(
+        run_with_sdk(project_dir, user_message, history, model, thinking_level, provider)
+    )
     debug_success("insights_runner", "Query completed")
 
 
