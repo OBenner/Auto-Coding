@@ -336,18 +336,73 @@ class CommandExecutor:
         """
         logger.info(f"Handling merge command for PR #{pr_number}")
 
-        # TODO: Implement merge logic
-        # - Get PR data to check mergeability
-        # - Check for merge conflicts
-        # - Execute merge using gh_client.pr_merge()
-        # - Return success/failure result
+        try:
+            # Parse optional merge method from command args
+            # Supported methods: merge, squash, rebase (default: squash)
+            merge_method = "squash"
+            if command.args:
+                # First arg might be the merge method
+                potential_method = command.args[0].lower()
+                if potential_method in ("merge", "squash", "rebase"):
+                    merge_method = potential_method
 
-        return CommandResult(
-            success=True,
-            command_type="merge",
-            message="✓ Merge command executed successfully",
-            data={"pr_number": pr_number},
-        )
+            # Execute the merge using GHClient
+            await self.gh_client.pr_merge(
+                pr_number=pr_number,
+                merge_method=merge_method,
+            )
+
+            logger.info(f"Successfully merged PR #{pr_number} using {merge_method} method")
+
+            return CommandResult(
+                success=True,
+                command_type="merge",
+                message=f"✓ Merged PR #{pr_number} using {merge_method} merge",
+                data={
+                    "pr_number": pr_number,
+                    "merge_method": merge_method,
+                    "merged_by": username,
+                },
+            )
+
+        except GHCommandError as e:
+            error_msg = str(e)
+
+            # Check for specific merge errors
+            if "not mergeable" in error_msg.lower():
+                message = f"✗ PR #{pr_number} is not mergeable (likely has conflicts)"
+            elif "merge conflict" in error_msg.lower():
+                message = f"✗ PR #{pr_number} has merge conflicts that must be resolved"
+            elif "required status" in error_msg.lower() or "checks" in error_msg.lower():
+                message = f"✗ PR #{pr_number} has failing CI checks that must pass"
+            elif "approved" in error_msg.lower() or "review" in error_msg.lower():
+                message = f"✗ PR #{pr_number} requires approval before merging"
+            elif "draft" in error_msg.lower():
+                message = f"✗ PR #{pr_number} is in draft state and cannot be merged"
+            else:
+                message = f"✗ Failed to merge PR #{pr_number}: {error_msg}"
+
+            logger.error(f"Merge failed for PR #{pr_number}: {error_msg}")
+
+            return CommandResult(
+                success=False,
+                command_type="merge",
+                message=message,
+                error=error_msg,
+                data={"pr_number": pr_number, "merge_method": merge_method},
+            )
+
+        except Exception as e:
+            error_msg = str(e)
+            logger.error(f"Unexpected error merging PR #{pr_number}: {error_msg}")
+
+            return CommandResult(
+                success=False,
+                command_type="merge",
+                message=f"✗ Unexpected error merging PR #{pr_number}",
+                error=error_msg,
+                data={"pr_number": pr_number},
+            )
 
     async def _handle_resolve(
         self,
