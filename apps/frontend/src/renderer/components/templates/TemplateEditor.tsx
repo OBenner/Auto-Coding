@@ -107,7 +107,7 @@ export function TemplateEditor({
     if (!formData.name?.trim()) {
       newErrors.name = t('editor.validation.nameRequired');
     } else if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(formData.name)) {
-      newErrors.name = 'Name must be lowercase alphanumeric with hyphens only';
+      newErrors.name = t('editor.validation.invalidNameFormat');
     }
 
     if (!formData.description?.trim()) {
@@ -160,7 +160,7 @@ export function TemplateEditor({
     try {
       await onExport?.();
     } catch (err) {
-      setImportError(err instanceof Error ? err.message : 'Export failed');
+      setImportError(err instanceof Error ? err.message : t('editor.validation.exportFailed'));
     } finally {
       setIsExporting(false);
     }
@@ -449,7 +449,7 @@ export function TemplateEditor({
                 disabled={isTesting || isSaving}
               >
                 <TestTube className="h-4 w-4 mr-2" />
-                {isTesting ? 'Testing...' : t('editor.actions.test')}
+                {isTesting ? t('editor.actions.testing') : t('editor.actions.test')}
               </Button>
             )}
           </div>
@@ -474,7 +474,7 @@ export function TemplateEditor({
                 disabled={isSaving || isTesting}
               >
                 <Save className="h-4 w-4 mr-2" />
-                {isSaving ? 'Saving...' : t('editor.actions.save')}
+                {isSaving ? t('editor.actions.saving') : t('editor.actions.save')}
               </Button>
             )}
           </div>

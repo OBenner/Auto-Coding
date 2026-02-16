@@ -22,7 +22,9 @@
       "descriptionRequired": "La description est requise",
       "categoryRequired": "La catégorie est requise",
       "promptTooShort": "L'invite personnalisée doit contenir au moins 20 caractères",
-      "invalidVersion": "Format de version invalide (utilisez le versionnage sémantique comme 1.0.0)"
+      "invalidVersion": "Format de version invalide (utilisez le versionnage sémantique comme 1.0.0)",
+      "invalidNameFormat": "Le nom doit être en minuscules alphanumériques avec des tirets uniquement",
+      "exportFailed": "L'exportation a échoué"
     },
     "actions": {
       "save": "Enregistrer le modèle",
@@ -31,8 +33,14 @@
       "import": "Importer le modèle",
       "export": "Exporter le modèle",
       "importing": "Importation...",
-      "exporting": "Exportation..."
+      "exporting": "Exportation...",
+      "saving": "Enregistrement...",
+      "testing": "Test en cours..."
     }
+  },
+  "selector": {
+    "noneOption": "Aucun",
+    "useDefaultAgentHint": "(Utiliser l'agent par défaut)"
   },
   "toolSelector": {
     "title": "Configuration des outils",
@@ -124,20 +132,6 @@
     "running": "Test en cours...",
     "testFailed": "Le test du modèle a échoué. Vérifiez la configuration du modèle et réessayez.",
     "testSuccess": "Test réussi ! Le modèle a généré le contenu suivant :"
-  },
-  "preview": {
-    "sections": {
-      "rationale": "Justification",
-      "userStories": "User Stories",
-      "acceptanceCriteria": "Critères d'acceptation",
-      "technicalDetails": "Détails techniques",
-      "testCoverage": "Couverture de tests",
-      "dependencies": "Dépendances"
-    },
-    "empty": {
-      "title": "Aucun contenu de spécification",
-      "description": "Générez une spécification pour voir l'aperçu"
-    }
   },
   "marketplace": {
     "title": "Marketplace des modèles",

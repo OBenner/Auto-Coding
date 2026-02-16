@@ -6,7 +6,7 @@
  * in an organized, accessible interface following the pattern from AgentTools.tsx.
  */
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Checkbox } from '../ui/checkbox';
 import { Label } from '../ui/label';
@@ -174,6 +174,14 @@ export function ToolSelector({
   const [selectedMcpServers, setSelectedMcpServers] = useState<string[]>(
     value?.mcpServers || ['auto-claude']  // Auto-Code MCP always included
   );
+
+  // Sync from value prop
+  useEffect(() => {
+    if (value) {
+      setSelectedTools(value.baseTools);
+      setSelectedMcpServers(value.mcpServers);
+    }
+  }, [value]);
 
   // Group tools by category
   const toolsByCategory = useMemo(() => {

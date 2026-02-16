@@ -47,7 +47,7 @@ def parse_version(version: str) -> VersionPart:
         ValueError: If version string is invalid
     """
     # Semantic versioning pattern: MAJOR.MINOR.PATCH(-PRERELEASE)?(+BUILD)?
-    pattern = r"^(\d+)\.(\d+)\.(\d+)(?:-([a-zA-Z0-9.]+))?(?:\+([a-zA-Z0-9.]+))?$"
+    pattern = r"^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+([0-9A-Za-z.-]+))?$"
     match = re.match(pattern, version)
 
     if not match:
@@ -115,7 +115,7 @@ def compare_versions(v1: str, v2: str) -> int:
                 if p1 != p2:
                     return -1 if p1 < p2 else 1
 
-        # If all equal up to min length, shorter is greater (1.0.0-alpha < 1.0.0-alpha.1)
+        # If all equal up to min length, shorter prerelease has lower precedence (1.0.0-alpha < 1.0.0-alpha.1)
         if len(v1_parts) != len(v2_parts):
             return -1 if len(v1_parts) < len(v2_parts) else 1
 
@@ -140,6 +140,9 @@ def is_newer(current: str, other: str) -> bool:
 def get_next_version(current: str, change_type: str) -> str:
     """
     Calculate next version based on change type.
+
+    Note: Any prerelease or build metadata on the current version is
+    intentionally discarded when computing the next version.
 
     Args:
         current: Current version string

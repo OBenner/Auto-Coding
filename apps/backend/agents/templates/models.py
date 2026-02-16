@@ -12,7 +12,7 @@ AgentTemplate defines the schema for custom agent configurations, including:
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 
@@ -49,8 +49,8 @@ class AgentTemplate:
     mcp_servers: list[str] = field(default_factory=list)
     author: str = ""
     tags: list[str] = field(default_factory=list)
-    created_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())
-    updated_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    created_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
+    updated_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
     thinking_level: str = "medium"
     parameters: dict[str, Any] = field(default_factory=dict)
 
@@ -97,9 +97,6 @@ class AgentTemplate:
         # Validate tools list
         if not isinstance(self.tools, list):
             errors.append("Tools must be a list")
-        elif not self.tools:
-            errors.append("At least one tool must be specified")
-
         # Validate MCP servers list
         if not isinstance(self.mcp_servers, list):
             errors.append("MCP servers must be a list")
@@ -136,7 +133,7 @@ class AgentTemplate:
         import re
 
         # Semantic versioning pattern: MAJOR.MINOR.PATCH (with optional pre-release/build)
-        pattern = r"^\d+\.\d+\.\d+(-[a-zA-Z0-9.]+)?(\+[a-zA-Z0-9.]+)?$"
+        pattern = r"^\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$"
         return bool(re.match(pattern, version))
 
     def to_dict(self) -> dict[str, Any]:
@@ -183,12 +180,12 @@ class AgentTemplate:
             mcp_servers=data.get("mcp_servers", []),
             author=data.get("author", ""),
             tags=data.get("tags", []),
-            created_at=data.get("created_at", datetime.utcnow().isoformat()),
-            updated_at=data.get("updated_at", datetime.utcnow().isoformat()),
+            created_at=data.get("created_at", datetime.now(UTC).isoformat()),
+            updated_at=data.get("updated_at", datetime.now(UTC).isoformat()),
             thinking_level=data.get("thinking_level", "medium"),
             parameters=data.get("parameters", {}),
         )
 
     def update_timestamp(self) -> None:
         """Update the updated_at timestamp to current time."""
-        self.updated_at = datetime.utcnow().isoformat()
+        self.updated_at = datetime.now(UTC).isoformat()
