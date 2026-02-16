@@ -97,6 +97,7 @@
     "lucide-react": "^0.562.0",
     "minimatch": "^10.1.1",
     "motion": "^12.23.26",
+    "@modelcontextprotocol/sdk": "^1.0.4",
     "proper-lockfile": "^4.1.2",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
