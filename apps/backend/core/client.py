@@ -407,15 +407,85 @@ def is_electron_mcp_enabled() -> bool:
     Check if Electron MCP server integration is enabled.
 
     Requires ELECTRON_MCP_ENABLED to be set to 'true'.
-    When enabled, QA agents can use Puppeteer MCP tools to connect to Electron apps
-    via Chrome DevTools Protocol on the configured debug port.
+    When enabled, QA agents can use MCP tools to connect to Electron apps.
     """
     return os.environ.get("ELECTRON_MCP_ENABLED", "").lower() == "true"
 
 
+_VALID_ELECTRON_MCP_MODES: tuple[str, ...] = ("cdp", "embedded")
+_VALID_ELECTRON_MCP_LOG_LEVELS: tuple[str, ...] = ("debug", "info", "warn", "error")
+
+
+def get_electron_mcp_mode() -> str:
+    """
+    Get the Electron MCP server mode.
+
+    Returns:
+        "embedded" - MCP server runs inside Electron process (stdio transport)
+        "cdp" - External CDP-based server (electron-mcp-server package)
+
+    Default: "cdp" for backward compatibility
+    """
+    mode = os.environ.get("ELECTRON_MCP_MODE", "cdp").lower()
+
+    if mode not in _VALID_ELECTRON_MCP_MODES:
+        logger.warning(
+            "Invalid ELECTRON_MCP_MODE '%s'. Valid values: %s. Using default: cdp",
+            mode,
+            ", ".join(_VALID_ELECTRON_MCP_MODES),
+        )
+        return "cdp"
+
+    return mode
+
+
 def get_electron_debug_port() -> int:
-    """Get the Electron remote debugging port (default: 9222)."""
-    return int(os.environ.get("ELECTRON_DEBUG_PORT", "9222"))
+    """
+    Get the Electron remote debugging port (default: 9222).
+
+    Returns:
+        Port number for Chrome DevTools Protocol
+
+    Raises:
+        ValueError: If port is not a valid number or out of range
+    """
+    port_str = os.environ.get("ELECTRON_DEBUG_PORT", "9222")
+
+    try:
+        port = int(port_str)
+    except ValueError:
+        raise ValueError(
+            f"Invalid ELECTRON_DEBUG_PORT: '{port_str}'. Must be a number."
+        )
+
+    if not (1024 <= port <= 65535):
+        raise ValueError(
+            f"Invalid ELECTRON_DEBUG_PORT: {port}. Must be between 1024 and 65535."
+        )
+
+    return port
+
+
+def get_electron_mcp_log_level() -> str:
+    """
+    Get the Electron MCP server log level.
+
+    Returns:
+        Log level: "debug", "info", "warn", or "error"
+
+    Default: "info"
+    """
+    level = os.environ.get("ELECTRON_MCP_LOG_LEVEL", "info").lower()
+
+    if level not in _VALID_ELECTRON_MCP_LOG_LEVELS:
+        logger.warning(
+            "Invalid ELECTRON_MCP_LOG_LEVEL '%s'. Valid values: %s. Using default: info",
+            level,
+            ", ".join(_VALID_ELECTRON_MCP_LOG_LEVELS),
+        )
+        return "info"
+
+    return level
 
 
 def should_use_claude_md() -> bool:
@@ -840,9 +910,9 @@ def create_client(
     if "context7" in required_servers:
         mcp_servers_list.append("context7 (documentation)")
     if "electron" in required_servers:
-        mcp_servers_list.append(
-            f"electron (desktop automation, port {get_electron_debug_port()})"
-        )
+        electron_mode = get_electron_mcp_mode()
+        mode_label = "embedded" if electron_mode == "embedded" else "CDP"
+        mcp_servers_list.append(f"electron (desktop automation, {mode_label} mode)")
     if "puppeteer" in required_servers:
         mcp_servers_list.append("puppeteer (browser automation)")
     if "linear" in required_servers:
@@ -878,11 +948,29 @@ def create_client(
 
     if "electron" in required_servers:
         # Electron MCP for desktop apps
-        # Electron app must be started with --remote-debugging-port=<port>
-        mcp_servers["electron"] = {
-            "command": "npm",
-            "args": ["exec", "electron-mcp-server"],
-        }
+        # Two modes supported:
+        # 1. CDP mode (default): Uses external electron-mcp-server package
+        # 2. Embedded mode: Spawns Electron app with MCP server inside
+        electron_mode = get_electron_mcp_mode()
+
+        if electron_mode == "embedded":
+            # Embedded mode: MCP server runs inside Electron process
+            # Electron app starts with MCP server enabled, communicates via stdio
+            mcp_servers["electron"] = {
+                "command": "npm",
+                "args": ["start"],
+                "env": {
+                    "ELECTRON_MCP_ENABLED": "true",
+                    "ELECTRON_MCP_LOG_LEVEL": get_electron_mcp_log_level(),
+                },
+            }
+        else:
+            # CDP mode: External electron-mcp-server package
+            # Electron app must be started with --remote-debugging-port=<port>
+            mcp_servers["electron"] = {
+                "command": "npm",
+                "args": ["exec", "electron-mcp-server"],
+            }
 
     if "puppeteer" in required_servers:
         # Puppeteer for web frontends (not Electron)
