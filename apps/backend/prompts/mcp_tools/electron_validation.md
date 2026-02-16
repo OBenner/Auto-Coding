@@ -1,11 +1,14 @@
 ## ELECTRON APP VALIDATION
 
-For Electron/desktop applications, use the electron-mcp-server tools to validate the UI.
+For Electron/desktop applications, use the Electron MCP tools to validate the UI.
 
 **Prerequisites:**
 - `ELECTRON_MCP_ENABLED=true` in environment
-- Electron app running with `--remote-debugging-port=9222`
-- Start with: `pnpm run dev:mcp` or `pnpm run start:mcp`
+- Two modes supported:
+  - **CDP mode** (default): Electron app running with `--remote-debugging-port=9222`
+  - **Embedded mode** (recommended): Backend spawns Electron app with MCP server inside
+- For CDP mode, start with: `pnpm run dev:mcp` or `pnpm run start:mcp`
+- For embedded mode, ensure Electron app is built: `pnpm run build`
 
 ### Available Tools
 
