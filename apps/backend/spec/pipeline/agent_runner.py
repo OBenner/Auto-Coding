@@ -25,6 +25,20 @@ from task_logger import (
 # By deferring the import, we break the circular dependency.
 
 
+# Map prompt files to agent types for correct tool permissions
+PROMPT_TO_AGENT_TYPE = {
+    "spec_critic.md": "spec_critic",
+    "spec_discovery.md": "spec_discovery",
+    "spec_requirements.md": "spec_requirements",
+    "spec_context.md": "spec_context",
+    "spec_writing.md": "spec_writing",
+    "spec_planning.md": "spec_planning",
+    "spec_validation.md": "spec_validation",
+    "spec_research.md": "spec_research",
+    "spec_compaction.md": "spec_compaction",
+}
+
+
 class AgentRunner:
     """Manages agent execution with logging and error handling."""
 
@@ -122,10 +136,21 @@ class AgentRunner:
         # Lazy import to avoid circular import with core.client
         from core.client import create_client
 
+        # Determine agent type from prompt file for correct tool permissions
+        # This ensures spec_critic gets access to actor-critic-thinking tool
+        agent_type = PROMPT_TO_AGENT_TYPE.get(prompt_file, "coder")
+        debug_detailed(
+            "agent_runner",
+            "Determined agent type from prompt file",
+            prompt_file=prompt_file,
+            agent_type=agent_type,
+        )
+
         client = create_client(
             self.project_dir,
             self.spec_dir,
             self.model,
+            agent_type=agent_type,
             max_thinking_tokens=thinking_budget,
         )
 

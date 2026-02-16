@@ -486,6 +486,14 @@ def get_required_mcp_servers(
     if "graphiti" in servers and not os.environ.get("GRAPHITI_MCP_URL"):
         servers = [s for s in servers if s != "graphiti"]
 
+    # Handle actor-critic-thinking for agents that have it enabled
+    # This is a special marker in agent configs that adds the server when enabled
+    # Unlike "linear" which is in mcp_servers_optional list, this is a boolean flag
+    if config.get("actor-critic-thinking", False):
+        from core.client import is_actor_critic_mcp_enabled
+        if is_actor_critic_mcp_enabled():
+            servers.append("actor-critic-thinking")
+
     # ========== Apply per-agent MCP overrides ==========
     # Format: AGENT_MCP_<agent_type>_ADD=server1,server2
     #         AGENT_MCP_<agent_type>_REMOVE=server1,server2
