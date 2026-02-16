@@ -160,6 +160,7 @@ AGENT_CONFIGS = {
         "mcp_servers": [],  # Self-critique, no external tools
         "auto_claude_tools": [],
         "thinking_default": "ultrathink",
+        "actor-critic-thinking": True,
     },
     "spec_discovery": {
         "tools": BASE_READ_TOOLS + WEB_TOOLS,
