@@ -19,6 +19,7 @@
  */
 
 import { ElectronMCPServer } from './mcp-server.js';
+import { getMCPLogLevel } from './mcp-manager.js';
 
 // ============================================================================
 // Constants
@@ -42,24 +43,13 @@ let cachedLogLevel: string | null = null;
 
 /**
  * Get log level from environment or default.
- * Caches the result to avoid repeated env reads and recursive log() calls.
+ * Delegates validation to getMCPLogLevel (from mcp-manager) and caches the result.
  */
 function getLogLevel(): string {
   if (cachedLogLevel !== null) {
     return cachedLogLevel;
   }
-
-  const level = process.env.ELECTRON_MCP_LOG_LEVEL;
-  const validLevels = ['debug', 'info', 'warn', 'error'];
-
-  if (level && !validLevels.includes(level.toLowerCase())) {
-    // Use console.warn directly to avoid recursive log() call
-    console.warn(`${LOG_PREFIX} Invalid log level: "${level}". Valid values: ${validLevels.join(', ')}. Using default: ${DEFAULT_LOG_LEVEL}`);
-    cachedLogLevel = DEFAULT_LOG_LEVEL;
-    return DEFAULT_LOG_LEVEL;
-  }
-
-  cachedLogLevel = level || DEFAULT_LOG_LEVEL;
+  cachedLogLevel = getMCPLogLevel();
   return cachedLogLevel;
 }
 
@@ -107,15 +97,21 @@ function log(level: string, message: string, ...args: any[]): void {
 }
 
 /**
+ * Log error stack trace when debug logging is enabled.
+ * Centralized to avoid duplicating the debug-level check.
+ */
+function logDebugStack(error: Error): void {
+  if (getLogLevel() === 'debug') {
+    console.error(error.stack);
+  }
+}
+
+/**
  * Handle uncaught errors
  */
 function handleError(error: Error): void {
   log('error', 'Fatal error:', error.message);
-
-  if (getLogLevel() === 'debug') {
-    console.error(error.stack);
-  }
-
+  logDebugStack(error);
   process.exit(1);
 }
 
@@ -209,17 +205,15 @@ async function main(): Promise<void> {
 
 process.on('uncaughtException', (error: Error) => {
   log('error', 'Uncaught exception:', error.message);
-  if (getLogLevel() === 'debug') {
-    console.error(error.stack);
-  }
+  logDebugStack(error);
   process.exit(1);
 });
 
 process.on('unhandledRejection', (reason: unknown) => {
   const message = reason instanceof Error ? reason.message : String(reason);
   log('error', 'Unhandled promise rejection:', message);
-  if (reason instanceof Error && getLogLevel() === 'debug') {
-    console.error(reason.stack);
+  if (reason instanceof Error) {
+    logDebugStack(reason);
   }
   process.exit(1);
 });

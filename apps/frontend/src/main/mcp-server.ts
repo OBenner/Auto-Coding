@@ -385,6 +385,18 @@ function sanitizeError(error: unknown): string {
   return 'Unknown error';
 }
 
+/**
+ * Create a standardized error result for MCP tool responses.
+ * Centralizes error formatting to avoid duplication across tool handlers.
+ */
+function toolErrorResult(error: unknown, extraFields?: Record<string, unknown>): CallToolResult {
+  const payload = { ...extraFields, error: sanitizeError(error) };
+  return {
+    content: [{ type: 'text', text: JSON.stringify(payload) }],
+    isError: true
+  };
+}
+
 // ============================================================================
 // Blocked eval patterns
 // ============================================================================
@@ -534,13 +546,7 @@ export class ElectronMCPServer {
         }]
       };
     } catch (error) {
-      return {
-        content: [{
-          type: 'text',
-          text: JSON.stringify({ error: sanitizeError(error) })
-        }],
-        isError: true
-      };
+      return toolErrorResult(error);
     }
   }
 
@@ -597,13 +603,7 @@ export class ElectronMCPServer {
         }]
       };
     } catch (error) {
-      return {
-        content: [{
-          type: 'text',
-          text: JSON.stringify({ error: sanitizeError(error) })
-        }],
-        isError: true
-      };
+      return toolErrorResult(error);
     }
   }
 
@@ -641,16 +641,7 @@ export class ElectronMCPServer {
         }]
       };
     } catch (error) {
-      return {
-        content: [{
-          type: 'text',
-          text: JSON.stringify({
-            success: false,
-            error: sanitizeError(error)
-          })
-        }],
-        isError: true
-      };
+      return toolErrorResult(error, { success: false });
     }
   }
 
@@ -682,13 +673,7 @@ export class ElectronMCPServer {
         }]
       };
     } catch (error) {
-      return {
-        content: [{
-          type: 'text',
-          text: JSON.stringify({ error: sanitizeError(error) })
-        }],
-        isError: true
-      };
+      return toolErrorResult(error);
     }
   }
 

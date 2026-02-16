@@ -48,6 +48,33 @@ class LLMInteractionTester:
         self.verbose = os.getenv("VERBOSE", "false").lower() == "true"
         self.model_id = os.getenv("LLM_TEST_MODEL_ID", DEFAULT_TEST_MODEL_ID)
 
+    def _create_test_client(self):
+        """Create a Claude SDK client configured for QA testing."""
+        return create_client(
+            project_dir=self.project_dir,
+            spec_dir=self.spec_dir,
+            agent_type="qa_reviewer",
+            model=self.model_id,
+        )
+
+    def _log_verbose_traceback(self):
+        """Print traceback if verbose mode is enabled."""
+        if self.verbose:
+            import traceback
+
+            traceback.print_exc()
+
+    def _record_failure(self, test_name: str, error: Exception) -> None:
+        """Log error, print traceback if verbose, and record test failure."""
+        self.log(f"  {test_name} failed: {error}", "error")
+        self._log_verbose_traceback()
+        self.test_results.append((test_name, False, str(error)))
+
+    @staticmethod
+    def _extract_response_text(response) -> str:
+        """Extract lowercased text content from an agent response."""
+        return str(response.content).lower() if hasattr(response, "content") else ""
+
     def log(self, message: str, level: str = "info"):
         """Log message with level"""
         if level == "error":
@@ -99,12 +126,7 @@ class LLMInteractionTester:
 
         try:
             self.log("Creating Claude SDK client...", "info")
-            client = create_client(
-                project_dir=self.project_dir,
-                spec_dir=self.spec_dir,
-                agent_type="qa_reviewer",
-                model=self.model_id,
-            )
+            client = self._create_test_client()
 
             self.log("Calling list_tools()...", "info")
             tools = client.list_tools()
@@ -172,12 +194,7 @@ class LLMInteractionTester:
             return True
 
         except Exception as e:
-            self.log(f"\n  Test failed with error: {e}", "error")
-            if self.verbose:
-                import traceback
-
-                traceback.print_exc()
-            self.test_results.append(("test_1_tool_discovery", False, str(e)))
+            self._record_failure("test_1_tool_discovery", e)
             return False
 
     def test_2_single_tool_invocation(self) -> bool:
@@ -208,12 +225,7 @@ class LLMInteractionTester:
             print(f"  Task: {test_case['task']}")
 
             try:
-                client = create_client(
-                    project_dir=self.project_dir,
-                    spec_dir=self.spec_dir,
-                    agent_type="qa_reviewer",
-                    model=self.model_id,
-                )
+                client = self._create_test_client()
 
                 start_time = time.time()
                 response = client.create_agent_session(
@@ -222,11 +234,7 @@ class LLMInteractionTester:
                 duration = time.time() - start_time
 
                 # Check if response contains expected content
-                response_text = (
-                    str(response.content).lower()
-                    if hasattr(response, "content")
-                    else ""
-                )
+                response_text = self._extract_response_text(response)
 
                 # Check for expected keywords
                 keywords_found = [
@@ -290,12 +298,7 @@ class LLMInteractionTester:
         print(f"\n  Task: {task}")
 
         try:
-            client = create_client(
-                project_dir=self.project_dir,
-                spec_dir=self.spec_dir,
-                agent_type="qa_reviewer",
-                model=self.model_id,
-            )
+            client = self._create_test_client()
 
             print("  Running multi-step workflow...")
             start_time = time.time()
@@ -349,12 +352,7 @@ class LLMInteractionTester:
                 return True  # Still pass as long as it completed
 
         except Exception as e:
-            self.log(f"  Multi-step workflow failed: {e}", "error")
-            if self.verbose:
-                import traceback
-
-                traceback.print_exc()
-            self.test_results.append(("test_3_multi_step_workflow", False, str(e)))
+            self._record_failure("test_3_multi_step_workflow", e)
             return False
 
     def test_4_error_handling(self) -> bool:
@@ -384,12 +382,7 @@ class LLMInteractionTester:
             print(f"  Task: {test_case['task']}")
 
             try:
-                client = create_client(
-                    project_dir=self.project_dir,
-                    spec_dir=self.spec_dir,
-                    agent_type="qa_reviewer",
-                    model=self.model_id,
-                )
+                client = self._create_test_client()
 
                 start_time = time.time()
                 response = client.create_agent_session(
@@ -397,11 +390,7 @@ class LLMInteractionTester:
                 )
                 duration = time.time() - start_time
 
-                response_text = (
-                    str(response.content).lower()
-                    if hasattr(response, "content")
-                    else ""
-                )
+                response_text = self._extract_response_text(response)
 
                 # Check if agent handled the error gracefully
                 error_indicators = ["error", "invalid", "not found", "failed", "cannot"]
@@ -466,12 +455,7 @@ class LLMInteractionTester:
             print(f"  Target: < {target_ms}ms")
 
             try:
-                client = create_client(
-                    project_dir=self.project_dir,
-                    spec_dir=self.spec_dir,
-                    agent_type="qa_reviewer",
-                    model=self.model_id,
-                )
+                client = self._create_test_client()
 
                 start_time = time.time()
                 client.create_agent_session(
@@ -533,12 +517,7 @@ class LLMInteractionTester:
             try:
                 test_method()
             except Exception as e:
-                self.log(f"\nTest {test_name} crashed: {e}", "error")
-                if self.verbose:
-                    import traceback
-
-                    traceback.print_exc()
-                self.test_results.append((test_name, False, f"Crashed: {e}"))
+                self._record_failure(test_name, e)
 
         # Calculate results
         total = len(self.test_results)
