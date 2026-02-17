@@ -623,7 +623,14 @@ export const IPC_CHANNELS = {
   TEMPLATE_PREVIEW: 'template:preview',
   TEMPLATE_CREATE_SPEC: 'template:createSpec',
   TEMPLATE_SUGGEST: 'template:suggest',
-
+  // Custom template operations (user-created)
+  TEMPLATE_CUSTOM_LIST: 'template:custom:list',
+  TEMPLATE_CUSTOM_SAVE: 'template:custom:save',
+  TEMPLATE_CUSTOM_UPDATE: 'template:custom:update',
+  TEMPLATE_CUSTOM_DELETE: 'template:custom:delete',
+  TEMPLATE_CUSTOM_EXPORT: 'template:custom:export',
+  TEMPLATE_CUSTOM_IMPORT: 'template:custom:import',
+  TEMPLATE_CUSTOM_TEST: 'template:custom:test',
   // Session Replay operations
   SESSION_REPLAY_LIST: 'sessionReplay:list',
   SESSION_REPLAY_GET_SESSION: 'sessionReplay:getSession',

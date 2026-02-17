@@ -934,6 +934,14 @@ export interface ElectronAPI {
     specId?: string
   ) => Promise<IPCResult<{ specId: string; specPath: string }>>;
   suggestTemplates: (projectId: string, taskDescription: string) => Promise<IPCResult<string[]>>;
+  // Custom agent template operations (user-created templates)
+  listCustomTemplates: () => Promise<IPCResult<import('./template').CustomTemplate[]>>;
+  saveCustomTemplate: (template: Omit<import('./template').CustomTemplate, 'id' | 'createdAt' | 'updatedAt'>) => Promise<IPCResult<import('./template').CustomTemplate & { validationErrors?: string[] }>>;
+  updateCustomTemplate: (template: import('./template').CustomTemplate) => Promise<IPCResult<import('./template').CustomTemplate & { validationErrors?: string[] }>>;
+  deleteCustomTemplate: (templateId: string) => Promise<IPCResult>;
+  exportCustomTemplate: (templateId: string) => Promise<IPCResult<string>>; // Returns JSON string
+  importCustomTemplate: (jsonData: string) => Promise<IPCResult<import('./template').CustomTemplate & { validationErrors?: string[] }>>;
+  testCustomTemplate: (templateId: string, testInput: string) => Promise<IPCResult<GeneratedSpec>>;
 
   // Feedback submission (adaptive agent learning)
   submitFeedback?: (request: {
