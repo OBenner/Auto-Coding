@@ -97,7 +97,7 @@ OpenAI integration with custom orchestration, security wrapper, and MCP client.
 | Variable | Description | Example | Default |
 |----------|-------------|---------|---------|
 | `OPENAI_MODEL` | Model identifier | `gpt-5.2` | `gpt-5.2` |
-| `OPENAI_API_BASE` | Custom API base URL | `https://api.openai.com/v1` | `https://api.openai.com/v1` |
+| `OPENAI_BASE_URL` | Custom API base URL | `https://api.openai.com/v1` | `https://api.openai.com/v1` |
 | `OPENAI_CUSTOM_MCP_ENABLED` | Enable custom MCP client | `true`/`false` | `true` |
 | `OPENAI_SECURITY_WRAPPER_ENABLED` | Enable security wrapper | `true`/`false` | `true` |
 
@@ -107,7 +107,7 @@ OpenAI integration with custom orchestration, security wrapper, and MCP client.
 |--------------|-------------------|----------|
 | `gpt-5.2` | Claude Sonnet 4.5 | Complex reasoning, code generation |
 | `gpt-5` | Claude Haiku | Cost optimization, quick tasks |
-| `gpt-5.2-turbo` | Claude Sonnet 4.5 | Fast complex reasoning |
+| `gpt-5-turbo` | Claude Sonnet 4.5 | Fast complex reasoning |
 
 #### Configuration Example
 
@@ -691,7 +691,7 @@ Complete list of all environment variables:
 |----------|------|---------|-------------|
 | `OPENAI_API_KEY` | string | (required) | OpenAI API key |
 | `OPENAI_MODEL` | string | `gpt-5.2` | Default model |
-| `OPENAI_API_BASE` | string | `https://api.openai.com/v1` | API base URL |
+| `OPENAI_BASE_URL` | string | `https://api.openai.com/v1` | API base URL |
 | `OPENAI_CUSTOM_MCP_ENABLED` | boolean | `true` | Enable custom MCP client |
 | `OPENAI_SECURITY_WRAPPER_ENABLED` | boolean | `true` | Enable security wrapper |
 

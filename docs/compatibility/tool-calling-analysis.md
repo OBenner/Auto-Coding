@@ -626,7 +626,7 @@ class ToolSchemaTranslator:
 |---------|--------|--------|------------|
 | OneOf/AnyOf/AllOf | ✓ | Limited | Test per-provider, remove if unsupported |
 | Complex validation | ✓ | Limited | Simplify to basic types |
- | Extended thinking | ✓ | ✗ | Fallback to prompt engineering |
+| Extended thinking | ✓ | ✗ | Fallback to prompt engineering |
 | Tool permissions | ✓ | ✗ | Implement custom layer |
 | Pre/post hooks | ✓ | ✗ | Implement wrapper layer |
 

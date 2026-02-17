@@ -333,6 +333,7 @@ sed -i 's/^AI_ENGINE_PROVIDER=.*/AI_ENGINE_PROVIDER=claude/' apps/backend/.env
 ```
 
 **Verify rollback:**
+
 ```bash
 python apps/backend/run.py --validate-config
 python apps/backend/run.py --show-config
@@ -392,6 +393,7 @@ After any rollback:
 **Cause:** OpenAI provider implementation not yet installed.
 
 **Solution:**
+
 ```bash
 # Verify OpenAI provider module exists
 ls apps/backend/core/providers/
@@ -405,6 +407,7 @@ ls apps/backend/core/providers/
 **Cause:** `OPENAI_API_KEY` not set in environment or `.env` file.
 
 **Solution:**
+
 ```bash
 # Add to .env file
 echo "OPENAI_API_KEY=sk-proj-your-key-here" >> apps/backend/.env
@@ -418,6 +421,7 @@ python -c "import os; print(os.getenv('OPENAI_API_KEY', 'NOT SET')[:10])"
 **Cause:** Code requests extended thinking from OpenAI provider, which doesn't support it.
 
 **Solution:**
+
 ```bash
 # Option 1: Switch back to Claude for this task
 AI_ENGINE_PROVIDER=claude python apps/backend/run.py --spec <id>
@@ -433,6 +437,7 @@ CODER_PROVIDER=openai      # Coder doesn't need extended thinking
 **Cause:** Custom MCP client for OpenAI not yet implemented or not enabled.
 
 **Solution:**
+
 ```bash
 # Verify custom MCP is enabled
 grep OPENAI_CUSTOM_MCP_ENABLED apps/backend/.env
@@ -449,6 +454,7 @@ AI_ENGINE_PROVIDER=claude python apps/backend/run.py --spec <id>
 **Cause:** Security wrapper not enabled for OpenAI provider.
 
 **Solution:**
+
 ```bash
 # Enable security wrapper (required for OpenAI provider in production)
 echo "OPENAI_SECURITY_WRAPPER_ENABLED=true" >> apps/backend/.env
@@ -462,7 +468,9 @@ apps/backend/.venv/bin/pytest tests/unit/security/test_security_wrapper.py -v
 **Cause:** Sessions are provider-specific and cannot be transferred.
 
 **Solution:**
+
 Sessions are intentionally provider-scoped. To switch providers, start a new spec run:
+
 ```bash
 # Run with OpenAI
 AI_ENGINE_PROVIDER=openai python apps/backend/run.py --spec <id>

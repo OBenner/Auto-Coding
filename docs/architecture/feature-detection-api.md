@@ -518,6 +518,7 @@ require_feature(provider, ProviderFeature.MCP_SERVERS)
 4. **Lazy evaluation** - Only check features when actually needed
 
 Example:
+
 ```python
 # ❌ BAD: Checks feature in loop
 for i in range(100):

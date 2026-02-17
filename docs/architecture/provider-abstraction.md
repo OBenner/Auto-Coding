@@ -257,14 +257,14 @@ class ClaudeAgentProvider(AIEngineProvider):
         client = create_client(
             project_dir=project_dir,
             spec_dir=spec_dir,
-            model=model,
+            model=config.model,
             agent_type=agent_type,
             max_thinking_tokens=max_thinking_tokens,
             output_format=output_format,
             agents=agents,
         )
 
-        return ClaudeAgentSession(session_id, client, project_dir, spec_dir)
+        return ClaudeAgentSession(config.name, client, project_dir, spec_dir)
 ```
 
 **Key characteristics:**

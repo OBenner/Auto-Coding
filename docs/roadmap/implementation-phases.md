@@ -15,7 +15,7 @@ The implementation is organized into **7 phases** that progress from foundationa
 
 ## Phase Dependencies
 
-```
+```text
 Phase 1 (Provider Abstraction) ────────┐
 Phase 2 (Compatibility Analysis) ─────┤
 Phase 3 (MCP Integration Design) ─────┤
@@ -350,7 +350,7 @@ Create comprehensive implementation roadmap, testing strategy, and migration gui
 
 ### Parallel Execution Group Summary
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │ Group A: Parallel Design Phases (3-5 workers recommended)  │
 ├─────────────────────────────────────────────────────────────┤

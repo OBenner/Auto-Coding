@@ -516,6 +516,7 @@ def validate_required_features(
 ```
 
 **Usage:**
+
 ```python
 validate_required_features(
     provider,
@@ -818,7 +819,7 @@ def run_task_with_warnings(provider: AIEngineProvider) -> None:
 
 ### Decision Tree
 
-```
+```text
 User wants to run a task
     │
     ├─→ Does task require extended thinking?
@@ -898,7 +899,7 @@ User wants to run a task
 
 #### Message 1: Provider Selection Hint
 
-```
+```text
 🤖 Auto-Code Provider Recommendation
 
 Task "spec-creation" requires:
@@ -923,7 +924,7 @@ Your choice: [1/2/3]
 
 #### Message 2: Feature Unavailable Warning
 
-```
+```text
 ⚠️  Feature Unavailable Warning
 
 Provider 'OpenAI' does not support MCP servers.
@@ -1039,7 +1040,7 @@ def test_required_feature_error():
 
 Include in user documentation:
 
-```
+```text
 # Provider Comparison
 
 | Feature | Claude | OpenAI | Notes |
@@ -1063,7 +1064,7 @@ Include in user documentation:
 
 ### Feature Availability by Agent
 
-```
+```text
 # Agent Feature Requirements
 
 | Agent | Extended Thinking | MCP Servers | Native Security | Recommended Provider |

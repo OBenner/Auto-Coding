@@ -227,7 +227,7 @@ interface OpenAIProviderConfig {
 - Masked in UI after entry
 
 **Connection Testing:**
-- Calls `POST /v1/models` to verify API key
+- Calls `GET /v1/models` to verify API key
 - Updates ConnectionStatus component with result
 - Shows error message for auth failures
 - Displays model list on success

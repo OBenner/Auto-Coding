@@ -62,7 +62,8 @@ class OpenAIProviderSession(AgentSession):
         self._messages.append({"role": "user", "content": message})
 
         # Send entire conversation history
-        response = await openai.ChatCompletion.acreate(
+        client = AsyncOpenAI()
+        response = await client.chat.completions.create(
             model=self._model,
             messages=self._messages,  # Full history required
             stream=True

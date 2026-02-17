@@ -15,7 +15,7 @@ The OpenAI adapter consists of two main classes:
 
 ### Class Hierarchy
 
-```
+```text
 AIEngineProvider (abstract base)
 └── OpenAIProvider
     └── Creates: OpenAISession instances
@@ -431,7 +431,7 @@ except Exception as e:
 
 The OpenAI adapter requires the following package:
 
-```
+```text
 openai>=1.0.0
 ```
 

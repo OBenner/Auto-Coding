@@ -202,7 +202,7 @@ AGENT_CONFIGS = {
 
 ### Architecture Diagram
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                        Agent Layer                               │
 │  (agents/planner.py, agents/coder.py, agents/qa_reviewer.py)     │
@@ -268,7 +268,7 @@ from security import (
 from agents.tools_pkg import get_allowed_tools
 
 
-class OpenAI SecurityWrapper:
+class OpenAISecurityWrapper:
     """
     Wraps OpenAI client with security validation.
 
@@ -475,7 +475,7 @@ Wraps OpenAI SDK with security validation layer.
 
 from openai import AsyncOpenAI
 
-from .security_wrapper import OpenAI SecurityWrapper
+from .security_wrapper import OpenAISecurityWrapper
 
 
 class OpenAIProvider:
@@ -512,7 +512,7 @@ class OpenAIProvider:
         self.spec_dir = spec_dir
 
         # Initialize security wrapper
-        self.security = OpenAI SecurityWrapper(
+        self.security = OpenAISecurityWrapper(
             project_dir=project_dir,
             spec_dir=spec_dir,
             agent_type=agent_type,
@@ -624,7 +624,7 @@ class OpenAIProvider:
 
 ### Security Wrapper API
 
-#### `OpenAI SecurityWrapper.validate_function_call()`
+#### `OpenAISecurityWrapper.validate_function_call()`
 
 **Purpose**: Pre-execution validation for all function calls
 
@@ -639,7 +639,7 @@ class OpenAIProvider:
 - `get_security_profile()` from `security/profile.py`
 - `get_allowed_tools()` from `agents/tools_pkg/models.py`
 
-#### `OpenAI SecurityWrapper._validate_file_operation()`
+#### `OpenAISecurityWrapper._validate_file_operation()`
 
 **Purpose**: Enforce file permissions
 
@@ -654,7 +654,7 @@ class OpenAIProvider:
 
 **Replica of**: Claude SDK's `permissions.allow` configuration
 
-#### `OpenAI SecurityWrapper._validate_bash_command()`
+#### `OpenAISecurityWrapper._validate_bash_command()`
 
 **Purpose**: Validate bash commands against allowlist
 
@@ -668,7 +668,7 @@ class OpenAIProvider:
 
 **This is the key integration point** - the wrapper bridges OpenAI's function calling to Auto Code's existing security system.
 
-#### `OpenAI SecurityWrapper.filter_function_definitions()`
+#### `OpenAISecurityWrapper.filter_function_definitions()`
 
 **Purpose**: Filter tools at API call time
 
@@ -695,6 +695,7 @@ The wrapper **reuses** existing security components:
 ### 2. Client Factory (`core/client.py`)
 
 **Current code** (Claude-only):
+
 ```python
 def create_client(
     project_dir: Path,
@@ -708,6 +709,7 @@ def create_client(
 ```
 
 **Enhanced code** (Multi-provider):
+
 ```python
 def create_client(
     project_dir: Path,
@@ -816,7 +818,7 @@ response = await client.create_agent_session(...)
 
 **Tasks**:
 1. Create `core/providers/openai/security_wrapper.py`
-2. Implement `OpenAI SecurityWrapper` class
+2. Implement `OpenAISecurityWrapper` class
 3. Implement `_validate_file_operation()`
 4. Implement `_validate_bash_command()` (reusing `bash_security_hook`)
 5. Implement `filter_function_definitions()`
@@ -870,7 +872,7 @@ response = await client.create_agent_session(...)
 
 async def test_file_permission_validation():
     """Test file path validation"""
-    wrapper = OpenAI SecurityWrapper(project_dir, spec_dir)
+    wrapper = OpenAISecurityWrapper(project_dir, spec_dir)
 
     # Should allow: project directory
     is_allowed, _ = wrapper._validate_file_operation(
@@ -890,7 +892,7 @@ async def test_file_permission_validation():
 
 async def test_bash_command_validation():
     """Test bash command validation via security hook"""
-    wrapper = OpenAI SecurityWrapper(project_dir, spec_dir)
+    wrapper = OpenAISecurityWrapper(project_dir, spec_dir)
 
     # Should allow: base command (ls)
     is_allowed, _ = await wrapper._validate_bash_command(
@@ -907,7 +909,7 @@ async def test_bash_command_validation():
 
 async def test_tool_filtering():
     """Test function definition filtering"""
-    wrapper = OpenAI SecurityWrapper(project_dir, spec_dir, agent_type="coder")
+    wrapper = OpenAISecurityWrapper(project_dir, spec_dir, agent_type="coder")
 
     all_functions = [
         {"name": "Read", ...},
@@ -974,7 +976,7 @@ async def test_openai_provider_allows_allowed_commands():
 
 async def test_cannot_escape_project_directory():
     """Test that file operations cannot escape project directory"""
-    wrapper = OpenAI SecurityWrapper(project_dir, spec_dir)
+    wrapper = OpenAISecurityWrapper(project_dir, spec_dir)
 
     # Try to read file outside project
     is_allowed, _ = wrapper._validate_file_operation(
@@ -986,7 +988,7 @@ async def test_cannot_escape_project_directory():
 
 async def test_cannot_execute_disallowed_commands():
     """Test that disallowed commands are blocked"""
-    wrapper = OpenAI SecurityWrapper(project_dir, spec_dir)
+    wrapper = OpenAISecurityWrapper(project_dir, spec_dir)
 
     # Try to execute disallowed command (assuming stack doesn't include docker)
     is_allowed, _ = await wrapper._validate_bash_command(
@@ -997,8 +999,8 @@ async def test_cannot_execute_disallowed_commands():
 
 async def test_agent_type_tool_filtering():
     """Test that agent types only see their allowed tools"""
-    coder_wrapper = OpenAI SecurityWrapper(project_dir, spec_dir, agent_type="coder")
-    qa_wrapper = OpenAI SecurityWrapper(project_dir, spec_dir, agent_type="qa_reviewer")
+    coder_wrapper = OpenAISecurityWrapper(project_dir, spec_dir, agent_type="coder")
+    qa_wrapper = OpenAISecurityWrapper(project_dir, spec_dir, agent_type="qa_reviewer")
 
     # Coder should not have Electron tools
     assert "electron_take_screenshot" not in coder_wrapper.allowed_tools
