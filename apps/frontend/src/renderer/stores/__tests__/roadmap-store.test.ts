@@ -15,10 +15,15 @@ function makeFeature(overrides: Partial<RoadmapFeature> = {}): RoadmapFeature {
     id: 'feat-1',
     title: 'Test Feature',
     description: 'A test feature',
-    priority: 'high',
+    rationale: 'Test rationale',
+    priority: 'must',
     complexity: 'medium',
+    impact: 'medium',
     status: 'under_review',
     phaseId: 'phase-1',
+    dependencies: [],
+    acceptanceCriteria: [],
+    userStories: [],
     source: { provider: 'internal' },
     ...overrides,
   } as RoadmapFeature;
@@ -28,12 +33,17 @@ function makeRoadmap(features: RoadmapFeature[] = []): Roadmap {
   return {
     id: 'roadmap-1',
     projectId: 'proj-1',
+    projectName: 'Test Project',
+    version: '1.0.0',
+    vision: 'Test vision',
+    targetAudience: { primary: 'developers', secondary: [] },
+    status: 'draft',
     phases: [
-      { id: 'phase-1', name: 'Phase 1', description: 'First phase' },
-      { id: 'phase-2', name: 'Phase 2', description: 'Second phase' },
+      { id: 'phase-1', name: 'Phase 1', description: 'First phase', order: 0, status: 'planned', features: [], milestones: [] },
+      { id: 'phase-2', name: 'Phase 2', description: 'Second phase', order: 1, status: 'planned', features: [], milestones: [] },
     ],
     features,
-    generatedAt: new Date(),
+    createdAt: new Date(),
     updatedAt: new Date(),
   } as Roadmap;
 }
@@ -169,7 +179,7 @@ describe('roadmap-store', () => {
       const newId = useRoadmapStore.getState().addFeature({
         title: 'New Feature',
         description: 'Description',
-        priority: 'high',
+        priority: 'must',
         complexity: 'low',
         status: 'under_review',
         phaseId: 'phase-1',
@@ -253,26 +263,26 @@ describe('roadmap-store', () => {
 
     it('getFeaturesByPriority should filter by priority', () => {
       const roadmap = makeRoadmap([
-        makeFeature({ id: 'f1', priority: 'high' }),
-        makeFeature({ id: 'f2', priority: 'low' }),
-        makeFeature({ id: 'f3', priority: 'high' }),
+        makeFeature({ id: 'f1', priority: 'must' }),
+        makeFeature({ id: 'f2', priority: 'could' }),
+        makeFeature({ id: 'f3', priority: 'must' }),
       ]);
 
-      const highPriority = getFeaturesByPriority(roadmap, 'high');
-      expect(highPriority).toHaveLength(2);
+      const mustPriority = getFeaturesByPriority(roadmap, 'must');
+      expect(mustPriority).toHaveLength(2);
     });
 
     it('getFeatureStats should aggregate feature statistics', () => {
       const roadmap = makeRoadmap([
-        makeFeature({ priority: 'high', status: 'under_review', complexity: 'low' }),
-        makeFeature({ priority: 'high', status: 'in_progress', complexity: 'medium' }),
-        makeFeature({ priority: 'low', status: 'done', complexity: 'low' }),
+        makeFeature({ priority: 'must', status: 'under_review', complexity: 'low' }),
+        makeFeature({ priority: 'must', status: 'in_progress', complexity: 'medium' }),
+        makeFeature({ priority: 'could', status: 'done', complexity: 'low' }),
       ]);
 
       const stats = getFeatureStats(roadmap);
       expect(stats.total).toBe(3);
-      expect(stats.byPriority['high']).toBe(2);
-      expect(stats.byPriority['low']).toBe(1);
+      expect(stats.byPriority['must']).toBe(2);
+      expect(stats.byPriority['could']).toBe(1);
       expect(stats.byStatus['under_review']).toBe(1);
       expect(stats.byStatus['in_progress']).toBe(1);
       expect(stats.byStatus['done']).toBe(1);

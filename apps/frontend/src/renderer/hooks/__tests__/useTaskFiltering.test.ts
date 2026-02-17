@@ -12,10 +12,10 @@ function makeTask(overrides: Partial<Task> = {}): Task {
     specId: 'spec-001',
     title: 'Test Task',
     description: 'A test task',
-    status: 'pending',
+    status: 'backlog',
     metadata: {
       category: 'feature',
-      complexity: 'standard',
+      complexity: 'medium',
       impact: 'medium',
       priority: 'medium',
     },
@@ -30,7 +30,7 @@ describe('useTaskFiltering', () => {
       specId: 'spec-001',
       title: 'Add Authentication',
       description: 'OAuth login flow',
-      status: 'pending',
+      status: 'backlog',
       metadata: { category: 'feature', complexity: 'complex', impact: 'high', priority: 'high' },
     }),
     makeTask({
@@ -39,14 +39,14 @@ describe('useTaskFiltering', () => {
       title: 'Fix Button Bug',
       description: 'Submit button broken',
       status: 'in_progress',
-      metadata: { category: 'bugfix', complexity: 'simple', impact: 'low', priority: 'low' },
+      metadata: { category: 'bug_fix', complexity: 'small', impact: 'low', priority: 'low' },
     }),
     makeTask({
       id: 't3',
       specId: 'spec-003',
       title: 'Refactor Database',
       description: 'Move to PostgreSQL',
-      status: 'completed',
+      status: 'done',
       metadata: { category: 'feature', complexity: 'complex', impact: 'high', priority: 'medium' },
     }),
   ];
@@ -141,7 +141,7 @@ describe('useTaskFiltering', () => {
     it('should show all when status is "all"', () => {
       const { result } = renderHook(() => useTaskFiltering(tasks));
 
-      act(() => result.current.setStatusFilter('pending'));
+      act(() => result.current.setStatusFilter('backlog'));
       act(() => result.current.setStatusFilter('all'));
 
       expect(result.current.filteredTasks).toHaveLength(3);
@@ -152,7 +152,7 @@ describe('useTaskFiltering', () => {
     it('should filter by category', () => {
       const { result } = renderHook(() => useTaskFiltering(tasks));
 
-      act(() => result.current.setCategoryFilter('bugfix'));
+      act(() => result.current.setCategoryFilter('bug_fix'));
 
       expect(result.current.filteredTasks).toHaveLength(1);
       expect(result.current.filteredTasks[0].id).toBe('t2');
@@ -224,7 +224,7 @@ describe('useTaskFiltering', () => {
 
       act(() => {
         result.current.setSearchQuery('auth');
-        result.current.setStatusFilter('pending');
+        result.current.setStatusFilter('backlog');
         result.current.setCategoryFilter('feature');
       });
 
@@ -242,9 +242,9 @@ describe('useTaskFiltering', () => {
 
       const { uniqueValues } = result.current;
       expect(uniqueValues.categories).toContain('feature');
-      expect(uniqueValues.categories).toContain('bugfix');
+      expect(uniqueValues.categories).toContain('bug_fix');
       expect(uniqueValues.complexities).toContain('complex');
-      expect(uniqueValues.complexities).toContain('simple');
+      expect(uniqueValues.complexities).toContain('small');
       expect(uniqueValues.impacts).toContain('high');
       expect(uniqueValues.impacts).toContain('low');
       expect(uniqueValues.priorities).toContain('high');

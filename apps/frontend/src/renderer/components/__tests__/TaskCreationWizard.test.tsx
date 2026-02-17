@@ -112,7 +112,7 @@ describe('TaskCreationWizard logic', () => {
       const detectAtMention = (text: string, cursorPos: number): string | null => {
         // Look backwards from cursor for @ pattern
         const beforeCursor = text.substring(0, cursorPos);
-        const match = beforeCursor.match(/@([\w./\-]*)$/);
+        const match = beforeCursor.match(/@([\w./-]*)$/);
         return match ? match[1] : null;
       };
 
@@ -125,9 +125,8 @@ describe('TaskCreationWizard logic', () => {
     it('should parse file mentions from description', () => {
       const parseFileMentions = (description: string): string[] => {
         const mentions: string[] = [];
-        const regex = /@([\w./\-]+)/g;
-        let match;
-        while ((match = regex.exec(description)) !== null) {
+        const regex = /@([\w./-]+)/g;
+        for (const match of description.matchAll(regex)) {
           mentions.push(match[1]);
         }
         return mentions;

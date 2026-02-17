@@ -24,17 +24,21 @@ vi.mock('../../../shared/constants', () => ({
   },
 }));
 
-function makeIdea(overrides: Partial<Idea> = {}): Idea {
+function makeIdea(overrides: Record<string, unknown> = {}): Idea {
   return {
     id: 'idea-1',
     title: 'Test Idea',
     description: 'A test idea',
+    rationale: 'Test rationale',
     type: 'code_improvements',
-    status: 'new',
-    priority: 'medium',
-    effort: 'low',
+    status: 'draft',
+    createdAt: new Date(),
+    buildsUpon: [],
+    estimatedEffort: 'medium',
+    affectedFiles: [],
+    existingPatterns: [],
     ...overrides,
-  } as Idea;
+  } as unknown as Idea;
 }
 
 function makeSession(ideas: Idea[] = []): IdeationSession {
@@ -121,17 +125,17 @@ describe('ideation-store', () => {
 
   describe('idea status management', () => {
     const session = makeSession([
-      makeIdea({ id: 'i1', status: 'new' }),
-      makeIdea({ id: 'i2', status: 'new' }),
+      makeIdea({ id: 'i1', status: 'draft' }),
+      makeIdea({ id: 'i2', status: 'draft' }),
     ]);
 
     it('should update idea status', () => {
       useIdeationStore.setState({ session });
-      useIdeationStore.getState().updateIdeaStatus('i1', 'starred');
+      useIdeationStore.getState().updateIdeaStatus('i1', 'selected');
 
       const ideas = useIdeationStore.getState().session!.ideas;
-      expect(ideas[0].status).toBe('starred');
-      expect(ideas[1].status).toBe('new');
+      expect(ideas[0].status).toBe('selected');
+      expect(ideas[1].status).toBe('draft');
     });
 
     it('should dismiss idea', () => {
@@ -158,7 +162,7 @@ describe('ideation-store', () => {
     });
 
     it('should not modify state when no session', () => {
-      useIdeationStore.getState().updateIdeaStatus('i1', 'starred');
+      useIdeationStore.getState().updateIdeaStatus('i1', 'selected');
       expect(useIdeationStore.getState().session).toBeNull();
     });
   });
@@ -166,22 +170,22 @@ describe('ideation-store', () => {
   describe('dismissAllIdeas', () => {
     it('should dismiss all active ideas but keep dismissed/converted/archived', () => {
       const session = makeSession([
-        makeIdea({ id: 'i1', status: 'new' }),
+        makeIdea({ id: 'i1', status: 'draft' }),
         makeIdea({ id: 'i2', status: 'dismissed' }),
         makeIdea({ id: 'i3', status: 'converted' }),
         makeIdea({ id: 'i4', status: 'archived' }),
-        makeIdea({ id: 'i5', status: 'starred' }),
+        makeIdea({ id: 'i5', status: 'selected' }),
       ]);
       useIdeationStore.setState({ session });
 
       useIdeationStore.getState().dismissAllIdeas();
 
       const ideas = useIdeationStore.getState().session!.ideas;
-      expect(ideas[0].status).toBe('dismissed'); // was new -> dismissed
+      expect(ideas[0].status).toBe('dismissed'); // was draft -> dismissed
       expect(ideas[1].status).toBe('dismissed'); // already dismissed
       expect(ideas[2].status).toBe('converted'); // unchanged
       expect(ideas[3].status).toBe('archived'); // unchanged
-      expect(ideas[4].status).toBe('dismissed'); // was starred -> dismissed
+      expect(ideas[4].status).toBe('dismissed'); // was selected -> dismissed
     });
   });
 
@@ -352,10 +356,10 @@ describe('ideation-store', () => {
 
   describe('selectors', () => {
     const session = makeSession([
-      makeIdea({ id: 'i1', type: 'code_improvements', status: 'new' }),
+      makeIdea({ id: 'i1', type: 'code_improvements', status: 'draft' }),
       makeIdea({ id: 'i2', type: 'ui_ux_improvements', status: 'dismissed' }),
       makeIdea({ id: 'i3', type: 'code_improvements', status: 'archived' }),
-      makeIdea({ id: 'i4', type: 'ui_ux_improvements', status: 'starred' }),
+      makeIdea({ id: 'i4', type: 'ui_ux_improvements', status: 'selected' }),
     ]);
 
     it('getIdeasByType should filter by type', () => {
@@ -390,8 +394,8 @@ describe('ideation-store', () => {
       expect(summary.totalIdeas).toBe(2); // only active (new, starred)
       expect(summary.byType['code_improvements']).toBe(1);
       expect(summary.byType['ui_ux_improvements']).toBe(1);
-      expect(summary.byStatus['new']).toBe(1);
-      expect(summary.byStatus['starred']).toBe(1);
+      expect(summary.byStatus['draft']).toBe(1);
+      expect(summary.byStatus['selected']).toBe(1);
     });
 
     it('getIdeationSummary should handle null session', () => {
