@@ -125,20 +125,6 @@
     "testFailed": "Le test du modèle a échoué. Vérifiez la configuration du modèle et réessayez.",
     "testSuccess": "Test réussi ! Le modèle a généré le contenu suivant :"
   },
-  "preview": {
-    "sections": {
-      "rationale": "Justification",
-      "userStories": "User Stories",
-      "acceptanceCriteria": "Critères d'acceptation",
-      "technicalDetails": "Détails techniques",
-      "testCoverage": "Couverture de tests",
-      "dependencies": "Dépendances"
-    },
-    "empty": {
-      "title": "Aucun contenu de spécification",
-      "description": "Générez une spécification pour voir l'aperçu"
-    }
-  },
   "marketplace": {
     "title": "Marketplace des modèles",
     "description": "Parcourir et importer des modèles d'agent partagés par la communauté",
