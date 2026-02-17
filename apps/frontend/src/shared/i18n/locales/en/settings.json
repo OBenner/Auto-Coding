@@ -48,6 +48,10 @@
     "keyboardShortcuts": {
       "title": "Keyboard Shortcuts",
       "description": "Customize keyboard shortcuts for common actions"
+    },
+    "envConfig": {
+      "title": "Environment Config",
+      "description": "Configure Claude authentication and environment tokens"
     }
   },
   "apiProfiles": {
