@@ -60,13 +60,7 @@ export function EnvConfigModal({
   const [success, setSuccess] = useState(false);
   const [sourcePath, setSourcePath] = useState<string | null>(null);
   const [hasExistingToken, setHasExistingToken] = useState(false);
-  const [claudeProfiles, setClaudeProfiles] = useState<Array<{
-    id: string;
-    name: string;
-    oauthToken?: string;
-    email?: string;
-    isDefault: boolean;
-  }>>([]);
+  const [claudeProfiles, setClaudeProfiles] = useState<ClaudeProfile[]>([]);
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
   const [isLoadingProfiles, setIsLoadingProfiles] = useState(true);
 
@@ -209,9 +203,24 @@ export function EnvConfigModal({
     }
   };
 
+  const validateTokenFormat = (value: string): string | null => {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return 'Please enter a token';
+    }
+    // Claude OAuth tokens follow the pattern: sk-ant-oat01-...
+    const validPrefixes = ['sk-ant-oat01-', 'sk-ant-'];
+    const hasValidPrefix = validPrefixes.some((prefix) => trimmed.startsWith(prefix));
+    if (!hasValidPrefix) {
+      return 'Invalid token format. Claude OAuth tokens should start with "sk-ant-oat01-"';
+    }
+    return null;
+  };
+
   const handleSave = async () => {
-    if (!token.trim()) {
-      setError('Please enter a token');
+    const validationError = validateTokenFormat(token);
+    if (validationError) {
+      setError(validationError);
       return;
     }
 
