@@ -5,6 +5,7 @@ Main entry point for the FastAPI web service
 
 import logging
 import os
+import secrets
 from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
@@ -28,7 +29,7 @@ HOST = os.getenv("HOST", "0.0.0.0")
 PORT = int(os.getenv("PORT", "8000"))
 DEBUG = os.getenv("DEBUG", "false").lower() == "true"
 CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")
-SECRET_KEY = os.getenv("SECRET_KEY")
+SECRET_KEY = os.getenv("SECRET_KEY") or secrets.token_urlsafe(32)
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
 WS_HEARTBEAT_INTERVAL = int(os.getenv("WS_HEARTBEAT_INTERVAL", "30"))
 
@@ -70,14 +71,12 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept", "X-Requested-With"],
 )
 
 # Configure session middleware for OAuth state management
-app.add_middleware(
-    SessionMiddleware, secret_key=SECRET_KEY or "dev-secret-key-change-in-production"
-)
+app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY)
 
 # Configure usage tracking middleware
 from core.middleware import UsageTrackingMiddleware

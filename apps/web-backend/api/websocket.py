@@ -290,7 +290,7 @@ async def agent_events_websocket(websocket: WebSocket):
 
                 else:
                     await manager.send_personal_message(
-                        {"status": "error", "message": f"Unknown action: {action}"},
+                        {"status": "error", "message": "Unknown action"},
                         websocket,
                     )
 
@@ -301,7 +301,8 @@ async def agent_events_websocket(websocket: WebSocket):
             except Exception as e:
                 logger.error(f"Error processing message: {e}")
                 await manager.send_personal_message(
-                    {"status": "error", "message": str(e)}, websocket
+                    {"status": "error", "message": "Internal error processing message"},
+                    websocket,
                 )
 
     except WebSocketDisconnect:
