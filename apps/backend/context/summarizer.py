@@ -43,6 +43,8 @@ from core.simple_client import create_simple_client
 
 logger = logging.getLogger(__name__)
 
+_TRUNCATION_MARKER = "\n\n[... truncated ...]"
+
 
 class SummarizationLevel(Enum):
     """
@@ -77,6 +79,26 @@ class SummarizationLevel(Enum):
             SummarizationLevel.AGGRESSIVE: 10000,
         }
         return char_limits[self]
+
+
+async def _extract_response_text(client) -> str:
+    """Send a query via the client and extract the text from the response."""
+    response_text = ""
+    async for msg in client.receive_response():
+        msg_type = type(msg).__name__
+        if msg_type != "AssistantMessage" or not hasattr(msg, "content"):
+            continue
+        for block in msg.content:
+            if type(block).__name__ == "TextBlock" and hasattr(block, "text"):
+                response_text += block.text
+    return response_text.strip()
+
+
+def _truncate(text: str, max_chars: int) -> str:
+    """Truncate text to max_chars, appending a marker if truncated."""
+    if len(text) <= max_chars:
+        return text
+    return text[:max_chars] + _TRUNCATION_MARKER
 
 
 class ContextSummarizer:
@@ -138,9 +160,13 @@ class ContextSummarizer:
         max_input_chars = level.max_input_chars
 
         # Truncate input if needed
-        truncated_content = content[:max_input_chars]
         if len(content) > max_input_chars:
-            truncated_content += "\n\n[... content truncated for summarization ...]"
+            truncated_content = (
+                content[:max_input_chars]
+                + "\n\n[... content truncated for summarization ...]"
+            )
+        else:
+            truncated_content = content
 
         # Build prompt
         preserve_note = (
@@ -179,21 +205,10 @@ Skip verbose implementations, comments, and boilerplate.
         try:
             async with client:
                 await client.query(prompt)
-                response_text = ""
-                async for msg in client.receive_response():
-                    msg_type = type(msg).__name__
-                    if msg_type == "AssistantMessage" and hasattr(msg, "content"):
-                        for block in msg.content:
-                            block_type = type(block).__name__
-                            if block_type == "TextBlock" and hasattr(block, "text"):
-                                response_text += block.text
-                return response_text.strip()
+                return await _extract_response_text(client)
         except Exception as e:
             logger.warning(f"File summarization failed for {file_path}: {e}")
-            # Fallback: return truncated raw content
-            fallback = content[:2000]
-            if len(content) > 2000:
-                fallback += "\n\n[... truncated ...]"
+            fallback = _truncate(content, 2000)
             return f"[Summarization failed: {e}]\n\n{fallback}"
 
     async def summarize_conversation(
@@ -237,11 +252,7 @@ Skip verbose implementations, comments, and boilerplate.
         formatted_conversation = "\n\n".join(conversation_text)
 
         # Truncate if too long
-        max_chars = 10000
-        if len(formatted_conversation) > max_chars:
-            formatted_conversation = (
-                formatted_conversation[:max_chars] + "\n\n[... truncated ...]"
-            )
+        formatted_conversation = _truncate(formatted_conversation, 10000)
 
         prompt = f"""Summarize the following conversation in {max_words} words or less.
 
@@ -273,18 +284,9 @@ Be concise and use bullet points. Skip greetings and meta-commentary.
         try:
             async with client:
                 await client.query(prompt)
-                response_text = ""
-                async for msg in client.receive_response():
-                    msg_type = type(msg).__name__
-                    if msg_type == "AssistantMessage" and hasattr(msg, "content"):
-                        for block in msg.content:
-                            block_type = type(block).__name__
-                            if block_type == "TextBlock" and hasattr(block, "text"):
-                                response_text += block.text
-                return response_text.strip()
+                return await _extract_response_text(client)
         except Exception as e:
             logger.warning(f"Conversation summarization failed: {e}")
-            # Fallback: return truncated conversation
             fallback = formatted_conversation[:1000]
             return f"[Summarization failed: {e}]\n\n{fallback}"
 
@@ -379,10 +381,7 @@ Be concise and use bullet points. Skip greetings and meta-commentary.
         require_auth_token()
 
         # Truncate if too long
-        max_chars = 5000
-        truncated_code = code[:max_chars]
-        if len(code) > max_chars:
-            truncated_code += "\n\n[... truncated ...]"
+        truncated_code = _truncate(code, 5000)
 
         lang_note = f" ({language})" if language else ""
 
@@ -416,21 +415,10 @@ Be concise and technical.
         try:
             async with client:
                 await client.query(prompt)
-                response_text = ""
-                async for msg in client.receive_response():
-                    msg_type = type(msg).__name__
-                    if msg_type == "AssistantMessage" and hasattr(msg, "content"):
-                        for block in msg.content:
-                            block_type = type(block).__name__
-                            if block_type == "TextBlock" and hasattr(block, "text"):
-                                response_text += block.text
-                return response_text.strip()
+                return await _extract_response_text(client)
         except Exception as e:
             logger.warning(f"Code snippet summarization failed: {e}")
-            # Fallback: return truncated code
-            fallback = code[:500]
-            if len(code) > 500:
-                fallback += "\n\n[... truncated ...]"
+            fallback = _truncate(code, 500)
             return f"[Summarization failed: {e}]\n\n{fallback}"
 
 

@@ -160,6 +160,22 @@ def _matches_decision_point_filters(
     return True
 
 
+def _collect_decision_points_from_phase(
+    phase_name: str,
+    phase_data: dict,
+    session_id: int | None,
+) -> list[dict]:
+    """Collect matching decision points from a single phase."""
+    points = []
+    for entry in phase_data.get("entries", []):
+        if not _matches_decision_point_filters(entry, session_id):
+            continue
+        if "phase" not in entry:
+            entry = {**entry, "phase": phase_name}
+        points.append(entry)
+    return points
+
+
 def export_decision_points(
     spec_dir: Path,
     format: str = "json",
@@ -193,18 +209,13 @@ def export_decision_points(
     for phase_name, phase_data in logs["phases"].items():
         if phase and phase_name != phase:
             continue
-
-        for entry in phase_data.get("entries", []):
-            if not _matches_decision_point_filters(entry, session_id):
-                continue
-            if "phase" not in entry:
-                entry = {**entry, "phase": phase_name}
-            decision_points.append(entry)
+        decision_points.extend(
+            _collect_decision_points_from_phase(phase_name, phase_data, session_id)
+        )
 
     if format == "json":
         return json.dumps(decision_points, indent=2, ensure_ascii=False)
-    else:
-        return _format_decision_points_markdown(decision_points)
+    return _format_decision_points_markdown(decision_points)
 
 
 def _format_session_metadata(session: dict, lines: list[str]) -> None:

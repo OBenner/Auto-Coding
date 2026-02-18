@@ -45,6 +45,59 @@ const PHASE_COLORS: Record<string, { color: string; bgColor: string }> = {
   default: { color: 'bg-gray-500', bgColor: 'bg-gray-500/20' },
 };
 
+/** Render the inner marker shape (decision star or regular circle) */
+function TimelineMarkerShape({
+  isDecisionPoint,
+  isCurrent,
+  shouldAnimate,
+  colors,
+}: Readonly<{
+  isDecisionPoint: boolean;
+  isCurrent: boolean;
+  shouldAnimate: boolean;
+  colors: { color: string; bgColor: string };
+}>) {
+  if (isDecisionPoint) {
+    return (
+      <motion.div
+        className={cn(
+          'relative w-6 h-6 rounded-full flex items-center justify-center',
+          colors.bgColor,
+          isCurrent && 'ring-2 ring-primary ring-offset-2',
+        )}
+        animate={
+          shouldAnimate && isCurrent
+            ? { rotate: [0, -10, 10, -10, 0] }
+            : { rotate: 0 }
+        }
+        transition={
+          shouldAnimate && isCurrent
+            ? { duration: 0.5, repeat: 1, repeatDelay: 0.5 }
+            : undefined
+        }
+      >
+        <Star
+          className={cn(
+            'w-3.5 h-3.5',
+            isCurrent
+              ? 'text-primary fill-primary'
+              : colors.color.replace('bg-', 'text-'),
+          )}
+        />
+      </motion.div>
+    );
+  }
+
+  return (
+    <div
+      className={cn(
+        'w-3 h-3 rounded-full',
+        isCurrent ? colors.color : cn(colors.color, 'opacity-70'),
+      )}
+    />
+  );
+}
+
 /**
  * Timeline component with decision point markers
  * Supports horizontal scrolling, click navigation, and visual highlighting
@@ -72,7 +125,7 @@ export const Timeline = memo(function Timeline({
       ([entry]) => {
         const nowVisible = entry.isIntersecting;
 
-        if (prevVisibleRef.current !== nowVisible && typeof (window as unknown as Record<string, unknown>).DEBUG === 'boolean' && (window as unknown as Record<string, unknown>).DEBUG) {
+        if (prevVisibleRef.current !== nowVisible && typeof (globalThis as unknown as Record<string, unknown>).DEBUG === 'boolean' && (globalThis as unknown as Record<string, unknown>).DEBUG) {
           console.log(`[Timeline] Visibility changed: ${prevVisibleRef.current} -> ${nowVisible}, animations ${nowVisible ? 'resumed' : 'paused'}`);
         }
 
@@ -143,10 +196,9 @@ export const Timeline = memo(function Timeline({
   return (
     <div ref={containerRef} className={cn('relative', className)}>
       {/* Timeline container with scroll */}
-      <div
+      <nav
         ref={scrollContainerRef}
         className="flex items-center gap-1 overflow-x-auto scrollbar-thin scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent px-2 py-3"
-        role="navigation"
         aria-label={t('accessibility.navigateTimeline')}
       >
         {/* Connection line */}
@@ -189,39 +241,12 @@ export const Timeline = memo(function Timeline({
                 title={isDecisionPoint ? t('sessionPlayer.decisionPointMarker') : t('sessionPlayer.regularEntryMarker')}
               >
                 {/* Marker */}
-                {isDecisionPoint ? (
-                  // Decision point marker - star icon
-                  <motion.div
-                    className={cn(
-                      'relative w-6 h-6 rounded-full flex items-center justify-center',
-                      colors.bgColor,
-                      isCurrent && 'ring-2 ring-primary ring-offset-2'
-                    )}
-                    animate={shouldAnimate && isCurrent ? {
-                      rotate: [0, -10, 10, -10, 0],
-                    } : { rotate: 0 }}
-                    transition={shouldAnimate && isCurrent ? {
-                      duration: 0.5,
-                      repeat: 1,
-                      repeatDelay: 0.5,
-                    } : undefined}
-                  >
-                    <Star
-                      className={cn(
-                        'w-3.5 h-3.5',
-                        isCurrent ? 'text-primary fill-primary' : colors.color.replace('bg-', 'text-')
-                      )}
-                    />
-                  </motion.div>
-                ) : (
-                  // Regular entry marker - circle
-                  <div
-                    className={cn(
-                      'w-3 h-3 rounded-full',
-                      isCurrent ? colors.color : cn(colors.color, 'opacity-70')
-                    )}
-                  />
-                )}
+                <TimelineMarkerShape
+                  isDecisionPoint={isDecisionPoint}
+                  isCurrent={isCurrent}
+                  shouldAnimate={shouldAnimate}
+                  colors={colors}
+                />
 
                 {/* Tooltip */}
                 <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-popover text-popover-foreground text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-20">
@@ -234,7 +259,7 @@ export const Timeline = memo(function Timeline({
             );
           })}
         </AnimatePresence>
-      </div>
+      </nav>
 
       {/* Scroll indicators */}
       <AnimatePresence>

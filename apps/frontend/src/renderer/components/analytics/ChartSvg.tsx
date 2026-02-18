@@ -18,7 +18,7 @@ interface ChartGridProps {
   formatYLabel?: (fraction: number) => string;
 }
 
-export function ChartGrid({ dims, formatYLabel }: ChartGridProps) {
+export function ChartGrid({ dims, formatYLabel }: Readonly<ChartGridProps>) {
   return (
     <>
       {/* Horizontal grid lines */}
@@ -91,7 +91,7 @@ interface MetricSeriesProps {
   dateLabels?: string[];
 }
 
-export function MetricSeries({ metric, dateLabels }: MetricSeriesProps) {
+export function MetricSeries({ metric, dateLabels }: Readonly<MetricSeriesProps>) {
   return (
     <g>
       {/* Area fill */}
@@ -108,9 +108,9 @@ export function MetricSeries({ metric, dateLabels }: MetricSeriesProps) {
       />
 
       {/* Data points */}
-      {metric.points.map((point, index) => (
+      {metric.points.map((point, pointIndex) => (
         <circle
-          key={index}
+          key={`${point.x}-${point.y}`}
           cx={point.x}
           cy={point.y}
           r="4"
@@ -118,7 +118,7 @@ export function MetricSeries({ metric, dateLabels }: MetricSeriesProps) {
           className="cursor-pointer transition-transform hover:scale-125"
         >
           <title>
-            {dateLabels?.[index] ? `${dateLabels[index]}: ` : ''}
+            {dateLabels?.[pointIndex] ? `${dateLabels[pointIndex]}: ` : ''}
             {`${metric.label}: ${metric.formatValue(point.value)}`}
           </title>
         </circle>

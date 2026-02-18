@@ -269,6 +269,56 @@ class AgentProcessIsolator:
 
         return self._execute_subprocess(cmd, working_dir)
 
+    def _handle_completed_process(
+        self,
+        result: AgentIsolationResult,
+        stdout: str,
+        stderr: str,
+    ) -> None:
+        """Populate result from a completed (non-timed-out) process."""
+        result.stdout = stdout
+        result.stderr = stderr
+        result.return_code = self._process.returncode
+        result.execution_time = time.time() - self._start_time
+        result.success = self._process.returncode == 0
+
+        # Try to parse JSON output from stdout
+        if result.success and stdout.strip():
+            try:
+                result.agent_output = json.loads(stdout.strip())
+            except json.JSONDecodeError:
+                _debug_verbose("Agent output is not JSON, treating as plain text")
+
+        # Check for crash indicators
+        if result.return_code != 0 and result.return_code not in [-1, 1]:
+            result.crashed = True
+            _debug_error(f"Agent process crashed with code {result.return_code}")
+
+        if result.success:
+            _debug_success(
+                f"Agent executed successfully in {result.execution_time:.2f}s "
+                f"(peak memory: {self._peak_memory_mb:.0f}MB)"
+            )
+        else:
+            _debug_warning(
+                f"Agent exited with code {result.return_code}: {stderr[:200]}"
+            )
+
+    def _handle_timeout(self, result: AgentIsolationResult) -> None:
+        """Handle a timed-out subprocess."""
+        self._process.kill()
+        stdout, stderr = self._process.communicate(timeout=5)
+        result.stdout = stdout or ""
+        result.stderr = stderr or ""
+        result.return_code = self._process.returncode or -1
+        result.error = (
+            f"Execution timeout ({self.limits.max_execution_seconds}s exceeded)"
+        )
+        result.violated_limits.append("max_execution_seconds")
+        result.crashed = True
+        result.execution_time = time.time() - self._start_time
+        _debug_error(f"Agent execution timeout: {result.error}")
+
     def _execute_subprocess(
         self,
         cmd: list[str],
@@ -314,51 +364,9 @@ class AgentProcessIsolator:
                 stdout, stderr = self._process.communicate(
                     timeout=self.limits.max_execution_seconds
                 )
-                result.stdout = stdout
-                result.stderr = stderr
-                result.return_code = self._process.returncode
-                result.execution_time = time.time() - self._start_time
-                result.success = self._process.returncode == 0
-
-                # Try to parse JSON output from stdout
-                if result.success and stdout.strip():
-                    try:
-                        result.agent_output = json.loads(stdout.strip())
-                    except json.JSONDecodeError:
-                        _debug_verbose(
-                            "Agent output is not JSON, treating as plain text"
-                        )
-
-                # Check for crash indicators
-                if result.return_code != 0 and result.return_code not in [-1, 1]:
-                    result.crashed = True
-                    _debug_error(
-                        f"Agent process crashed with code {result.return_code}"
-                    )
-
-                if result.success:
-                    _debug_success(
-                        f"Agent executed successfully in {result.execution_time:.2f}s "
-                        f"(peak memory: {self._peak_memory_mb:.0f}MB)"
-                    )
-                else:
-                    _debug_warning(
-                        f"Agent exited with code {result.return_code}: {stderr[:200]}"
-                    )
-
+                self._handle_completed_process(result, stdout, stderr)
             except subprocess.TimeoutExpired:
-                self._process.kill()
-                stdout, stderr = self._process.communicate(timeout=5)
-                result.stdout = stdout or ""
-                result.stderr = stderr or ""
-                result.return_code = self._process.returncode or -1
-                result.error = (
-                    f"Execution timeout ({self.limits.max_execution_seconds}s exceeded)"
-                )
-                result.violated_limits.append("max_execution_seconds")
-                result.crashed = True
-                result.execution_time = time.time() - self._start_time
-                _debug_error(f"Agent execution timeout: {result.error}")
+                self._handle_timeout(result)
 
             # Collect violated limits recorded by the monitor thread
             result.violated_limits.extend(self._violated_limits)

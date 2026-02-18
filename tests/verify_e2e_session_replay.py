@@ -738,16 +738,10 @@ def main():
     create_test_data(spec_dir)
 
     # Step 2: Test backend APIs
-    all_passed = True
-
     query_passed = _verify_query_apis(spec_dir)
-    all_passed = all_passed and query_passed
-
     comparison_passed = _verify_comparison_apis(spec_dir)
-    all_passed = all_passed and comparison_passed
-
     export_passed = _verify_export_apis(spec_dir)
-    all_passed = all_passed and export_passed
+    all_passed = query_passed and comparison_passed and export_passed
 
     # Step 3: Print frontend checklist
     print_frontend_checklist(spec_dir)

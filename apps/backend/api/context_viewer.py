@@ -215,7 +215,7 @@ def get_prioritization_scores(
     return result
 
 
-def get_optimization_report(spec_dir: Path) -> dict[str, Any]:
+def get_optimization_report(_spec_dir: Path) -> dict[str, Any]:
     """
     Get optimization effectiveness report.
 

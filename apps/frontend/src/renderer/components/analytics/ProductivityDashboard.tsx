@@ -6,7 +6,7 @@ import { useToast } from '../../hooks/use-toast';
 import { QualityTrendChart } from './QualityTrendChart';
 import { QualityAlertCard } from './QualityAlertCard';
 import { DashboardActions } from './DashboardActions';
-import { useQualityStore, type QualityScore, loadAllQualityData } from '../../stores/quality-store';
+import { useQualityStore, loadAllQualityData } from '../../stores/quality-store';
 import type {
   ProductivitySummary,
   ProductivityTrendPoint,

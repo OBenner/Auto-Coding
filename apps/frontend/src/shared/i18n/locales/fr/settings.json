@@ -48,6 +48,10 @@
     "keyboardShortcuts": {
       "title": "Raccourcis clavier",
       "description": "Personnaliser les raccourcis clavier pour les actions courantes"
+    },
+    "envConfig": {
+      "title": "Config. d'environnement",
+      "description": "Configurer l'authentification Claude et les tokens d'environnement"
     }
   },
   "apiProfiles": {

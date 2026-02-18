@@ -11,6 +11,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 try:
     from api.routes import specs
+
     print("✓ Imports successful")
 
     # Test that router is configured correctly
@@ -29,5 +30,6 @@ try:
 except Exception as e:
     print(f"❌ Error: {e}")
     import traceback
+
     traceback.print_exc()
     sys.exit(1)

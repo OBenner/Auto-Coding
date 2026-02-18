@@ -184,7 +184,7 @@ def verify_trend_detection(spec_dir: Path) -> bool:
         print("✗ FAILED: Insufficient data for trend analysis")
         return False
 
-    print(f"✓ Sufficient data for trend analysis (>= 5 sessions)")
+    print("✓ Sufficient data for trend analysis (>= 5 sessions)")
 
     if not trend.baseline_calculated:
         print("✗ FAILED: Baseline not calculated")
@@ -259,7 +259,7 @@ def verify_quality_summary(spec_dir: Path) -> bool:
         print(f"✗ FAILED: Expected >= 5 sessions, got {summary['total_sessions']}")
         return False
 
-    print(f"✓ Summary contains all required metrics")
+    print("✓ Summary contains all required metrics")
     return True
 
 
@@ -301,7 +301,7 @@ def verify_data_persistence(spec_dir: Path) -> bool:
     with open(history_file) as f:
         data = json.load(f)
 
-    print(f"✓ Quality history file exists")
+    print("✓ Quality history file exists")
     print(f"  - Updated at: {data.get('updated_at', 'unknown')}")
     print(f"  - Total scores: {len(data.get('scores', []))}")
 
@@ -314,7 +314,7 @@ def verify_data_persistence(spec_dir: Path) -> bool:
     # Try to deserialize a score
     try:
         test_score = QualityScore.from_dict(scores[0])
-        print(f"✓ Scores can be deserialized")
+        print("✓ Scores can be deserialized")
         print(f"  - Sample score: {test_score.session_id} = {test_score.composite_score:.3f}")
     except Exception as e:
         print(f"✗ FAILED: Could not deserialize score: {e}")
@@ -364,7 +364,7 @@ def verify_frontend_integration(spec_dir: Path) -> bool:
         print(f"✗ FAILED: Missing fields in trend data: {missing_fields}")
         return False
 
-    print(f"✓ Quality data format compatible with frontend")
+    print("✓ Quality data format compatible with frontend")
     return True
 
 
