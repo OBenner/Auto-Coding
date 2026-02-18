@@ -160,7 +160,7 @@ it('should handle button click', () => {
   render(<Button onClick={handleClick}>Click Me</Button>);
 
   fireEvent.click(screen.getByRole('button', { name: /click me/i }));
-  expect(handleClick).toHaveBeenCalledOnce();
+  expect(handleClick).toHaveBeenCalledTimes(1);
 });
 ```
 

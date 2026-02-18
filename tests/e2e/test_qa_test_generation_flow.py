@@ -10,12 +10,10 @@ Verifies the complete test generation flow in the QA loop:
 5. Test validation
 """
 
-import asyncio
 import json
-import shutil
 import tempfile
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
@@ -233,16 +231,16 @@ def mock_test_generators():
         }
 
     with patch(
-        "apps.backend.agents.test_generator.run_test_generator_session",
-        side_effect=mock_pytest_generator,
+        "apps.backend.qa.loop.run_test_generator_session",
+        new=AsyncMock(side_effect=mock_pytest_generator),
     ):
         with patch(
-            "apps.backend.agents.vitest_generator.generate_vitest_tests",
-            side_effect=mock_vitest_generator,
+            "apps.backend.qa.loop.generate_vitest_tests",
+            new=AsyncMock(side_effect=mock_vitest_generator),
         ):
             with patch(
-                "apps.backend.agents.e2e_generator.generate_e2e_tests",
-                side_effect=mock_e2e_generator,
+                "apps.backend.qa.loop.generate_e2e_tests",
+                new=AsyncMock(side_effect=mock_e2e_generator),
             ):
                 yield
 
@@ -308,7 +306,7 @@ def mock_coverage_reporter():
     )
 
     with patch(
-        "analysis.coverage_reporter.collect_coverage",
+        "apps.backend.qa.loop.collect_coverage",
         return_value=mock_report,
     ):
         yield mock_report
@@ -365,11 +363,10 @@ async def test_e2e_test_generation_flow(
     mock_client.create_agent_session = mock_agent_session
 
     with patch("apps.backend.qa.loop.create_client", return_value=mock_client):
-        # Patch create_client for test_generator module too
-        with patch("agents.test_generator.create_client", return_value=mock_client):
+        with patch("apps.backend.agents.test_generator.create_client", return_value=mock_client):
             with patch(
                 "apps.backend.qa.loop.run_qa_agent_session",
-                return_value=("approved", "All tests passed"),
+                new=AsyncMock(return_value=("approved", "All tests passed")),
             ):
                 with patch("apps.backend.qa.loop.emit_phase"):
                     with patch("apps.backend.qa.loop.get_task_logger", return_value=None):

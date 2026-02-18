@@ -23,10 +23,16 @@ Usage:
 from __future__ import annotations
 
 import json
-import xml.etree.ElementTree as ET
+import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+
+try:
+    import defusedxml.ElementTree as ET
+except ImportError:
+    import xml.etree.ElementTree as ET  # noqa: S405 - fallback if defusedxml unavailable
+
+logger = logging.getLogger(__name__)
 
 
 # =============================================================================
@@ -194,7 +200,9 @@ class PytestCoverageParser(CoverageParser):
             return report
 
         except (json.JSONDecodeError, KeyError, FileNotFoundError) as e:
-            print(f"Failed to parse pytest coverage report: {e}")
+            logger.error(
+                "Failed to parse pytest coverage report: %s", report_path, exc_info=e
+            )
             return None
 
 
@@ -291,7 +299,9 @@ class VitestCoverageParser(CoverageParser):
             return report
 
         except (json.JSONDecodeError, KeyError, FileNotFoundError) as e:
-            print(f"Failed to parse Vitest coverage report: {e}")
+            logger.error(
+                "Failed to parse Vitest coverage report: %s", report_path, exc_info=e
+            )
             return None
 
 
@@ -330,7 +340,6 @@ class CoberturaXMLParser(CoverageParser):
 
             # Extract overall coverage
             line_rate = float(root.get("line-rate", 0))
-            branch_rate = float(root.get("branch-rate", 0))
             overall_coverage = line_rate * 100
 
             # Parse per-file coverage
@@ -348,7 +357,9 @@ class CoberturaXMLParser(CoverageParser):
 
                     lines = cls.findall(".//line")
                     lines_total = len(lines)
-                    lines_covered = sum(1 for line in lines if int(line.get("hits", 0)) > 0)
+                    lines_covered = sum(
+                        1 for line in lines if int(line.get("hits", 0)) > 0
+                    )
                     lines_missed = lines_total - lines_covered
                     missing_lines = [
                         int(line.get("number", 0))
@@ -389,7 +400,11 @@ class CoberturaXMLParser(CoverageParser):
             return report
 
         except (ET.ParseError, FileNotFoundError, ValueError) as e:
-            print(f"Failed to parse Cobertura XML coverage report: {e}")
+            logger.error(
+                "Failed to parse Cobertura XML coverage report: %s",
+                report_path,
+                exc_info=e,
+            )
             return None
 
 
@@ -426,23 +441,31 @@ def find_coverage_report(
         ],
     }
 
+    # Build list of search roots: project root + workspace subdirs
+    search_roots = [project_dir]
+    apps_dir = project_dir / "apps"
+    if apps_dir.is_dir():
+        search_roots.extend(d for d in apps_dir.iterdir() if d.is_dir())
+
     # If framework specified, check its specific locations
     if framework:
         locations = report_locations.get(framework, [])
-        for location in locations:
-            report_path = project_dir / location
-            if report_path.exists():
-                return report_path
+        for root in search_roots:
+            for location in locations:
+                report_path = root / location
+                if report_path.exists():
+                    return report_path
 
     # Otherwise, check all common locations
     all_locations = []
     for locs in report_locations.values():
         all_locations.extend(locs)
 
-    for location in all_locations:
-        report_path = project_dir / location
-        if report_path.exists():
-            return report_path
+    for root in search_roots:
+        for location in all_locations:
+            report_path = root / location
+            if report_path.exists():
+                return report_path
 
     return None
 

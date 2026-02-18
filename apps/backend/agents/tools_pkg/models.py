@@ -248,7 +248,8 @@ AGENT_CONFIGS = {
         "thinking_default": "medium",
     },
     # ═══════════════════════════════════════════════════════════════════════
-    # TEST GENERATION PHASES (Read + Write for generating test files)
+    # TEST GENERATION AGENT TYPES (QA-phase agents, not standalone phases)
+    # These share the QA model/thinking config via get_phase_model(spec, "qa")
     # ═══════════════════════════════════════════════════════════════════════
     "test_generator": {
         "tools": BASE_READ_TOOLS + BASE_WRITE_TOOLS + WEB_TOOLS,

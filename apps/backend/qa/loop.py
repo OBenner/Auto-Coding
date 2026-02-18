@@ -12,9 +12,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from agents.e2e_generator import generate_e2e_tests
 from agents.memory_manager import save_user_correction
 from agents.test_generator import run_test_generator_session
-from agents.e2e_generator import generate_e2e_tests
 from analysis.code_analyzer import CodeAnalyzer
 from analysis.coverage_reporter import collect_coverage, format_coverage_summary
 from analysis.failure_analyzer import analyze_failure, is_analysis_enabled
@@ -468,8 +468,10 @@ async def run_qa_validation_loop(
             all_modified_files = list(set(modified_files))
             python_files = [f for f in all_modified_files if f.endswith(".py")]
             typescript_files = [
-                f for f in all_modified_files
-                if f.endswith((".ts", ".tsx")) and not f.endswith((".test.ts", ".test.tsx"))
+                f
+                for f in all_modified_files
+                if f.endswith((".ts", ".tsx"))
+                and not f.endswith((".test.ts", ".test.tsx", ".spec.ts", ".spec.tsx"))
             ]
             modified_files = python_files + typescript_files
             debug(
@@ -537,7 +539,11 @@ async def run_qa_validation_loop(
                     except Exception as e:
                         debug_warning("qa_loop", f"Failed to analyze {file_path}: {e}")
 
-            if combined_analysis["functions"] or combined_analysis["classes"] or combined_analysis["components"]:
+            if (
+                combined_analysis["functions"]
+                or combined_analysis["classes"]
+                or combined_analysis["components"]
+            ):
                 print(
                     f"   Found {len(combined_analysis['functions'])} functions, "
                     f"{len(combined_analysis['classes'])} classes, and "
@@ -557,7 +563,9 @@ async def run_qa_validation_loop(
                 if test_result.get("success"):
                     generated_files = test_result.get("generated_files", [])
                     framework = test_result.get("framework", "pytest")
-                    print(f"   ✅ Generated {len(generated_files)} {framework} test file(s)")
+                    print(
+                        f"   ✅ Generated {len(generated_files)} {framework} test file(s)"
+                    )
                     debug_success(
                         "qa_loop",
                         "Test generation completed",
@@ -606,7 +614,9 @@ async def run_qa_validation_loop(
                         else:
                             error = e2e_result.get("error", "Unknown error")
                             print(f"   ⚠️  E2E test generation had issues: {error}")
-                            debug_warning("qa_loop", f"E2E test generation incomplete: {error}")
+                            debug_warning(
+                                "qa_loop", f"E2E test generation incomplete: {error}"
+                            )
                     except Exception as e:
                         debug_error("qa_loop", f"E2E test generation failed: {e}")
                         print(f"   ⚠️  E2E test generation failed: {e}")
@@ -637,6 +647,7 @@ async def run_qa_validation_loop(
                 # Save coverage report to spec directory
                 coverage_file = spec_dir / "coverage_report.json"
                 import json
+
                 coverage_data = {
                     "overall_coverage": coverage_report.overall_coverage,
                     "lines_total": coverage_report.lines_total,
@@ -653,7 +664,9 @@ async def run_qa_validation_loop(
                         }
                         for f in coverage_report.files[:20]  # Top 20 files
                     ],
-                    "uncovered_files": coverage_report.uncovered_files[:10],  # Top 10 uncovered
+                    "uncovered_files": coverage_report.uncovered_files[
+                        :10
+                    ],  # Top 10 uncovered
                 }
                 with open(coverage_file, "w", encoding="utf-8") as f:
                     json.dump(coverage_data, f, indent=2)

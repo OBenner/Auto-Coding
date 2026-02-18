@@ -6,6 +6,7 @@ AI agent that generates Vitest tests based on TypeScript/React code analysis res
 Uses the Test Generator Agent prompt to create comprehensive test coverage for frontend code.
 """
 
+import asyncio
 import json
 import logging
 import subprocess
@@ -30,11 +31,12 @@ from ui import (
 logger = logging.getLogger(__name__)
 
 
-def validate_vitest_tests(test_files: list[Path], project_dir: Path) -> bool:
+async def validate_vitest_tests(test_files: list[Path], project_dir: Path) -> bool:
     """
     Validate that generated Vitest tests are syntactically correct.
 
     Uses TypeScript compiler and Vitest to verify tests can be run without errors.
+    Runs subprocess calls in a thread to avoid blocking the event loop.
 
     Args:
         test_files: List of generated test file paths
@@ -55,7 +57,7 @@ def validate_vitest_tests(test_files: list[Path], project_dir: Path) -> bool:
     if not frontend_dir.exists():
         logger.warning("Frontend directory not found - skipping validation")
         print_status("Frontend directory not found - cannot validate", "warning")
-        return True  # Don't fail if frontend dir doesn't exist
+        return False
 
     for test_file in test_files:
         file_path = project_dir / test_file
@@ -63,9 +65,10 @@ def validate_vitest_tests(test_files: list[Path], project_dir: Path) -> bool:
             print_status(f"Test file not found: {test_file}", "error")
             return False
 
-        # Check TypeScript syntax with tsc
+        # Check TypeScript syntax with tsc (non-blocking)
         try:
-            result = subprocess.run(
+            result = await asyncio.to_thread(
+                subprocess.run,
                 ["npx", "tsc", "--noEmit", str(file_path)],
                 cwd=frontend_dir,
                 capture_output=True,
@@ -87,9 +90,9 @@ def validate_vitest_tests(test_files: list[Path], project_dir: Path) -> bool:
     # Try to run tests with Vitest (non-blocking)
     print_status("Checking Vitest test execution...", "progress")
     try:
-        # Run vitest with --run flag (non-watch mode)
-        result = subprocess.run(
-            ["npm", "run", "test", "--", "--run", "--reporter=verbose"],
+        result = await asyncio.to_thread(
+            subprocess.run,
+            ["npx", "vitest", "run", "--reporter=verbose"],
             cwd=frontend_dir,
             capture_output=True,
             text=True,
@@ -291,7 +294,7 @@ Begin by loading context (Phase 0 in your prompt).
     print()
 
     # Validate generated tests
-    validation_success = validate_vitest_tests(test_files, project_dir)
+    validation_success = await validate_vitest_tests(test_files, project_dir)
 
     # Log results
     if task_logger:
@@ -300,8 +303,9 @@ Begin by loading context (Phase 0 in your prompt).
                 f"Generated and validated {len(test_files)} Vitest test files"
             )
         else:
-            task_logger.log_warning(
-                f"Generated {len(test_files)} test files but validation failed"
+            task_logger.log_entry(
+                LogEntryType.WARNING,
+                f"Generated {len(test_files)} test files but validation failed",
             )
 
     return {

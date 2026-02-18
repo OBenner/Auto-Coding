@@ -202,32 +202,30 @@ EDGE CASE COVERAGE:
 
 #### 3.4.5: Run Generated Tests and Check Coverage
 
-**CRITICAL**: Test coverage report is mandatory for QA approval. Minimum 80% coverage required.
+**CRITICAL**: Test coverage report is mandatory for QA approval. Minimum 80% coverage required (configurable via `implementation_plan.json` field `qa_acceptance.unit_tests.minimum_coverage` or project config).
 
 ```bash
 # Run the newly generated tests
 pytest tests/ -v --tb=short
 
 # Check coverage of generated tests on target code
-# Extract target files from build-progress.txt or implementation_plan.json
-pytest tests/ --cov=apps/backend --cov-report=term-missing --cov-report=json
+pytest tests/ --cov=apps/backend --cov-report=term-missing --cov-report=json:coverage.json
 
-# For frontend (if applicable)
-cd apps/frontend && npm test -- --coverage --reporter=json > coverage-summary.json
+# For frontend (if applicable) - use Vitest directly
+cd apps/frontend && npx vitest run --coverage --coverage.reporter=json
+cd -
 
-# Parse coverage report
+# Parse coverage using the project's coverage_reporter module
 python -c "
-import json
-try:
-    with open('coverage.json', 'r') as f:
-        cov = json.load(f)
-    total_coverage = cov['totals']['percent_covered']
-    print(f'Total Coverage: {total_coverage:.1f}%')
-    if total_coverage >= 80:
-        print('PASS: Coverage >= 80%')
-    else:
-        print(f'FAIL: Coverage {total_coverage:.1f}% < 80%')
-except FileNotFoundError:
+from apps.backend.analysis.coverage_reporter import collect_coverage, format_coverage_summary
+result = collect_coverage('.')
+if result:
+    print(format_coverage_summary(result))
+    # List files below threshold
+    for f in result.files:
+        if f.coverage_percentage < 80:
+            print(f'  LOW: {f.file_path} ({f.coverage_percentage:.1f}%) - missing lines: {f.missing_lines[:10]}')
+else:
     print('WARNING: No coverage report found')
 "
 ```
@@ -241,7 +239,7 @@ GENERATED TESTS EXECUTION:
 - Coverage gaps: [list uncovered critical code paths or "None"]
 ```
 
-**If coverage < 80%:** Document which code paths are missing tests and add them to the QA report as critical issues.
+**If coverage < threshold:** Document which code paths are missing tests and add them to the QA report as critical issues.
 
 #### 3.4.6: Review Test Quality Manually
 

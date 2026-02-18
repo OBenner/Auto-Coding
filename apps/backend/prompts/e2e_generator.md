@@ -241,28 +241,32 @@ def electron_app():
 
 def wait_for_element(selector: str, timeout: int = 5):
     """Wait for element to appear in the DOM."""
+    import json as _json
+    selector_safe = _json.dumps(selector)
     start = time.time()
     while time.time() - start < timeout:
         result = send_electron_command("eval", {
-            "code": f"document.querySelector('{selector}') !== null"
+            "code": f"document.querySelector({selector_safe}) !== null"
         })
         if result:
             return True
         time.sleep(0.5)
-    raise TimeoutError(f"Element '{selector}' not found within {timeout}s")
+    raise TimeoutError(f"Element {selector!r} not found within {timeout}s")
 
 
 def wait_for_text(text: str, timeout: int = 5):
     """Wait for text to appear on the page."""
+    import json as _json
+    text_safe = _json.dumps(text)
     start = time.time()
     while time.time() - start < timeout:
         result = send_electron_command("eval", {
-            "code": f"document.body.textContent.includes('{text}')"
+            "code": f"document.body.textContent.includes({text_safe})"
         })
         if result:
             return True
         time.sleep(0.5)
-    raise TimeoutError(f"Text '{text}' not found within {timeout}s")
+    raise TimeoutError(f"Text {text!r} not found within {timeout}s")
 
 
 class TestCreateSpecWorkflow:
@@ -583,8 +587,9 @@ def test_modal_dialog(self, electron_app):
     })
     send_electron_command("click_by_text", {"text": "Confirm"})
 
-    # Verify modal closed
-    wait_for_element(".modal-dialog", timeout=2)  # Should timeout
+    # Verify modal closed (element should be absent)
+    with pytest.raises(TimeoutError):
+        wait_for_element(".modal-dialog", timeout=2)
 ```
 
 ## Validation

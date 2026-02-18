@@ -11,6 +11,7 @@ Uses the Test Generator Agent prompt to create comprehensive test coverage.
 """
 
 import ast
+import asyncio
 import json
 import logging
 import re
@@ -300,7 +301,10 @@ def validate_generated_tests(
     # Route to framework-specific validation
     if framework == "vitest":
         logger.info("Using Vitest validation for TypeScript/React tests")
-        return validate_vitest_tests(test_files, project_dir)
+        # validate_vitest_tests is async; use asyncio.run() from sync context.
+        # In production, vitest validation is handled directly by
+        # generate_vitest_tests() which awaits validate_vitest_tests().
+        return asyncio.run(validate_vitest_tests(test_files, project_dir))
 
     # Default to pytest validation
     logger.info("Using pytest validation for Python tests")
@@ -1179,7 +1183,8 @@ Generate additional test cases to improve coverage to at least {min_threshold:.0
                     f"Generated and validated {len(test_files)} test files",
                 )
         else:
-            task_logger.log_warning(
+            task_logger.log_entry(
+                LogEntryType.WARNING,
                 f"Generated {len(test_files)} test files but validation failed",
             )
 

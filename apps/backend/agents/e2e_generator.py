@@ -9,6 +9,7 @@ Generated tests use the Electron MCP server to interact with the running applica
 via Chrome DevTools Protocol, enabling automated testing of user interactions.
 """
 
+import asyncio
 import json
 import logging
 import subprocess
@@ -33,11 +34,12 @@ from ui import (
 logger = logging.getLogger(__name__)
 
 
-def validate_e2e_tests(test_files: list[Path], project_dir: Path) -> bool:
+async def validate_e2e_tests(test_files: list[Path], project_dir: Path) -> bool:
     """
     Validate that generated E2E tests are syntactically correct.
 
     Uses pytest --collect-only to verify tests can be collected without errors.
+    Runs subprocess calls in a thread to avoid blocking the event loop.
 
     Args:
         test_files: List of generated test file paths
@@ -68,9 +70,10 @@ def validate_e2e_tests(test_files: list[Path], project_dir: Path) -> bool:
             print_status(f"Syntax error in {test_file}: {e}", "error")
             return False
 
-        # Check if pytest can collect tests
+        # Check if pytest can collect tests (non-blocking)
         try:
-            result = subprocess.run(
+            result = await asyncio.to_thread(
+                subprocess.run,
                 ["pytest", str(file_path), "--collect-only", "-q"],
                 cwd=project_dir,
                 capture_output=True,
@@ -272,9 +275,7 @@ Begin by loading context (Phase 0 in your prompt).
                 relative_path = test_file.relative_to(project_dir)
                 test_files.append(relative_path)
             if test_files:
-                print_status(
-                    f"Found {len(test_files)} E2E tests in tests/", "success"
-                )
+                print_status(f"Found {len(test_files)} E2E tests in tests/", "success")
         else:
             return {
                 "generated_files": [],
@@ -305,7 +306,7 @@ Begin by loading context (Phase 0 in your prompt).
     print()
 
     # Validate generated tests
-    validation_success = validate_e2e_tests(test_files, project_dir)
+    validation_success = await validate_e2e_tests(test_files, project_dir)
 
     # Log results
     if task_logger:
@@ -314,8 +315,9 @@ Begin by loading context (Phase 0 in your prompt).
                 f"Generated and validated {len(test_files)} E2E test files"
             )
         else:
-            task_logger.log_warning(
-                f"Generated {len(test_files)} test files but validation failed"
+            task_logger.log_entry(
+                LogEntryType.WARNING,
+                f"Generated {len(test_files)} test files but validation failed",
             )
 
     return {
