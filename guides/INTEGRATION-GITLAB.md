@@ -77,6 +77,12 @@ glab auth login --hostname gitlab.example.com
 
 This opens your browser for OAuth authentication. Once complete, Auto Claude automatically uses your glab credentials (no environment variables needed).
 
+**How Auto Claude uses glab:** Auto Claude spawns `glab` as a subprocess to make GitLab API calls. This means:
+- `glab` must be available on your `PATH`
+- Minimum recommended version: `glab` >= 1.50.0
+- Auto Claude does not read glab config files directly -- it invokes `glab` CLI commands
+- Verify Auto Claude can find glab: `which glab && glab --version`
+
 ### Option 2: Personal Access Token
 
 If you prefer using a Personal Access Token:
@@ -510,6 +516,15 @@ To disable GitLab integration after enabling:
 ```
 
 Auto Claude will continue to work normally without GitLab features.
+
+## Secret & Environment Variable Safety
+
+- **Never commit `.env` files** or tokens to source control -- `.env` is gitignored by default
+- **Use placeholder values** in documentation and examples (e.g., `GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx`)
+- **Prefer secret managers** for shared environments (OS keychain, CI masked variables, HashiCorp Vault, cloud secret managers)
+- **Rotate tokens** periodically (every 60-90 days recommended)
+- **Use least-privilege tokens** -- only grant `api` scope, avoid `write_repository` unless needed
+- **Prefer glab OAuth** over Personal Access Tokens for better security (no token storage)
 
 ## See Also
 

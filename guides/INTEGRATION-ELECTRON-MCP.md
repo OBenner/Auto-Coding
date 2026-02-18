@@ -27,6 +27,26 @@ Electron MCP integration enables AI QA agents to visually validate Electron appl
 - Auto Claude backend installed
 - Electron app must be startable with remote debugging enabled
 
+## Security Warning
+
+> **WARNING: Remote debugging exposes a powerful DevTools interface.** Enabling `ELECTRON_MCP_ENABLED` and starting Electron with `--remote-debugging-port` opens a Chrome DevTools Protocol endpoint that can allow arbitrary code execution and data exfiltration if reachable from the network.
+
+**Required mitigations:**
+
+1. **Bind to localhost only** -- The debug port should only listen on `127.0.0.1`. Electron binds to localhost by default, but verify with:
+   ```bash
+   # Verify port is only on localhost
+   netstat -an | grep 9222   # Should show 127.0.0.1:9222, NOT 0.0.0.0:9222
+   ```
+2. **Firewall the port** -- Block port 9222 from external access using OS firewall rules
+3. **Never enable in production** -- `ELECTRON_MCP_ENABLED=true` is for development and QA only
+4. **Disable when not in use** -- Remove or comment out `ELECTRON_MCP_ENABLED` when not actively running QA
+5. **Secure remote access** -- If remote debugging is needed across machines, use an SSH tunnel or VPN:
+   ```bash
+   # SSH tunnel example (forward remote debug port to local)
+   ssh -L 9222:127.0.0.1:9222 user@remote-host
+   ```
+
 ## Setup
 
 **Step 1:** Enable Electron MCP in environment
@@ -334,6 +354,14 @@ The `send_command_to_electron` tool supports these commands:
 - **Selectors**: Use browser DevTools to find the best CSS selectors
 - **Timing**: Add delays for animations and async operations with `eval` command
 
+### Screenshot Privacy & Data Handling
+
+- **Use test accounts**: Run QA sessions with non-production data and test accounts to avoid capturing real user PII
+- **Mask secrets in UI**: Ensure API keys, tokens, and credentials are not visible in the UI during QA sessions
+- **Storage location**: Screenshots are stored temporarily in the `.auto-claude/` directory (gitignored) and are not persisted long-term
+- **Redaction**: If screenshots must be shared, redact sensitive regions (emails, user data, credentials) before distribution
+- **Compliance**: For organizations subject to PII, PCI, or HIPAA requirements, review screenshot handling against your data governance policies
+
 ### Performance
 
 - **Screenshots are compressed**: Screenshots are automatically compressed to stay under token limits
@@ -377,6 +405,14 @@ Auto Claude will continue to work normally with code-based testing only.
 - Use direct binary path for startup
 - No special firewall configuration usually needed
 - For headless CI/CD, use xvfb (see Troubleshooting)
+
+## Secret & Environment Variable Safety
+
+- **Never commit `.env` files** to source control -- `.env` is gitignored by default
+- **Use placeholder values** in documentation and examples (e.g., `ELECTRON_DEBUG_PORT=9222`)
+- **Prefer secret managers** for shared environments (OS keychain, CI masked variables, HashiCorp Vault, cloud secret managers)
+- **Rotate credentials** periodically (every 60-90 days recommended)
+- **Audit access** -- review who has access to debug ports and MCP configuration
 
 ## See Also
 

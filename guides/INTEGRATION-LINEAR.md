@@ -34,6 +34,13 @@ Linear integration provides real-time visibility into Auto Claude build progress
 3. Give it a descriptive name (e.g., "Auto Claude")
 4. Copy the key (format: `lin_api_xxx...`)
 
+**API key permissions and security:**
+- **Minimum role**: Member role is sufficient; Admin is only needed if your workspace restricts project creation
+- **Scope**: Linear API keys are workspace-wide -- create a dedicated key for Auto Claude for auditability
+- **Least privilege**: Use a dedicated service account rather than a personal account if available
+- **Rotation**: Rotate the API key periodically (every 60-90 days recommended)
+- **Storage**: Do not commit `LINEAR_API_KEY` to git. Prefer secret managers (HashiCorp Vault, AWS Secrets Manager, OS keyring, CI masked variables) over `.env` files in shared environments
+
 **Step 2:** Configure environment variables
 
 Navigate to the backend directory:
@@ -306,6 +313,14 @@ To disable Linear integration after enabling:
 ```
 
 Auto Claude will continue to work normally with local tracking only.
+
+## Secret & Environment Variable Safety
+
+- **Never commit `.env` files** or API keys to source control -- `.env` is gitignored by default
+- **Use placeholder values** in documentation and examples (e.g., `LINEAR_API_KEY=lin_api_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`)
+- **Prefer secret managers** for shared environments (OS keychain, CI masked variables, HashiCorp Vault, cloud secret managers)
+- **Rotate API keys** periodically (every 60-90 days recommended)
+- **Use dedicated service accounts** for Auto Claude instead of personal API keys for auditability
 
 ## See Also
 

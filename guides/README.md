@@ -30,9 +30,9 @@ Detailed documentation for Auto Code setup and usage.
 | **[SPEC-CREATION-PIPELINE.md](SPEC-CREATION-PIPELINE.md)** | Comprehensive guide to spec creation pipeline architecture and internals |
 | **[windows-development.md](windows-development.md)** | Windows-specific development guide (file encoding, paths, line endings) |
 | **[linux.md](linux.md)** | Linux-specific installation and build guide (Flatpak, AppImage) |
-| **[INTEGRATION-LINEAR.md](INTEGRATION-LINEAR.md)** | Linear integration setup for progress tracking |
-| **[INTEGRATION-GITLAB.md](INTEGRATION-GITLAB.md)** | GitLab integration setup for issue tracking and CI/CD |
-| **[INTEGRATION-ELECTRON-MCP.md](INTEGRATION-ELECTRON-MCP.md)** | Electron MCP integration for end-to-end testing of desktop app |
+| **[INTEGRATION-LINEAR.md](INTEGRATION-LINEAR.md)** | Linear integration for real-time build progress tracking via issues and subtask sync |
+| **[INTEGRATION-GITLAB.md](INTEGRATION-GITLAB.md)** | GitLab integration for AI-powered MR reviews and incremental follow-up reviews |
+| **[INTEGRATION-ELECTRON-MCP.md](INTEGRATION-ELECTRON-MCP.md)** | Electron MCP integration for visual E2E testing of desktop app UI via Chrome DevTools Protocol |
 
 ## Quick Links
 
