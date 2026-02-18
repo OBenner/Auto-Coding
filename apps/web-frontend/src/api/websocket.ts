@@ -79,7 +79,7 @@ export class WebSocketClient {
 	 * Sanitize a value for safe logging (strips control characters, truncates).
 	 */
 	private static sanitize(value: unknown): string {
-		return String(value).replace(/[\u0000-\u001f\u007f]/g, "").slice(0, 200);
+		return String(value).replace(/\p{Cc}/gu, "").slice(0, 200);
 	}
 
 	/**

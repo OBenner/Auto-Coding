@@ -120,7 +120,7 @@ if (typeof window !== 'undefined') {
 
 // Sanitize a value for safe logging - strips control characters and truncates
 function sanitizeForLog(value: unknown): string {
-  return String(value).replace(/[\u0000-\u001f\u007f\u0080-\u009f]/g, '').slice(0, 500);
+  return String(value).replace(/\p{Cc}/gu, '').slice(0, 500);
 }
 
 // Suppress console errors in tests unless explicitly testing error scenarios
