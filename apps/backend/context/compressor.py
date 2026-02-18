@@ -386,32 +386,10 @@ Provide ONLY the extracted sections, no explanations."""
         Raises:
             RuntimeError: If Claude SDK call fails after retries
         """
-        from core.simple_client import create_simple_client
-
-        # Use Haiku for fast/cheap summarization
-        client = create_simple_client(
-            agent_type="merge_resolver",  # Text-only, no tools needed
-            model="claude-haiku-4-5-20251001",
-            max_turns=1,
-        )
-
         last_error: Exception | None = None
         for attempt in range(1, 4):
             try:
-                async with client:
-                    await asyncio.wait_for(client.query(prompt), timeout=timeout)
-
-                    response_text = ""
-                    async for msg in client.receive_response():
-                        msg_type = type(msg).__name__
-                        if msg_type == "AssistantMessage" and hasattr(msg, "content"):
-                            for block in msg.content:
-                                block_type = type(block).__name__
-                                if block_type == "TextBlock" and hasattr(block, "text"):
-                                    response_text += block.text
-
-                    return response_text.strip()
-
+                return await self._execute_claude_query(prompt, timeout=timeout)
             except TimeoutError:
                 last_error = TimeoutError(
                     f"Claude summarization timed out (attempt {attempt})"
@@ -425,6 +403,30 @@ Provide ONLY the extracted sections, no explanations."""
 
         logger.error("Claude SDK call failed after 3 attempts: %s", last_error)
         raise RuntimeError(f"Failed to generate summary: {last_error}")
+
+    async def _execute_claude_query(self, prompt: str, *, timeout: float = 60.0) -> str:
+        """Execute a single Claude SDK query and extract text response."""
+        from core.simple_client import create_simple_client
+
+        client = create_simple_client(
+            agent_type="merge_resolver",
+            model="claude-haiku-4-5-20251001",
+            max_turns=1,
+        )
+
+        async with client:
+            await asyncio.wait_for(client.query(prompt), timeout=timeout)
+
+            response_text = ""
+            async for msg in client.receive_response():
+                msg_type = type(msg).__name__
+                if msg_type == "AssistantMessage" and hasattr(msg, "content"):
+                    for block in msg.content:
+                        block_type = type(block).__name__
+                        if block_type == "TextBlock" and hasattr(block, "text"):
+                            response_text += block.text
+
+            return response_text.strip()
 
     def _truncate_content(self, content: str, target_tokens: int) -> str:
         """
@@ -457,14 +459,12 @@ Provide ONLY the extracted sections, no explanations."""
     def compress_text(
         self,
         text: str,
-        context_hint: str = "code snippet",
     ) -> CompressionResult:
         """
         Compress a text string (not from a file).
 
         Args:
             text: The text to compress
-            context_hint: Hint about what the text is (for summarization)
 
         Returns:
             CompressionResult with compressed text

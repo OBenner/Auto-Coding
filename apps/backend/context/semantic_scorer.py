@@ -121,32 +121,17 @@ class SemanticScorer:
             return []
 
         try:
-            # Get embeddings for all queries
-            query_embeddings = []
-            for query in queries:
-                emb = await self._get_embedding(query)
-                if emb is not None:
-                    query_embeddings.append((query, emb))
-                else:
-                    query_embeddings.append((query, None))
+            query_embeddings = await self._get_embeddings_batch(queries)
+            doc_embeddings = await self._get_embeddings_batch(documents)
 
-            # Get embeddings for all documents
-            doc_embeddings = []
-            for doc in documents:
-                emb = await self._get_embedding(doc)
-                if emb is not None:
-                    doc_embeddings.append((doc, emb))
-                else:
-                    doc_embeddings.append((doc, None))
-
-            # Score all pairs
             results = []
             for query_text, query_emb in query_embeddings:
                 for doc_text, doc_emb in doc_embeddings:
-                    if query_emb is not None and doc_emb is not None:
-                        score = self._cosine_similarity(query_emb, doc_emb)
-                    else:
-                        score = 0.0
+                    score = (
+                        self._cosine_similarity(query_emb, doc_emb)
+                        if query_emb is not None and doc_emb is not None
+                        else 0.0
+                    )
                     results.append((query_text, doc_text, score))
 
             return results
@@ -155,6 +140,16 @@ class SemanticScorer:
             logger.warning(f"Failed to score query pairs: {e}")
             capture_exception(e, operation="score_query_pairs")
             return [(q, d, 0.0) for q in queries for d in documents]
+
+    async def _get_embeddings_batch(
+        self, texts: list[str]
+    ) -> list[tuple[str, Any | None]]:
+        """Get embeddings for a batch of texts."""
+        results = []
+        for text in texts:
+            emb = await self._get_embedding(text)
+            results.append((text, emb))
+        return results
 
     async def _get_embedding(self, text: str) -> Any | None:
         """

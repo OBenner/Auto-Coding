@@ -100,51 +100,28 @@ def _display_context_window_usage(
         subtask_id: Optional subtask ID for more detailed display
     """
     if not TOKEN_ESTIMATOR_AVAILABLE:
-        # TokenEstimator not available, skip display
         return
 
-    # Count files and calculate token usage
     pattern_files = list(context.get("patterns", {}).keys())
     files_to_modify = list(context.get("files_to_modify", {}).keys())
     total_files = len(pattern_files) + len(files_to_modify)
 
     if total_files == 0:
-        # No context loaded, nothing to display
         return
 
-    # Initialize token estimator
     token_estimator = TokenEstimator()
 
-    # Estimate tokens for each file
-    pattern_tokens = 0
-    modify_tokens = 0
-
-    for file_path in pattern_files:
-        content = context["patterns"][file_path]
-        pattern_tokens += token_estimator.count_tokens(content)
-
-    for file_path in files_to_modify:
-        content = context["files_to_modify"][file_path]
-        modify_tokens += token_estimator.count_tokens(content)
-
+    pattern_tokens = sum(
+        token_estimator.count_tokens(context["patterns"][f]) for f in pattern_files
+    )
+    modify_tokens = sum(
+        token_estimator.count_tokens(context["files_to_modify"][f])
+        for f in files_to_modify
+    )
     total_tokens = pattern_tokens + modify_tokens
 
-    # Context window limits (Claude models)
-    # Conservative estimates to leave room for prompts and responses
-    CONTEXT_LIMITS = {
-        "warning": 100000,  # Show warning above 100K tokens
-        "critical": 150000,  # Show critical message above 150K tokens
-        "max": 200000,  # Maximum safe context window
-    }
+    status_level = _get_context_status_level(total_tokens)
 
-    # Determine status level
-    status_level = "success"
-    if total_tokens > CONTEXT_LIMITS["critical"]:
-        status_level = "error"
-    elif total_tokens > CONTEXT_LIMITS["warning"]:
-        status_level = "warning"
-
-    # Display context window usage
     print()
     print_status("Context Window Usage", status_level)
     print_key_value("Total Files", str(total_files))
@@ -156,15 +133,37 @@ def _display_context_window_usage(
         "Files to Modify", f"{len(files_to_modify)} ({modify_tokens:,} tokens)"
     )
 
-    # Show warnings if approaching limits
-    if total_tokens > CONTEXT_LIMITS["critical"]:
+    _print_context_warnings(total_tokens)
+
+    max_context = 200_000
+    percentage = (total_tokens / max_context) * 100
+    print_key_value("Context Usage", f"{percentage:.1f}%")
+
+    if subtask_id:
+        _print_context_file_list(pattern_files, files_to_modify)
+
+    print()
+
+
+def _get_context_status_level(total_tokens: int) -> str:
+    """Return status level string based on token count."""
+    if total_tokens > 150_000:
+        return "error"
+    if total_tokens > 100_000:
+        return "warning"
+    return "success"
+
+
+def _print_context_warnings(total_tokens: int) -> None:
+    """Print warning messages if context is too large."""
+    if total_tokens > 150_000:
         print()
         print_status(
             f"⚠️ Context window is critically large ({total_tokens:,} tokens). "
             f"This may impact performance or exceed model limits.",
             "error",
         )
-    elif total_tokens > CONTEXT_LIMITS["warning"]:
+    elif total_tokens > 100_000:
         print()
         print_status(
             f"⚠️ Context window is large ({total_tokens:,} tokens). "
@@ -172,28 +171,24 @@ def _display_context_window_usage(
             "warning",
         )
 
-    # Show percentage of context window used
-    percentage = (total_tokens / CONTEXT_LIMITS["max"]) * 100
-    print_key_value("Context Usage", f"{percentage:.1f}%")
 
-    # List files if verbose or subtask specified
-    if subtask_id:
-        print()
-        print(muted("Files included in context:"))
-        if pattern_files:
-            print(muted("  Pattern files:"))
-            for f in pattern_files[:5]:  # Show first 5
-                print(muted(f"    - {f}"))
-            if len(pattern_files) > 5:
-                print(muted(f"    ... and {len(pattern_files) - 5} more"))
-        if files_to_modify:
-            print(muted("  Files to modify:"))
-            for f in files_to_modify[:5]:  # Show first 5
-                print(muted(f"    - {f}"))
-            if len(files_to_modify) > 5:
-                print(muted(f"    ... and {len(files_to_modify) - 5} more"))
-
+def _print_context_file_list(
+    pattern_files: list[str], files_to_modify: list[str]
+) -> None:
+    """Print the list of files included in context."""
     print()
+    print(muted("Files included in context:"))
+    for label, files in [
+        ("Pattern files", pattern_files),
+        ("Files to modify", files_to_modify),
+    ]:
+        if not files:
+            continue
+        print(muted(f"  {label}:"))
+        for f in files[:5]:
+            print(muted(f"    - {f}"))
+        if len(files) > 5:
+            print(muted(f"    ... and {len(files) - 5} more"))
 
 
 async def run_autonomous_agent(

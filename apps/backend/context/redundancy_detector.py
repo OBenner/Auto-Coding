@@ -83,78 +83,15 @@ class RedundancyDetector:
 
         for file_match in sorted_files:
             try:
-                # Resolve path and ensure it's inside the project directory
-                raw_path = Path(file_match.path)
-                candidate = (
-                    raw_path if raw_path.is_absolute() else self.project_dir / raw_path
+                self._process_file_for_redundancy(
+                    file_match,
+                    seen_hashes,
+                    seen_content_signatures,
+                    filtered_files,
+                    removal_report,
                 )
-                file_path = candidate.resolve()
-
-                if not str(file_path).startswith(str(self.project_dir) + os.sep):
-                    logger.warning(
-                        "Skipping file outside project root: %s", file_match.path
-                    )
-                    continue
-
-                # Check if file exists and is readable
-                if not file_path.exists():
-                    logger.debug(f"File not found, skipping: {file_match.path}")
-                    continue
-
-                content = file_path.read_text(encoding="utf-8", errors="ignore")
-
-                # Check for exact duplicate (hash-based)
-                content_hash = self._compute_hash(content)
-                if content_hash in seen_hashes:
-                    removal_report.append(
-                        {
-                            "file": file_match.path,
-                            "reason": "exact_duplicate",
-                            "duplicate_of": seen_hashes[content_hash],
-                            "tokens_saved": file_match.estimated_tokens or 0,
-                        }
-                    )
-                    logger.debug(f"Exact duplicate found: {file_match.path}")
-                    continue
-
-                # Normalize content for near-duplicate detection
-                normalized_content = self._normalize_content(content)
-
-                # Check for near-duplicate (signature-based)
-                signature = self._compute_content_signature(content)
-                if signature in seen_content_signatures:
-                    stored = seen_content_signatures[signature]
-                    similarity = self._compute_similarity(
-                        normalized_content, stored["normalized"]
-                    )
-
-                    if similarity >= self.similarity_threshold:
-                        removal_report.append(
-                            {
-                                "file": file_match.path,
-                                "reason": "near_duplicate",
-                                "similar_to": stored["file"].path,
-                                "similarity": similarity,
-                                "tokens_saved": file_match.estimated_tokens or 0,
-                            }
-                        )
-                        logger.debug(
-                            f"Near-duplicate found: {file_match.path} "
-                            f"(similarity={similarity:.2f})"
-                        )
-                        continue
-
-                # No redundancy found, keep this file
-                filtered_files.append(file_match)
-                seen_hashes[content_hash] = file_match.path
-                seen_content_signatures[signature] = {
-                    "file": file_match,
-                    "normalized": normalized_content,
-                }
-
             except (OSError, UnicodeDecodeError) as e:
                 logger.debug(f"Failed to analyze file {file_match.path}: {e}")
-                # Keep files that can't be analyzed (better safe than sorry)
                 filtered_files.append(file_match)
 
         tokens_saved = sum(r.get("tokens_saved", 0) for r in removal_report)
@@ -164,6 +101,83 @@ class RedundancyDetector:
         )
 
         return filtered_files, removal_report
+
+    def _process_file_for_redundancy(
+        self,
+        file_match: FileMatch,
+        seen_hashes: dict[str, str],
+        seen_content_signatures: dict[str, dict],
+        filtered_files: list[FileMatch],
+        removal_report: list[dict],
+    ) -> None:
+        """Process a single file for redundancy detection."""
+        file_path = self._resolve_file_path(file_match.path)
+        if file_path is None:
+            return
+
+        content = file_path.read_text(encoding="utf-8", errors="ignore")
+
+        # Check for exact duplicate (hash-based)
+        content_hash = self._compute_hash(content)
+        if content_hash in seen_hashes:
+            removal_report.append(
+                {
+                    "file": file_match.path,
+                    "reason": "exact_duplicate",
+                    "duplicate_of": seen_hashes[content_hash],
+                    "tokens_saved": file_match.estimated_tokens or 0,
+                }
+            )
+            logger.debug(f"Exact duplicate found: {file_match.path}")
+            return
+
+        # Check for near-duplicate (signature-based)
+        normalized_content = self._normalize_content(content)
+        signature = self._compute_content_signature(content)
+        if signature in seen_content_signatures:
+            stored = seen_content_signatures[signature]
+            similarity = self._compute_similarity(
+                normalized_content, stored["normalized"]
+            )
+            if similarity >= self.similarity_threshold:
+                removal_report.append(
+                    {
+                        "file": file_match.path,
+                        "reason": "near_duplicate",
+                        "similar_to": stored["file"].path,
+                        "similarity": similarity,
+                        "tokens_saved": file_match.estimated_tokens or 0,
+                    }
+                )
+                logger.debug(
+                    f"Near-duplicate found: {file_match.path} "
+                    f"(similarity={similarity:.2f})"
+                )
+                return
+
+        # No redundancy found, keep this file
+        filtered_files.append(file_match)
+        seen_hashes[content_hash] = file_match.path
+        seen_content_signatures[signature] = {
+            "file": file_match,
+            "normalized": normalized_content,
+        }
+
+    def _resolve_file_path(self, path_str: str) -> Path | None:
+        """Resolve a file path and validate it's inside the project directory."""
+        raw_path = Path(path_str)
+        candidate = raw_path if raw_path.is_absolute() else self.project_dir / raw_path
+        file_path = candidate.resolve()
+
+        if not str(file_path).startswith(str(self.project_dir) + os.sep):
+            logger.warning("Skipping file outside project root: %s", path_str)
+            return None
+
+        if not file_path.exists():
+            logger.debug(f"File not found, skipping: {path_str}")
+            return None
+
+        return file_path
 
     def _compute_hash(self, content: str) -> str:
         """
@@ -228,7 +242,9 @@ class RedundancyDetector:
         # Create a simple hash of the normalized content
         import hashlib
 
-        return hashlib.md5(normalized_content.encode("utf-8")).hexdigest()
+        return hashlib.md5(  # noqa: S324
+            normalized_content.encode("utf-8"), usedforsecurity=False
+        ).hexdigest()
 
     def _normalize_content(self, content: str) -> str:
         """
