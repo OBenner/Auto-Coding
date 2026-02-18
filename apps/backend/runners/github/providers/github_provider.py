@@ -157,6 +157,40 @@ class GitHubProvider:
         """Fetch the diff for a pull request."""
         return await self._gh_client.pr_diff(number)
 
+    @staticmethod
+    def _format_finding_location(finding) -> str:
+        """Format the file location string for a review finding."""
+        if not finding.file:
+            return ""
+        location = f" (`{finding.file}"
+        if finding.line:
+            location += f":{finding.line}"
+            if finding.end_line and finding.end_line != finding.line:
+                location += f"-{finding.end_line}"
+        location += "`)"
+        return location
+
+    @staticmethod
+    def _format_finding(finding) -> str:
+        """Format a single review finding as markdown."""
+        _SEVERITY_ICONS = {
+            "critical": "\u274c",
+            "high": "\u26a0\ufe0f",
+            "medium": "\U0001f7e1",
+            "low": "\U0001f535",
+            "info": "\u2139\ufe0f",
+        }
+        icon = _SEVERITY_ICONS.get(finding.severity, "\u2022")
+        location = GitHubProvider._format_finding_location(finding)
+        lines = [
+            f"- {icon} **[{finding.severity.upper()}]** {finding.title}{location}",
+            f"  {finding.description}",
+        ]
+        for evidence_line in finding.evidence:
+            lines.append(f"  > {evidence_line}")
+        lines.append("")
+        return "\n".join(lines)
+
     async def post_review(self, pr_number: int, review: ReviewData) -> int:
         """Post a review to a pull request.
 
@@ -168,30 +202,7 @@ class GitHubProvider:
         # Append structured findings with evidence if present
         if review.findings:
             body += "\n\n---\n\n### Structured Findings\n\n"
-            for finding in review.findings:
-                icon = {
-                    "critical": "\u274c",
-                    "high": "\u26a0\ufe0f",
-                    "medium": "\U0001f7e1",
-                    "low": "\U0001f535",
-                    "info": "\u2139\ufe0f",
-                }.get(finding.severity, "\u2022")
-                location = ""
-                if finding.file:
-                    location = f" (`{finding.file}"
-                    if finding.line:
-                        location += f":{finding.line}"
-                        if finding.end_line and finding.end_line != finding.line:
-                            location += f"-{finding.end_line}"
-                    location += "`)"
-
-                body += f"- {icon} **[{finding.severity.upper()}]** {finding.title}{location}\n"
-                body += f"  {finding.description}\n"
-
-                # Inline code evidence
-                for evidence_line in finding.evidence:
-                    body += f"  > {evidence_line}\n"
-                body += "\n"
+            body += "\n".join(self._format_finding(f) for f in review.findings)
 
         # GitHub API enforces a 65 536-character limit on review bodies.
         _MAX_REVIEW_BODY = 65_536

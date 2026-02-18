@@ -25,6 +25,7 @@ import {
   PanelLeftClose,
   Puzzle,
   BarChart3,
+  Play,
   Calendar,
   Activity
 } from 'lucide-react';
@@ -62,7 +63,7 @@ import { SessionContextIndicator } from './SessionContextIndicator';
 import { NavIndicator } from './NavIndicator';
 import type { Project, AutoBuildVersionInfo, GitStatus, ProjectEnvConfig } from '../../shared/types';
 
-export type SidebarView = 'kanban' | 'terminals' | 'roadmap' | 'context' | 'ideation' | 'github-issues' | 'gitlab-issues' | 'github-prs' | 'gitlab-merge-requests' | 'changelog' | 'insights' | 'worktrees' | 'agent-tools' | 'plugins' | 'analytics' | 'merge-analytics' | 'scheduler';
+export type SidebarView = 'kanban' | 'terminals' | 'roadmap' | 'context' | 'ideation' | 'github-issues' | 'gitlab-issues' | 'github-prs' | 'gitlab-merge-requests' | 'changelog' | 'insights' | 'worktrees' | 'agent-tools' | 'plugins' | 'analytics' | 'merge-analytics' | 'sessions' | 'scheduler';
 
 interface SidebarProps {
   onSettingsClick: () => void;
@@ -92,7 +93,8 @@ const baseNavItems: NavItem[] = [
   { id: 'plugins', labelKey: 'navigation:items.plugins', icon: Puzzle, shortcut: 'U' },
   { id: 'worktrees', labelKey: 'navigation:items.worktrees', icon: GitBranch, shortcut: 'W' },
   { id: 'analytics', labelKey: 'navigation:items.analytics', icon: Activity, shortcut: 'T' },
-  { id: 'merge-analytics', labelKey: 'navigation:items.mergeAnalytics', icon: BarChart3, shortcut: 'Y' }
+  { id: 'merge-analytics', labelKey: 'navigation:items.mergeAnalytics', icon: BarChart3, shortcut: 'Y' },
+  { id: 'sessions', labelKey: 'navigation:items.sessions', icon: Play }
 ];
 
 // GitHub nav items shown when GitHub is enabled

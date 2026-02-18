@@ -1,0 +1,52 @@
+{
+  "success": true,
+  "total": 3,
+  "passed": 3,
+  "tests": [
+    {
+      "name": "test_3_multi_step_workflow",
+      "passed": true,
+      "duration_seconds": 164.74847149848938,
+      "indicators_found": [
+        "window",
+        "health",
+        "log",
+        "summary"
+      ]
+    },
+    {
+      "name": "test_4_error_handling",
+      "passed": true,
+      "details": [
+        {
+          "name": "invalid_screenshot_quality",
+          "passed": true,
+          "duration_seconds": 25.27966046333313,
+          "error_detected": true
+        },
+        {
+          "name": "non_existent_element",
+          "passed": true,
+          "duration_seconds": 52.577579498291016,
+          "error_detected": true
+        }
+      ]
+    },
+    {
+      "name": "test_5_performance_benchmarks",
+      "passed": true,
+      "benchmarks": [
+        {
+          "tool": "health_check",
+          "latency_ms": 202810,
+          "within_target": false
+        },
+        {
+          "tool": "get_window_info",
+          "latency_ms": 195223,
+          "within_target": false
+        }
+      ]
+    }
+  ]
+}

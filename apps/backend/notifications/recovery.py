@@ -26,6 +26,8 @@ from ui import (
     warning,
 )
 
+_LABEL_SUBTASK_ID = "Subtask ID"
+
 
 def notify_stuck_subtask(
     subtask_id: str,
@@ -56,7 +58,7 @@ def notify_stuck_subtask(
     )
     print()
 
-    print_key_value("Subtask ID", subtask_id)
+    print_key_value(_LABEL_SUBTASK_ID, subtask_id)
     print_key_value("Attempts Made", str(attempt_count))
     print_key_value("Reason", reason)
 
@@ -159,7 +161,7 @@ def notify_escalation(
     )
     print()
 
-    print_key_value("Subtask ID", subtask_id)
+    print_key_value(_LABEL_SUBTASK_ID, subtask_id)
     print_key_value("Escalation Reason", reason)
 
     if history and len(history) > 0:
@@ -205,7 +207,7 @@ def notify_circular_fix_detected(
     )
     print()
 
-    print_key_value("Subtask ID", subtask_id)
+    print_key_value(_LABEL_SUBTASK_ID, subtask_id)
     print()
     print(f"  {bold('Recent Similar Approaches:')}")
     for i, approach in enumerate(similar_approaches[-3:], 1):

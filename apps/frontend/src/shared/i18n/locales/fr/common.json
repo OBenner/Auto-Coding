@@ -802,5 +802,10 @@
     "submitError": "Échec de la soumission du retour : {{error}}",
     "notAvailable": "Retour non disponible",
     "notAvailableDescription": "Le système de retour n'est pas encore entièrement configuré"
+  },
+  "quality": {
+    "score": "Score de qualité",
+    "trend": "Tendance",
+    "alert": "Alerte de qualité"
   }
 }

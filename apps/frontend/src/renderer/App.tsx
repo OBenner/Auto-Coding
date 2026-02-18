@@ -46,6 +46,7 @@ import { Changelog } from './components/Changelog';
 import { CalendarView } from './components/Scheduler/CalendarView';
 import { QueueView } from './components/Scheduler/QueueView';
 import { Worktrees } from './components/Worktrees';
+import { SessionList } from './components/session-replay/SessionList';
 import { AgentTools } from './components/AgentTools';
 import { ProductivityDashboard } from './components/analytics/ProductivityDashboard';
 import { WelcomeScreen } from './components/WelcomeScreen';
@@ -148,6 +149,7 @@ export function App() {
   const [settingsInitialSection, setSettingsInitialSection] = useState<AppSection | undefined>(undefined);
   const [settingsInitialProjectSection, setSettingsInitialProjectSection] = useState<ProjectSettingsSection | undefined>(undefined);
   const [activeView, setActiveView] = useState<SidebarView>('kanban');
+  const [sessionFilterSpecId, setSessionFilterSpecId] = useState<string | undefined>(undefined);
   const [isOnboardingWizardOpen, setIsOnboardingWizardOpen] = useState(false);
   const [isVersionWarningModalOpen, setIsVersionWarningModalOpen] = useState(false);
   const [isRefreshingTasks, setIsRefreshingTasks] = useState(false);
@@ -326,6 +328,13 @@ export function App() {
       i18n.changeLanguage(settings.language);
     }
   }, [settings.language, i18n]);
+
+  // Clear session filter when switching away from sessions view
+  useEffect(() => {
+    if (activeView !== 'sessions') {
+      setSessionFilterSpecId(undefined);
+    }
+  }, [activeView]);
 
   // Listen for open-app-settings events (e.g., from project settings)
   useEffect(() => {
@@ -636,6 +645,12 @@ export function App() {
 
   const handleAddProject = () => {
     setShowAddProjectModal(true);
+  };
+
+  const handleViewTaskSessions = (task: Task) => {
+    setSessionFilterSpecId(task.specId);
+    setActiveView('sessions');
+    setSelectedTask(null); // Close the modal
   };
 
   const handleProjectAdded = (project: Project, needsInit: boolean) => {
@@ -1071,6 +1086,12 @@ export function App() {
                   <Worktrees projectId={activeProjectId || selectedProjectId!} />
                 )}
                 {activeView === 'agent-tools' && <AgentTools />}
+                {activeView === 'sessions' && (
+                  <SessionList
+                    projectId={activeProjectId || selectedProjectId!}
+                    specId={sessionFilterSpecId}
+                  />
+                )}
                 {activeView === 'analytics' && (activeProjectId || selectedProjectId) && (
                   <ProductivityDashboard projectId={activeProjectId || selectedProjectId!} />
                 )}
@@ -1095,6 +1116,7 @@ export function App() {
           onOpenChange={(open) => !open && handleCloseTaskDetail()}
           onSwitchToTerminals={() => setActiveView('terminals')}
           onOpenInbuiltTerminal={handleOpenInbuiltTerminal}
+          onViewSessions={selectedTask ? () => handleViewTaskSessions(selectedTask) : undefined}
         />
 
         {/* Dialogs */}

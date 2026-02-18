@@ -25,6 +25,9 @@
     "showMetadata": "Afficher les métadonnées",
     "hideMetadata": "Masquer les métadonnées"
   },
+  "taskDetail": {
+    "viewSessionReplay": "Voir la relecture de session"
+  },
   "labels": {
     "running": "En cours",
     "aiReview": "Révision IA",

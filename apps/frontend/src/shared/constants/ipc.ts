@@ -623,6 +623,26 @@ export const IPC_CHANNELS = {
   TEMPLATE_PREVIEW: 'template:preview',
   TEMPLATE_CREATE_SPEC: 'template:createSpec',
   TEMPLATE_SUGGEST: 'template:suggest',
+  // Custom template operations (user-created)
+  TEMPLATE_CUSTOM_LIST: 'template:custom:list',
+  TEMPLATE_CUSTOM_SAVE: 'template:custom:save',
+  TEMPLATE_CUSTOM_UPDATE: 'template:custom:update',
+  TEMPLATE_CUSTOM_DELETE: 'template:custom:delete',
+  TEMPLATE_CUSTOM_EXPORT: 'template:custom:export',
+  TEMPLATE_CUSTOM_IMPORT: 'template:custom:import',
+  TEMPLATE_CUSTOM_TEST: 'template:custom:test',
+  // Session Replay operations
+  SESSION_REPLAY_LIST: 'sessionReplay:list',
+  SESSION_REPLAY_GET_SESSION: 'sessionReplay:getSession',
+  SESSION_REPLAY_GET_TIMELINE: 'sessionReplay:getTimeline',
+  SESSION_REPLAY_GET_DECISION_POINTS: 'sessionReplay:getDecisionPoints',
+  SESSION_REPLAY_GET_BOOKMARKS: 'sessionReplay:getBookmarks',
+  SESSION_REPLAY_ADD_BOOKMARK: 'sessionReplay:addBookmark',
+  SESSION_REPLAY_REMOVE_BOOKMARK: 'sessionReplay:removeBookmark',
+  SESSION_REPLAY_GET_ENTRIES: 'sessionReplay:getEntries',
+  SESSION_REPLAY_SEARCH: 'sessionReplay:search',
+  SESSION_REPLAY_EXPORT_SESSION: 'sessionReplay:exportSession',
+  SESSION_REPLAY_EXPORT_ALL: 'sessionReplay:exportAll',
 
   // Feedback submission (adaptive agent learning)
   FEEDBACK_SUBMIT: 'feedback:submit',

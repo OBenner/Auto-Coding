@@ -48,6 +48,13 @@ class LogEntry:
         None  # Subphase grouping (e.g., "PROJECT DISCOVERY", "CONTEXT GATHERING")
     )
     collapsed: bool | None = None  # Whether to show collapsed by default in UI
+    # Decision point tracking fields
+    is_decision_point: bool | None = (
+        None  # Whether this entry represents an important decision point
+    )
+    reasoning: str | None = None  # Agent's reasoning/thinking at this decision point
+    alternatives: list[str] | None = None  # Alternative options that were considered
+    decision: str | None = None  # The final decision or choice made
 
     def to_dict(self) -> dict:
         """Convert to dictionary, excluding None values."""
@@ -76,3 +83,89 @@ class PhaseLog:
             "completed_at": self.completed_at,
             "entries": self.entries,
         }
+
+
+@dataclass
+class SessionMetadata:
+    """Metadata for a session."""
+
+    session_id: int
+    started_at: str
+    completed_at: str | None = None
+    duration_seconds: float | None = None
+    subtasks: list[str] | None = None
+
+    def __post_init__(self):
+        if self.subtasks is None:
+            self.subtasks = []
+
+    def to_dict(self) -> dict:
+        """Convert to dictionary, excluding None values for optional fields."""
+        result = {
+            "session_id": self.session_id,
+            "started_at": self.started_at,
+        }
+        if self.completed_at is not None:
+            result["completed_at"] = self.completed_at
+        if self.duration_seconds is not None:
+            result["duration_seconds"] = self.duration_seconds
+        if self.subtasks:
+            result["subtasks"] = self.subtasks
+        return result
+
+
+@dataclass
+class SubtaskTransition:
+    """A transition between subtasks."""
+
+    timestamp: str
+    from_subtask: str | None
+    to_subtask: str | None
+    session: int | None = None
+
+    def to_dict(self) -> dict:
+        """
+        Convert to dictionary.
+
+        Always includes from_subtask and to_subtask (even if None) since None
+        is meaningful (indicates start/end of subtask work).
+        """
+        result = {
+            "timestamp": self.timestamp,
+            "from_subtask": self.from_subtask,
+            "to_subtask": self.to_subtask,
+        }
+        if self.session is not None:
+            result["session"] = self.session
+        return result
+
+
+@dataclass
+class Bookmark:
+    """A bookmark marking an interesting moment in a session."""
+
+    id: str  # Unique bookmark ID
+    timestamp: str  # When the bookmark was created
+    entry_timestamp: str  # Timestamp of the log entry being bookmarked
+    phase: str  # Phase where the bookmark was created
+    label: str  # User-provided label/title
+    note: str | None = None  # Optional user note/comment
+    session: int | None = None  # Session number
+    subtask_id: str | None = None  # Associated subtask
+
+    def to_dict(self) -> dict:
+        """Convert to dictionary, excluding None values for optional fields."""
+        result = {
+            "id": self.id,
+            "timestamp": self.timestamp,
+            "entry_timestamp": self.entry_timestamp,
+            "phase": self.phase,
+            "label": self.label,
+        }
+        if self.note is not None:
+            result["note"] = self.note
+        if self.session is not None:
+            result["session"] = self.session
+        if self.subtask_id is not None:
+            result["subtask_id"] = self.subtask_id
+        return result
