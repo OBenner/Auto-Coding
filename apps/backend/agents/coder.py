@@ -298,8 +298,13 @@ async def run_autonomous_agent(
 
             # Handle rollback action
             if pending_recovery_action.action == "rollback":
-                print_status(f"Rolling back to commit {pending_recovery_action.target[:8]}...", "warning")
-                rollback_success = recovery_manager.rollback_to_commit(pending_recovery_action.target)
+                print_status(
+                    f"Rolling back to commit {pending_recovery_action.target[:8]}...",
+                    "warning",
+                )
+                rollback_success = recovery_manager.rollback_to_commit(
+                    pending_recovery_action.target
+                )
                 if rollback_success:
                     print_status("Rollback successful", "success")
                 else:
@@ -576,38 +581,29 @@ async def run_autonomous_agent(
                 source_spec_dir=source_spec_dir,
             )
 
-<<<<<<< HEAD
             # === ENHANCED RECOVERY: Handle failures with smart recovery ===
             if not success:
                 attempt_count = recovery_manager.get_attempt_count(subtask_id)
-=======
-            # Check for stuck subtasks
-            attempt_count = recovery_manager.get_attempt_count(subtask_id)
-            if not success and attempt_count >= 3:
-                recovery_manager.mark_subtask_stuck(
-                    subtask_id, f"Failed after {attempt_count} attempts"
-                )
-
-                # Notify user about stuck subtask
-                notify_stuck_subtask(
-                    subtask_id=subtask_id,
-                    reason=f"Failed after {attempt_count} attempts",
-                    attempt_count=attempt_count,
-                    spec_dir=spec_dir,
-                )
->>>>>>> origin/develop
 
                 # Classify the failure type
                 # We use a generic "verification failed" error since we don't have the actual error message
                 # The recovery system will use attempt history to determine if it's circular
-                error_message = f"Subtask {subtask_id} verification failed or incomplete"
-                failure_type = recovery_manager.classify_failure(error_message, subtask_id)
+                error_message = (
+                    f"Subtask {subtask_id} verification failed or incomplete"
+                )
+                failure_type = recovery_manager.classify_failure(
+                    error_message, subtask_id
+                )
 
                 # Determine recovery action (handles exponential backoff, model fallback, DLQ, notifications)
-                recovery_action = recovery_manager.determine_recovery_action(failure_type, subtask_id)
+                recovery_action = recovery_manager.determine_recovery_action(
+                    failure_type, subtask_id
+                )
 
                 # Record the notification or silent failure
-                recovery_manager.record_recovery_notification(subtask_id, failure_type, recovery_action)
+                recovery_manager.record_recovery_notification(
+                    subtask_id, failure_type, recovery_action
+                )
 
                 print()
                 print_status(f"Recovery action: {recovery_action.action}", "warning")
@@ -630,25 +626,44 @@ async def run_autonomous_agent(
                             current_model_shorthand = "haiku"
 
                         # Get fallback model from chain
-                        fallback_chain = MODEL_FALLBACK_CHAIN.get(current_model_shorthand, [])
+                        fallback_chain = MODEL_FALLBACK_CHAIN.get(
+                            current_model_shorthand, []
+                        )
                         if fallback_chain:
                             override_model = fallback_chain[0]  # Use first fallback
-                            print_status(f"Will try fallback model: {override_model}", "info")
+                            print_status(
+                                f"Will try fallback model: {override_model}", "info"
+                            )
                         else:
                             override_model = None
 
                     # Set recovery guidance from strategy
                     if recovery_action.strategy:
                         recovery_guidance = recovery_action.strategy.guidance
-                        print_key_value("Strategy", recovery_action.strategy.description)
+                        print_key_value(
+                            "Strategy", recovery_action.strategy.description
+                        )
 
-                    print_status(f"Will retry after {recovery_action.wait_seconds:.1f}s backoff", "progress")
+                    print_status(
+                        f"Will retry after {recovery_action.wait_seconds:.1f}s backoff",
+                        "progress",
+                    )
 
                 elif recovery_action.action == "skip":
                     # Mark subtask as stuck and skip
-                    recovery_manager.mark_subtask_stuck(subtask_id, recovery_action.reason)
+                    recovery_manager.mark_subtask_stuck(
+                        subtask_id, recovery_action.reason
+                    )
                     print_status(f"Subtask {subtask_id} marked as STUCK", "error")
                     print(muted("Recovery exhausted - consider manual intervention"))
+
+                    # Notify user about stuck subtask
+                    notify_stuck_subtask(
+                        subtask_id=subtask_id,
+                        reason=recovery_action.reason,
+                        attempt_count=attempt_count,
+                        spec_dir=spec_dir,
+                    )
 
                     # Record stuck subtask in Linear (if enabled)
                     if linear_is_enabled:
@@ -661,12 +676,26 @@ async def run_autonomous_agent(
 
                 elif recovery_action.action == "escalate":
                     # Critical failure - escalate to human
-                    recovery_manager.mark_subtask_stuck(subtask_id, recovery_action.reason)
+                    recovery_manager.mark_subtask_stuck(
+                        subtask_id, recovery_action.reason
+                    )
                     print()
                     print_status("ESCALATION REQUIRED", "error")
                     print_status(recovery_action.reason, "error")
-                    print(muted("This failure has been added to the dead-letter queue for manual review"))
+                    print(
+                        muted(
+                            "This failure has been added to the dead-letter queue for manual review"
+                        )
+                    )
                     print()
+
+                    # Notify user about escalation
+                    notify_stuck_subtask(
+                        subtask_id=subtask_id,
+                        reason=recovery_action.reason,
+                        attempt_count=attempt_count,
+                        spec_dir=spec_dir,
+                    )
 
                     # Record stuck subtask in Linear (if enabled)
                     if linear_is_enabled:
@@ -680,11 +709,16 @@ async def run_autonomous_agent(
                 elif recovery_action.action == "rollback":
                     # Rollback will be handled at the start of next iteration
                     pending_recovery_action = recovery_action
-                    print_status(f"Will rollback to {recovery_action.target[:8]} on next iteration", "warning")
+                    print_status(
+                        f"Will rollback to {recovery_action.target[:8]} on next iteration",
+                        "warning",
+                    )
 
                 elif recovery_action.action == "continue":
                     # Context exhausted - will continue in next session
-                    print_status("Context exhausted - will continue in next session", "info")
+                    print_status(
+                        "Context exhausted - will continue in next session", "info"
+                    )
                     # No special handling needed - natural session boundary
 
                 print()

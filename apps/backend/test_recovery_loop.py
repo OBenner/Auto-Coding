@@ -13,25 +13,19 @@ Comprehensive test of the auto-recovery loop system including:
 This test verifies all components work together properly.
 """
 
-import asyncio
-import json
-import tempfile
 import shutil
+import tempfile
+from datetime import UTC, datetime
 from pathlib import Path
-from datetime import datetime, UTC
 
 # Import the recovery system components
 from services.recovery import (
-    RecoveryManager,
-    FailureType,
-    RecoveryAction,
-    RetryStrategy,
     BACKOFF_BASE_DELAY,
     BACKOFF_MAX_DELAY,
     BACKOFF_MULTIPLIER,
+    FailureType,
+    RecoveryManager,
 )
-from services.dead_letter_queue import DeadLetterQueue
-from services.notification_manager import NotificationManager
 
 
 class RecoveryLoopTest:
@@ -64,10 +58,9 @@ class RecoveryLoopTest:
 
         # Initialize recovery manager
         self.recovery_manager = RecoveryManager(
-            spec_dir=self.spec_dir,
-            project_dir=self.project_dir
+            spec_dir=self.spec_dir, project_dir=self.project_dir
         )
-        print(f"✓ RecoveryManager initialized")
+        print("✓ RecoveryManager initialized")
 
         return self
 
@@ -75,16 +68,18 @@ class RecoveryLoopTest:
         """Clean up test environment."""
         if self.test_dir and self.test_dir.exists():
             shutil.rmtree(self.test_dir)
-            print(f"\n✓ Test environment cleaned up")
+            print("\n✓ Test environment cleaned up")
 
     def record_result(self, test_name: str, passed: bool, details: str = ""):
         """Record test result."""
-        self.test_results.append({
-            "test": test_name,
-            "passed": passed,
-            "details": details,
-            "timestamp": datetime.now(UTC).isoformat()
-        })
+        self.test_results.append(
+            {
+                "test": test_name,
+                "passed": passed,
+                "details": details,
+                "timestamp": datetime.now(UTC).isoformat(),
+            }
+        )
         status = "✓ PASS" if passed else "✗ FAIL"
         print(f"{status}: {test_name}")
         if details:
@@ -105,19 +100,20 @@ class RecoveryLoopTest:
         all_passed = True
         for error_msg, expected_type in test_cases:
             result = self.recovery_manager.classify_failure(
-                error=error_msg,
-                subtask_id="test-subtask"
+                error=error_msg, subtask_id="test-subtask"
             )
             if result == expected_type:
                 print(f"  ✓ '{error_msg}' → {expected_type.value}")
             else:
-                print(f"  ✗ '{error_msg}' → {result.value} (expected {expected_type.value})")
+                print(
+                    f"  ✗ '{error_msg}' → {result.value} (expected {expected_type.value})"
+                )
                 all_passed = False
 
         self.record_result(
             "Failure Classification",
             all_passed,
-            f"Tested {len(test_cases)} error patterns"
+            f"Tested {len(test_cases)} error patterns",
         )
         return all_passed
 
@@ -126,14 +122,14 @@ class RecoveryLoopTest:
         print("\n--- Test 2: Exponential Backoff ---")
 
         expected_delays = [
-            (0, 0.0),     # First attempt: no delay
-            (1, 2.0),     # 1.0 * 2^1 = 2.0
-            (2, 4.0),     # 1.0 * 2^2 = 4.0
-            (3, 8.0),     # 1.0 * 2^3 = 8.0
-            (4, 16.0),    # 1.0 * 2^4 = 16.0
-            (5, 32.0),    # 1.0 * 2^5 = 32.0
-            (6, 60.0),    # Capped at 60s
-            (10, 60.0),   # Still capped
+            (0, 0.0),  # First attempt: no delay
+            (1, 2.0),  # 1.0 * 2^1 = 2.0
+            (2, 4.0),  # 1.0 * 2^2 = 4.0
+            (3, 8.0),  # 1.0 * 2^3 = 8.0
+            (4, 16.0),  # 1.0 * 2^4 = 16.0
+            (5, 32.0),  # 1.0 * 2^5 = 32.0
+            (6, 60.0),  # Capped at 60s
+            (10, 60.0),  # Still capped
         ]
 
         all_passed = True
@@ -142,13 +138,15 @@ class RecoveryLoopTest:
             if abs(actual_delay - expected_delay) < 0.001:
                 print(f"  ✓ Attempt {attempt}: {actual_delay}s delay")
             else:
-                print(f"  ✗ Attempt {attempt}: {actual_delay}s (expected {expected_delay}s)")
+                print(
+                    f"  ✗ Attempt {attempt}: {actual_delay}s (expected {expected_delay}s)"
+                )
                 all_passed = False
 
         self.record_result(
             "Exponential Backoff",
             all_passed,
-            f"Base={BACKOFF_BASE_DELAY}s, Max={BACKOFF_MAX_DELAY}s, Multiplier={BACKOFF_MULTIPLIER}x"
+            f"Base={BACKOFF_BASE_DELAY}s, Max={BACKOFF_MAX_DELAY}s, Multiplier={BACKOFF_MULTIPLIER}x",
         )
         return all_passed
 
@@ -162,7 +160,12 @@ class RecoveryLoopTest:
             (FailureType.VERIFICATION_FAILED, 1, "model_fallback", True),
             (FailureType.VERIFICATION_FAILED, 2, "alternative_approach", True),
             (FailureType.UNKNOWN, 0, "direct_retry", False),
-            (FailureType.UNKNOWN, 1, "model_fallback_alternative", True),  # UNKNOWN uses combined strategy
+            (
+                FailureType.UNKNOWN,
+                1,
+                "model_fallback_alternative",
+                True,
+            ),  # UNKNOWN uses combined strategy
             (FailureType.BROKEN_BUILD, 0, None, False),  # No strategy for BROKEN_BUILD
         ]
 
@@ -171,31 +174,43 @@ class RecoveryLoopTest:
             strategy = self.recovery_manager.select_retry_strategy(
                 failure_type=failure_type,
                 attempt_count=attempt,
-                subtask_id="test-subtask"
+                subtask_id="test-subtask",
             )
 
             if expected_strategy is None:
                 if strategy is None:
-                    print(f"  ✓ {failure_type.value} attempt {attempt}: No strategy (as expected)")
+                    print(
+                        f"  ✓ {failure_type.value} attempt {attempt}: No strategy (as expected)"
+                    )
                 else:
-                    print(f"  ✗ {failure_type.value} attempt {attempt}: {strategy.name} (expected None)")
+                    print(
+                        f"  ✗ {failure_type.value} attempt {attempt}: {strategy.name} (expected None)"
+                    )
                     all_passed = False
             else:
                 if strategy and strategy.name == expected_strategy:
-                    fallback_check = "✓" if strategy.use_model_fallback == expected_fallback else "✗"
-                    print(f"  {fallback_check} {failure_type.value} attempt {attempt}: {strategy.name}")
+                    fallback_check = (
+                        "✓" if strategy.use_model_fallback == expected_fallback else "✗"
+                    )
+                    print(
+                        f"  {fallback_check} {failure_type.value} attempt {attempt}: {strategy.name}"
+                    )
                     if strategy.use_model_fallback != expected_fallback:
-                        print(f"      Model fallback: {strategy.use_model_fallback} (expected {expected_fallback})")
+                        print(
+                            f"      Model fallback: {strategy.use_model_fallback} (expected {expected_fallback})"
+                        )
                         all_passed = False
                 else:
                     actual = strategy.name if strategy else "None"
-                    print(f"  ✗ {failure_type.value} attempt {attempt}: {actual} (expected {expected_strategy})")
+                    print(
+                        f"  ✗ {failure_type.value} attempt {attempt}: {actual} (expected {expected_strategy})"
+                    )
                     all_passed = False
 
         self.record_result(
             "Retry Strategy Selection",
             all_passed,
-            "Progressive strategies: direct → model_fallback → alternative"
+            "Progressive strategies: direct → model_fallback → alternative",
         )
         return all_passed
 
@@ -232,7 +247,7 @@ class RecoveryLoopTest:
                     session=1,
                     success=False,
                     approach="initial",
-                    error="test error"
+                    error="test error",
                 )
 
             action = self.recovery_manager.determine_recovery_action(
@@ -241,12 +256,18 @@ class RecoveryLoopTest:
             )
 
             checks = [
-                (action.action == scenario["expected_action"],
-                 f"action={action.action} (expected {scenario['expected_action']})"),
-                (abs(action.wait_seconds - scenario["expected_wait"]) < 0.001,
-                 f"wait={action.wait_seconds}s (expected {scenario['expected_wait']}s)"),
-                (action.strategy is not None,
-                 f"strategy={action.strategy.name if action.strategy else None}"),
+                (
+                    action.action == scenario["expected_action"],
+                    f"action={action.action} (expected {scenario['expected_action']})",
+                ),
+                (
+                    abs(action.wait_seconds - scenario["expected_wait"]) < 0.001,
+                    f"wait={action.wait_seconds}s (expected {scenario['expected_wait']}s)",
+                ),
+                (
+                    action.strategy is not None,
+                    f"strategy={action.strategy.name if action.strategy else None}",
+                ),
             ]
 
             all_checks_passed = all(check[0] for check in checks)
@@ -260,7 +281,7 @@ class RecoveryLoopTest:
         self.record_result(
             "Recovery Action Determination",
             all_passed,
-            f"Tested {len(scenarios)} scenarios"
+            f"Tested {len(scenarios)} scenarios",
         )
         return all_passed
 
@@ -294,7 +315,7 @@ class RecoveryLoopTest:
         self.record_result(
             "Dead-Letter Queue",
             all_passed,
-            "Unrecoverable failures captured for manual review"
+            "Unrecoverable failures captured for manual review",
         )
         return all_passed
 
@@ -309,10 +330,10 @@ class RecoveryLoopTest:
         for i in range(2):
             self.recovery_manager.record_attempt(
                 subtask_id=subtask_id,
-                session=i+1,
+                session=i + 1,
                 success=False,
                 approach="test",
-                error="test error"
+                error="test error",
             )
 
         # Get action after 2 attempts (should not notify yet)
@@ -337,7 +358,7 @@ class RecoveryLoopTest:
             session=3,
             success=False,
             approach="test",
-            error="test error"
+            error="test error",
         )
 
         action = self.recovery_manager.determine_recovery_action(
@@ -346,7 +367,7 @@ class RecoveryLoopTest:
         )
 
         if action.should_notify:
-            print(f"  ✓ Notification triggered at threshold")
+            print("  ✓ Notification triggered at threshold")
             print(f"    Message: {action.notification_message[:60]}...")
 
             # Record the notification
@@ -360,13 +381,13 @@ class RecoveryLoopTest:
             print(f"  Total notifications: {final_stats['total_notifications']}")
             all_passed = True
         else:
-            print(f"  ✗ Expected notification at threshold, got should_notify=False")
+            print("  ✗ Expected notification at threshold, got should_notify=False")
             all_passed = False
 
         self.record_result(
             "Notification Thresholds",
             all_passed,
-            "Silent retries below threshold, notification at threshold"
+            "Silent retries below threshold, notification at threshold",
         )
         return all_passed
 
@@ -390,7 +411,7 @@ class RecoveryLoopTest:
                 session=attempt_num + 1,
                 success=False,
                 approach="test_approach",
-                error=f"Verification failed on attempt {attempt_num}"
+                error=f"Verification failed on attempt {attempt_num}",
             )
 
             # Determine recovery action
@@ -400,7 +421,9 @@ class RecoveryLoopTest:
             )
 
             print(f"    Action: {action.action}")
-            print(f"    Strategy: {action.strategy.name if action.strategy else 'None'}")
+            print(
+                f"    Strategy: {action.strategy.name if action.strategy else 'None'}"
+            )
             print(f"    Wait: {action.wait_seconds}s")
             print(f"    Model Fallback: {action.use_model_fallback}")
             print(f"    Notify: {action.should_notify}")
@@ -416,21 +439,23 @@ class RecoveryLoopTest:
             # Check if we exhausted retry strategies (action is "skip")
             if action.action == "skip":
                 print(f"    ✓ Strategies exhausted after {attempt_num + 1} attempts")
-                print(f"    Note: VERIFICATION_FAILED uses 'skip' (not 'escalate') when exhausted")
+                print(
+                    "    Note: VERIFICATION_FAILED uses 'skip' (not 'escalate') when exhausted"
+                )
                 exhausted = True
                 break
 
         # VERIFICATION_FAILED doesn't escalate to DLQ, it just skips
         if exhausted:
-            print(f"\n  ✓ Recovery loop correctly exhausted after max attempts")
+            print("\n  ✓ Recovery loop correctly exhausted after max attempts")
         else:
-            print(f"\n  ✗ Expected strategies to be exhausted")
+            print("\n  ✗ Expected strategies to be exhausted")
             all_passed = False
 
         self.record_result(
             "Full Recovery Loop",
             all_passed,
-            f"Simulated {max_attempts} attempts with progressive strategies"
+            f"Simulated {max_attempts} attempts with progressive strategies",
         )
         return all_passed
 
@@ -442,7 +467,7 @@ class RecoveryLoopTest:
         all_passed = True
 
         # UNKNOWN failures have max_attempts=2
-        print(f"  Testing UNKNOWN failure escalation (max 2 attempts)...")
+        print("  Testing UNKNOWN failure escalation (max 2 attempts)...")
 
         for attempt_num in range(3):  # Try 3 times to exceed max
             print(f"\n  Attempt {attempt_num}:")
@@ -453,7 +478,7 @@ class RecoveryLoopTest:
                 session=attempt_num + 1,
                 success=False,
                 approach="test_approach",
-                error=f"Unknown error on attempt {attempt_num}"
+                error=f"Unknown error on attempt {attempt_num}",
             )
 
             # Determine recovery action
@@ -463,7 +488,9 @@ class RecoveryLoopTest:
             )
 
             print(f"    Action: {action.action}")
-            print(f"    Strategy: {action.strategy.name if action.strategy else 'None'}")
+            print(
+                f"    Strategy: {action.strategy.name if action.strategy else 'None'}"
+            )
 
             # Record notification if needed
             if action.should_notify:
@@ -481,7 +508,7 @@ class RecoveryLoopTest:
                 break
         else:
             # Loop completed without escalation
-            print(f"  ✗ Expected escalation after exhausting attempts")
+            print("  ✗ Expected escalation after exhausting attempts")
             all_passed = False
 
         # Verify DLQ has the escalated failure
@@ -489,16 +516,16 @@ class RecoveryLoopTest:
         unknown_failures = [f for f in pending if f["subtask_id"] == subtask_id]
 
         if len(unknown_failures) > 0:
-            print(f"\n  ✓ Failure properly escalated to DLQ")
+            print("\n  ✓ Failure properly escalated to DLQ")
             print(f"    DLQ entry: {unknown_failures[0]['id']}")
         else:
-            print(f"\n  ✗ Expected failure in DLQ after escalation")
+            print("\n  ✗ Expected failure in DLQ after escalation")
             all_passed = False
 
         self.record_result(
             "UNKNOWN Failure Escalation",
             all_passed,
-            "UNKNOWN errors escalate to DLQ after exhausting strategies"
+            "UNKNOWN errors escalate to DLQ after exhausting strategies",
         )
         return all_passed
 
@@ -508,7 +535,11 @@ class RecoveryLoopTest:
 
         test_cases = [
             (FailureType.BROKEN_BUILD, True, "Can rollback and retry"),
-            (FailureType.VERIFICATION_FAILED, True, "Can retry with different approach"),
+            (
+                FailureType.VERIFICATION_FAILED,
+                True,
+                "Can retry with different approach",
+            ),
             (FailureType.CONTEXT_EXHAUSTED, True, "Can continue in next session"),
             (FailureType.UNKNOWN, True, "Can retry with caution"),
             (FailureType.CIRCULAR_FIX, False, "Requires human intervention"),
@@ -520,13 +551,15 @@ class RecoveryLoopTest:
             if actual == expected_recoverable:
                 print(f"  ✓ {failure_type.value}: recoverable={actual} ({reason})")
             else:
-                print(f"  ✗ {failure_type.value}: recoverable={actual} (expected {expected_recoverable})")
+                print(
+                    f"  ✗ {failure_type.value}: recoverable={actual} (expected {expected_recoverable})"
+                )
                 all_passed = False
 
         self.record_result(
             "is_recoverable() Method",
             all_passed,
-            "Correctly distinguishes recoverable vs non-recoverable failures"
+            "Correctly distinguishes recoverable vs non-recoverable failures",
         )
         return all_passed
 
@@ -554,6 +587,7 @@ class RecoveryLoopTest:
             except Exception as e:
                 print(f"\n✗ Test failed with exception: {e}")
                 import traceback
+
                 traceback.print_exc()
 
         self.print_summary()
@@ -591,6 +625,7 @@ def main():
     except Exception as e:
         print(f"\n✗ Test suite failed with exception: {e}")
         import traceback
+
         traceback.print_exc()
         return False
     finally:
@@ -599,4 +634,5 @@ def main():
 
 if __name__ == "__main__":
     import sys
+
     sys.exit(0 if main() else 1)

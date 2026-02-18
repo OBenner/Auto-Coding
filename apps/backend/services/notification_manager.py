@@ -12,7 +12,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-
 # Configuration
 NOTIFICATIONS_FILE = "notifications.json"
 DEFAULT_RETRY_THRESHOLD = 3  # Notify after 3 failed retries
@@ -308,9 +307,7 @@ class NotificationManager:
         if total_failures == 0:
             return 0.0
 
-        return (
-            self._data["metadata"]["total_notifications"] / total_failures * 100
-        )
+        return self._data["metadata"]["total_notifications"] / total_failures * 100
 
     def get_escalation_rate(self) -> float:
         """

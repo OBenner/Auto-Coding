@@ -12,7 +12,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-
 # Configuration
 DLQ_FILE = "dead_letter_queue.json"
 

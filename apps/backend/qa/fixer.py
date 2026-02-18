@@ -21,7 +21,7 @@ from core.model_fallback import MODEL_FALLBACK_CHAIN
 from debug import debug, debug_detailed, debug_error, debug_section, debug_success
 from phase_config import resolve_model_id
 from security.tool_input_validator import get_safe_tool_input
-from services.recovery import FailureType, RecoveryAction, RecoveryManager
+from services.recovery import RecoveryAction, RecoveryManager
 from task_logger import (
     LogEntryType,
     LogPhase,
@@ -213,7 +213,9 @@ async def run_qa_fixer_session(
 
             # Handle rollback action
             if pending_recovery_action.action == "rollback":
-                print(f"↩️  Rolling back to commit {pending_recovery_action.target[:8]}...")
+                print(
+                    f"↩️  Rolling back to commit {pending_recovery_action.target[:8]}..."
+                )
                 rollback_success = recovery_manager.rollback_to_commit(
                     pending_recovery_action.target
                 )
@@ -549,11 +551,12 @@ async def run_qa_fixer_session(
             )
 
             # === ENHANCED RECOVERY: Use smart recovery system ===
-            attempt_count = recovery_manager.get_attempt_count(fixer_subtask_id)
 
             # Classify the failure type
             error_message = f"QA fixer error: {e}"
-            failure_type = recovery_manager.classify_failure(error_message, fixer_subtask_id)
+            failure_type = recovery_manager.classify_failure(
+                error_message, fixer_subtask_id
+            )
 
             # Determine recovery action (handles exponential backoff, model fallback, DLQ, notifications)
             recovery_action = recovery_manager.determine_recovery_action(
@@ -586,7 +589,9 @@ async def run_qa_fixer_session(
                         current_model_shorthand = "haiku"
 
                     # Get fallback model from chain
-                    fallback_chain = MODEL_FALLBACK_CHAIN.get(current_model_shorthand, [])
+                    fallback_chain = MODEL_FALLBACK_CHAIN.get(
+                        current_model_shorthand, []
+                    )
                     if fallback_chain:
                         override_model = fallback_chain[0]  # Use first fallback
                         print(f"   Will try fallback model: {override_model}")
@@ -598,13 +603,17 @@ async def run_qa_fixer_session(
                     recovery_guidance = recovery_action.strategy.guidance
                     print(f"   Strategy: {recovery_action.strategy.description}")
 
-                print(f"   Will retry after {recovery_action.wait_seconds:.1f}s backoff\n")
+                print(
+                    f"   Will retry after {recovery_action.wait_seconds:.1f}s backoff\n"
+                )
                 continue
 
             elif recovery_action.action == "skip":
                 # Mark subtask as stuck and skip
-                recovery_manager.mark_subtask_stuck(fixer_subtask_id, recovery_action.reason)
-                print(f"❌ QA Fixer marked as STUCK")
+                recovery_manager.mark_subtask_stuck(
+                    fixer_subtask_id, recovery_action.reason
+                )
+                print("❌ QA Fixer marked as STUCK")
                 print("   Recovery exhausted - consider manual intervention\n")
                 # Record failed outcome
                 recovery_manager.record_outcome(
@@ -614,11 +623,15 @@ async def run_qa_fixer_session(
 
             elif recovery_action.action == "escalate":
                 # Critical failure - escalate to human
-                recovery_manager.mark_subtask_stuck(fixer_subtask_id, recovery_action.reason)
+                recovery_manager.mark_subtask_stuck(
+                    fixer_subtask_id, recovery_action.reason
+                )
                 print()
                 print("🚨 ESCALATION REQUIRED")
                 print(f"   {recovery_action.reason}")
-                print("   This failure has been added to the dead-letter queue for manual review")
+                print(
+                    "   This failure has been added to the dead-letter queue for manual review"
+                )
                 print()
                 # Record failed outcome
                 recovery_manager.record_outcome(
@@ -629,7 +642,9 @@ async def run_qa_fixer_session(
             elif recovery_action.action == "rollback":
                 # Rollback will be handled at the start of next iteration
                 pending_recovery_action = recovery_action
-                print(f"   Will rollback to {recovery_action.target[:8]} on next iteration\n")
+                print(
+                    f"   Will rollback to {recovery_action.target[:8]} on next iteration\n"
+                )
                 continue
 
             elif recovery_action.action == "continue":

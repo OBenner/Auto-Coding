@@ -75,10 +75,14 @@ class RecoveryAction:
     target: str  # commit hash, subtask id, or message
     reason: str
     wait_seconds: float = field(default=0.0)  # Exponential backoff delay before retry
-    use_model_fallback: bool = field(default=False)  # Suggest trying with fallback model
+    use_model_fallback: bool = field(
+        default=False
+    )  # Suggest trying with fallback model
     strategy: RetryStrategy | None = field(default=None)  # Selected retry strategy
     should_notify: bool = field(default=False)  # Whether to notify user
-    notification_message: str = field(default="")  # Notification message if should_notify=True
+    notification_message: str = field(
+        default=""
+    )  # Notification message if should_notify=True
 
 
 # Error Pattern Database
