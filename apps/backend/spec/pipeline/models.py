@@ -8,10 +8,13 @@ Data structures, helper functions, and utilities for the spec creation pipeline.
 from __future__ import annotations
 
 import json
+import logging
 import shutil
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
+
+logger = logging.getLogger(__name__)
 
 from init import init_auto_claude_dir
 from task_logger import update_task_logger_path
@@ -26,7 +29,7 @@ def get_specs_dir(project_dir: Path) -> Path:
 
     IMPORTANT: Only .auto-claude/ is considered an "installed" auto-claude.
     The auto-claude/ folder (if it exists) is SOURCE CODE being developed,
-    not an installation. This allows Auto Claude to be used to develop itself.
+    not an installation. This allows Auto Code to be used to develop itself.
 
     This function also ensures .auto-claude is added to .gitignore on first use.
 
@@ -80,7 +83,7 @@ def cleanup_orphaned_pending_folders(specs_dir: Path) -> None:
         try:
             shutil.rmtree(folder)
         except OSError:
-            pass
+            logger.debug("Failed to remove orphaned spec folder: %s", folder)
 
 
 def create_spec_dir(specs_dir: Path, lock: SpecNumberLock | None = None) -> Path:
@@ -110,7 +113,7 @@ def create_spec_dir(specs_dir: Path, lock: SpecNumberLock | None = None) -> Path
                     num = int(folder.name[:3])
                     numbers.append(num)
                 except ValueError:
-                    pass
+                    logger.debug("Non-numeric spec folder prefix: %s", folder.name)
             next_num = max(numbers) + 1 if numbers else 1
         else:
             next_num = 1

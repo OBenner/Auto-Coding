@@ -158,9 +158,6 @@ export function registerLinearHandlers(
               }
             }
           `;
-          void _countQuery;
-          void _issuesQuery;
-
           // Simple count estimation - get first 250 issues
           const countData = await linearGraphQL(apiKey, `
             query($teamId: ID!) {

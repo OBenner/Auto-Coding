@@ -123,6 +123,108 @@ Look for:
 - UI components that could have variants
 - Infrastructure that enables new capabilities
 
+### Research Best Practices and Patterns (Using WebSearch)
+
+**WebSearch should be used AFTER local pattern discovery to validate approaches and discover proven implementation patterns.**
+
+After identifying local patterns that could be extended, use web search to research how other projects implement similar features. This helps validate your approach and discover gotchas early.
+
+#### Step 1: Search for Implementation Best Practices
+
+When you identify a potential improvement, search for how it's implemented in similar projects:
+
+```
+Tool: WebSearch
+Query: "[feature type] implementation best practices [tech stack] 2026"
+```
+
+**Example searches:**
+- `"pagination component React best practices 2026"` - For UI pagination patterns
+- `"CSV export implementation Node.js 2026"` - For data export features
+- `"dark mode implementation React TypeScript 2026"` - For theming features
+- `"search filtering best practices frontend 2026"` - For search/filter features
+- `"webhook handling patterns Python 2026"` - For webhook integrations
+- `"bulk operations API design 2026"` - For batch processing features
+
+**What to verify:**
+1. **Common approaches** - What are the standard ways to implement this?
+2. **Performance patterns** - How do others handle scale/performance?
+3. **State management** - How is state typically managed for this feature?
+4. **Error handling** - What edge cases do others handle?
+5. **Testing patterns** - How is this feature typically tested?
+
+#### Step 2: Search for Implementation Examples
+
+Find working code examples to understand the implementation approach:
+
+```
+Tool: WebSearch
+Query: "[feature] [framework] example implementation 2026"
+```
+
+**Example searches:**
+- `"React table pagination example implementation 2026"` - See working code
+- `"Python CSV export with streaming example 2026"` - Learn patterns
+- `"TypeScript form validation examples 2026"` - Understand validation
+- `"Next.js dark mode implementation tutorial 2026"` - See full flow
+- `"Express middleware error handling examples 2026"` - Learn error patterns
+- `"React hooks for data fetching examples 2026"` - See hook patterns
+
+**What to extract:**
+1. **Code structure** - How is the feature organized?
+2. **Key functions/hooks** - What are the main building blocks?
+3. **Dependencies** - What libraries are commonly used?
+4. **Configuration** - What options/settings are needed?
+5. **Integration points** - How does it connect to the rest of the app?
+
+#### Step 3: Search for Common Gotchas
+
+Research problems others encountered when implementing similar features:
+
+```
+Tool: WebSearch
+Query: "[feature] common issues [framework] 2026"
+```
+
+**Example searches:**
+- `"React pagination performance issues 2026"` - Find pitfalls
+- `"CSV export memory problems Node.js 2026"` - Avoid issues
+- `"dark mode flash FOUC solutions 2026"` - Learn edge cases
+- `"search filter debouncing best practices 2026"` - Handle UX
+- `"webhook security vulnerabilities 2026"` - Security concerns
+- `"bulk operations timeout handling 2026"` - Scalability issues
+
+**What to document:**
+1. **Performance gotchas** - Memory leaks, slow operations, bottlenecks
+2. **Edge cases** - Empty states, error conditions, race conditions
+3. **Browser/platform issues** - Compatibility problems
+4. **Security concerns** - Common vulnerabilities for this feature type
+5. **UX pitfalls** - User experience issues to avoid
+
+#### Step 4: Validate Against Project Tech Stack
+
+Search for how this feature works specifically with your project's stack:
+
+```
+Tool: WebSearch
+Query: "[feature] [specific framework/library from project] 2026"
+```
+
+**Example searches based on project stack:**
+- `"pagination with React Query 2026"` - If project uses React Query
+- `"CSV export with Pandas Python 2026"` - If project uses Pandas
+- `"dark mode Tailwind CSS 2026"` - If project uses Tailwind
+- `"Electron app auto-updates best practices 2026"` - If Electron project
+- `"FastAPI background tasks examples 2026"` - If FastAPI project
+- `"TypeORM bulk insert performance 2026"` - If project uses TypeORM
+
+**What to verify:**
+1. **Compatibility** - Does this work well with existing stack?
+2. **Stack-specific patterns** - Are there better ways with current tools?
+3. **Performance characteristics** - How does it perform with current stack?
+4. **Migration path** - Can we reuse existing code patterns?
+5. **Community adoption** - Is this a common pattern for this stack?
+
 ---
 
 ## PHASE 2: IDENTIFY OPPORTUNITY CATEGORIES

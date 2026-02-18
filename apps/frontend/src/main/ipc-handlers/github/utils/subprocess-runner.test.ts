@@ -48,16 +48,16 @@ import { detectAuthFailure } from '../../../rate-limit-detector';
 import { isWindows } from '../../../platform';
 
 describe('runPythonSubprocess', () => {
-  let mockSpawn: any;
-  let mockChildProcess: any;
+  let mockSpawn: ReturnType<typeof vi.mocked<typeof childProcess.spawn>>;
+  let mockChildProcess: EventEmitter & { stdout: EventEmitter; stderr: EventEmitter; kill: ReturnType<typeof vi.fn>; pid?: number };
 
   beforeEach(() => {
     mockSpawn = vi.mocked(childProcess.spawn);
-    mockChildProcess = new EventEmitter();
+    mockChildProcess = new EventEmitter() as typeof mockChildProcess;
     mockChildProcess.stdout = new EventEmitter();
     mockChildProcess.stderr = new EventEmitter();
     mockChildProcess.kill = vi.fn();
-    mockSpawn.mockReturnValue(mockChildProcess);
+    mockSpawn.mockReturnValue(mockChildProcess as unknown as childProcess.ChildProcess);
     vi.clearAllMocks();
   });
 
@@ -174,7 +174,7 @@ describe('runPythonSubprocess', () => {
 
         // Assert - should only include safe vars
         const spawnCall = mockSpawn.mock.calls[0];
-        const envArg = spawnCall[2].env;
+        const envArg = spawnCall[2]!.env!;
 
         // Safe vars should be included
         expect(envArg.PATH).toBe('/usr/bin');
@@ -220,7 +220,7 @@ describe('runPythonSubprocess', () => {
 
         // Assert - Windows-specific vars should be included
         const spawnCall = mockSpawn.mock.calls[0];
-        const envArg = spawnCall[2].env;
+        const envArg = spawnCall[2]!.env!;
 
         expect(envArg.SYSTEMROOT).toBe('C:\\Windows');
         expect(envArg.COMSPEC).toBe('C:\\Windows\\System32\\cmd.exe');
@@ -417,7 +417,7 @@ describe('runPythonSubprocess', () => {
       });
 
       mockChildProcess.pid = 12345;
-      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
       vi.spyOn(process, 'kill').mockImplementation(() => true);
 
       // Act

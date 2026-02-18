@@ -31,7 +31,6 @@ Environment Variables:
 import os
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
 
 
 class AIEngineProvider(str, Enum):
@@ -87,9 +86,7 @@ class ProviderConfig:
 
         # Claude Agent SDK settings
         anthropic_api_key = os.environ.get("ANTHROPIC_API_KEY", "")
-        claude_model = os.environ.get(
-            "CLAUDE_MODEL", "claude-sonnet-4-5-20250929"
-        )
+        claude_model = os.environ.get("CLAUDE_MODEL", "claude-sonnet-4-5-20250929")
 
         # LiteLLM settings
         litellm_model = os.environ.get("LITELLM_MODEL", "")
@@ -98,9 +95,7 @@ class ProviderConfig:
 
         # OpenRouter settings
         openrouter_api_key = os.environ.get("OPENROUTER_API_KEY", "")
-        openrouter_model = os.environ.get(
-            "OPENROUTER_MODEL", DEFAULT_OPENROUTER_MODEL
-        )
+        openrouter_model = os.environ.get("OPENROUTER_MODEL", DEFAULT_OPENROUTER_MODEL)
         openrouter_base_url = os.environ.get(
             "OPENROUTER_BASE_URL", DEFAULT_OPENROUTER_BASE_URL
         )
@@ -166,7 +161,7 @@ class ProviderConfig:
             return f"OpenRouter ({self.openrouter_model})"
         return f"Unknown ({self.provider})"
 
-    def get_model_for_provider(self) -> Optional[str]:
+    def get_model_for_provider(self) -> str | None:
         """Get the configured model for the current provider."""
         if self.provider == AIEngineProvider.CLAUDE.value:
             return self.claude_model

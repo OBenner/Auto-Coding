@@ -26,7 +26,7 @@ import fnmatch
 import json
 import re
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 from pathlib import Path
 from typing import Any
@@ -338,7 +338,7 @@ class MultiRepoConfig:
         file_path = config_file or (self.base_dir / "multi_repo_config.json")
         data = {
             "repos": [c.to_dict() for c in self.repos.values()],
-            "last_updated": datetime.now(timezone.utc).isoformat(),
+            "last_updated": datetime.now(UTC).isoformat(),
         }
         with open(file_path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)

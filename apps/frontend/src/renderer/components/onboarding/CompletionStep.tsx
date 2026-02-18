@@ -136,6 +136,7 @@ export function CompletionStep({
           <div className="grid grid-cols-1 gap-3">
             {nextSteps.map((step, index) => (
               <NextStepCard
+                // biome-ignore lint/suspicious/noArrayIndexKey: Static list with stable order
                 key={index}
                 icon={step.icon}
                 title={step.title}

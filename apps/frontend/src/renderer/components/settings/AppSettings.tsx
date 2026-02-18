@@ -18,7 +18,8 @@ import {
   Globe,
   Code,
   Bug,
-  Users
+  Users,
+  Keyboard
 } from 'lucide-react';
 
 // GitLab icon component (lucide-react doesn't have one)
@@ -51,6 +52,7 @@ import { AdvancedSettings } from './AdvancedSettings';
 import { DevToolsSettings } from './DevToolsSettings';
 import { DebugSettings } from './DebugSettings';
 import { AccountSettings } from './AccountSettings';
+import { KeyboardShortcutsSettings } from './KeyboardShortcutsSettings';
 import { ProjectSelector } from './ProjectSelector';
 import { ProjectSettingsContent, ProjectSettingsSection } from './ProjectSettingsContent';
 import { useProjectStore } from '../../stores/project-store';
@@ -65,7 +67,7 @@ interface AppSettingsDialogProps {
 }
 
 // App-level settings sections
-export type AppSection = 'appearance' | 'display' | 'language' | 'devtools' | 'agent' | 'paths' | 'accounts' | 'updates' | 'notifications' | 'debug';
+export type AppSection = 'appearance' | 'display' | 'language' | 'devtools' | 'agent' | 'paths' | 'accounts' | 'updates' | 'notifications' | 'keyboardShortcuts' | 'debug';
 
 interface NavItemConfig<T extends string> {
   id: T;
@@ -82,6 +84,7 @@ const appNavItemsConfig: NavItemConfig<AppSection>[] = [
   { id: 'accounts', icon: Users },
   { id: 'updates', icon: Package },
   { id: 'notifications', icon: Bell },
+  { id: 'keyboardShortcuts', icon: Keyboard },
   { id: 'debug', icon: Bug }
 ];
 
@@ -151,7 +154,7 @@ export function AppSettingsDialog({ open, onOpenChange, initialSection, initialP
 
     // If on project section with a project selected, save project settings too
     if (activeTopLevel === 'project' && selectedProject && projectSettingsHook) {
-      await projectSettingsHook.handleSave(() => {});
+      await projectSettingsHook.handleSave(() => undefined);
       // Check for project errors
       if (projectSettingsHook.error || projectSettingsHook.envError) {
         setProjectError(projectSettingsHook.error || projectSettingsHook.envError);
@@ -195,6 +198,8 @@ export function AppSettingsDialog({ open, onOpenChange, initialSection, initialP
         return <AdvancedSettings settings={settings} onSettingsChange={setSettings} section="updates" version={version} />;
       case 'notifications':
         return <AdvancedSettings settings={settings} onSettingsChange={setSettings} section="notifications" version={version} />;
+      case 'keyboardShortcuts':
+        return <KeyboardShortcutsSettings isOpen={open} />;
       case 'debug':
         return <DebugSettings />;
       default:
@@ -256,6 +261,7 @@ export function AppSettingsDialog({ open, onOpenChange, initialSection, initialP
                         const isActive = activeTopLevel === 'app' && appSection === item.id;
                         return (
                           <button
+                            type="button"
                             key={item.id}
                             onClick={() => {
                               setActiveTopLevel('app');
@@ -280,6 +286,7 @@ export function AppSettingsDialog({ open, onOpenChange, initialSection, initialP
                       {/* Re-run Wizard button */}
                       {onRerunWizard && (
                         <button
+                          type="button"
                           onClick={() => {
                             onOpenChange(false);
                             onRerunWizard();
@@ -321,6 +328,7 @@ export function AppSettingsDialog({ open, onOpenChange, initialSection, initialP
                         const isActive = activeTopLevel === 'project' && projectSection === item.id;
                         return (
                           <button
+                            type="button"
                             key={item.id}
                             onClick={() => {
                               setActiveTopLevel('project');

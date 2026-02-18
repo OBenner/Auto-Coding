@@ -35,9 +35,9 @@ for (const envPath of possibleEnvPaths) {
   }
 }
 
-import { app, BrowserWindow, shell, nativeImage, session, screen } from 'electron';
+import { app, BrowserWindow, shell, nativeImage, session, screen, Menu } from 'electron';
 import { join } from 'path';
-import { accessSync, readFileSync, writeFileSync, rmSync } from 'fs';
+import { accessSync, readFileSync, writeFileSync, rmSync, cpSync, readdirSync, mkdirSync } from 'fs';
 import { electronApp, optimizer, is } from '@electron-toolkit/utils';
 import { setupIpcHandlers } from './ipc-setup';
 import { AgentManager } from './agent';
@@ -53,6 +53,7 @@ import { initSentryMain } from './sentry';
 import { preWarmToolCache } from './cli-tool-manager';
 import { initializeClaudeProfileManager, getClaudeProfileManager } from './claude-profile-manager';
 import { isMacOS, isWindows } from './platform';
+import { setupMCPLifecycle } from './mcp-manager';
 import type { AppSettings, AuthFailureInfo } from '../shared/types';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -148,8 +149,7 @@ function createWindow(): void {
     const display = screen.getPrimaryDisplay();
     // Validate the returned object has expected structure with valid dimensions
     if (
-      display &&
-      display.workAreaSize &&
+      display?.workAreaSize &&
       typeof display.workAreaSize.width === 'number' &&
       typeof display.workAreaSize.height === 'number' &&
       display.workAreaSize.width > 0 &&
@@ -192,11 +192,12 @@ function createWindow(): void {
     trafficLightPosition: { x: 15, y: 10 },
     icon: getIconPath(),
     webPreferences: {
-      preload: join(__dirname, '../preload/index.mjs'),
+      preload: join(__dirname, '../preload/index.cjs'),
       sandbox: true,
       contextIsolation: true,
       nodeIntegration: false,
-      backgroundThrottling: false // Prevent terminal lag when window loses focus
+      backgroundThrottling: false, // Prevent terminal lag when window loses focus
+      spellcheck: true
     }
   });
 
@@ -226,9 +227,53 @@ function createWindow(): void {
     return { action: 'deny' };
   });
 
+  // Spell check context menu: show suggestions, "Add to Dictionary", and standard edit actions
+  mainWindow.webContents.on('context-menu', (event, params) => {
+    if (!params.misspelledWord) return;
+    event.preventDefault();
+
+    const menuItems: Electron.MenuItemConstructorOptions[] = params.dictionarySuggestions.map(
+      (suggestion) => ({
+        label: suggestion,
+        click: () => {
+          try {
+            if (mainWindow && typeof mainWindow.webContents.replaceMisspelling === 'function') {
+              mainWindow.webContents.replaceMisspelling(suggestion);
+            }
+          } catch (err) {
+            console.error('[Spellcheck] Failed to replace misspelling:', err);
+          }
+        },
+      })
+    );
+    if (menuItems.length > 0) {
+      menuItems.push({ type: 'separator' });
+    }
+    menuItems.push({
+      label: 'Add to Dictionary',
+      click: () => {
+        try {
+          const ses = mainWindow?.webContents?.session;
+          if (ses && typeof ses.addWordToSpellCheckerDictionary === 'function') {
+            ses.addWordToSpellCheckerDictionary(params.misspelledWord);
+          }
+        } catch (err) {
+          console.error('[Spellcheck] Failed to add word to dictionary:', err);
+        }
+      },
+    });
+    Menu.buildFromTemplate(menuItems).popup({ window: mainWindow ?? undefined });
+  });
+
   // Load the renderer
-  if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
-    mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL']);
+  // In dev mode, electron-vite sets ELECTRON_RENDERER_URL to the Vite dev server
+  // Only use the URL if explicitly set - don't fallback based on is.dev
+  // because `npm start` (build + electron .) also has is.dev=true but no dev server
+  const rendererUrl = process.env['ELECTRON_RENDERER_URL'];
+
+  if (rendererUrl) {
+    console.log('[main] Loading renderer from URL:', rendererUrl);
+    mainWindow.loadURL(rendererUrl);
   } else {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'));
   }
@@ -244,12 +289,96 @@ function createWindow(): void {
   });
 }
 
+/**
+ * Migrate user data from old "Auto Claude" directory to new "Auto Code" directory.
+ * After the brand rename, Electron's userData path changed because app.setName() changed.
+ * This copies settings, profiles, and config from the old location.
+ *
+ * Uses a marker file (.migration-from-auto-claude) to track whether migration has run,
+ * since the new directory may already have a settings.json from a fresh launch.
+ * Only copies files/dirs that don't already exist in the new location.
+ */
+function migrateUserDataFromOldAppName(): void {
+  try {
+    const newUserData = app.getPath('userData');
+    const migrationMarker = join(newUserData, '.migration-from-auto-claude');
+
+    // Already migrated - skip
+    if (existsSync(migrationMarker)) {
+      return;
+    }
+
+    // Check old userData directories (from previous app names)
+    const parentDir = dirname(newUserData);
+    const oldDirNames = ['auto-claude-ui', 'Auto Claude'];
+
+    // Electron/Chromium cache dirs - no point migrating these
+    const SKIP_ENTRIES = new Set([
+      'blob_storage', 'Cache', 'Code Cache', 'Crashpad', 'DawnGraphiteCache',
+      'DawnWebGPUCache', 'Dictionaries', 'GPUCache', 'Local Storage',
+      'Network', 'Shared Dictionary', 'Session Storage',
+      'DIPS', 'DIPS-journal', 'DIPS-wal',
+      'Local State', 'Preferences', 'SharedStorage', 'SharedStorage-wal',
+      'electron-log-preload.js',
+    ]);
+
+    for (const oldName of oldDirNames) {
+      const oldUserData = join(parentDir, oldName);
+      if (!existsSync(oldUserData)) continue;
+
+      // Found old data - copy missing entries to new location
+      console.log(`[main] Migrating user data from "${oldUserData}" to "${newUserData}"`);
+      mkdirSync(newUserData, { recursive: true });
+
+      let copiedCount = 0;
+      try {
+        const entries = readdirSync(oldUserData, { withFileTypes: true });
+        for (const entry of entries) {
+          if (SKIP_ENTRIES.has(entry.name)) continue;
+
+          const srcPath = join(oldUserData, entry.name);
+          const destPath = join(newUserData, entry.name);
+
+          // Don't overwrite existing files (user may have reconfigured)
+          if (existsSync(destPath)) continue;
+
+          try {
+            cpSync(srcPath, destPath, { recursive: true });
+            copiedCount++;
+            console.log(`[main]   Copied: ${entry.name}`);
+          } catch (copyErr) {
+            console.warn(`[main]   Failed to copy "${entry.name}":`, copyErr);
+          }
+        }
+        console.log(`[main] User data migration complete (${copiedCount} entries copied)`);
+      } catch (readErr) {
+        console.warn('[main] Failed to read old user data directory:', readErr);
+      }
+      break; // Only migrate from the first found old directory
+    }
+
+    // Write marker so we don't re-attempt migration on every launch
+    try {
+      writeFileSync(migrationMarker, new Date().toISOString(), 'utf-8');
+    } catch {
+      // Non-critical - worst case migration runs again next launch
+    }
+  } catch (err) {
+    console.warn('[main] User data migration failed (non-fatal):', err);
+  }
+}
+
 // Set app name before ready (for dock tooltip on macOS in dev mode)
-app.setName('Auto Claude');
+app.setName('Auto Code');
 if (isMacOS()) {
   // Force the name to appear in dock on macOS
-  app.name = 'Auto Claude';
+  app.name = 'Auto Code';
 }
+
+// Migrate user data from old "Auto Claude" app name to new "Auto Code"
+// Electron derives userData path from app.name, so the rename changed where data is stored.
+// This copies settings, profiles, and config from the old directory if the new one is empty.
+migrateUserDataFromOldAppName();
 
 // Fix Windows GPU cache permission errors (0x5 Access Denied)
 if (isWindows()) {
@@ -257,6 +386,10 @@ if (isWindows()) {
   app.commandLine.appendSwitch('disable-gpu-program-cache');
   console.log('[main] Applied Windows GPU cache fixes');
 }
+
+// Setup MCP server lifecycle (starts server if ELECTRON_MCP_ENABLED=true)
+// This integrates with Electron's app lifecycle for automatic startup/shutdown
+setupMCPLifecycle();
 
 // Initialize the application
 app.whenReady().then(() => {

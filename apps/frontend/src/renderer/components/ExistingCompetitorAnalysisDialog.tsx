@@ -66,6 +66,7 @@ export function ExistingCompetitorAnalysisDialog({
         <div className="py-4 space-y-3">
           {/* Option 1: Use existing (recommended) */}
           <button
+            type="button"
             onClick={handleUseExisting}
             className="w-full rounded-lg bg-primary/10 border border-primary/30 p-4 text-left hover:bg-primary/20 transition-colors"
           >
@@ -85,6 +86,7 @@ export function ExistingCompetitorAnalysisDialog({
 
           {/* Option 2: Run new analysis */}
           <button
+            type="button"
             onClick={handleRunNew}
             className="w-full rounded-lg bg-muted/50 border border-border p-4 text-left hover:bg-muted transition-colors"
           >
@@ -103,6 +105,7 @@ export function ExistingCompetitorAnalysisDialog({
 
           {/* Option 3: Skip */}
           <button
+            type="button"
             onClick={handleSkip}
             className="w-full rounded-lg bg-muted/30 border border-border/50 p-4 text-left hover:bg-muted/50 transition-colors"
           >

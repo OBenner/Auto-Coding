@@ -1,10 +1,10 @@
 # Release Process
 
-This document describes how releases are created for Auto Claude.
+This document describes how releases are created for Auto Code.
 
 ## Overview
 
-Auto Claude uses an automated release pipeline that ensures releases are only published after all builds succeed. This prevents version mismatches between documentation and actual releases.
+Auto Code uses an automated release pipeline that ensures releases are only published after all builds succeed. This prevents version mismatches between documentation and actual releases.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -19,13 +19,13 @@ Auto Claude uses an automated release pipeline that ensures releases are only pu
 │        │                                 │                                   │
 │        ▼                                 │                                   │
 │   ┌─────────┐                           │                                   │
-│   │ v2.8.0  │  2. Create PR             │                                   │
+│   │ v3.0.0  │  2. Create PR             │                                   │
 │   │ commit  │ ────────────────────►     │                                   │
 │   └─────────┘                           │                                   │
 │                                          │                                   │
 │                           3. Merge PR    ▼                                   │
 │                                    ┌──────────┐                              │
-│                                    │ v2.8.0   │                              │
+│                                    │ v3.0.0   │                              │
 │                                    │ on main  │                              │
 │                                    └────┬─────┘                              │
 │                                         │                                    │
@@ -34,7 +34,7 @@ Auto Claude uses an automated release pipeline that ensures releases are only pu
 │                     ├───────────────────────────────────────┤               │
 │                     │ 4. prepare-release.yml                 │               │
 │                     │    - Detects version > latest tag      │               │
-│                     │    - Creates tag v2.8.0                │               │
+│                     │    - Creates tag v3.0.0                │               │
 │                     │                                        │               │
 │                     │ 5. release.yml (triggered by tag)      │               │
 │                     │    - Builds macOS (Intel + ARM)        │               │
@@ -56,7 +56,7 @@ On your development branch (typically `develop` or a feature branch):
 
 ```bash
 # Navigate to project root
-cd /path/to/auto-claude
+cd /path/to/auto-code
 
 # Bump version (choose one)
 node scripts/bump-version.js patch   # 2.7.1 -> 2.7.2 (bug fixes)
@@ -107,7 +107,7 @@ git commit --amend --no-edit
 git push origin your-branch
 
 # Create PR to main (via GitHub UI or gh CLI)
-gh pr create --base main --title "Release v2.8.0"
+gh pr create --base main --title "Release v3.0.0"
 ```
 
 ### Step 4: Merge to Main
@@ -117,7 +117,7 @@ Once the PR is approved and merged to `main`, GitHub Actions will automatically:
 1. **Detect the version bump** (`prepare-release.yml`)
 2. **Validate CHANGELOG.md** has an entry for the new version (FAILS if missing)
 3. **Extract release notes** from CHANGELOG.md
-4. **Create a git tag** (e.g., `v2.8.0`)
+4. **Create a git tag** (e.g., `v3.0.0`)
 5. **Trigger the release workflow** (`release.yml`)
 6. **Build binaries** for all platforms:
    - macOS Intel (x64) - code signed & notarized
@@ -131,9 +131,9 @@ Once the PR is approved and merged to `main`, GitHub Actions will automatically:
 ### Step 5: Verify
 
 After merging, check:
-- [GitHub Actions](https://github.com/AndyMik90/Auto-Claude/actions) - ensure all workflows pass
-- [Releases](https://github.com/AndyMik90/Auto-Claude/releases) - verify release was created
-- [README](https://github.com/AndyMik90/Auto-Claude#download) - confirm version updated
+- [GitHub Actions](https://github.com/OBenner/Auto-Coding/actions) - ensure all workflows pass
+- [Releases](https://github.com/OBenner/Auto-Coding/releases) - verify release was created
+- [README](https://github.com/OBenner/Auto-Coding#download) - confirm version updated
 
 ## Version Numbering
 
@@ -237,8 +237,8 @@ In rare cases where you need to bypass the automated flow:
 
 ```bash
 # Create tag manually (NOT RECOMMENDED)
-git tag -a v2.8.0 -m "Release v2.8.0"
-git push origin v2.8.0
+git tag -a v3.0.0 -m "Release v3.0.0"
+git push origin v3.0.0
 
 # This will trigger release.yml directly
 ```

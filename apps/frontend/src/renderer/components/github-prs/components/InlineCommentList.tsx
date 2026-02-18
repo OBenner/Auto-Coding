@@ -6,7 +6,6 @@ import { MessageSquare, User } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Badge } from '../../ui/badge';
 import { Button } from '../../ui/button';
-import { cn } from '../../../lib/utils';
 import { CollapsibleCard } from './CollapsibleCard';
 
 /**
@@ -55,7 +54,7 @@ function groupCommentsByFile(comments: InlineComment[]): Map<string, InlineComme
   }
 
   // Sort comments within each file by line number
-  for (const [path, fileComments] of grouped.entries()) {
+  for (const [_path, fileComments] of grouped.entries()) {
     fileComments.sort((a, b) => {
       const lineA = a.line || 0;
       const lineB = b.line || 0;

@@ -69,8 +69,7 @@ def _create_litellm_provider(config: "ProviderConfig") -> "AIEngineProvider":
         from core.providers.adapters.litellm import LiteLLMProvider
     except ImportError as e:
         raise ProviderNotInstalled(
-            "LiteLLM adapter not installed. "
-            "Install with: pip install litellm"
+            "LiteLLM adapter not installed. Install with: pip install litellm"
         ) from e
 
     logger.debug(f"Creating LiteLLM provider with model: {config.litellm_model}")
@@ -95,8 +94,7 @@ def _create_openrouter_provider(config: "ProviderConfig") -> "AIEngineProvider":
         from core.providers.adapters.openrouter import OpenRouterProvider
     except ImportError as e:
         raise ProviderNotInstalled(
-            "OpenRouter adapter not installed. "
-            "Install with: pip install openai"
+            "OpenRouter adapter not installed. Install with: pip install openai"
         ) from e
 
     logger.debug(f"Creating OpenRouter provider with model: {config.openrouter_model}")

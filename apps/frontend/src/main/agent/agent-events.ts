@@ -13,13 +13,14 @@ export class AgentEvents {
     log: string,
     currentPhase: ExecutionProgressData['phase'],
     isSpecRunner: boolean
-  ): { phase: ExecutionProgressData['phase']; message?: string; currentSubtask?: string } | null {
+  ): { phase: ExecutionProgressData['phase']; message?: string; currentSubtask?: string; resources?: { cpu_percent?: number; memory_mb?: number; memory_percent?: number; elapsed_seconds?: number } } | null {
     const structuredEvent = parsePhaseEvent(log);
     if (structuredEvent) {
       return {
         phase: structuredEvent.phase as ExecutionProgressData['phase'],
         message: structuredEvent.message,
-        currentSubtask: structuredEvent.subtask
+        currentSubtask: structuredEvent.subtask,
+        resources: structuredEvent.resources
       };
     }
 

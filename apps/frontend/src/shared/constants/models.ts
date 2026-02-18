@@ -1,26 +1,69 @@
 /**
  * Model and agent profile constants
- * Claude models, thinking levels, memory backends, and agent profiles
+ *
+ * This file defines model tiers (opus/sonnet/haiku), thinking levels, and agent profiles.
+ * Model tiers are abstract categories that map to different actual models depending on the provider:
+ * - opus: Most capable models (Claude Opus, GPT-4o, Llama 405B, etc.)
+ * - sonnet: Balanced models (Claude Sonnet, GPT-4 Turbo, Llama 70B, etc.)
+ * - haiku: Fast models (Claude Haiku, GPT-4o Mini, Llama 8B, etc.)
+ *
+ * For provider-specific model mappings, see api-profiles.ts
  */
 
 import type { AgentProfile, PhaseModelConfig, FeatureModelConfig, FeatureThinkingConfig } from '../types/settings';
+import { mapModelTierToId, getProviderById } from './api-profiles';
 
 // ============================================
-// Available Models
+// Model Tiers (Provider-agnostic)
 // ============================================
+
+export type ModelTier = 'opus' | 'sonnet' | 'haiku';
 
 export const AVAILABLE_MODELS = [
-  { value: 'opus', label: 'Claude Opus 4.5' },
-  { value: 'sonnet', label: 'Claude Sonnet 4.5' },
-  { value: 'haiku', label: 'Claude Haiku 4.5' }
+  { value: 'opus', label: 'Opus (Most Capable)', description: 'Best for complex tasks requiring deep analysis' },
+  { value: 'sonnet', label: 'Sonnet (Balanced)', description: 'Good balance of quality and speed' },
+  { value: 'haiku', label: 'Haiku (Fast)', description: 'Fastest for simple tasks and quick iterations' }
 ] as const;
 
-// Maps model shorthand to actual Claude model IDs
+// Default model IDs for Anthropic (used when no provider is specified)
 export const MODEL_ID_MAP: Record<string, string> = {
   opus: 'claude-opus-4-5-20251101',
   sonnet: 'claude-sonnet-4-5-20250929',
   haiku: 'claude-haiku-4-5-20251001'
 } as const;
+
+/**
+ * Get the actual model ID for a tier and provider
+ * Falls back to Anthropic model IDs if provider not found
+ */
+export function getModelIdForTier(tier: ModelTier, providerId?: string): string {
+  if (providerId) {
+    const modelId = mapModelTierToId(providerId, tier);
+    if (modelId) return modelId;
+  }
+  // Fallback to default Anthropic models
+  return MODEL_ID_MAP[tier];
+}
+
+/**
+ * Get display label for a model tier
+ */
+export function getModelTierLabel(tier: ModelTier, providerId?: string): string {
+  if (providerId) {
+    const provider = getProviderById(providerId);
+    if (provider) {
+      const model = provider.models.find(m => m.tier === tier);
+      if (model) return model.name;
+    }
+  }
+  // Fallback to generic tier names
+  const tierMap: Record<ModelTier, string> = {
+    opus: 'Opus (Most Capable)',
+    sonnet: 'Sonnet (Balanced)',
+    haiku: 'Haiku (Fast)'
+  };
+  return tierMap[tier];
+}
 
 // Maps thinking levels to budget tokens (null = no extended thinking)
 export const THINKING_BUDGET_MAP: Record<string, number | null> = {

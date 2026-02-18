@@ -59,6 +59,7 @@ export function ThemeSelector({ settings, onSettingsChange }: ThemeSelectorProps
         <div className="grid grid-cols-3 gap-3 max-w-md pt-1">
           {(['system', 'light', 'dark'] as const).map((mode) => (
             <button
+              type="button"
               key={mode}
               onClick={() => handleModeChange(mode)}
               className={cn(
@@ -90,6 +91,7 @@ export function ThemeSelector({ settings, onSettingsChange }: ThemeSelectorProps
 
             return (
               <button
+                type="button"
                 key={theme.id}
                 onClick={() => handleColorThemeChange(theme.id)}
                 className={cn(

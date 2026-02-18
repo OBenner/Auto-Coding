@@ -125,6 +125,7 @@ def invalidate_project_cache(project_dir: Path | None = None) -> None:
                 logger.debug(f"Invalidated project index cache for {project_dir}")
 
 
+from agents.templates.models import AgentTemplate
 from agents.tools_pkg import (
     CONTEXT7_TOOLS,
     ELECTRON_TOOLS,
@@ -143,10 +144,7 @@ from core.auth import (
     require_auth_token,
     validate_token_not_encrypted,
 )
-from core.cost_tracking import CostTracker
-from core.model_fallback import retry_with_fallback
 from linear_updater import is_linear_enabled
-from phase_config import get_agent_model
 from prompts_pkg.project_context import detect_project_capabilities, load_project_index
 from security import bash_security_hook
 
@@ -410,15 +408,85 @@ def is_electron_mcp_enabled() -> bool:
     Check if Electron MCP server integration is enabled.
 
     Requires ELECTRON_MCP_ENABLED to be set to 'true'.
-    When enabled, QA agents can use Puppeteer MCP tools to connect to Electron apps
-    via Chrome DevTools Protocol on the configured debug port.
+    When enabled, QA agents can use MCP tools to connect to Electron apps.
     """
     return os.environ.get("ELECTRON_MCP_ENABLED", "").lower() == "true"
 
 
+_VALID_ELECTRON_MCP_MODES: tuple[str, ...] = ("cdp", "embedded")
+_VALID_ELECTRON_MCP_LOG_LEVELS: tuple[str, ...] = ("debug", "info", "warn", "error")
+
+
+def get_electron_mcp_mode() -> str:
+    """
+    Get the Electron MCP server mode.
+
+    Returns:
+        "embedded" - MCP server runs inside Electron process (stdio transport)
+        "cdp" - External CDP-based server (electron-mcp-server package)
+
+    Default: "cdp" for backward compatibility
+    """
+    mode = os.environ.get("ELECTRON_MCP_MODE", "cdp").lower()
+
+    if mode not in _VALID_ELECTRON_MCP_MODES:
+        logger.warning(
+            "Invalid ELECTRON_MCP_MODE '%s'. Valid values: %s. Using default: cdp",
+            mode,
+            ", ".join(_VALID_ELECTRON_MCP_MODES),
+        )
+        return "cdp"
+
+    return mode
+
+
 def get_electron_debug_port() -> int:
-    """Get the Electron remote debugging port (default: 9222)."""
-    return int(os.environ.get("ELECTRON_DEBUG_PORT", "9222"))
+    """
+    Get the Electron remote debugging port (default: 9222).
+
+    Returns:
+        Port number for Chrome DevTools Protocol
+
+    Raises:
+        ValueError: If port is not a valid number or out of range
+    """
+    port_str = os.environ.get("ELECTRON_DEBUG_PORT", "9222")
+
+    try:
+        port = int(port_str)
+    except ValueError:
+        raise ValueError(
+            f"Invalid ELECTRON_DEBUG_PORT: '{port_str}'. Must be a number."
+        )
+
+    if not (1024 <= port <= 65535):
+        raise ValueError(
+            f"Invalid ELECTRON_DEBUG_PORT: {port}. Must be between 1024 and 65535."
+        )
+
+    return port
+
+
+def get_electron_mcp_log_level() -> str:
+    """
+    Get the Electron MCP server log level.
+
+    Returns:
+        Log level: "debug", "info", "warn", or "error"
+
+    Default: "info"
+    """
+    level = os.environ.get("ELECTRON_MCP_LOG_LEVEL", "info").lower()
+
+    if level not in _VALID_ELECTRON_MCP_LOG_LEVELS:
+        logger.warning(
+            "Invalid ELECTRON_MCP_LOG_LEVEL '%s'. Valid values: %s. Using default: info",
+            level,
+            ", ".join(_VALID_ELECTRON_MCP_LOG_LEVELS),
+        )
+        return "info"
+
+    return level
 
 
 def should_use_claude_md() -> bool:
@@ -445,6 +513,170 @@ def load_claude_md(project_dir: Path) -> str | None:
     return None
 
 
+def load_plugin_mcp_servers(project_dir: Path, spec_dir: Path) -> dict[str, Any]:
+    """
+    Load MCP servers from enabled integration plugins.
+
+    Queries the PluginRegistry for enabled integration plugins and creates
+    MCP servers from their tools. This allows third-party plugins to extend
+    Auto Code with custom integrations.
+
+    Args:
+        project_dir: Root directory of the project
+        spec_dir: Directory containing the current spec
+
+    Returns:
+        Dictionary mapping plugin IDs to MCP server instances
+        Example: {"my-plugin": <MCP server instance>}
+    """
+    try:
+        from plugins.base import PluginType
+        from plugins.registry import PluginRegistry
+        from plugins.sdk.integration import IntegrationContext, IntegrationPlugin
+    except ImportError:
+        logger.debug("Plugin system not available")
+        return {}
+
+    plugin_servers = {}
+
+    try:
+        # Get singleton registry instance
+        registry = PluginRegistry.get_instance()
+
+        # Get all enabled integration plugins
+        integration_plugins = registry.list_plugins(
+            plugin_type=PluginType.INTEGRATION,
+            enabled_only=True,
+        )
+
+        logger.debug(f"Found {len(integration_plugins)} enabled integration plugin(s)")
+
+        # Create MCP server for each enabled plugin
+        for plugin in integration_plugins:
+            if not isinstance(plugin, IntegrationPlugin):
+                logger.warning(
+                    f"Plugin {plugin.name} is not an IntegrationPlugin, skipping"
+                )
+                continue
+
+            # Check if plugin is available (has valid config, connectivity, etc.)
+            if not plugin.is_available():
+                logger.debug(
+                    f"Integration plugin {plugin.name} is not available, skipping"
+                )
+                continue
+
+            # Create integration context
+            context = IntegrationContext(
+                project_dir=project_dir,
+                spec_dir=spec_dir,
+            )
+
+            # Create MCP server from plugin
+            try:
+                mcp_server = plugin.create_mcp_server(context)
+                if mcp_server:
+                    plugin_servers[plugin.name] = mcp_server
+                    logger.info(f"Loaded MCP server from plugin: {plugin.name}")
+                else:
+                    logger.debug(f"Plugin {plugin.name} returned no MCP server")
+            except Exception as e:
+                logger.error(
+                    f"Failed to create MCP server for plugin {plugin.name}: {e}"
+                )
+                continue
+
+    except Exception as e:
+        logger.error(f"Error loading plugin MCP servers: {e}")
+
+    return plugin_servers
+
+
+def load_preferences(
+    base_prompt: str,
+    spec_dir: Path,
+    project_dir: Path,
+) -> str:
+    """
+    Load user preference profile and adapt the system prompt accordingly.
+
+    This function retrieves the user's preference profile from Graphiti memory
+    and applies adaptive behavior instructions to the prompt based on learned
+    patterns and explicit user settings.
+
+    Args:
+        base_prompt: Original system prompt
+        spec_dir: Directory containing the spec
+        project_dir: Project root directory
+
+    Returns:
+        Modified prompt with adaptive instructions, or original if no preferences found
+    """
+    try:
+        # Import here to avoid circular dependencies
+        from agents.preferences import PreferenceProfile, modify_prompt_for_preferences
+        from integrations.graphiti.memory import (
+            get_graphiti_memory,
+            is_graphiti_enabled,
+        )
+
+        # Only load preferences if Graphiti is enabled
+        if not is_graphiti_enabled():
+            logger.debug("Graphiti not enabled, skipping preference loading")
+            print("   - User preferences: Graphiti not enabled")
+            return base_prompt
+
+        # Get preference profile from Graphiti memory
+        memory = get_graphiti_memory(spec_dir, project_dir)
+
+        # Run async operation in sync context
+        import asyncio
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            profile_data = loop.run_until_complete(memory.get_preference_profile())
+        finally:
+            loop.close()
+
+        if not profile_data:
+            logger.debug("No preference profile found, using defaults")
+            print("   - User preferences: No profile found, using defaults")
+            return base_prompt
+
+        # Convert dict to PreferenceProfile object
+        profile = PreferenceProfile.from_dict(profile_data)
+
+        # Apply preferences to prompt
+        modified_prompt = modify_prompt_for_preferences(base_prompt, profile)
+
+        # Log preference application
+        verbosity = profile.get_effective_verbosity().value
+        risk = profile.get_effective_risk_tolerance().value
+        acceptance_rate = profile.get_feedback_acceptance_rate()
+
+        logger.info(
+            f"Applied user preferences: verbosity={verbosity}, risk={risk}, "
+            f"acceptance_rate={acceptance_rate:.1%}"
+        )
+        print(
+            f"   - User preferences: Applied (verbosity={verbosity}, risk={risk}, "
+            f"feedback={len(profile.feedback_history)} records)"
+        )
+
+        return modified_prompt
+
+    except ImportError as e:
+        logger.debug(f"Preference modules not available: {e}")
+        print("   - User preferences: Modules not available")
+        return base_prompt
+
+    except Exception as e:
+        logger.warning(f"Failed to load preferences: {e}")
+        print(f"   - User preferences: Failed to load ({type(e).__name__})")
+        return base_prompt
+
+
 def create_client(
     project_dir: Path,
     spec_dir: Path,
@@ -453,6 +685,7 @@ def create_client(
     max_thinking_tokens: int | None = None,
     output_format: dict | None = None,
     agents: dict | None = None,
+    custom_template: AgentTemplate | None = None,
 ) -> ClaudeSDKClient:
     """
     Create a Claude Agent SDK client with multi-layered security.
@@ -479,12 +712,16 @@ def create_client(
                Format: {"agent-name": {"description": "...", "prompt": "...",
                         "tools": [...], "model": "inherit"}}
                See: https://platform.claude.com/docs/en/agent-sdk/subagents
+        custom_template: Optional custom agent template with user-defined prompts,
+                        tools, and MCP server configuration. When provided, overrides
+                        default agent_type configuration from AGENT_CONFIGS.
 
     Returns:
         Configured ClaudeSDKClient
 
     Raises:
-        ValueError: If agent_type is not found in AGENT_CONFIGS
+        ValueError: If agent_type is not found in AGENT_CONFIGS or if custom_template
+                   validation fails
 
     Security layers (defense in depth):
     1. Sandbox - OS-level bash command isolation prevents filesystem escape
@@ -493,10 +730,6 @@ def create_client(
        (see security.py for ALLOWED_COMMANDS)
     4. Tool filtering - Each agent type only sees relevant tools (prevents misuse)
     """
-    # Resolve model using agent-specific configuration
-    # Priority: CLI arg (model) > task_metadata.json agentModels > AGENT_DEFAULT_MODELS > fallback
-    resolved_model = get_agent_model(spec_dir, agent_type, model)
-
     # Get OAuth token - Claude CLI handles token lifecycle internally
     oauth_token = require_auth_token()
 
@@ -532,25 +765,61 @@ def create_client(
     # Load per-project MCP configuration from .auto-claude/.env
     mcp_config = load_project_mcp_config(project_dir)
 
-    # Get allowed tools using phase-aware configuration
-    # This respects AGENT_CONFIGS and only includes tools the agent needs
-    # Also respects per-project MCP configuration
-    allowed_tools_list = get_allowed_tools(
-        agent_type,
-        project_capabilities,
-        linear_enabled,
-        mcp_config,
-    )
+    # Handle custom template configuration
+    # Custom templates override AGENT_CONFIGS for tools, MCP servers, and thinking level
+    if custom_template:
+        # Validate custom template before using it
+        from agents.templates.validator import validate_template
 
-    # Get required MCP servers for this agent type
-    # This is the key optimization - only start servers the agent needs
-    # Now also respects per-project MCP configuration
-    required_servers = get_required_mcp_servers(
-        agent_type,
-        project_capabilities,
-        linear_enabled,
-        mcp_config,
-    )
+        is_valid, errors = validate_template(custom_template)
+        if not is_valid:
+            raise ValueError(f"Custom template validation failed: {'; '.join(errors)}")
+
+        # Use template's tool configuration
+        allowed_tools_list = custom_template.tools
+
+        # Use template's MCP server configuration
+        required_servers = custom_template.mcp_servers
+
+        # Override max_thinking_tokens based on template's thinking level if not explicitly set
+        if max_thinking_tokens is None:
+            thinking_level_tokens = {
+                "none": None,
+                "low": 2000,
+                "medium": 5000,
+                "high": 10000,
+                "ultrathink": 16000,
+            }
+            max_thinking_tokens = thinking_level_tokens.get(
+                custom_template.thinking_level, None
+            )
+
+        logger.info(
+            f"Using custom template '{custom_template.name}' "
+            f"(tools: {len(allowed_tools_list)}, "
+            f"MCP servers: {len(required_servers)}, "
+            f"thinking: {custom_template.thinking_level})"
+        )
+    else:
+        # Get allowed tools using phase-aware configuration
+        # This respects AGENT_CONFIGS and only includes tools the agent needs
+        # Also respects per-project MCP configuration
+        allowed_tools_list = get_allowed_tools(
+            agent_type,
+            project_capabilities,
+            linear_enabled,
+            mcp_config,
+        )
+
+        # Get required MCP servers for this agent type
+        # This is the key optimization - only start servers the agent needs
+        # Now also respects per-project MCP configuration
+        required_servers = get_required_mcp_servers(
+            agent_type,
+            project_capabilities,
+            linear_enabled,
+            mcp_config,
+        )
 
     # Check if Graphiti MCP is enabled (already filtered by get_required_mcp_servers)
     graphiti_mcp_enabled = "graphiti" in required_servers
@@ -683,9 +952,9 @@ def create_client(
     if "context7" in required_servers:
         mcp_servers_list.append("context7 (documentation)")
     if "electron" in required_servers:
-        mcp_servers_list.append(
-            f"electron (desktop automation, port {get_electron_debug_port()})"
-        )
+        electron_mode = get_electron_mcp_mode()
+        mode_label = "embedded" if electron_mode == "embedded" else "CDP"
+        mcp_servers_list.append(f"electron (desktop automation, {mode_label} mode)")
     if "puppeteer" in required_servers:
         mcp_servers_list.append("puppeteer (browser automation)")
     if "linear" in required_servers:
@@ -721,11 +990,29 @@ def create_client(
 
     if "electron" in required_servers:
         # Electron MCP for desktop apps
-        # Electron app must be started with --remote-debugging-port=<port>
-        mcp_servers["electron"] = {
-            "command": "npm",
-            "args": ["exec", "electron-mcp-server"],
-        }
+        # Two modes supported:
+        # 1. CDP mode (default): Uses external electron-mcp-server package
+        # 2. Embedded mode: Spawns Electron app with MCP server inside
+        electron_mode = get_electron_mcp_mode()
+
+        if electron_mode == "embedded":
+            # Embedded mode: MCP server runs inside Electron process
+            # Electron app starts with MCP server enabled, communicates via stdio
+            mcp_servers["electron"] = {
+                "command": "npm",
+                "args": ["start"],
+                "env": {
+                    "ELECTRON_MCP_ENABLED": "true",
+                    "ELECTRON_MCP_LOG_LEVEL": get_electron_mcp_log_level(),
+                },
+            }
+        else:
+            # CDP mode: External electron-mcp-server package
+            # Electron app must be started with --remote-debugging-port=<port>
+            mcp_servers["electron"] = {
+                "command": "npm",
+                "args": ["exec", "electron-mcp-server"],
+            }
 
     if "puppeteer" in required_servers:
         # Puppeteer for web frontends (not Electron)
@@ -790,6 +1077,18 @@ def create_client(
         f"and build-progress.txt updates."
     )
 
+    # Include custom template prompt if provided
+    if custom_template and custom_template.custom_prompt:
+        base_prompt = (
+            f"{base_prompt}\n\n"
+            f"# Custom Agent Instructions (from template: {custom_template.name})\n\n"
+            f"{custom_template.custom_prompt}"
+        )
+        print(
+            f"   - Custom template: {custom_template.name} ({custom_template.category})"
+        )
+        print(f"   - Template description: {custom_template.description}")
+
     # Include CLAUDE.md if enabled and present
     if should_use_claude_md():
         claude_md_content = load_claude_md(project_dir)
@@ -800,11 +1099,15 @@ def create_client(
             print("   - CLAUDE.md: not found in project root")
     else:
         print("   - CLAUDE.md: disabled by project settings")
+
+    # Load and apply user preferences to adapt agent behavior
+    base_prompt = load_preferences(base_prompt, spec_dir, project_dir)
+
     print()
 
     # Build options dict, conditionally including output_format
     options_kwargs: dict[str, Any] = {
-        "model": resolved_model,
+        "model": model,
         "system_prompt": base_prompt,
         "allowed_tools": allowed_tools_list,
         "mcp_servers": mcp_servers,
@@ -843,65 +1146,4 @@ def create_client(
     if agents:
         options_kwargs["agents"] = agents
 
-    # Wrap client creation with fallback logic
-    # If the requested model fails (rate limit, unavailable, etc.),
-    # automatically retry with degraded models (opus -> sonnet -> haiku)
-    def _create_client_with_model(model_to_use: str) -> ClaudeSDKClient:
-        """Helper to create client with a specific model."""
-        options_with_model = {**options_kwargs, "model": model_to_use}
-        return ClaudeSDKClient(options=ClaudeAgentOptions(**options_with_model))
-
-    # Use retry_with_fallback to handle model failures gracefully
-    # This will automatically try fallback models if the primary model fails
-    return retry_with_fallback(
-        callable_fn=_create_client_with_model,
-        model=resolved_model,
-        max_retries_per_model=1,
-    )
-
-
-def log_agent_usage(
-    spec_dir: Path,
-    agent_type: str,
-    model: str,
-    input_tokens: int,
-    output_tokens: int,
-) -> float:
-    """
-    Log model usage for an agent session to cost tracking.
-
-    This is a cost tracking hook that should be called after each agent session
-    to record token usage and calculate costs.
-
-    Args:
-        spec_dir: Directory containing the spec
-        agent_type: Type of agent (e.g., "coder", "planner", "qa_reviewer")
-        model: Claude model identifier (e.g., "claude-sonnet-4-5-20250929")
-        input_tokens: Number of input tokens consumed
-        output_tokens: Number of output tokens consumed
-
-    Returns:
-        Cost of this operation in dollars
-
-    Example:
-        # After an agent session completes
-        cost = log_agent_usage(
-            spec_dir=Path(".auto-claude/specs/001"),
-            agent_type="coder",
-            model="claude-sonnet-4-5-20250929",
-            input_tokens=5000,
-            output_tokens=2000
-        )
-        print(f"Session cost: ${cost:.4f}")
-    """
-    tracker = CostTracker(spec_dir=spec_dir)
-    cost = tracker.log_usage(
-        agent_type=agent_type,
-        model=model,
-        input_tokens=input_tokens,
-        output_tokens=output_tokens,
-    )
-    logger.debug(
-        f"Logged usage for {agent_type}: {input_tokens} input + {output_tokens} output tokens = ${cost:.4f}"
-    )
-    return cost
+    return ClaudeSDKClient(options=ClaudeAgentOptions(**options_kwargs))

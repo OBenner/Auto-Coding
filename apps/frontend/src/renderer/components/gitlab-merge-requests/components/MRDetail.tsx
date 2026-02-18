@@ -93,7 +93,7 @@ export function MRDetail({
   onCheckNewCommits,
   onCancelReview,
   onPostReview,
-  onPostNote,
+  onPostNote: _onPostNote,
   onMergeMR,
   onApproveMR,
 }: MRDetailProps) {

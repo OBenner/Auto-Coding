@@ -253,6 +253,7 @@ class GraphitiSearch:
         query: str,
         num_results: int = 5,
         min_score: float = 0.5,
+        categories: list[str] | None = None,
     ) -> tuple[list[dict], list[dict]]:
         """
         Retrieve patterns and gotchas relevant to the current task.
@@ -265,6 +266,7 @@ class GraphitiSearch:
             query: Search query (task description)
             num_results: Max results per type
             min_score: Minimum relevance score (0.0-1.0)
+            categories: Optional list of pattern categories to filter by
 
         Returns:
             Tuple of (patterns, gotchas) lists
@@ -274,10 +276,12 @@ class GraphitiSearch:
 
         try:
             # Search with query focused on patterns
+            # Get more results if filtering by category
+            search_multiplier = 3 if categories else 2
             pattern_results = await self.client.graphiti.search(
                 query=f"pattern: {query}",
                 group_ids=[self.group_id],
-                num_results=num_results * 2,
+                num_results=num_results * search_multiplier,
             )
 
             for result in pattern_results:
@@ -298,14 +302,20 @@ class GraphitiSearch:
                         if not isinstance(data, dict):
                             continue
                         if data.get("type") == EPISODE_TYPE_PATTERN:
-                            patterns.append(
-                                {
-                                    "pattern": data.get("pattern", ""),
-                                    "applies_to": data.get("applies_to", ""),
-                                    "example": data.get("example", ""),
-                                    "score": score,
-                                }
-                            )
+                            pattern_entry = {
+                                "pattern": data.get("pattern", ""),
+                                "category": data.get("category", "uncategorized"),
+                                "applies_to": data.get("applies_to", ""),
+                                "example": data.get("example", ""),
+                                "score": score,
+                            }
+
+                            # Filter by category if specified
+                            if (
+                                categories is None
+                                or pattern_entry["category"] in categories
+                            ):
+                                patterns.append(pattern_entry)
                     except (json.JSONDecodeError, TypeError, AttributeError):
                         continue
 
@@ -349,8 +359,11 @@ class GraphitiSearch:
             patterns.sort(key=lambda x: x.get("score", 0), reverse=True)
             gotchas.sort(key=lambda x: x.get("score", 0), reverse=True)
 
+            category_filter_str = (
+                f" (filtered by: {', '.join(categories)})" if categories else ""
+            )
             logger.info(
-                f"Found {len(patterns)} patterns and {len(gotchas)} gotchas for: {query[:50]}..."
+                f"Found {len(patterns[:num_results])} patterns and {len(gotchas[:num_results])} gotchas for: {query[:50]}...{category_filter_str}"
             )
             return patterns[:num_results], gotchas[:num_results]
 

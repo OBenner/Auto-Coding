@@ -1,0 +1,111 @@
+version: '3.8'
+
+services:
+  # PostgreSQL database for user data and repositories
+  postgres:
+    image: postgres:16-alpine
+    container_name: autoclaude-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: autoclaude
+      POSTGRES_INITDB_ARGS: "-E UTF8"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - autoclaude-network
+    restart: unless-stopped
+
+  # Redis for usage tracking and caching
+  redis:
+    image: redis:7-alpine
+    container_name: autoclaude-redis
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - autoclaude-network
+    restart: unless-stopped
+
+  # Auto Code web backend API
+  web-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: autoclaude-backend
+    environment:
+      # Server configuration
+      HOST: 0.0.0.0
+      PORT: 8000
+      DEBUG: "false"
+      LOG_LEVEL: INFO
+
+      # CORS configuration
+      CORS_ORIGINS: http://localhost:3000,https://autoclaude.app
+
+      # Authentication
+      SECRET_KEY: ${SECRET_KEY:-change-me-in-production}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-60}
+
+      # Database configuration (connect to postgres service)
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/autoclaude
+
+      # Redis configuration (connect to redis service)
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_DB: 0
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+
+      # OAuth configuration
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
+      GITLAB_CLIENT_ID: ${GITLAB_CLIENT_ID:-}
+      GITLAB_CLIENT_SECRET: ${GITLAB_CLIENT_SECRET:-}
+      OAUTH_REDIRECT_URI: ${OAUTH_REDIRECT_URI:-http://localhost:8000/api/git/callback}
+
+      # WebSocket configuration
+      WS_HEARTBEAT_INTERVAL: 30
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - autoclaude-network
+    restart: unless-stopped
+    # Mount auto-claude backend directory if available locally
+    # Comment out in production deployment
+    volumes:
+      - ${AUTO_CLAUDE_BACKEND_DIR:-/app/backend}:/app/backend:ro
+
+networks:
+  autoclaude-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local

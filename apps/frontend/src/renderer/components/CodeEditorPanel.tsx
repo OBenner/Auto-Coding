@@ -176,7 +176,9 @@ export function CodeEditorPanel() {
           </span>
           {/* Dirty indicator */}
           {isDirty && (
+            // biome-ignore lint/a11y/useSemanticElements: Using span with role="status" for visual indicator dot
             <span
+              role="status"
               className="h-2 w-2 rounded-full bg-amber-500 shrink-0"
               title="Unsaved changes"
               aria-label="Unsaved changes"

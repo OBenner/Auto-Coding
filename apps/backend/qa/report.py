@@ -8,7 +8,7 @@ and report generation.
 
 import json
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any
@@ -68,7 +68,7 @@ def record_iteration(
     record = {
         "iteration": iteration,
         "status": status,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "issues": issues,
     }
     if duration_seconds is not None:
@@ -267,7 +267,7 @@ async def escalate_to_human(
 
     content = f"""# QA Escalation - Human Intervention Required
 
-**Generated**: {datetime.now(timezone.utc).isoformat()}
+**Generated**: {datetime.now(UTC).isoformat()}
 **Iteration**: {iteration}/{MAX_QA_ITERATIONS}
 **Reason**: Recurring issues detected ({RECURRING_ISSUE_THRESHOLD}+ occurrences)
 
@@ -362,7 +362,7 @@ def create_manual_test_plan(spec_dir: Path, spec_name: str) -> Path:
 
     content = f"""# Manual Test Plan - {spec_name}
 
-**Generated**: {datetime.now(timezone.utc).isoformat()}
+**Generated**: {datetime.now(UTC).isoformat()}
 **Reason**: No automated test framework detected
 
 ## Overview
@@ -521,3 +521,131 @@ def is_no_test_project(spec_dir: Path, project_dir: Path) -> bool:
                     return False
 
     return True
+
+
+# =============================================================================
+# LEARNING METRICS STORAGE
+# =============================================================================
+
+
+def get_learning_metrics(spec_dir: Path) -> dict[str, Any]:
+    """
+    Get learning metrics from implementation plan.
+
+    Returns:
+        Dict with learning metrics:
+        {
+            "root_causes_identified": int,
+            "user_corrections_applied": int,
+            "patterns_applied": int,
+            "last_updated": str (ISO timestamp),
+        }
+    """
+    plan = load_implementation_plan(spec_dir)
+    if not plan:
+        return {}
+    return plan.get("learning_metrics", {})
+
+
+def initialize_learning_metrics(spec_dir: Path) -> bool:
+    """
+    Initialize learning metrics section in implementation plan if it doesn't exist.
+
+    Args:
+        spec_dir: Spec directory
+
+    Returns:
+        True if initialized successfully
+    """
+    plan = load_implementation_plan(spec_dir)
+    if not plan:
+        plan = {}
+
+    if "learning_metrics" not in plan:
+        plan["learning_metrics"] = {
+            "root_causes_identified": 0,
+            "user_corrections_applied": 0,
+            "patterns_applied": 0,
+            "last_updated": datetime.now(UTC).isoformat(),
+        }
+        return save_implementation_plan(spec_dir, plan)
+
+    return True
+
+
+def update_learning_metrics(
+    spec_dir: Path,
+    root_causes_identified: int | None = None,
+    user_corrections_applied: int | None = None,
+    patterns_applied: int | None = None,
+) -> bool:
+    """
+    Update learning metrics in implementation plan.
+
+    Args:
+        spec_dir: Spec directory
+        root_causes_identified: Number of root causes identified (absolute value)
+        user_corrections_applied: Number of user corrections applied (absolute value)
+        patterns_applied: Number of patterns successfully applied (absolute value)
+
+    Returns:
+        True if updated successfully
+    """
+    plan = load_implementation_plan(spec_dir)
+    if not plan:
+        plan = {}
+
+    # Initialize if needed
+    if "learning_metrics" not in plan:
+        plan["learning_metrics"] = {
+            "root_causes_identified": 0,
+            "user_corrections_applied": 0,
+            "patterns_applied": 0,
+        }
+
+    metrics = plan["learning_metrics"]
+
+    # Update provided metrics
+    if root_causes_identified is not None:
+        metrics["root_causes_identified"] = root_causes_identified
+
+    if user_corrections_applied is not None:
+        metrics["user_corrections_applied"] = user_corrections_applied
+
+    if patterns_applied is not None:
+        metrics["patterns_applied"] = patterns_applied
+
+    # Update timestamp
+    metrics["last_updated"] = datetime.now(UTC).isoformat()
+
+    return save_implementation_plan(spec_dir, plan)
+
+
+def increment_learning_metric(spec_dir: Path, metric_name: str) -> bool:
+    """
+    Increment a learning metric by 1.
+
+    Args:
+        spec_dir: Spec directory
+        metric_name: Name of metric to increment
+                     ("root_causes_identified", "user_corrections_applied", "patterns_applied")
+
+    Returns:
+        True if incremented successfully
+    """
+    # Valid metric names
+    valid_metrics = {
+        "root_causes_identified",
+        "user_corrections_applied",
+        "patterns_applied",
+    }
+
+    if metric_name not in valid_metrics:
+        return False
+
+    # Get current metrics
+    metrics = get_learning_metrics(spec_dir)
+    current_value = metrics.get(metric_name, 0)
+
+    # Increment
+    return update_learning_metrics(spec_dir, **{metric_name: current_value + 1})

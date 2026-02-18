@@ -14,9 +14,20 @@ Fallback Strategy:
 
 import logging
 from collections.abc import Callable
-from typing import Any, TypeVar
+from typing import TypeVar
+
+from core.circuit_breaker import CircuitBreaker
 
 logger = logging.getLogger(__name__)
+
+# Per-model circuit breakers
+_model_breakers: dict[str, CircuitBreaker] = {}
+
+
+def reset_circuit_breakers() -> None:
+    """Reset all per-model circuit breakers. Useful for testing."""
+    _model_breakers.clear()
+
 
 # Model fallback chain mapping
 # Maps each model shorthand to its fallback sequence
@@ -30,7 +41,7 @@ MODEL_FALLBACK_CHAIN: dict[str, list[str]] = {
 T = TypeVar("T")
 
 
-def retry_with_fallback(
+def retry_with_fallback[T](
     callable_fn: Callable[[str], T],
     model: str,
     max_retries_per_model: int = 1,
@@ -81,6 +92,24 @@ def retry_with_fallback(
         # Determine if this is the initial attempt or a fallback
         is_fallback = attempt_num > 1
 
+        # Get or create a circuit breaker for this model
+        model_key = _extract_model_shorthand(current_model)
+        if model_key not in _model_breakers:
+            _model_breakers[model_key] = CircuitBreaker(
+                name=f"model_{model_key}",
+                failure_threshold=3,
+                recovery_timeout=60.0,
+            )
+        breaker = _model_breakers[model_key]
+
+        # Skip this model if its circuit breaker is open
+        if not breaker.can_execute():
+            logger.warning(
+                f"[SKIP] Circuit breaker open for model '{current_model}' — "
+                f"skipping to next fallback"
+            )
+            continue
+
         if is_fallback:
             # Log fallback transition with cost implications
             logger.warning(
@@ -96,6 +125,9 @@ def retry_with_fallback(
             try:
                 result = callable_fn(current_model)
 
+                # Record success on the circuit breaker
+                breaker.record_success()
+
                 # Log success with appropriate context for cost analysis
                 if is_fallback:
                     logger.info(
@@ -107,7 +139,9 @@ def retry_with_fallback(
                         f"[SUCCESS] Request completed with model '{current_model}' after {retry} retries"
                     )
                 else:
-                    logger.debug(f"[SUCCESS] Request completed with initial model '{current_model}'")
+                    logger.debug(
+                        f"[SUCCESS] Request completed with initial model '{current_model}'"
+                    )
 
                 return result
 
@@ -120,6 +154,7 @@ def retry_with_fallback(
                 is_retryable = _is_retryable_error(e)
 
                 if is_retryable:
+                    breaker.record_failure(e)
                     if retry < max_retries_per_model - 1:
                         logger.warning(
                             f"[RETRY] API error with model '{current_model}' ({error_type}: {error_msg}). "
@@ -148,7 +183,9 @@ def retry_with_fallback(
         raise last_exception
     else:
         # Should never reach here, but just in case
-        raise RuntimeError("retry_with_fallback failed with no exception (unexpected state)")
+        raise RuntimeError(
+            "retry_with_fallback failed with no exception (unexpected state)"
+        )
 
 
 def _extract_model_shorthand(model: str) -> str:
@@ -209,7 +246,10 @@ def _is_retryable_error(exception: Exception) -> bool:
     ]
 
     # Check error type
-    if any(pattern in error_type.lower() for pattern in ["ratelimit", "connection", "timeout"]):
+    if any(
+        pattern in error_type.lower()
+        for pattern in ["ratelimit", "connection", "timeout"]
+    ):
         return True
 
     # Check error message

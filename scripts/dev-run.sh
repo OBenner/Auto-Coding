@@ -1,7 +1,7 @@
 #!/bin/bash
 
 ###############################################################################
-# Auto Claude - Development Server Start Script (Unix)
+# Auto Code - Development Server Start Script (Unix)
 ###############################################################################
 #
 # PURPOSE:
@@ -56,7 +56,7 @@ done
 # Show help if requested
 if [ $SHOW_HELP -eq 1 ]; then
     echo ""
-    echo "Auto Claude - Development Server"
+    echo "Auto Code - Development Server"
     echo ""
     echo "USAGE:"
     echo "  ./scripts/dev-run.sh           Start dev server"
@@ -71,7 +71,7 @@ if [ $SHOW_HELP -eq 1 ]; then
 fi
 
 echo -e "${BLUE}╔════════════════════════════════════════════════════════════════╗${NC}"
-echo -e "${BLUE}║        Auto Claude - Starting Development Server               ║${NC}"
+echo -e "${BLUE}║        Auto Code - Starting Development Server               ║${NC}"
 echo -e "${BLUE}╚════════════════════════════════════════════════════════════════╝${NC}"
 echo ""
 
@@ -91,7 +91,8 @@ if [ ! -d "node_modules" ]; then
     exit 1
 fi
 
-if [ ! -d "apps/frontend/node_modules" ]; then
+# Check frontend dependencies (npm workspaces hoists to root node_modules)
+if [ ! -d "node_modules/electron" ] && [ ! -d "apps/frontend/node_modules" ]; then
     echo -e "${RED}✗${NC} Frontend dependencies not installed. Run ./scripts/dev-setup.sh first."
     exit 1
 fi

@@ -308,6 +308,7 @@ export function PRFilterBar({
           />
           {filters.searchQuery && (
             <button
+              type="button"
               onClick={() => onSearchChange('')}
               className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
               aria-label={t('prReview.clearSearch')}

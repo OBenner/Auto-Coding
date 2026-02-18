@@ -205,6 +205,10 @@ export class UsageMonitor extends EventEmitter {
   private currentUsageProfileId: string | null = null; // Track which profile's usage is in currentUsage
   private isChecking = false;
 
+  // Exponential backoff for global check failures (e.g., ETIMEDOUT when API unreachable)
+  private consecutiveGlobalFailures = 0;
+  private static MAX_BACKOFF_MULTIPLIER = 10; // Cap at 10x base interval (5 min at 30s base)
+
   // Per-profile API failure tracking with cooldown-based retry
   // Map<profileId, lastFailureTimestamp> - stores when API last failed for this profile
   private apiFailureTimestamps: Map<string, number> = new Map();
@@ -267,17 +271,36 @@ export class UsageMonitor extends EventEmitter {
 
     const profileManager = getClaudeProfileManager();
     const settings = profileManager.getAutoSwitchSettings();
-    const interval = settings.usageCheckInterval || 30000; // 30 seconds for accurate usage tracking
+    const baseInterval = settings.usageCheckInterval || 30000; // 30 seconds for accurate usage tracking
 
-    this.debugLog('[UsageMonitor] Starting with interval: ' + interval + ' ms (30-second updates for accurate usage stats)');
+    this.debugLog('[UsageMonitor] Starting with base interval: ' + baseInterval + ' ms (30-second updates for accurate usage stats)');
 
-    // Check immediately
-    this.checkUsageAndSwap();
+    // Check immediately, then schedule next check with dynamic interval
+    const scheduleNext = () => {
+      const backoffMultiplier = Math.min(
+        Math.pow(2, this.consecutiveGlobalFailures),
+        UsageMonitor.MAX_BACKOFF_MULTIPLIER
+      );
+      const nextInterval = baseInterval * backoffMultiplier;
 
-    // Then check periodically
-    this.intervalId = setInterval(() => {
-      this.checkUsageAndSwap();
-    }, interval);
+      if (this.consecutiveGlobalFailures > 0) {
+        this.debugLog(`[UsageMonitor] Backing off: ${nextInterval}ms (${this.consecutiveGlobalFailures} consecutive failures)`);
+      }
+
+      this.intervalId = setTimeout(() => {
+        this.checkUsageAndSwap().then(() => {
+          if (this.intervalId) scheduleNext(); // Continue if not stopped
+        }).catch(() => {
+          if (this.intervalId) scheduleNext(); // Continue even on error
+        });
+      }, nextInterval);
+    };
+
+    this.checkUsageAndSwap().then(() => {
+      scheduleNext();
+    }).catch(() => {
+      scheduleNext();
+    });
   }
 
   /**
@@ -285,8 +308,9 @@ export class UsageMonitor extends EventEmitter {
    */
   stop(): void {
     if (this.intervalId) {
-      clearInterval(this.intervalId);
+      clearTimeout(this.intervalId);
       this.intervalId = null;
+      this.consecutiveGlobalFailures = 0;
       this.debugLog('[UsageMonitor] Stopped');
     }
   }
@@ -401,6 +425,27 @@ export class UsageMonitor extends EventEmitter {
         needsReauthentication: this.needsReauthProfiles.has(profile.id)
       }));
 
+      // Also include API profiles in the startup minimal response
+      try {
+        const profilesFile = await loadProfilesFile();
+        for (const apiProfile of profilesFile.profiles) {
+          if (!apiProfile.apiKey) continue;
+          allProfiles.push({
+            profileId: apiProfile.id,
+            profileName: apiProfile.name,
+            sessionPercent: 0,
+            weeklyPercent: 0,
+            isAuthenticated: true,
+            isRateLimited: false,
+            availabilityScore: 100,
+            isActive: apiProfile.id === activeProfileId,
+            needsReauthentication: false
+          });
+        }
+      } catch (error) {
+        this.debugLog('[UsageMonitor:getAllProfilesUsage] Failed to load API profiles on startup:', error);
+      }
+
       // Return minimal data with auth status - don't return null!
       return {
         activeProfile: {
@@ -438,7 +483,10 @@ export class UsageMonitor extends EventEmitter {
       }
 
       // For active profile, use the current detailed usage (always fresh from last poll)
-      if (profile.id === activeProfileId && this.currentUsage) {
+      // IMPORTANT: Also verify currentUsageProfileId matches to prevent cross-contamination
+      // when an API profile is active but currentUsage was fetched for that API profile,
+      // not this OAuth profile
+      if (profile.id === activeProfileId && this.currentUsage && this.currentUsageProfileId === profile.id) {
         const summary = this.buildProfileUsageSummary(profile, this.currentUsage);
         profileResults[i] = summary;
         this.allProfilesUsageCache.set(profile.id, { usage: summary, fetchedAt: now });
@@ -534,11 +582,71 @@ export class UsageMonitor extends EventEmitter {
       }
     }
 
-    // Collect non-null results
+    // Collect non-null OAuth profile results
     for (const result of profileResults) {
       if (result) {
         allProfiles.push(result);
       }
+    }
+
+    // Include API profiles in the allProfiles list
+    // API profiles are stored separately from OAuth profiles and must be iterated independently
+    try {
+      const profilesFile = await loadProfilesFile();
+      for (const apiProfile of profilesFile.profiles) {
+        if (!apiProfile.apiKey) continue; // Skip profiles without API keys
+
+        // Check if this API profile is the active one and we have its usage data
+        if (apiProfile.id === activeProfileId && this.currentUsage && this.currentUsageProfileId === apiProfile.id) {
+          const summary: ProfileUsageSummary = {
+            profileId: apiProfile.id,
+            profileName: apiProfile.name,
+            sessionPercent: this.currentUsage.sessionPercent,
+            weeklyPercent: this.currentUsage.weeklyPercent,
+            sessionResetTimestamp: this.currentUsage.sessionResetTimestamp,
+            weeklyResetTimestamp: this.currentUsage.weeklyResetTimestamp,
+            isAuthenticated: true,
+            isRateLimited: false,
+            availabilityScore: this.calculateAvailabilityScore(
+              this.currentUsage.sessionPercent,
+              this.currentUsage.weeklyPercent,
+              false,
+              undefined,
+              true
+            ),
+            isActive: true,
+            lastFetchedAt: this.currentUsage.fetchedAt?.toISOString(),
+            needsReauthentication: false
+          };
+          this.allProfilesUsageCache.set(apiProfile.id, { usage: summary, fetchedAt: now });
+          allProfiles.push(summary);
+        } else {
+          // Inactive API profile or no current usage - use cached data or defaults
+          const cached = this.allProfilesUsageCache.get(apiProfile.id);
+          if (cached && (now - cached.fetchedAt) < UsageMonitor.PROFILE_USAGE_CACHE_TTL_MS) {
+            allProfiles.push({
+              ...cached.usage,
+              isActive: apiProfile.id === activeProfileId
+            });
+          } else {
+            // No cached data available - show defaults (0%)
+            const summary: ProfileUsageSummary = {
+              profileId: apiProfile.id,
+              profileName: apiProfile.name,
+              sessionPercent: 0,
+              weeklyPercent: 0,
+              isAuthenticated: true,
+              isRateLimited: false,
+              availabilityScore: 100,
+              isActive: apiProfile.id === activeProfileId,
+              needsReauthentication: false
+            };
+            allProfiles.push(summary);
+          }
+        }
+      }
+    } catch (error) {
+      this.debugLog('[UsageMonitor:getAllProfilesUsage] Failed to load API profiles:', error);
     }
 
     // Sort by availability score (highest first = most available)
@@ -898,7 +1006,8 @@ export class UsageMonitor extends EventEmitter {
       const credential = await this.getCredential();
       const usage = await this.fetchUsage(profileId, credential, activeProfile);
       if (!usage) {
-        this.debugLog('[UsageMonitor] Failed to fetch usage');
+        this.consecutiveGlobalFailures++;
+        this.debugLog('[UsageMonitor] Failed to fetch usage (failure #' + this.consecutiveGlobalFailures + ')');
         return;
       }
 
@@ -911,6 +1020,9 @@ export class UsageMonitor extends EventEmitter {
       // Step 2.5: Persist usage to profile for caching (so other profiles can display cached usage)
       const profileManager = getClaudeProfileManager();
       profileManager.updateProfileUsageFromAPI(profileId, usage.sessionPercent, usage.weeklyPercent);
+
+      // Usage fetch succeeded - reset backoff counter
+      this.consecutiveGlobalFailures = 0;
 
       // Step 3: Emit usage update for UI (always emit, regardless of proactive swap settings)
       this.emit('usage-updated', usage);
@@ -971,7 +1083,8 @@ export class UsageMonitor extends EventEmitter {
         }
       }
 
-      console.error('[UsageMonitor] Check failed:', error);
+      this.consecutiveGlobalFailures++;
+      console.error('[UsageMonitor] Check failed (failure #' + this.consecutiveGlobalFailures + '):', error);
     } finally {
       this.isChecking = false;
     }
@@ -1271,14 +1384,21 @@ export class UsageMonitor extends EventEmitter {
     // Per-profile tracking: if API fails for one profile, it only affects that profile
     if (this.shouldUseApiMethod(profileId) && credential) {
       this.debugLog('[UsageMonitor:FETCH] Attempting API fetch method');
-      const apiUsage = await this.fetchUsageViaAPI(credential, profileId, profileName, profileEmail, activeProfile);
-      if (apiUsage) {
-        this.debugLog('[UsageMonitor] Successfully fetched via API');
-        this.debugLog('[UsageMonitor:FETCH] API fetch successful:', {
-          sessionPercent: apiUsage.sessionPercent,
-          weeklyPercent: apiUsage.weeklyPercent
-        });
-        return apiUsage;
+      try {
+        const apiUsage = await this.fetchUsageViaAPI(credential, profileId, profileName, profileEmail, activeProfile);
+        if (apiUsage) {
+          this.debugLog('[UsageMonitor] Successfully fetched via API');
+          this.debugLog('[UsageMonitor:FETCH] API fetch successful:', {
+            sessionPercent: apiUsage.sessionPercent,
+            weeklyPercent: apiUsage.weeklyPercent
+          });
+          return apiUsage;
+        }
+      } catch (apiError) {
+        // Auth failures (401/403) and network errors should not prevent CLI fallback.
+        // The usage API is non-critical - gracefully degrade instead of triggering
+        // auth failure recovery (token refresh, profile marking, swap attempts).
+        this.debugLog('[UsageMonitor:FETCH] API fetch error, falling through to CLI fallback:', apiError);
       }
 
       // API failed - record timestamp for cooldown-based retry
@@ -1431,21 +1551,21 @@ export class UsageMonitor extends EventEmitter {
       });
 
       if (!response.ok) {
-        console.error('[UsageMonitor] API error:', response.status, response.statusText, {
+        console.warn('[UsageMonitor] API error:', response.status, response.statusText, {
           provider,
           endpoint: usageEndpoint
         });
 
         // Check for auth failures via status code (works for all providers)
         if (response.status === 401 || response.status === 403) {
-          const error = new Error(`API Auth Failure: ${response.status} (${provider})`);
-          (error as any).statusCode = response.status;
+          const error = new Error(`API Auth Failure: ${response.status} (${provider})`) as Error & { statusCode?: number };
+          error.statusCode = response.status;
           throw error;
         }
 
         // For other error statuses, try to parse response body to detect auth failures
         // This handles cases where providers might return different status codes for auth errors
-        let errorData: any;
+        let errorData: unknown;
         try {
           errorData = await response.json();
         } catch (parseError) {
@@ -1483,9 +1603,9 @@ export class UsageMonitor extends EventEmitter {
         const hasAuthError = authErrorPatterns.some(pattern => errorText.includes(pattern));
 
         if (hasAuthError) {
-          const error = new Error(`API Auth Failure detected in response body (${provider}): ${JSON.stringify(errorData)}`);
-          (error as any).statusCode = response.status; // Include original status code
-          (error as any).detectedInBody = true;
+          const error = new Error(`API Auth Failure detected in response body (${provider}): ${JSON.stringify(errorData)}`) as Error & { statusCode?: number; detectedInBody?: boolean };
+          error.statusCode = response.status; // Include original status code
+          error.detectedInBody = true;
           throw error;
         }
 
@@ -1565,10 +1685,11 @@ export class UsageMonitor extends EventEmitter {
       this.debugLog('[UsageMonitor:API_FETCH] API fetch completed successfully');
 
       return normalizedUsage;
-    } catch (error: any) {
+    } catch (error: unknown) {
       // Re-throw auth failures to be handled by checkUsageAndSwap
       // This includes both status code auth failures (401/403) and body-detected failures
-      if (error?.message?.includes('Auth Failure') || error?.statusCode === 401 || error?.statusCode === 403) {
+      const err = error as Error & { statusCode?: number };
+      if (err?.message?.includes('Auth Failure') || err?.statusCode === 401 || err?.statusCode === 403) {
         throw error;
       }
 
@@ -1595,6 +1716,7 @@ export class UsageMonitor extends EventEmitter {
    * }
    */
   private normalizeAnthropicResponse(
+    // biome-ignore lint/suspicious/noExplicitAny: API response shape varies by provider and version
     data: any,
     profileId: string,
     profileName: string,
@@ -1662,6 +1784,7 @@ export class UsageMonitor extends EventEmitter {
    * @returns Normalized usage snapshot or null on parse failure
    */
   private normalizeQuotaLimitResponse(
+    // biome-ignore lint/suspicious/noExplicitAny: API response shape varies by provider
     data: any,
     profileId: string,
     profileName: string,
@@ -1692,7 +1815,9 @@ export class UsageMonitor extends EventEmitter {
       }
 
       // Find TOKENS_LIMIT (5-hour usage) and TIME_LIMIT (monthly usage)
+      // biome-ignore lint/suspicious/noExplicitAny: API response item shape varies
       const tokensLimit = data.limits.find((item: any) => item.type === 'TOKENS_LIMIT');
+      // biome-ignore lint/suspicious/noExplicitAny: API response item shape varies
       const timeLimit = data.limits.find((item: any) => item.type === 'TIME_LIMIT');
 
       if (this.isDebug) {
@@ -1812,6 +1937,7 @@ export class UsageMonitor extends EventEmitter {
    * Maps TIME_LIMIT → monthly usage (displayed as weekly in UI)
    */
   private normalizeZAIResponse(
+    // biome-ignore lint/suspicious/noExplicitAny: API response shape varies by provider
     data: any,
     profileId: string,
     profileName: string,
@@ -1830,6 +1956,7 @@ export class UsageMonitor extends EventEmitter {
    * TOKENS_LIMIT and TIME_LIMIT items.
    */
   private normalizeZhipuResponse(
+    // biome-ignore lint/suspicious/noExplicitAny: API response shape varies by provider
     data: any,
     profileId: string,
     profileName: string,

@@ -16,7 +16,6 @@ the Claude SDK which is not available in the test environment.
 import json
 import sys
 import tempfile
-from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -116,6 +115,10 @@ from qa.criteria import (
     should_run_fixes,
     print_qa_status,
 )
+
+# Ensure qa.criteria uses mocked is_build_complete even when progress was already imported
+import qa.criteria as _qa_criteria_mod
+_qa_criteria_mod.is_build_complete = mock_progress.is_build_complete
 
 # Mock the qa.report import inside print_qa_status
 mock_report = MagicMock()

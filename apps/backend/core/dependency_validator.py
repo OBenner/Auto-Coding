@@ -22,7 +22,8 @@ def validate_platform_dependencies() -> None:
     # Check Windows-specific dependencies (all Python versions per ACS-306)
     # pywin32 is required on all Python versions on Windows - MCP library unconditionally imports win32api
     if is_windows():
-        try:
+        try:  # Platform-specific
+            # Optional: pywintypes is platform-specific (Windows only)
             import pywintypes  # noqa: F401
         except ImportError:
             _exit_with_pywin32_error()
@@ -31,7 +32,8 @@ def validate_platform_dependencies() -> None:
     # Note: secretstorage is optional for app functionality (falls back to .env),
     # but we validate it to ensure proper OAuth token storage via keyring
     if is_linux():
-        try:
+        try:  # Platform-specific
+            # Optional: secretstorage is platform-specific (Linux only)
             import secretstorage  # noqa: F401
         except ImportError:
             _warn_missing_secretstorage()
@@ -78,7 +80,7 @@ def _exit_with_pywin32_error() -> None:
     sys.exit(
         "Error: Required Windows dependency 'pywin32' is not installed.\n"
         "\n"
-        "Auto Claude requires pywin32 on Windows for:\n"
+        "Auto Code requires pywin32 on Windows for:\n"
         "  - MCP library (win32api, win32con, win32job modules)\n"
         "  - LadybugDB/Graphiti memory integration\n"
         "\n"
@@ -113,7 +115,7 @@ def _warn_missing_secretstorage() -> None:
     sys.stderr.write(
         "Warning: Linux dependency 'secretstorage' is not installed.\n"
         "\n"
-        "Auto Claude can use secretstorage for secure OAuth token storage via\n"
+        "Auto Code can use secretstorage for secure OAuth token storage via\n"
         "the system keyring (gnome-keyring, kwallet, etc.). Without it, tokens\n"
         "will be stored in plaintext in your .env file.\n"
         "\n"

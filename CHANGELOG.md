@@ -1,3 +1,14 @@
+## [Unreleased]
+
+### Added
+- **Intelligent Pattern Recognition** (Feature #032) - Automatic extraction, categorization, and suggestion of coding patterns from successful builds
+  - AI-based pattern categorization across 14 categories (architecture, testing, security, etc.)
+  - Semantic search and filtering for relevant pattern suggestions during spec creation
+  - Frontend UI for pattern confirmation, rejection, and modification
+  - Integration with Graphiti memory system for cross-session pattern retention
+  - Compounding intelligence: system gets smarter as more features are built
+  - See [guides/INTELLIGENT-PATTERN-RECOGNITION.md](guides/INTELLIGENT-PATTERN-RECOGNITION.md) for full documentation
+
 ## [3.0.0] - 2026-01-27
 
 ### Added

@@ -189,6 +189,8 @@ export function PreviewPanel({
       </div>
 
       {/* Preview Content */}
+      {/* biome-ignore lint/a11y/noNoninteractiveElementInteractions: Drop zone requires drag event handlers */}
+      {/* biome-ignore lint/a11y/noStaticElementInteractions: Drop zone with drag-drop functionality */}
       <div
         className={`flex-1 overflow-hidden p-6 ${isDragOver ? 'bg-muted/50' : ''}`}
         onDragOver={onDragOver}

@@ -13,7 +13,7 @@ function createMockProcess() {
   return {
     stdout: { on: vi.fn() },
     stderr: { on: vi.fn() },
-    on: vi.fn((event: string, callback: any) => {
+    on: vi.fn((event: string, callback: (code: number) => void) => {
       if (event === 'exit') {
         // Simulate immediate exit with code 0
         setTimeout(() => callback(0), 10);
@@ -142,20 +142,33 @@ vi.mock('../env-utils', () => ({
 // Mock fs.existsSync for getAutoBuildSourcePath path validation
 vi.mock('fs', async (importOriginal) => {
   const actual = await importOriginal<typeof import('fs')>();
+
+  // Shared path validation logic for both sync and async file existence checks
+  const isFakePath = (inputPath: string): boolean => {
+    const normalizedPath = inputPath.replace(/\\/g, '/');
+    return normalizedPath === '/fake/auto-build' ||
+           normalizedPath === '/fake/auto-build/runners' ||
+           normalizedPath === '/fake/auto-build/runners/spec_runner.py';
+  };
+
   return {
     ...actual,
     existsSync: vi.fn((inputPath: string) => {
       // Normalize path separators for cross-platform compatibility
       // path.join() uses backslashes on Windows, so we normalize to forward slashes
-      const normalizedPath = inputPath.replace(/\\/g, '/');
-      // Return true for the fake auto-build path and its expected files
-      if (normalizedPath === '/fake/auto-build' ||
-          normalizedPath === '/fake/auto-build/runners' ||
-          normalizedPath === '/fake/auto-build/runners/spec_runner.py') {
-        return true;
-      }
-      return false;
-    })
+      return isFakePath(inputPath);
+    }),
+    promises: {
+      ...actual.promises,
+      // Mock fs.promises.access so that fileExists() in agent-process.ts resolves
+      // for the fake auto-build paths (used by getAutoBuildSourcePath -> validatePath)
+      access: vi.fn(async (inputPath: string) => {
+        if (isFakePath(inputPath)) {
+          return undefined; // Resolving means the file exists
+        }
+        throw new Error(`ENOENT: no such file or directory, access '${inputPath}'`);
+      })
+    }
   };
 });
 
@@ -403,10 +416,10 @@ describe('AgentProcessManager - API Profile Env Injection (Story 2.3)', () => {
       vi.mocked(profileService.getAPIProfileEnv).mockResolvedValue(mockApiProfileEnv);
 
       // Mock ALL console methods to capture any debug/error output
-      const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-      const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-      const consoleDebugSpy = vi.spyOn(console, 'debug').mockImplementation(() => {});
+      const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      const consoleDebugSpy = vi.spyOn(console, 'debug').mockImplementation(() => undefined);
 
       await processManager.spawnProcess('task-1', '/fake/cwd', ['run.py'], {}, 'task-execution');
 
@@ -444,8 +457,8 @@ describe('AgentProcessManager - API Profile Env Injection (Story 2.3)', () => {
       vi.mocked(profileService.getAPIProfileEnv).mockResolvedValue(mockApiProfileEnv);
 
       // Mock console methods
-      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-      const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
 
       await processManager.spawnProcess('task-1', '/fake/cwd', ['run.py'], {}, 'task-execution');
 

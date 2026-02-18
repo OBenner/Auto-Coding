@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Zap,
   Eye,
@@ -79,15 +79,7 @@ export function IntegrationSettings({
   const [branches, setBranches] = useState<string[]>([]);
   const [isLoadingBranches, setIsLoadingBranches] = useState(false);
 
-  // Load branches when GitHub section expands
-  useEffect(() => {
-    if (githubExpanded && project.path) {
-      loadBranches();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- loadBranches is intentionally excluded to avoid infinite loops
-  }, [githubExpanded, project.path, loadBranches]);
-
-  const loadBranches = async () => {
+  const loadBranches = useCallback(async () => {
     setIsLoadingBranches(true);
     try {
       const result = await window.electronAPI.getGitBranches(project.path);
@@ -97,7 +89,7 @@ export function IntegrationSettings({
         if (!settings.mainBranch) {
           const detectResult = await window.electronAPI.detectMainBranch(project.path);
           if (detectResult.success && detectResult.data) {
-            setSettings(prev => ({ ...prev, mainBranch: detectResult.data! }));
+            setSettings(prev => ({ ...prev, mainBranch: detectResult.data as string }));
           }
         }
       }
@@ -106,7 +98,14 @@ export function IntegrationSettings({
     } finally {
       setIsLoadingBranches(false);
     }
-  };
+  }, [project.path, settings.mainBranch, setSettings]);
+
+  // Load branches when GitHub section expands
+  useEffect(() => {
+    if (githubExpanded && project.path) {
+      loadBranches();
+    }
+  }, [githubExpanded, project.path, loadBranches]);
 
   if (!envConfig) return null;
 
@@ -115,6 +114,7 @@ export function IntegrationSettings({
       {/* Linear Integration Section */}
       <section className="space-y-3">
         <button
+          type="button"
           onClick={onLinearToggle}
           className="w-full flex items-center justify-between text-sm font-semibold text-foreground hover:text-foreground/80"
         >
@@ -294,6 +294,7 @@ export function IntegrationSettings({
       {/* GitHub Integration Section */}
       <section className="space-y-3">
         <button
+          type="button"
           onClick={onGitHubToggle}
           className="w-full flex items-center justify-between text-sm font-semibold text-foreground hover:text-foreground/80"
         >

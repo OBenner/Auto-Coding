@@ -1,17 +1,17 @@
 {
-  "name": "auto-claude-ui",
-  "version": "2.7.5",
+  "name": "auto-code-ui",
+  "version": "3.0.0",
   "type": "module",
-  "description": "Desktop UI for Auto Claude autonomous coding framework",
-  "homepage": "https://github.com/AndyMik90/Auto-Claude",
+  "description": "Desktop UI for Auto-Coding autonomous coding framework",
+  "homepage": "https://github.com/OBenner/Auto-Coding",
   "repository": {
     "type": "git",
-    "url": "https://github.com/AndyMik90/Auto-Claude.git"
+    "url": "https://github.com/OBenner/Auto-Coding.git"
   },
   "main": "./out/main/index.js",
   "author": {
-    "name": "Auto Claude Team",
-    "email": "119136210+AndyMik90@users.noreply.github.com"
+    "name": "Auto-Coding Team",
+    "email": "oleg.yakovlev.spb@gmail.com"
   },
   "license": "AGPL-3.0",
   "engines": {
@@ -36,9 +36,9 @@
     "package:win": "node scripts/package-with-python.cjs --win",
     "package:linux": "node scripts/package-with-python.cjs --linux",
     "package:flatpak": "node scripts/package-with-python.cjs --linux flatpak",
-    "start:packaged:mac": "open dist/mac-arm64/Auto-Claude.app || open dist/mac/Auto-Claude.app",
-    "start:packaged:win": "start \"\" \"dist\\win-unpacked\\Auto-Claude.exe\"",
-    "start:packaged:linux": "./dist/linux-unpacked/auto-claude",
+    "start:packaged:mac": "open dist/mac-arm64/Auto-Coding.app || open dist/mac/Auto-Coding.app",
+    "start:packaged:win": "start \"\" \"dist\\win-unpacked\\Auto-Coding.exe\"",
+    "start:packaged:linux": "./dist/linux-unpacked/auto-coding",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
@@ -85,9 +85,11 @@
     "@xterm/addon-web-links": "^0.12.0",
     "@xterm/addon-webgl": "^0.19.0",
     "@xterm/xterm": "^6.0.0",
+    "adm-zip": "^0.5.16",
     "chokidar": "^5.0.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "cmdk": "^1.1.1",
     "dotenv": "^16.6.1",
     "electron-log": "^5.4.3",
     "electron-updater": "^6.6.2",
@@ -95,12 +97,14 @@
     "lucide-react": "^0.562.0",
     "minimatch": "^10.1.1",
     "motion": "^12.23.26",
+    "@modelcontextprotocol/sdk": "^1.0.4",
     "proper-lockfile": "^4.1.2",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
     "react-i18next": "^16.5.0",
     "react-markdown": "^10.1.0",
     "react-resizable-panels": "^4.2.0",
+    "reactflow": "^11.11.4",
     "remark-gfm": "^4.0.1",
     "semver": "^7.7.3",
     "tailwind-merge": "^3.4.0",
@@ -118,6 +122,7 @@
     "@testing-library/dom": "^10.0.0",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.1.0",
+    "@types/adm-zip": "^0.5.7",
     "@types/minimatch": "^5.1.2",
     "@types/node": "^25.0.0",
     "@types/react": "^19.2.7",
@@ -125,6 +130,7 @@
     "@types/semver": "^7.7.1",
     "@types/uuid": "^10.0.0",
     "@vitejs/plugin-react": "^5.1.2",
+    "@vitest/coverage-v8": "^4.0.18",
     "autoprefixer": "^10.4.22",
     "cross-env": "^10.1.0",
     "electron": "39.2.7",
@@ -144,15 +150,15 @@
     "dmg-builder": "26.5.0"
   },
   "build": {
-    "appId": "com.autoclaude.ui",
-    "productName": "Auto-Claude",
+    "appId": "com.autocoding.ui",
+    "productName": "Auto-Coding",
     "npmRebuild": false,
     "artifactName": "${productName}-${version}-${platform}-${arch}.${ext}",
     "publish": [
       {
         "provider": "github",
-        "owner": "AndyMik90",
-        "repo": "Auto-Claude"
+        "owner": "OBenner",
+        "repo": "Auto-Coding"
       }
     ],
     "directories": {

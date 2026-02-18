@@ -12,7 +12,7 @@ import io
 import os
 import sys
 
-from ..core.platform import is_windows
+from core.platform import is_windows
 
 
 def enable_windows_ansi_support() -> bool:
@@ -93,7 +93,7 @@ def configure_safe_encoding() -> None:
                 stream.reconfigure(encoding="utf-8", errors="replace")
                 continue
             except (AttributeError, io.UnsupportedOperation, OSError):
-                pass
+                stream = getattr(sys, stream_name)  # re-fetch unchanged stream
 
         # Method 2: Wrap with TextIOWrapper for piped output
         # This is needed when stdout/stderr are pipes (e.g., from Electron)
@@ -107,7 +107,7 @@ def configure_safe_encoding() -> None:
                 )
                 setattr(sys, stream_name, new_stream)
         except (AttributeError, io.UnsupportedOperation, OSError):
-            pass
+            stream = getattr(sys, stream_name)  # re-fetch unchanged stream
 
 
 # Configure safe encoding and ANSI support on module import

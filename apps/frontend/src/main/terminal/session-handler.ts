@@ -154,7 +154,7 @@ function createSessionObject(terminal: TerminalProcess): TerminalSession {
     id: terminal.id,
     title: terminal.title,
     cwd: terminal.cwd,
-    projectPath: terminal.projectPath!,
+    projectPath: terminal.projectPath ?? '',
     isClaudeMode: terminal.isClaudeMode,
     claudeSessionId: terminal.claudeSessionId,
     outputBuffer: terminal.outputBuffer,

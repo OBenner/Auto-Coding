@@ -716,6 +716,8 @@ describe('Terminal File Drop - Component Integration', () => {
       });
 
     return (
+      // biome-ignore lint/a11y/noNoninteractiveElementInteractions: Test component for drop zone
+      // biome-ignore lint/a11y/noStaticElementInteractions: Test component for drop zone
       <div
         data-testid="drop-zone"
         onDragOver={handleNativeDragOver}

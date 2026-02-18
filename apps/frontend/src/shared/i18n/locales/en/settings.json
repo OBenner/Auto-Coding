@@ -7,7 +7,7 @@
   "sections": {
     "appearance": {
       "title": "Appearance",
-      "description": "Customize how Auto Claude looks"
+      "description": "Customize how Auto-Coding looks"
     },
     "display": {
       "title": "Display",
@@ -35,7 +35,7 @@
     },
     "updates": {
       "title": "Updates",
-      "description": "Auto Claude updates"
+      "description": "Auto-Coding updates"
     },
     "notifications": {
       "title": "Notifications",
@@ -44,6 +44,14 @@
     "debug": {
       "title": "Debug & Logs",
       "description": "Troubleshooting tools"
+    },
+    "keyboardShortcuts": {
+      "title": "Keyboard Shortcuts",
+      "description": "Customize keyboard shortcuts for common actions"
+    },
+    "envConfig": {
+      "title": "Environment Config",
+      "description": "Configure Claude authentication and environment tokens"
     }
   },
   "apiProfiles": {
@@ -186,7 +194,7 @@
     "otherAgentSettingsDescription": "Additional agent configuration options",
     "agentFramework": "Agent Framework",
     "agentFrameworkDescription": "The coding framework used for autonomous tasks",
-    "agentFrameworkAutoClaude": "Auto Claude",
+    "agentFrameworkAutoClaude": "Auto-Coding",
     "aiTerminalNaming": "AI Terminal Naming",
     "aiTerminalNamingDescription": "Automatically name terminals based on commands (uses Haiku)",
     "featureModelSettings": "Feature Model Settings",
@@ -215,18 +223,19 @@
     "sourceHomebrew": "Homebrew",
     "sourceNvm": "NVM",
     "sourceSystemPath": "System PATH",
+    "sourceWindowsWhere": "Windows Where",
     "sourceBundled": "Bundled",
     "sourceFallback": "Fallback",
     "notDetected": "Not detected",
-    "autoClaudePath": "Auto Claude Path",
-    "autoClaudePathDescription": "Relative path to auto-claude directory in projects",
-    "autoClaudePathPlaceholder": "auto-claude (default)",
+    "autoClaudePath": "Auto-Coding Path",
+    "autoClaudePathDescription": "Relative path to .auto-claude directory in projects",
+    "autoClaudePathPlaceholder": ".auto-claude (default)",
     "autoNameTerminals": "Automatically name terminals",
     "autoNameTerminalsDescription": "Use AI to generate descriptive names for terminal tabs based on their activity"
   },
   "theme": {
     "title": "Appearance",
-    "description": "Customize how Auto Claude looks",
+    "description": "Customize how Auto-Coding looks",
     "mode": "Mode",
     "modeDescription": "Choose between light and dark themes",
     "light": "Light",
@@ -242,14 +251,14 @@
     "detectAgain": "Detect Again",
     "ide": {
       "label": "Preferred IDE",
-      "description": "Auto Claude will open worktrees in this editor",
+      "description": "Auto-Coding will open worktrees in this editor",
       "placeholder": "Select IDE...",
       "customPath": "Custom IDE Path",
       "customPathPlaceholder": "/path/to/your/ide"
     },
     "terminal": {
       "label": "Preferred Terminal",
-      "description": "Auto Claude will open terminal sessions here",
+      "description": "Auto-Coding will open terminal sessions here",
       "placeholder": "Select terminal...",
       "customPath": "Custom Terminal Path",
       "customPathPlaceholder": "/path/to/your/terminal"
@@ -270,7 +279,7 @@
   },
   "updates": {
     "title": "Updates",
-    "description": "Manage Auto Claude updates",
+    "description": "Manage Auto-Coding updates",
     "appUpdateReady": "App Update Ready",
     "newVersion": "New Version",
     "released": "Released",
@@ -287,7 +296,7 @@
     "unableToCheck": "Unable to check for updates",
     "checkForUpdates": "Check for Updates",
     "autoUpdateProjects": "Auto-Update Projects",
-    "autoUpdateProjectsDescription": "Automatically update Auto Claude in projects when a new version is available",
+    "autoUpdateProjectsDescription": "Automatically update Auto-Coding in projects when a new version is available",
     "betaUpdates": "Beta Updates",
     "betaUpdatesDescription": "Receive pre-release beta versions with new features (may be less stable)",
     "stableDowngradeAvailable": "Stable Version Available",
@@ -600,7 +609,7 @@
     "description": "Access logs and debug information for troubleshooting",
     "errorReporting": {
       "label": "Anonymous Error Reporting",
-      "description": "Send crash reports to help improve Auto Claude. No personal data or code is collected."
+      "description": "Send crash reports to help improve Auto-Coding. No personal data or code is collected."
     },
     "openLogsFolder": "Open Logs Folder",
     "copyDebugInfo": "Copy Debug Info",
@@ -682,7 +691,7 @@
     "noProjectSelected": "No Project Selected",
     "noProjectSelectedDescription": "Select a project from the dropdown to view and configure MCP servers.",
     "projectNotInitialized": "Project Not Initialized",
-    "projectNotInitializedDescription": "Initialize Auto Claude for this project to configure MCP servers.",
+    "projectNotInitializedDescription": "Initialize Auto-Coding for this project to configure MCP servers.",
     "browserAutomation": "Browser Automation (QA agents only)",
     "alwaysEnabled": "always enabled",
     "addServer": "Add Server",
@@ -719,7 +728,7 @@
         "description": "Web browser automation for testing"
       },
       "autoClaude": {
-        "name": "Auto-Claude Tools",
+        "name": "Auto-Coding Tools",
         "description": "Build progress tracking"
       }
     },
@@ -768,6 +777,100 @@
       "createAnthropicKey": "Create Anthropic API Key",
       "openai": "This looks like an OpenAI API. You'll need an API key.",
       "createOpenaiKey": "Create OpenAI API Key"
+    }
+  },
+  "keyboardShortcuts": {
+    "title": "Keyboard Shortcuts",
+    "description": "Customize keyboard shortcuts for common actions",
+    "infoBanner": "Click on a shortcut to record a new key combination. Press Escape to cancel recording.",
+    "unsavedChanges": "You have unsaved changes",
+    "actions": {
+      "change": "Change",
+      "resetToDefaults": "Reset to Defaults",
+      "save": "Save Changes",
+      "saving": "Saving...",
+      "commandPalette": {
+        "label": "Open Command Palette",
+        "description": "Quickly search and execute commands"
+      },
+      "quickActions": {
+        "label": "Quick Actions",
+        "description": "Access recent actions and quick tasks"
+      },
+      "createTask": {
+        "label": "Create New Task",
+        "description": "Create a new task or spec"
+      },
+      "batchQA": {
+        "label": "Batch QA",
+        "description": "Run QA on multiple tasks at once"
+      },
+      "batchStatusUpdate": {
+        "label": "Batch Status Update",
+        "description": "Update status of multiple tasks"
+      }
+    },
+    "recording": {
+      "pressKeys": "Press keys...",
+      "cancel": "Cancel"
+    },
+    "toast": {
+      "resetTitle": "Shortcuts Reset",
+      "resetDescription": "All keyboard shortcuts have been reset to default values",
+      "savedTitle": "Shortcuts Saved",
+      "savedDescription": "Your keyboard shortcuts have been saved successfully",
+      "saveFailedTitle": "Save Failed",
+      "saveFailedDescription": "Failed to save keyboard shortcuts. Please try again."
+    }
+  },
+  "agentPreferences": {
+    "title": "Agent Behavior Preferences",
+    "description": "Configure how agents adapt their behavior to match your preferences",
+    "verbosity": {
+      "label": "Response Verbosity",
+      "description": "Control how detailed agent explanations should be",
+      "minimal": "Very brief",
+      "concise": "Short",
+      "normal": "Standard",
+      "detailed": "Thorough",
+      "verbose": "Very detailed"
+    },
+    "riskTolerance": {
+      "label": "Risk Tolerance",
+      "description": "How cautious agents should be when making changes",
+      "cautious": "Safe first",
+      "balanced": "Moderate",
+      "aggressive": "Move fast"
+    },
+    "projectType": {
+      "label": "Project Type",
+      "description": "Project maturity level affecting risk decisions",
+      "greenfield": "New project",
+      "established": "Stable",
+      "legacy": "Old codebase"
+    },
+    "codingStyle": {
+      "label": "Coding Style Preferences",
+      "description": "Learn and match project conventions automatically",
+      "indentation": "Indentation",
+      "quoteStyle": "Quote Style",
+      "namingConvention": "Naming Convention",
+      "commentDensity": "Comment Density",
+      "typeHints": "Use Type Hints",
+      "typeHintsDescription": "Add type annotations to code",
+      "auto": "Auto-detect",
+      "spaces": "Spaces",
+      "tabs": "Tabs",
+      "single": "Single quotes",
+      "double": "Double quotes",
+      "minimal": "Minimal",
+      "normalComments": "Normal",
+      "verbose": "Verbose"
+    },
+    "userInstructions": {
+      "label": "Custom Instructions",
+      "description": "Add explicit preferences like 'be more cautious' or 'use TypeScript'",
+      "placeholder": "e.g., 'be more cautious' or 'prefer functional style'"
     }
   }
 }
