@@ -6,7 +6,6 @@
  */
 
 import {
-	AlertCircle,
 	ChevronRight,
 	FileCode,
 	FolderGit,
@@ -14,14 +13,13 @@ import {
 	GitBranch,
 	GitMerge,
 	GitPullRequest,
-	Loader2,
 	Minus,
 	Plus,
 	RefreshCw,
 	Trash2,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import { useTranslation } from "react-i18next";
+import { PageErrorState, PageLoadingState } from "../components/PageStates";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import {
@@ -55,7 +53,6 @@ interface WorktreeItem {
 const MOCK_WORKTREES: WorktreeItem[] = [];
 
 export function GitOperations() {
-	const { t } = useTranslation(["common"]);
 	const [worktrees, setWorktrees] = useState<WorktreeItem[]>([]);
 	const [isLoading, setIsLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
@@ -65,33 +62,30 @@ export function GitOperations() {
 	 * Fetch worktrees from the API
 	 * Currently returns mock data - will be replaced with actual API call
 	 */
-	const fetchWorktrees = useCallback(
-		async (showRefreshIndicator = false) => {
-			try {
-				if (showRefreshIndicator) {
-					setIsRefreshing(true);
-				} else {
-					setIsLoading(true);
-				}
-				setError(null);
-
-				// Simulate API call delay
-				await new Promise((resolve) => setTimeout(resolve, 500));
-
-				// TODO: Replace with actual API call when backend endpoint is available
-				// const response = await apiClient.listWorktrees();
-				setWorktrees(MOCK_WORKTREES);
-			} catch (err) {
-				const message =
-					err instanceof Error ? err.message : "Failed to load worktrees";
-				setError(message);
-			} finally {
-				setIsLoading(false);
-				setIsRefreshing(false);
+	const fetchWorktrees = useCallback(async (showRefreshIndicator = false) => {
+		try {
+			if (showRefreshIndicator) {
+				setIsRefreshing(true);
+			} else {
+				setIsLoading(true);
 			}
-		},
-		[],
-	);
+			setError(null);
+
+			// Simulate API call delay
+			await new Promise((resolve) => setTimeout(resolve, 500));
+
+			// TODO: Replace with actual API call when backend endpoint is available
+			// const response = await apiClient.listWorktrees();
+			setWorktrees(MOCK_WORKTREES);
+		} catch (err) {
+			const message =
+				err instanceof Error ? err.message : "Failed to load worktrees";
+			setError(message);
+		} finally {
+			setIsLoading(false);
+			setIsRefreshing(false);
+		}
+	}, []);
 
 	// Initial load
 	useEffect(() => {
@@ -108,36 +102,8 @@ export function GitOperations() {
 		navigator.clipboard.writeText(path);
 	}, []);
 
-	// Loading state
-	if (isLoading) {
-		return (
-			<div className="min-h-screen bg-gray-50 flex items-center justify-center">
-				<div className="text-center">
-					<Loader2 className="h-12 w-12 animate-spin text-blue-600 mx-auto mb-4" />
-					<p className="text-gray-600">{t("common:loading")}</p>
-				</div>
-			</div>
-		);
-	}
-
-	// Error state
-	if (error) {
-		return (
-			<div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-				<div className="text-center max-w-md">
-					<AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-					<h2 className="text-xl font-semibold text-gray-900 mb-2">
-						{t("common:error")}
-					</h2>
-					<p className="text-gray-600 mb-4">{error}</p>
-					<Button onClick={handleRefresh}>
-						<RefreshCw className="h-4 w-4 mr-2" />
-						Try Again
-					</Button>
-				</div>
-			</div>
-		);
-	}
+	if (isLoading) return <PageLoadingState />;
+	if (error) return <PageErrorState error={error} onRetry={handleRefresh} />;
 
 	return (
 		<div className="min-h-screen bg-gray-50">

@@ -34,91 +34,52 @@ def get_specs_dir() -> Path:
     return project_dir / ".auto-claude" / "specs"
 
 
-def count_subtasks(spec_dir: Path) -> tuple[int, int]:
+def _parse_plan_subtask_statuses(spec_dir: Path) -> list[str]:
     """
-    Count completed and total subtasks in implementation_plan.json.
+    Read implementation_plan.json and return a flat list of subtask statuses.
 
-    Args:
-        spec_dir: Directory containing implementation_plan.json
-
-    Returns:
-        (completed_count, total_count)
+    Returns an empty list if the file doesn't exist or can't be parsed.
     """
     plan_file = spec_dir / "implementation_plan.json"
-
     if not plan_file.exists():
-        return 0, 0
-
+        return []
     try:
-        with open(plan_file, encoding="utf-8") as f:
-            plan = json.load(f)
+        data = json.loads(plan_file.read_text(encoding="utf-8"))
+        return [
+            subtask.get("status", "pending")
+            for phase in data.get("phases", [])
+            for subtask in phase.get("subtasks", [])
+        ]
+    except (OSError, json.JSONDecodeError, ValueError):
+        return []
 
-        total = 0
-        completed = 0
 
-        for phase in plan.get("phases", []):
-            for subtask in phase.get("subtasks", []):
-                total += 1
-                if subtask.get("status") == "completed":
-                    completed += 1
-
-        return completed, total
-    except (OSError, json.JSONDecodeError, UnicodeDecodeError):
-        return 0, 0
+def count_subtasks(spec_dir: Path) -> tuple[int, int]:
+    """Count completed and total subtasks. Returns (completed, total)."""
+    statuses = _parse_plan_subtask_statuses(spec_dir)
+    return sum(1 for s in statuses if s == "completed"), len(statuses)
 
 
 def count_subtasks_detailed(spec_dir: Path) -> dict:
-    """
-    Count subtasks by status.
-
-    Returns:
-        Dict with completed, in_progress, pending, failed counts
-    """
-    plan_file = spec_dir / "implementation_plan.json"
-
+    """Count subtasks grouped by status."""
+    statuses = _parse_plan_subtask_statuses(spec_dir)
     result = {
         "completed": 0,
         "in_progress": 0,
         "pending": 0,
         "failed": 0,
-        "total": 0,
+        "total": len(statuses),
     }
-
-    if not plan_file.exists():
-        return result
-
-    try:
-        with open(plan_file, encoding="utf-8") as f:
-            plan = json.load(f)
-
-        for phase in plan.get("phases", []):
-            for subtask in phase.get("subtasks", []):
-                result["total"] += 1
-                subtask_status = subtask.get("status", "pending")
-                if subtask_status in result:
-                    result[subtask_status] += 1
-                else:
-                    result["pending"] += 1
-
-        return result
-    except (OSError, json.JSONDecodeError, UnicodeDecodeError):
-        return result
+    for s in statuses:
+        key = s if s in result else "pending"
+        result[key] += 1
+    return result
 
 
 def get_progress_percentage(spec_dir: Path) -> float:
-    """
-    Get the progress as a percentage.
-
-    Args:
-        spec_dir: Directory containing implementation_plan.json
-
-    Returns:
-        Percentage of subtasks completed (0-100)
-    """
+    """Get progress as a percentage (0-100)."""
     completed, total = count_subtasks(spec_dir)
-    if total == 0:
-        return 0.0
-    return (completed / total) * 100
+    return (completed / total * 100) if total else 0.0
 
 
 def list_specs() -> list[dict]:

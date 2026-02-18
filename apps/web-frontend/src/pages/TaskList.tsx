@@ -5,11 +5,12 @@
  * Allows navigation to individual task details.
  */
 
-import { AlertCircle, RefreshCw } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { apiClient } from "../api/client";
 import type { TaskSummary } from "../api/types";
+import { PageErrorState, PageLoadingState } from "../components/PageStates";
 import { TaskCard } from "../components/TaskCard";
 import { Button } from "../components/ui/button";
 import { ScrollArea } from "../components/ui/scroll-area";
@@ -90,36 +91,8 @@ export function TaskList({ onTaskClick, onCreateTask }: TaskListProps) {
 		[onTaskClick],
 	);
 
-	// Loading state
-	if (isLoading) {
-		return (
-			<div className="min-h-screen bg-gray-50 flex items-center justify-center">
-				<div className="text-center">
-					<div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4" />
-					<p className="text-gray-600">{t("common:loading")}</p>
-				</div>
-			</div>
-		);
-	}
-
-	// Error state
-	if (error) {
-		return (
-			<div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-				<div className="text-center max-w-md">
-					<AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-					<h2 className="text-xl font-semibold text-gray-900 mb-2">
-						{t("common:error")}
-					</h2>
-					<p className="text-gray-600 mb-4">{error}</p>
-					<Button onClick={handleRefresh}>
-						<RefreshCw className="h-4 w-4 mr-2" />
-						Try Again
-					</Button>
-				</div>
-			</div>
-		);
-	}
+	if (isLoading) return <PageLoadingState />;
+	if (error) return <PageErrorState error={error} onRetry={handleRefresh} />;
 
 	// Empty state
 	if (tasks.length === 0) {
