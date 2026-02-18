@@ -156,7 +156,7 @@ async def generate_e2e_tests(
 
     # Log session start
     if task_logger:
-        task_logger.start_phase(LogPhase.CODING, "Starting E2E test generation...")
+        task_logger.start_phase(LogPhase.VALIDATION, "Starting E2E test generation...")
         components_count = len(analysis_results.get("components", []))
         features_count = len(analysis_results.get("features", []))
         task_logger.log_info(

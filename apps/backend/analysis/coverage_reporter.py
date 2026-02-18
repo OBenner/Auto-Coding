@@ -153,7 +153,7 @@ class PytestCoverageParser(CoverageParser):
         }
         """
         try:
-            with open(report_path) as f:
+            with open(report_path, encoding="utf-8") as f:
                 data = json.load(f)
 
             totals = data.get("totals", {})
@@ -233,7 +233,7 @@ class VitestCoverageParser(CoverageParser):
         }
         """
         try:
-            with open(report_path) as f:
+            with open(report_path, encoding="utf-8") as f:
                 data = json.load(f)
 
             # Extract totals
@@ -367,6 +367,18 @@ class CoberturaXMLParser(CoverageParser):
                         if int(line.get("hits", 0)) == 0
                     ]
 
+                    # Count branches from line-level data
+                    file_branches = 0
+                    file_branches_covered = 0
+                    for line in lines:
+                        if line.get("branch") == "true":
+                            cond = line.get("condition-coverage", "")
+                            # Format: "50% (1/2)" - extract covered/total
+                            if "(" in cond and "/" in cond:
+                                parts = cond.split("(")[1].rstrip(")").split("/")
+                                file_branches_covered += int(parts[0])
+                                file_branches += int(parts[1])
+
                     file_cov = FileCoverage(
                         file_path=file_path,
                         lines_total=lines_total,
@@ -374,11 +386,15 @@ class CoberturaXMLParser(CoverageParser):
                         lines_missed=lines_missed,
                         coverage_percentage=file_line_rate * 100,
                         missing_lines=missing_lines,
+                        branches_total=file_branches,
+                        branches_covered=file_branches_covered,
                     )
                     file_coverages.append(file_cov)
 
                     total_lines += lines_total
                     total_covered += lines_covered
+                    total_branches += file_branches
+                    total_branches_covered += file_branches_covered
 
                     if file_line_rate == 0:
                         uncovered_files.append(file_path)

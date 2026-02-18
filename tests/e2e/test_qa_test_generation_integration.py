@@ -16,7 +16,7 @@ import pytest
 
 def test_framework_detection_pytest():
     """Test that Python code triggers pytest framework selection."""
-    from apps.backend.agents.test_generator import detect_test_framework
+    from agents.test_generator import detect_test_framework
 
     py_analysis = {
         "functions": [{"name": "validate_email", "params": ["email"]}],
@@ -28,7 +28,7 @@ def test_framework_detection_pytest():
 
 def test_framework_detection_vitest():
     """Test that React components trigger vitest framework selection."""
-    from apps.backend.agents.test_generator import detect_test_framework
+    from agents.test_generator import detect_test_framework
 
     ts_analysis = {
         "components": [{"name": "LoginForm", "props": []}],
@@ -39,7 +39,7 @@ def test_framework_detection_vitest():
 
 def test_framework_detection_hooks():
     """Test that hooks trigger vitest framework selection."""
-    from apps.backend.agents.test_generator import detect_test_framework
+    from agents.test_generator import detect_test_framework
 
     hooks_analysis = {
         "hooks": [{"name": "useAuth"}],
@@ -50,7 +50,7 @@ def test_framework_detection_hooks():
 
 def test_framework_detection_default_to_pytest():
     """Test that ambiguous code defaults to pytest."""
-    from apps.backend.agents.test_generator import detect_test_framework
+    from agents.test_generator import detect_test_framework
 
     ambiguous_analysis = {
         "functions": [],
@@ -61,7 +61,7 @@ def test_framework_detection_default_to_pytest():
 
 def test_coverage_report_collection():
     """Test that coverage reporter can collect reports from multiple frameworks."""
-    from apps.backend.analysis.coverage_reporter import (
+    from analysis.coverage_reporter import (
         CoverageReport,
         FileCoverage,
         format_coverage_summary,
@@ -132,7 +132,7 @@ def test_test_validation_pytest():
     """Test pytest validation works for valid Python tests."""
     from unittest.mock import Mock, patch
 
-    from apps.backend.agents.test_generator import validate_generated_tests
+    from agents.test_generator import validate_generated_tests
 
     with tempfile.TemporaryDirectory() as tmpdir:
         project_dir = Path(tmpdir)
@@ -156,17 +156,18 @@ def test_test_validation_pytest():
 
 def test_test_validation_vitest():
     """Test vitest validation routing."""
-    from unittest.mock import patch
+    from unittest.mock import AsyncMock, patch
 
-    from apps.backend.agents.test_generator import validate_generated_tests
+    from agents.test_generator import validate_generated_tests
 
     with tempfile.TemporaryDirectory() as tmpdir:
         project_dir = Path(tmpdir)
 
-        # Mock vitest validation
+        # Mock vitest validation at the import location in test_generator
+        # (validate_vitest_tests is async and imported from .vitest_generator)
         with patch(
-            "apps.backend.agents.vitest_generator.validate_vitest_tests",
-            return_value=True,
+            "agents.test_generator.validate_vitest_tests",
+            new=AsyncMock(return_value=True),
         ):
             result = validate_generated_tests(
                 [Path("Button.test.tsx")], project_dir, framework="vitest"
@@ -176,10 +177,10 @@ def test_test_validation_vitest():
 
 def test_qa_loop_has_test_generation_integration():
     """Verify QA loop has test generation integration points."""
-    from apps.backend.qa.loop import run_qa_validation_loop
-
     # Check that the function exists and has the right signature
     import inspect
+
+    from qa.loop import run_qa_validation_loop
 
     sig = inspect.signature(run_qa_validation_loop)
     params = list(sig.parameters.keys())
@@ -192,7 +193,7 @@ def test_qa_loop_has_test_generation_integration():
 
 def test_qa_loop_imports_test_generators():
     """Verify QA loop imports all test generation components."""
-    import apps.backend.qa.loop as loop_module
+    import qa.loop as loop_module
 
     # Check that test generation modules are imported
     assert hasattr(loop_module, "run_test_generator_session")
@@ -230,9 +231,9 @@ def test_all_generators_use_correct_phase():
                         # Check that it's not using "test_generation" phase
                         for arg in node.args:
                             if isinstance(arg, ast.Constant):
-                                assert (
-                                    arg.value != "test_generation"
-                                ), f"{generator_file} uses invalid phase 'test_generation'"
+                                assert arg.value != "test_generation", (
+                                    f"{generator_file} uses invalid phase 'test_generation'"
+                                )
 
 
 if __name__ == "__main__":

@@ -185,8 +185,8 @@ def mock_code_analyzers():
         "edge_cases": ["empty input", "invalid credentials"],
     }
 
-    with patch("apps.backend.analysis.code_analyzer.CodeAnalyzer") as mock_py:
-        with patch("apps.backend.analysis.ts_analyzer.TypeScriptAnalyzer") as mock_ts:
+    with patch("analysis.code_analyzer.CodeAnalyzer") as mock_py:
+        with patch("analysis.ts_analyzer.TypeScriptAnalyzer") as mock_ts:
             mock_py_instance = Mock()
             mock_py_instance.analyze_file.return_value = py_analysis
             mock_py.return_value = mock_py_instance
@@ -200,7 +200,12 @@ def mock_code_analyzers():
 
 @pytest.fixture
 def mock_test_generators():
-    """Mock test generator sessions."""
+    """Mock test generator sessions.
+
+    Note: generate_vitest_tests is called internally by run_test_generator_session
+    (in agents/test_generator.py), NOT imported directly into qa/loop.py.
+    Only run_test_generator_session and generate_e2e_tests are imported there.
+    """
 
     async def mock_pytest_generator(*args, **kwargs):
         return {
@@ -212,16 +217,6 @@ def mock_test_generators():
             "framework": "pytest",
         }
 
-    async def mock_vitest_generator(*args, **kwargs):
-        return {
-            "success": True,
-            "generated_files": [
-                "apps/frontend/src/components/LoginForm.test.tsx",
-                "apps/frontend/src/hooks/useAuth.test.ts",
-            ],
-            "framework": "vitest",
-        }
-
     async def mock_e2e_generator(*args, **kwargs):
         return {
             "success": True,
@@ -231,18 +226,14 @@ def mock_test_generators():
         }
 
     with patch(
-        "apps.backend.qa.loop.run_test_generator_session",
+        "qa.loop.run_test_generator_session",
         new=AsyncMock(side_effect=mock_pytest_generator),
     ):
         with patch(
-            "apps.backend.qa.loop.generate_vitest_tests",
-            new=AsyncMock(side_effect=mock_vitest_generator),
+            "qa.loop.generate_e2e_tests",
+            new=AsyncMock(side_effect=mock_e2e_generator),
         ):
-            with patch(
-                "apps.backend.qa.loop.generate_e2e_tests",
-                new=AsyncMock(side_effect=mock_e2e_generator),
-            ):
-                yield
+            yield
 
 
 @pytest.fixture
@@ -272,7 +263,7 @@ def mock_coverage_reporter():
         framework: str = ""
         files: list = field(default_factory=list)
         uncovered_files: list = field(default_factory=list)
-        report_path: str = None
+        report_path: str | None = None
 
     mock_report = CoverageReport(
         overall_coverage=85.5,
@@ -306,7 +297,7 @@ def mock_coverage_reporter():
     )
 
     with patch(
-        "apps.backend.qa.loop.collect_coverage",
+        "qa.loop.collect_coverage",
         return_value=mock_report,
     ):
         yield mock_report
@@ -315,13 +306,25 @@ def mock_coverage_reporter():
 @pytest.fixture
 def mock_qa_complete():
     """Mock QA completion check and phase configuration."""
-    with patch("apps.backend.qa.loop.is_build_complete", return_value=True):
-        with patch("apps.backend.qa.loop.is_qa_approved", return_value=False):
+    with patch("qa.loop.is_build_complete", return_value=True):
+        with patch("qa.loop.is_qa_approved", return_value=False):
             # Mock phase configuration functions at their import locations
-            with patch("apps.backend.agents.test_generator.get_phase_model", return_value="claude-sonnet-4"):
-                with patch("apps.backend.agents.test_generator.get_phase_thinking_budget", return_value=10000):
-                    with patch("apps.backend.qa.loop.get_phase_model", return_value="claude-sonnet-4"):
-                        with patch("apps.backend.qa.loop.get_phase_thinking_budget", return_value=10000):
+            with patch(
+                "agents.test_generator.get_phase_model",
+                return_value="claude-sonnet-4",
+            ):
+                with patch(
+                    "agents.test_generator.get_phase_thinking_budget",
+                    return_value=10000,
+                ):
+                    with patch(
+                        "qa.loop.get_phase_model",
+                        return_value="claude-sonnet-4",
+                    ):
+                        with patch(
+                            "qa.loop.get_phase_thinking_budget",
+                            return_value=10000,
+                        ):
                             yield
 
 
@@ -349,7 +352,7 @@ async def test_e2e_test_generation_flow(
     project_dir, spec_dir = mock_implementation_plan
 
     # Import after fixtures are set up
-    from apps.backend.qa.loop import run_qa_validation_loop
+    from qa.loop import run_qa_validation_loop
 
     # Mock the client creation and QA agent sessions to avoid actual API calls
     mock_client = AsyncMock()
@@ -362,17 +365,15 @@ async def test_e2e_test_generation_flow(
 
     mock_client.create_agent_session = mock_agent_session
 
-    with patch("apps.backend.qa.loop.create_client", return_value=mock_client):
-        with patch("apps.backend.agents.test_generator.create_client", return_value=mock_client):
+    with patch("qa.loop.create_client", return_value=mock_client):
+        with patch("agents.test_generator.create_client", return_value=mock_client):
             with patch(
-                "apps.backend.qa.loop.run_qa_agent_session",
+                "qa.loop.run_qa_agent_session",
                 new=AsyncMock(return_value=("approved", "All tests passed")),
             ):
-                with patch("apps.backend.qa.loop.emit_phase"):
-                    with patch("apps.backend.qa.loop.get_task_logger", return_value=None):
-                        with patch(
-                            "apps.backend.qa.loop.is_linear_enabled", return_value=False
-                        ):
+                with patch("qa.loop.emit_phase"):
+                    with patch("qa.loop.get_task_logger", return_value=None):
+                        with patch("qa.loop.is_linear_enabled", return_value=False):
                             # Create mock test files that generators would create
                             test_utils = project_dir / "tests/test_utils.py"
                             test_utils.parent.mkdir(parents=True, exist_ok=True)
@@ -381,11 +382,16 @@ async def test_e2e_test_generation_flow(
                             test_auth = project_dir / "tests/test_auth.py"
                             test_auth.write_text("def test_authenticate_user(): pass")
 
-                            login_form_test = project_dir / "apps/frontend/src/components/LoginForm.test.tsx"
+                            login_form_test = (
+                                project_dir
+                                / "apps/frontend/src/components/LoginForm.test.tsx"
+                            )
                             login_form_test.parent.mkdir(parents=True, exist_ok=True)
                             login_form_test.write_text("test('renders', () => {})")
 
-                            use_auth_test = project_dir / "apps/frontend/src/hooks/useAuth.test.ts"
+                            use_auth_test = (
+                                project_dir / "apps/frontend/src/hooks/useAuth.test.ts"
+                            )
                             use_auth_test.parent.mkdir(parents=True, exist_ok=True)
                             use_auth_test.write_text("test('login', () => {})")
 
@@ -411,25 +417,25 @@ async def test_e2e_test_generation_flow(
     with open(coverage_file) as f:
         coverage_data = json.load(f)
 
-    assert (
-        coverage_data["overall_coverage"] == 85.5
-    ), "Coverage should match mock report"
+    assert coverage_data["overall_coverage"] == 85.5, (
+        "Coverage should match mock report"
+    )
     assert coverage_data["framework"] == "pytest + vitest"
     assert len(coverage_data["files"]) == 2, "Should have file-level coverage data"
 
     print("✅ E2E test generation flow verified successfully!")
-    print(f"   - Python files analyzed: 2")
-    print(f"   - TypeScript files analyzed: 2")
-    print(f"   - pytest tests generated: 2")
-    print(f"   - Vitest tests generated: 2")
-    print(f"   - E2E tests generated: 1")
+    print("   - Python files analyzed: 2")
+    print("   - TypeScript files analyzed: 2")
+    print("   - pytest tests generated: 2")
+    print("   - Vitest tests generated: 2")
+    print("   - E2E tests generated: 1")
     print(f"   - Coverage: {coverage_data['overall_coverage']}%")
 
 
 @pytest.mark.asyncio
 async def test_framework_detection():
     """Test that framework detection works correctly."""
-    from apps.backend.agents.test_generator import detect_test_framework
+    from agents.test_generator import detect_test_framework
 
     # Test pytest detection
     py_analysis = {
@@ -453,7 +459,7 @@ async def test_framework_detection():
 
 def test_test_validation_routing():
     """Test that test validation routes to correct framework."""
-    from apps.backend.agents.test_generator import validate_generated_tests
+    from agents.test_generator import validate_generated_tests
 
     # Create mock test files
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -470,13 +476,15 @@ def test_test_validation_routing():
             mock_run.return_value = Mock(returncode=0, stdout="", stderr="")
 
             # Test pytest validation
-            result = validate_generated_tests([py_test], project_dir, framework="pytest")
+            result = validate_generated_tests(
+                [py_test], project_dir, framework="pytest"
+            )
             assert result is True, "pytest validation should succeed"
 
         # Test vitest validation (mock it since we don't have actual vitest setup)
         with patch(
-            "apps.backend.agents.vitest_generator.validate_vitest_tests",
-            return_value=True,
+            "agents.test_generator.validate_vitest_tests",
+            new=AsyncMock(return_value=True),
         ):
             ts_test = project_dir / "apps" / "frontend"
             ts_test.mkdir(parents=True)
