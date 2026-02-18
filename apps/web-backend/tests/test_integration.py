@@ -414,7 +414,8 @@ class TestAgentRunnerServiceIntegration:
             with patch.dict(_running_tasks, {}, clear=True):
                 # Create a completed task
                 task = asyncio.create_task(quick_task())
-                await task  # Wait for completion
+                result = await task  # Wait for completion
+                assert result is not None
                 _running_tasks["completed-task"] = task
 
                 # Create a running task
