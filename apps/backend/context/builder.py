@@ -7,6 +7,7 @@ Main builder class that orchestrates context building for tasks.
 
 import asyncio
 import json
+import logging
 from dataclasses import asdict
 from pathlib import Path
 
@@ -18,9 +19,15 @@ from .keyword_extractor import KeywordExtractor
 from .models import FileMatch, TaskContext
 from .pattern_discovery import PatternDiscoverer
 from .prioritizer import FilePrioritizer
+from .priority_manager import PriorityManager
+from .redundancy_detector import RedundancyDetector
 from .search import CodeSearcher
+from .semantic_scorer import SemanticScorer
 from .service_matcher import ServiceMatcher
 from .token_counter import TokenCounter
+from .token_estimator import TokenEstimator
+
+logger = logging.getLogger(__name__)
 
 
 class ContextBuilder:
@@ -36,12 +43,24 @@ class ContextBuilder:
         self.project_index = project_index or self._load_project_index()
         self.token_budget = token_budget
 
+        # Initialize semantic scorer if Graphiti is enabled
+        self.semantic_scorer = self._init_semantic_scorer()
+
+        # Initialize token estimator
+        self.token_estimator = TokenEstimator()
+
         # Initialize components
-        self.searcher = CodeSearcher(self.project_dir)
+        self.searcher = CodeSearcher(
+            self.project_dir, semantic_scorer=self.semantic_scorer
+        )
         self.service_matcher = ServiceMatcher(self.project_index)
         self.keyword_extractor = KeywordExtractor()
         self.categorizer = FileCategorizer()
         self.pattern_discoverer = PatternDiscoverer(self.project_dir)
+        self.redundancy_detector = RedundancyDetector(
+            self.project_dir, token_estimator=self.token_estimator
+        )
+        self.priority_manager = PriorityManager(self.project_dir)
 
         # Initialize prioritization components
         self.prioritizer = FilePrioritizer(self.project_dir)
@@ -67,6 +86,39 @@ class ContextBuilder:
         from analyzer import analyze_project
 
         return analyze_project(self.project_dir)
+
+    def _init_semantic_scorer(self) -> SemanticScorer | None:
+        """
+        Initialize semantic scorer if Graphiti is enabled.
+
+        Returns:
+            SemanticScorer instance or None if Graphiti is not available
+        """
+        if not is_graphiti_enabled():
+            logger.debug("Graphiti not enabled, semantic scoring unavailable")
+            return None
+
+        try:
+            from graphiti_config import GraphitiConfig
+            from graphiti_providers import create_embedder
+
+            config = GraphitiConfig.from_env()
+            embedder = create_embedder(config)
+
+            if embedder is None:
+                logger.warning("Failed to create embedder for semantic scoring")
+                return None
+
+            scorer = SemanticScorer(embedder)
+            logger.info("Semantic scorer initialized successfully")
+            return scorer
+
+        except ImportError as e:
+            logger.debug(f"Graphiti dependencies not available: {e}")
+            return None
+        except Exception as e:
+            logger.warning(f"Failed to initialize semantic scorer: {e}")
+            return None
 
     def build_context(
         self,
@@ -110,8 +162,10 @@ class ContextBuilder:
             if not service_path.is_absolute():
                 service_path = self.project_dir / service_path
 
-            # Search this service using keyword-based search
+            # Search this service (sync version always uses keyword search;
+            # use build_context_async for semantic search support)
             matches = self.searcher.search_service(service_path, service_name, keywords)
+
             all_matches.extend(matches)
 
             # If semantic search is enabled, also search using embeddings
@@ -129,7 +183,28 @@ class ContextBuilder:
         # Prioritize matches using recency and dependency analysis
         all_matches = self._prioritize_matches(all_matches)
 
-        # Categorize matches
+        # Apply user priorities to filter and sort matches
+        all_matches = self.priority_manager.apply_priorities(
+            all_matches, exclude_never=True, sort=True
+        )
+
+        # Log priority application
+        if all_matches:
+            logger.debug(f"Applied user priorities to {len(all_matches)} files")
+
+        # Detect and remove redundant files
+        all_matches, redundancy_report = self.redundancy_detector.detect_redundancies(
+            all_matches, keep_highest_relevance=True
+        )
+
+        # Log redundancy report
+        if redundancy_report:
+            logger.info(
+                f"Removed {len(redundancy_report)} redundant files from context: "
+                f"{sum(r.get('tokens_saved', 0) for r in redundancy_report)} tokens saved"
+            )
+
+        # Categorize matches after redundancy removal
         files_to_modify, files_to_reference = self.categorizer.categorize_matches(
             all_matches, task
         )
@@ -143,20 +218,18 @@ class ContextBuilder:
         graph_hints = []
         if include_graph_hints and is_graphiti_enabled():
             try:
-                # Run the async function in a new event loop if necessary
+                asyncio.get_running_loop()
+                # Already in an async context - skip to avoid RuntimeError
+            except RuntimeError:
+                # No event loop running - safe to create one
                 try:
-                    asyncio.get_running_loop()
-                    # We're already in an async context - this shouldn't happen in CLI
-                    # but handle it gracefully
-                    graph_hints = []
-                except RuntimeError:
-                    # No event loop running - create one
                     graph_hints = asyncio.run(
                         fetch_graph_hints(task, str(self.project_dir))
                     )
-            except Exception:
-                # Graphiti is optional - fail gracefully
-                graph_hints = []
+                except Exception:
+                    # Graphiti is optional - fail gracefully;
+                    # graph_hints remains [] from initial assignment
+                    pass
 
         return TaskContext(
             task_description=task,
@@ -184,7 +257,7 @@ class ContextBuilder:
         Build context for a specific task (async version).
 
         This version is preferred when called from async code as it can
-        properly await the graph hints retrieval.
+        properly await the graph hints retrieval and semantic search.
 
         Args:
             task: Description of the task
@@ -217,8 +290,25 @@ class ContextBuilder:
             if not service_path.is_absolute():
                 service_path = self.project_dir / service_path
 
-            # Search this service using keyword-based search
-            matches = self.searcher.search_service(service_path, service_name, keywords)
+            # Search this service
+            # Use semantic search if available, otherwise fall back to keyword search
+            if self.semantic_scorer:
+                try:
+                    matches = await self.searcher.search_with_semantics(
+                        service_path, service_name, keywords, task
+                    )
+                except Exception as e:
+                    logger.warning(
+                        f"Semantic search failed for {service_name}, falling back: {e}"
+                    )
+                    matches = self.searcher.search_service(
+                        service_path, service_name, keywords
+                    )
+            else:
+                matches = self.searcher.search_service(
+                    service_path, service_name, keywords
+                )
+
             all_matches.extend(matches)
 
             # If semantic search is enabled, also search using embeddings
@@ -236,7 +326,28 @@ class ContextBuilder:
         # Prioritize matches using recency and dependency analysis
         all_matches = self._prioritize_matches(all_matches)
 
-        # Categorize matches
+        # Apply user priorities to filter and sort matches
+        all_matches = self.priority_manager.apply_priorities(
+            all_matches, exclude_never=True, sort=True
+        )
+
+        # Log priority application
+        if all_matches:
+            logger.debug(f"Applied user priorities to {len(all_matches)} files")
+
+        # Detect and remove redundant files
+        all_matches, redundancy_report = self.redundancy_detector.detect_redundancies(
+            all_matches, keep_highest_relevance=True
+        )
+
+        # Log redundancy report
+        if redundancy_report:
+            logger.info(
+                f"Removed {len(redundancy_report)} redundant files from context: "
+                f"{sum(r.get('tokens_saved', 0) for r in redundancy_report)} tokens saved"
+            )
+
+        # Categorize matches after redundancy removal
         files_to_modify, files_to_reference = self.categorizer.categorize_matches(
             all_matches, task
         )

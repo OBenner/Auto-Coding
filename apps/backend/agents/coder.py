@@ -73,7 +73,122 @@ from .utils import (
     sync_spec_to_source,
 )
 
+# Import for context window usage display
+try:
+    from context.token_estimator import TokenEstimator
+
+    TOKEN_ESTIMATOR_AVAILABLE = True
+except ImportError:
+    TOKEN_ESTIMATOR_AVAILABLE = False
+
 logger = logging.getLogger(__name__)
+
+
+def _display_context_window_usage(
+    context: dict,
+    subtask_id: str | None = None,
+) -> None:
+    """
+    Display context window usage information to the user.
+
+    This provides transparency about what files are included in the context
+    and the estimated token usage, helping users understand the scope of
+    information being provided to the AI agent.
+
+    Args:
+        context: Context dict from load_subtask_context
+        subtask_id: Optional subtask ID for more detailed display
+    """
+    if not TOKEN_ESTIMATOR_AVAILABLE:
+        return
+
+    pattern_files = list(context.get("patterns", {}).keys())
+    files_to_modify = list(context.get("files_to_modify", {}).keys())
+    total_files = len(pattern_files) + len(files_to_modify)
+
+    if total_files == 0:
+        return
+
+    token_estimator = TokenEstimator()
+
+    pattern_tokens = sum(
+        token_estimator.count_tokens(context["patterns"][f]) for f in pattern_files
+    )
+    modify_tokens = sum(
+        token_estimator.count_tokens(context["files_to_modify"][f])
+        for f in files_to_modify
+    )
+    total_tokens = pattern_tokens + modify_tokens
+
+    status_level = _get_context_status_level(total_tokens)
+
+    print()
+    print_status("Context Window Usage", status_level)
+    print_key_value("Total Files", str(total_files))
+    print_key_value("Estimated Tokens", f"{total_tokens:,}")
+    print_key_value(
+        "Pattern Files", f"{len(pattern_files)} ({pattern_tokens:,} tokens)"
+    )
+    print_key_value(
+        "Files to Modify", f"{len(files_to_modify)} ({modify_tokens:,} tokens)"
+    )
+
+    _print_context_warnings(total_tokens)
+
+    max_context = 200_000
+    percentage = (total_tokens / max_context) * 100
+    print_key_value("Context Usage", f"{percentage:.1f}%")
+
+    if subtask_id:
+        _print_context_file_list(pattern_files, files_to_modify)
+
+    print()
+
+
+def _get_context_status_level(total_tokens: int) -> str:
+    """Return status level string based on token count."""
+    if total_tokens > 150_000:
+        return "error"
+    if total_tokens > 100_000:
+        return "warning"
+    return "success"
+
+
+def _print_context_warnings(total_tokens: int) -> None:
+    """Print warning messages if context is too large."""
+    if total_tokens > 150_000:
+        print()
+        print_status(
+            f"⚠️ Context window is critically large ({total_tokens:,} tokens). "
+            f"This may impact performance or exceed model limits.",
+            "error",
+        )
+    elif total_tokens > 100_000:
+        print()
+        print_status(
+            f"⚠️ Context window is large ({total_tokens:,} tokens). "
+            f"Consider reducing file count or using summaries.",
+            "warning",
+        )
+
+
+def _print_context_file_list(
+    pattern_files: list[str], files_to_modify: list[str]
+) -> None:
+    """Print the list of files included in context."""
+    print()
+    print(muted("Files included in context:"))
+    for label, files in [
+        ("Pattern files", pattern_files),
+        ("Files to modify", files_to_modify),
+    ]:
+        if not files:
+            continue
+        print(muted(f"  {label}:"))
+        for f in files[:5]:
+            print(muted(f"    - {f}"))
+        if len(files) > 5:
+            print(muted(f"    ... and {len(files) - 5} more"))
 
 
 async def run_autonomous_agent(
@@ -400,6 +515,9 @@ async def run_autonomous_agent(
             context = load_subtask_context(spec_dir, project_dir, next_subtask)
             if context.get("patterns") or context.get("files_to_modify"):
                 prompt += "\n\n" + format_context_for_prompt(context)
+
+                # Display context window usage for transparency
+                _display_context_window_usage(context, subtask_id)
 
             # Retrieve and append Graphiti memory context (if enabled)
             graphiti_context = await get_graphiti_context(
