@@ -6,24 +6,24 @@
  */
 
 import type {
-  AgentEvent,
-  ErrorEvent,
-  ExecutionEvent,
-  IdeationEvent,
-  LogEvent,
-  RoadmapEvent,
-  WebSocketAction,
-  WebSocketMessage,
+	AgentEvent,
+	ErrorEvent,
+	ExecutionEvent,
+	IdeationEvent,
+	LogEvent,
+	RoadmapEvent,
+	WebSocketAction,
+	WebSocketMessage,
 } from "./types";
 
 /**
  * WebSocket connection state
  */
 export type ConnectionState =
-  | "connecting"
-  | "connected"
-  | "disconnected"
-  | "error";
+	| "connecting"
+	| "connected"
+	| "disconnected"
+	| "error";
 
 /**
  * Event handler type for WebSocket events
@@ -34,351 +34,365 @@ export type EventHandler<T = AgentEvent> = (event: T) => void;
  * WebSocket client configuration
  */
 export interface WebSocketConfig {
-  url: string;
-  reconnect?: boolean;
-  reconnectDelay?: number;
-  maxReconnectAttempts?: number;
-  pingInterval?: number;
-  debug?: boolean;
+	url: string;
+	reconnect?: boolean;
+	reconnectDelay?: number;
+	maxReconnectAttempts?: number;
+	pingInterval?: number;
+	debug?: boolean;
 }
 
 /**
  * Default WebSocket configuration
  */
 const DEFAULT_WS_CONFIG: Required<WebSocketConfig> = {
-  url: import.meta.env.VITE_WS_URL || "ws://localhost:8000",
-  reconnect: true,
-  reconnectDelay: 3000, // 3 seconds
-  maxReconnectAttempts: 10,
-  pingInterval: 30000, // 30 seconds
-  debug: import.meta.env.VITE_DEBUG === "true",
+	url: import.meta.env.VITE_WS_URL || "ws://localhost:8000",
+	reconnect: true,
+	reconnectDelay: 3000, // 3 seconds
+	maxReconnectAttempts: 10,
+	pingInterval: 30000, // 30 seconds
+	debug: import.meta.env.VITE_DEBUG === "true",
 };
 
 /**
  * WebSocket Client for real-time agent events
  */
 export class WebSocketClient {
-  private config: Required<WebSocketConfig>;
-  private ws: WebSocket | null = null;
-  private state: ConnectionState = "disconnected";
-  private reconnectAttempts = 0;
-  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-  private pingTimer: ReturnType<typeof setInterval> | null = null;
-  private subscriptions = new Set<string>();
+	private config: Required<WebSocketConfig>;
+	private ws: WebSocket | null = null;
+	private state: ConnectionState = "disconnected";
+	private reconnectAttempts = 0;
+	private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+	private pingTimer: ReturnType<typeof setInterval> | null = null;
+	private subscriptions = new Set<string>();
 
-  // Event handlers
-  private eventHandlers = new Map<string, Set<EventHandler>>();
-  private stateHandlers = new Set<(state: ConnectionState) => void>();
+	// Event handlers
+	private eventHandlers = new Map<string, Set<EventHandler>>();
+	private stateHandlers = new Set<(state: ConnectionState) => void>();
 
-  constructor(config: Partial<WebSocketConfig> = {}) {
-    this.config = { ...DEFAULT_WS_CONFIG, ...config };
-    this.log("WebSocketClient initialized", this.config);
-  }
+	constructor(config: Partial<WebSocketConfig> = {}) {
+		this.config = { ...DEFAULT_WS_CONFIG, ...config };
+		this.log("WebSocketClient initialized", this.config);
+	}
 
-  /**
-   * Internal logging helper - sanitizes all values inline to prevent log injection
-   */
-  private log(message: string, ...args: unknown[]): void {
-    if (this.config.debug) {
-      // eslint-disable-next-line no-control-regex
-      const safeMsg = String(message).replace(/[\x00-\x1f\x7f]/g, '').slice(0, 200);
-      // eslint-disable-next-line no-control-regex
-      const sanitizedArgs = args.map(a => String(a).replace(/[\x00-\x1f\x7f]/g, '').slice(0, 200));
-      console.log('[WebSocketClient] ' + safeMsg, ...sanitizedArgs);
-    }
-  }
+	/**
+	 * Sanitize a value for safe logging (strips control characters, truncates).
+	 */
+	private static sanitize(value: unknown): string {
+		return String(value).replace(/\p{Cc}/gu, "").slice(0, 200);
+	}
 
-  /**
-   * Update connection state and notify handlers
-   */
-  private setState(state: ConnectionState): void {
-    if (this.state === state) return;
+	/**
+	 * Internal logging helper - sanitizes all values to prevent log injection
+	 */
+	private log(message: string, ...args: unknown[]): void {
+		if (this.config.debug) {
+			const safeMsg = WebSocketClient.sanitize(message);
+			const sanitizedArgs = args.map((a) => WebSocketClient.sanitize(a));
+			console.log("[WebSocketClient]", safeMsg, sanitizedArgs.join(" "));
+		}
+	}
 
-    this.state = state;
-    this.log(`State changed: ${state}`);
+	/**
+	 * Update connection state and notify handlers
+	 */
+	private setState(state: ConnectionState): void {
+		if (this.state === state) return;
 
-    for (const handler of this.stateHandlers) {
-      try {
-        handler(state);
-      } catch (error) {
-        console.error("Error in state handler:", error);
-      }
-    }
-  }
+		this.state = state;
+		this.log(`State changed: ${state}`);
 
-  /**
-   * Connect to WebSocket server
-   */
-  connect(): void {
-    if (this.ws?.readyState === WebSocket.OPEN) {
-      this.log("Already connected");
-      return;
-    }
+		for (const handler of this.stateHandlers) {
+			try {
+				handler(state);
+			} catch (error) {
+				console.error("Error in state handler:", error);
+			}
+		}
+	}
 
-    if (this.ws?.readyState === WebSocket.CONNECTING) {
-      this.log("Already connecting");
-      return;
-    }
+	/**
+	 * Connect to WebSocket server
+	 */
+	connect(): void {
+		if (this.ws?.readyState === WebSocket.OPEN) {
+			this.log("Already connected");
+			return;
+		}
 
-    try {
-      this.setState("connecting");
-      this.log(`Connecting to ${this.config.url}/ws/agent-events`);
+		if (this.ws?.readyState === WebSocket.CONNECTING) {
+			this.log("Already connecting");
+			return;
+		}
 
-      this.ws = new WebSocket(`${this.config.url}/ws/agent-events`);
+		try {
+			this.setState("connecting");
+			this.log(`Connecting to ${this.config.url}/ws/agent-events`);
 
-      this.ws.onopen = () => {
-        this.log("Connected");
-        this.setState("connected");
-        this.reconnectAttempts = 0;
+			this.ws = new WebSocket(`${this.config.url}/ws/agent-events`);
 
-        // Start ping interval
-        this.startPing();
+			this.ws.onopen = () => {
+				this.log("Connected");
+				this.setState("connected");
+				this.reconnectAttempts = 0;
 
-        // Re-subscribe to previous subscriptions
-        for (const specId of this.subscriptions) {
-          this.subscribe(specId);
-        }
-      };
+				// Start ping interval
+				this.startPing();
 
-      this.ws.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data) as AgentEvent;
-          this.handleEvent(data);
-        } catch (error) {
-          console.error("Error parsing WebSocket message:", error);
-        }
-      };
+				// Re-subscribe to previous subscriptions
+				for (const specId of this.subscriptions) {
+					this.subscribe(specId);
+				}
+			};
 
-      this.ws.onerror = (error) => {
-        console.error("WebSocket error:", error);
-        this.setState("error");
-      };
+			this.ws.onmessage = (event) => {
+				try {
+					const data = JSON.parse(event.data) as AgentEvent;
+					this.handleEvent(data);
+				} catch (error) {
+					console.error("Error parsing WebSocket message:", error);
+				}
+			};
 
-      this.ws.onclose = () => {
-        this.log("Connection closed");
-        this.setState("disconnected");
-        this.stopPing();
+			this.ws.onerror = (error) => {
+				console.error("WebSocket error:", error);
+				this.setState("error");
+			};
 
-        // Attempt reconnect if enabled
-        if (this.config.reconnect && this.reconnectAttempts < this.config.maxReconnectAttempts) {
-          this.scheduleReconnect();
-        }
-      };
-    } catch (error) {
-      console.error("Error connecting to WebSocket:", error);
-      this.setState("error");
-    }
-  }
+			this.ws.onclose = () => {
+				this.log("Connection closed");
+				this.setState("disconnected");
+				this.stopPing();
 
-  /**
-   * Disconnect from WebSocket server
-   */
-  disconnect(): void {
-    this.log("Disconnecting");
-    this.config.reconnect = false; // Disable auto-reconnect
-    this.clearReconnectTimer();
-    this.stopPing();
+				// Attempt reconnect if enabled
+				if (
+					this.config.reconnect &&
+					this.reconnectAttempts < this.config.maxReconnectAttempts
+				) {
+					this.scheduleReconnect();
+				}
+			};
+		} catch (error) {
+			console.error("Error connecting to WebSocket:", error);
+			this.setState("error");
+		}
+	}
 
-    if (this.ws) {
-      this.ws.close();
-      this.ws = null;
-    }
+	/**
+	 * Disconnect from WebSocket server
+	 */
+	disconnect(): void {
+		this.log("Disconnecting");
+		this.config.reconnect = false; // Disable auto-reconnect
+		this.clearReconnectTimer();
+		this.stopPing();
 
-    this.setState("disconnected");
-  }
+		if (this.ws) {
+			this.ws.close();
+			this.ws = null;
+		}
 
-  /**
-   * Schedule a reconnection attempt
-   */
-  private scheduleReconnect(): void {
-    this.clearReconnectTimer();
+		this.setState("disconnected");
+	}
 
-    this.reconnectAttempts++;
-    const delay = this.config.reconnectDelay * this.reconnectAttempts;
+	/**
+	 * Schedule a reconnection attempt
+	 */
+	private scheduleReconnect(): void {
+		this.clearReconnectTimer();
 
-    this.log(`Scheduling reconnect attempt ${this.reconnectAttempts} in ${delay}ms`);
+		this.reconnectAttempts++;
+		const delay = this.config.reconnectDelay * this.reconnectAttempts;
 
-    this.reconnectTimer = setTimeout(() => {
-      this.connect();
-    }, delay);
-  }
+		this.log(
+			`Scheduling reconnect attempt ${this.reconnectAttempts} in ${delay}ms`,
+		);
 
-  /**
-   * Clear reconnect timer
-   */
-  private clearReconnectTimer(): void {
-    if (this.reconnectTimer) {
-      clearTimeout(this.reconnectTimer);
-      this.reconnectTimer = null;
-    }
-  }
+		this.reconnectTimer = setTimeout(() => {
+			this.connect();
+		}, delay);
+	}
 
-  /**
-   * Start ping interval to keep connection alive
-   */
-  private startPing(): void {
-    this.stopPing();
+	/**
+	 * Clear reconnect timer
+	 */
+	private clearReconnectTimer(): void {
+		if (this.reconnectTimer) {
+			clearTimeout(this.reconnectTimer);
+			this.reconnectTimer = null;
+		}
+	}
 
-    this.pingTimer = setInterval(() => {
-      this.send({ action: "ping" });
-    }, this.config.pingInterval);
-  }
+	/**
+	 * Start ping interval to keep connection alive
+	 */
+	private startPing(): void {
+		this.stopPing();
 
-  /**
-   * Stop ping interval
-   */
-  private stopPing(): void {
-    if (this.pingTimer) {
-      clearInterval(this.pingTimer);
-      this.pingTimer = null;
-    }
-  }
+		this.pingTimer = setInterval(() => {
+			this.send({ action: "ping" });
+		}, this.config.pingInterval);
+	}
 
-  /**
-   * Send a WebSocket message
-   */
-  private send(message: WebSocketMessage): void {
-    if (this.ws?.readyState !== WebSocket.OPEN) {
-      console.warn("Cannot send message: WebSocket not connected");
-      return;
-    }
+	/**
+	 * Stop ping interval
+	 */
+	private stopPing(): void {
+		if (this.pingTimer) {
+			clearInterval(this.pingTimer);
+			this.pingTimer = null;
+		}
+	}
 
-    try {
-      this.ws.send(JSON.stringify(message));
-      this.log("Sent message:", message);
-    } catch (error) {
-      console.error("Error sending WebSocket message:", error);
-    }
-  }
+	/**
+	 * Send a WebSocket message
+	 */
+	private send(message: WebSocketMessage): void {
+		if (this.ws?.readyState !== WebSocket.OPEN) {
+			console.warn("Cannot send message: WebSocket not connected");
+			return;
+		}
 
-  /**
-   * Subscribe to events for a specific spec
-   */
-  subscribe(specId: string): void {
-    this.subscriptions.add(specId);
-    this.send({ action: "subscribe", spec_id: specId });
-    this.log(`Subscribed to spec: ${specId}`);
-  }
+		try {
+			this.ws.send(JSON.stringify(message));
+			this.log("Sent message:", message);
+		} catch (error) {
+			console.error("Error sending WebSocket message:", error);
+		}
+	}
 
-  /**
-   * Unsubscribe from events for a specific spec
-   */
-  unsubscribe(specId: string): void {
-    this.subscriptions.delete(specId);
-    this.send({ action: "unsubscribe", spec_id: specId });
-    this.log(`Unsubscribed from spec: ${specId}`);
-  }
+	/**
+	 * Subscribe to events for a specific spec
+	 */
+	subscribe(specId: string): void {
+		this.subscriptions.add(specId);
+		this.send({ action: "subscribe", spec_id: specId });
+		this.log(`Subscribed to spec: ${specId}`);
+	}
 
-  /**
-   * Handle incoming WebSocket event
-   */
-  private handleEvent(event: AgentEvent): void {
-    this.log("Received event:", event);
+	/**
+	 * Unsubscribe from events for a specific spec
+	 */
+	unsubscribe(specId: string): void {
+		this.subscriptions.delete(specId);
+		this.send({ action: "unsubscribe", spec_id: specId });
+		this.log(`Unsubscribed from spec: ${specId}`);
+	}
 
-    // Emit to specific event type handlers
-    const typeHandlers = this.eventHandlers.get(event.event_type);
-    if (typeHandlers) {
-      for (const handler of typeHandlers) {
-        try {
-          handler(event);
-        } catch (error) {
-          // eslint-disable-next-line no-control-regex
-          console.error("Error in event handler for type:", String(event.event_type).replace(/[\x00-\x1f\x7f]/g, '').slice(0, 50), error);
-        }
-      }
-    }
+	/**
+	 * Handle incoming WebSocket event
+	 */
+	private handleEvent(event: AgentEvent): void {
+		this.log("Received event:", event);
 
-    // Emit to wildcard handlers
-    const wildcardHandlers = this.eventHandlers.get("*");
-    if (wildcardHandlers) {
-      for (const handler of wildcardHandlers) {
-        try {
-          handler(event);
-        } catch (error) {
-          console.error("Error in wildcard event handler:", error);
-        }
-      }
-    }
-  }
+		// Emit to specific event type handlers
+		const typeHandlers = this.eventHandlers.get(event.event_type);
+		if (typeHandlers) {
+			for (const handler of typeHandlers) {
+				try {
+					handler(event);
+				} catch (error) {
+					const safeType = WebSocketClient.sanitize(event.event_type);
+					console.error(
+						"Error in event handler for type:",
+						safeType,
+						error,
+					);
+				}
+			}
+		}
 
-  /**
-   * Register an event handler
-   */
-  on(eventType: "execution", handler: EventHandler<ExecutionEvent>): void;
-  on(eventType: "ideation", handler: EventHandler<IdeationEvent>): void;
-  on(eventType: "roadmap", handler: EventHandler<RoadmapEvent>): void;
-  on(eventType: "log", handler: EventHandler<LogEvent>): void;
-  on(eventType: "error", handler: EventHandler<ErrorEvent>): void;
-  on(eventType: "*", handler: EventHandler<AgentEvent>): void;
-  // biome-ignore lint/suspicious/noExplicitAny: Implementation signature needs to accept all overloads
-  on(eventType: string, handler: EventHandler<any>): void {
-    if (!this.eventHandlers.has(eventType)) {
-      this.eventHandlers.set(eventType, new Set());
-    }
-    this.eventHandlers.get(eventType)!.add(handler);
-    this.log(`Registered handler for: ${eventType}`);
-  }
+		// Emit to wildcard handlers
+		const wildcardHandlers = this.eventHandlers.get("*");
+		if (wildcardHandlers) {
+			for (const handler of wildcardHandlers) {
+				try {
+					handler(event);
+				} catch (error) {
+					console.error("Error in wildcard event handler:", error);
+				}
+			}
+		}
+	}
 
-  /**
-   * Unregister an event handler
-   */
-  off(eventType: string, handler: EventHandler): void {
-    const handlers = this.eventHandlers.get(eventType);
-    if (handlers) {
-      handlers.delete(handler);
-      this.log(`Unregistered handler for: ${eventType}`);
-    }
-  }
+	/**
+	 * Register an event handler
+	 */
+	on(eventType: "execution", handler: EventHandler<ExecutionEvent>): void;
+	on(eventType: "ideation", handler: EventHandler<IdeationEvent>): void;
+	on(eventType: "roadmap", handler: EventHandler<RoadmapEvent>): void;
+	on(eventType: "log", handler: EventHandler<LogEvent>): void;
+	on(eventType: "error", handler: EventHandler<ErrorEvent>): void;
+	on(eventType: "*", handler: EventHandler<AgentEvent>): void;
+	// biome-ignore lint/suspicious/noExplicitAny: Implementation signature needs to accept all overloads
+	on(eventType: string, handler: EventHandler<any>): void {
+		if (!this.eventHandlers.has(eventType)) {
+			this.eventHandlers.set(eventType, new Set());
+		}
+		this.eventHandlers.get(eventType)!.add(handler);
+		this.log(`Registered handler for: ${eventType}`);
+	}
 
-  /**
-   * Register a state change handler
-   */
-  onStateChange(handler: (state: ConnectionState) => void): void {
-    this.stateHandlers.add(handler);
-  }
+	/**
+	 * Unregister an event handler
+	 */
+	off(eventType: string, handler: EventHandler): void {
+		const handlers = this.eventHandlers.get(eventType);
+		if (handlers) {
+			handlers.delete(handler);
+			this.log(`Unregistered handler for: ${eventType}`);
+		}
+	}
 
-  /**
-   * Unregister a state change handler
-   */
-  offStateChange(handler: (state: ConnectionState) => void): void {
-    this.stateHandlers.delete(handler);
-  }
+	/**
+	 * Register a state change handler
+	 */
+	onStateChange(handler: (state: ConnectionState) => void): void {
+		this.stateHandlers.add(handler);
+	}
 
-  /**
-   * Get current connection state
-   */
-  getState(): ConnectionState {
-    return this.state;
-  }
+	/**
+	 * Unregister a state change handler
+	 */
+	offStateChange(handler: (state: ConnectionState) => void): void {
+		this.stateHandlers.delete(handler);
+	}
 
-  /**
-   * Check if connected
-   */
-  isConnected(): boolean {
-    return this.state === "connected" && this.ws?.readyState === WebSocket.OPEN;
-  }
+	/**
+	 * Get current connection state
+	 */
+	getState(): ConnectionState {
+		return this.state;
+	}
 
-  /**
-   * Get list of active subscriptions
-   */
-  getSubscriptions(): string[] {
-    return Array.from(this.subscriptions);
-  }
+	/**
+	 * Check if connected
+	 */
+	isConnected(): boolean {
+		return this.state === "connected" && this.ws?.readyState === WebSocket.OPEN;
+	}
 
-  /**
-   * Update WebSocket configuration
-   */
-  updateConfig(config: Partial<WebSocketConfig>): void {
-    this.config = { ...this.config, ...config };
-    this.log("Config updated", this.config);
-  }
+	/**
+	 * Get list of active subscriptions
+	 */
+	getSubscriptions(): string[] {
+		return Array.from(this.subscriptions);
+	}
 
-  /**
-   * Get current configuration
-   */
-  getConfig(): Readonly<Required<WebSocketConfig>> {
-    return { ...this.config };
-  }
+	/**
+	 * Update WebSocket configuration
+	 */
+	updateConfig(config: Partial<WebSocketConfig>): void {
+		this.config = { ...this.config, ...config };
+		this.log("Config updated", this.config);
+	}
+
+	/**
+	 * Get current configuration
+	 */
+	getConfig(): Readonly<Required<WebSocketConfig>> {
+		return { ...this.config };
+	}
 }
 
 /**
@@ -391,7 +405,7 @@ export const wsClient = new WebSocketClient();
  * Create a new WebSocket client with custom configuration
  */
 export function createWebSocketClient(
-  config: Partial<WebSocketConfig> = {}
+	config: Partial<WebSocketConfig> = {},
 ): WebSocketClient {
-  return new WebSocketClient(config);
+	return new WebSocketClient(config);
 }

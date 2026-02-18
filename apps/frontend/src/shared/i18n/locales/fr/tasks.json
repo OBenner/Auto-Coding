@@ -25,6 +25,9 @@
     "showMetadata": "Afficher les métadonnées",
     "hideMetadata": "Masquer les métadonnées"
   },
+  "taskDetail": {
+    "viewSessionReplay": "Voir la relecture de session"
+  },
   "labels": {
     "running": "En cours",
     "aiReview": "Révision IA",
@@ -110,8 +113,8 @@
     "unlockColumn": "Déverrouiller la largeur de la colonne",
     "columnLocked": "La largeur de la colonne est verrouillée",
     "expandAll": "Développer toutes les colonnes",
-    "batchQA": "QA par lot",
-    "batchStatusUpdate": "Mettre à jour le statut"
+    "searchPlaceholder": "Rechercher des tâches...",
+    "clearFilters": "Effacer les filtres"
   },
   "queue": {
     "limitReached": "Limite de tâches parallèles atteinte ({{current}}/{{max}}). Tâche déplacée vers la file d'attente.",
@@ -137,7 +140,6 @@
       "idle": "Inactif",
       "planning": "Planification",
       "coding": "Codage",
-      "testGeneration": "Tests",
       "reviewing": "Révision",
       "fixing": "Correction",
       "complete": "Terminé",
@@ -255,9 +257,7 @@
     "deselectAll": "Désélectionner toutes les tâches",
     "editTask": "Modifier la tâche : {{title}}",
     "deleteTask": "Supprimer la tâche : {{title}}",
-    "moveTask": "Déplacer la tâche vers {{status}}",
-    "batchQA": "Exécuter la QA sur les tâches sélectionnées",
-    "batchStatusUpdate": "Mettre à jour le statut des tâches sélectionnées"
+    "moveTask": "Déplacer la tâche vers {{status}}"
   },
   "wizard": {
     "createTitle": "Créer une nouvelle tâche",
@@ -393,30 +393,31 @@
     "title": "Images de référence (facultatif)",
     "description": "Ajoutez des références visuelles comme des captures d'écran ou des conceptions pour aider l'IA à comprendre vos exigences."
   },
-  "githubIssues": {
-    "quickCreateSpec": "Créer rapidement un spec",
-    "investigate": "Enquêter"
+  "overview": {
+    "implementationPlan": "Plan d'implémentation",
+    "phaseNumber": "Phase {{number}}",
+    "subtasksCompleted": "sous-tâches terminées",
+    "verification": "Vérification",
+    "qaReport": "Rapport QA",
+    "qaEscalation": "Escalade QA",
+    "totalIterations": "Itérations totales",
+    "totalIssues": "Problèmes totaux",
+    "uniqueIssues": "Problèmes uniques",
+    "fixSuccessRate": "Taux de réussite des corrections",
+    "recurringIssues": "Problèmes récurrents",
+    "commonIssues": "Problèmes courants",
+    "noDataAvailable": "Aucune donnée de vue d'ensemble disponible"
   },
-  "gitlabIssues": {
-    "quickCreateSpec": "Créer rapidement un spec",
-    "investigate": "Enquêter"
+  "merge": {
+    "progress": "Fusion des fichiers...",
+    "analyzing": "Analyse des modifications...",
+    "fileProgress": "{{current}} / {{total}} fichiers",
+    "currentFile": "Traitement : {{file}}",
+    "conflicts": "{{count}} conflit(s) détecté(s)",
+    "complete": "Fusion terminée",
+    "autoResolved": "{{count}} fichier(s) résolu(s) automatiquement"
   },
-  "batchStatusUpdate": {
-    "title": "Mettre à jour le statut",
-    "description": "Mettre à jour le statut pour {{count}} tâche(s) sélectionnée(s)",
-    "updating": "Mise à jour du statut ({{current}} sur {{total}})...",
-    "resultsDescription": "{{success}} réussie(s), {{failed}} échouée(s)",
-    "tasksToUpdate": "Tâches à mettre à jour",
-    "newStatus": "Nouveau statut",
-    "selectStatus": "Sélectionner le statut",
-    "statusHint": "Toutes les tâches sélectionnées seront mises à jour vers ce statut",
-    "updateAll": "Tout mettre à jour",
-    "updatingStatus": "Mise à jour de la tâche {{current}} sur {{total}}",
-    "completed": "terminée(s)",
-    "succeeded": "réussie(s)",
-    "failed": "échouée(s)",
-    "errors": {
-      "unknown": "Une erreur inconnue s'est produite"
-    }
+  "prPolling": {
+    "autoRefreshing": "Actualisation automatique"
   }
 }

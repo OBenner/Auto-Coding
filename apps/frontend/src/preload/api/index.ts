@@ -4,6 +4,7 @@ import { TaskAPI, createTaskAPI } from './task-api';
 import { SettingsAPI, createSettingsAPI } from './settings-api';
 import { FileAPI, createFileAPI } from './file-api';
 import { AgentAPI, createAgentAPI } from './agent-api';
+import { TemplateAPI, createTemplateAPI } from './template-api';
 import type { IdeationAPI } from './modules/ideation-api';
 import type { InsightsAPI } from './modules/insights-api';
 import { AppUpdateAPI, createAppUpdateAPI } from './app-update-api';
@@ -16,6 +17,9 @@ import { ProfileAPI, createProfileAPI } from './profile-api';
 import { ScreenshotAPI, createScreenshotAPI } from './screenshot-api';
 import { QueueAPI, createQueueAPI } from './queue-api';
 import { PluginAPI, createPluginAPI } from './plugin-api';
+import type { SessionReplayAPI } from './modules/session-replay-api';
+import { createSessionReplayAPI } from './modules/session-replay-api';
+import { ContextViewerAPI, createContextViewerAPI } from './modules/context-viewer-api';
 import { SchedulerAPI, createSchedulerAPI } from './scheduler-api';
 import { FeedbackAPI, createFeedbackAPI } from './feedback-api';
 
@@ -26,6 +30,7 @@ export interface ElectronAPI extends
   SettingsAPI,
   FileAPI,
   AgentAPI,
+  TemplateAPI,
   IdeationAPI,
   InsightsAPI,
   AppUpdateAPI,
@@ -36,10 +41,13 @@ export interface ElectronAPI extends
   ProfileAPI,
   ScreenshotAPI,
   PluginAPI,
+  ContextViewerAPI,
   FeedbackAPI {
   github: GitHubAPI;
   /** Queue routing API for rate limit recovery */
   queue: QueueAPI;
+  /** Session replay API for learning and review */
+  sessionReplay: SessionReplayAPI;
   /** Scheduler API for build scheduling and queue management */
   scheduler: SchedulerAPI;
 }
@@ -50,6 +58,7 @@ export const createElectronAPI = (): ElectronAPI => ({
   ...createTaskAPI(),
   ...createSettingsAPI(),
   ...createFileAPI(),
+  ...createTemplateAPI(),
   ...createAgentAPI(),  // Includes: Roadmap, Ideation, Insights, Changelog, Linear, GitHub, GitLab, Shell, SessionContext
   ...createAppUpdateAPI(),
   ...createDebugAPI(),
@@ -58,9 +67,11 @@ export const createElectronAPI = (): ElectronAPI => ({
   ...createProfileAPI(),
   ...createScreenshotAPI(),
   ...createPluginAPI(),
+  ...createContextViewerAPI(),
   ...createFeedbackAPI(),
   github: createGitHubAPI(),
   queue: createQueueAPI(),  // Queue routing for rate limit recovery
+  sessionReplay: createSessionReplayAPI(),
   scheduler: createSchedulerAPI()
 });
 
@@ -73,6 +84,7 @@ export {
   createSettingsAPI,
   createFileAPI,
   createAgentAPI,
+  createTemplateAPI,
   createAppUpdateAPI,
   createProfileAPI,
   createGitHubAPI,
@@ -82,6 +94,8 @@ export {
   createScreenshotAPI,
   createQueueAPI,
   createPluginAPI,
+  createSessionReplayAPI,
+  createContextViewerAPI,
   createSchedulerAPI,
   createFeedbackAPI
 };
@@ -93,6 +107,7 @@ export type {
   SettingsAPI,
   FileAPI,
   AgentAPI,
+  TemplateAPI,
   IdeationAPI,
   InsightsAPI,
   AppUpdateAPI,
@@ -105,6 +120,8 @@ export type {
   ScreenshotAPI,
   QueueAPI,
   PluginAPI,
+  SessionReplayAPI,
+  ContextViewerAPI,
   SchedulerAPI,
   FeedbackAPI
 };

@@ -357,6 +357,59 @@ const browserMockAPI: ElectronAPI = {
     data: []
   }),
 
+  // Custom Agent Template Operations
+  listCustomTemplates: async () => ({
+    success: true,
+    data: []
+  }),
+  saveCustomTemplate: async (template: Omit<import('../../shared/types/template').CustomTemplate, 'id' | 'createdAt' | 'updatedAt'>) => ({
+    success: true,
+    data: {
+      id: `custom-template-${Date.now()}`,
+      ...template,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    }
+  }),
+  updateCustomTemplate: async (template: import('../../shared/types/template').CustomTemplate) => ({
+    success: true,
+    data: {
+      ...template,
+      updatedAt: new Date()
+    }
+  }),
+  deleteCustomTemplate: async (_templateId: string) => ({
+    success: true
+  }),
+  exportCustomTemplate: async (_templateId: string) => ({
+    success: true,
+    data: '{"mock": "template"}'
+  }),
+  importCustomTemplate: async (_jsonData: string) => ({
+    success: true,
+    data: {
+      id: `custom-template-${Date.now()}`,
+      name: 'Imported Template',
+      description: 'Imported from JSON',
+      category: 'other' as const,
+      parameters: {},
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      isPublic: false
+    }
+  }),
+  testCustomTemplate: async (_templateId: string, _testInput: string) => ({
+    success: true,
+    data: {
+      title: 'Test Result',
+      description: 'Template test result',
+      rationale: 'Test rationale',
+      user_stories: [],
+      acceptance_criteria: [],
+      technical_details: 'Test details'
+    }
+  }),
+
   // Queue Routing API (rate limit recovery)
   queue: {
     getRunningTasksByProfile: async () => ({ success: true, data: { byProfile: {}, totalRunning: 0 } }),
@@ -367,6 +420,21 @@ const browserMockAPI: ElectronAPI = {
     onQueueProfileSwapped: () => () => {},
     onQueueSessionCaptured: () => () => {},
     onQueueBlockedNoProfiles: () => () => {}
+  },
+
+  // Session Replay API
+  sessionReplay: {
+    listSessions: async () => ({ success: true, data: [] }),
+    getSession: async () => ({ success: true, data: null }),
+    getTimeline: async () => ({ success: true, data: [] }),
+    getDecisionPoints: async () => ({ success: true, data: [] }),
+    getBookmarks: async () => ({ success: true, data: [] }),
+    addBookmark: async () => ({ success: true, data: { id: 'mock', timestamp: '', entry_timestamp: '', phase: '', label: '', note: null, session: 0, subtask_id: '' } }),
+    removeBookmark: async () => ({ success: true, data: undefined }),
+    getEntries: async () => ({ success: true, data: [] }),
+    search: async () => ({ success: true, data: [] }),
+    exportSession: async () => ({ success: true, data: '' }),
+    exportAll: async () => ({ success: true, data: '' }),
   },
 
   // Scheduler API (build scheduling and queue management)
@@ -533,6 +601,13 @@ const browserMockAPI: ElectronAPI = {
   disablePlugin: async () => ({ success: true, data: { success: true } }),
   installPlugin: async () => ({ success: true, data: { success: true } }),
   uninstallPlugin: async () => ({ success: true, data: { success: true } }),
+
+  // Context Viewer API
+  getContextStats: async () => ({ success: true, data: null }),
+  getTokenBreakdown: async () => ({ success: true, data: null }),
+  getPrioritizationScores: async () => ({ success: true, data: null }),
+  getOptimizationReport: async () => ({ success: true, data: null }),
+  exportContextSnapshot: async () => ({ success: true, data: null }),
 
   // Productivity analytics operations
   getProductivitySummary: async (

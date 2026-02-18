@@ -25,6 +25,7 @@ import {
   PanelLeftClose,
   Puzzle,
   BarChart3,
+  Play,
   Calendar,
   Activity
 } from 'lucide-react';
@@ -56,12 +57,13 @@ import { AddProjectModal } from './AddProjectModal';
 import { GitSetupModal } from './GitSetupModal';
 import { RateLimitIndicator } from './RateLimitIndicator';
 import { ClaudeCodeStatusBadge } from './ClaudeCodeStatusBadge';
+import { useAuthFailureStore } from '../stores/auth-failure-store';
 import { UpdateBanner } from './UpdateBanner';
 import { SessionContextIndicator } from './SessionContextIndicator';
 import { NavIndicator } from './NavIndicator';
 import type { Project, AutoBuildVersionInfo, GitStatus, ProjectEnvConfig } from '../../shared/types';
 
-export type SidebarView = 'kanban' | 'terminals' | 'roadmap' | 'context' | 'ideation' | 'github-issues' | 'gitlab-issues' | 'github-prs' | 'gitlab-merge-requests' | 'changelog' | 'insights' | 'worktrees' | 'agent-tools' | 'plugins' | 'analytics' | 'merge-analytics' | 'scheduler';
+export type SidebarView = 'kanban' | 'terminals' | 'roadmap' | 'context' | 'ideation' | 'github-issues' | 'gitlab-issues' | 'github-prs' | 'gitlab-merge-requests' | 'changelog' | 'insights' | 'worktrees' | 'agent-tools' | 'plugins' | 'analytics' | 'merge-analytics' | 'sessions' | 'scheduler';
 
 interface SidebarProps {
   onSettingsClick: () => void;
@@ -91,7 +93,8 @@ const baseNavItems: NavItem[] = [
   { id: 'plugins', labelKey: 'navigation:items.plugins', icon: Puzzle, shortcut: 'U' },
   { id: 'worktrees', labelKey: 'navigation:items.worktrees', icon: GitBranch, shortcut: 'W' },
   { id: 'analytics', labelKey: 'navigation:items.analytics', icon: Activity, shortcut: 'T' },
-  { id: 'merge-analytics', labelKey: 'navigation:items.mergeAnalytics', icon: BarChart3, shortcut: 'Y' }
+  { id: 'merge-analytics', labelKey: 'navigation:items.mergeAnalytics', icon: BarChart3, shortcut: 'Y' },
+  { id: 'sessions', labelKey: 'navigation:items.sessions', icon: Play }
 ];
 
 // GitHub nav items shown when GitHub is enabled
@@ -116,6 +119,7 @@ export function Sidebar({
   const projects = useProjectStore((state) => state.projects);
   const selectedProjectId = useProjectStore((state) => state.selectedProjectId);
   const settings = useSettingsStore((state) => state.settings);
+  const hasPendingAuthFailure = useAuthFailureStore((state) => state.hasPendingAuthFailure);
 
   const [showAddProjectModal, setShowAddProjectModal] = useState(false);
   const [showInitDialog, setShowInitDialog] = useState(false);
@@ -513,14 +517,25 @@ export function Sidebar({
                 <Button
                   variant="ghost"
                   size={isCollapsed ? "icon" : "sm"}
-                  className={isCollapsed ? "" : "flex-1 justify-start gap-2"}
+                  className={cn(isCollapsed ? "relative" : "relative flex-1 justify-start gap-2")}
                   onClick={onSettingsClick}
+                  aria-label={isCollapsed ? t('actions.settings') : undefined}
                 >
                   <Settings className="h-4 w-4" />
                   {!isCollapsed && t('actions.settings')}
+                  {hasPendingAuthFailure && (
+                    <span
+                      className="absolute top-1 right-1 h-2 w-2 rounded-full bg-destructive"
+                      aria-label={t('common:auth.failure.badgeTooltip')}
+                    />
+                  )}
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side={isCollapsed ? "right" : "top"}>{t('tooltips.settings')}</TooltipContent>
+              <TooltipContent side={isCollapsed ? "right" : "top"}>
+                {hasPendingAuthFailure
+                  ? t('common:auth.failure.badgeTooltip')
+                  : t('tooltips.settings')}
+              </TooltipContent>
             </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>

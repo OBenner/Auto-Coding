@@ -70,7 +70,7 @@ def load_project_context(project_dir: str) -> str:
             context_parts.append(
                 f"## Project Structure\n```json\n{json.dumps(summary, indent=2)}\n```"
             )
-        except (OSError, json.JSONDecodeError, KeyError, ValueError):
+        except (OSError, KeyError, ValueError):
             pass  # Project index unavailable or malformed
 
     # Load roadmap if available
@@ -88,7 +88,7 @@ def load_project_context(project_dir: str) -> str:
             context_parts.append(
                 f"## Roadmap Features\n```json\n{json.dumps(feature_summary, indent=2)}\n```"
             )
-        except (OSError, json.JSONDecodeError, KeyError, ValueError):
+        except (OSError, KeyError, ValueError):
             pass  # Roadmap unavailable or malformed
 
     # Load existing tasks

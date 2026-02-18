@@ -8,6 +8,7 @@ import { readFile } from 'fs/promises';
 import { homedir } from 'os';
 import { join } from 'path';
 import type { ClaudeProfile, ClaudeAutoSwitchSettings } from '../../shared/types';
+import { atomicWriteFileSync } from '../fs-utils';
 
 /**
  * Directory constants for profile isolation
@@ -247,7 +248,7 @@ export async function loadProfileStoreAsync(storePath: string): Promise<ProfileS
  */
 export function saveProfileStore(storePath: string, data: ProfileStoreData): void {
   try {
-    writeFileSync(storePath, JSON.stringify(data, null, 2), 'utf-8');
+    atomicWriteFileSync(storePath, JSON.stringify(data, null, 2), 'utf-8');
   } catch (error) {
     console.error('[ProfileStorage] Error saving profiles:', error);
   }

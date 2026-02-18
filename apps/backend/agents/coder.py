@@ -19,6 +19,7 @@ from linear_updater import (
     linear_task_started,
     linear_task_stuck,
 )
+from notifications import notify_stuck_subtask
 from phase_config import get_phase_model, get_phase_thinking_budget, resolve_model_id
 from phase_event import ExecutionPhase, emit_phase
 from progress import (
@@ -31,14 +32,14 @@ from progress import (
     print_progress_summary,
     print_session_header,
 )
-from prompt_generator import (
+from prompts_pkg.prompt_generator import (
     format_context_for_prompt,
     generate_planner_prompt,
     generate_subtask_prompt,
     load_subtask_context,
 )
-from prompts import is_first_run
-from recovery import FailureType, RecoveryAction, RecoveryManager
+from prompts_pkg.prompts import is_first_run
+from recovery import RecoveryAction, RecoveryManager
 from security.constants import PROJECT_DIR_ENV_VAR
 from task_logger import (
     LogPhase,
@@ -59,7 +60,12 @@ from ui import (
 
 from .base import AUTO_CONTINUE_DELAY_SECONDS, HUMAN_INTERVENTION_FILE
 from .memory_manager import debug_memory_system_status, get_graphiti_context
-from .session import post_session_processing, run_agent_session, save_token_stats
+from .session import (
+    post_session_processing,
+    run_agent_session,
+    run_agent_session_isolated,
+    save_token_stats,
+)
 from .utils import (
     find_phase_for_subtask,
     get_commit_count,
@@ -462,11 +468,40 @@ async def run_autonomous_agent(
             task_logger.set_subtask(subtask_id)
             task_logger.set_session(iteration)
 
-        # Run session with async context manager
-        async with client:
-            status, response, usage_metadata = await run_agent_session(
-                client, prompt, spec_dir, verbose, phase=current_log_phase
+        # Check if process isolation is enabled
+        use_process_isolation = (
+            os.getenv("AGENT_PROCESS_ISOLATION", "").lower() == "true"
+        )
+
+        if use_process_isolation:
+            # Run in isolated subprocess for crash resistance
+            agent_type = "planner" if first_run else "coder"
+            if verbose or iteration == 1:
+                print_status(
+                    "Process isolation: ENABLED (crash-resistant mode)", "info"
+                )
+            status, response, usage_metadata = await run_agent_session_isolated(
+                project_dir=project_dir,
+                spec_dir=spec_dir,
+                agent_type=agent_type,
+                model=phase_model,
+                starting_message=prompt,
+                system_prompt=None,
+                max_thinking_tokens=phase_thinking_budget,
+                session_name=f"{agent_type}-session-{iteration}",
+                limits=None,  # Use default ResourceLimits
             )
+        else:
+            # Run in current process (legacy mode)
+            async with client:
+                (
+                    status,
+                    response,
+                    usage_metadata,
+                    _,
+                ) = await run_agent_session(
+                    client, prompt, spec_dir, verbose, phase=current_log_phase
+                )
 
         # Save token statistics for coding phase
         if usage_metadata and current_log_phase == LogPhase.CODING:
@@ -541,9 +576,26 @@ async def run_autonomous_agent(
                 source_spec_dir=source_spec_dir,
             )
 
+<<<<<<< HEAD
             # === ENHANCED RECOVERY: Handle failures with smart recovery ===
             if not success:
                 attempt_count = recovery_manager.get_attempt_count(subtask_id)
+=======
+            # Check for stuck subtasks
+            attempt_count = recovery_manager.get_attempt_count(subtask_id)
+            if not success and attempt_count >= 3:
+                recovery_manager.mark_subtask_stuck(
+                    subtask_id, f"Failed after {attempt_count} attempts"
+                )
+
+                # Notify user about stuck subtask
+                notify_stuck_subtask(
+                    subtask_id=subtask_id,
+                    reason=f"Failed after {attempt_count} attempts",
+                    attempt_count=attempt_count,
+                    spec_dir=spec_dir,
+                )
+>>>>>>> origin/develop
 
                 # Classify the failure type
                 # We use a generic "verification failed" error since we don't have the actual error message

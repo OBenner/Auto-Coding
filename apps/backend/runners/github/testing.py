@@ -33,17 +33,17 @@ class GitHubClientProtocol(Protocol):
         limit: int = 100,
         json_fields: list[str] | None = None,
     ) -> list[dict[str, Any]]:
-        pass
+        pass  # Protocol method - no implementation needed
 
     async def pr_get(
         self,
         pr_number: int,
         json_fields: list[str] | None = None,
     ) -> dict[str, Any]:
-        pass
+        pass  # Protocol method - no implementation needed
 
     async def pr_diff(self, pr_number: int) -> str:
-        pass
+        pass  # Protocol method - no implementation needed
 
     async def pr_review(
         self,
@@ -51,7 +51,7 @@ class GitHubClientProtocol(Protocol):
         body: str,
         event: str = "comment",
     ) -> int:
-        pass
+        pass  # Protocol method - no implementation needed
 
     async def issue_list(
         self,
@@ -59,30 +59,30 @@ class GitHubClientProtocol(Protocol):
         limit: int = 100,
         json_fields: list[str] | None = None,
     ) -> list[dict[str, Any]]:
-        pass
+        pass  # Protocol method - no implementation needed
 
     async def issue_get(
         self,
         issue_number: int,
         json_fields: list[str] | None = None,
     ) -> dict[str, Any]:
-        pass
+        pass  # Protocol method - no implementation needed
 
     async def issue_comment(self, issue_number: int, body: str) -> None:
-        pass
+        pass  # Protocol method - no implementation needed
 
     async def issue_add_labels(self, issue_number: int, labels: list[str]) -> None:
-        pass
+        pass  # Protocol method - no implementation needed
 
     async def issue_remove_labels(self, issue_number: int, labels: list[str]) -> None:
-        pass
+        pass  # Protocol method - no implementation needed
 
     async def api_get(
         self,
         endpoint: str,
         params: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        pass
+        pass  # Protocol method - no implementation needed
 
 
 @runtime_checkable
@@ -90,16 +90,16 @@ class ClaudeClientProtocol(Protocol):
     """Protocol for Claude AI clients."""
 
     async def query(self, prompt: str) -> None:
-        pass
+        pass  # Protocol method - no implementation needed
 
     async def receive_response(self):
-        pass
+        pass  # Protocol method - no implementation needed
 
     async def __aenter__(self) -> ClaudeClientProtocol:
-        pass
+        pass  # Protocol method - no implementation needed
 
     async def __aexit__(self, *args) -> None:
-        pass
+        pass  # Protocol method - no implementation needed
 
 
 # ============================================================================

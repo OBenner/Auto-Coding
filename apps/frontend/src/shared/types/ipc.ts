@@ -205,6 +205,7 @@ export interface ElectronAPI {
   // Task archive operations
   archiveTasks: (projectId: string, taskIds: string[], version?: string) => Promise<IPCResult<boolean>>;
   unarchiveTasks: (projectId: string, taskIds: string[]) => Promise<IPCResult<boolean>>;
+  exportTask: (projectId: string, taskId: string) => Promise<IPCResult<string>>;
 
   // Merge analytics operations
   getMergeHistory: (projectId: string, filter?: MergeAnalyticsFilter) => Promise<IPCResult<MergeOperationRecord[]>>;
@@ -896,12 +897,24 @@ export interface ElectronAPI {
   // Token statistics
   getTokenStats: (projectPath: string, specId: string) => Promise<IPCResult<import('./task').TaskTokenStats | null>>;
 
+  // Task spec file reading (for task overview display)
+  getImplementationPlan: (taskId: string) => Promise<IPCResult<ImplementationPlan | null>>;
+  getQAReport: (taskId: string) => Promise<IPCResult<string | null>>;
+  getQAEscalation: (taskId: string) => Promise<IPCResult<import('./task').QAEscalation | null>>;
+
   // Plugin management
   listPlugins: (options?: { pluginType?: string; enabledOnly?: boolean }) => Promise<IPCResult<import('../../main/plugins/types').PluginInfo[]>>;
   enablePlugin: (pluginName: string) => Promise<IPCResult<{ success: boolean }>>;
   disablePlugin: (pluginName: string) => Promise<IPCResult<{ success: boolean }>>;
   installPlugin: (source: { type: string; path?: string; marketplace_id?: string }) => Promise<IPCResult<{ success: boolean; plugin?: { name: string; version: string } }>>;
   uninstallPlugin: (pluginName: string) => Promise<IPCResult<{ success: boolean }>>;
+
+  // Context Viewer API
+  getContextStats: (projectId: string, specId?: string) => Promise<IPCResult<any>>;
+  getTokenBreakdown: (projectId: string, specId?: string) => Promise<IPCResult<any>>;
+  getPrioritizationScores: (projectId: string, task?: string) => Promise<IPCResult<any>>;
+  getOptimizationReport: (projectId: string, specId: string) => Promise<IPCResult<any>>;
+  exportContextSnapshot: (projectId: string, specId: string) => Promise<IPCResult<any>>;
 
   // Productivity analytics operations
   getProductivitySummary: (projectId: string, filter?: ProductivityAnalyticsFilter) => Promise<IPCResult<ProductivitySummary>>;
@@ -921,6 +934,14 @@ export interface ElectronAPI {
     specId?: string
   ) => Promise<IPCResult<{ specId: string; specPath: string }>>;
   suggestTemplates: (projectId: string, taskDescription: string) => Promise<IPCResult<string[]>>;
+  // Custom agent template operations (user-created templates)
+  listCustomTemplates: () => Promise<IPCResult<import('./template').CustomTemplate[]>>;
+  saveCustomTemplate: (template: Omit<import('./template').CustomTemplate, 'id' | 'createdAt' | 'updatedAt'>) => Promise<IPCResult<import('./template').CustomTemplate & { validationErrors?: string[] }>>;
+  updateCustomTemplate: (template: import('./template').CustomTemplate) => Promise<IPCResult<import('./template').CustomTemplate & { validationErrors?: string[] }>>;
+  deleteCustomTemplate: (templateId: string) => Promise<IPCResult>;
+  exportCustomTemplate: (templateId: string) => Promise<IPCResult<string>>; // Returns JSON string
+  importCustomTemplate: (jsonData: string) => Promise<IPCResult<import('./template').CustomTemplate & { validationErrors?: string[] }>>;
+  testCustomTemplate: (templateId: string, testInput: string) => Promise<IPCResult<GeneratedSpec>>;
 
   // Feedback submission (adaptive agent learning)
   submitFeedback?: (request: {
@@ -929,10 +950,13 @@ export interface ElectronAPI {
     agentType?: string;
     taskDescription?: string;
     context?: string;
-  }) => Promise<IPCResult<{ recorded: boolean }>>;
+  }) => Promise<IPCResult<{ recorded: boolean; reason?: string }>>;
+
 
   // Queue Routing API (rate limit recovery)
   queue: import('../../preload/api/queue-api').QueueAPI;
+  // Session Replay API for learning and review
+  sessionReplay: import('../../preload/api/modules/session-replay-api').SessionReplayAPI;
   // Scheduler API for build scheduling and queue management
   scheduler: import('../../preload/api/scheduler-api').SchedulerAPI;
 }
