@@ -60,9 +60,7 @@ class Settings:
         self.WS_HEARTBEAT_INTERVAL: int = int(os.getenv("WS_HEARTBEAT_INTERVAL", "30"))
 
         # Database configuration
-        self.DATABASE_URL: str = os.getenv(
-            "DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/autoclaude"
-        )
+        self.DATABASE_URL: str = os.getenv("DATABASE_URL", "")
 
         # OAuth configuration - GitHub
         self.GITHUB_CLIENT_ID: str = os.getenv("GITHUB_CLIENT_ID", "")

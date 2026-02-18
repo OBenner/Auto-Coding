@@ -200,10 +200,8 @@ class UsageTrackingMiddleware(BaseHTTPMiddleware):
             logger.error(f"Failed to record request: {e}")
             # Don't fail the request if tracking fails
 
-        # Add custom headers for debugging (optional, can be disabled in production)
+        # Add timing header for debugging (only in debug mode)
         if settings.DEBUG:
             response.headers["X-Process-Time"] = str(process_time)
-            if user_id:
-                response.headers["X-User-Id"] = str(user_id)
 
         return response

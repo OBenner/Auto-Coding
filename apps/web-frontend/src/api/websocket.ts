@@ -76,20 +76,20 @@ export class WebSocketClient {
 	}
 
 	/**
-	 * Internal logging helper - sanitizes all values inline to prevent log injection
+	 * Sanitize a value for safe logging (strips control characters, truncates).
+	 */
+	private static sanitize(value: unknown): string {
+		// eslint-disable-next-line no-control-regex
+		return String(value).replace(/[\x00-\x1f\x7f]/g, "").slice(0, 200);
+	}
+
+	/**
+	 * Internal logging helper - sanitizes all values to prevent log injection
 	 */
 	private log(message: string, ...args: unknown[]): void {
 		if (this.config.debug) {
-			// eslint-disable-next-line no-control-regex
-			const safeMsg = String(message)
-				.replace(/[\x00-\x1f\x7f]/g, "")
-				.slice(0, 200);
-			// eslint-disable-next-line no-control-regex
-			const sanitizedArgs = args.map((a) =>
-				String(a)
-					.replace(/[\x00-\x1f\x7f]/g, "")
-					.slice(0, 200),
-			);
+			const safeMsg = WebSocketClient.sanitize(message);
+			const sanitizedArgs = args.map((a) => WebSocketClient.sanitize(a));
 			console.log("[WebSocketClient]", safeMsg, sanitizedArgs.join(" "));
 		}
 	}

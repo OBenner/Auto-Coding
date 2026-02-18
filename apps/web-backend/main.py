@@ -62,7 +62,6 @@ app = FastAPI(
     title="Web Backend API",
     description="FastAPI backend service for Auto Code web interface",
     version="1.0.0",
-    debug=DEBUG,
     lifespan=lifespan,
 )
 
@@ -116,7 +115,7 @@ async def root():
 @app.get("/health")
 async def health_check():
     """Health check endpoint for monitoring"""
-    return {"status": "healthy", "service": "web-backend", "debug": DEBUG}
+    return {"status": "healthy", "service": "web-backend"}
 
 
 if __name__ == "__main__":

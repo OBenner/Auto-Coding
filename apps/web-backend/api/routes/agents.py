@@ -5,10 +5,8 @@ Provides endpoints for starting and managing agent execution.
 """
 
 import logging
-from pathlib import Path
 from typing import Literal
 
-from core.config import settings
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
 from services.agent_runner import (
@@ -18,12 +16,9 @@ from services.agent_runner import (
     start_agent_task,
 )
 
+from api.routes.shared import get_project_dir, sanitize_log
+
 logger = logging.getLogger(__name__)
-
-
-def _sanitize_log(value: str) -> str:
-    """Sanitize value for safe logging (prevent log injection)."""
-    return str(value).replace("\n", "\\n").replace("\r", "\\r")
 
 
 # Create router for agent endpoints
@@ -72,16 +67,6 @@ class AgentCancelResponse(BaseModel):
     message: str = Field(..., description="Human-readable message")
 
 
-def _get_project_dir() -> Path:
-    """Get the project directory from settings."""
-    # Use configured project directory or fall back to parent of backend
-    if hasattr(settings, "PROJECT_DIR") and settings.PROJECT_DIR:
-        return Path(settings.PROJECT_DIR)
-
-    # Default: parent of web-backend directory (../../ from api/routes/)
-    return Path(__file__).parent.parent.parent.parent.parent
-
-
 @router.post(
     "/run", response_model=AgentRunResponse, status_code=status.HTTP_202_ACCEPTED
 )
@@ -113,12 +98,12 @@ async def run_agent(request: AgentRunRequest):
     """
     try:
         logger.info(
-            f"Agent run request: spec_id={_sanitize_log(request.spec_id)}, "
-            f"agent_type={_sanitize_log(request.agent_type)}, model={_sanitize_log(request.model)}"
+            f"Agent run request: spec_id={sanitize_log(request.spec_id)}, "
+            f"agent_type={sanitize_log(request.agent_type)}, model={sanitize_log(request.model)}"
         )
 
         # Start the agent task
-        project_dir = _get_project_dir()
+        project_dir = get_project_dir()
 
         task_id = start_agent_task(
             spec_id=request.spec_id,
@@ -270,10 +255,7 @@ async def agents_health():
     Returns:
         Dictionary with status and configuration info
     """
-    project_dir = _get_project_dir()
-
     return {
         "status": "ok",
         "endpoint": "agents",
-        "project_dir": str(project_dir),
     }
