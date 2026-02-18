@@ -330,9 +330,10 @@ class DeadLetterQueue:
                 lines.append("-" * 50)
             report = "\n".join(lines)
 
-        # Save to file if path provided
-        if output_path:
-            path = Path(output_path)
-            path.write_text(report, encoding="utf-8")
+        # Save to file (use default spec_dir/dlq_report.txt if no path provided)
+        if output_path is None:
+            output_path = self.spec_dir / "dlq_report.txt"
+        path = Path(output_path)
+        path.write_text(report, encoding="utf-8")
 
         return report

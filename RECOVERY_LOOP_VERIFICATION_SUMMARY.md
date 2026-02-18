@@ -118,8 +118,8 @@ Created comprehensive test suite that verifies:
 The Auto-Recovery Loop Enhancement feature is **complete and ready for production use**.
 
 To use the enhanced recovery:
-1. Coder agents automatically use enhanced recovery via `agents/coder.py`
-2. QA fixer automatically uses enhanced recovery via `qa/fixer.py`
+1. Coder agents use enhanced recovery via `agents/coder.py`
+2. QA fixer uses enhanced recovery via `qa/fixer.py`
 3. Recovery statistics tracked in `.auto-claude/specs/XXX/memory/recovery_metrics.json`
 4. Dead-letter queue available in `.auto-claude/specs/XXX/memory/dead_letter_queue.json`
 5. Notification history in `.auto-claude/specs/XXX/memory/notifications.json`

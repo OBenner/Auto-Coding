@@ -92,6 +92,7 @@ async def run_qa_fixer_session(
     # === ENHANCED RECOVERY: Track recovery state ===
     pending_recovery_action: RecoveryAction | None = None
     override_model: str | None = None  # For model fallback
+    active_model: str = model  # Track active model for fallback chain progression
     recovery_guidance: str | None = None  # Strategy guidance for next attempt
     current_client = client  # Track current client (may be replaced for fallback)
 
@@ -253,7 +254,8 @@ async def run_qa_fixer_session(
             )
             # Enter async context for new client
             await current_client.__aenter__()
-            # Reset override after creating new client
+            # Track the new active model and clear override
+            active_model = override_model
             override_model = None
 
         if fixer_iteration > 1:
@@ -580,12 +582,12 @@ async def run_qa_fixer_session(
                 # Set model fallback if recommended
                 if recovery_action.use_model_fallback:
                     # Extract current model shorthand and get fallback
-                    current_model_shorthand = model
-                    if "opus" in model.lower():
+                    current_model_shorthand = active_model
+                    if "opus" in active_model.lower():
                         current_model_shorthand = "opus"
-                    elif "sonnet" in model.lower():
+                    elif "sonnet" in active_model.lower():
                         current_model_shorthand = "sonnet"
-                    elif "haiku" in model.lower():
+                    elif "haiku" in active_model.lower():
                         current_model_shorthand = "haiku"
 
                     # Get fallback model from chain

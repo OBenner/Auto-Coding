@@ -327,6 +327,9 @@ async def run_autonomous_agent(
         if override_model:
             phase_model = resolve_model_id(override_model)
             print_status(f"Using fallback model: {override_model}", "progress")
+            override_model = (
+                None  # Clear after use to avoid affecting subsequent subtasks
+            )
         else:
             phase_model = get_phase_model(spec_dir, current_phase, model)
 

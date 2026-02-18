@@ -318,7 +318,7 @@ class RecoveryMetrics:
 
         # Find strategy with highest success rate (min 2 uses to avoid statistical noise)
         best_strategy = None
-        best_rate = 0.0
+        best_rate = -1.0
 
         for strategy, stats in strategy_stats.items():
             if stats["total_uses"] >= 2 and stats["success_rate_percent"] > best_rate:

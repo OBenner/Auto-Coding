@@ -216,7 +216,7 @@ class RecoveryManager:
 
         Formula: delay = min(base * multiplier^attempt, max_delay)
         Example progression (base=1.0, multiplier=2.0):
-            - Attempt 0: 1.0s
+            - Attempt 0: 0.0s (no delay for first attempt)
             - Attempt 1: 2.0s
             - Attempt 2: 4.0s
             - Attempt 3: 8.0s

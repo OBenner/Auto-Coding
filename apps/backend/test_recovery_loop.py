@@ -590,7 +590,7 @@ class RecoveryLoopTest:
 
                 traceback.print_exc()
 
-        self.print_summary()
+        return self.print_summary()
 
     def print_summary(self):
         """Print test summary."""
