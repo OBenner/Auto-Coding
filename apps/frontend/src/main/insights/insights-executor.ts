@@ -1,5 +1,5 @@
 import { spawn, ChildProcess } from 'child_process';
-import { existsSync, writeFileSync, unlinkSync } from 'fs';
+import { existsSync, writeFileSync, mkdtempSync, rmSync } from 'fs';
 import path from 'path';
 import os from 'os';
 import { EventEmitter } from 'events';
@@ -88,10 +88,9 @@ export class InsightsExecutor extends EventEmitter {
     const processEnv = await this.config.getProcessEnv();
 
     // Write conversation history to temp file to avoid Windows command-line length limit
-    const historyFile = path.join(
-      os.tmpdir(),
-      `insights-history-${projectId}-${Date.now()}.json`
-    );
+    // Use mkdtempSync for secure temp directory creation (prevents predictable temp paths)
+    const historyTmpDir = mkdtempSync(path.join(os.tmpdir(), 'insights-history-'));
+    const historyFile = path.join(historyTmpDir, `history-${projectId}.json`);
 
     let historyFileCreated = false;
     try {
@@ -169,12 +168,12 @@ export class InsightsExecutor extends EventEmitter {
       proc.on('close', (code) => {
         this.activeSessions.delete(projectId);
 
-        // Cleanup temp file
-        if (historyFileCreated && existsSync(historyFile)) {
+        // Cleanup temp directory and file
+        if (historyFileCreated && existsSync(historyTmpDir)) {
           try {
-            unlinkSync(historyFile);
+            rmSync(historyTmpDir, { recursive: true, force: true });
           } catch (cleanupErr) {
-            console.error('[Insights] Failed to cleanup history file:', cleanupErr);
+            console.error('[Insights] Failed to cleanup history temp dir:', cleanupErr);
           }
         }
 
@@ -216,12 +215,12 @@ export class InsightsExecutor extends EventEmitter {
       proc.on('error', (err) => {
         this.activeSessions.delete(projectId);
 
-        // Cleanup temp file
-        if (historyFileCreated && existsSync(historyFile)) {
+        // Cleanup temp directory and file
+        if (historyFileCreated && existsSync(historyTmpDir)) {
           try {
-            unlinkSync(historyFile);
+            rmSync(historyTmpDir, { recursive: true, force: true });
           } catch (cleanupErr) {
-            console.error('[Insights] Failed to cleanup history file:', cleanupErr);
+            console.error('[Insights] Failed to cleanup history temp dir:', cleanupErr);
           }
         }
 

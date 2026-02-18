@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   MessageSquare,
@@ -106,6 +106,9 @@ export function Insights({ projectId }: InsightsProps) {
   const [taskCreated, setTaskCreated] = useState<Set<string>>(new Set());
   const [showSidebar, setShowSidebar] = useState(true);
 
+  const [isUserScrolledUp, setIsUserScrolledUp] = useState(false);
+  const isUserScrolledUpRef = useRef(isUserScrolledUp);
+  isUserScrolledUpRef.current = isUserScrolledUp;
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -116,9 +119,35 @@ export function Insights({ projectId }: InsightsProps) {
     return cleanup;
   }, [projectId]);
 
-  // Auto-scroll to bottom when messages change
+  // Smart auto-scroll: only scroll to bottom if user is near bottom
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (!isUserScrolledUpRef.current && messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [session?.messages?.length, streamingContent]);
+
+  // Track scroll position on messages viewport via callback ref
+  const messagesViewportRef = useRef<HTMLDivElement | null>(null);
+  const scrollHandlerRef = useRef<(() => void) | null>(null);
+  const handleMessagesViewportRef = useCallback((el: HTMLDivElement | null) => {
+    // Detach listener from previous element
+    if (messagesViewportRef.current && scrollHandlerRef.current) {
+      messagesViewportRef.current.removeEventListener('scroll', scrollHandlerRef.current);
+    }
+    messagesViewportRef.current = el;
+    // Attach listener to new element
+    if (el) {
+      const onScroll = () => {
+        const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 100;
+        setIsUserScrolledUp((prev) => {
+          const next = !isNearBottom;
+          return prev === next ? prev : next;
+        });
+      };
+      scrollHandlerRef.current = onScroll;
+      el.addEventListener('scroll', onScroll, { passive: true });
+      onScroll(); // Initialize state from current scroll position
+    }
   }, []);
 
   // Focus textarea on mount
@@ -259,7 +288,7 @@ export function Insights({ projectId }: InsightsProps) {
         </div>
 
       {/* Messages */}
-      <ScrollArea className="flex-1 px-6 py-4">
+      <ScrollArea className="flex-1 px-6 py-4" onViewportRef={handleMessagesViewportRef}>
         {messages.length === 0 && !streamingContent ? (
           <div className="flex h-full flex-col items-center justify-center text-center">
             <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">

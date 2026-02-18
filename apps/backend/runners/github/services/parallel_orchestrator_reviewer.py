@@ -676,7 +676,7 @@ The SDK will run invoked agents in parallel automatically.
                                 file_count += 1
                                 if file_count >= MAX_FILE_COUNT:
                                     break
-                    except (OSError, PermissionError):
+                    except OSError:
                         file_count = 0
                     file_count_str = (
                         f"{file_count:,}+"
@@ -783,7 +783,7 @@ The SDK will run invoked agents in parallel automatically.
                 result_text = stream_result["result_text"]
                 structured_output = stream_result["structured_output"]
                 agents_invoked = stream_result["agents_invoked"]
-                msg_count = stream_result["msg_count"]
+                stream_result["msg_count"]
 
             self._report_progress(
                 "finalizing",

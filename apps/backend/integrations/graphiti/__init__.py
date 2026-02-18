@@ -12,9 +12,6 @@ from .config import GraphitiConfig, validate_graphiti_config
 __all__ = [
     "GraphitiConfig",
     "validate_graphiti_config",
-    "GraphitiMemory",
-    "create_llm_client",
-    "create_embedder",
 ]
 
 

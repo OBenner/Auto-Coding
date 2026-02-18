@@ -19,11 +19,14 @@ from __future__ import annotations
 import ast
 import asyncio
 import json
+import logging
 import os
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
+
+logger = logging.getLogger(__name__)
 
 try:
     from .gh_client import GHClient, PRTooLargeError
@@ -791,7 +794,7 @@ class PRContextGatherer:
                             f"**Workspaces**: {', '.join(pkg_data['workspaces'])}"
                         )
             except (json.JSONDecodeError, KeyError):
-                pass
+                logger.debug("Failed to parse package.json for workspace info")
 
         # Check for Python project structure
         if (self.project_dir / "pyproject.toml").exists():

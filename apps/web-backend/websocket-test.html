@@ -481,10 +481,13 @@ Subtask: ${d.current_subtask || 'N/A'}`;
 
             const header = document.createElement('div');
             header.className = 'event-header';
-            header.innerHTML = `
-                <span>${type.toUpperCase()}</span>
-                <span class="event-time">${new Date().toLocaleTimeString()}</span>
-            `;
+            const typeSpan = document.createElement('span');
+            typeSpan.textContent = type.toUpperCase();
+            const timeSpan = document.createElement('span');
+            timeSpan.className = 'event-time';
+            timeSpan.textContent = new Date().toLocaleTimeString();
+            header.appendChild(typeSpan);
+            header.appendChild(timeSpan);
 
             const body = document.createElement('div');
             body.className = 'event-body';
@@ -496,10 +499,16 @@ Subtask: ${d.current_subtask || 'N/A'}`;
             if (rawData) {
                 const details = document.createElement('details');
                 details.style.marginTop = '8px';
-                details.innerHTML = `
-                    <summary style="cursor: pointer; color: #666;">Raw Data</summary>
-                    <pre style="margin-top: 8px; font-size: 11px;">${JSON.stringify(rawData, null, 2)}</pre>
-                `;
+                const summary = document.createElement('summary');
+                summary.style.cursor = 'pointer';
+                summary.style.color = '#666';
+                summary.textContent = 'Raw Data';
+                const pre = document.createElement('pre');
+                pre.style.marginTop = '8px';
+                pre.style.fontSize = '11px';
+                pre.textContent = JSON.stringify(rawData, null, 2);
+                details.appendChild(summary);
+                details.appendChild(pre);
                 div.appendChild(details);
             }
 
@@ -545,10 +554,13 @@ Subtask: ${d.current_subtask || 'N/A'}`;
             const div = document.createElement('div');
             div.className = `test-item ${status}`;
             div.id = `test-${name.replace(/\s+/g, '-')}`;
-            div.innerHTML = `
-                <span class="icon">${status === 'pass' ? '✓' : status === 'fail' ? '✗' : '○'}</span>
-                <span>${name}</span>
-            `;
+            const iconSpan = document.createElement('span');
+            iconSpan.className = 'icon';
+            iconSpan.textContent = status === 'pass' ? '✓' : status === 'fail' ? '✗' : '○';
+            const nameSpan = document.createElement('span');
+            nameSpan.textContent = name;
+            div.appendChild(iconSpan);
+            div.appendChild(nameSpan);
             itemsEl.appendChild(div);
         }
 

@@ -10,7 +10,6 @@ Tests the complete test generation pipeline including:
 - End-to-end integration flow
 """
 
-import json
 import sys
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
@@ -48,7 +47,7 @@ sys.modules['claude_agent_sdk'] = mock_agent_sdk
 sys.modules['claude_agent_sdk.types'] = mock_agent_types
 
 # Import test generation modules
-from analysis.code_analyzer import CodeAnalyzer, FunctionInfo, ClassInfo
+from analysis.code_analyzer import CodeAnalyzer
 from agents.test_generator import validate_generated_tests, run_test_generator_session
 
 
@@ -630,7 +629,7 @@ class TestRunTestGeneratorSession:
         assert result["error"] is None
 
         # Verify client was created with correct parameters
-        mock_create_client_calls = [
+        [
             call for call in monkeypatch._setattr
             if hasattr(call, '__name__') and call.__name__ == 'mock_create_client'
         ]
