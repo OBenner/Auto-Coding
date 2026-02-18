@@ -53,12 +53,10 @@ def upgrade() -> None:
     )
 
     # Create indexes
-    op.create_index(op.f("ix_users_id"), "users", ["id"], unique=False)
     op.create_index(op.f("ix_users_email"), "users", ["email"], unique=True)
 
 
 def downgrade() -> None:
     """Drop users table"""
     op.drop_index(op.f("ix_users_email"), table_name="users")
-    op.drop_index(op.f("ix_users_id"), table_name="users")
     op.drop_table("users")

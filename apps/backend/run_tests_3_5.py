@@ -15,7 +15,12 @@ async def main():
     project_dir = script_dir.parent
 
     cwd = Path.cwd()
-    spec_dir = cwd / ".auto-claude" / "specs" / "175-run-manual-ui-testing-validation-33-scenarios-docu"
+    spec_dir = (
+        cwd
+        / ".auto-claude"
+        / "specs"
+        / "175-run-manual-ui-testing-validation-33-scenarios-docu"
+    )
     if not spec_dir.exists():
         spec_dir = script_dir / ".temp_spec"
         spec_dir.mkdir(exist_ok=True)
@@ -31,16 +36,18 @@ async def main():
 
     # Import in specific order to avoid circular import
     try:
-        from agents.tools_pkg import AGENT_CONFIGS
+        from agents.tools_pkg import AGENT_CONFIGS  # noqa: F401
+
         print("✅ agents.tools_pkg imported")
     except ImportError as e:
         print(f"❌ Failed to import agents.tools_pkg: {e}")
         sys.exit(1)
 
     try:
-        from core.auth import get_auth_token
-        from core.platform import is_windows
-        from security import bash_security_hook
+        from core.auth import get_auth_token  # noqa: F401
+        from core.platform import is_windows  # noqa: F401
+        from security import bash_security_hook  # noqa: F401
+
         print("✅ Core dependencies imported")
     except ImportError as e:
         print(f"❌ Failed to import dependencies: {e}")
@@ -48,11 +55,14 @@ async def main():
 
     try:
         import core.client as client_module
+
         create_client = client_module.create_client
         print("✅ core.client imported")
     except ImportError as e:
         print(f"❌ Failed to import core.client: {e}")
-        import traceback; traceback.print_exc()
+        import traceback
+
+        traceback.print_exc()
         sys.exit(1)
 
     model_id = os.getenv("LLM_TEST_MODEL_ID", "claude-sonnet-4-5-20250929")
@@ -72,9 +82,9 @@ async def main():
         async with client:
             await client.query(task)
             async for msg in client.receive_response():
-                if hasattr(msg, 'content'):
+                if hasattr(msg, "content"):
                     response_text += str(msg.content)
-                elif hasattr(msg, 'text'):
+                elif hasattr(msg, "text"):
                     response_text += str(msg.text)
         return response_text
 
@@ -105,25 +115,33 @@ async def main():
 
         print(f"  ⏱️  Duration: {duration:.2f}s")
         print(f"  Response length: {len(response)} chars")
-        print(f"  ✅ Multi-step workflow completed - indicators found: {found} ({len(found)}/4)")
+        print(
+            f"  ✅ Multi-step workflow completed - indicators found: {found} ({len(found)}/4)"
+        )
         if verbose:
             print(f"  Response preview: {response[:500]}...")
-        all_results.append({
-            "name": "test_3_multi_step_workflow",
-            "passed": len(found) >= 2,
-            "duration_seconds": duration,
-            "indicators_found": found,
-        })
+        all_results.append(
+            {
+                "name": "test_3_multi_step_workflow",
+                "passed": len(found) >= 2,
+                "duration_seconds": duration,
+                "indicators_found": found,
+            }
+        )
     except Exception as e:
         print(f"  ❌ Test 3 failed: {e}")
         if verbose:
-            import traceback; traceback.print_exc()
-        all_results.append({
-            "name": "test_3_multi_step_workflow",
-            "passed": False,
-            "duration_seconds": 0,
-            "error": str(e)[:200],
-        })
+            import traceback
+
+            traceback.print_exc()
+        all_results.append(
+            {
+                "name": "test_3_multi_step_workflow",
+                "passed": False,
+                "duration_seconds": 0,
+                "error": str(e)[:200],
+            }
+        )
 
     # ================================================================
     # TEST 4: Error Handling
@@ -155,31 +173,57 @@ async def main():
             response = await run_agent_query(client, tc["task"])
             duration = time.time() - start
 
-            error_indicators = ["error", "invalid", "not found", "failed", "cannot", "doesn't exist", "does not exist"]
+            error_indicators = [
+                "error",
+                "invalid",
+                "not found",
+                "failed",
+                "cannot",
+                "doesn't exist",
+                "does not exist",
+            ]
             handled = any(ind in response.lower() for ind in error_indicators)
 
             print(f"  ⏱️  Duration: {duration:.2f}s")
             if handled:
-                print(f"  ✅ Error handled gracefully")
+                print("  ✅ Error handled gracefully")
             else:
-                print(f"  ⚠️ Agent responded but no explicit error mention (still counts as pass)")
+                print(
+                    "  ⚠️ Agent responded but no explicit error mention (still counts as pass)"
+                )
 
             if verbose:
                 print(f"  Response preview: {response[:300]}...")
 
-            test4_details.append({"name": tc["name"], "passed": True, "duration_seconds": duration, "error_detected": handled})
+            test4_details.append(
+                {
+                    "name": tc["name"],
+                    "passed": True,
+                    "duration_seconds": duration,
+                    "error_detected": handled,
+                }
+            )
         except Exception as e:
             print(f"  ❌ {tc['name']} failed: {e}")
-            test4_details.append({"name": tc["name"], "passed": False, "duration_seconds": 0, "error": str(e)[:200]})
+            test4_details.append(
+                {
+                    "name": tc["name"],
+                    "passed": False,
+                    "duration_seconds": 0,
+                    "error": str(e)[:200],
+                }
+            )
             test4_passed = False
 
     p4 = sum(1 for d in test4_details if d["passed"])
     print(f"\n  Results: {p4}/{len(error_cases)} tests passed")
-    all_results.append({
-        "name": "test_4_error_handling",
-        "passed": test4_passed,
-        "details": test4_details,
-    })
+    all_results.append(
+        {
+            "name": "test_4_error_handling",
+            "passed": test4_passed,
+            "details": test4_details,
+        }
+    )
 
     # ================================================================
     # TEST 5: Performance Benchmarks
@@ -204,10 +248,18 @@ async def main():
 
             status = "✅" if duration_ms < target_ms else "⚠️"
             print(f"  {status} Latency: {duration_ms:.0f}ms")
-            perf_results.append({"tool": tool_name, "latency_ms": round(duration_ms), "within_target": duration_ms < target_ms})
+            perf_results.append(
+                {
+                    "tool": tool_name,
+                    "latency_ms": round(duration_ms),
+                    "within_target": duration_ms < target_ms,
+                }
+            )
         except Exception as e:
             print(f"  ❌ Benchmark failed: {e}")
-            perf_results.append({"tool": tool_name, "latency_ms": None, "error": str(e)[:200]})
+            perf_results.append(
+                {"tool": tool_name, "latency_ms": None, "error": str(e)[:200]}
+            )
 
     print("\n  Performance Summary:")
     for p in perf_results:
@@ -215,11 +267,13 @@ async def main():
             s = "✅" if p["within_target"] else "⚠️"
             print(f"    {s} {p['tool']}: {p['latency_ms']}ms")
 
-    all_results.append({
-        "name": "test_5_performance_benchmarks",
-        "passed": True,
-        "benchmarks": perf_results,
-    })
+    all_results.append(
+        {
+            "name": "test_5_performance_benchmarks",
+            "passed": True,
+            "benchmarks": perf_results,
+        }
+    )
 
     # ================================================================
     # SUMMARY
@@ -237,7 +291,16 @@ async def main():
 
     results_file = script_dir / "test_3_5_results.json"
     with open(results_file, "w") as f:
-        json.dump({"success": passed == total, "total": total, "passed": passed, "tests": all_results}, f, indent=2)
+        json.dump(
+            {
+                "success": passed == total,
+                "total": total,
+                "passed": passed,
+                "tests": all_results,
+            },
+            f,
+            indent=2,
+        )
     print(f"\nResults saved to: {results_file}")
 
     return passed == total

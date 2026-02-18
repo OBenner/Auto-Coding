@@ -161,7 +161,7 @@ async def run_agent(request: AgentRunRequest):
         logger.error(f"Error starting agent: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to start agent: {str(e)}",
+            detail="Failed to start agent",
         )
 
 
@@ -212,7 +212,7 @@ async def get_agent_status(task_id: str):
         logger.error(f"Error getting task status: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get task status: {str(e)}",
+            detail="Failed to get task status",
         )
 
 
@@ -256,7 +256,7 @@ async def cancel_agent(task_id: str):
         logger.error(f"Error cancelling task: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to cancel task: {str(e)}",
+            detail="Failed to cancel task",
         )
 
 

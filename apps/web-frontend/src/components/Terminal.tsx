@@ -14,7 +14,6 @@ import { Button } from "./ui/button";
 export interface TerminalProps {
 	id?: string;
 	cwd?: string;
-	projectPath?: string;
 	isActive?: boolean;
 	onClose?: () => void;
 	onActivate?: () => void;
@@ -69,6 +68,7 @@ export function TerminalComponent({
 		"disconnected" | "connecting" | "connected" | "error"
 	>("disconnected");
 	const [error, setError] = useState<string | null>(null);
+	const [reconnectCount, setReconnectCount] = useState(0);
 
 	// Get auth token from localStorage if not provided
 	const authToken = useMemo(() => {
@@ -127,18 +127,13 @@ export function TerminalComponent({
 		terminal.writeln("\x1b[1;36mAuto Code Terminal\x1b[0m");
 		terminal.writeln("Connecting to backend...");
 
-		// Focus terminal when activated
-		if (isActive) {
-			terminal.focus();
-		}
-
 		return () => {
 			fitAddon.dispose();
 			terminal.dispose();
 			xtermRef.current = null;
 			fitAddonRef.current = null;
 		};
-	}, [isActive]);
+	}, []);
 
 	/**
 	 * Connect to WebSocket terminal endpoint
@@ -240,6 +235,7 @@ export function TerminalComponent({
 				);
 				reconnectTimeoutRef.current = setTimeout(() => {
 					reconnectTimeoutRef.current = null;
+					setReconnectCount((c) => c + 1);
 				}, 3000);
 			}
 		};
@@ -255,7 +251,7 @@ export function TerminalComponent({
 			ws.close();
 			wsRef.current = null;
 		};
-	}, [authToken, wsUrl, sessionId, cwd]);
+	}, [authToken, wsUrl, sessionId, cwd, reconnectCount]);
 
 	/**
 	 * Handle user input from xterm.js
@@ -279,8 +275,8 @@ export function TerminalComponent({
 			}
 		};
 
-		xterm.onData(handleData);
-		xterm.onResize(({ cols, rows }) => {
+		const dataDisposable = xterm.onData(handleData);
+		const resizeDisposable = xterm.onResize(({ cols, rows }) => {
 			const ws = wsRef.current;
 			if (ws?.readyState === WebSocket.OPEN) {
 				const message: TerminalInputMessage = { type: "resize", cols, rows };
@@ -292,8 +288,8 @@ export function TerminalComponent({
 		window.addEventListener("resize", handleResize);
 
 		return () => {
-			xterm.onData(() => {});
-			xterm.onResize(() => {});
+			dataDisposable.dispose();
+			resizeDisposable.dispose();
 			window.removeEventListener("resize", handleResize);
 		};
 	}, []);
@@ -333,6 +329,7 @@ export function TerminalComponent({
 			wsRef.current.close();
 			wsRef.current = null;
 		}
+		setReconnectCount((c) => c + 1);
 	}, []);
 
 	const getStatusIndicator = useCallback(() => {

@@ -153,7 +153,9 @@ async def run_template_test(
         "Starting template test",
         template=template_name,
         prompt_length=len(test_prompt),
-        prompt_preview=test_prompt[:200] + "..." if len(test_prompt) > 200 else test_prompt,
+        prompt_preview=test_prompt[:200] + "..."
+        if len(test_prompt) > 200
+        else test_prompt,
     )
 
     print_status(f"Testing template: {template_name}", "info")
@@ -332,12 +334,16 @@ async def run_template_test(
                 )
                 print_key_value(
                     "Token usage",
-                    f"{usage_metadata['input_tokens']} in, {usage_metadata['output_tokens']} out"
+                    f"{usage_metadata['input_tokens']} in, {usage_metadata['output_tokens']} out",
                 )
         elif hasattr(client, "_usage"):
             # Alternative: some SDKs store usage in a _usage attribute
             usage = client._usage
-            if isinstance(usage, dict) and "input_tokens" in usage and "output_tokens" in usage:
+            if (
+                isinstance(usage, dict)
+                and "input_tokens" in usage
+                and "output_tokens" in usage
+            ):
                 usage_metadata = {
                     "input_tokens": usage["input_tokens"],
                     "output_tokens": usage["output_tokens"],
@@ -379,29 +385,29 @@ def create_test_prompt(
     custom_instructions: str | None = None,
 ) -> str:
     """
-    Create a test prompt for template testing.
+        Create a test prompt for template testing.
 
-    Generates a test prompt that exercises the template's configuration:
-- Tests if the agent understands its custom prompt
-- Verifies tool awareness
-- Checks if MCP servers are accessible
+        Generates a test prompt that exercises the template's configuration:
+    - Tests if the agent understands its custom prompt
+    - Verifies tool awareness
+    - Checks if MCP servers are accessible
 
-    Args:
-        template: AgentTemplate instance being tested
-        custom_instructions: Optional custom test instructions
+        Args:
+            template: AgentTemplate instance being tested
+            custom_instructions: Optional custom test instructions
 
-    Returns:
-        Test prompt string
+        Returns:
+            Test prompt string
     """
     base_prompt = f"""You are testing a custom agent template called '{template.name}'.
 
 Template Configuration:
 - Category: {template.category}
-- Tools: {', '.join(template.tools)}
-- MCP Servers: {', '.join(template.mcp_servers) if template.mcp_servers else 'None'}
+- Tools: {", ".join(template.tools)}
+- MCP Servers: {", ".join(template.mcp_servers) if template.mcp_servers else "None"}
 - Thinking Level: {template.thinking_level}
 
-{'Custom Prompt: ' + template.custom_prompt[:200] + '...' if len(template.custom_prompt) > 200 else 'Custom Prompt: ' + template.custom_prompt if template.custom_prompt else 'No custom prompt (using base agent behavior)'}
+{"Custom Prompt: " + template.custom_prompt[:200] + "..." if len(template.custom_prompt) > 200 else "Custom Prompt: " + template.custom_prompt if template.custom_prompt else "No custom prompt (using base agent behavior)"}
 
 Please respond with:
 1. Confirm you understand your role and configuration

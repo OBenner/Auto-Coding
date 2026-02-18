@@ -38,7 +38,6 @@ from services.agent_runner import (
     cancel_task,
     cleanup_completed_tasks,
     get_task_status,
-    start_agent_task,
 )
 
 # ============================================================================
@@ -415,7 +414,7 @@ class TestAgentRunnerServiceIntegration:
             with patch.dict(_running_tasks, {}, clear=True):
                 # Create a completed task
                 task = asyncio.create_task(quick_task())
-                _result = await task  # Wait for completion
+                await task  # Wait for completion
                 _running_tasks["completed-task"] = task
 
                 # Create a running task

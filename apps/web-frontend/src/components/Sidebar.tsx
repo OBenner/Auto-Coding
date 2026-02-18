@@ -101,6 +101,7 @@ export function Sidebar({
 					size="icon"
 					onClick={toggleSidebar}
 					className="h-8 w-8"
+					aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
 				>
 					{isCollapsed ? (
 						<PanelLeft className="h-4 w-4" />
@@ -130,6 +131,7 @@ export function Sidebar({
 												isActive && "bg-accent text-accent-foreground",
 											)}
 											onClick={() => handleViewChange(item.id)}
+											aria-label={isCollapsed ? item.label : undefined}
 										>
 											<Icon className={cn("h-5 w-5", !isCollapsed && "mr-2")} />
 											{!isCollapsed && <span>{item.label}</span>}
@@ -170,6 +172,7 @@ export function Sidebar({
 									isCollapsed ? "h-10 w-10" : "justify-start",
 								)}
 								onClick={onNewTaskClick}
+								aria-label={isCollapsed ? t("common:actions.newTask", { defaultValue: "New Task" }) : undefined}
 							>
 								<Plus className={cn("h-5 w-5", !isCollapsed && "mr-2")} />
 								{!isCollapsed && (
@@ -198,6 +201,7 @@ export function Sidebar({
 									isCollapsed ? "h-10 w-10" : "justify-start",
 								)}
 								onClick={onSettingsClick}
+								aria-label={isCollapsed ? t("common:actions.settings", { defaultValue: "Settings" }) : undefined}
 							>
 								<Settings className={cn("h-5 w-5", !isCollapsed && "mr-2")} />
 								{!isCollapsed && (

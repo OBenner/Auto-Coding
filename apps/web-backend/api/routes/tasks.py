@@ -273,7 +273,7 @@ async def list_tasks():
         logger.error(f"Error listing tasks: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to list tasks: {str(e)}",
+            detail="Failed to list tasks",
         )
 
 
@@ -287,13 +287,11 @@ async def tasks_health():
     Returns:
         Dictionary with status and configuration info
     """
-    project_dir = _get_project_dir()
     specs_dir = _get_specs_dir()
 
     return {
         "status": "ok",
         "endpoint": "tasks",
-        "project_dir": str(project_dir),
         "specs_dir_exists": specs_dir.exists(),
     }
 
@@ -392,5 +390,5 @@ async def get_task_detail(task_id: str):
         )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get task detail: {str(e)}",
+            detail="Failed to get task detail",
         )

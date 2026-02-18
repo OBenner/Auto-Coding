@@ -58,7 +58,6 @@ def upgrade() -> None:
     )
 
     # Create indexes
-    op.create_index(op.f("ix_repositories_id"), "repositories", ["id"], unique=False)
     op.create_index(
         op.f("ix_repositories_user_id"), "repositories", ["user_id"], unique=False
     )
@@ -67,5 +66,4 @@ def upgrade() -> None:
 def downgrade() -> None:
     """Drop repositories table"""
     op.drop_index(op.f("ix_repositories_user_id"), table_name="repositories")
-    op.drop_index(op.f("ix_repositories_id"), table_name="repositories")
     op.drop_table("repositories")

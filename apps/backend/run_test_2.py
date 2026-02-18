@@ -10,6 +10,7 @@ import sys
 import time
 from pathlib import Path
 
+
 async def main():
     """Run only test_2_single_tool_invocation"""
     # Determine directories
@@ -18,7 +19,12 @@ async def main():
 
     # Look for spec dir in worktree structure
     cwd = Path.cwd()
-    spec_dir = cwd / ".auto-claude" / "specs" / "175-run-manual-ui-testing-validation-33-scenarios-docu"
+    spec_dir = (
+        cwd
+        / ".auto-claude"
+        / "specs"
+        / "175-run-manual-ui-testing-validation-33-scenarios-docu"
+    )
 
     if not spec_dir.exists():
         # Create temp spec dir if needed
@@ -36,16 +42,18 @@ async def main():
 
     # Import in specific order to avoid circular import
     try:
-        from agents.tools_pkg import AGENT_CONFIGS
+        from agents.tools_pkg import AGENT_CONFIGS  # noqa: F401
+
         print("✅ agents.tools_pkg imported")
     except ImportError as e:
         print(f"❌ Failed to import agents.tools_pkg: {e}")
         sys.exit(1)
 
     try:
-        from core.auth import get_auth_token
-        from core.platform import is_windows
-        from security import bash_security_hook
+        from core.auth import get_auth_token  # noqa: F401
+        from core.platform import is_windows  # noqa: F401
+        from security import bash_security_hook  # noqa: F401
+
         print("✅ Core dependencies imported")
     except ImportError as e:
         print(f"❌ Failed to import dependencies: {e}")
@@ -53,11 +61,13 @@ async def main():
 
     try:
         import core.client as client_module
+
         create_client = client_module.create_client
         print("✅ core.client imported")
     except ImportError as e:
         print(f"❌ Failed to import core.client: {e}")
         import traceback
+
         traceback.print_exc()
         sys.exit(1)
 
@@ -65,6 +75,7 @@ async def main():
 
     class SimpleTester:
         """Simplified tester for test_2"""
+
         def __init__(self, project_dir, spec_dir):
             self.project_dir = project_dir
             self.spec_dir = spec_dir
@@ -87,9 +98,9 @@ async def main():
                 await client.query(task)
                 async for msg in client.receive_response():
                     msg_type = type(msg).__name__
-                    if hasattr(msg, 'content'):
+                    if hasattr(msg, "content"):
                         response_text += str(msg.content)
-                    elif hasattr(msg, 'text'):
+                    elif hasattr(msg, "text"):
                         response_text += str(msg.text)
             return response_text
 
@@ -123,7 +134,9 @@ async def main():
                     client = self._create_test_client()
 
                     start_time = time.time()
-                    response_text = await self._run_agent_query(client, test_case["task"])
+                    response_text = await self._run_agent_query(
+                        client, test_case["task"]
+                    )
                     duration = time.time() - start_time
 
                     response_lower = response_text.lower()
@@ -139,10 +152,16 @@ async def main():
                     print(f"  Response length: {len(response_text)} chars")
 
                     if keywords_found:
-                        print(f"  ✅ {test_case['name']} succeeded - found keywords: {keywords_found}")
-                        results.append((test_case["name"], True, duration, keywords_found))
+                        print(
+                            f"  ✅ {test_case['name']} succeeded - found keywords: {keywords_found}"
+                        )
+                        results.append(
+                            (test_case["name"], True, duration, keywords_found)
+                        )
                     else:
-                        print(f"  ⚠️ {test_case['name']} completed but expected keywords not found")
+                        print(
+                            f"  ⚠️ {test_case['name']} completed but expected keywords not found"
+                        )
                         print(f"     Expected: {test_case['expected_keywords']}")
                         results.append((test_case["name"], False, duration, []))
                         all_passed = False
@@ -156,6 +175,7 @@ async def main():
                     all_passed = False
                     if self.verbose:
                         import traceback
+
                         traceback.print_exc()
 
             # Summary
@@ -172,6 +192,7 @@ async def main():
     except Exception as e:
         print(f"\n❌ Test execution failed: {e}")
         import traceback
+
         traceback.print_exc()
         result = False
         details = []
@@ -198,14 +219,14 @@ async def main():
                 "name": name,
                 "passed": passed,
                 "duration_seconds": duration,
-                "keywords_found": keywords
+                "keywords_found": keywords,
             }
             for name, passed, duration, keywords in details
         ],
         "verification": {
             "expected": ["uptime", "status", "window id", "title"],
-            "result": "PASS" if result else "FAIL"
-        }
+            "result": "PASS" if result else "FAIL",
+        },
     }
 
     results_file = script_dir / "test_2_results.json"
@@ -214,6 +235,7 @@ async def main():
     print(f"\nResults saved to: {results_file}")
 
     return result
+
 
 if __name__ == "__main__":
     result = asyncio.run(main())

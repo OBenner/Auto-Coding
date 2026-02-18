@@ -272,7 +272,7 @@ async def list_specs():
         logger.error(f"Error listing specs: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to list specs: {str(e)}",
+            detail="Failed to list specs",
         )
 
 
@@ -286,13 +286,11 @@ async def specs_health():
     Returns:
         Dictionary with status and configuration info
     """
-    project_dir = _get_project_dir()
     specs_dir = _get_specs_dir()
 
     return {
         "status": "ok",
         "endpoint": "specs",
-        "project_dir": str(project_dir),
         "specs_dir_exists": specs_dir.exists(),
     }
 
@@ -391,5 +389,5 @@ async def get_spec_detail(spec_id: str):
         )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get spec detail: {str(e)}",
+            detail="Failed to get spec detail",
         )

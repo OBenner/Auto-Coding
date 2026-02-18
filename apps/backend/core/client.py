@@ -773,9 +773,7 @@ def create_client(
 
         is_valid, errors = validate_template(custom_template)
         if not is_valid:
-            raise ValueError(
-                f"Custom template validation failed: {'; '.join(errors)}"
-            )
+            raise ValueError(f"Custom template validation failed: {'; '.join(errors)}")
 
         # Use template's tool configuration
         allowed_tools_list = custom_template.tools
@@ -1086,7 +1084,9 @@ def create_client(
             f"# Custom Agent Instructions (from template: {custom_template.name})\n\n"
             f"{custom_template.custom_prompt}"
         )
-        print(f"   - Custom template: {custom_template.name} ({custom_template.category})")
+        print(
+            f"   - Custom template: {custom_template.name} ({custom_template.category})"
+        )
         print(f"   - Template description: {custom_template.description}")
 
     # Include CLAUDE.md if enabled and present

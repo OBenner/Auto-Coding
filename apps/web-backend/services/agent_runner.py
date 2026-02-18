@@ -10,6 +10,7 @@ import asyncio
 import logging
 import sys
 from pathlib import Path
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -99,7 +100,7 @@ async def run_agent_async(
     project_dir: Path | None = None,
     model: str = "claude-sonnet-4-5-20250929",
     verbose: bool = False,
-) -> dict[str, any]:
+) -> dict[str, Any]:
     """
     Run an agent asynchronously.
 
@@ -186,11 +187,12 @@ async def run_agent_async(
         # Execute agent based on type
         if agent_type == "planner":
             # Run planner agent
-            await _broadcast_log_event(
-                spec_id=canonical_spec_id,
-                log_line=f"Running planner agent with model {model}",
-                level="info",
-            ) if _broadcast_log_event else None
+            if _broadcast_log_event:
+                await _broadcast_log_event(
+                    spec_id=canonical_spec_id,
+                    log_line=f"Running planner agent with model {model}",
+                    level="info",
+                )
 
             success = await run_followup_planner(
                 project_dir=project_dir,
@@ -200,23 +202,25 @@ async def run_agent_async(
             )
 
             if success:
-                await _broadcast_execution_event(
-                    spec_id=canonical_spec_id,
-                    phase="complete",
-                    phase_progress=100.0,
-                    overall_progress=100.0,
-                    message="Planner execution completed successfully",
-                    current_subtask=None,
-                ) if _broadcast_execution_event else None
+                if _broadcast_execution_event:
+                    await _broadcast_execution_event(
+                        spec_id=canonical_spec_id,
+                        phase="complete",
+                        phase_progress=100.0,
+                        overall_progress=100.0,
+                        message="Planner execution completed successfully",
+                        current_subtask=None,
+                    )
             else:
-                await _broadcast_execution_event(
-                    spec_id=canonical_spec_id,
-                    phase="failed",
-                    phase_progress=0.0,
-                    overall_progress=0.0,
-                    message="Planner execution failed",
-                    current_subtask=None,
-                ) if _broadcast_execution_event else None
+                if _broadcast_execution_event:
+                    await _broadcast_execution_event(
+                        spec_id=canonical_spec_id,
+                        phase="failed",
+                        phase_progress=0.0,
+                        overall_progress=0.0,
+                        message="Planner execution failed",
+                        current_subtask=None,
+                    )
 
             return {
                 "success": success,
@@ -229,11 +233,12 @@ async def run_agent_async(
 
         elif agent_type in ["coder", "qa_reviewer", "qa_fixer"]:
             # Run main autonomous agent (handles coder + QA flow)
-            await _broadcast_log_event(
-                spec_id=canonical_spec_id,
-                log_line=f"Running {agent_type} agent with model {model}",
-                level="info",
-            ) if _broadcast_log_event else None
+            if _broadcast_log_event:
+                await _broadcast_log_event(
+                    spec_id=canonical_spec_id,
+                    log_line=f"Running {agent_type} agent with model {model}",
+                    level="info",
+                )
 
             await run_autonomous_agent(
                 project_dir=project_dir,
@@ -244,14 +249,15 @@ async def run_agent_async(
                 source_spec_dir=None,  # Not using worktree in web mode
             )
 
-            await _broadcast_execution_event(
-                spec_id=canonical_spec_id,
-                phase="complete",
-                phase_progress=100.0,
-                overall_progress=100.0,
-                message=f"{agent_type} execution completed successfully",
-                current_subtask=None,
-            ) if _broadcast_execution_event else None
+            if _broadcast_execution_event:
+                await _broadcast_execution_event(
+                    spec_id=canonical_spec_id,
+                    phase="complete",
+                    phase_progress=100.0,
+                    overall_progress=100.0,
+                    message=f"{agent_type} execution completed successfully",
+                    current_subtask=None,
+                )
 
             return {
                 "success": True,
@@ -336,7 +342,7 @@ def start_agent_task(
     return task_id
 
 
-def get_task_status(task_id: str) -> dict[str, any] | None:
+def get_task_status(task_id: str) -> dict[str, Any] | None:
     """
     Get the status of a running task.
 

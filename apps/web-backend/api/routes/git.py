@@ -8,10 +8,8 @@ import logging
 import secrets
 
 from core.config import settings
-from core.database import get_db
 from core.oauth import oauth
-from fastapi import APIRouter, Depends, HTTPException, Request, status
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, HTTPException, Request, status
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +65,7 @@ async def github_authorize(request: Request):
 
 
 @router.get("/github/callback")
-async def github_callback(request: Request, db: Session = Depends(get_db)):
+async def github_callback(request: Request):
     """
     Handle GitHub OAuth callback.
 
@@ -76,7 +74,6 @@ async def github_callback(request: Request, db: Session = Depends(get_db)):
 
     Args:
         request: FastAPI request object containing OAuth code and state
-        db: Database session dependency
 
     Returns:
         Dictionary with access token and user information
@@ -141,7 +138,7 @@ async def github_callback(request: Request, db: Session = Depends(get_db)):
         logger.error(f"GitHub OAuth callback error: {e}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"OAuth authentication failed: {str(e)}",
+            detail="OAuth authentication failed",
         )
 
 
@@ -192,7 +189,7 @@ async def gitlab_authorize(request: Request):
 
 
 @router.get("/gitlab/callback")
-async def gitlab_callback(request: Request, db: Session = Depends(get_db)):
+async def gitlab_callback(request: Request):
     """
     Handle GitLab OAuth callback.
 
@@ -201,7 +198,6 @@ async def gitlab_callback(request: Request, db: Session = Depends(get_db)):
 
     Args:
         request: FastAPI request object containing OAuth code and state
-        db: Database session dependency
 
     Returns:
         Dictionary with access token and user information
@@ -266,7 +262,7 @@ async def gitlab_callback(request: Request, db: Session = Depends(get_db)):
         logger.error(f"GitLab OAuth callback error: {e}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"OAuth authentication failed: {str(e)}",
+            detail="OAuth authentication failed",
         )
 
 

@@ -208,7 +208,7 @@ async def get_usage_stats(
         logger.error(f"Error fetching usage stats: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to fetch usage statistics: {str(e)}",
+            detail="Failed to fetch usage statistics",
         )
 
 
@@ -287,7 +287,7 @@ async def get_usage_dashboard(
         logger.error(f"Error fetching dashboard data: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to fetch dashboard data: {str(e)}",
+            detail="Failed to fetch dashboard data",
         )
 
 

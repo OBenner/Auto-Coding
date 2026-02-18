@@ -18,7 +18,7 @@ import {
 	Loader2,
 	RefreshCw,
 } from "lucide-react";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { cn } from "../lib/utils";
 import { Button } from "./ui/button";
 import { ScrollArea } from "./ui/scroll-area";
@@ -314,7 +314,7 @@ export function FileExplorer({
 	className,
 	apiUrl,
 }: FileExplorerProps) {
-	const [files, setFiles] = useState<FileNode[]>(initialFiles || SAMPLE_FILES);
+	const [files, setFiles] = useState<FileNode[]>(initialFiles || (apiUrl ? [] : SAMPLE_FILES));
 	const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
 	const [loadingPaths, setLoadingPaths] = useState<Set<string>>(new Set());
 	const [isLoading, setIsLoading] = useState(false);
@@ -331,13 +331,15 @@ export function FileExplorer({
 			}
 
 			try {
-				const token = localStorage.getItem("auth_token") || "";
+				const headers: Record<string, string> = {};
+				const token = localStorage.getItem("auth_token");
+				if (token) {
+					headers.Authorization = `Bearer ${token}`;
+				}
 				const response = await fetch(
 					`${apiUrl}/api/files?path=${encodeURIComponent(path)}`,
 					{
-						headers: {
-							Authorization: `Bearer ${token}`,
-						},
+						headers,
 					},
 				);
 
@@ -348,7 +350,8 @@ export function FileExplorer({
 				const data = await response.json();
 				return data.files || [];
 			} catch (err) {
-				console.error("Error fetching directory:", err);
+				const message = err instanceof Error ? err.message : "Failed to fetch directory";
+				setError(message);
 				return null;
 			}
 		},
@@ -375,56 +378,63 @@ export function FileExplorer({
 	}, [rootPath, fetchDirectory]);
 
 	/**
+	 * Auto-load real data when apiUrl is provided
+	 */
+	useEffect(() => {
+		if (apiUrl && !initialFiles) {
+			handleRefresh();
+		}
+	}, [apiUrl]); // eslint-disable-line react-hooks/exhaustive-deps
+
+	/**
 	 * Toggle folder expansion
 	 */
 	const handleToggle = useCallback(
 		async (node: FileNode) => {
 			if (!node.isDirectory) return;
 
-			const newExpanded = new Set(expandedPaths);
+			setExpandedPaths((prev) => {
+				const newExpanded = new Set(prev);
+				if (prev.has(node.path)) {
+					newExpanded.delete(node.path);
+				} else {
+					newExpanded.add(node.path);
+				}
+				return newExpanded;
+			});
 
-			if (expandedPaths.has(node.path)) {
-				// Collapse
-				newExpanded.delete(node.path);
-			} else {
-				// Expand
-				newExpanded.add(node.path);
+			// Fetch children if not already loaded and API is available
+			if (!node.children && apiUrl) {
+				setLoadingPaths((prev) => new Set(prev).add(node.path));
 
-				// Fetch children if not already loaded and API is available
-				if (!node.children && apiUrl) {
-					setLoadingPaths((prev) => new Set(prev).add(node.path));
+				const children = await fetchDirectory(node.path);
 
-					const children = await fetchDirectory(node.path);
-
-					if (children) {
-						// Update the tree with new children
-						setFiles((prevFiles) => {
-							const updateNode = (nodes: FileNode[]): FileNode[] => {
-								return nodes.map((n) => {
-									if (n.path === node.path) {
-										return { ...n, children };
-									}
-									if (n.children) {
-										return { ...n, children: updateNode(n.children) };
-									}
-									return n;
-								});
-							};
-							return updateNode(prevFiles);
-						});
-					}
-
-					setLoadingPaths((prev) => {
-						const newSet = new Set(prev);
-						newSet.delete(node.path);
-						return newSet;
+				if (children) {
+					// Update the tree with new children
+					setFiles((prevFiles) => {
+						const updateNode = (nodes: FileNode[]): FileNode[] => {
+							return nodes.map((n) => {
+								if (n.path === node.path) {
+									return { ...n, children };
+								}
+								if (n.children) {
+									return { ...n, children: updateNode(n.children) };
+								}
+								return n;
+							});
+						};
+						return updateNode(prevFiles);
 					});
 				}
-			}
 
-			setExpandedPaths(newExpanded);
+				setLoadingPaths((prev) => {
+					const newSet = new Set(prev);
+					newSet.delete(node.path);
+					return newSet;
+				});
+			}
 		},
-		[expandedPaths, apiUrl, fetchDirectory],
+		[apiUrl, fetchDirectory],
 	);
 
 	/**

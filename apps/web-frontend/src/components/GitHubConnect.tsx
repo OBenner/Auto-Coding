@@ -57,9 +57,9 @@ export function GitHubConnect() {
 	};
 
 	const handleDisconnect = () => {
-		// TODO: Implement disconnect functionality
+		// TODO: Wire to backend disconnect endpoint when available
 		setStatus({ connected: false });
-		setSuccess("GitHub account disconnected");
+		setSuccess("GitHub account disconnected (local only - backend disconnect not yet implemented)");
 	};
 
 	return (
@@ -151,7 +151,7 @@ export function GitHubConnect() {
 							Disconnect
 						</Button>
 						<Button
-							onClick={() => setSuccess("Connection refreshed!")}
+							onClick={() => setSuccess("Connection status refresh not yet implemented - please reconnect if needed")}
 							className="flex-1"
 						>
 							Refresh Connection
