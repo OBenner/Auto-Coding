@@ -22,11 +22,6 @@ from agents.templates.models import AgentTemplate
 from agents.tools_pkg import (
     BASE_READ_TOOLS,
     BASE_WRITE_TOOLS,
-    CONTEXT7_TOOLS,
-    ELECTRON_TOOLS,
-    GRAPHITI_MCP_TOOLS,
-    LINEAR_TOOLS,
-    PUPPETEER_TOOLS,
     WEB_TOOLS,
 )
 
@@ -318,9 +313,7 @@ def validate_mcp_server_permissions(mcp_servers: list[str]) -> list[str]:
     errors = []
 
     if not isinstance(mcp_servers, list):
-        errors.append(
-            f"MCP servers must be a list, got: {type(mcp_servers).__name__}"
-        )
+        errors.append(f"MCP servers must be a list, got: {type(mcp_servers).__name__}")
         return errors
 
     # Empty MCP server list is valid (some agents don't need MCP)
@@ -475,7 +468,9 @@ def validate_import(data: dict[str, Any]) -> tuple[bool, list[str]]:
 
     # Validate field types
     if "name" in data and not isinstance(data["name"], str):
-        errors.append(f"Field 'name' must be a string, got: {type(data['name']).__name__}")
+        errors.append(
+            f"Field 'name' must be a string, got: {type(data['name']).__name__}"
+        )
 
     if "description" in data and not isinstance(data["description"], str):
         errors.append(
@@ -488,7 +483,9 @@ def validate_import(data: dict[str, Any]) -> tuple[bool, list[str]]:
         )
 
     if "tools" in data and not isinstance(data["tools"], list):
-        errors.append(f"Field 'tools' must be a list, got: {type(data['tools']).__name__}")
+        errors.append(
+            f"Field 'tools' must be a list, got: {type(data['tools']).__name__}"
+        )
 
     if "mcp_servers" in data and not isinstance(data["mcp_servers"], list):
         errors.append(
@@ -557,9 +554,7 @@ def validate_import_statements(prompt: str) -> list[str]:
         if matches:
             # Extract the import statement for better error reporting
             import_lines = [
-                line.strip()
-                for line in prompt.split("\n")
-                if re.search(pattern, line)
+                line.strip() for line in prompt.split("\n") if re.search(pattern, line)
             ]
             if import_lines:
                 errors.append(
@@ -614,7 +609,9 @@ def validate_urls(data: dict[str, Any]) -> list[str]:
 
         url = data[field]
         if not isinstance(url, str):
-            errors.append(f"Field '{field}' must be a string, got: {type(url).__name__}")
+            errors.append(
+                f"Field '{field}' must be a string, got: {type(url).__name__}"
+            )
             continue
 
         # Check for dangerous protocols
@@ -780,9 +777,7 @@ def validate_template_for_import(data: dict[str, Any]) -> tuple[bool, list[str]]
 
     # Add summary if there are errors
     if errors:
-        error_summary = [
-            f"Template validation failed with {len(errors)} error(s):"
-        ]
+        error_summary = [f"Template validation failed with {len(errors)} error(s):"]
         error_summary.extend(errors)
         return is_valid, error_summary
 

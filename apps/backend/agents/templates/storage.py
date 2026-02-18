@@ -16,7 +16,6 @@ This enables:
 
 import json
 from pathlib import Path
-from typing import Optional
 
 from agents.templates.models import AgentTemplate
 
@@ -67,7 +66,7 @@ def save_template(template: AgentTemplate, project_dir: Path) -> None:
         raise OSError(f"Failed to save template '{template.name}': {e}") from e
 
 
-def load_template(name: str, project_dir: Path) -> Optional[AgentTemplate]:
+def load_template(name: str, project_dir: Path) -> AgentTemplate | None:
     """
     Load a template from disk by name.
 

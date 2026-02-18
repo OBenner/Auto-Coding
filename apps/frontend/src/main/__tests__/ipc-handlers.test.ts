@@ -300,12 +300,13 @@ describe("IPC Handlers", { timeout: 15000 }, () => {
       writeFileSync(storeFile, JSON.stringify({ projects: [], settings: {} }));
 
       // Wait for ProjectStore's async initialization to complete (reads the file above).
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      // Use a longer delay to avoid race conditions on slower CI runners.
+      await new Promise((resolve) => setTimeout(resolve, 1000));
 
       // Add project twice
       const result1 = await ipcMain.invokeHandler("project:add", {}, TEST_PROJECT_PATH);
       // Wait for the fire-and-forget saveAsync to flush
-      await new Promise((resolve) => setTimeout(resolve, 200));
+      await new Promise((resolve) => setTimeout(resolve, 500));
       const result2 = await ipcMain.invokeHandler("project:add", {}, TEST_PROJECT_PATH);
 
       const data1 = (result1 as { data: { id: string } }).data;
