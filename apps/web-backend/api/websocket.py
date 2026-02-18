@@ -6,6 +6,7 @@ Clients can subscribe to specific spec IDs and receive execution, ideation, and 
 """
 
 import asyncio
+import contextlib
 import json
 import logging
 import os
@@ -543,10 +544,8 @@ async def terminal_websocket(websocket: WebSocket):
     finally:
         # Cancel read task
         read_task.cancel()
-        try:
+        with contextlib.suppress(asyncio.CancelledError):
             await read_task
-        except asyncio.CancelledError:
-            pass  # Expected: read_task was intentionally cancelled
 
         # Send close status
         try:
@@ -585,6 +584,7 @@ async def _read_terminal_output(session, websocket: WebSocket):
         logger.debug(
             f"Terminal output reader cancelled for session {_sanitize_log(session.session_id)}"
         )
+        raise
     except Exception as e:
         logger.error(f"Error reading terminal output: {e}")
 

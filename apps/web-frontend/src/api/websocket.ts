@@ -79,8 +79,7 @@ export class WebSocketClient {
 	 * Sanitize a value for safe logging (strips control characters, truncates).
 	 */
 	private static sanitize(value: unknown): string {
-		// eslint-disable-next-line no-control-regex
-		return String(value).replace(/[\x00-\x1f\x7f]/g, "").slice(0, 200);
+		return String(value).replace(/[\u0000-\u001f\u007f]/g, "").slice(0, 200);
 	}
 
 	/**
@@ -293,10 +292,7 @@ export class WebSocketClient {
 				try {
 					handler(event);
 				} catch (error) {
-					// eslint-disable-next-line no-control-regex
-					const safeType = String(event.event_type)
-						.replace(/[\x00-\x1f\x7f]/g, "")
-						.slice(0, 50);
+					const safeType = WebSocketClient.sanitize(event.event_type);
 					console.error(
 						"Error in event handler for type:",
 						safeType,

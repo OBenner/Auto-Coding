@@ -73,7 +73,7 @@ export function Kanban({ onTaskClick, onCreateTask }: KanbanPageProps) {
 				setError(null);
 
 				const response = await apiClient.listTasks();
-				const convertedTasks = response.tasks.map(convertTaskSummary);
+				const convertedTasks = response.tasks.map((t) => convertTaskSummary(t));
 				setTasks(convertedTasks);
 			} catch (err) {
 				const message =

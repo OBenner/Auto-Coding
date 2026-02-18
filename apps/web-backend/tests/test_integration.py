@@ -13,6 +13,7 @@ from API request through WebSocket event delivery.
 """
 
 import asyncio
+import contextlib
 from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -394,10 +395,8 @@ class TestAgentRunnerServiceIntegration:
                 assert cancelled is True
 
                 # Wait for cancellation to propagate
-                try:
+                with contextlib.suppress(asyncio.CancelledError):
                     await task
-                except asyncio.CancelledError:
-                    pass  # Expected: task was intentionally cancelled
 
                 # Verify task is cancelled
                 assert task.cancelled()
@@ -438,10 +437,8 @@ class TestAgentRunnerServiceIntegration:
 
                 # Cleanup
                 running.cancel()
-                try:
+                with contextlib.suppress(asyncio.CancelledError):
                     await running
-                except asyncio.CancelledError:
-                    pass  # Expected: cleanup of running task
 
         asyncio.run(run_test())
 
@@ -591,7 +588,7 @@ class TestAgentPhaseTransitionIntegration:
         # Verify final event shows completion
         final_call = mock_ws.send_json.call_args_list[-1][0][0]
         assert final_call["data"]["phase"] == "complete"
-        assert final_call["data"]["overall_progress"] == 100.0
+        assert final_call["data"]["overall_progress"] == pytest.approx(100.0)
 
     @pytest.mark.asyncio
     async def test_subtask_progress_tracking(self):
@@ -794,7 +791,7 @@ class TestBroadcastHelperIntegration:
             call_data = mock_ws.send_json.call_args[0][0]
             assert call_data["event_type"] == "execution"
             assert call_data["spec_id"] == "test-spec"
-            assert call_data["data"]["phase_progress"] == 75.0
+            assert call_data["data"]["phase_progress"] == pytest.approx(75.0)
             assert call_data["data"]["current_subtask"] == "subtask-2-1"
         finally:
             manager.disconnect(mock_ws)

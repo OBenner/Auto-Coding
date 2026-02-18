@@ -64,16 +64,16 @@ export function sanitizeMarkdownForDisplay(
 		// Remove code blocks
 		.replace(/```[\s\S]*?```/g, "")
 		// Remove links but keep text
-		.replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+		.replace(/\[([^\]]{1,500})\]\([^)]{1,2000}\)/g, "$1")
 		// Remove images
-		.replace(/!\[([^\]]*)\]\([^)]+\)/g, "")
+		.replace(/!\[([^\]]*)\]\([^)]{1,2000}\)/g, "")
 		// Remove horizontal rules
 		.replace(/^[-*_]{3,}$/gm, "")
 		// Remove blockquotes
 		.replace(/^>\s*/gm, "")
 		// Remove list markers
-		.replace(/^[\s]*[-*+]\s+/gm, "")
-		.replace(/^[\s]*\d+\.\s+/gm, "")
+		.replace(/^[ \t]*[-*+]\s+/gm, "")
+		.replace(/^[ \t]*\d+\.\s+/gm, "")
 		// Remove checkbox markers
 		.replace(/\[[ x]\]\s*/gi, "")
 		// Collapse multiple newlines to single space

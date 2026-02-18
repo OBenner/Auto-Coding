@@ -253,7 +253,7 @@ async def test_execution_events():
                     first_exec = execution_events[0]
                     if (
                         first_exec["data"]["phase"] == "planning"
-                        and first_exec["data"]["phase_progress"] == 25.0
+                        and abs(first_exec["data"]["phase_progress"] - 25.0) < 0.01
                     ):
                         print_success("First execution event has correct data")
 

@@ -426,7 +426,7 @@ async def test_broadcast_execution_event():
         assert call_data["event_type"] == "execution"
         assert call_data["spec_id"] == "spec-test"
         assert call_data["data"]["phase"] == "coding"
-        assert call_data["data"]["phase_progress"] == 50.0
+        assert call_data["data"]["phase_progress"] == pytest.approx(50.0)
     finally:
         # Clean up
         global_manager.disconnect(mock_ws)

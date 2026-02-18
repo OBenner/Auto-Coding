@@ -30,9 +30,7 @@ class Settings:
         self.DEBUG: bool = os.getenv("DEBUG", "false").lower() == "true"
 
         # CORS configuration
-        cors_origins = os.getenv(
-            "CORS_ORIGINS", "http://localhost:3000,http://localhost:5173"
-        )
+        cors_origins = os.getenv("CORS_ORIGINS", "")
         self.CORS_ORIGINS: list[str] = [
             origin.strip() for origin in cors_origins.split(",")
         ]

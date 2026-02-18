@@ -120,8 +120,7 @@ if (typeof window !== 'undefined') {
 
 // Sanitize a value for safe logging - strips control characters and truncates
 function sanitizeForLog(value: unknown): string {
-  // biome-ignore lint/suspicious/noControlCharactersInRegex: Intentional sanitization for log injection prevention
-  return String(value).replace(/[\x00-\x1f\x7f\x80-\x9f]/g, '').slice(0, 500);
+  return String(value).replace(/[\u0000-\u001f\u007f\u0080-\u009f]/g, '').slice(0, 500);
 }
 
 // Suppress console errors in tests unless explicitly testing error scenarios

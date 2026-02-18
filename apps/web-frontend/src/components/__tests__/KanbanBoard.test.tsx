@@ -56,7 +56,7 @@ vi.mock("@dnd-kit/sortable", async () => {
 
 // Helper to create mock tasks
 const createMockTask = (overrides: Partial<Task> = {}): Task => ({
-	id: `task-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+	id: `task-${Date.now()}-${crypto.randomUUID().slice(0, 9)}`,
 	specId: "spec-1",
 	title: "Test Task",
 	description: "A test task description",
