@@ -533,7 +533,7 @@ class CodeAnalyzer:
         """
         Detect the predominant case style from a list of identifiers.
 
-        Delegates to NamingDetector._detect_case_style for consistency.
+        Delegates to NamingDetector.detect_case_style for consistency.
         Strips leading underscores before analysis to handle private members.
 
         Args:
@@ -547,8 +547,7 @@ class CodeAnalyzer:
         # Strip leading underscores (private member convention)
         stripped = [name.lstrip("_") for name in identifiers if name]
         stripped = [name for name in stripped if name]
-        detector = NamingDetector.__new__(NamingDetector)
-        return detector._detect_case_style(stripped)
+        return NamingDetector.detect_case_style(stripped)
 
     def _detect_error_patterns(self, tree: ast.AST) -> dict[str, Any]:
         """

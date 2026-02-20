@@ -8,8 +8,8 @@
 import { ipcMain } from 'electron';
 import { IPC_CHANNELS } from '../../shared/constants';
 import type { IPCResult } from '../../shared/types';
-import path from 'path';
 import { projectStore } from '../project-store';
+import { joinPaths } from '../platform';
 import { runPythonSubprocess } from './github/utils/subprocess-runner';
 import { getRunnerEnv } from './github/utils/runner-env';
 import { debugLog, debugError } from '../../shared/utils/debug-logger';
@@ -47,8 +47,8 @@ export type PatternCategory = 'naming-conventions' | 'error-handling' | 'code-or
  */
 function getBackendDir(): string {
   // The backend is at apps/backend/ from the project root
-  const projectRoot = path.resolve(__dirname, '../../../..');
-  return path.join(projectRoot, 'apps', 'backend');
+  const projectRoot = joinPaths(__dirname, '..', '..', '..', '..');
+  return joinPaths(projectRoot, 'apps', 'backend');
 }
 
 /**
@@ -68,7 +68,7 @@ async function getPythonEnv(): Promise<{ pythonPath: string; env: Record<string,
  * Helper to get spec directory path from project
  */
 function getSpecDir(projectPath: string, specId: string): string {
-  return path.join(projectPath, '.auto-claude', 'specs', specId);
+  return joinPaths(projectPath, '.auto-claude', 'specs', specId);
 }
 
 /**
@@ -177,11 +177,16 @@ export function registerPatternHandlers(): void {
 
         const pythonCode = `${pyPreamble(backendDir, 'from memory.patterns import load_patterns')}
 spec_dir = Path(${JSON.stringify(specDir)})
-category = ${JSON.stringify(category || null)}
+category_filter = ${JSON.stringify(category || null)}
 patterns = load_patterns(spec_dir)
 formatted_patterns = []
 for i, pattern in enumerate(patterns, 1):
-    formatted_patterns.append({'index': i, 'text': pattern})
+    text = pattern.split(" [category: ")[0] if " [category: " in pattern else pattern
+    cat = None
+    if " [category: " in pattern:
+        cat = pattern.split(" [category: ")[1].split("]")[0]
+    if category_filter is None or cat == category_filter:
+        formatted_patterns.append({'index': i, 'text': text, 'category': cat})
 print(json.dumps({'patterns': formatted_patterns}))
 `;
         const data = await runPatternScript<{ patterns: BackendPattern[] }>(pythonCode, 'PATTERN_LIST');
@@ -298,9 +303,9 @@ print(json.dumps({'index': pattern_index, 'text': pattern}))
 spec_dir = Path(${JSON.stringify(specDir)})
 try:
     approve_pattern(spec_dir, ${patternIndex})
-    print('{"success": true}')
+    print(json.dumps({"success": True}))
 except Exception as e:
-    print(f'{{"error": "{str(e)}"}}')
+    print(json.dumps({"error": str(e)}))
     sys.exit(1)
 `;
         await runPatternScript<{ success: boolean }>(pythonCode, 'PATTERN_APPROVE');
@@ -345,9 +350,9 @@ spec_dir = Path(${JSON.stringify(specDir)})
 new_text = ${JSON.stringify(newText)}
 try:
     override_pattern(spec_dir, ${patternIndex}, new_text)
-    print('{"success": true}')
+    print(json.dumps({"success": True}))
 except Exception as e:
-    print(f'{{"error": "{str(e)}"}}')
+    print(json.dumps({"error": str(e)}))
     sys.exit(1)
 `;
         await runPatternScript<{ success: boolean }>(pythonCode, 'PATTERN_OVERRIDE');
@@ -390,9 +395,9 @@ except Exception as e:
 spec_dir = Path(${JSON.stringify(specDir)})
 try:
     delete_pattern(spec_dir, ${patternIndex})
-    print('{"success": true}')
+    print(json.dumps({"success": True}))
 except Exception as e:
-    print(f'{{"error": "{str(e)}"}}')
+    print(json.dumps({"error": str(e)}))
     sys.exit(1)
 `;
         await runPatternScript<{ success: boolean }>(pythonCode, 'PATTERN_DELETE');

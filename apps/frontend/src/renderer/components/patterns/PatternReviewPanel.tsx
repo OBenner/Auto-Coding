@@ -22,6 +22,7 @@ import {
   ChevronRight
 } from 'lucide-react';
 import { useProjectStore } from '../../stores/project-store';
+import { useTaskStore } from '../../stores/task-store';
 import type { Pattern } from '../../../preload/api/modules/pattern-api';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
@@ -57,24 +58,25 @@ export function PatternReviewPanel() {
   // State
   const [patterns, setPatterns] = useState<Pattern[]>([]);
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all');
-  const [expandedPatternId, setExpandedPatternId] = useState<string | null>(null);
+  const [expandedPatternIndex, setExpandedPatternIndex] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [deleteConfirmPattern, setDeleteConfirmPattern] = useState<Pattern | null>(null);
-  const [editingPatternId, setEditingPatternId] = useState<string | null>(null);
+  const [editingPatternIndex, setEditingPatternIndex] = useState<number | null>(null);
   const [editText, setEditText] = useState('');
 
   // Get current project and spec
   const { projects, getActiveProject } = useProjectStore();
   const currentProject = getActiveProject() ?? projects[0];
-  const currentSpecId = currentProject?.id;
+  const selectedTask = useTaskStore((s) => s.getSelectedTask());
+  const currentSpecId = selectedTask?.specId ?? currentProject?.id;
 
   /**
    * Load patterns from backend
    */
   const loadPatterns = async () => {
     if (!currentProject) {
-      setError('No project found');
+      setError(t('patternReview.noProject'));
       return;
     }
 
@@ -90,13 +92,12 @@ export function PatternReviewPanel() {
       );
 
       if (result.success && result.data) {
-        // Backend now returns patterns with id field, no need to add it
         setPatterns(result.data);
       } else {
-        setError(result.error || 'Failed to load patterns');
+        setError(result.error || t('patternReview.failedToLoad'));
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error');
+      setError(err instanceof Error ? err.message : t('patternReview.unknownError'));
     } finally {
       setIsLoading(false);
     }
@@ -108,7 +109,7 @@ export function PatternReviewPanel() {
   useEffect(() => {
     loadPatterns();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [categoryFilter, currentProject?.id]);
+  }, [categoryFilter, currentProject?.id, currentSpecId]);
 
   // Filter patterns by category
   const filteredPatterns = categoryFilter === 'all'
@@ -128,14 +129,13 @@ export function PatternReviewPanel() {
     }, {} as Record<string, Pattern[]>);
 
   // Handlers
-  const handleApprove = async (patternId: string) => {
+  const handleApprove = async (patternIndex: number) => {
     if (!currentProject) return;
 
     setIsLoading(true);
     setError(null);
 
     try {
-      const patternIndex = parseInt(patternId);
       const result = await window.electronAPI.pattern.approvePattern(
         currentProject.id,
         currentSpecId,
@@ -143,31 +143,29 @@ export function PatternReviewPanel() {
       );
 
       if (result.success) {
-        // Refresh patterns after approval
         await loadPatterns();
       } else {
-        setError(result.error || 'Failed to approve pattern');
+        setError(result.error || t('patternReview.failedToApprove'));
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error');
+      setError(err instanceof Error ? err.message : t('patternReview.unknownError'));
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleStartEdit = (pattern: Pattern) => {
-    setEditingPatternId(pattern.id);
+    setEditingPatternIndex(pattern.index);
     setEditText(pattern.text);
   };
 
-  const handleSaveEdit = async (patternId: string) => {
+  const handleSaveEdit = async (patternIndex: number) => {
     if (!currentProject || !editText.trim()) return;
 
     setIsLoading(true);
     setError(null);
 
     try {
-      const patternIndex = parseInt(patternId);
       const result = await window.electronAPI.pattern.overridePattern(
         currentProject.id,
         currentSpecId,
@@ -176,22 +174,21 @@ export function PatternReviewPanel() {
       );
 
       if (result.success) {
-        // Refresh patterns after override
         await loadPatterns();
-        setEditingPatternId(null);
+        setEditingPatternIndex(null);
         setEditText('');
       } else {
-        setError(result.error || 'Failed to override pattern');
+        setError(result.error || t('patternReview.failedToOverride'));
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error');
+      setError(err instanceof Error ? err.message : t('patternReview.unknownError'));
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleCancelEdit = () => {
-    setEditingPatternId(null);
+    setEditingPatternIndex(null);
     setEditText('');
   };
 
@@ -202,29 +199,27 @@ export function PatternReviewPanel() {
     setError(null);
 
     try {
-      const patternIndex = parseInt(deleteConfirmPattern.id);
       const result = await window.electronAPI.pattern.deletePattern(
         currentProject.id,
         currentSpecId,
-        patternIndex
+        deleteConfirmPattern.index
       );
 
       if (result.success) {
-        // Refresh patterns after deletion
         await loadPatterns();
         setDeleteConfirmPattern(null);
       } else {
-        setError(result.error || 'Failed to delete pattern');
+        setError(result.error || t('patternReview.failedToDelete'));
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error');
+      setError(err instanceof Error ? err.message : t('patternReview.unknownError'));
     } finally {
       setIsLoading(false);
     }
   };
 
-  const toggleExpanded = (patternId: string) => {
-    setExpandedPatternId(expandedPatternId === patternId ? null : patternId);
+  const toggleExpanded = (patternIndex: number) => {
+    setExpandedPatternIndex(expandedPatternIndex === patternIndex ? null : patternIndex);
   };
 
   // Get confidence badge color
@@ -245,11 +240,11 @@ export function PatternReviewPanel() {
   const getCategoryName = (category: Pattern['category']) => {
     switch (category) {
       case 'naming-conventions':
-        return 'Naming Conventions';
+        return t('patternReview.categoryNaming');
       case 'error-handling':
-        return 'Error Handling';
+        return t('patternReview.categoryErrorHandling');
       case 'code-organization':
-        return 'Code Organization';
+        return t('patternReview.categoryOrganization');
       default:
         return category;
     }
@@ -262,10 +257,10 @@ export function PatternReviewPanel() {
         <div>
           <h2 className="text-2xl font-bold flex items-center gap-2">
             <Sparkles className="h-6 w-6 text-primary" />
-            Learned Patterns
+            {t('patternReview.title')}
           </h2>
           <p className="text-sm text-muted-foreground mt-1">
-            Review and manage patterns learned from your codebase
+            {t('patternReview.subtitle')}
           </p>
         </div>
         {error && (
@@ -278,35 +273,35 @@ export function PatternReviewPanel() {
       {/* Filter Bar */}
       <div className="flex items-center gap-4 mb-6 p-4 bg-muted/30 rounded-lg border border-border">
         <Filter className="h-4 w-4 text-muted-foreground" />
-        <Label className="text-sm font-medium">Filter by category:</Label>
+        <Label className="text-sm font-medium">{t('patternReview.filterLabel')}</Label>
         <div className="flex gap-2">
           <Button
             variant={categoryFilter === 'all' ? 'default' : 'outline'}
             size="sm"
             onClick={() => setCategoryFilter('all')}
           >
-            All
+            {t('patternReview.filterAll')}
           </Button>
           <Button
             variant={categoryFilter === 'naming-conventions' ? 'default' : 'outline'}
             size="sm"
             onClick={() => setCategoryFilter('naming-conventions')}
           >
-            Naming
+            {t('patternReview.filterNaming')}
           </Button>
           <Button
             variant={categoryFilter === 'error-handling' ? 'default' : 'outline'}
             size="sm"
             onClick={() => setCategoryFilter('error-handling')}
           >
-            Error Handling
+            {t('patternReview.filterErrorHandling')}
           </Button>
           <Button
             variant={categoryFilter === 'code-organization' ? 'default' : 'outline'}
             size="sm"
             onClick={() => setCategoryFilter('code-organization')}
           >
-            Organization
+            {t('patternReview.filterOrganization')}
           </Button>
         </div>
       </div>
@@ -320,9 +315,9 @@ export function PatternReviewPanel() {
         ) : filteredPatterns.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 px-4 border border-dashed rounded-lg">
             <Info className="h-12 w-12 text-muted-foreground mb-4" />
-            <h4 className="text-lg font-medium mb-2">No patterns found</h4>
+            <h4 className="text-lg font-medium mb-2">{t('patternReview.emptyTitle')}</h4>
             <p className="text-sm text-muted-foreground text-center max-w-sm">
-              Patterns are automatically learned during spec discovery. Create a new spec to start learning patterns from your codebase.
+              {t('patternReview.emptyDescription')}
             </p>
           </div>
         ) : (
@@ -334,11 +329,11 @@ export function PatternReviewPanel() {
                 </h3>
                 <div className="space-y-2">
                   {categoryPatterns.map((pattern) => {
-                    const isExpanded = expandedPatternId === pattern.id;
-                    const isEditing = editingPatternId === pattern.id;
+                    const isExpanded = expandedPatternIndex === pattern.index;
+                    const isEditing = editingPatternIndex === pattern.index;
 
                     return (
-                      <Card key={pattern.id} className={cn(
+                      <Card key={pattern.index} className={cn(
                         "transition-colors",
                         pattern.approved ? "border-primary/50 bg-primary/5" : ""
                       )}>
@@ -359,7 +354,7 @@ export function PatternReviewPanel() {
 
                               <div className="flex items-center gap-2 flex-wrap">
                                 <Badge variant={getConfidenceBadgeVariant(pattern.confidence)}>
-                                  {pattern.confidence} confidence
+                                  {t('patternReview.confidence', { level: pattern.confidence })}
                                 </Badge>
                                 <Badge variant="outline">
                                   {getCategoryName(pattern.category)}
@@ -367,7 +362,7 @@ export function PatternReviewPanel() {
                                 {pattern.approved && (
                                   <Badge variant="default" className="bg-success/20 text-success border-success/30">
                                     <Check className="h-3 w-3 mr-1" />
-                                    Approved
+                                    {t('patternReview.approved')}
                                   </Badge>
                                 )}
                               </div>
@@ -380,11 +375,11 @@ export function PatternReviewPanel() {
                                   <Button
                                     variant="ghost"
                                     size="sm"
-                                    onClick={() => handleSaveEdit(pattern.id)}
+                                    onClick={() => handleSaveEdit(pattern.index)}
                                     className="h-8 gap-1"
                                   >
                                     <Check className="h-4 w-4" />
-                                    Save
+                                    {t('patternReview.save')}
                                   </Button>
                                   <Button
                                     variant="ghost"
@@ -392,7 +387,7 @@ export function PatternReviewPanel() {
                                     onClick={handleCancelEdit}
                                     className="h-8"
                                   >
-                                    Cancel
+                                    {t('patternReview.cancel')}
                                   </Button>
                                 </>
                               ) : (
@@ -403,13 +398,13 @@ export function PatternReviewPanel() {
                                         <Button
                                           variant="ghost"
                                           size="sm"
-                                          onClick={() => handleApprove(pattern.id)}
+                                          onClick={() => handleApprove(pattern.index)}
                                           className="h-8 w-8 p-0"
                                         >
                                           <Check className="h-4 w-4" />
                                         </Button>
                                       </TooltipTrigger>
-                                      <TooltipContent>Approve pattern</TooltipContent>
+                                      <TooltipContent>{t('patternReview.tooltipApprove')}</TooltipContent>
                                     </Tooltip>
                                   )}
 
@@ -424,7 +419,7 @@ export function PatternReviewPanel() {
                                         <Edit className="h-4 w-4" />
                                       </Button>
                                     </TooltipTrigger>
-                                    <TooltipContent>Edit pattern</TooltipContent>
+                                    <TooltipContent>{t('patternReview.tooltipEdit')}</TooltipContent>
                                   </Tooltip>
 
                                   <Tooltip>
@@ -438,7 +433,7 @@ export function PatternReviewPanel() {
                                         <Trash2 className="h-4 w-4" />
                                       </Button>
                                     </TooltipTrigger>
-                                    <TooltipContent>Delete pattern</TooltipContent>
+                                    <TooltipContent>{t('patternReview.tooltipDelete')}</TooltipContent>
                                   </Tooltip>
 
                                   {pattern.reasoning && (
@@ -447,7 +442,7 @@ export function PatternReviewPanel() {
                                         <Button
                                           variant="ghost"
                                           size="sm"
-                                          onClick={() => toggleExpanded(pattern.id)}
+                                          onClick={() => toggleExpanded(pattern.index)}
                                           className="h-8 w-8 p-0"
                                         >
                                           {isExpanded ? (
@@ -458,7 +453,7 @@ export function PatternReviewPanel() {
                                         </Button>
                                       </TooltipTrigger>
                                       <TooltipContent>
-                                        {isExpanded ? 'Hide details' : 'Show details'}
+                                        {isExpanded ? t('patternReview.tooltipHideDetails') : t('patternReview.tooltipShowDetails')}
                                       </TooltipContent>
                                     </Tooltip>
                                   )}
@@ -473,7 +468,7 @@ export function PatternReviewPanel() {
                               <div className="flex items-start gap-2 text-sm">
                                 <AlertCircle className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
                                 <div>
-                                  <p className="font-medium text-muted-foreground mb-1">Reasoning:</p>
+                                  <p className="font-medium text-muted-foreground mb-1">{t('patternReview.reasoning')}</p>
                                   <p className="text-foreground">{pattern.reasoning}</p>
                                 </div>
                               </div>
@@ -497,9 +492,9 @@ export function PatternReviewPanel() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Pattern</AlertDialogTitle>
+            <AlertDialogTitle>{t('patternReview.deleteTitle')}</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete this pattern? This action cannot be undone.
+              {t('patternReview.deleteDescription')}
               <div className="mt-4 p-3 bg-muted rounded-md">
                 <p className="text-sm font-medium text-foreground">
                   {deleteConfirmPattern?.text}
@@ -508,12 +503,12 @@ export function PatternReviewPanel() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t('patternReview.cancel')}</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDelete}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Delete
+              {t('patternReview.deleteConfirm')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

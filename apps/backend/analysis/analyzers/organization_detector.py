@@ -16,7 +16,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
 
-from .base import SKIP_DIRS, BaseAnalyzer, collect_files
+from .base import SKIP_DIRS, BaseAnalyzer, _should_skip, collect_files
 
 
 class OrganizationDetector(BaseAnalyzer):
@@ -350,11 +350,12 @@ class OrganizationDetector(BaseAnalyzer):
             if self._exists(path_str):
                 test_locations.append(path_str)
 
-        # Check if tests are colocated or separate
+        # Check if tests are colocated or separate (skip ignored dirs)
         tests_colocated = any(
             f.name.startswith("test_") or f.name.endswith("_test.py")
             for f in self.path.rglob("*.py")
             if f.parent.name not in ["tests", "test", "__tests__"]
+            and not _should_skip(f.parts)
         )
 
         self.organization_patterns["separation_patterns"] = {

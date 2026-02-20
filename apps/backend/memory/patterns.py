@@ -300,12 +300,24 @@ def save_detected_patterns_from_errors(
 
     category = "error-handling"
 
-    # Exception types
-    exception_types = error_patterns.get("exception_types", {})
-    if exception_types:
-        top_exceptions = sorted(
-            exception_types.items(), key=lambda x: x[1], reverse=True
-        )[:3]
+    # Exception types — detector may return:
+    #   "exception_types" as dict {name: count} OR
+    #   "common_exceptions" as list [{"type": name, "count": count}]
+    exception_types_raw = error_patterns.get(
+        "exception_types", error_patterns.get("common_exceptions")
+    )
+    if exception_types_raw:
+        # Normalize to list of (name, count) tuples
+        if isinstance(exception_types_raw, dict):
+            top_exceptions = sorted(
+                exception_types_raw.items(), key=lambda x: x[1], reverse=True
+            )[:3]
+        else:
+            # list of dicts: [{"type": name, "count": count}]
+            top_exceptions = [
+                (item.get("type", str(item)), item.get("count", 0))
+                for item in exception_types_raw[:3]
+            ]
         if top_exceptions:
             exc_list = ", ".join([exc for exc, _ in top_exceptions])
             pattern = f"Common exception types: {exc_list}"
@@ -317,24 +329,32 @@ def save_detected_patterns_from_errors(
                 reasoning="Most frequently caught exceptions",
             )
 
-    # Custom exceptions
-    custom_exceptions = error_patterns.get("custom_exceptions", [])
-    if custom_exceptions:
-        pattern = (
-            f"Project defines custom exceptions: {', '.join(custom_exceptions[:5])}"
-        )
-        append_pattern(
-            spec_dir,
-            pattern,
-            category=category,
-            confidence=confidence,
-            reasoning="Custom exception classes found in codebase",
-        )
+    # Custom exceptions — may be list of strings or list of dicts with "name" key
+    custom_exceptions_raw = error_patterns.get("custom_exceptions", [])
+    if custom_exceptions_raw:
+        # Normalize to list of names
+        custom_names = [
+            item["name"] if isinstance(item, dict) else str(item)
+            for item in custom_exceptions_raw[:5]
+        ]
+        if custom_names:
+            pattern = f"Project defines custom exceptions: {', '.join(custom_names)}"
+            append_pattern(
+                spec_dir,
+                pattern,
+                category=category,
+                confidence=confidence,
+                reasoning="Custom exception classes found in codebase",
+            )
 
-    # Logging patterns
-    logging_patterns = error_patterns.get("logging_patterns", [])
-    if logging_patterns:
-        unique_patterns = set(logging_patterns)
+    # Logging patterns — may be list of strings or list of dicts with "pattern" key
+    logging_patterns_raw = error_patterns.get("logging_patterns", [])
+    if logging_patterns_raw:
+        log_items = [
+            item.get("pattern", str(item)) if isinstance(item, dict) else str(item)
+            for item in logging_patterns_raw
+        ]
+        unique_patterns = set(log_items)
         if unique_patterns:
             pattern = f"Error logging: {', '.join(list(unique_patterns)[:3])}"
             append_pattern(
@@ -345,8 +365,10 @@ def save_detected_patterns_from_errors(
                 reasoning="Detected error logging practices",
             )
 
-    # Error propagation
-    propagation = error_patterns.get("error_propagation", {})
+    # Error propagation — key may be "error_propagation" or "error_propagation_stats"
+    propagation = error_patterns.get(
+        "error_propagation", error_patterns.get("error_propagation_stats", {})
+    )
     if propagation:
         total = sum(propagation.values())
         if total > 0:
@@ -401,7 +423,9 @@ def save_detected_patterns_from_organization(
 
     # File organization
     file_org = organization_patterns.get("file_organization", {})
-    avg_file_size = file_org.get("average_file_size")
+    avg_file_size = file_org.get("average_file_size_lines") or file_org.get(
+        "average_file_size"
+    )
     if avg_file_size:
         if avg_file_size < 300:
             pattern = "Files are kept small (< 300 lines)"

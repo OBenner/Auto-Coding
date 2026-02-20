@@ -13,7 +13,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from .base import BaseAnalyzer
+from .base import BaseAnalyzer, collect_files
 
 
 class NamingDetector(BaseAnalyzer):
@@ -76,9 +76,9 @@ class NamingDetector(BaseAnalyzer):
         conventions["file_style"] = "snake_case"
 
         # Sample from actual files to validate conventions
-        py_files = list(self.path.glob("**/*.py"))
+        py_files = collect_files(self.path, "*.py", limit=10)
         if py_files:
-            samples = self._sample_python_identifiers(py_files[:10])
+            samples = self._sample_python_identifiers(py_files)
             conventions["examples"] = samples
 
             # Override detected style if samples show different pattern
@@ -102,7 +102,9 @@ class NamingDetector(BaseAnalyzer):
         conventions["file_style"] = "kebab-case"  # or camelCase depending on project
 
         # Sample from actual files
-        js_files = list(self.path.glob("**/*.js")) + list(self.path.glob("**/*.ts"))
+        js_files = collect_files(self.path, "*.js", limit=20) + collect_files(
+            self.path, "*.ts", limit=20
+        )
         if js_files:
             samples = self._sample_javascript_identifiers(js_files[:10])
             conventions["examples"] = samples
@@ -221,6 +223,11 @@ class NamingDetector(BaseAnalyzer):
         return {k: v[:10] for k, v in samples.items()}
 
     def _detect_case_style(self, identifiers: list[str]) -> str | None:
+        """Instance method that delegates to the static version."""
+        return NamingDetector.detect_case_style(identifiers)
+
+    @staticmethod
+    def detect_case_style(identifiers: list[str]) -> str | None:
         """
         Detect the predominant case style from a list of identifiers.
 

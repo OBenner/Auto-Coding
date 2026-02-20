@@ -1222,14 +1222,27 @@ async def detect_and_save_codebase_patterns(
         from analysis.analyzers.naming_detector import NamingDetector
         from analysis.analyzers.organization_detector import OrganizationDetector
 
+        # Detect primary language for naming analysis
+        detected_language = "python"  # default
+        try:
+            from project.stack_detector import StackDetector
+
+            stack = StackDetector(project_dir)
+            stack.detect_languages()
+            langs = stack.stack.languages
+            if langs:
+                detected_language = langs[0]
+        except Exception:
+            pass  # Fall back to "python"
+
         # Detect naming conventions
         try:
-            naming_detector = NamingDetector(project_dir, {"language": "python"})
+            naming_detector = NamingDetector(
+                project_dir, {"language": detected_language}
+            )
             naming_conventions = naming_detector.detect_naming_conventions()
             save_detected_patterns_from_naming(spec_dir, naming_conventions)
-            pattern_counts["naming"] = len(
-                [k for k, v in naming_conventions.items() if v]
-            )
+            pattern_counts["naming"] = sum(1 for v in naming_conventions.values() if v)
             if is_debug_enabled():
                 debug(
                     "memory",

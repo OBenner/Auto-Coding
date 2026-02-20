@@ -37,7 +37,6 @@ def _extract_patterns_sync(spec_dir: Path, project_dir: Path) -> dict[str, int]:
 
         # Run async pattern detection in sync context
         loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
         try:
             pattern_counts = loop.run_until_complete(
                 detect_and_save_codebase_patterns(spec_dir, project_dir)
