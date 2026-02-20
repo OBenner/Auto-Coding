@@ -14,7 +14,7 @@ sys.path.insert(0, str(backend_dir))
 print("Testing imports...")
 
 try:
-    from cli.metrics_commands import handle_metrics_command, show_learning_metrics
+    from cli.metrics_commands import show_learning_metrics
     print("✓ cli.metrics_commands imported successfully")
 except ImportError as e:
     print(f"✗ Failed to import cli.metrics_commands: {e}")
@@ -23,8 +23,6 @@ except ImportError as e:
 try:
     from analysis.metrics_tracker import (
         get_detailed_metrics,
-        get_improvement_trends,
-        get_success_rate,
     )
     print("✓ analysis.metrics_tracker imported successfully")
 except ImportError as e:
@@ -32,7 +30,7 @@ except ImportError as e:
     sys.exit(1)
 
 try:
-    from analysis.failure_analyzer import analyze_failure, extract_root_cause
+    import analysis.failure_analyzer  # noqa: F401
     print("✓ analysis.failure_analyzer imported successfully")
 except ImportError as e:
     print(f"✗ Failed to import analysis.failure_analyzer: {e}")

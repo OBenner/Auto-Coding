@@ -27,6 +27,8 @@ import { registerIdeationHandlers } from './ideation-handlers';
 import { registerChangelogHandlers } from './changelog-handlers';
 import { registerInsightsHandlers } from './insights-handlers';
 import { registerMemoryHandlers } from './memory-handlers';
+import { registerSessionContextHandlers } from './session-context-handlers';
+import { registerSchedulerHandlers } from './scheduler-handlers';
 import { registerAppUpdateHandlers } from './app-update-handlers';
 import { registerDebugHandlers } from './debug-handlers';
 import { registerClaudeCodeHandlers } from './claude-code-handlers';
@@ -35,8 +37,11 @@ import { registerProfileHandlers } from './profile-handlers';
 import { registerScreenshotHandlers } from './screenshot-handlers';
 import { registerTerminalWorktreeIpcHandlers } from './terminal';
 import { registerMergeAnalyticsHandlers } from './merge-analytics-handlers';
+import { registerAnalyticsHandlers } from './analytics-handlers';
 import { registerTokenStatsHandlers } from './token-stats-handler';
 import { registerTemplateHandlers } from './template-handlers';
+import { registerSessionReplayHandlers } from './session-replay-handlers';
+import { registerFeedbackHandlers } from './feedback-handlers';
 import { notificationService } from '../notification-service';
 
 /**
@@ -107,6 +112,9 @@ export function setupIpcHandlers(
   // Memory & infrastructure handlers (for Graphiti/LadybugDB)
   registerMemoryHandlers();
 
+  // Session context handlers (conversation history tracking)
+  registerSessionContextHandlers(getMainWindow);
+
   // App auto-update handlers
   registerAppUpdateHandlers();
 
@@ -128,11 +136,23 @@ export function setupIpcHandlers(
   // Merge analytics handlers
   registerMergeAnalyticsHandlers();
 
+  // Productivity analytics handlers
+  registerAnalyticsHandlers();
+
   // Token statistics handlers
   registerTokenStatsHandlers();
 
   // Template library handlers
   registerTemplateHandlers();
+
+  // Session replay handlers
+  registerSessionReplayHandlers();
+
+  // Feedback handlers (adaptive agent learning)
+  registerFeedbackHandlers(getMainWindow);
+
+  // Scheduler handlers (build scheduling and queue management)
+  registerSchedulerHandlers(getMainWindow);
 
   console.warn('[IPC] All handler modules registered successfully');
 }
@@ -156,6 +176,7 @@ export {
   registerChangelogHandlers,
   registerInsightsHandlers,
   registerMemoryHandlers,
+  registerSessionContextHandlers,
   registerAppUpdateHandlers,
   registerDebugHandlers,
   registerClaudeCodeHandlers,
@@ -163,6 +184,10 @@ export {
   registerProfileHandlers,
   registerScreenshotHandlers,
   registerMergeAnalyticsHandlers,
+  registerAnalyticsHandlers,
   registerTokenStatsHandlers,
-  registerTemplateHandlers
+  registerTemplateHandlers,
+  registerSessionReplayHandlers,
+  registerFeedbackHandlers,
+  registerSchedulerHandlers
 };

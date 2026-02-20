@@ -15,6 +15,7 @@ This allows:
 """
 
 import asyncio
+import logging
 import os
 import re
 import shutil
@@ -25,6 +26,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import TypedDict, TypeVar
+
+logger = logging.getLogger(__name__)
 
 from core.gh_executable import get_gh_executable, invalidate_gh_cache
 from core.git_executable import get_git_executable, get_isolated_git_env, run_git
@@ -430,7 +433,7 @@ class WorktreeManager:
                     if os.path.samefile(resolved_path, registered_path):
                         return True
             except OSError:
-                pass
+                logger.debug("samefile comparison failed for worktree path check")
             # Fallback to normalized case comparison for non-existent paths
             if os.path.normcase(str(resolved_path)) == os.path.normcase(
                 str(registered_path)
@@ -503,7 +506,7 @@ class WorktreeManager:
                     stats["days_since_last_commit"] = (
                         datetime.now() - last_commit_date
                     ).days
-            except (ValueError, TypeError) as e:
+            except (ValueError, TypeError):
                 # If parsing fails, silently continue without date info
                 pass
 
@@ -645,6 +648,27 @@ class WorktreeManager:
             )
 
         print(f"Created worktree: {worktree_path.name} on branch {branch_name}")
+
+        # Auto-push branch with tracking (-u) to simplify later push/PR operations.
+        # Non-fatal: if push fails (e.g., no remote, offline), just warn and continue.
+        if not branch_exists:
+            remote_check = self._run_git(["remote", "get-url", "origin"])
+            if remote_check.returncode != 0:
+                logger.warning("Skipping auto-push: no 'origin' remote configured")
+            else:
+                push_result = self._run_git(
+                    ["push", "-u", "origin", branch_name],
+                    timeout=self.GIT_PUSH_TIMEOUT,
+                )
+                if push_result.returncode == 0:
+                    logger.info(
+                        f"Auto-pushed branch {branch_name} with upstream tracking"
+                    )
+                else:
+                    logger.warning(
+                        f"Could not auto-push branch {branch_name}: "
+                        f"{push_result.stderr.strip()}"
+                    )
 
         return WorktreeInfo(
             path=worktree_path,
@@ -1270,7 +1294,6 @@ class WorktreeManager:
             if result.returncode == 0:
                 return result.stdout.strip()
         except (
-            subprocess.TimeoutExpired,
             FileNotFoundError,
             subprocess.SubprocessError,
         ) as e:

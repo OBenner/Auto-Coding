@@ -1,11 +1,12 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import { motion, AnimatePresence } from 'motion/react';
 import {
   Plus,
   Settings,
   LayoutGrid,
   Terminal,
-  Map,
+  Map as MapIcon,
   BookOpen,
   Lightbulb,
   AlertCircle,
@@ -23,7 +24,11 @@ import {
   PanelLeft,
   PanelLeftClose,
   Puzzle,
-  BarChart3
+  BarChart3,
+  Play,
+  Calendar,
+  Activity,
+  MessageSquare
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { ScrollArea } from './ui/scroll-area';
@@ -53,10 +58,13 @@ import { AddProjectModal } from './AddProjectModal';
 import { GitSetupModal } from './GitSetupModal';
 import { RateLimitIndicator } from './RateLimitIndicator';
 import { ClaudeCodeStatusBadge } from './ClaudeCodeStatusBadge';
+import { useAuthFailureStore } from '../stores/auth-failure-store';
 import { UpdateBanner } from './UpdateBanner';
+import { SessionContextIndicator } from './SessionContextIndicator';
+import { NavIndicator } from './NavIndicator';
 import type { Project, AutoBuildVersionInfo, GitStatus, ProjectEnvConfig } from '../../shared/types';
 
-export type SidebarView = 'kanban' | 'terminals' | 'roadmap' | 'context' | 'ideation' | 'github-issues' | 'gitlab-issues' | 'github-prs' | 'gitlab-merge-requests' | 'changelog' | 'insights' | 'worktrees' | 'agent-tools' | 'plugins' | 'merge-analytics';
+export type SidebarView = 'kanban' | 'terminals' | 'roadmap' | 'context' | 'ideation' | 'github-issues' | 'gitlab-issues' | 'github-prs' | 'gitlab-merge-requests' | 'changelog' | 'insights' | 'worktrees' | 'agent-tools' | 'plugins' | 'analytics' | 'merge-analytics' | 'sessions' | 'scheduler' | 'feedback';
 
 interface SidebarProps {
   onSettingsClick: () => void;
@@ -77,14 +85,18 @@ const baseNavItems: NavItem[] = [
   { id: 'kanban', labelKey: 'navigation:items.kanban', icon: LayoutGrid, shortcut: 'K' },
   { id: 'terminals', labelKey: 'navigation:items.terminals', icon: Terminal, shortcut: 'A' },
   { id: 'insights', labelKey: 'navigation:items.insights', icon: Sparkles, shortcut: 'N' },
-  { id: 'roadmap', labelKey: 'navigation:items.roadmap', icon: Map, shortcut: 'D' },
+  { id: 'roadmap', labelKey: 'navigation:items.roadmap', icon: MapIcon, shortcut: 'D' },
   { id: 'ideation', labelKey: 'navigation:items.ideation', icon: Lightbulb, shortcut: 'I' },
   { id: 'changelog', labelKey: 'navigation:items.changelog', icon: FileText, shortcut: 'L' },
+  { id: 'scheduler', labelKey: 'navigation:items.scheduler', icon: Calendar, shortcut: 'S' },
   { id: 'context', labelKey: 'navigation:items.context', icon: BookOpen, shortcut: 'C' },
   { id: 'agent-tools', labelKey: 'navigation:items.agentTools', icon: Wrench, shortcut: 'M' },
   { id: 'plugins', labelKey: 'navigation:items.plugins', icon: Puzzle, shortcut: 'U' },
   { id: 'worktrees', labelKey: 'navigation:items.worktrees', icon: GitBranch, shortcut: 'W' },
-  { id: 'merge-analytics', labelKey: 'navigation:items.mergeAnalytics', icon: BarChart3, shortcut: 'Y' }
+  { id: 'analytics', labelKey: 'navigation:items.analytics', icon: Activity, shortcut: 'T' },
+  { id: 'merge-analytics', labelKey: 'navigation:items.mergeAnalytics', icon: BarChart3, shortcut: 'Y' },
+  { id: 'sessions', labelKey: 'navigation:items.sessions', icon: Play },
+  { id: 'feedback', labelKey: 'navigation:items.feedback', icon: MessageSquare, shortcut: 'F' }
 ];
 
 // GitHub nav items shown when GitHub is enabled
@@ -109,6 +121,7 @@ export function Sidebar({
   const projects = useProjectStore((state) => state.projects);
   const selectedProjectId = useProjectStore((state) => state.selectedProjectId);
   const settings = useSettingsStore((state) => state.settings);
+  const hasPendingAuthFailure = useAuthFailureStore((state) => state.hasPendingAuthFailure);
 
   const [showAddProjectModal, setShowAddProjectModal] = useState(false);
   const [showInitDialog, setShowInitDialog] = useState(false);
@@ -117,11 +130,21 @@ export function Sidebar({
   const [pendingProject, setPendingProject] = useState<Project | null>(null);
   const [isInitializing, setIsInitializing] = useState(false);
   const [envConfig, setEnvConfig] = useState<ProjectEnvConfig | null>(null);
+  const [indicatorPosition, setIndicatorPosition] = useState<{
+    top: number;
+    height: number;
+    opacity: number;
+  }>({ top: 0, height: 0, opacity: 0 });
 
   const selectedProject = projects.find((p) => p.id === selectedProjectId);
 
   // Sidebar collapsed state from settings
   const isCollapsed = settings.sidebarCollapsed ?? false;
+
+  // Refs for position tracking (used for animated indicator)
+  const navContainerRef = useRef<HTMLDivElement>(null);
+  const navItemRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
+  const resizeObserverRef = useRef<ResizeObserver | null>(null);
 
   const toggleSidebar = () => {
     saveSettings({ sidebarCollapsed: !isCollapsed });
@@ -196,6 +219,63 @@ export function Sidebar({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [selectedProjectId, onViewChange, visibleNavItems]);
+
+  // Track position changes using ResizeObserver for smooth indicator animations
+  useEffect(() => {
+    const container = navContainerRef.current;
+    const activeItem = navItemRefs.current.get(activeView);
+
+    if (!container || !activeItem) {
+      setIndicatorPosition((prev) => ({ ...prev, opacity: 0 }));
+      return;
+    }
+
+    const updatePosition = () => {
+      const containerEl = navContainerRef.current;
+      const activeEl = navItemRefs.current.get(activeView);
+
+      if (!containerEl || !activeEl) {
+        setIndicatorPosition((prev) => ({ ...prev, opacity: 0 }));
+        return;
+      }
+
+      const containerRect = containerEl.getBoundingClientRect();
+      const itemRect = activeEl.getBoundingClientRect();
+
+      const top = itemRect.top - containerRect.top;
+      const height = itemRect.height;
+
+      setIndicatorPosition({ top, height, opacity: 1 });
+    };
+
+    // Initial measurement
+    updatePosition();
+
+    const handleScroll = () => {
+      requestAnimationFrame(updatePosition);
+    };
+
+    // Observe layout changes if ResizeObserver is available
+    if (typeof ResizeObserver !== 'undefined') {
+      resizeObserverRef.current = new ResizeObserver(() => {
+        requestAnimationFrame(updatePosition);
+      });
+
+      resizeObserverRef.current.observe(container);
+      navItemRefs.current.forEach((item) => {
+        resizeObserverRef.current?.observe(item);
+      });
+    }
+
+    // Also update on scroll of the scrollable area
+    container.addEventListener('scroll', handleScroll, { passive: true });
+
+    return () => {
+      resizeObserverRef.current?.disconnect();
+      resizeObserverRef.current = null;
+      container.removeEventListener('scroll', handleScroll);
+    };
+  }, [activeView, visibleNavItems, isCollapsed]);
 
   // Check git status when project changes
   useEffect(() => {
@@ -280,11 +360,22 @@ export function Sidebar({
     const Icon = item.icon;
 
     const button = (
-      <button
+      <motion.button
         key={item.id}
+        ref={(el) => {
+          if (el) {
+            navItemRefs.current.set(item.id, el);
+          } else {
+            navItemRefs.current.delete(item.id);
+          }
+        }}
         onClick={() => handleNavClick(item.id)}
         disabled={!selectedProjectId}
         aria-keyshortcuts={item.shortcut}
+        initial={{ opacity: 0, x: -10 }}
+        animate={{ opacity: 1, x: 0 }}
+        exit={{ opacity: 0, x: -10 }}
+        transition={{ duration: 0.2, ease: 'easeInOut' }}
         className={cn(
           'flex w-full items-center rounded-lg text-sm transition-all duration-200',
           'hover:bg-accent hover:text-accent-foreground',
@@ -304,7 +395,7 @@ export function Sidebar({
             )}
           </>
         )}
-      </button>
+      </motion.button>
     );
 
     // Wrap in tooltip when collapsed
@@ -378,14 +469,25 @@ export function Sidebar({
         <ScrollArea className="flex-1">
           <div className={cn("py-4 transition-all duration-300", isCollapsed ? "px-2" : "px-3")}>
             {/* Project Section */}
-            <div>
+            <div className="relative">
               {!isCollapsed && (
                 <h3 className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   {t('sections.project')}
                 </h3>
               )}
-              <nav className="space-y-1">
-                {visibleNavItems.map(renderNavItem)}
+              {/* Animated indicator for active nav item */}
+              {selectedProjectId && (
+                <NavIndicator
+                  activeView={activeView}
+                  containerRef={navContainerRef}
+                  itemRefs={navItemRefs}
+                  position={indicatorPosition}
+                />
+              )}
+              <nav ref={navContainerRef} className="space-y-1">
+                <AnimatePresence mode="popLayout">
+                  {visibleNavItems.map((item) => renderNavItem(item))}
+                </AnimatePresence>
               </nav>
             </div>
           </div>
@@ -404,6 +506,9 @@ export function Sidebar({
           {/* Claude Code Status Badge */}
           {!isCollapsed && <ClaudeCodeStatusBadge />}
 
+          {/* Session Context Indicator */}
+          {!isCollapsed && <SessionContextIndicator projectId={selectedProjectId ?? undefined} taskId={selectedProject?.autoBuildPath ?? undefined} />}
+
           {/* Settings and Help row */}
           <div className={cn(
             "flex items-center",
@@ -414,14 +519,25 @@ export function Sidebar({
                 <Button
                   variant="ghost"
                   size={isCollapsed ? "icon" : "sm"}
-                  className={isCollapsed ? "" : "flex-1 justify-start gap-2"}
+                  className={cn(isCollapsed ? "relative" : "relative flex-1 justify-start gap-2")}
                   onClick={onSettingsClick}
+                  aria-label={isCollapsed ? t('actions.settings') : undefined}
                 >
                   <Settings className="h-4 w-4" />
                   {!isCollapsed && t('actions.settings')}
+                  {hasPendingAuthFailure && (
+                    <span
+                      className="absolute top-1 right-1 h-2 w-2 rounded-full bg-destructive"
+                      aria-label={t('common:auth.failure.badgeTooltip')}
+                    />
+                  )}
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side={isCollapsed ? "right" : "top"}>{t('tooltips.settings')}</TooltipContent>
+              <TooltipContent side={isCollapsed ? "right" : "top"}>
+                {hasPendingAuthFailure
+                  ? t('common:auth.failure.badgeTooltip')
+                  : t('tooltips.settings')}
+              </TooltipContent>
             </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>

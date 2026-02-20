@@ -305,6 +305,7 @@ class LiteLLMProvider(AIEngineProvider):
 
         # Verify litellm is installed
         try:
+            # Optional: litellm is an optional runtime dependency
             import litellm  # noqa: F401
         except ImportError as e:
             raise ProviderNotInstalled(
@@ -416,6 +417,7 @@ class LiteLLMProvider(AIEngineProvider):
 
         # Check if litellm is installed
         try:
+            # Optional: litellm is an optional runtime dependency
             import litellm  # noqa: F401
 
             return True

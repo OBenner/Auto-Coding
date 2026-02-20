@@ -9,8 +9,13 @@ Handles session memory storage using dual-layer approach:
 
 import logging
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from core.sentry import capture_exception
+
+if TYPE_CHECKING:
+    from agents.session_context import SessionContext
+
 from debug import (
     debug,
     debug_detailed,
@@ -20,7 +25,7 @@ from debug import (
     debug_warning,
     is_debug_enabled,
 )
-from graphiti_config import get_graphiti_status, is_graphiti_enabled
+from integrations.graphiti.config import get_graphiti_status, is_graphiti_enabled
 
 # Import from parent memory package
 # Now safe since this module is named memory_manager (not memory)
@@ -28,6 +33,63 @@ from memory import save_session_insights as save_file_based_memory
 from memory.graphiti_helpers import get_graphiti_memory
 
 logger = logging.getLogger(__name__)
+
+
+async def get_session_context(
+    spec_dir: Path,
+    project_dir: Path,
+) -> "SessionContext | None":
+    """
+    Get SessionContext instance for managing conversation history in Graphiti.
+
+    This provides access to session context storage and retrieval for:
+    - Persisting conversation history across restarts
+    - Tracking code references
+    - Optimizing context window
+
+    Args:
+        spec_dir: Spec directory
+        project_dir: Project root directory
+
+    Returns:
+        SessionContext instance or None if initialization fails
+    """
+    try:
+        from agents.session_context import SessionContext
+
+        # Create SessionContext instance
+        session_context = SessionContext(
+            spec_dir=spec_dir,
+            project_dir=project_dir,
+        )
+
+        # Initialize Graphiti connection
+        if await session_context.initialize():
+            debug_success(
+                "memory",
+                "SessionContext initialized",
+                spec_dir=str(spec_dir),
+            )
+            return session_context
+        else:
+            debug_warning(
+                "memory",
+                "SessionContext initialization failed - Graphiti not available",
+            )
+            return None
+
+    except Exception as e:
+        debug_error(
+            "memory",
+            f"Failed to create SessionContext: {e}",
+        )
+        logger.warning(f"Failed to create SessionContext: {e}")
+        capture_exception(
+            e,
+            operation="get_session_context",
+            spec_dir=str(spec_dir),
+        )
+        return None
 
 
 def debug_memory_system_status() -> None:
@@ -125,7 +187,7 @@ async def get_pattern_suggestions(
     memory = None
     try:
         # Get GraphitiMemory instance
-        memory = await get_graphiti_memory(spec_dir, project_dir)
+        memory = get_graphiti_memory(spec_dir, project_dir)
         if memory is None:
             if is_debug_enabled():
                 debug_warning(
@@ -274,7 +336,7 @@ async def get_graphiti_context(
     memory = None
     try:
         # Use centralized helper for GraphitiMemory instantiation (async)
-        memory = await get_graphiti_memory(spec_dir, project_dir)
+        memory = get_graphiti_memory(spec_dir, project_dir)
         if memory is None:
             if is_debug_enabled():
                 debug_warning(
@@ -403,7 +465,7 @@ async def get_graphiti_context(
         if memory is not None:
             try:
                 await memory.close()
-            except Exception as e:
+            except Exception:
                 logger.debug(
                     "Failed to close Graphiti memory connection", exc_info=True
                 )
@@ -494,15 +556,14 @@ async def save_session_memory(
         memory = None
         try:
             # Use centralized helper for GraphitiMemory instantiation (async)
-            memory = await get_graphiti_memory(spec_dir, project_dir)
-            if memory is None:
-                if is_debug_enabled():
-                    debug_warning("memory", "GraphitiMemory not available")
-                    debug(
-                        "memory",
-                        "get_graphiti_memory() returned None - this usually means Graphiti is disabled or provider config is invalid",
-                    )
-                # Continue to file-based fallback
+            memory = get_graphiti_memory(spec_dir, project_dir)
+            if memory is None and is_debug_enabled():
+                debug_warning("memory", "GraphitiMemory not available")
+                debug(
+                    "memory",
+                    "get_graphiti_memory() returned None - this usually means Graphiti is disabled or provider config is invalid",
+                )
+            # Continue to file-based fallback
             if memory is not None and memory.is_enabled:
                 if is_debug_enabled():
                     debug("memory", "Saving to Graphiti...")
@@ -627,6 +688,378 @@ async def save_session_memory(
         return False, "none"
 
 
+async def save_feedback(
+    spec_dir: Path,
+    project_dir: Path,
+    feedback_type: str,
+    task_description: str,
+    agent_type: str,
+    context: dict | None = None,
+    rating: int | None = None,
+) -> bool:
+    """
+    Save user feedback (accept/reject/modify) to memory and update preferences.
+
+    This is the primary feedback collection function that tracks all user
+    interactions with agent outputs and updates the preference profile to
+    enable adaptive behavior.
+
+    Args:
+        spec_dir: Spec directory
+        project_dir: Project root directory
+        feedback_type: Type of feedback ("accepted", "rejected", "modified")
+        task_description: Description of the task that was evaluated
+        agent_type: Type of agent that produced the output (planner, coder, qa_reviewer, etc.)
+        context: Optional additional context about the feedback
+                 For "modified": should include what was changed
+                 For "rejected": should include why it was rejected
+        rating: Optional rating (1-5 for stars, or 0/1 for thumbs down/up)
+
+    Returns:
+        True if saved successfully, False otherwise
+    """
+    if not is_graphiti_enabled():
+        if is_debug_enabled():
+            debug("memory", "Graphiti not enabled, skipping feedback save")
+        return False
+
+    memory = None
+    try:
+        memory = await get_graphiti_memory(spec_dir, project_dir)
+        if memory is None:
+            if is_debug_enabled():
+                debug_warning("memory", "GraphitiMemory not available for feedback")
+            return False
+
+        if is_debug_enabled():
+            debug_data = {
+                "feedback_type": feedback_type,
+                "agent_type": agent_type,
+                "task": task_description[:100],
+            }
+            if rating is not None:
+                debug_data["rating"] = rating
+            debug(
+                "memory",
+                "Saving user feedback",
+                **debug_data,
+            )
+
+        # Save feedback to preference profile via Graphiti
+        from agents.preferences import FeedbackType
+
+        # Validate feedback type
+        try:
+            feedback_enum = FeedbackType(feedback_type)
+        except ValueError:
+            logger.warning(f"Invalid feedback type: {feedback_type}")
+            if is_debug_enabled():
+                debug_error(
+                    "memory", "Invalid feedback type", feedback_type=feedback_type
+                )
+            return False
+
+        # Store feedback in Graphiti as an episode
+        episode_data = {
+            "episode_type": "user_feedback",
+            "feedback_type": feedback_type,
+            "task_description": task_description,
+            "agent_type": agent_type,
+            "context": context or {},
+        }
+        if rating is not None:
+            episode_data["rating"] = rating
+
+        # Build insights based on feedback type
+        insights = {
+            "what_failed": [],
+            "what_worked": [],
+            "discoveries": {},
+            "recommendations_for_next_session": [],
+            "subtasks_completed": [],
+            "_user_feedback": episode_data,
+        }
+
+        if feedback_enum == FeedbackType.ACCEPTED:
+            insights["what_worked"].append(
+                f"{agent_type} output accepted for: {task_description[:200]}"
+            )
+            insights["recommendations_for_next_session"].append(
+                f"Continue current approach for {agent_type} tasks"
+            )
+        elif feedback_enum == FeedbackType.REJECTED:
+            reason = (
+                context.get("reason", "No reason provided")
+                if context
+                else "No reason provided"
+            )
+            insights["what_failed"].append(
+                f"{agent_type} output rejected: {task_description[:200]}"
+            )
+            insights["discoveries"]["gotchas_encountered"] = [
+                {
+                    "gotcha": f"User rejected {agent_type} approach",
+                    "solution": reason[:500],
+                    "source": "user_feedback",
+                }
+            ]
+            insights["recommendations_for_next_session"].append(
+                f"Adjust {agent_type} approach: {reason[:300]}"
+            )
+        elif feedback_enum == FeedbackType.MODIFIED:
+            modifications = (
+                context.get("modifications", "User made changes")
+                if context
+                else "User made changes"
+            )
+            reason = context.get("reason", "") if context else ""
+            insights["what_worked"].append(
+                f"{agent_type} output partially accepted (with modifications)"
+            )
+            insights["what_failed"].append(
+                f"Required modification: {modifications[:200]}"
+            )
+            if reason:
+                insights["discoveries"]["patterns"] = [
+                    {
+                        "pattern": f"User prefers different approach for {task_description[:100]}",
+                        "reason": reason[:300],
+                        "source": "user_feedback",
+                    }
+                ]
+            insights["recommendations_for_next_session"].append(
+                f"Apply learned modifications: {modifications[:300]}"
+            )
+
+        # Save to Graphiti
+        result = await memory.save_session_insights(
+            session_num=0,  # Feedback is session-independent
+            insights=insights,
+        )
+
+        # Also update preference profile directly
+        profile_kwargs = {
+            "feedback_type": feedback_enum,
+            "task_description": task_description,
+            "agent_type": agent_type,
+            "context": context or {},
+        }
+        if rating is not None:
+            profile_kwargs["rating"] = rating
+        profile_result = await memory.add_feedback_to_profile(**profile_kwargs)
+
+        if result and profile_result:
+            logger.info(f"User feedback saved: {feedback_type} for {agent_type} task")
+            if is_debug_enabled():
+                debug_success(
+                    "memory",
+                    "Feedback saved successfully",
+                    feedback_type=feedback_type,
+                    profile_updated=profile_result,
+                )
+        return bool(result and profile_result)
+
+    except Exception as e:
+        logger.warning(f"Failed to save user feedback: {e}")
+        if is_debug_enabled():
+            debug_error("memory", "Feedback save failed", error=str(e))
+        capture_exception(
+            e,
+            operation="save_feedback",
+            feedback_type=feedback_type,
+            agent_type=agent_type,
+            spec_dir=str(spec_dir),
+            project_dir=str(project_dir),
+        )
+        return False
+    finally:
+        if memory is not None:
+            try:
+                await memory.close()
+            except Exception:
+                pass
+
+
+async def track_improvement(
+    spec_dir: Path,
+    project_dir: Path,
+    improvement_description: str,
+    feedback_ids: list[str] | None = None,
+    before_metrics: dict | None = None,
+    after_metrics: dict | None = None,
+    agent_type: str | None = None,
+    context: dict | None = None,
+) -> bool:
+    """
+    Track an improvement made in response to user feedback.
+
+    This function records when user feedback has led to a measurable improvement
+    in agent behavior, code quality, or user satisfaction. This creates a feedback
+    loop showing how user input directly influences the system.
+
+    Args:
+        spec_dir: Spec directory
+        project_dir: Project root directory
+        improvement_description: Description of what was improved
+        feedback_ids: Optional list of feedback IDs that triggered this improvement
+        before_metrics: Optional metrics before the improvement
+                       (e.g., {"success_rate": 0.6, "avg_rating": 3.2})
+        after_metrics: Optional metrics after the improvement
+                      (e.g., {"success_rate": 0.85, "avg_rating": 4.1})
+        agent_type: Optional agent type that was improved (planner, coder, etc.)
+        context: Optional additional context about the improvement
+
+    Returns:
+        True if tracked successfully, False otherwise
+
+    Example:
+        >>> await track_improvement(
+        ...     spec_dir=Path(".auto-claude/specs/001"),
+        ...     project_dir=Path("."),
+        ...     improvement_description="Improved error handling based on user feedback",
+        ...     feedback_ids=["feedback_123", "feedback_456"],
+        ...     before_metrics={"error_rate": 0.15},
+        ...     after_metrics={"error_rate": 0.03},
+        ...     agent_type="coder"
+        ... )
+    """
+    if not is_graphiti_enabled():
+        if is_debug_enabled():
+            debug("memory", "Graphiti not enabled, skipping improvement tracking")
+        return False
+
+    memory = None
+    try:
+        memory = await get_graphiti_memory(spec_dir, project_dir)
+        if memory is None:
+            if is_debug_enabled():
+                debug_warning(
+                    "memory", "GraphitiMemory not available for improvement tracking"
+                )
+            return False
+
+        if is_debug_enabled():
+            debug_data = {
+                "improvement": improvement_description[:100],
+            }
+            if feedback_ids:
+                debug_data["feedback_count"] = len(feedback_ids)
+            if agent_type:
+                debug_data["agent_type"] = agent_type
+            debug(
+                "memory",
+                "Tracking improvement",
+                **debug_data,
+            )
+
+        # Import episode type
+        from integrations.graphiti.queries_pkg.schema import EPISODE_TYPE_IMPROVEMENT
+
+        # Calculate improvement delta if metrics provided
+        improvement_delta = {}
+        if before_metrics and after_metrics:
+            for key in set(before_metrics.keys()) | set(after_metrics.keys()):
+                before_val = before_metrics.get(key)
+                after_val = after_metrics.get(key)
+                if before_val is not None and after_val is not None:
+                    if isinstance(before_val, (int, float)) and isinstance(
+                        after_val, (int, float)
+                    ):
+                        delta = after_val - before_val
+                        percent_change = (
+                            round(((delta / before_val) * 100), 2)
+                            if before_val != 0
+                            else None
+                        )
+                        improvement_delta[key] = {
+                            "before": before_val,
+                            "after": after_val,
+                            "delta": delta,
+                            "percent_change": percent_change,
+                        }
+
+        # Store improvement in Graphiti as an episode
+        episode_data = {
+            "episode_type": EPISODE_TYPE_IMPROVEMENT,
+            "improvement_description": improvement_description,
+            "feedback_ids": feedback_ids or [],
+            "before_metrics": before_metrics or {},
+            "after_metrics": after_metrics or {},
+            "improvement_delta": improvement_delta,
+            "context": context or {},
+        }
+        if agent_type:
+            episode_data["agent_type"] = agent_type
+
+        # Build insights that show how feedback led to improvement
+        insights = {
+            "what_worked": [
+                f"User feedback led to improvement: {improvement_description[:200]}"
+            ],
+            "discoveries": {
+                "improvements": [
+                    {
+                        "description": improvement_description,
+                        "feedback_count": len(feedback_ids) if feedback_ids else 0,
+                        "metrics_delta": improvement_delta,
+                        "source": "user_feedback_loop",
+                    }
+                ]
+            },
+            "recommendations_for_next_session": [],
+            "_improvement": episode_data,
+        }
+
+        # Add specific recommendations based on metrics
+        if improvement_delta:
+            for metric, delta_data in improvement_delta.items():
+                if delta_data["delta"] > 0:  # Improvement
+                    insights["recommendations_for_next_session"].append(
+                        f"Continue approach that improved {metric} by {delta_data['percent_change']:.1f}%"
+                    )
+
+        # Save to Graphiti
+        result = await memory.save_session_insights(
+            session_num=0,  # Improvements are session-independent
+            insights=insights,
+        )
+
+        if result:
+            logger.info(
+                f"Improvement tracked: {improvement_description[:100]} "
+                f"(based on {len(feedback_ids) if feedback_ids else 0} feedback items)"
+            )
+            if is_debug_enabled():
+                debug_success(
+                    "memory",
+                    "Improvement tracked successfully",
+                    improvement=improvement_description[:100],
+                    feedback_count=len(feedback_ids) if feedback_ids else 0,
+                    metrics_improved=list(improvement_delta.keys()),
+                )
+
+        return bool(result)
+
+    except Exception as e:
+        logger.warning(f"Failed to track improvement: {e}")
+        if is_debug_enabled():
+            debug_error("memory", "Improvement tracking failed", error=str(e))
+        capture_exception(
+            e,
+            operation="track_improvement",
+            improvement=improvement_description[:100],
+            spec_dir=str(spec_dir),
+            project_dir=str(project_dir),
+        )
+        return False
+    finally:
+        if memory is not None:
+            try:
+                await memory.close()
+            except Exception:
+                pass
+
+
 async def save_user_correction(
     spec_dir: Path,
     project_dir: Path,
@@ -636,6 +1069,9 @@ async def save_user_correction(
 ) -> bool:
     """
     Save a user correction to Graphiti memory.
+
+    DEPRECATED: Use save_feedback() instead for new code.
+    This is kept for backward compatibility with QA_FIX_REQUEST.md workflow.
 
     Called when the user manually edits QA_FIX_REQUEST.md to provide
     better guidance than the QA agent generated.
@@ -657,7 +1093,7 @@ async def save_user_correction(
 
     memory = None
     try:
-        memory = await get_graphiti_memory(spec_dir, project_dir)
+        memory = get_graphiti_memory(spec_dir, project_dir)
         if memory is None:
             if is_debug_enabled():
                 debug_warning(

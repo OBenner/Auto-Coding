@@ -8,21 +8,20 @@ Verifies that:
 3. Complete workflow integration functions properly
 """
 
-import json
 import sys
 from pathlib import Path
 
 # Add auto-claude directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "apps" / "backend"))
 
-from critique import (
+from spec.critique import (
     generate_critique_prompt,
     parse_critique_response,
     should_proceed,
     format_critique_summary,
     CritiqueResult,
 )
-from implementation_plan import Subtask, SubtaskStatus, Verification, VerificationType
+from implementation_plan import Subtask, SubtaskStatus
 
 
 def test_critique_data_structures():

@@ -97,9 +97,9 @@ class TestPlannerToCoderTransition:
 
     def test_first_run_flag_indicates_planner_mode(self, test_env):
         """Test that first_run=True indicates planner mode."""
-        from prompts import is_first_run
+        from prompts_pkg import is_first_run
 
-        temp_dir, spec_dir, project_dir = test_env
+        _temp_dir, spec_dir, _project_dir = test_env
 
         # Empty spec directory - should be first run (planner mode)
         assert is_first_run(spec_dir) is True, "Empty spec should be first run"
@@ -115,7 +115,7 @@ class TestPlannerToCoderTransition:
         """Test that planning phase transitions to coding phase correctly."""
         from progress import get_next_subtask
 
-        temp_dir, spec_dir, project_dir = test_env
+        _temp_dir, spec_dir, _project_dir = test_env
 
         # Create implementation plan with pending subtask
         create_implementation_plan(spec_dir, [
@@ -133,7 +133,7 @@ class TestPlannerToCoderTransition:
         """Test that planner completion (plan created) enables coder session."""
         from progress import is_build_complete, count_subtasks
 
-        temp_dir, spec_dir, project_dir = test_env
+        _temp_dir, spec_dir, _project_dir = test_env
 
         # Create plan with pending subtasks
         create_implementation_plan(spec_dir, [
@@ -153,7 +153,7 @@ class TestPlannerToCoderTransition:
         """Test that subtask information is preserved during phase transition."""
         from agents.utils import load_implementation_plan, find_subtask_in_plan
 
-        temp_dir, spec_dir, project_dir = test_env
+        _temp_dir, spec_dir, _project_dir = test_env
 
         # Create plan with detailed subtask info
         subtask_data = {
@@ -195,7 +195,7 @@ class TestPostSessionProcessing:
         from recovery import RecoveryManager
         from agents.session import post_session_processing
 
-        temp_dir, spec_dir, project_dir = test_env
+        _temp_dir, spec_dir, project_dir = test_env
 
         # Create plan with completed subtask
         create_implementation_plan(spec_dir, [
@@ -206,11 +206,11 @@ class TestPostSessionProcessing:
         commit_before = get_latest_commit(project_dir)
 
         # Mock memory-related functions to avoid side effects
-        with patch("agents.session.extract_session_insights", new_callable=AsyncMock) as mock_insights, \
-             patch("agents.session.save_session_memory", new_callable=AsyncMock) as mock_memory:
+        with patch("agents.session.extract_session_insights", new_callable=AsyncMock) as _mock_insights, \
+             patch("agents.session.save_session_memory", new_callable=AsyncMock) as _mock_memory:
 
-            mock_insights.return_value = {"file_insights": [], "patterns_discovered": []}
-            mock_memory.return_value = (True, "file")
+            _mock_insights.return_value = {"file_insights": [], "patterns_discovered": []}
+            _mock_memory.return_value = (True, "file")
 
             # Run async function using asyncio.run()
             async def run_test():
@@ -240,7 +240,7 @@ class TestPostSessionProcessing:
         from recovery import RecoveryManager
         from agents.session import post_session_processing
 
-        temp_dir, spec_dir, project_dir = test_env
+        _temp_dir, spec_dir, project_dir = test_env
 
         # Create plan with in_progress subtask
         create_implementation_plan(spec_dir, [
@@ -250,11 +250,11 @@ class TestPostSessionProcessing:
         recovery_manager = RecoveryManager(spec_dir, project_dir)
         commit_before = get_latest_commit(project_dir)
 
-        with patch("agents.session.extract_session_insights", new_callable=AsyncMock) as mock_insights, \
-             patch("agents.session.save_session_memory", new_callable=AsyncMock) as mock_memory:
+        with patch("agents.session.extract_session_insights", new_callable=AsyncMock) as _mock_insights, \
+             patch("agents.session.save_session_memory", new_callable=AsyncMock) as _mock_memory:
 
-            mock_insights.return_value = {"file_insights": [], "patterns_discovered": []}
-            mock_memory.return_value = (True, "file")
+            _mock_insights.return_value = {"file_insights": [], "patterns_discovered": []}
+            _mock_memory.return_value = (True, "file")
 
             # Run async function using asyncio.run()
             async def run_test():
@@ -283,7 +283,7 @@ class TestPostSessionProcessing:
         from recovery import RecoveryManager
         from agents.session import post_session_processing
 
-        temp_dir, spec_dir, project_dir = test_env
+        _temp_dir, spec_dir, project_dir = test_env
 
         # Create plan with pending subtask (no progress made)
         create_implementation_plan(spec_dir, [
@@ -293,11 +293,11 @@ class TestPostSessionProcessing:
         recovery_manager = RecoveryManager(spec_dir, project_dir)
         commit_before = get_latest_commit(project_dir)
 
-        with patch("agents.session.extract_session_insights", new_callable=AsyncMock) as mock_insights, \
-             patch("agents.session.save_session_memory", new_callable=AsyncMock) as mock_memory:
+        with patch("agents.session.extract_session_insights", new_callable=AsyncMock) as _mock_insights, \
+             patch("agents.session.save_session_memory", new_callable=AsyncMock) as _mock_memory:
 
-            mock_insights.return_value = {"file_insights": [], "patterns_discovered": []}
-            mock_memory.return_value = (True, "file")
+            _mock_insights.return_value = {"file_insights": [], "patterns_discovered": []}
+            _mock_memory.return_value = (True, "file")
 
             # Run async function using asyncio.run()
             async def run_test():
@@ -328,7 +328,7 @@ class TestSubtaskStateTransitions:
         """Test finding a subtask by ID in the plan."""
         from agents.utils import load_implementation_plan, find_subtask_in_plan
 
-        temp_dir, spec_dir, project_dir = test_env
+        _temp_dir, spec_dir, _project_dir = test_env
 
         create_implementation_plan(spec_dir, [
             {"id": "subtask-1", "description": "First task", "status": "completed"},
@@ -355,7 +355,7 @@ class TestSubtaskStateTransitions:
         """Test finding the phase containing a subtask."""
         from agents.utils import load_implementation_plan, find_phase_for_subtask
 
-        temp_dir, spec_dir, project_dir = test_env
+        _temp_dir, spec_dir, _project_dir = test_env
 
         # Create plan with multiple phases
         plan = {
@@ -405,7 +405,7 @@ class TestSubtaskStateTransitions:
         """Test that get_next_subtask skips completed subtasks."""
         from progress import get_next_subtask
 
-        temp_dir, spec_dir, project_dir = test_env
+        _temp_dir, spec_dir, _project_dir = test_env
 
         create_implementation_plan(spec_dir, [
             {"id": "subtask-1", "description": "First task", "status": "completed"},
@@ -422,7 +422,7 @@ class TestSubtaskStateTransitions:
         """Test that build is complete when all subtasks are completed."""
         from progress import is_build_complete
 
-        temp_dir, spec_dir, project_dir = test_env
+        _temp_dir, spec_dir, _project_dir = test_env
 
         create_implementation_plan(spec_dir, [
             {"id": "subtask-1", "description": "First task", "status": "completed"},
@@ -442,7 +442,7 @@ class TestHandoffDataPreservation:
 
     def test_subtask_context_loading(self, test_env):
         """Test that subtask context is properly loaded for coder."""
-        from prompt_generator import load_subtask_context
+        from prompts_pkg import load_subtask_context
 
         temp_dir, spec_dir, project_dir = test_env
 
@@ -763,7 +763,6 @@ class TestSubtaskCompletionDetection:
 
     def test_subtask_status_transition_through_in_progress(self, test_env):
         """Test detecting subtask transition through in_progress state."""
-        from agents.utils import load_implementation_plan, find_subtask_in_plan
         from progress import count_subtasks_detailed
 
         temp_dir, spec_dir, project_dir = test_env
@@ -1256,7 +1255,6 @@ class TestQALoopWorkflow:
     def test_full_qa_workflow_with_one_rejection(self, test_env):
         """Test QA workflow with one rejection followed by approval."""
         from qa_loop import (
-            should_run_qa,
             should_run_fixes,
             is_qa_approved,
             is_qa_rejected,
