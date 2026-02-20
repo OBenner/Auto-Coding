@@ -6,6 +6,7 @@
  */
 
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
 
 interface GitHubUser {
@@ -22,6 +23,7 @@ interface ConnectionStatus {
 }
 
 export function GitHubConnect() {
+	const { t } = useTranslation(["common"]);
 	const [status, setStatus] = useState<ConnectionStatus>({ connected: false });
 	const [isLoading, setIsLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
@@ -76,7 +78,7 @@ export function GitHubConnect() {
 					</svg>
 				</div>
 				<div className="flex-1">
-					<h2 className="text-xl font-semibold text-gray-900">GitHub</h2>
+					<h2 className="text-xl font-semibold text-gray-900">{t("common:services.github")}</h2>
 					<p className="text-sm text-gray-600">
 						Connect your GitHub account to access repositories
 					</p>

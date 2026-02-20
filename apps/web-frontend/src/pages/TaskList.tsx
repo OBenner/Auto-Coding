@@ -3,18 +3,19 @@
  *
  * Displays all tasks from the backend in a grid layout.
  * Allows navigation to individual task details.
+ *
+ * Integrated with task store for state management.
  */
 
-import { RefreshCw } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { apiClient } from "../api/client";
-import type { TaskSummary } from "../api/types";
-import { PageErrorState, PageLoadingState } from "../components/PageStates";
+import { RefreshCw, AlertCircle } from "lucide-react";
 import { TaskCard } from "../components/TaskCard";
 import { Button } from "../components/ui/button";
 import { ScrollArea } from "../components/ui/scroll-area";
+import { useTaskStore } from "../store/task-store";
 import type { Task } from "../shared/types";
+import type { TaskSummary } from "../api/types";
 
 interface TaskListProps {
 	onTaskClick: (taskId: string) => void;
@@ -22,68 +23,68 @@ interface TaskListProps {
 }
 
 export function TaskList({ onTaskClick, onCreateTask }: TaskListProps) {
-	const { t } = useTranslation(["common"]);
-	const [tasks, setTasks] = useState<Task[]>([]);
-	const [isLoading, setIsLoading] = useState(true);
-	const [error, setError] = useState<string | null>(null);
+	const { t } = useTranslation(["common", "tasks", "navigation", "buttons"]);
+
+	// Get state and actions from task store
+	const {
+		tasks,
+		isLoading,
+		error,
+		fetchTasks,
+		refreshTasks,
+	} = useTaskStore();
+
+	// Track refresh state separately from initial loading
 	const [isRefreshing, setIsRefreshing] = useState(false);
 
 	/**
 	 * Convert API TaskSummary to frontend Task type
+	 * Maps backend API response to frontend Task type for TaskCard component
 	 */
-	const convertTaskSummary = useCallback((summary: TaskSummary): Task => {
-		return {
-			id: summary.number,
-			specId: summary.number,
-			title: summary.name,
-			description: `Status: ${summary.status}`,
-			status: "backlog", // Default status - will be updated with real data in future
-			subtasks: [],
-			createdAt: new Date(),
-			updatedAt: new Date(),
-			metadata: {},
-		};
-	}, []);
-
-	/**
-	 * Fetch tasks from the API
-	 */
-	const fetchTasks = useCallback(
-		async (showRefreshIndicator = false) => {
-			try {
-				if (showRefreshIndicator) {
-					setIsRefreshing(true);
-				} else {
-					setIsLoading(true);
-				}
-				setError(null);
-
-				const response = await apiClient.listTasks();
-				const convertedTasks = response.tasks.map(convertTaskSummary);
-				setTasks(convertedTasks);
-			} catch (err) {
-				const message =
-					err instanceof Error ? err.message : "Failed to load tasks";
-				setError(message);
-			} finally {
-				setIsLoading(false);
-				setIsRefreshing(false);
-			}
+	const convertTaskSummary = useCallback(
+		(summary: TaskSummary): Task => {
+			return {
+				id: summary.number,
+				specId: summary.number,
+				title: summary.name,
+				description: `${t("labels.status")}: ${summary.status}`,
+				status: summary.status as any, // Will be refined when backend provides proper status enum
+				subtasks: [],
+				createdAt: new Date(),
+				updatedAt: new Date(),
+				metadata: {},
+			};
 		},
-		[convertTaskSummary],
+		[t],
 	);
 
-	// Initial load
+	// Convert tasks from store to Task type for TaskCard
+	const convertedTasks = useMemo(() => {
+		return tasks.map(convertTaskSummary);
+	}, [tasks, convertTaskSummary]);
+
+	/**
+	 * Initial load of tasks
+	 */
 	useEffect(() => {
 		fetchTasks();
 	}, [fetchTasks]);
 
-	// Handle refresh button click
-	const handleRefresh = useCallback(() => {
-		fetchTasks(true);
-	}, [fetchTasks]);
+	/**
+	 * Handle refresh button click
+	 */
+	const handleRefresh = useCallback(async () => {
+		setIsRefreshing(true);
+		try {
+			await refreshTasks();
+		} finally {
+			setIsRefreshing(false);
+		}
+	}, [refreshTasks]);
 
-	// Handle task card click
+	/**
+	 * Handle task card click
+	 */
 	const handleTaskClick = useCallback(
 		(task: Task) => {
 			onTaskClick(task.id);
@@ -91,37 +92,67 @@ export function TaskList({ onTaskClick, onCreateTask }: TaskListProps) {
 		[onTaskClick],
 	);
 
-	if (isLoading) return <PageLoadingState />;
-	if (error) return <PageErrorState error={error} onRetry={handleRefresh} />;
+	// Loading state
+	if (isLoading) {
+		return (
+			<div className="flex items-center justify-center min-h-[400px]">
+				<div className="text-center">
+					<div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4" />
+					<p className="text-muted-foreground">{t("buttons.loading")}</p>
+				</div>
+			</div>
+		);
+	}
+
+	// Error state
+	if (error) {
+		return (
+			<div className="flex items-center justify-center min-h-[400px] p-4">
+				<div className="text-center max-w-md">
+					<AlertCircle className="h-12 w-12 text-destructive mx-auto mb-4" />
+					<h2 className="text-xl font-semibold mb-2">{t("labels.error")}</h2>
+					<p className="text-muted-foreground mb-4">{error}</p>
+					<Button onClick={handleRefresh}>
+						<RefreshCw className="h-4 w-4 mr-2" />
+						{t("buttons.retry")}
+					</Button>
+				</div>
+			</div>
+		);
+	}
 
 	// Empty state
 	if (tasks.length === 0) {
 		return (
-			<div className="min-h-screen bg-gray-50">
-				<div className="max-w-7xl mx-auto p-6">
-					<div className="flex items-center justify-between mb-6">
-						<h1 className="text-3xl font-bold text-gray-900">
-							{t("common:tasks")}
-						</h1>
-						<Button
-							onClick={handleRefresh}
-							disabled={isRefreshing}
-							variant="outline"
-						>
+			<div className="space-y-6">
+				<div className="flex items-center justify-between">
+					<h1 className="text-3xl font-bold">{t("tasks")}</h1>
+					<div className="flex gap-2">
+						<Button onClick={handleRefresh} disabled={isRefreshing} variant="outline">
 							<RefreshCw
 								className={`h-4 w-4 mr-2 ${isRefreshing ? "animate-spin" : ""}`}
 							/>
-							Refresh
+							{t("buttons.refresh")}
 						</Button>
+						{onCreateTask && (
+							<Button
+								onClick={onCreateTask}
+								className="bg-gradient-to-br from-blue-500 to-purple-600 hover:opacity-90"
+							>
+								{t("common:actions.create")} Task
+							</Button>
+						)}
 					</div>
+				</div>
 
-					<div className="flex items-center justify-center min-h-[400px]">
-						<div className="text-center">
-							<p className="text-lg text-gray-600 mb-2">No tasks found</p>
-							<p className="text-sm text-gray-500">
-								Tasks will appear here once you create specs
-							</p>
-						</div>
+				<div className="flex items-center justify-center min-h-[400px]">
+					<div className="text-center">
+						<p className="text-lg text-muted-foreground mb-2">
+							{t("empty.title")}
+						</p>
+						<p className="text-sm text-muted-foreground">
+							{t("empty.description")}
+						</p>
 					</div>
 				</div>
 			</div>
@@ -130,53 +161,49 @@ export function TaskList({ onTaskClick, onCreateTask }: TaskListProps) {
 
 	// Task list view
 	return (
-		<div className="min-h-screen bg-gray-50">
-			<div className="max-w-7xl mx-auto p-6">
-				{/* Header */}
-				<div className="flex items-center justify-between mb-6">
-					<div>
-						<h1 className="text-3xl font-bold text-gray-900">
-							{t("common:tasks")}
-						</h1>
-						<p className="text-sm text-gray-600 mt-1">
-							{tasks.length} {tasks.length === 1 ? "task" : "tasks"} total
-						</p>
-					</div>
-					<div className="flex gap-2">
-						<Button
-							onClick={handleRefresh}
-							disabled={isRefreshing}
-							variant="outline"
-						>
-							<RefreshCw
-								className={`h-4 w-4 mr-2 ${isRefreshing ? "animate-spin" : ""}`}
-							/>
-							Refresh
-						</Button>
-						{onCreateTask && (
-							<Button
-								onClick={onCreateTask}
-								className="bg-gradient-to-br from-blue-500 to-purple-600 hover:opacity-90"
-							>
-								Create Task
-							</Button>
-						)}
-					</div>
+		<div className="space-y-6">
+			{/* Header */}
+			<div className="flex items-center justify-between">
+				<div>
+					<h1 className="text-3xl font-bold">{t("tasks")}</h1>
+					<p className="text-sm text-muted-foreground mt-1">
+						{tasks.length} {tasks.length === 1 ? "task" : "tasks"} total
+					</p>
 				</div>
-
-				{/* Task Grid */}
-				<ScrollArea className="h-[calc(100vh-200px)]">
-					<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-						{tasks.map((task) => (
-							<TaskCard
-								key={task.id}
-								task={task}
-								onClick={() => handleTaskClick(task)}
-							/>
-						))}
-					</div>
-				</ScrollArea>
+				<div className="flex gap-2">
+					<Button
+						onClick={handleRefresh}
+						disabled={isRefreshing}
+						variant="outline"
+					>
+						<RefreshCw
+							className={`h-4 w-4 mr-2 ${isRefreshing ? "animate-spin" : ""}`}
+						/>
+						{t("buttons.refresh")}
+					</Button>
+					{onCreateTask && (
+						<Button
+							onClick={onCreateTask}
+							className="bg-gradient-to-br from-blue-500 to-purple-600 hover:opacity-90"
+						>
+							{t("common:actions.create")} Task
+						</Button>
+					)}
+				</div>
 			</div>
+
+			{/* Task Grid */}
+			<ScrollArea className="h-[calc(100vh-250px)]">
+				<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pb-4">
+					{convertedTasks.map((task) => (
+						<TaskCard
+							key={task.id}
+							task={task}
+							onClick={() => handleTaskClick(task)}
+						/>
+					))}
+				</div>
+			</ScrollArea>
 		</div>
 	);
 }

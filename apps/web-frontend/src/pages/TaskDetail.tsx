@@ -27,6 +27,7 @@ import type {
 	AgentType,
 	TaskDetail as TaskDetailType,
 } from "../api/types";
+import { useTaskSubscription } from "../hooks/useWebSocketTaskIntegration";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import {
@@ -37,6 +38,7 @@ import {
 } from "../components/ui/card";
 import { ScrollArea } from "../components/ui/scroll-area";
 import { Separator } from "../components/ui/separator";
+import { BuildProgress } from "../components/BuildProgress";
 
 interface TaskDetailProps {
 	taskId: string;
@@ -44,11 +46,14 @@ interface TaskDetailProps {
 }
 
 export function TaskDetail({ taskId, onBack }: TaskDetailProps) {
-	const { t } = useTranslation(["common"]);
+	const { t } = useTranslation(["common", "tasks"]);
 	const [task, setTask] = useState<TaskDetailType | null>(null);
 	const [isLoading, setIsLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
 	const [isRefreshing, setIsRefreshing] = useState(false);
+
+	// Subscribe to WebSocket events for this task
+	useTaskSubscription(taskId);
 
 	// Agent control state
 	const [agentStatus, setAgentStatus] = useState<AgentStatusResponse | null>(
@@ -237,11 +242,11 @@ export function TaskDetail({ taskId, onBack }: TaskDetailProps) {
 					<div className="flex gap-2 justify-center">
 						<Button onClick={onBack} variant="outline">
 							<ArrowLeft className="h-4 w-4 mr-2" />
-							Back to Tasks
+							{t("common:buttons.back")}
 						</Button>
 						<Button onClick={handleRefresh}>
 							<RefreshCw className="h-4 w-4 mr-2" />
-							Try Again
+							{t("common:buttons.retry")}
 						</Button>
 					</div>
 				</div>
@@ -261,7 +266,9 @@ export function TaskDetail({ taskId, onBack }: TaskDetailProps) {
 						</Button>
 						<div>
 							<h1 className="text-3xl font-bold text-gray-900">{task.name}</h1>
-							<p className="text-sm text-gray-600 mt-1">Spec #{task.number}</p>
+							<p className="text-sm text-gray-600 mt-1">
+								Spec #{task.number}
+							</p>
 						</div>
 					</div>
 					<Button
@@ -272,7 +279,7 @@ export function TaskDetail({ taskId, onBack }: TaskDetailProps) {
 						<RefreshCw
 							className={`h-4 w-4 mr-2 ${isRefreshing ? "animate-spin" : ""}`}
 						/>
-						Refresh
+						{t("common:buttons.refresh")}
 					</Button>
 				</div>
 
@@ -280,10 +287,14 @@ export function TaskDetail({ taskId, onBack }: TaskDetailProps) {
 					{/* Status and Progress Card */}
 					<Card>
 						<CardContent className="space-y-4 pt-6">
-							<h3 className="text-lg font-semibold mb-4">Status & Progress</h3>
+							<h3 className="text-lg font-semibold mb-4">
+								{t("common:labels.status")}
+							</h3>
 							<div className="flex items-center gap-4">
 								<div>
-									<p className="text-sm text-gray-600 mb-1">Status</p>
+									<p className="text-sm text-gray-600 mb-1">
+										{t("tasks:labels.status")}
+									</p>
 									<Badge variant="outline" className="text-sm">
 										{task.status}
 									</Badge>
@@ -338,6 +349,12 @@ export function TaskDetail({ taskId, onBack }: TaskDetailProps) {
 							</div>
 						</CardContent>
 					</Card>
+
+					{/* Build Progress Card */}
+					<BuildProgress
+						taskId={task.number}
+						progress={task.progress}
+					/>
 
 					{/* Agent Controls Card */}
 					<Card>
@@ -420,7 +437,9 @@ export function TaskDetail({ taskId, onBack }: TaskDetailProps) {
 					{task.spec_content && (
 						<Card>
 							<CardContent className="pt-6">
-								<h3 className="text-lg font-semibold mb-4">Specification</h3>
+								<h3 className="text-lg font-semibold mb-4">
+									{t("common:specs")}
+								</h3>
 								<ScrollArea className="h-[400px] w-full rounded-md border p-4">
 									<pre className="text-sm font-mono whitespace-pre-wrap">
 										{task.spec_content}
@@ -433,7 +452,9 @@ export function TaskDetail({ taskId, onBack }: TaskDetailProps) {
 					{/* Folder Location Card */}
 					<Card>
 						<CardContent className="pt-6">
-							<h3 className="text-lg font-semibold mb-4">Location</h3>
+							<h3 className="text-lg font-semibold mb-4">
+								{t("common:labels.location", "Location")}
+							</h3>
 							<div className="flex items-center gap-2">
 								<code className="text-sm bg-gray-100 px-3 py-1 rounded">
 									{task.folder}

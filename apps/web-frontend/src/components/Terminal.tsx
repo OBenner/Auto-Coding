@@ -7,6 +7,7 @@ import { FitAddon } from "@xterm/addon-fit";
 import { Terminal } from "@xterm/xterm";
 import { Loader2, X, Terminal as XtermIcon } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import "@xterm/xterm/css/xterm.css";
 import { cn } from "../lib/utils";
 import { Button } from "./ui/button";
@@ -55,6 +56,7 @@ export function TerminalComponent({
 	token = "",
 	wsUrl = import.meta.env.VITE_WS_URL || "ws://localhost:8000",
 }: TerminalProps) {
+	const { t } = useTranslation(["errors"]);
 	const terminalRef = useRef<HTMLDivElement>(null);
 	const xtermRef = useRef<Terminal | null>(null);
 	const fitAddonRef = useRef<FitAddon | null>(null);

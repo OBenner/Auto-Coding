@@ -253,7 +253,7 @@ export const TaskCard = memo(function TaskCard({
 				{totalSubtasks > 0 && (
 					<div className="space-y-1 mb-3">
 						<div className="flex justify-between text-xs text-muted-foreground">
-							<span>Progress</span>
+							<span>{t("tasks:labels.progress")}</span>
 							<span>{Math.round(progress)}%</span>
 						</div>
 						<div className="h-2 bg-muted rounded-full overflow-hidden">

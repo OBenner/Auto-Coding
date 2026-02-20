@@ -211,13 +211,42 @@ export class ApiClient {
 
 	/**
 	 * Verify authentication token
+	 * Returns {valid: false} for 401 errors instead of throwing
 	 */
 	async verifyAuth(token: string): Promise<{ valid: boolean }> {
-		return this.fetch<{ valid: boolean }>("/api/auth/verify", {
-			headers: {
-				Authorization: `Bearer ${token}`,
-			},
-		});
+		const url = `${this.config.baseUrl}/api/auth/verify`;
+		this.log(`Verifying auth token`);
+
+		try {
+			const response = await fetch(url, {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					Authorization: `Bearer ${token}`,
+				},
+			});
+
+			// Clear token on 401 (invalid/expired token)
+			if (response.status === 401) {
+				this.log("Token verification failed: 401 Unauthorized");
+				return { valid: false };
+			}
+
+			if (!response.ok) {
+				const error: ApiError = await response
+					.json()
+					.catch(() => ({ detail: response.statusText }));
+				throw new Error(error.detail || `HTTP ${response.status}`);
+			}
+
+			await response.json();
+			this.log("Token verified successfully");
+			return { valid: true };
+		} catch (error) {
+			this.log("Token verification error:", error);
+			// Network errors or other issues - treat as invalid
+			return { valid: false };
+		}
 	}
 
 	/**
