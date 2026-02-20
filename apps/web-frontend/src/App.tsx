@@ -82,7 +82,7 @@ function KanbanWrapper() {
  * Shows loading state while auth is being verified
  */
 function AppProvider({ children }: { children: React.ReactNode }) {
-  const { isConnected } = useWebSocketIntegration()
+  useWebSocketIntegration()
   const [isInitializing, setIsInitializing] = useState(true)
   const { isVerifying } = useAuthStore()
 
@@ -103,10 +103,6 @@ function AppProvider({ children }: { children: React.ReactNode }) {
   if (isInitializing || isVerifying) {
     return <AppLoading />
   }
-
-  // You can use isConnected to show connection status
-  // For now, we just render children regardless of connection state
-  // The WebSocket will reconnect automatically
 
   return <>{children}</>
 }

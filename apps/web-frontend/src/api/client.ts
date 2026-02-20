@@ -239,7 +239,7 @@ export class ApiClient {
 				throw new Error(error.detail || `HTTP ${response.status}`);
 			}
 
-			const data = await response.json();
+			await response.json();
 			this.log("Token verified successfully");
 			return { valid: true };
 		} catch (error) {

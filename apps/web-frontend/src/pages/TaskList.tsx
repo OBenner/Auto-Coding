@@ -7,7 +7,7 @@
  * Integrated with task store for state management.
  */
 
-import { useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { RefreshCw, AlertCircle } from "lucide-react";
 import { TaskCard } from "../components/TaskCard";
@@ -33,6 +33,9 @@ export function TaskList({ onTaskClick, onCreateTask }: TaskListProps) {
 		fetchTasks,
 		refreshTasks,
 	} = useTaskStore();
+
+	// Track refresh state separately from initial loading
+	const [isRefreshing, setIsRefreshing] = useState(false);
 
 	/**
 	 * Convert API TaskSummary to frontend Task type
@@ -71,7 +74,12 @@ export function TaskList({ onTaskClick, onCreateTask }: TaskListProps) {
 	 * Handle refresh button click
 	 */
 	const handleRefresh = useCallback(async () => {
-		await refreshTasks();
+		setIsRefreshing(true);
+		try {
+			await refreshTasks();
+		} finally {
+			setIsRefreshing(false);
+		}
 	}, [refreshTasks]);
 
 	/**
@@ -120,9 +128,9 @@ export function TaskList({ onTaskClick, onCreateTask }: TaskListProps) {
 				<div className="flex items-center justify-between">
 					<h1 className="text-3xl font-bold">{t("tasks")}</h1>
 					<div className="flex gap-2">
-						<Button onClick={handleRefresh} disabled={isLoading} variant="outline">
+						<Button onClick={handleRefresh} disabled={isRefreshing} variant="outline">
 							<RefreshCw
-								className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`}
+								className={`h-4 w-4 mr-2 ${isRefreshing ? "animate-spin" : ""}`}
 							/>
 							{t("buttons.refresh")}
 						</Button>
@@ -165,11 +173,11 @@ export function TaskList({ onTaskClick, onCreateTask }: TaskListProps) {
 				<div className="flex gap-2">
 					<Button
 						onClick={handleRefresh}
-						disabled={isLoading}
+						disabled={isRefreshing}
 						variant="outline"
 					>
 						<RefreshCw
-							className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`}
+							className={`h-4 w-4 mr-2 ${isRefreshing ? "animate-spin" : ""}`}
 						/>
 						{t("buttons.refresh")}
 					</Button>

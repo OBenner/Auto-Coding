@@ -1,4 +1,3 @@
-import { useTranslation } from 'react-i18next';
 import { Skeleton } from './ui/skeleton';
 import { Card, CardContent, CardHeader } from './ui/card';
 
@@ -8,7 +7,6 @@ import { Card, CardContent, CardHeader } from './ui/card';
  * Matches the structure of the main app layout
  */
 export function AppLoading() {
-  const { t } = useTranslation(['common', 'labels']);
 
   return (
     <div className="min-h-screen bg-background">

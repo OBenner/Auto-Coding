@@ -20,8 +20,7 @@ import type {
   IdeationEvent,
   RoadmapEvent,
   LogEvent,
-  ErrorEvent,
-  AgentEvent
+  ErrorEvent
 } from '../api/types';
 import {
   appendTaskLog,
@@ -175,36 +174,6 @@ function handleErrorEvent(event: ErrorEvent): void {
 
   // Update task status to failed
   updateTaskStatus(taskId, 'failed');
-}
-
-/**
- * Handle all WebSocket events
- */
-function handleAgentEvent(event: AgentEvent): void {
-  switch (event.event_type) {
-    case 'execution':
-      handleExecutionEvent(event as ExecutionEvent);
-      break;
-
-    case 'ideation':
-      handleIdeationEvent(event as IdeationEvent);
-      break;
-
-    case 'roadmap':
-      handleRoadmapEvent(event as RoadmapEvent);
-      break;
-
-    case 'log':
-      handleLogEvent(event as LogEvent);
-      break;
-
-    case 'error':
-      handleErrorEvent(event as ErrorEvent);
-      break;
-
-    default:
-      console.warn('[WebSocketTaskIntegration] Unknown event type:', (event as AgentEvent).event_type);
-  }
 }
 
 /**

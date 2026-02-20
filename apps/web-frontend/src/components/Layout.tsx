@@ -6,10 +6,8 @@
 
 import { useState, type ReactNode } from 'react';
 import { Outlet, useNavigate } from 'react-router-dom';
-import { Menu } from 'lucide-react';
 import { Sidebar, type SidebarView } from './Sidebar';
 import { Navbar } from './Navbar';
-import { Button } from './ui/button';
 import { cn } from '../lib/utils';
 
 interface LayoutProps {
