@@ -23,6 +23,7 @@ class LogEntryType(str, Enum):
     PHASE_START = "phase_start"
     PHASE_END = "phase_end"
     ERROR = "error"
+    WARNING = "warning"
     SUCCESS = "success"
     INFO = "info"
     DECISION = "decision"

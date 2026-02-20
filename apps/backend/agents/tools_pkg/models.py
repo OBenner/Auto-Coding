@@ -248,6 +248,30 @@ AGENT_CONFIGS = {
         "thinking_default": "medium",
     },
     # ═══════════════════════════════════════════════════════════════════════
+    # TEST GENERATION AGENT TYPES (QA-phase agents, not standalone phases)
+    # These share the QA model/thinking config via get_phase_model(spec, "qa")
+    # ═══════════════════════════════════════════════════════════════════════
+    "test_generator": {
+        "tools": BASE_READ_TOOLS + BASE_WRITE_TOOLS + WEB_TOOLS,
+        "mcp_servers": ["context7", "graphiti", "auto-claude"],
+        "mcp_servers_optional": [],
+        "auto_claude_tools": [
+            TOOL_GET_BUILD_PROGRESS,
+            TOOL_GET_SESSION_CONTEXT,
+        ],
+        "thinking_default": "high",
+    },
+    "e2e_generator": {
+        "tools": BASE_READ_TOOLS + BASE_WRITE_TOOLS + WEB_TOOLS,
+        "mcp_servers": ["context7", "graphiti", "auto-claude", "browser"],
+        "mcp_servers_optional": [],
+        "auto_claude_tools": [
+            TOOL_GET_BUILD_PROGRESS,
+            TOOL_GET_SESSION_CONTEXT,
+        ],
+        "thinking_default": "high",
+    },
+    # ═══════════════════════════════════════════════════════════════════════
     # UTILITY PHASES (Minimal, no MCP)
     # ═══════════════════════════════════════════════════════════════════════
     "insights": {
