@@ -18,7 +18,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from graphiti_config import is_graphiti_enabled
+from integrations.graphiti.config import is_graphiti_enabled
 from memory.graphiti_helpers import get_graphiti_memory
 from memory.patterns import load_patterns
 
@@ -91,7 +91,7 @@ class ValidationResult:
         """Get a summary of validation results."""
         errors = [v for v in self.violations if v.severity == "error"]
         warnings = [v for v in self.violations if v.severity == "warning"]
-        info = [v for v in self.violations if v.severity == "info"]
+        info_items = [v for v in self.violations if v.severity == "info"]
 
         return {
             "patterns_checked": self.patterns_checked,
@@ -99,7 +99,7 @@ class ValidationResult:
             "total_violations": len(self.violations),
             "errors": len(errors),
             "warnings": len(warnings),
-            "info": len(info),
+            "info": len(info_items),
             "violations": [v.to_dict() for v in self.violations],
         }
 
@@ -110,7 +110,8 @@ class ValidationResult:
 
 
 async def get_learned_patterns(
-    spec_dir: Path, project_dir: Path
+    spec_dir: Path,
+    project_dir: Path,
 ) -> dict[str, list[dict[str, Any]]]:
     """
     Retrieve learned patterns from memory system.
@@ -144,11 +145,12 @@ async def get_learned_patterns(
 
     # If Graphiti is enabled, retrieve from knowledge graph
     if is_graphiti_enabled():
+        memory = None
         try:
             memory = await get_graphiti_memory(spec_dir, project_dir)
             if memory:
                 # Search for patterns by category
-                for category in patterns_by_category.keys():
+                for category in patterns_by_category:
                     try:
                         # Use search_facts to find pattern nodes
                         results = await memory.client.search_facts(
@@ -166,10 +168,17 @@ async def get_learned_patterns(
                                 }
                                 patterns_by_category[category].append(pattern_data)
                     except Exception as e:
-                        logger.warning(f"Graphiti pattern retrieval failed for {category}: {e}")
-                await memory.close()
+                        logger.warning(
+                            f"Graphiti pattern retrieval failed for {category}: {e}"
+                        )
         except Exception as e:
             logger.warning(f"Graphiti memory access failed: {e}")
+        finally:
+            if memory:
+                try:
+                    await memory.close()
+                except (OSError, RuntimeError):
+                    logger.debug("Failed to close Graphiti memory connection")
 
     return patterns_by_category
 
@@ -234,19 +243,13 @@ def validate_naming_conventions(
     # Validate function names
     for node in ast.walk(tree):
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            _validate_function_name(
-                node, expected_styles, file_path, result
-            )
+            _validate_function_name(node, expected_styles, file_path, result)
 
         elif isinstance(node, ast.ClassDef):
-            _validate_class_name(
-                node, expected_styles, file_path, result
-            )
+            _validate_class_name(node, expected_styles, file_path, result)
 
         elif isinstance(node, ast.Assign):
-            _validate_variable_names(
-                node, expected_styles, file_path, result
-            )
+            _validate_variable_names(node, expected_styles, file_path, result)
 
 
 def _extract_naming_styles(patterns: list[dict[str, Any]]) -> dict[str, str]:
@@ -404,9 +407,7 @@ def validate_error_handling(
     # Validate try/except blocks
     for node in ast.walk(tree):
         if isinstance(node, ast.Try):
-            _validate_exception_handling(
-                node, expected_exceptions, file_path, result
-            )
+            _validate_exception_handling(node, expected_exceptions, file_path, result)
 
 
 def _extract_expected_exceptions(patterns: list[dict[str, Any]]) -> list[str]:
@@ -479,8 +480,11 @@ async def validate_patterns(
         files_to_validate = list(project_dir.glob("**/*.py"))
         # Filter out common ignore patterns
         files_to_validate = [
-            f for f in files_to_validate
-            if not any(part.startswith(".") or part == "__pycache__" for part in f.parts)
+            f
+            for f in files_to_validate
+            if not any(
+                part.startswith(".") or part == "__pycache__" for part in f.parts
+            )
         ]
 
     result.files_validated = len(files_to_validate)

@@ -591,6 +591,11 @@ def rate_limited(
                         # Not a rate limit error - propagate immediately
                         raise
 
+            # All retries exhausted without success or exception
+            raise RateLimitExceeded(
+                f"All {max_retries} retries exhausted for {operation_type} operation"
+            )
+
         @functools.wraps(func)
         def sync_wrapper(*args, **kwargs):
             # For sync functions, run in event loop

@@ -11,6 +11,7 @@ import {
   StagedInProjectMessage,
   CreatePRDialog
 } from './task-review';
+import { FeedbackDialog, type FeedbackRating } from '../FeedbackDialog';
 
 interface TaskReviewProps {
   task: Task;
@@ -53,6 +54,10 @@ interface TaskReviewProps {
   isCreatingPR: boolean;
   onShowPRDialog: (show: boolean) => void;
   onCreatePR: (options: { targetBranch?: string; title?: string; draft?: boolean }) => Promise<WorktreeCreatePRResult | null>;
+  // User feedback
+  showFeedbackDialog: boolean;
+  onShowFeedbackDialog: (show: boolean) => void;
+  onSubmitFeedback: (rating: FeedbackRating, comment: string) => Promise<void>;
 }
 
 /**
@@ -101,7 +106,10 @@ export function TaskReview({
   showPRDialog,
   isCreatingPR,
   onShowPRDialog,
-  onCreatePR
+  onCreatePR,
+  showFeedbackDialog,
+  onShowFeedbackDialog,
+  onSubmitFeedback
 }: TaskReviewProps) {
   return (
     <div className="space-y-4">
@@ -200,6 +208,13 @@ export function TaskReview({
         worktreeStatus={worktreeStatus}
         onOpenChange={onShowPRDialog}
         onCreatePR={onCreatePR}
+      />
+
+      {/* User Feedback Dialog */}
+      <FeedbackDialog
+        open={showFeedbackDialog}
+        onOpenChange={onShowFeedbackDialog}
+        onSubmit={onSubmitFeedback}
       />
     </div>
   );

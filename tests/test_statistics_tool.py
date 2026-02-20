@@ -7,7 +7,6 @@ including time tracking, completion velocity, session counts, and QA iterations.
 """
 
 import json
-import os
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -38,7 +37,7 @@ try:
     _stats_mod.tool = _mock_tool_decorator
     _stats_mod.SDK_TOOLS_AVAILABLE = True
 except ImportError:
-    pass
+    _stats_mod = None  # Module not yet imported; will be patched later
 
 
 class TestTimestampParsing:
@@ -279,7 +278,7 @@ class TestPhaseDurationCalculation:
         """Should use updated_at when started_at/completed_at missing."""
         from agents.tools_pkg.tools.statistics import _calculate_phase_durations
 
-        start_time = datetime(2026, 1, 26, 10, 0, 0, tzinfo=timezone.utc)
+        datetime(2026, 1, 26, 10, 0, 0, tzinfo=timezone.utc)
         end_time = datetime(2026, 1, 26, 11, 0, 0, tzinfo=timezone.utc)
 
         phases = [
@@ -475,8 +474,9 @@ class TestCreateStatisticsTools:
             pytest.skip("SDK not available")
 
         tools = create_statistics_tools(tmp_path, tmp_path)
-        assert len(tools) == 1
+        assert len(tools) == 2
         assert callable(tools[0])
+        assert callable(tools[1])
 
 
 class TestGetSpecStatistics:

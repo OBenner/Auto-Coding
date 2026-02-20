@@ -650,7 +650,15 @@ describe('settings-store', () => {
       expect(window.electronAPI.getSettings).toHaveBeenCalled();
 
       const state = useSettingsStore.getState();
-      expect(state.settings).toEqual(testSettings);
+      // migrateAgentPreferences adds default agent preference fields
+      expect(state.settings).toEqual({
+        ...testSettings,
+        agentVerbosity: 'normal',
+        agentRiskTolerance: 'balanced',
+        agentProjectType: 'established',
+        agentCodingStyle: {},
+        agentUserInstructions: [],
+      });
       expect(state.isLoading).toBe(false);
     });
 

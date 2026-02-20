@@ -10,10 +10,22 @@ This approach:
 - Reduces token usage by ~80%
 - Keeps the agent focused on ONE task
 - Moves bookkeeping to Python orchestration
+
+Context Optimization:
+- Integrates with ContextSummarizer for intelligent file summarization
+- Uses HistoryTracker to avoid redundant context
+- Provides session coherence across multiple turns
 """
 
 import json
+import logging
 from pathlib import Path
+from typing import Any
+
+logger = logging.getLogger(__name__)
+
+from context.compressor import ContextCompressor
+from context.token_estimator import TokenEstimator
 
 
 def get_relative_spec_path(spec_dir: Path, project_dir: Path) -> str:
@@ -112,7 +124,7 @@ def generate_subtask_prompt(
     verification = subtask.get("verification", {})
 
     # Get relative spec path
-    relative_spec = get_relative_spec_path(spec_dir, project_dir)
+    get_relative_spec_path(spec_dir, project_dir)
 
     # Build the prompt
     sections = []
@@ -322,13 +334,17 @@ def load_subtask_context(
     max_file_lines: int = 200,
 ) -> dict:
     """
-    Load minimal context needed for a subtask.
+    Load minimal context needed for a subtask with smart compression.
+
+    Uses ContextCompressor to intelligently compress large files instead of
+    simple line truncation, preserving important information while reducing
+    token usage.
 
     Args:
         spec_dir: Spec directory
         project_dir: Project root
         subtask: The subtask being implemented
-        max_file_lines: Maximum lines to include per file
+        max_file_lines: Approximate maximum lines (converted to token threshold)
 
     Returns:
         Dict with file contents and relevant context
@@ -339,41 +355,101 @@ def load_subtask_context(
         "spec_excerpt": None,
     }
 
-    # Load pattern files (truncated)
+    # Initialize compressor and token estimator
+    # Convert max_file_lines to approximate token threshold
+    # Average: ~10-15 tokens per line of code, so use 12.5 as middle ground
+    token_threshold = max_file_lines * 12
+    compressor = ContextCompressor(
+        compression_threshold=token_threshold,
+        target_ratio=0.5,  # Target 50% of original for subtask context
+        token_estimator=TokenEstimator(),
+    )
+
+    # Load pattern files with smart compression
     for pattern_path in subtask.get("patterns_from", []):
         full_path = project_dir / pattern_path
         if full_path.exists():
             try:
-                lines = full_path.read_text(encoding="utf-8").split("\n")
-                if len(lines) > max_file_lines:
-                    content = "\n".join(lines[:max_file_lines])
-                    content += (
-                        f"\n\n... (truncated, {len(lines) - max_file_lines} more lines)"
-                    )
-                else:
-                    content = "\n".join(lines)
+                # Use smart compression instead of simple truncation
+                result = compressor.compress_file(full_path, strategy="auto")
+                content = result.compressed_content
+
+                # Add compression metadata if applied
+                if result.method != "none":
+                    content += f"\n\n... (compressed from {result.original_tokens} to {result.compressed_tokens} tokens using {result.method})"
+
                 context["patterns"][pattern_path] = content
             except Exception:
-                context["patterns"][pattern_path] = "(Could not read file)"
+                # Fallback to simple truncation if compression fails
+                try:
+                    lines = full_path.read_text(encoding="utf-8").split("\n")
+                    if len(lines) > max_file_lines:
+                        content = "\n".join(lines[:max_file_lines])
+                        content += f"\n\n... (truncated, {len(lines) - max_file_lines} more lines)"
+                    else:
+                        content = "\n".join(lines)
+                    context["patterns"][pattern_path] = content
+                except Exception:
+                    context["patterns"][pattern_path] = "(Could not read file)"
 
-    # Load files to modify (truncated)
+    # Load files to modify with smart compression
     for file_path in subtask.get("files_to_modify", []):
         full_path = project_dir / file_path
         if full_path.exists():
             try:
-                lines = full_path.read_text(encoding="utf-8").split("\n")
-                if len(lines) > max_file_lines:
-                    content = "\n".join(lines[:max_file_lines])
-                    content += (
-                        f"\n\n... (truncated, {len(lines) - max_file_lines} more lines)"
-                    )
-                else:
-                    content = "\n".join(lines)
+                # Use smart compression instead of simple truncation
+                result = compressor.compress_file(full_path, strategy="auto")
+                content = result.compressed_content
+
+                # Add compression metadata if applied
+                if result.method != "none":
+                    content += f"\n\n... (compressed from {result.original_tokens} to {result.compressed_tokens} tokens using {result.method})"
+
                 context["files_to_modify"][file_path] = content
             except Exception:
-                context["files_to_modify"][file_path] = "(Could not read file)"
+                # Fallback to simple truncation if compression fails
+                try:
+                    lines = full_path.read_text(encoding="utf-8").split("\n")
+                    if len(lines) > max_file_lines:
+                        content = "\n".join(lines[:max_file_lines])
+                        content += f"\n\n... (truncated, {len(lines) - max_file_lines} more lines)"
+                    else:
+                        content = "\n".join(lines)
+                    context["files_to_modify"][file_path] = content
+                except Exception:
+                    context["files_to_modify"][file_path] = "(Could not read file)"
 
     return context
+
+
+def get_recovery_context(
+    spec_dir: Path, project_dir: Path, subtask_id: str
+) -> tuple[int, list[str] | None]:
+    """
+    Get recovery context for a subtask.
+
+    Retrieves attempt count and recovery hints from the recovery manager
+    to support retry logic with different approaches.
+
+    Args:
+        spec_dir: Spec directory containing recovery state
+        project_dir: Project root directory
+        subtask_id: ID of the subtask to get recovery context for
+
+    Returns:
+        Tuple of (attempt_count, recovery_hints):
+            - attempt_count: Number of previous attempts (0 if first attempt)
+            - recovery_hints: List of hints from previous attempts, or None if first attempt
+    """
+    from services.recovery import RecoveryManager
+
+    recovery_manager = RecoveryManager(spec_dir, project_dir)
+    attempt_count = recovery_manager.get_attempt_count(subtask_id)
+    recovery_hints = (
+        recovery_manager.get_recovery_hints(subtask_id) if attempt_count > 0 else None
+    )
+
+    return attempt_count, recovery_hints
 
 
 def format_context_for_prompt(context: dict) -> str:
@@ -385,6 +461,8 @@ def format_context_for_prompt(context: dict) -> str:
             - patterns: Dict of reference file paths to contents
             - files_to_modify: Dict of file paths to current contents
             - pattern_suggestions: Pre-formatted string of pattern suggestions from Graphiti
+            - selection_reasoning: List of strings explaining why files were selected
+            - token_summary: Dict with token usage statistics (optional)
 
     Returns:
         Formatted string to append to prompt
@@ -395,6 +473,27 @@ def format_context_for_prompt(context: dict) -> str:
     if context.get("pattern_suggestions"):
         sections.append(context["pattern_suggestions"])
         sections.append("")  # Add spacing after pattern suggestions
+
+    # Add selection reasoning for transparency
+    if context.get("selection_reasoning"):
+        sections.append("## Context Selection Reasoning\n")
+        sections.append("The following files were selected for this task based on:\n")
+        for reason in context["selection_reasoning"]:
+            sections.append(f"- {reason}")
+        sections.append("")  # Add spacing after reasoning
+
+    # Add token summary if available
+    if context.get("token_summary"):
+        summary = context["token_summary"]
+        sections.append("## Token Usage Summary\n")
+        sections.append(
+            f"- **Total Estimated Tokens:** {summary.get('total_tokens', 'N/A')}"
+        )
+        sections.append(f"- **Files Included:** {summary.get('file_count', 'N/A')}")
+        sections.append(
+            f"- **Compression Applied:** {summary.get('compression_method', 'None')}"
+        )
+        sections.append("")  # Add spacing after token summary
 
     if context.get("patterns"):
         sections.append("## Reference Files (Patterns to Follow)\n")
@@ -407,3 +506,298 @@ def format_context_for_prompt(context: dict) -> str:
             sections.append(f"### `{path}`\n```\n{content}\n```\n")
 
     return "\n".join(sections)
+
+
+def generate_context_summary_section(
+    spec_dir: Path,
+    project_dir: Path | None = None,
+) -> str:
+    """
+    Generate a session context summary section for prompts.
+
+    Uses HistoryTracker to provide information about what context has been
+    sent to the agent, helping maintain session coherence and avoid redundancy.
+
+    Args:
+        spec_dir: Directory containing spec files
+        project_dir: Project root directory (optional, inferred if not provided)
+
+    Returns:
+        Formatted markdown section with session summary
+
+    Example:
+        >>> section = generate_context_summary_section(
+        ...     spec_dir=Path(".auto-claude/specs/120"),
+        ...     project_dir=Path(".")
+        ... )
+        >>> # Returns markdown section with session stats
+    """
+    try:
+        from context.history_tracker import get_history_tracker
+    except ImportError:
+        logger.warning("HistoryTracker not available, skipping session summary")
+        return ""
+
+    # Get history tracker for this spec
+    tracker = get_history_tracker(spec_dir=spec_dir)
+
+    # Get session summary
+    summary = tracker.get_session_summary()
+
+    # If no context has been sent yet, skip the section
+    if summary.get("unique_files_sent", 0) == 0:
+        return ""
+
+    # Format the summary section
+    sections = [
+        "## Session Context Summary",
+        "",
+        f"**Turn:** {summary.get('current_turn', 0)}",
+        f"**Files Sent:** {summary.get('unique_files_sent', 0)} unique files",
+        f"**Total Tokens:** {summary.get('total_tokens_sent', 0)} tokens",
+        "",
+    ]
+
+    # Add recently accessed files
+    recent_files = summary.get("recent_files", [])
+    if recent_files:
+        sections.append("**Recently Accessed:**")
+        for file_path in recent_files[:5]:  # Show top 5
+            sections.append(f"- `{file_path}`")
+        sections.append("")
+
+    # Add most frequent files
+    frequent = summary.get("most_frequent", [])
+    if frequent:
+        sections.append("**Most Referenced:**")
+        for entry in frequent[:3]:  # Show top 3
+            path = entry.get("path", "unknown")
+            count = entry.get("sent_count", 0)
+            sections.append(f"- `{path}` (sent {count}x)")
+        sections.append("")
+
+    sections.append("---")
+    sections.append("")
+
+    return "\n".join(sections)
+
+
+async def generate_file_summary(
+    file_path: str,
+    content: str,
+    summarization_level: str = "medium",
+) -> str:
+    """
+    Generate a summary of file content using ContextSummarizer.
+
+    This is useful for including condensed versions of large files in prompts
+    to save tokens while preserving key information.
+
+    Args:
+        file_path: Path to the file (for context)
+        content: File content to summarize
+        summarization_level: Level of summarization (light/medium/aggressive)
+
+    Returns:
+        Summarized file content
+
+    Example:
+        >>> summary = await generate_file_summary(
+        ...     file_path="apps/backend/core/client.py",
+        ...     content=file_content,
+        ...     summarization_level="medium"
+        ... )
+    """
+    try:
+        from context.summarizer import SummarizationLevel, get_context_summarizer
+    except ImportError:
+        logger.warning("ContextSummarizer not available, returning truncated content")
+        # Fallback: return first 2000 chars
+        if len(content) > 2000:
+            return content[:2000] + "\n\n[... truncated ...]"
+        return content
+
+    # Map string level to enum
+    level_map = {
+        "light": SummarizationLevel.LIGHT,
+        "medium": SummarizationLevel.MEDIUM,
+        "aggressive": SummarizationLevel.AGGRESSIVE,
+    }
+    level = level_map.get(summarization_level.lower(), SummarizationLevel.MEDIUM)
+
+    # Get summarizer
+    summarizer = get_context_summarizer(default_level=level)
+
+    try:
+        # Generate summary
+        summary = await summarizer.summarize_file_content(
+            file_path=file_path,
+            content=content,
+            level=level,
+            preserve_imports=True,
+        )
+        return summary
+    except Exception as e:
+        logger.warning(f"Failed to summarize {file_path}: {e}")
+        # Fallback: return truncated content
+        if len(content) > 2000:
+            return (
+                content[:2000] + f"\n\n[Summarization failed: {e}]\n[... truncated ...]"
+            )
+        return content
+
+
+async def load_subtask_context_with_summaries(
+    spec_dir: Path,
+    project_dir: Path,
+    subtask: dict,
+    enable_summarization: bool = True,
+    summarization_level: str = "medium",
+    max_file_lines: int = 200,
+) -> dict[str, Any]:
+    """
+    Load subtask context with optional summarization for large files.
+
+    This enhanced version of load_subtask_context can automatically
+    summarize large files to save tokens while preserving key information.
+
+    Args:
+        spec_dir: Spec directory
+        project_dir: Project root
+        subtask: The subtask being implemented
+        enable_summarization: Whether to summarize large files
+        summarization_level: Level of summarization (light/medium/aggressive)
+        max_file_lines: Maximum lines before triggering summarization
+
+    Returns:
+        Dict with file contents (possibly summarized) and context
+
+    Example:
+        >>> context = await load_subtask_context_with_summaries(
+        ...     spec_dir=Path(".auto-claude/specs/120"),
+        ...     project_dir=Path("."),
+        ...     subtask=subtask_dict,
+        ...     enable_summarization=True
+        ... )
+    """
+    context: dict[str, Any] = {
+        "patterns": {},
+        "files_to_modify": {},
+        "spec_excerpt": None,
+        "summarization_used": False,
+    }
+
+    # Helper to load and optionally summarize a file
+    async def load_file(file_path: str, is_pattern: bool = False) -> str:
+        full_path = project_dir / file_path
+        if not full_path.exists():
+            return "(Could not read file)"
+
+        try:
+            content = full_path.read_text(encoding="utf-8")
+            lines = content.split("\n")
+
+            # Check if file is large enough to warrant summarization
+            if enable_summarization and len(lines) > max_file_lines:
+                logger.info(
+                    f"Summarizing {file_path} ({len(lines)} lines > {max_file_lines})"
+                )
+                summary = await generate_file_summary(
+                    file_path=file_path,
+                    content=content,
+                    summarization_level=summarization_level,
+                )
+                context["summarization_used"] = True
+                return f"[Summarized to save tokens]\n\n{summary}"
+            else:
+                # Return full content (possibly truncated)
+                if len(lines) > max_file_lines:
+                    truncated = "\n".join(lines[:max_file_lines])
+                    truncated += (
+                        f"\n\n... (truncated, {len(lines) - max_file_lines} more lines)"
+                    )
+                    return truncated
+                return content
+        except Exception as e:
+            logger.warning(f"Failed to load {file_path}: {e}")
+            return f"(Could not read file: {e})"
+
+    # Load pattern files
+    for pattern_path in subtask.get("patterns_from", []):
+        context["patterns"][pattern_path] = await load_file(
+            pattern_path, is_pattern=True
+        )
+
+    # Load files to modify
+    for file_path in subtask.get("files_to_modify", []):
+        context["files_to_modify"][file_path] = await load_file(file_path)
+
+    return context
+
+
+def generate_subtask_prompt_with_context(
+    spec_dir: Path,
+    project_dir: Path,
+    subtask: dict,
+    phase: dict,
+    include_session_summary: bool = True,
+    attempt_count: int = 0,
+    recovery_hints: list[str] | None = None,
+) -> str:
+    """
+    Generate a subtask prompt with enhanced context awareness.
+
+    This is an enhanced version of generate_subtask_prompt that includes:
+    - Session summary from HistoryTracker
+    - Context coherence information
+    - Smart token optimization
+
+    Args:
+        spec_dir: Directory containing spec files
+        project_dir: Root project directory (working directory)
+        subtask: The subtask to implement
+        phase: The phase containing this subtask
+        include_session_summary: Whether to include session summary
+        attempt_count: Number of previous attempts (for retry context)
+        recovery_hints: Hints from previous failed attempts
+
+    Returns:
+        Context-optimized prompt string
+
+    Example:
+        >>> prompt = generate_subtask_prompt_with_context(
+        ...     spec_dir=Path(".auto-claude/specs/120"),
+        ...     project_dir=Path("."),
+        ...     subtask=subtask_dict,
+        ...     phase=phase_dict,
+        ...     include_session_summary=True
+        ... )
+    """
+    # Start with the base prompt
+    base_prompt = generate_subtask_prompt(
+        spec_dir=spec_dir,
+        project_dir=project_dir,
+        subtask=subtask,
+        phase=phase,
+        attempt_count=attempt_count,
+        recovery_hints=recovery_hints,
+    )
+
+    # Add session summary if requested
+    if include_session_summary:
+        session_summary = generate_context_summary_section(
+            spec_dir=spec_dir,
+            project_dir=project_dir,
+        )
+        if session_summary:
+            # Insert session summary after environment context
+            parts = base_prompt.split("# Subtask Implementation Task", 1)
+            if len(parts) == 2:
+                return (
+                    parts[0]
+                    + session_summary
+                    + "\n# Subtask Implementation Task"
+                    + parts[1]
+                )
+
+    return base_prompt

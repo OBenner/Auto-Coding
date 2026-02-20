@@ -1,0 +1,86 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://auto-claude.dev/schemas/context-priority.schema.json",
+  "title": "Context Priority Configuration",
+  "description": "User-defined file priority hints for context optimization. Allows explicit control over which files should be prioritized or excluded from AI context.",
+  "type": "object",
+  "additionalProperties": {
+    "type": "object",
+    "description": "Priority configuration for a file path or glob pattern",
+    "properties": {
+      "priority": {
+        "description": "Priority level for context selection. Higher values indicate greater importance.",
+        "type": "string",
+        "enum": [
+          "never",
+          "low",
+          "normal",
+          "medium",
+          "high",
+          "always"
+        ],
+        "default": "normal"
+      },
+      "reason": {
+        "description": "Optional explanation for why this priority level was set (useful for team documentation)",
+        "type": "string",
+        "maxLength": 500
+      },
+      "comment": {
+        "description": "Additional notes or comments about this priority rule",
+        "type": "string",
+        "maxLength": 500
+      }
+    },
+    "required": ["priority"],
+    "additionalProperties": false
+  },
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "JSON Schema identifier (optional, for IDE validation)"
+    }
+  },
+  "examples": [
+    {
+      "apps/backend/core/client.py": {
+        "priority": "always",
+        "reason": "Critical for all AI interactions"
+      },
+      "apps/backend/agents/*.py": {
+        "priority": "high",
+        "reason": "Core agent implementations"
+      },
+      "**/*_test.py": {
+        "priority": "low",
+        "reason": "Test files usually less relevant"
+      },
+      "node_modules/**": {
+        "priority": "never",
+        "reason": "Third-party dependencies"
+      },
+      ".git/**": {
+        "priority": "never",
+        "reason": "Git internals"
+      },
+      "**/*.min.js": {
+        "priority": "never",
+        "reason": "Minified files not useful"
+      }
+    }
+  ],
+  "x-documentation": {
+    "usage": "Place this file at .auto-claude/context-priority.json in your project root.",
+    "priority_levels": {
+      "never": "Exclude from context completely (score: -100)",
+      "low": "Lower priority than normal (score: -1)",
+      "normal": "Default priority (score: 0)",
+      "medium": "Higher than normal (score: 1)",
+      "high": "Much higher priority (score: 2)",
+      "always": "Always include regardless of context (score: 100)"
+    },
+    "pattern_matching": "Keys support glob patterns using fnmatch. Examples: '**/*.py', 'apps/backend/**', '*.test.js'",
+    "conflict_resolution": "More specific patterns take precedence over general patterns. Explicit file paths take precedence over patterns.",
+    "ide_integration": "Add '$schema' key to enable validation: \"$schema\": \".auto-claude/context-priority.schema.json\""
+  }
+}

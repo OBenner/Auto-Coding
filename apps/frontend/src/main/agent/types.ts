@@ -17,7 +17,7 @@ export interface AgentProcess {
 }
 
 export interface ExecutionProgressData {
-  phase: 'idle' | 'planning' | 'coding' | 'qa_review' | 'qa_fixing' | 'complete' | 'failed';
+  phase: 'idle' | 'planning' | 'coding' | 'test_generation' | 'qa_review' | 'qa_fixing' | 'complete' | 'failed';
   phaseProgress: number;
   overallProgress: number;
   currentSubtask?: string;

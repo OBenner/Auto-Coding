@@ -35,9 +35,7 @@ from pydantic_models import (
     # Initial review models
     QuickScanResult,
     SecurityFinding,
-    QualityFinding,
     DeepAnalysisFinding,
-    StructuralIssue,
     AICommentTriage,
 )
 

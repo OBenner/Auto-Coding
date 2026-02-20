@@ -52,7 +52,7 @@ def test_initialization(test_env):
     temp_dir, spec_dir, project_dir = test_env
 
     # Initialize manager to trigger directory creation (manager instance not needed)
-    _manager = RecoveryManager(spec_dir, project_dir)
+    RecoveryManager(spec_dir, project_dir)
 
     # Check that memory directory was created
     assert (spec_dir / "memory").exists(), "Memory directory not created"
@@ -127,11 +127,9 @@ def test_circular_fix_detection(test_env):
 
     assert is_circular, "Circular fix not detected"
 
-    # Test with different approach
-    is_circular = manager.is_circular_fix("subtask-1", "Using completely different callback-based approach")
-
-    # This might be detected as circular if word overlap is high
-    # But "callback-based" is sufficiently different from "async await"
+    # Test with different approach - result intentionally not asserted as the
+    # behavior depends on word overlap heuristics ("callback-based" vs "async await")
+    manager.is_circular_fix("subtask-1", "Using completely different callback-based approach")
 
 
 def test_failure_classification(test_env):
@@ -468,7 +466,7 @@ def test_checkpoint_recovery_hints_restoration(test_env):
     assert "synchronous" in hint_text.lower() or "FAILED" in hint_text, "Previous approach not reflected in hints"
 
     # Check circular fix detection with restored data
-    is_circular = manager2.is_circular_fix("subtask-1", "Using async database with asyncio again")
+    manager2.is_circular_fix("subtask-1", "Using async database with asyncio again")
     # Note: May or may not detect as circular depending on word overlap
 
 
@@ -543,24 +541,6 @@ def run_all_tests():
     # Note: This manual runner is kept for backwards compatibility.
     # Prefer running tests with pytest: pytest tests/test_recovery.py -v
 
-    tests = [
-        ("test_initialization", test_initialization),
-        ("test_record_attempt", test_record_attempt),
-        ("test_circular_fix_detection", test_circular_fix_detection),
-        ("test_failure_classification", test_failure_classification),
-        ("test_recovery_action_determination", test_recovery_action_determination),
-        ("test_good_commit_tracking", test_good_commit_tracking),
-        ("test_mark_subtask_stuck", test_mark_subtask_stuck),
-        ("test_recovery_hints", test_recovery_hints),
-        # Session checkpoint and restoration tests
-        ("test_checkpoint_persistence_across_sessions", test_checkpoint_persistence_across_sessions),
-        ("test_restoration_after_failure", test_restoration_after_failure),
-        ("test_checkpoint_multiple_subtasks", test_checkpoint_multiple_subtasks),
-        ("test_restoration_with_build_commits", test_restoration_with_build_commits),
-        ("test_checkpoint_recovery_hints_restoration", test_checkpoint_recovery_hints_restoration),
-        ("test_restoration_stuck_subtasks_list", test_restoration_stuck_subtasks_list),
-        ("test_checkpoint_clear_and_reset", test_checkpoint_clear_and_reset),
-    ]
 
     print("Note: Running with manual test runner for backwards compatibility.")
     print("For full pytest integration with fixtures, run: pytest tests/test_recovery.py -v")

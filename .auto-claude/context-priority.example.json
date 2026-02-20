@@ -1,0 +1,95 @@
+{
+  "$schema": ".auto-claude/context-priority.schema.json",
+  "#comment": "This is an example configuration. Copy to context-priority.json and customize for your project.",
+  "#documentation": "https://github.com/OBenner/Auto-Coding/docs/context-optimization.md",
+
+  "#always-include": "Files that should ALWAYS be in AI context regardless of task",
+  "apps/backend/core/client.py": {
+    "priority": "always",
+    "reason": "Critical SDK client - all AI interactions go through this"
+  },
+  "apps/backend/agents/planner.py": {
+    "priority": "always",
+    "reason": "Core planner agent - essential for understanding build pipeline"
+  },
+
+  "#high-priority": "Core application files most relevant to tasks",
+  "apps/backend/agents/*.py": {
+    "priority": "high",
+    "reason": "Agent implementations - frequently modified"
+  },
+  "apps/backend/context/*.py": {
+    "priority": "high",
+    "reason": "Context management system - core to this feature"
+  },
+  "apps/frontend/src/main/**/*.ts": {
+    "priority": "high",
+    "reason": "Electron main process - critical for desktop app"
+  },
+
+  "#medium-priority": "Important but not always critical",
+  "apps/backend/integrations/**/*.py": {
+    "priority": "medium",
+    "reason": "Third-party integrations (GitHub, Linear, etc.)"
+  },
+  "apps/frontend/src/renderer/components/**/*.tsx": {
+    "priority": "medium",
+    "reason": "UI components - relevant for frontend work"
+  },
+
+  "#low-priority": "Less relevant unless specifically working on them",
+  "apps/frontend/src/renderer/styles/**/*.css": {
+    "priority": "low",
+    "reason": "Styling files - only relevant for UI changes"
+  },
+  "docs/**/*.md": {
+    "priority": "low",
+    "reason": "Documentation - reference only"
+  },
+
+  "#never-include": "Files that should NEVER be in AI context",
+  "node_modules/**": {
+    "priority": "never",
+    "reason": "Third-party dependencies - not relevant"
+  },
+  ".git/**": {
+    "priority": "never",
+    "reason": "Git internals - never relevant"
+  },
+  "**/*_test.py": {
+    "priority": "never",
+    "reason": "Test files - exclude unless debugging tests"
+  },
+  "**/*.min.js": {
+    "priority": "never",
+    "reason": "Minified files - not human-readable"
+  },
+  "**/*.min.css": {
+    "priority": "never",
+    "reason": "Minified styles - not human-readable"
+  },
+  "dist/**": {
+    "priority": "never",
+    "reason": "Build output - not source code"
+  },
+  "build/**": {
+    "priority": "never",
+    "reason": "Build artifacts - not source code"
+  },
+  ".venv/**": {
+    "priority": "never",
+    "reason": "Python virtual environment - dependencies"
+  },
+  "__pycache__/**": {
+    "priority": "never",
+    "reason": "Python bytecode - not source"
+  },
+  "*.pyc": {
+    "priority": "never",
+    "reason": "Python bytecode files"
+  },
+  ".auto-claude/specs/**/memory/**": {
+    "priority": "never",
+    "reason": "Graphiti memory database - not source code"
+  }
+}

@@ -5,18 +5,21 @@ Pattern Commands
 CLI commands for managing learned codebase patterns
 """
 
+from __future__ import annotations
+
 import argparse
-import sys
+import os
+import tempfile
 from pathlib import Path
 
-# Ensure parent directory is in path for imports (before other imports)
-_PARENT_DIR = Path(__file__).parent.parent
-if str(_PARENT_DIR) not in sys.path:
-    sys.path.insert(0, str(_PARENT_DIR))
-
+from cli.utils import print_banner
 from integrations.graphiti.pattern_categorizer import get_pattern_categories
 from integrations.graphiti.pattern_suggester import get_patterns_by_category
-from memory.graphiti_helpers import get_graphiti_memory, is_graphiti_memory_enabled, run_async
+from memory.graphiti_helpers import (
+    get_graphiti_memory,
+    is_graphiti_memory_enabled,
+    run_async,
+)
 from memory.patterns import load_patterns
 from ui import (
     Icons,
@@ -29,12 +32,6 @@ from ui import (
     success,
     warning,
 )
-
-# Import utils - handle both relative and absolute imports
-try:
-    from .utils import print_banner
-except ImportError:
-    from cli.utils import print_banner
 
 
 def list_patterns(spec_dir: Path, category: str | None = None) -> None:
@@ -96,13 +93,17 @@ def list_patterns(spec_dir: Path, category: str | None = None) -> None:
                     client = run_async(get_client(spec_dir))
                     if client:
                         results = run_async(
-                            get_patterns_by_category(client, group_id, category, num_results=50)
+                            get_patterns_by_category(
+                                client, group_id, category, num_results=50
+                            )
                         )
                         if results:
                             for i, result in enumerate(results, 1):
                                 content = result.get("content", "")
                                 score = result.get("score", 0.0)
-                                result_category = result.get("category", "uncategorized")
+                                result_category = result.get(
+                                    "category", "uncategorized"
+                                )
                                 print(f"{i}. {content}")
                                 print(
                                     muted(
@@ -131,7 +132,9 @@ def list_patterns(spec_dir: Path, category: str | None = None) -> None:
 
                 run_async(graphiti.close())
         except Exception as e:
-            print(warning(f"{icon(Icons.WARNING)} Failed to load Graphiti patterns: {e}"))
+            print(
+                warning(f"{icon(Icons.WARNING)} Failed to load Graphiti patterns: {e}")
+            )
             print()
 
     # Show available categories
@@ -141,7 +144,7 @@ def list_patterns(spec_dir: Path, category: str | None = None) -> None:
         print()
         categories = get_pattern_categories()
         for cat in categories:
-            print(f"  • {cat}")
+            print(f"  * {cat}")
         print()
         print(muted("Use --category to filter by specific category"))
         print()
@@ -278,15 +281,22 @@ def override_pattern(spec_dir: Path, pattern_index: int, new_text: str) -> None:
     old_pattern = patterns[pattern_index - 1]
     patterns[pattern_index - 1] = new_text
 
-    # Write updated patterns back to file
+    # Write updated patterns back to file atomically
     memory_dir = get_memory_dir(spec_dir)
     patterns_file = memory_dir / "patterns.md"
 
-    with open(patterns_file, "w", encoding="utf-8") as f:
-        f.write("# Code Patterns\n\n")
-        f.write("Established patterns to follow in this codebase:\n\n")
-        for pattern in patterns:
-            f.write(f"- {pattern}\n")
+    fd, tmp_path = tempfile.mkstemp(dir=str(memory_dir), suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write("# Code Patterns\n\n")
+            f.write("Established patterns to follow in this codebase:\n\n")
+            for pattern in patterns:
+                f.write(f"- {pattern}\n")
+        os.replace(tmp_path, str(patterns_file))
+    except BaseException:
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+        raise
 
     print(muted(f"Old: {old_pattern}"))
     print(success(f"New: {new_text}"))
@@ -323,20 +333,27 @@ def delete_pattern(spec_dir: Path, pattern_index: int) -> None:
 
     deleted_pattern = patterns.pop(pattern_index - 1)
 
-    # Write updated patterns back to file
+    # Write updated patterns back to file atomically
     memory_dir = get_memory_dir(spec_dir)
     patterns_file = memory_dir / "patterns.md"
 
-    with open(patterns_file, "w", encoding="utf-8") as f:
-        if patterns:
-            f.write("# Code Patterns\n\n")
-            f.write("Established patterns to follow in this codebase:\n\n")
-            for pattern in patterns:
-                f.write(f"- {pattern}\n")
-        else:
-            # Empty file if no patterns left
-            f.write("# Code Patterns\n\n")
-            f.write("No patterns yet.\n")
+    fd, tmp_path = tempfile.mkstemp(dir=str(memory_dir), suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            if patterns:
+                f.write("# Code Patterns\n\n")
+                f.write("Established patterns to follow in this codebase:\n\n")
+                for pattern in patterns:
+                    f.write(f"- {pattern}\n")
+            else:
+                # Empty file if no patterns left
+                f.write("# Code Patterns\n\n")
+                f.write("No patterns yet.\n")
+        os.replace(tmp_path, str(patterns_file))
+    except BaseException:
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+        raise
 
     print(warning(f"Deleted: {deleted_pattern}"))
     print()
@@ -344,13 +361,16 @@ def delete_pattern(spec_dir: Path, pattern_index: int) -> None:
     print()
 
 
-def handle_patterns_command(spec_dir: Path, args: argparse.Namespace) -> None:
+def handle_patterns_command(spec_dir: Path, args: argparse.Namespace) -> int:
     """
     Handle the pattern management command.
 
     Args:
         spec_dir: Spec directory path
         args: Parsed command-line arguments
+
+    Returns:
+        0 on success, 1 on error
     """
     action = args.action
 
@@ -359,12 +379,14 @@ def handle_patterns_command(spec_dir: Path, args: argparse.Namespace) -> None:
     elif action == "show":
         if not args.index:
             print(warning(f"{icon(Icons.WARNING)} --index required for 'show' action"))
-            sys.exit(1)
+            return 1
         show_pattern_details(spec_dir, args.index)
     elif action == "approve":
         if not args.index:
-            print(warning(f"{icon(Icons.WARNING)} --index required for 'approve' action"))
-            sys.exit(1)
+            print(
+                warning(f"{icon(Icons.WARNING)} --index required for 'approve' action")
+            )
+            return 1
         approve_pattern(spec_dir, args.index)
     elif action == "override":
         if not args.index or not args.text:
@@ -373,16 +395,20 @@ def handle_patterns_command(spec_dir: Path, args: argparse.Namespace) -> None:
                     f"{icon(Icons.WARNING)} --index and --text required for 'override' action"
                 )
             )
-            sys.exit(1)
+            return 1
         override_pattern(spec_dir, args.index, args.text)
     elif action == "delete":
         if not args.index:
-            print(warning(f"{icon(Icons.WARNING)} --index required for 'delete' action"))
-            sys.exit(1)
+            print(
+                warning(f"{icon(Icons.WARNING)} --index required for 'delete' action")
+            )
+            return 1
         delete_pattern(spec_dir, args.index)
     else:
         print(warning(f"{icon(Icons.WARNING)} Unknown action: {action}"))
-        sys.exit(1)
+        return 1
+
+    return 0
 
 
 def main() -> None:
@@ -449,8 +475,10 @@ Examples:
 
     # Validate spec_dir exists
     if not args.spec_dir.exists():
-        print(warning(f"{icon(Icons.WARNING)} Spec directory not found: {args.spec_dir}"))
-        sys.exit(1)
+        print(
+            warning(f"{icon(Icons.WARNING)} Spec directory not found: {args.spec_dir}")
+        )
+        return
 
     # Handle the command
     handle_patterns_command(args.spec_dir, args)

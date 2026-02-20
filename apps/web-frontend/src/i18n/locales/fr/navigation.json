@@ -1,0 +1,34 @@
+{
+  "sections": {
+    "main": "Principal",
+    "tools": "Outils"
+  },
+  "items": {
+    "dashboard": "Tableau de bord",
+    "createSpec": "Créer une spécification",
+    "tasks": "Tâches",
+    "specs": "Spécifications",
+    "settings": "Paramètres",
+    "help": "Aide et commentaires"
+  },
+  "actions": {
+    "settings": "Paramètres",
+    "help": "Aide et commentaires",
+    "newTask": "Nouvelle tâche",
+    "collapseSidebar": "Réduire la barre latérale",
+    "expandSidebar": "Développer la barre latérale",
+    "logout": "Déconnexion"
+  },
+  "tooltips": {
+    "settings": "Paramètres de l'application",
+    "help": "Aide et commentaires",
+    "dashboard": "Aller au tableau de bord",
+    "createSpec": "Créer une nouvelle spécification",
+    "tasks": "Voir toutes les tâches",
+    "specs": "Voir toutes les spécifications"
+  },
+  "messages": {
+    "welcomeBack": "Bienvenue",
+    "noProjectSelected": "Aucun projet sélectionné"
+  }
+}
