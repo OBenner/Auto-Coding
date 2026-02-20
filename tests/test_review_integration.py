@@ -13,10 +13,8 @@ Integration tests for complete review workflows:
 import json
 from pathlib import Path
 
-import pytest
 
 from review import ReviewState, REVIEW_STATE_FILE
-from tests.review_fixtures import review_spec_dir, complete_spec_dir
 
 
 class TestFullReviewFlow:
@@ -199,11 +197,10 @@ class TestFullReviewWorkflowIntegration:
         # Simulate force flag bypass (even without valid approval)
         review_state.reject(complete_spec_dir)
         force_flag = True
-        if force_flag:
-            # run.py with --force would proceed even without approval
-            build_should_proceed = True
-        else:
-            build_should_proceed = review_state.is_approval_valid(complete_spec_dir)
+        # run.py with --force would proceed even without approval
+        approval_valid = review_state.is_approval_valid(complete_spec_dir)
+        assert not approval_valid, "Approval should be invalid after rejection"
+        build_should_proceed = force_flag or approval_valid
         assert build_should_proceed, "Force flag should bypass approval check"
 
     def test_spec_change_detection_accuracy(self, complete_spec_dir: Path) -> None:

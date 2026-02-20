@@ -608,7 +608,7 @@ export class AgentProcessManager {
         if (phaseChanged && currentPhase !== 'idle' && currentPhase !== phaseUpdate.phase) {
           // Type guard to narrow currentPhase to CompletablePhase
           const isCompletablePhase = (phase: ExecutionProgressData['phase']): phase is CompletablePhase => {
-            return ['planning', 'coding', 'qa_review', 'qa_fixing'].includes(phase);
+            return ['planning', 'coding', 'test_generation', 'qa_review', 'qa_fixing'].includes(phase);
           };
           if (isCompletablePhase(currentPhase) && !completedPhases.includes(currentPhase)) {
             completedPhases.push(currentPhase);

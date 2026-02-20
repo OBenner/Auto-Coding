@@ -11,6 +11,7 @@ import os
 from pathlib import Path
 
 from core.client import create_client
+from core.model_fallback import MODEL_FALLBACK_CHAIN
 from linear_updater import (
     LinearTaskState,
     is_linear_enabled,
@@ -18,7 +19,8 @@ from linear_updater import (
     linear_task_started,
     linear_task_stuck,
 )
-from phase_config import get_phase_model, get_phase_thinking_budget
+from notifications import notify_stuck_subtask
+from phase_config import get_phase_model, get_phase_thinking_budget, resolve_model_id
 from phase_event import ExecutionPhase, emit_phase
 from progress import (
     count_subtasks,
@@ -30,14 +32,14 @@ from progress import (
     print_progress_summary,
     print_session_header,
 )
-from prompt_generator import (
+from prompts_pkg.prompt_generator import (
     format_context_for_prompt,
     generate_planner_prompt,
     generate_subtask_prompt,
     load_subtask_context,
 )
-from prompts import is_first_run
-from recovery import RecoveryManager
+from prompts_pkg.prompts import is_first_run
+from recovery import RecoveryAction, RecoveryManager
 from security.constants import PROJECT_DIR_ENV_VAR
 from task_logger import (
     LogPhase,
@@ -58,7 +60,12 @@ from ui import (
 
 from .base import AUTO_CONTINUE_DELAY_SECONDS, HUMAN_INTERVENTION_FILE
 from .memory_manager import debug_memory_system_status, get_graphiti_context
-from .session import post_session_processing, run_agent_session, save_token_stats
+from .session import (
+    post_session_processing,
+    run_agent_session,
+    run_agent_session_isolated,
+    save_token_stats,
+)
 from .utils import (
     find_phase_for_subtask,
     get_commit_count,
@@ -67,7 +74,122 @@ from .utils import (
     sync_spec_to_source,
 )
 
+# Import for context window usage display
+try:
+    from context.token_estimator import TokenEstimator
+
+    TOKEN_ESTIMATOR_AVAILABLE = True
+except ImportError:
+    TOKEN_ESTIMATOR_AVAILABLE = False
+
 logger = logging.getLogger(__name__)
+
+
+def _display_context_window_usage(
+    context: dict,
+    subtask_id: str | None = None,
+) -> None:
+    """
+    Display context window usage information to the user.
+
+    This provides transparency about what files are included in the context
+    and the estimated token usage, helping users understand the scope of
+    information being provided to the AI agent.
+
+    Args:
+        context: Context dict from load_subtask_context
+        subtask_id: Optional subtask ID for more detailed display
+    """
+    if not TOKEN_ESTIMATOR_AVAILABLE:
+        return
+
+    pattern_files = list(context.get("patterns", {}).keys())
+    files_to_modify = list(context.get("files_to_modify", {}).keys())
+    total_files = len(pattern_files) + len(files_to_modify)
+
+    if total_files == 0:
+        return
+
+    token_estimator = TokenEstimator()
+
+    pattern_tokens = sum(
+        token_estimator.count_tokens(context["patterns"][f]) for f in pattern_files
+    )
+    modify_tokens = sum(
+        token_estimator.count_tokens(context["files_to_modify"][f])
+        for f in files_to_modify
+    )
+    total_tokens = pattern_tokens + modify_tokens
+
+    status_level = _get_context_status_level(total_tokens)
+
+    print()
+    print_status("Context Window Usage", status_level)
+    print_key_value("Total Files", str(total_files))
+    print_key_value("Estimated Tokens", f"{total_tokens:,}")
+    print_key_value(
+        "Pattern Files", f"{len(pattern_files)} ({pattern_tokens:,} tokens)"
+    )
+    print_key_value(
+        "Files to Modify", f"{len(files_to_modify)} ({modify_tokens:,} tokens)"
+    )
+
+    _print_context_warnings(total_tokens)
+
+    max_context = 200_000
+    percentage = (total_tokens / max_context) * 100
+    print_key_value("Context Usage", f"{percentage:.1f}%")
+
+    if subtask_id:
+        _print_context_file_list(pattern_files, files_to_modify)
+
+    print()
+
+
+def _get_context_status_level(total_tokens: int) -> str:
+    """Return status level string based on token count."""
+    if total_tokens > 150_000:
+        return "error"
+    if total_tokens > 100_000:
+        return "warning"
+    return "success"
+
+
+def _print_context_warnings(total_tokens: int) -> None:
+    """Print warning messages if context is too large."""
+    if total_tokens > 150_000:
+        print()
+        print_status(
+            f"⚠️ Context window is critically large ({total_tokens:,} tokens). "
+            f"This may impact performance or exceed model limits.",
+            "error",
+        )
+    elif total_tokens > 100_000:
+        print()
+        print_status(
+            f"⚠️ Context window is large ({total_tokens:,} tokens). "
+            f"Consider reducing file count or using summaries.",
+            "warning",
+        )
+
+
+def _print_context_file_list(
+    pattern_files: list[str], files_to_modify: list[str]
+) -> None:
+    """Print the list of files included in context."""
+    print()
+    print(muted("Files included in context:"))
+    for label, files in [
+        ("Pattern files", pattern_files),
+        ("Files to modify", files_to_modify),
+    ]:
+        if not files:
+            continue
+        print(muted(f"  {label}:"))
+        for f in files[:5]:
+            print(muted(f"    - {f}"))
+        if len(files) > 5:
+            print(muted(f"    ... and {len(files) - 5} more"))
 
 
 async def run_autonomous_agent(
@@ -139,6 +261,11 @@ async def run_autonomous_agent(
     planning_retry_context: str | None = None
     planning_validation_failures = 0
     max_planning_validation_retries = 3
+
+    # Track recovery state for enhanced recovery
+    pending_recovery_action: RecoveryAction | None = None
+    override_model: str | None = None  # For model fallback
+    recovery_guidance: str | None = None  # Strategy guidance for next attempt
 
     def _validate_and_fix_implementation_plan() -> tuple[bool, list[str]]:
         from spec.validate_pkg import SpecValidator, auto_fix_plan
@@ -245,11 +372,10 @@ async def run_autonomous_agent(
         # Get the next subtask to work on (planner sessions shouldn't bind to a subtask)
         next_subtask = None if first_run else get_next_subtask(spec_dir)
         subtask_id = next_subtask.get("id") if next_subtask else None
-        phase_name = next_subtask.get("phase_name") if next_subtask else None
 
         # Update status for this session
         status_manager.update_session(iteration)
-        if phase_name:
+        if next_subtask and next_subtask.get("phase_name"):
             current_phase = get_current_phase(spec_dir)
             if current_phase:
                 status_manager.update_phase(
@@ -265,7 +391,7 @@ async def run_autonomous_agent(
             is_planner=first_run,
             subtask_id=subtask_id,
             subtask_desc=next_subtask.get("description") if next_subtask else None,
-            phase_name=phase_name,
+            phase_name=next_subtask.get("phase_name") if next_subtask else None,
             attempt=recovery_manager.get_attempt_count(subtask_id) + 1
             if subtask_id
             else 1,
@@ -275,10 +401,50 @@ async def run_autonomous_agent(
         commit_before = get_latest_commit(project_dir)
         commit_count_before = get_commit_count(project_dir)
 
+        # === ENHANCED RECOVERY: Handle pending recovery action ===
+        if pending_recovery_action:
+            # Apply exponential backoff delay if specified
+            if pending_recovery_action.wait_seconds > 0:
+                print_status(
+                    f"Recovery backoff: waiting {pending_recovery_action.wait_seconds:.1f}s before retry...",
+                    "progress",
+                )
+                await asyncio.sleep(pending_recovery_action.wait_seconds)
+
+            # Handle rollback action
+            if pending_recovery_action.action == "rollback":
+                print_status(
+                    f"Rolling back to commit {pending_recovery_action.target[:8]}...",
+                    "warning",
+                )
+                rollback_success = recovery_manager.rollback_to_commit(
+                    pending_recovery_action.target
+                )
+                if rollback_success:
+                    print_status("Rollback successful", "success")
+                else:
+                    print_status("Rollback failed", "error")
+
+            # Display recovery notification if needed
+            if pending_recovery_action.should_notify:
+                print()
+                print_status(pending_recovery_action.notification_message, "warning")
+                print()
+
+            # Clear the pending action
+            pending_recovery_action = None
+
         # Get the phase-specific model and thinking level (respects task_metadata.json configuration)
         # first_run means we're in planning phase, otherwise coding phase
         current_phase = "planning" if first_run else "coding"
-        phase_model = get_phase_model(spec_dir, current_phase, model)
+
+        # Use override model if set (for model fallback), otherwise use phase model
+        if override_model:
+            phase_model = resolve_model_id(override_model)
+            print_status(f"Using fallback model: {override_model}", "progress")
+        else:
+            phase_model = get_phase_model(spec_dir, current_phase, model)
+
         phase_thinking_budget = get_phase_thinking_budget(spec_dir, current_phase)
 
         # Create client (fresh context) with phase-specific model and thinking
@@ -353,9 +519,8 @@ async def run_autonomous_agent(
                         await asyncio.sleep(delay)
                         next_subtask = get_next_subtask(spec_dir)
                         if next_subtask:
-                            # Update subtask_id and phase_name after successful retry
+                            # Update subtask_id after successful retry
                             subtask_id = next_subtask.get("id")
-                            phase_name = next_subtask.get("phase_name")
                             print_status(
                                 f"Found subtask {subtask_id} after {delay}s delay",
                                 "success",
@@ -392,10 +557,19 @@ async def run_autonomous_agent(
                 recovery_hints=recovery_hints,
             )
 
+            # Add recovery strategy guidance if available
+            if recovery_guidance:
+                prompt += f"\n\n## RECOVERY STRATEGY\n\n{recovery_guidance}\n"
+                # Clear the guidance after using it
+                recovery_guidance = None
+
             # Load and append relevant file context
             context = load_subtask_context(spec_dir, project_dir, next_subtask)
             if context.get("patterns") or context.get("files_to_modify"):
                 prompt += "\n\n" + format_context_for_prompt(context)
+
+                # Display context window usage for transparency
+                _display_context_window_usage(context, subtask_id)
 
             # Retrieve and append Graphiti memory context (if enabled)
             graphiti_context = await get_graphiti_context(
@@ -417,11 +591,40 @@ async def run_autonomous_agent(
             task_logger.set_subtask(subtask_id)
             task_logger.set_session(iteration)
 
-        # Run session with async context manager
-        async with client:
-            status, response, usage_metadata = await run_agent_session(
-                client, prompt, spec_dir, verbose, phase=current_log_phase
+        # Check if process isolation is enabled
+        use_process_isolation = (
+            os.getenv("AGENT_PROCESS_ISOLATION", "").lower() == "true"
+        )
+
+        if use_process_isolation:
+            # Run in isolated subprocess for crash resistance
+            agent_type = "planner" if first_run else "coder"
+            if verbose or iteration == 1:
+                print_status(
+                    "Process isolation: ENABLED (crash-resistant mode)", "info"
+                )
+            status, response, usage_metadata = await run_agent_session_isolated(
+                project_dir=project_dir,
+                spec_dir=spec_dir,
+                agent_type=agent_type,
+                model=phase_model,
+                starting_message=prompt,
+                system_prompt=None,
+                max_thinking_tokens=phase_thinking_budget,
+                session_name=f"{agent_type}-session-{iteration}",
+                limits=None,  # Use default ResourceLimits
             )
+        else:
+            # Run in current process (legacy mode)
+            async with client:
+                (
+                    status,
+                    response,
+                    usage_metadata,
+                    _,
+                ) = await run_agent_session(
+                    client, prompt, spec_dir, verbose, phase=current_log_phase
+                )
 
         # Save token statistics for coding phase
         if usage_metadata and current_log_phase == LogPhase.CODING:
@@ -496,27 +699,147 @@ async def run_autonomous_agent(
                 source_spec_dir=source_spec_dir,
             )
 
-            # Check for stuck subtasks
-            attempt_count = recovery_manager.get_attempt_count(subtask_id)
-            if not success and attempt_count >= 3:
-                recovery_manager.mark_subtask_stuck(
-                    subtask_id, f"Failed after {attempt_count} attempts"
-                )
-                print()
-                print_status(
-                    f"Subtask {subtask_id} marked as STUCK after {attempt_count} attempts",
-                    "error",
-                )
-                print(muted("Consider: manual intervention or skipping this subtask"))
+            # === ENHANCED RECOVERY: Handle failures with smart recovery ===
+            if not success:
+                attempt_count = recovery_manager.get_attempt_count(subtask_id)
 
-                # Record stuck subtask in Linear (if enabled)
-                if linear_is_enabled:
-                    await linear_task_stuck(
-                        spec_dir=spec_dir,
-                        subtask_id=subtask_id,
-                        attempt_count=attempt_count,
+                # Classify the failure type
+                # We use a generic "verification failed" error since we don't have the actual error message
+                # The recovery system will use attempt history to determine if it's circular
+                error_message = (
+                    f"Subtask {subtask_id} verification failed or incomplete"
+                )
+                failure_type = recovery_manager.classify_failure(
+                    error_message, subtask_id
+                )
+
+                # Determine recovery action (handles exponential backoff, model fallback, DLQ, notifications)
+                recovery_action = recovery_manager.determine_recovery_action(
+                    failure_type, subtask_id
+                )
+
+                # Record the notification or silent failure
+                recovery_manager.record_recovery_notification(
+                    subtask_id, failure_type, recovery_action
+                )
+
+                print()
+                print_status(f"Recovery action: {recovery_action.action}", "warning")
+                print_key_value("Reason", recovery_action.reason)
+
+                # Handle different recovery actions
+                if recovery_action.action == "retry":
+                    # Set up for retry with exponential backoff and optional model fallback
+                    pending_recovery_action = recovery_action
+
+                    # Set model fallback if recommended
+                    if recovery_action.use_model_fallback:
+                        # Extract current model shorthand and get fallback
+                        current_model_shorthand = "sonnet"  # Default
+                        if "opus" in phase_model.lower():
+                            current_model_shorthand = "opus"
+                        elif "sonnet" in phase_model.lower():
+                            current_model_shorthand = "sonnet"
+                        elif "haiku" in phase_model.lower():
+                            current_model_shorthand = "haiku"
+
+                        # Get fallback model from chain
+                        fallback_chain = MODEL_FALLBACK_CHAIN.get(
+                            current_model_shorthand, []
+                        )
+                        if fallback_chain:
+                            override_model = fallback_chain[0]  # Use first fallback
+                            print_status(
+                                f"Will try fallback model: {override_model}", "info"
+                            )
+                        else:
+                            override_model = None
+
+                    # Set recovery guidance from strategy
+                    if recovery_action.strategy:
+                        recovery_guidance = recovery_action.strategy.guidance
+                        print_key_value(
+                            "Strategy", recovery_action.strategy.description
+                        )
+
+                    print_status(
+                        f"Will retry after {recovery_action.wait_seconds:.1f}s backoff",
+                        "progress",
                     )
-                    print_status("Linear notified of stuck subtask", "info")
+
+                elif recovery_action.action == "skip":
+                    # Mark subtask as stuck and skip
+                    recovery_manager.mark_subtask_stuck(
+                        subtask_id, recovery_action.reason
+                    )
+                    print_status(f"Subtask {subtask_id} marked as STUCK", "error")
+                    print(muted("Recovery exhausted - consider manual intervention"))
+
+                    # Notify user about stuck subtask
+                    notify_stuck_subtask(
+                        subtask_id=subtask_id,
+                        reason=recovery_action.reason,
+                        attempt_count=attempt_count,
+                        spec_dir=spec_dir,
+                    )
+
+                    # Record stuck subtask in Linear (if enabled)
+                    if linear_is_enabled:
+                        await linear_task_stuck(
+                            spec_dir=spec_dir,
+                            subtask_id=subtask_id,
+                            attempt_count=attempt_count,
+                        )
+                        print_status("Linear notified of stuck subtask", "info")
+
+                elif recovery_action.action == "escalate":
+                    # Critical failure - escalate to human
+                    recovery_manager.mark_subtask_stuck(
+                        subtask_id, recovery_action.reason
+                    )
+                    print()
+                    print_status("ESCALATION REQUIRED", "error")
+                    print_status(recovery_action.reason, "error")
+                    print(
+                        muted(
+                            "This failure has been added to the dead-letter queue for manual review"
+                        )
+                    )
+                    print()
+
+                    # Notify user about escalation
+                    notify_stuck_subtask(
+                        subtask_id=subtask_id,
+                        reason=recovery_action.reason,
+                        attempt_count=attempt_count,
+                        spec_dir=spec_dir,
+                    )
+
+                    # Record stuck subtask in Linear (if enabled)
+                    if linear_is_enabled:
+                        await linear_task_stuck(
+                            spec_dir=spec_dir,
+                            subtask_id=subtask_id,
+                            attempt_count=attempt_count,
+                        )
+                        print_status("Linear notified of escalation", "info")
+
+                elif recovery_action.action == "rollback":
+                    # Rollback will be handled at the start of next iteration
+                    pending_recovery_action = recovery_action
+                    print_status(
+                        f"Will rollback to {recovery_action.target[:8]} on next iteration",
+                        "warning",
+                    )
+
+                elif recovery_action.action == "continue":
+                    # Context exhausted - will continue in next session
+                    print_status(
+                        "Context exhausted - will continue in next session", "info"
+                    )
+                    # No special handling needed - natural session boundary
+
+                print()
         elif plan_validated and source_spec_dir:
             # After planning phase, sync the newly created implementation plan back to source
             if sync_spec_to_source(spec_dir, source_spec_dir):

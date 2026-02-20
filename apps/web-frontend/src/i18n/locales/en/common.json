@@ -51,7 +51,9 @@
     "update": "Update",
     "refresh": "Refresh",
     "search": "Search",
-    "filter": "Filter"
+    "filter": "Filter",
+    "newTask": "New Task",
+    "settings": "Settings"
   },
   "labels": {
     "loading": "Loading...",
@@ -139,6 +141,8 @@
   "specs": "Specs",
   "settings": "Settings",
   "dashboard": "Dashboard",
+  "loading": "Loading...",
+  "error": "Error",
   "services": {
     "github": "GitHub"
   }

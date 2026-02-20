@@ -8,6 +8,14 @@ import { TaskList } from './pages/TaskList'
 import { TaskDetail } from './pages/TaskDetail'
 import { Dashboard } from './pages/Dashboard'
 import { CreateSpec } from './pages/CreateSpec'
+import { Changelog } from "./pages/Changelog"
+import { FilesPage } from "./pages/FilesPage"
+import { GitOperations } from "./pages/GitOperations"
+import { Insights } from "./pages/Insights"
+import { Kanban } from "./pages/Kanban"
+import { Roadmap } from "./pages/Roadmap"
+import { TaskCreate } from "./pages/TaskCreate"
+import { TerminalPage } from "./pages/TerminalPage"
 import { Layout } from './components/Layout'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { AppLoading } from './components/AppLoading'
@@ -24,7 +32,11 @@ function TaskListPage() {
     navigate(`/tasks/${taskId}`)
   }
 
-  return <TaskList onTaskClick={handleTaskClick} />
+  const handleCreateTask = () => {
+    navigate("/tasks/create")
+  }
+
+  return <TaskList onTaskClick={handleTaskClick} onCreateTask={handleCreateTask} />
 }
 
 /**
@@ -43,6 +55,25 @@ function TaskDetailPage() {
   }
 
   return <TaskDetail taskId={id} onBack={handleBack} />
+}
+
+/**
+ * Kanban wrapper component that integrates with React Router
+ */
+function KanbanWrapper() {
+  const navigate = useNavigate()
+
+  const handleTaskClick = (taskId: string) => {
+    navigate(`/tasks/${taskId}`)
+  }
+
+  const handleCreateTask = () => {
+    navigate("/tasks/create")
+  }
+
+  return (
+    <Kanban onTaskClick={handleTaskClick} onCreateTask={handleCreateTask} />
+  )
 }
 
 /**
@@ -100,10 +131,22 @@ function App() {
 
               {/* Task routes */}
               <Route path="/tasks" element={<TaskListPage />} />
+              <Route path="/tasks/create" element={<TaskCreate />} />
               <Route path="/tasks/:id" element={<TaskDetailPage />} />
 
               {/* Create spec route */}
               <Route path="/create" element={<CreateSpec />} />
+
+              {/* Kanban and project views */}
+              <Route path="/kanban" element={<KanbanWrapper />} />
+              <Route path="/roadmap" element={<Roadmap />} />
+              <Route path="/changelog" element={<Changelog />} />
+              <Route path="/insights" element={<Insights />} />
+
+              {/* Terminal and file management */}
+              <Route path="/terminal" element={<TerminalPage />} />
+              <Route path="/files" element={<FilesPage />} />
+              <Route path="/git" element={<GitOperations />} />
 
               {/* Settings and usage routes */}
               <Route path="/settings/*" element={<Settings />} />
@@ -116,4 +159,4 @@ function App() {
   )
 }
 
-export default App
+export default App;

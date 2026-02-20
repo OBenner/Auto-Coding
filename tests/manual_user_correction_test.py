@@ -12,7 +12,6 @@ This script demonstrates the complete user correction flow for subtask-5-2:
 Run this manually to verify the E2E flow works correctly.
 """
 
-import asyncio
 import json
 import sys
 import tempfile

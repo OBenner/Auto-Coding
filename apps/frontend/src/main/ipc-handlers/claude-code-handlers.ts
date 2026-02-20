@@ -19,7 +19,7 @@ import type { IPCResult } from '../../shared/types';
 import type { ClaudeCodeVersionInfo, ClaudeInstallationList, ClaudeInstallationInfo } from '../../shared/types/cli';
 import { getToolInfo, configureTools, sortNvmVersionDirs, getClaudeDetectionPaths, type ExecFileAsyncOptionsWithVerbatim } from '../cli-tool-manager';
 import { readSettingsFile, writeSettingsFile } from '../settings-utils';
-import { isSecurePath } from '../utils/windows-paths';
+import { isSecurePath, getWindowsShellPaths } from '../platform/paths';
 import { isWindows, isMacOS, isLinux } from '../platform';
 import { getClaudeProfileManager } from '../claude-profile-manager';
 import { isValidConfigDir } from '../utils/config-path-validator';
@@ -585,11 +585,8 @@ export async function openTerminalWithCommand(command: string): Promise<void> {
       } else if (terminalId === 'gitbash') {
         // Git Bash - use the passed command (escaped for bash context)
         const escapedBashCommand = escapeGitBashCommand(command);
-        const gitBashPaths = [
-          'C:\\Program Files\\Git\\git-bash.exe',
-          'C:\\Program Files (x86)\\Git\\git-bash.exe',
-        ];
-        const gitBashPath = gitBashPaths.find(p => existsSync(p));
+        const shellPaths = getWindowsShellPaths();
+        const gitBashPath = shellPaths.gitbashLauncher?.find(p => existsSync(p));
         if (gitBashPath) {
           await runWindowsCommand(`"${gitBashPath}" -c "${escapedBashCommand}"`);
         } else {
@@ -609,11 +606,8 @@ export async function openTerminalWithCommand(command: string): Promise<void> {
         await runWindowsCommand(`start cmd /k "powershell -NoExit -Command ${escapedCommand}"`);
       } else if (terminalId === 'conemu') {
         // ConEmu - open with PowerShell tab running the command
-        const conemuPaths = [
-          'C:\\Program Files\\ConEmu\\ConEmu64.exe',
-          'C:\\Program Files (x86)\\ConEmu\\ConEmu.exe',
-        ];
-        const conemuPath = conemuPaths.find(p => existsSync(p));
+        const shellPaths = getWindowsShellPaths();
+        const conemuPath = shellPaths.conemu?.find(p => existsSync(p));
         if (conemuPath) {
           // ConEmu uses -run to specify the command to execute
           await runWindowsCommand(`start "" "${conemuPath}" -run "powershell -NoExit -Command ${escapedCommand}"`);
