@@ -52,69 +52,10 @@ const CategoryIcon: Record<TaskCategory, typeof Zap> = {
 // Defined outside component to avoid recreation on every render
 const STUCK_CHECK_SKIP_PHASES = ['complete', 'failed', 'planning'] as const;
 
-/**
- * Badge priority constants for TaskCard badge consolidation
- *
- * Priority badges are shown by default (critical information)
- * Secondary badges are hidden in expandable metadata section (less critical)
- */
-const BADGE_PRIORITY = {
-  PRIORITY: 'priority' as const,
-  SECONDARY: 'secondary' as const
-};
-
-/**
- * Badge type classification for grouping
- * Maps badge types to their display priority
- */
-const BADGE_TYPE_PRIORITY = {
-  // Priority badges (always visible)
-  stuck: BADGE_PRIORITY.PRIORITY,
-  incomplete: BADGE_PRIORITY.PRIORITY,
-  archived: BADGE_PRIORITY.PRIORITY,
-  executionPhase: BADGE_PRIORITY.PRIORITY,
-  status: BADGE_PRIORITY.PRIORITY,
-  reviewReason: BADGE_PRIORITY.PRIORITY,
-  impact: BADGE_PRIORITY.PRIORITY,
-  priority: BADGE_PRIORITY.PRIORITY,
-  securitySeverity: BADGE_PRIORITY.PRIORITY,
-
-  // Secondary badges (hidden by default, shown in expandable)
-  category: BADGE_PRIORITY.SECONDARY,
-  complexity: BADGE_PRIORITY.SECONDARY
-} as const;
-
-/**
- * Helper function to determine if a badge should be shown by default
- */
-function isBadgePriority(badgeType: keyof typeof BADGE_TYPE_PRIORITY): boolean {
-  return BADGE_TYPE_PRIORITY[badgeType] === BADGE_PRIORITY.PRIORITY;
-}
-
-/**
- * Badge grouping logic - separates badges into priority and secondary groups
- */
-interface BadgeGroup {
-  priority: string[];
-  secondary: string[];
-}
-
-function groupBadgesByPriority(badges: { type: keyof typeof BADGE_TYPE_PRIORITY; visible: boolean }[]): BadgeGroup {
-  return badges.reduce<BadgeGroup>(
-    (groups, badge) => {
-      if (!badge.visible) return groups;
-
-      const isPriority = isBadgePriority(badge.type);
-      if (isPriority) {
-        groups.priority.push(badge.type);
-      } else {
-        groups.secondary.push(badge.type);
-      }
-
-      return groups;
-    },
-    { priority: [], secondary: [] }
-  );
+function renderCategoryIcon(category: TaskCategory) {
+  const Icon = CategoryIcon[category];
+  if (!Icon) return null;
+  return <Icon className="h-2.5 w-2.5 mr-0.5" />;
 }
 
 function shouldSkipStuckCheck(phase: string | undefined): boolean {
@@ -569,14 +510,20 @@ export const TaskCard = memo(function TaskCard({
             {(task.metadata?.category || task.metadata?.complexity) && (
               <Popover>
                 <PopoverTrigger asChild>
-                  <Badge
-                    variant="outline"
-                    className="text-[10px] px-1.5 py-0.5 flex items-center gap-1 cursor-pointer hover:bg-accent transition-colors"
+                  <button
+                    type="button"
+                    className="outline-none"
+                    aria-label={t('tasks:actions.showMetadata')}
                     onClick={(e) => e.stopPropagation()}
                   >
-                    <Info className="h-2.5 w-2.5" />
-                    {t('tasks:labels.moreInfo')}
-                  </Badge>
+                    <Badge
+                      variant="outline"
+                      className="text-[10px] px-1.5 py-0.5 flex items-center gap-1 cursor-pointer hover:bg-accent transition-colors"
+                    >
+                      <Info className="h-2.5 w-2.5" />
+                      {t('tasks:labels.moreInfo')}
+                    </Badge>
+                  </button>
                 </PopoverTrigger>
                 <PopoverContent
                   className="w-auto p-3"
@@ -594,13 +541,7 @@ export const TaskCard = memo(function TaskCard({
                           variant="outline"
                           className={cn('text-[10px] px-1.5 py-0', TASK_CATEGORY_COLORS[task.metadata.category])}
                         >
-                          {CategoryIcon[task.metadata.category] && (
-                            (() => {
-                              const category = task.metadata.category as keyof typeof CategoryIcon;
-                              const Icon = CategoryIcon[category];
-                              return <Icon className="h-2.5 w-2.5 mr-0.5" />;
-                            })()
-                          )}
+                          {renderCategoryIcon(task.metadata.category)}
                           {TASK_CATEGORY_LABELS[task.metadata.category]}
                         </Badge>
                       )}
