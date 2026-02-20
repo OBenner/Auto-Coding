@@ -146,10 +146,25 @@ function setupTestProject(): void {
   mkdirSync(path.join(TEST_PROJECT_PATH, "auto-claude", "specs"), { recursive: true });
 }
 
-// Cleanup test directories
+// Cleanup test directories with retry for Windows ENOTEMPTY errors
 function cleanupTestDirs(): void {
-  if (existsSync(TEST_DIR)) {
-    rmSync(TEST_DIR, { recursive: true, force: true });
+  if (!existsSync(TEST_DIR)) return;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      rmSync(TEST_DIR, { recursive: true, force: true });
+      return;
+    } catch (err: unknown) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if ((code === "ENOTEMPTY" || code === "EPERM") && attempt < 2) {
+        // Windows may hold file locks briefly; wait and retry
+        const start = Date.now();
+        while (Date.now() - start < 200) {
+          /* busy-wait */
+        }
+        continue;
+      }
+      throw err;
+    }
   }
 }
 

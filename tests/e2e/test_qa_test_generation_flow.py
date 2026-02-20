@@ -10,6 +10,7 @@ Verifies the complete test generation flow in the QA loop:
 5. Test validation
 """
 
+import contextlib
 import json
 import tempfile
 from pathlib import Path
@@ -185,8 +186,8 @@ def mock_code_analyzers():
         "edge_cases": ["empty input", "invalid credentials"],
     }
 
-    with patch("analysis.code_analyzer.CodeAnalyzer") as mock_py:
-        with patch("analysis.ts_analyzer.TypeScriptAnalyzer") as mock_ts:
+    with patch("qa.loop.CodeAnalyzer") as mock_py:
+        with patch("qa.loop.TypeScriptAnalyzer") as mock_ts:
             mock_py_instance = Mock()
             mock_py_instance.analyze_file.return_value = py_analysis
             mock_py.return_value = mock_py_instance
@@ -306,26 +307,24 @@ def mock_coverage_reporter():
 @pytest.fixture
 def mock_qa_complete():
     """Mock QA completion check and phase configuration."""
-    with patch("qa.loop.is_build_complete", return_value=True):
-        with patch("qa.loop.is_qa_approved", return_value=False):
-            # Mock phase configuration functions at their import locations
-            with patch(
-                "agents.test_generator.get_phase_model",
-                return_value="claude-sonnet-4",
-            ):
-                with patch(
-                    "agents.test_generator.get_phase_thinking_budget",
-                    return_value=10000,
-                ):
-                    with patch(
-                        "qa.loop.get_phase_model",
-                        return_value="claude-sonnet-4",
-                    ):
-                        with patch(
-                            "qa.loop.get_phase_thinking_budget",
-                            return_value=10000,
-                        ):
-                            yield
+    with contextlib.ExitStack() as stack:
+        stack.enter_context(patch("qa.loop.is_build_complete", return_value=True))
+        stack.enter_context(patch("qa.loop.is_qa_approved", return_value=False))
+        stack.enter_context(
+            patch(
+                "agents.test_generator.get_phase_model", return_value="claude-sonnet-4"
+            )
+        )
+        stack.enter_context(
+            patch("agents.test_generator.get_phase_thinking_budget", return_value=10000)
+        )
+        stack.enter_context(
+            patch("qa.loop.get_phase_model", return_value="claude-sonnet-4")
+        )
+        stack.enter_context(
+            patch("qa.loop.get_phase_thinking_budget", return_value=10000)
+        )
+        yield
 
 
 @pytest.mark.asyncio
@@ -365,47 +364,50 @@ async def test_e2e_test_generation_flow(
 
     mock_client.create_agent_session = mock_agent_session
 
-    with patch("qa.loop.create_client", return_value=mock_client):
-        with patch("agents.test_generator.create_client", return_value=mock_client):
-            with patch(
+    with contextlib.ExitStack() as stack:
+        stack.enter_context(patch("qa.loop.create_client", return_value=mock_client))
+        stack.enter_context(
+            patch("agents.test_generator.create_client", return_value=mock_client)
+        )
+        stack.enter_context(
+            patch(
                 "qa.loop.run_qa_agent_session",
                 new=AsyncMock(return_value=("approved", "All tests passed")),
-            ):
-                with patch("qa.loop.emit_phase"):
-                    with patch("qa.loop.get_task_logger", return_value=None):
-                        with patch("qa.loop.is_linear_enabled", return_value=False):
-                            # Create mock test files that generators would create
-                            test_utils = project_dir / "tests/test_utils.py"
-                            test_utils.parent.mkdir(parents=True, exist_ok=True)
-                            test_utils.write_text("def test_validate_email(): pass")
+            )
+        )
+        stack.enter_context(patch("qa.loop.emit_phase"))
+        stack.enter_context(patch("qa.loop.get_task_logger", return_value=None))
+        stack.enter_context(patch("qa.loop.is_linear_enabled", return_value=False))
 
-                            test_auth = project_dir / "tests/test_auth.py"
-                            test_auth.write_text("def test_authenticate_user(): pass")
+        # Create mock test files that generators would create
+        test_utils = project_dir / "tests/test_utils.py"
+        test_utils.parent.mkdir(parents=True, exist_ok=True)
+        test_utils.write_text("def test_validate_email(): pass")
 
-                            login_form_test = (
-                                project_dir
-                                / "apps/frontend/src/components/LoginForm.test.tsx"
-                            )
-                            login_form_test.parent.mkdir(parents=True, exist_ok=True)
-                            login_form_test.write_text("test('renders', () => {})")
+        test_auth = project_dir / "tests/test_auth.py"
+        test_auth.write_text("def test_authenticate_user(): pass")
 
-                            use_auth_test = (
-                                project_dir / "apps/frontend/src/hooks/useAuth.test.ts"
-                            )
-                            use_auth_test.parent.mkdir(parents=True, exist_ok=True)
-                            use_auth_test.write_text("test('login', () => {})")
+        login_form_test = (
+            project_dir / "apps/frontend/src/components/LoginForm.test.tsx"
+        )
+        login_form_test.parent.mkdir(parents=True, exist_ok=True)
+        login_form_test.write_text("test('renders', () => {})")
 
-                            e2e_test = project_dir / "tests/e2e/test_login_flow.py"
-                            e2e_test.parent.mkdir(parents=True, exist_ok=True)
-                            e2e_test.write_text("def test_login_flow(): pass")
+        use_auth_test = project_dir / "apps/frontend/src/hooks/useAuth.test.ts"
+        use_auth_test.parent.mkdir(parents=True, exist_ok=True)
+        use_auth_test.write_text("test('login', () => {})")
 
-                            # Run the QA validation loop (test generation happens inside)
-                            result = await run_qa_validation_loop(
-                                project_dir=project_dir,
-                                spec_dir=spec_dir,
-                                model="claude-sonnet-4",
-                                verbose=True,
-                            )
+        e2e_test = project_dir / "tests/e2e/test_login_flow.py"
+        e2e_test.parent.mkdir(parents=True, exist_ok=True)
+        e2e_test.write_text("def test_login_flow(): pass")
+
+        # Run the QA validation loop (test generation happens inside)
+        result = await run_qa_validation_loop(
+            project_dir=project_dir,
+            spec_dir=spec_dir,
+            model="claude-sonnet-4",
+            verbose=True,
+        )
 
     # Verify the flow completed successfully
     assert result is True, "QA validation loop should complete successfully"

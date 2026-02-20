@@ -161,18 +161,19 @@ def _move_tests_to_review_directory(
     review_dir.mkdir(exist_ok=True)
     debug("qa_loop", "Created test review directory", review_dir=str(review_dir))
 
-    # Move each generated test file to review directory
+    # Move each generated test file to review directory, preserving relative paths
     moved_files = []
     for file_path_str in generated_files:
         file_path = Path(file_path_str)
         source = project_dir / file_path
-        dest = review_dir / file_path.name
+        dest = review_dir / file_path
+        dest.parent.mkdir(parents=True, exist_ok=True)
 
         if source.exists():
             try:
                 shutil.move(str(source), str(dest))
-                moved_files.append(file_path.name)
-                debug("qa_loop", "Moved test to review", file=file_path.name)
+                moved_files.append(str(file_path))
+                debug("qa_loop", "Moved test to review", file=str(file_path))
             except Exception as e:
                 debug_error("qa_loop", f"Failed to move {file_path.name}: {e}")
         else:

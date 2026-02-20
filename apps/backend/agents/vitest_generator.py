@@ -169,7 +169,9 @@ async def generate_vitest_tests(
 
     # Log session start
     if task_logger:
-        task_logger.start_phase(LogPhase.CODING, "Starting Vitest test generation...")
+        task_logger.start_phase(
+            LogPhase.VALIDATION, "Starting Vitest test generation..."
+        )
         task_logger.log_info(
             f"Analyzing {len(analysis_results.get('components', []))} components, "
             f"{len(analysis_results.get('functions', []))} functions"

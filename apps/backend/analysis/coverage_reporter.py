@@ -156,8 +156,11 @@ class PytestCoverageParser(CoverageParser):
             with open(report_path, encoding="utf-8") as f:
                 data = json.load(f)
 
-            totals = data.get("totals", {})
-            files_data = data.get("files", {})
+            # Guard: verify this is actually a pytest-cov JSON report
+            totals = data.get("totals")
+            files_data = data.get("files")
+            if not isinstance(totals, dict) or not isinstance(files_data, dict):
+                return None
 
             # Parse per-file coverage
             file_coverages = []
