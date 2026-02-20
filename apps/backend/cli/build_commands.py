@@ -48,6 +48,9 @@ from .input_handlers import (
     read_multiline_input,
 )
 
+# Pattern management commands are available in pattern_commands.py
+# Run: python apps/backend/cli/pattern_commands.py --help
+
 
 def handle_build_command(
     project_dir: Path,

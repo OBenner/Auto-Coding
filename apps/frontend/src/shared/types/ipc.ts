@@ -961,6 +961,9 @@ export interface ElectronAPI {
 
   // Queue Routing API (rate limit recovery)
   queue: import('../../preload/api/queue-api').QueueAPI;
+
+  // Pattern learning API (codebase patterns)
+  pattern: import('../../preload/api/modules/pattern-api').PatternAPI;
   // Session Replay API for learning and review
   sessionReplay: import('../../preload/api/modules/session-replay-api').SessionReplayAPI;
   // Scheduler API for build scheduling and queue management

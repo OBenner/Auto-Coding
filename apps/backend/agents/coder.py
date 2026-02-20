@@ -59,7 +59,11 @@ from ui import (
 )
 
 from .base import AUTO_CONTINUE_DELAY_SECONDS, HUMAN_INTERVENTION_FILE
-from .memory_manager import debug_memory_system_status, get_graphiti_context
+from .memory_manager import (
+    debug_memory_system_status,
+    get_graphiti_context,
+    get_pattern_suggestions,
+)
 from .session import (
     post_session_processing,
     run_agent_session,
@@ -547,6 +551,14 @@ async def run_autonomous_agent(
             plan = load_implementation_plan(spec_dir)
             phase = find_phase_for_subtask(plan, subtask_id) if plan else {}
 
+            # Retrieve pattern suggestions for this subtask
+            subtask_description = next_subtask.get("description", "")
+            pattern_suggestions = await get_pattern_suggestions(
+                spec_dir=spec_dir,
+                project_dir=project_dir,
+                query=subtask_description,
+            )
+
             # Generate focused, minimal prompt for this subtask
             prompt = generate_subtask_prompt(
                 spec_dir=spec_dir,
@@ -555,6 +567,7 @@ async def run_autonomous_agent(
                 phase=phase or {},
                 attempt_count=attempt_count,
                 recovery_hints=recovery_hints,
+                pattern_suggestions=pattern_suggestions,
             )
 
             # Add recovery strategy guidance if available

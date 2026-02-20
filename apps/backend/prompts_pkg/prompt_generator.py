@@ -97,6 +97,7 @@ def generate_subtask_prompt(
     phase: dict,
     attempt_count: int = 0,
     recovery_hints: list[str] | None = None,
+    pattern_suggestions: str | None = None,
 ) -> str:
     """
     Generate a minimal, focused prompt for implementing a single subtask.
@@ -108,6 +109,8 @@ def generate_subtask_prompt(
         phase: The phase containing this subtask
         attempt_count: Number of previous attempts (for retry context)
         recovery_hints: Hints from previous failed attempts
+        pattern_suggestions: Relevant code patterns from Graphiti memory
+            (retrieved via get_pattern_suggestions from memory_manager)
 
     Returns:
         A focused prompt string (~100 lines instead of 900)
@@ -174,6 +177,16 @@ You MUST use a DIFFERENT approach than previous attempts.
         sections.append("**Pattern Files (study these first):**")
         for f in patterns_from:
             sections.append(f"- `{f}`")
+        sections.append("")
+
+    # Pattern suggestions from Graphiti memory (truncate to avoid bloating prompt)
+    if pattern_suggestions:
+        max_pattern_chars = 2000
+        if len(pattern_suggestions) > max_pattern_chars:
+            pattern_suggestions = (
+                pattern_suggestions[:max_pattern_chars] + "\n...(truncated)"
+            )
+        sections.append(pattern_suggestions)
         sections.append("")
 
     # Verification
