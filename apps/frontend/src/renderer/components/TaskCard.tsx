@@ -17,10 +17,8 @@ import { Popover, PopoverTrigger, PopoverContent } from './ui/popover';
 import { cn, formatRelativeTime, sanitizeMarkdownForDisplay } from '../lib/utils';
 import { PhaseProgressIndicator } from './PhaseProgressIndicator';
 import {
-  TASK_CATEGORY_LABELS,
   TASK_CATEGORY_COLORS,
   TASK_COMPLEXITY_COLORS,
-  TASK_COMPLEXITY_LABELS,
   TASK_IMPACT_COLORS,
   TASK_IMPACT_LABELS,
   TASK_PRIORITY_COLORS,
@@ -524,7 +522,7 @@ export const TaskCard = memo(function TaskCard({
                 <PopoverTrigger asChild>
                   <button
                     type="button"
-                    className="outline-none"
+                    className="outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background rounded-sm"
                     aria-label={t('tasks:actions.showMetadata')}
                     onClick={(e) => e.stopPropagation()}
                   >
@@ -554,7 +552,7 @@ export const TaskCard = memo(function TaskCard({
                           className={cn('text-[10px] px-1.5 py-0', TASK_CATEGORY_COLORS[task.metadata.category])}
                         >
                           {renderCategoryIcon(task.metadata.category)}
-                          {TASK_CATEGORY_LABELS[task.metadata.category]}
+                          {t(`form.classification.values.category.${task.metadata.category}`)}
                         </Badge>
                       )}
                       {/* Complexity badge */}
@@ -563,7 +561,7 @@ export const TaskCard = memo(function TaskCard({
                           variant="outline"
                           className={cn('text-[10px] px-1.5 py-0', TASK_COMPLEXITY_COLORS[task.metadata.complexity])}
                         >
-                          {TASK_COMPLEXITY_LABELS[task.metadata.complexity]}
+                          {t(`form.classification.values.complexity.${task.metadata.complexity}`)}
                         </Badge>
                       )}
                     </div>
