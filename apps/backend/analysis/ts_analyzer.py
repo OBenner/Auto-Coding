@@ -186,7 +186,7 @@ class TypeScriptAnalyzer:
         """Initialize the TypeScript analyzer."""
         # Regex patterns for extraction
         self._function_component_pattern = re.compile(
-            r"(?:export\s+(?:default\s+)?)?(?:const|function)\s+(\w+)\s*[=:]?\s*(?:\(([^)]*)\)|<[^>]*>\s*\(([^)]*)\))\s*(?::\s*[\w.<>]+\s*)?(?:=>|{)",
+            r"(?:export\s+(?:default\s+)?)?(?:const|function)\s+(\w+)\s*(?:[=:]\s*)?(?:\(([^)]*)\)|<[^>]*>\s*\(([^)]*)\))\s*(?::\s*[\w.<>]+\s*)?(?:=>|{)",
             re.MULTILINE,
         )
         self._class_component_pattern = re.compile(
@@ -204,7 +204,7 @@ class TypeScriptAnalyzer:
             r"(?:export\s+)?(?:interface|type|enum)\s+(\w+)", re.MULTILINE
         )
         self._export_pattern = re.compile(
-            r"export\s+(?:default\s+)?(?:const|function|class|interface|type|enum)?\s*(\w+)",
+            r"export\s+(?:default\s+)?(?:(?:const|function|class|interface|type|enum)\s+)?(\w+)",
             re.MULTILINE,
         )
 
@@ -393,7 +393,7 @@ class TypeScriptAnalyzer:
 
         # Pattern for function declarations
         func_pattern = re.compile(
-            r"(?:export\s+)?(?:async\s+)?(?:function|const|let)\s+(\w+)\s*[=:]?\s*(?:async\s+)?\(([^)]*)\)\s*(?::\s*([\w<>[\]|&\s]+))?\s*(?:=>|{)",
+            r"(?:export\s+)?(?:async\s+)?(?:function|const|let)\s+(\w+)\s*(?:[=:]\s*)?(?:async\s+)?\(([^)]*)\)\s*(?::\s*([\w<>[\]|&]+(?:\s+[\w<>[\]|&]+)*))?\s*(?:=>|{)",
             re.MULTILINE,
         )
 
