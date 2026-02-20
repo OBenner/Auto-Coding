@@ -86,6 +86,14 @@ SERVICE_ROOT_FILES = {
 }
 
 
+def collect_files(root: Path, glob: str, *, limit: int | None = None) -> list[Path]:
+    """Collect files matching *glob* under *root*, skipping SKIP_DIRS."""
+    files = [
+        f for f in root.rglob(glob) if not any(skip in f.parts for skip in SKIP_DIRS)
+    ]
+    return files[:limit] if limit else files
+
+
 class BaseAnalyzer:
     """Base class with common utilities for all analyzers."""
 

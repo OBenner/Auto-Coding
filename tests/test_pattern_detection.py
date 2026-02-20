@@ -182,9 +182,7 @@ class TestOrganizationPatternDetection:
         patterns = load_patterns(temp_spec_dir)
         assert len(patterns) > 0
         # Should have patterns about architecture or organization
-        assert any(
-            "architecture" in p.lower() or "file" in p.lower() for p in patterns
-        )
+        assert any("architecture" in p.lower() or "file" in p.lower() for p in patterns)
 
     def test_empty_organization_patterns(self, temp_spec_dir):
         """Test handling empty organization patterns."""
@@ -217,9 +215,9 @@ class TestIntegratedPatternDetection:
         assert len(patterns) > 0
 
     @pytest.mark.asyncio
-    async def test_detect_patterns_with_nonexistent_dir(self, temp_spec_dir):
+    async def test_detect_patterns_with_nonexistent_dir(self, temp_spec_dir, tmp_path):
         """Test pattern detection with non-existent project directory."""
-        nonexistent_dir = Path("/nonexistent/path/to/project")
+        nonexistent_dir = tmp_path / "nonexistent_project"
 
         # Should not crash
         pattern_counts = await detect_and_save_codebase_patterns(

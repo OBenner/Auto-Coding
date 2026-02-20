@@ -179,8 +179,13 @@ You MUST use a DIFFERENT approach than previous attempts.
             sections.append(f"- `{f}`")
         sections.append("")
 
-    # Pattern suggestions from Graphiti memory
+    # Pattern suggestions from Graphiti memory (truncate to avoid bloating prompt)
     if pattern_suggestions:
+        max_pattern_chars = 2000
+        if len(pattern_suggestions) > max_pattern_chars:
+            pattern_suggestions = (
+                pattern_suggestions[:max_pattern_chars] + "\n...(truncated)"
+            )
         sections.append(pattern_suggestions)
         sections.append("")
 

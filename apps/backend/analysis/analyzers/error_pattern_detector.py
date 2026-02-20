@@ -16,7 +16,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from .base import BaseAnalyzer
+from .base import BaseAnalyzer, collect_files
 
 
 class ErrorPatternDetector(BaseAnalyzer):
@@ -46,11 +46,11 @@ class ErrorPatternDetector(BaseAnalyzer):
             - logging_patterns: How errors are logged
             - error_propagation: Whether errors are re-raised, handled, or wrapped
         """
-        # Find all Python files
-        py_files = list(self.path.glob("**/*.py"))
+        # Find all Python files, excluding common directories
+        py_files = collect_files(self.path, "*.py", limit=50)
 
         # Analyze error patterns in each file
-        for file in py_files[:50]:  # Limit to 50 files for performance
+        for file in py_files:
             try:
                 self._analyze_file_error_patterns(file)
             except (OSError, UnicodeDecodeError, SyntaxError):
@@ -93,7 +93,8 @@ class ErrorPatternDetector(BaseAnalyzer):
 
                     if "Exception" in base_name or "Error" in base_name:
                         if node.name not in [
-                            exc["name"] for exc in self.error_patterns["custom_exceptions"]
+                            exc["name"]
+                            for exc in self.error_patterns["custom_exceptions"]
                         ]:
                             self.error_patterns["custom_exceptions"].append(
                                 {
@@ -106,7 +107,11 @@ class ErrorPatternDetector(BaseAnalyzer):
 
     def _analyze_try_block(self, node: ast.Try, source: str) -> None:
         """Analyze a try/except block for patterns."""
-        pattern = {"exception_types": [], "has_else": bool(node.orelse), "has_finally": bool(node.finalbody)}
+        pattern = {
+            "exception_types": [],
+            "has_else": bool(node.orelse),
+            "has_finally": bool(node.finalbody),
+        }
 
         for handler in node.handlers:
             exc_type = "Exception"
@@ -154,7 +159,11 @@ class ErrorPatternDetector(BaseAnalyzer):
                     func_name = node.func.attr
                     if func_name in ["error", "exception", "warning", "critical"]:
                         # Logging pattern detected
-                        obj = ast.unparse(node.func.value) if hasattr(node.func, "value") else ""
+                        obj = (
+                            ast.unparse(node.func.value)
+                            if hasattr(node.func, "value")
+                            else ""
+                        )
                         pattern = f"{obj}.{func_name}"
                         if pattern not in self.error_patterns["logging_patterns"]:
                             self.error_patterns["logging_patterns"].append(pattern)
@@ -283,13 +292,17 @@ class ErrorPatternDetector(BaseAnalyzer):
 
         # Analyze capitalization
         capitalized = sum(
-            1 for msg in messages if msg.get("format", {}).get("starts_with_capital", False)
+            1
+            for msg in messages
+            if msg.get("format", {}).get("starts_with_capital", False)
         )
         capitalization = "capital" if capitalized / total > 0.7 else "lowercase"
 
         # Analyze punctuation
         with_period = sum(
-            1 for msg in messages if msg.get("format", {}).get("ends_with_period", False)
+            1
+            for msg in messages
+            if msg.get("format", {}).get("ends_with_period", False)
         )
         punctuation = "period" if with_period / total > 0.5 else "no_period"
 

@@ -503,7 +503,9 @@ class CodeAnalyzer:
         }
 
         # Collect function names
-        function_names = [f.name for f in result.functions if not f.name.startswith("_")]
+        function_names = [
+            f.name for f in result.functions if not f.name.startswith("_")
+        ]
         if function_names:
             conventions["function_style"] = self._detect_case_style(function_names)
             conventions["examples"]["functions"] = function_names[:5]
@@ -531,39 +533,22 @@ class CodeAnalyzer:
         """
         Detect the predominant case style from a list of identifiers.
 
+        Delegates to NamingDetector._detect_case_style for consistency.
+        Strips leading underscores before analysis to handle private members.
+
         Args:
             identifiers: List of identifier names to analyze
 
         Returns:
             One of: snake_case, camelCase, PascalCase, UPPER_SNAKE_CASE, or None
         """
-        if not identifiers:
-            return None
+        from analysis.analyzers.naming_detector import NamingDetector
 
-        styles = {
-            "snake_case": 0,
-            "camelCase": 0,
-            "PascalCase": 0,
-            "UPPER_SNAKE_CASE": 0,
-        }
-
-        for name in identifiers:
-            if "_" in name:
-                if name.isupper():
-                    styles["UPPER_SNAKE_CASE"] += 1
-                else:
-                    styles["snake_case"] += 1
-            elif name[0].isupper():
-                styles["PascalCase"] += 1
-            elif any(c.isupper() for c in name):
-                styles["camelCase"] += 1
-
-        # Return the most common style
-        max_style = max(styles, key=styles.get)
-        if styles[max_style] > 0:
-            return max_style
-
-        return None
+        # Strip leading underscores (private member convention)
+        stripped = [name.lstrip("_") for name in identifiers if name]
+        stripped = [name for name in stripped if name]
+        detector = NamingDetector.__new__(NamingDetector)
+        return detector._detect_case_style(stripped)
 
     def _detect_error_patterns(self, tree: ast.AST) -> dict[str, Any]:
         """

@@ -16,8 +16,6 @@ import sys
 from pathlib import Path
 
 # Import pattern detectors for auto-extraction during discovery
-from analysis.analyzers.error_pattern_detector import detect_error_patterns
-from analysis.analyzers.naming_detector import detect_naming_conventions
 
 logger = logging.getLogger(__name__)
 

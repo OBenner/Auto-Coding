@@ -117,7 +117,9 @@ class NamingDetector(BaseAnalyzer):
         conventions["function_style"] = "PascalCase"  # Exported functions
         conventions["class_style"] = "PascalCase"  # Exported types
         conventions["constant_style"] = "PascalCase"  # Go doesn't use UPPER_CASE
-        conventions["private_prefix"] = "lowercase"  # Unexported = starts with lowercase
+        conventions["private_prefix"] = (
+            "lowercase"  # Unexported = starts with lowercase
+        )
         conventions["file_style"] = "snake_case"
 
     def _detect_rust_conventions(self, conventions: dict[str, Any]) -> None:
@@ -143,7 +145,9 @@ class NamingDetector(BaseAnalyzer):
         conventions["variable_style"] = "camelCase"
         conventions["function_style"] = "camelCase"
         conventions["class_style"] = "PascalCase"
-        conventions["constant_style"] = "camelCase"  # Swift uses camelCase for constants
+        conventions["constant_style"] = (
+            "camelCase"  # Swift uses camelCase for constants
+        )
         conventions["private_prefix"] = "_"  # Convention, not enforced
         conventions["file_style"] = "PascalCase"
 
@@ -181,9 +185,7 @@ class NamingDetector(BaseAnalyzer):
         # Limit samples
         return {k: v[:10] for k, v in samples.items()}
 
-    def _sample_javascript_identifiers(
-        self, files: list[Path]
-    ) -> dict[str, list[str]]:
+    def _sample_javascript_identifiers(self, files: list[Path]) -> dict[str, list[str]]:
         """Sample identifiers from JavaScript/TypeScript files."""
         samples = {"functions": [], "classes": [], "variables": [], "constants": []}
 
@@ -236,6 +238,8 @@ class NamingDetector(BaseAnalyzer):
         }
 
         for name in identifiers:
+            if not name:
+                continue
             if "_" in name:
                 if name.isupper():
                     styles["UPPER_SNAKE_CASE"] += 1
@@ -266,6 +270,8 @@ class NamingDetector(BaseAnalyzer):
         styles = {"kebab-case": 0, "snake_case": 0, "camelCase": 0, "PascalCase": 0}
 
         for name in file_names:
+            if not name:
+                continue
             if "-" in name:
                 styles["kebab-case"] += 1
             elif "_" in name:

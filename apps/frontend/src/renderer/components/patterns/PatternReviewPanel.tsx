@@ -65,9 +65,9 @@ export function PatternReviewPanel() {
   const [editText, setEditText] = useState('');
 
   // Get current project and spec
-  const { projects } = useProjectStore();
-  const currentProject = projects[0]; // Use first project for now
-  const currentSpecId = currentProject?.id || '068-codebase-pattern-learning'; // Use current spec for testing
+  const { projects, getActiveProject } = useProjectStore();
+  const currentProject = getActiveProject() ?? projects[0];
+  const currentSpecId = currentProject?.id;
 
   /**
    * Load patterns from backend
@@ -103,11 +103,12 @@ export function PatternReviewPanel() {
   };
 
   /**
-   * Load patterns on component mount and when category filter changes
+   * Load patterns on component mount and when category filter or project changes
    */
   useEffect(() => {
     loadPatterns();
-  }, [categoryFilter]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [categoryFilter, currentProject?.id]);
 
   // Filter patterns by category
   const filteredPatterns = categoryFilter === 'all'

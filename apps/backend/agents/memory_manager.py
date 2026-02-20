@@ -1218,8 +1218,8 @@ async def detect_and_save_codebase_patterns(
 
     try:
         # Import detectors
-        from analysis.analyzers.naming_detector import NamingDetector
         from analysis.analyzers.error_pattern_detector import ErrorPatternDetector
+        from analysis.analyzers.naming_detector import NamingDetector
         from analysis.analyzers.organization_detector import OrganizationDetector
 
         # Detect naming conventions
@@ -1277,9 +1277,7 @@ async def detect_and_save_codebase_patterns(
         except Exception as e:
             logger.warning(f"Failed to detect organization patterns: {e}")
             if is_debug_enabled():
-                debug_warning(
-                    "memory", "Organization detection failed", error=str(e)
-                )
+                debug_warning("memory", "Organization detection failed", error=str(e))
 
         total_patterns = sum(pattern_counts.values())
         if is_debug_enabled():

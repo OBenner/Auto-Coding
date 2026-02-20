@@ -10,96 +10,48 @@ Tests the complete pattern learning flow:
 4. Run coder agent and verify patterns applied
 5. Test user override via CLI
 6. Verify patterns persist across sessions
+
+Note: SDK modules are pre-mocked in tests/conftest.py (no need to mock here).
 """
 
 import json
+import re
+from unittest.mock import AsyncMock, patch
+
 import pytest
-import sys
-import tempfile
-from pathlib import Path
-from unittest.mock import MagicMock, patch, AsyncMock
-
-# Store original modules for cleanup
-_original_modules = {}
-_mocked_module_names = [
-    'claude_code_sdk',
-    'claude_code_sdk.types',
-    'claude_agent_sdk',
-    'claude_agent_sdk.types',
-]
-
-for name in _mocked_module_names:
-    if name in sys.modules:
-        _original_modules[name] = sys.modules[name]
-
-# Mock SDK modules before importing
-mock_agent_sdk = MagicMock()
-mock_agent_sdk.ClaudeSDKClient = MagicMock()
-mock_agent_sdk.ClaudeAgentOptions = MagicMock()
-mock_agent_types = MagicMock()
-mock_agent_types.HookMatcher = MagicMock()
-sys.modules['claude_agent_sdk'] = mock_agent_sdk
-sys.modules['claude_agent_sdk.types'] = mock_agent_types
-sys.modules['claude_code_sdk'] = mock_agent_sdk
-sys.modules['claude_code_sdk.types'] = mock_agent_types
-
-# Now we can import modules
+from analysis.analyzers.error_pattern_detector import detect_error_patterns
 from analysis.analyzers.naming_detector import NamingDetector
-from analysis.analyzers.error_pattern_detector import detect_error_patterns, ErrorPatternDetector
 from analysis.analyzers.organization_detector import detect_organization_patterns
 from memory.patterns import (
     append_pattern,
     load_patterns,
     save_detected_patterns_from_naming,
-    save_detected_patterns_from_errors,
     save_detected_patterns_from_organization,
 )
 
 
 def parse_pattern_line(line: str) -> dict:
     """Parse a pattern line into a dictionary with metadata."""
-    import re
-
     pattern_text = line
-    metadata = {
+    metadata: dict = {
         "pattern": "",
         "category": None,
         "confidence": None,
-        "reasoning": None
+        "reasoning": None,
     }
 
-    # Extract category
-    category_match = re.search(r'\[category: ([^\]]+)\]', line)
-    if category_match:
-        metadata["category"] = category_match.group(1)
-        pattern_text = pattern_text.replace(category_match.group(0), "").strip()
-
-    # Extract confidence
-    confidence_match = re.search(r'\[confidence: ([\d.]+)\]', line)
-    if confidence_match:
-        metadata["confidence"] = float(confidence_match.group(1))
-        pattern_text = pattern_text.replace(confidence_match.group(0), "").strip()
-
-    # Extract reasoning
-    reasoning_match = re.search(r'\[reasoning: ([^\]]+)\]', line)
-    if reasoning_match:
-        metadata["reasoning"] = reasoning_match.group(1)
-        pattern_text = pattern_text.replace(reasoning_match.group(0), "").strip()
+    for key, regex, transform in [
+        ("category", r"\[category: ([^\]]+)\]", str),
+        ("confidence", r"\[confidence: ([\d.]+)\]", float),
+        ("reasoning", r"\[reasoning: ([^\]]+)\]", str),
+    ]:
+        match = re.search(regex, pattern_text)
+        if match:
+            metadata[key] = transform(match.group(1))
+            pattern_text = pattern_text.replace(match.group(0), "").strip()
 
     metadata["pattern"] = pattern_text
     return metadata
-
-
-# Cleanup fixture
-@pytest.fixture(scope="module", autouse=True)
-def cleanup_mocked_modules():
-    """Restore original modules after tests."""
-    yield
-    for name in _mocked_module_names:
-        if name in _original_modules:
-            sys.modules[name] = _original_modules[name]
-        elif name in sys.modules:
-            del sys.modules[name]
 
 
 @pytest.fixture
@@ -132,11 +84,13 @@ Test feature for E2E pattern learning verification.
             {
                 "id": "subtask-1",
                 "description": "Implement authentication logic",
-                "status": "pending"
+                "status": "pending",
             }
-        ]
+        ],
     }
-    (spec_dir / "implementation_plan.json").write_text(json.dumps(implementation_plan, indent=2))
+    (spec_dir / "implementation_plan.json").write_text(
+        json.dumps(implementation_plan, indent=2)
+    )
 
     return spec_dir
 
@@ -260,11 +214,15 @@ class TestPatternDetectionE2E:
         # Verify detected patterns
         assert len(patterns["common_exceptions"]) > 0
         # Check if ValueError is in common exceptions
-        has_value_error = any(exc["type"] == "ValueError" for exc in patterns["common_exceptions"])
+        has_value_error = any(
+            exc["type"] == "ValueError" for exc in patterns["common_exceptions"]
+        )
         assert has_value_error
         assert len(patterns["custom_exceptions"]) > 0
         # Check if any custom exception contains "Error" (like AuthenticationError, ServiceError)
-        has_custom_error = any("Error" in exc["name"] for exc in patterns["custom_exceptions"])
+        has_custom_error = any(
+            "Error" in exc["name"] for exc in patterns["custom_exceptions"]
+        )
         assert has_custom_error
         assert len(patterns["logging_patterns"]) > 0
 
@@ -297,7 +255,7 @@ class TestPatternStorageE2E:
             pattern,
             category="naming-conventions",
             confidence=0.95,
-            reasoning="Detected from existing Python code"
+            reasoning="Detected from existing Python code",
         )
 
         # Load patterns (returns list of strings)
@@ -329,13 +287,14 @@ class TestPatternStorageE2E:
         patterns = [parse_pattern_line(line) for line in pattern_lines]
 
         # Should have patterns for each convention
-        naming_patterns = [p for p in patterns if p.get("category") == "naming-conventions"]
+        naming_patterns = [
+            p for p in patterns if p.get("category") == "naming-conventions"
+        ]
         assert len(naming_patterns) >= 3  # At least function, class, constant styles
 
         # Verify specific patterns
         function_pattern = next(
-            (p for p in naming_patterns if "function" in p["pattern"].lower()),
-            None
+            (p for p in naming_patterns if "function" in p["pattern"].lower()), None
         )
         assert function_pattern is not None
         assert "snake_case" in function_pattern["pattern"]
@@ -353,20 +312,14 @@ class TestPatternStorageE2E:
             exc_names = [exc["type"] for exc in error_patterns["common_exceptions"][:3]]
             pattern = f"Common exception types: {', '.join(exc_names)}"
             append_pattern(
-                temp_spec_dir,
-                pattern,
-                category="error-handling",
-                confidence=0.7
+                temp_spec_dir, pattern, category="error-handling", confidence=0.7
             )
 
         if error_patterns.get("custom_exceptions"):
             exc_names = [exc["name"] for exc in error_patterns["custom_exceptions"][:3]]
             pattern = f"Project defines custom exceptions: {', '.join(exc_names)}"
             append_pattern(
-                temp_spec_dir,
-                pattern,
-                category="error-handling",
-                confidence=0.7
+                temp_spec_dir, pattern, category="error-handling", confidence=0.7
             )
 
         # Load and verify (returns list of strings)
@@ -407,8 +360,11 @@ class TestPatternStorageE2E:
 class TestPatternApplicationE2E:
     """End-to-end tests for pattern application in agents."""
 
-    @patch('agents.memory_manager.get_pattern_suggestions')
-    async def test_pattern_suggestions_retrieved(self, mock_get_patterns, temp_spec_dir, temp_project_dir):
+    @pytest.mark.asyncio
+    @patch("agents.memory_manager.get_pattern_suggestions", new_callable=AsyncMock)
+    async def test_pattern_suggestions_retrieved(
+        self, mock_get_patterns, temp_spec_dir, temp_project_dir
+    ):
         """Test that pattern suggestions are retrieved for tasks."""
 
         # Mock return value
@@ -430,9 +386,7 @@ class TestPatternApplicationE2E:
         from agents.memory_manager import get_pattern_suggestions
 
         suggestions = await get_pattern_suggestions(
-            temp_spec_dir,
-            temp_project_dir,
-            query="Implement user authentication"
+            temp_spec_dir, temp_project_dir, query="Implement user authentication"
         )
 
         # Verify suggestions retrieved
@@ -470,7 +424,7 @@ class TestCrossSessionPersistence:
                 "pattern": "Organize by feature, not by layer",
                 "category": "code-organization",
                 "confidence": 0.85,
-            }
+            },
         ]
 
         for p in patterns_to_save:
@@ -478,7 +432,7 @@ class TestCrossSessionPersistence:
                 temp_spec_dir,
                 p["pattern"],
                 category=p["category"],
-                confidence=p["confidence"]
+                confidence=p["confidence"],
             )
 
         # Simulate session end (in real scenario, this would close connections)
@@ -494,18 +448,18 @@ class TestCrossSessionPersistence:
 
         for saved_pattern in patterns_to_save:
             pattern_found = any(
-                p["pattern"] == saved_pattern["pattern"]
-                for p in loaded_patterns
+                p["pattern"] == saved_pattern["pattern"] for p in loaded_patterns
             )
             assert pattern_found, f"Pattern '{saved_pattern['pattern']}' should persist"
 
             # Verify metadata persisted
             persisted = next(
-                p for p in loaded_patterns
-                if p["pattern"] == saved_pattern["pattern"]
+                p for p in loaded_patterns if p["pattern"] == saved_pattern["pattern"]
             )
             assert persisted.get("category") == saved_pattern["category"]
-            assert abs(persisted.get("confidence", 0) - saved_pattern["confidence"]) < 0.01
+            assert (
+                abs(persisted.get("confidence", 0) - saved_pattern["confidence"]) < 0.01
+            )
 
 
 class TestUserOverrideE2E:
@@ -520,7 +474,7 @@ class TestUserOverrideE2E:
             temp_spec_dir,
             original_pattern,
             category="naming-conventions",
-            confidence=0.8
+            confidence=0.8,
         )
 
         # User overrides with correct pattern
@@ -530,7 +484,7 @@ class TestUserOverrideE2E:
             correct_pattern,
             category="naming-conventions",
             confidence=1.0,  # User override = 100% confidence
-            reasoning="Manual override by user - Python convention"
+            reasoning="Manual override by user - Python convention",
         )
 
         # Load patterns (returns list of strings)
@@ -538,19 +492,23 @@ class TestUserOverrideE2E:
 
         # Parse patterns
         patterns = [parse_pattern_line(line) for line in pattern_lines]
-        naming_patterns = [p for p in patterns if p.get("category") == "naming-conventions"]
+        naming_patterns = [
+            p for p in patterns if p.get("category") == "naming-conventions"
+        ]
 
         # Both patterns should exist (we don't auto-delete)
         assert len(naming_patterns) >= 2
 
         # User override should have highest confidence
         user_pattern = next(
-            (p for p in naming_patterns if "snake_case" in p["pattern"]),
-            None
+            (p for p in naming_patterns if "snake_case" in p["pattern"]), None
         )
         assert user_pattern is not None
         assert user_pattern["confidence"] == 1.0
-        assert "user" in user_pattern.get("reasoning", "").lower() or user_pattern["confidence"] == 1.0
+        assert (
+            "user" in user_pattern.get("reasoning", "").lower()
+            or user_pattern["confidence"] == 1.0
+        )
 
 
 class TestCompleteE2EFlow:
@@ -587,11 +545,15 @@ class TestCompleteE2EFlow:
         if error_patterns.get("common_exceptions"):
             exc_names = [exc["type"] for exc in error_patterns["common_exceptions"][:3]]
             pattern = f"Common exception types: {', '.join(exc_names)}"
-            append_pattern(temp_spec_dir, pattern, category="error-handling", confidence=0.7)
+            append_pattern(
+                temp_spec_dir, pattern, category="error-handling", confidence=0.7
+            )
         if error_patterns.get("custom_exceptions"):
             exc_names = [exc["name"] for exc in error_patterns["custom_exceptions"][:3]]
             pattern = f"Custom exceptions: {', '.join(exc_names)}"
-            append_pattern(temp_spec_dir, pattern, category="error-handling", confidence=0.7)
+            append_pattern(
+                temp_spec_dir, pattern, category="error-handling", confidence=0.7
+            )
 
         save_detected_patterns_from_organization(temp_spec_dir, org_patterns)
 
@@ -610,13 +572,14 @@ class TestCompleteE2EFlow:
 
         # STEP 4: Verify patterns available for agents
         # Patterns are in memory files and can be loaded by agents
-        naming_patterns = [p for p in stored_patterns if p.get("category") == "naming-conventions"]
+        naming_patterns = [
+            p for p in stored_patterns if p.get("category") == "naming-conventions"
+        ]
         assert len(naming_patterns) > 0
 
         # Should contain snake_case convention
         snake_case_pattern = next(
-            (p for p in naming_patterns if "snake_case" in p["pattern"].lower()),
-            None
+            (p for p in naming_patterns if "snake_case" in p["pattern"].lower()), None
         )
         assert snake_case_pattern is not None
 
@@ -627,7 +590,7 @@ class TestCompleteE2EFlow:
             user_override,
             category="naming-conventions",
             confidence=1.0,
-            reasoning="User-specified critical convention"
+            reasoning="User-specified critical convention",
         )
 
         # Verify override stored (returns list of strings)
@@ -649,8 +612,7 @@ class TestCompleteE2EFlow:
         # Verify metadata preserved
         patterns_new_session = [parse_pattern_line(line) for line in pattern_lines_new]
         persisted_override = next(
-            p for p in patterns_new_session
-            if p["pattern"] == user_override
+            p for p in patterns_new_session if p["pattern"] == user_override
         )
         assert persisted_override["confidence"] == 1.0
         assert persisted_override["category"] == "naming-conventions"

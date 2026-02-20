@@ -16,7 +16,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
 
-from .base import SKIP_DIRS, BaseAnalyzer
+from .base import SKIP_DIRS, BaseAnalyzer, collect_files
 
 
 class OrganizationDetector(BaseAnalyzer):
@@ -82,7 +82,13 @@ class OrganizationDetector(BaseAnalyzer):
         feature_indicators = {"features", "modules", "domains"}
         mvc_indicators = {"models", "views", "controllers"}
         hexagonal_indicators = {"domain", "application", "infrastructure", "adapters"}
-        functional_indicators = {"handlers", "routers", "middleware", "utils", "helpers"}
+        functional_indicators = {
+            "handlers",
+            "routers",
+            "middleware",
+            "utils",
+            "helpers",
+        }
 
         found_dirs = {d.name.lower() for d in dirs}
 
@@ -108,16 +114,27 @@ class OrganizationDetector(BaseAnalyzer):
             "max_depth": max_depth,
             "total_directories": len(dirs),
             "common_directories": sorted(
-                [d for d in found_dirs if d in (layered_indicators | feature_indicators | mvc_indicators | hexagonal_indicators | functional_indicators)]
+                [
+                    d
+                    for d in found_dirs
+                    if d
+                    in (
+                        layered_indicators
+                        | feature_indicators
+                        | mvc_indicators
+                        | hexagonal_indicators
+                        | functional_indicators
+                    )
+                ]
             )[:10],
         }
 
     def _analyze_file_organization(self) -> None:
         """Analyze how files are organized."""
         # Focus on source code files
-        py_files = [f for f in self.path.rglob("*.py") if not any(skip in f.parts for skip in SKIP_DIRS)]
-        js_files = [f for f in self.path.rglob("*.js") if not any(skip in f.parts for skip in SKIP_DIRS)]
-        ts_files = [f for f in self.path.rglob("*.ts") if not any(skip in f.parts for skip in SKIP_DIRS)]
+        py_files = collect_files(self.path, "*.py")
+        js_files = collect_files(self.path, "*.js")
+        ts_files = collect_files(self.path, "*.ts")
 
         all_files = py_files + js_files + ts_files
 
@@ -143,9 +160,7 @@ class OrganizationDetector(BaseAnalyzer):
             files_per_dir[parent] += 1
 
         avg_files_per_dir = (
-            sum(files_per_dir.values()) / len(files_per_dir)
-            if files_per_dir
-            else 0
+            sum(files_per_dir.values()) / len(files_per_dir) if files_per_dir else 0
         )
 
         # Detect one-class-per-file pattern (for Python)
@@ -155,15 +170,15 @@ class OrganizationDetector(BaseAnalyzer):
                 try:
                     source = file.read_text(encoding="utf-8")
                     tree = ast.parse(source)
-                    num_classes = sum(1 for node in ast.walk(tree) if isinstance(node, ast.ClassDef))
+                    num_classes = sum(
+                        1 for node in ast.walk(tree) if isinstance(node, ast.ClassDef)
+                    )
                     classes_per_file.append(num_classes)
                 except (OSError, UnicodeDecodeError, SyntaxError):
                     continue
 
         avg_classes_per_file = (
-            sum(classes_per_file) / len(classes_per_file)
-            if classes_per_file
-            else 0
+            sum(classes_per_file) / len(classes_per_file) if classes_per_file else 0
         )
         one_class_per_file = avg_classes_per_file <= 1.5  # Allow some flexibility
 
@@ -178,7 +193,7 @@ class OrganizationDetector(BaseAnalyzer):
 
     def _analyze_module_patterns(self) -> None:
         """Analyze module organization patterns (Python-specific)."""
-        py_files = [f for f in self.path.rglob("*.py") if not any(skip in f.parts for skip in SKIP_DIRS)]
+        py_files = collect_files(self.path, "*.py")
 
         if not py_files:
             return
@@ -210,7 +225,10 @@ class OrganizationDetector(BaseAnalyzer):
                             common_imports[alias.name.split(".")[0]] += 1
 
                         # Check if imports are grouped
-                        if last_import_line >= 0 and node.lineno - last_import_line > 2:
+                        if (
+                            last_import_line >= 0
+                            and node.lineno - last_import_line <= 2
+                        ):
                             import_groups.append(True)
                         last_import_line = node.lineno
 
@@ -230,7 +248,10 @@ class OrganizationDetector(BaseAnalyzer):
                                 import_patterns["wildcard_imports"] += 1
 
                         # Check if imports are grouped
-                        if last_import_line >= 0 and node.lineno - last_import_line > 2:
+                        if (
+                            last_import_line >= 0
+                            and node.lineno - last_import_line <= 2
+                        ):
                             import_groups.append(True)
                         last_import_line = node.lineno
 
@@ -242,13 +263,13 @@ class OrganizationDetector(BaseAnalyzer):
                 continue
 
         avg_imports_per_file = (
-            sum(imports_per_file) / len(imports_per_file)
-            if imports_per_file
-            else 0
+            sum(imports_per_file) / len(imports_per_file) if imports_per_file else 0
         )
 
         # Determine import style preference
-        total_imports = import_patterns["relative_imports"] + import_patterns["absolute_imports"]
+        total_imports = (
+            import_patterns["relative_imports"] + import_patterns["absolute_imports"]
+        )
         prefers_relative = (
             import_patterns["relative_imports"] / total_imports > 0.5
             if total_imports > 0
@@ -259,7 +280,8 @@ class OrganizationDetector(BaseAnalyzer):
             "average_imports_per_file": round(avg_imports_per_file, 2),
             "prefers_relative_imports": prefers_relative,
             "uses_wildcard_imports": import_patterns["wildcard_imports"] > 0,
-            "groups_imports": import_patterns["grouped_imports"] > len(py_files) * 0.5,
+            "groups_imports": import_patterns["grouped_imports"]
+            > len(py_files[:50]) * 0.5,
             "common_dependencies": [
                 {"module": module, "count": count}
                 for module, count in common_imports.most_common(10)
@@ -351,26 +373,50 @@ class OrganizationDetector(BaseAnalyzer):
             "architectural_style": self.organization_patterns["architectural_style"],
             "directory_organization": {
                 "depth": {
-                    "average": self.organization_patterns["directory_structure"].get("average_depth"),
-                    "max": self.organization_patterns["directory_structure"].get("max_depth"),
+                    "average": self.organization_patterns["directory_structure"].get(
+                        "average_depth"
+                    ),
+                    "max": self.organization_patterns["directory_structure"].get(
+                        "max_depth"
+                    ),
                 },
-                "common_dirs": self.organization_patterns["directory_structure"].get("common_directories", []),
+                "common_dirs": self.organization_patterns["directory_structure"].get(
+                    "common_directories", []
+                ),
                 "patterns": {
-                    "layered": self.organization_patterns["directory_structure"].get("has_layered_architecture"),
-                    "feature_based": self.organization_patterns["directory_structure"].get("has_feature_based"),
-                    "mvc": self.organization_patterns["directory_structure"].get("has_mvc"),
+                    "layered": self.organization_patterns["directory_structure"].get(
+                        "has_layered_architecture"
+                    ),
+                    "feature_based": self.organization_patterns[
+                        "directory_structure"
+                    ].get("has_feature_based"),
+                    "mvc": self.organization_patterns["directory_structure"].get(
+                        "has_mvc"
+                    ),
                 },
             },
             "file_organization": {
                 "file_size": {
-                    "average_lines": self.organization_patterns["file_organization"].get("average_file_size_lines"),
-                    "max_lines": self.organization_patterns["file_organization"].get("max_file_size_lines"),
+                    "average_lines": self.organization_patterns[
+                        "file_organization"
+                    ].get("average_file_size_lines"),
+                    "max_lines": self.organization_patterns["file_organization"].get(
+                        "max_file_size_lines"
+                    ),
                 },
-                "one_class_per_file": self.organization_patterns["file_organization"].get("one_class_per_file"),
-                "files_per_directory": self.organization_patterns["file_organization"].get("average_files_per_directory"),
+                "one_class_per_file": self.organization_patterns[
+                    "file_organization"
+                ].get("one_class_per_file"),
+                "files_per_directory": self.organization_patterns[
+                    "file_organization"
+                ].get("average_files_per_directory"),
             },
-            "module_organization": self.organization_patterns.get("module_patterns", {}),
-            "separation_of_concerns": self.organization_patterns.get("separation_patterns", {}),
+            "module_organization": self.organization_patterns.get(
+                "module_patterns", {}
+            ),
+            "separation_of_concerns": self.organization_patterns.get(
+                "separation_patterns", {}
+            ),
         }
 
 

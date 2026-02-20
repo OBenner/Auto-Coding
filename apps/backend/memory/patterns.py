@@ -320,7 +320,9 @@ def save_detected_patterns_from_errors(
     # Custom exceptions
     custom_exceptions = error_patterns.get("custom_exceptions", [])
     if custom_exceptions:
-        pattern = f"Project defines custom exceptions: {', '.join(custom_exceptions[:5])}"
+        pattern = (
+            f"Project defines custom exceptions: {', '.join(custom_exceptions[:5])}"
+        )
         append_pattern(
             spec_dir,
             pattern,
