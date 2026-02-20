@@ -52,12 +52,24 @@ const CategoryIcon: Record<TaskCategory, typeof Zap> = {
 // Defined outside component to avoid recreation on every render
 const STUCK_CHECK_SKIP_PHASES = ['complete', 'failed', 'planning'] as const;
 
+/**
+ * Render the icon component associated with a task category.
+ *
+ * @param category - The task category whose icon should be rendered
+ * @returns The icon React element for the given category, or `null` if no icon exists
+ */
 function renderCategoryIcon(category: TaskCategory) {
   const Icon = CategoryIcon[category];
   if (!Icon) return null;
   return <Icon className="h-2.5 w-2.5 mr-0.5" />;
 }
 
+/**
+ * Determine whether stuck-checks should be skipped for a given execution phase.
+ *
+ * @param phase - The execution phase name, or `undefined` if not available.
+ * @returns `true` if the phase is listed in STUCK_CHECK_SKIP_PHASES (stuck checks should be skipped), `false` otherwise.
+ */
 function shouldSkipStuckCheck(phase: string | undefined): boolean {
   return STUCK_CHECK_SKIP_PHASES.includes(phase as typeof STUCK_CHECK_SKIP_PHASES[number]);
 }
