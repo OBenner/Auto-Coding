@@ -240,31 +240,7 @@ def mock_test_generators():
 @pytest.fixture
 def mock_coverage_reporter():
     """Mock coverage report collection."""
-    from dataclasses import dataclass, field
-
-    @dataclass
-    class FileCoverage:
-        file_path: str
-        coverage_percentage: float
-        lines_total: int
-        lines_covered: int
-        lines_missed: int
-        branches_total: int = 0
-        branches_covered: int = 0
-        missing_lines: list = field(default_factory=list)
-
-    @dataclass
-    class CoverageReport:
-        overall_coverage: float
-        lines_total: int
-        lines_covered: int
-        lines_missed: int
-        branches_total: int = 0
-        branches_covered: int = 0
-        framework: str = ""
-        files: list = field(default_factory=list)
-        uncovered_files: list = field(default_factory=list)
-        report_path: str | None = None
+    from analysis.coverage_reporter import CoverageReport, FileCoverage
 
     mock_report = CoverageReport(
         overall_coverage=85.5,

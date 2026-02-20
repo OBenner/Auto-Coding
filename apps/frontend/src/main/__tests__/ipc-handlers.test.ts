@@ -147,7 +147,7 @@ function setupTestProject(): void {
 }
 
 // Cleanup test directories with retry for Windows ENOTEMPTY errors
-function cleanupTestDirs(): void {
+async function cleanupTestDirs(): Promise<void> {
   if (!existsSync(TEST_DIR)) return;
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
@@ -157,10 +157,7 @@ function cleanupTestDirs(): void {
       const code = (err as NodeJS.ErrnoException).code;
       if ((code === "ENOTEMPTY" || code === "EPERM") && attempt < 2) {
         // Windows may hold file locks briefly; wait and retry
-        const start = Date.now();
-        while (Date.now() - start < 200) {
-          /* busy-wait */
-        }
+        await new Promise((resolve) => setTimeout(resolve, 200));
         continue;
       }
       throw err;
@@ -198,7 +195,7 @@ describe("IPC Handlers", { timeout: 15000 }, () => {
   };
 
   beforeEach(async () => {
-    cleanupTestDirs();
+    await cleanupTestDirs();
     setupTestProject();
     mkdirSync(path.join(TEST_DIR, "userData", "store"), { recursive: true });
 
@@ -258,8 +255,8 @@ describe("IPC Handlers", { timeout: 15000 }, () => {
     vi.resetModules();
   });
 
-  afterEach(() => {
-    cleanupTestDirs();
+  afterEach(async () => {
+    await cleanupTestDirs();
     vi.clearAllMocks();
   });
 

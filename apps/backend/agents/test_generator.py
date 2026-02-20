@@ -308,51 +308,9 @@ def validate_generated_tests(
 
     # Default to pytest validation
     logger.info("Using pytest validation for Python tests")
+    from ._validation import validate_python_tests
 
-    import subprocess
-
-    print()
-    print_status("Validating generated pytest tests...", "progress")
-
-    for test_file in test_files:
-        file_path = project_dir / test_file
-        if not file_path.exists():
-            print_status(f"Test file not found: {test_file}", "error")
-            return False
-
-        # Check Python syntax
-        try:
-            with open(file_path, encoding="utf-8") as f:
-                compile(f.read(), str(file_path), "exec")
-            print_status(f"Syntax valid: {test_file.name}", "success")
-        except SyntaxError as e:
-            print_status(f"Syntax error in {test_file}: {e}", "error")
-            return False
-
-        # Check if pytest can collect tests
-        try:
-            result = subprocess.run(
-                ["pytest", str(file_path), "--collect-only", "-q"],
-                cwd=project_dir,
-                capture_output=True,
-                text=True,
-                timeout=30,
-            )
-            if result.returncode != 0:
-                print_status(f"pytest collection failed for {test_file}", "error")
-                logger.debug(f"pytest output: {result.stdout}\n{result.stderr}")
-                return False
-            print_status(f"pytest collection OK: {test_file.name}", "success")
-        except subprocess.TimeoutExpired:
-            print_status(f"pytest collection timeout for {test_file}", "error")
-            return False
-        except FileNotFoundError:
-            logger.warning("pytest not found - skipping collection validation")
-            print_status("pytest not available - syntax check only", "warning")
-            continue
-
-    print_status("All generated tests are valid", "success")
-    return True
+    return asyncio.run(validate_python_tests(test_files, project_dir))
 
 
 def validate_test_quality(test_files: list[Path], project_dir: Path) -> dict[str, Any]:

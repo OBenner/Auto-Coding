@@ -165,6 +165,15 @@ def _move_tests_to_review_directory(
     moved_files = []
     for file_path_str in generated_files:
         file_path = Path(file_path_str)
+
+        # Reject absolute or upward-traversing paths
+        if file_path.is_absolute() or ".." in file_path.parts:
+            debug_error(
+                "qa_loop",
+                f"Skipping unsafe path: {file_path_str}",
+            )
+            continue
+
         source = project_dir / file_path
         dest = review_dir / file_path
         dest.parent.mkdir(parents=True, exist_ok=True)
@@ -199,11 +208,11 @@ These tests are waiting for your review and approval before being committed to t
 
 2. **Approve tests** (if they look good):
    ```bash
-   # Copy approved tests to your project's tests/ directory
-   cp {review_dir}/*.py {project_dir / "tests"}/
+   # Copy approved tests to your project (preserving directory structure)
+   cp -r {review_dir}/ {project_dir}/
 
    # Commit them with your changes
-   git add tests/
+   git add tests/ apps/frontend/src/
    git commit -m "Add generated tests for [feature name]"
    ```
 

@@ -13,20 +13,14 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from core.client import create_client
-from phase_config import get_phase_model, get_phase_thinking_budget
-from prompts_pkg.prompt_loader import get_agent_prompt
-from task_logger import LogEntryType, LogPhase, get_task_logger
+from task_logger import LogPhase
 from ui import (
-    Icons,
-    bold,
-    box,
-    highlight,
-    icon,
     muted,
     print_key_value,
     print_status,
 )
+
+from ._generator_base import log_generator_result, run_generator_session
 
 logger = logging.getLogger(__name__)
 
@@ -65,27 +59,39 @@ async def validate_vitest_tests(test_files: list[Path], project_dir: Path) -> bo
             print_status(f"Test file not found: {test_file}", "error")
             return False
 
-        # Check TypeScript syntax with tsc (non-blocking)
-        try:
-            result = await asyncio.to_thread(
-                subprocess.run,
-                ["npx", "tsc", "--noEmit", str(file_path)],
-                cwd=frontend_dir,
-                capture_output=True,
-                text=True,
-                timeout=30,
-            )
-            if result.returncode != 0:
-                print_status(f"TypeScript error in {test_file.name}", "error")
-                logger.debug(f"tsc output: {result.stdout}\n{result.stderr}")
-                return False
-            print_status(f"TypeScript syntax valid: {test_file.name}", "success")
-        except subprocess.TimeoutExpired:
-            print_status(f"TypeScript validation timeout for {test_file}", "error")
+    # Check TypeScript syntax with tsc using project tsconfig (non-blocking)
+    tsconfig_path = frontend_dir / "tsconfig.json"
+    tsc_args = ["npx", "tsc", "--noEmit"]
+    if tsconfig_path.exists():
+        tsc_args.extend(["-p", str(tsconfig_path)])
+    else:
+        # Fall back to checking individual files without tsconfig
+        tsc_args.extend([str(project_dir / f) for f in test_files])
+
+    try:
+        result = await asyncio.to_thread(
+            subprocess.run,
+            tsc_args,
+            cwd=frontend_dir,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if result.returncode != 0:
+            # Report which test files may have errors
+            for test_file in test_files:
+                if test_file.name in (result.stdout + result.stderr):
+                    print_status(f"TypeScript error in {test_file.name}", "error")
+            logger.debug(f"tsc output: {result.stdout}\n{result.stderr}")
             return False
-        except FileNotFoundError:
-            logger.warning("TypeScript compiler not found - skipping syntax validation")
-            print_status("tsc not available - basic check only", "warning")
+        for test_file in test_files:
+            print_status(f"TypeScript syntax valid: {test_file.name}", "success")
+    except subprocess.TimeoutExpired:
+        print_status("TypeScript validation timeout", "error")
+        return False
+    except FileNotFoundError:
+        logger.warning("TypeScript compiler not found - skipping syntax validation")
+        print_status("tsc not available - basic check only", "warning")
 
     # Try to run tests with Vitest (non-blocking)
     print_status("Checking Vitest test execution...", "progress")
@@ -139,55 +145,6 @@ async def generate_vitest_tests(
         - success: Whether generation succeeded
         - error: Error message if failed
     """
-    # Initialize task logger
-    task_logger = get_task_logger(spec_dir)
-
-    # Print session header
-    content = [
-        bold(f"{icon(Icons.SPARKLES)} VITEST GENERATOR SESSION"),
-        "",
-        f"Spec: {highlight(spec_dir.name)}",
-        muted("Generating Vitest tests for TypeScript/React code..."),
-    ]
-    print()
-    print(box(content, width=70, style="heavy"))
-    print()
-
-    # Determine model and thinking budget
-    # Vitest test generation is part of the QA phase
-    if model is None:
-        model = get_phase_model(spec_dir, "qa")
-    if max_thinking_tokens is None:
-        max_thinking_tokens = get_phase_thinking_budget(spec_dir, "qa")
-
-    print_key_value("Model", model)
-    print_key_value(
-        "Thinking budget",
-        str(max_thinking_tokens) if max_thinking_tokens else "Default",
-    )
-    print()
-
-    # Log session start
-    if task_logger:
-        task_logger.start_phase(
-            LogPhase.VALIDATION, "Starting Vitest test generation..."
-        )
-        task_logger.log_info(
-            f"Analyzing {len(analysis_results.get('components', []))} components, "
-            f"{len(analysis_results.get('functions', []))} functions"
-        )
-
-    # Load the test generator prompt
-    try:
-        prompt = get_agent_prompt("test_generator")
-    except Exception as e:
-        error_msg = f"Failed to load test_generator prompt: {e}"
-        logger.error(error_msg)
-        if task_logger:
-            task_logger.log_error(error_msg)
-        return {"generated_files": [], "success": False, "error": error_msg}
-
-    # Create the starting message with analysis results
     starting_message = f"""You are the Test Generator Agent. Your task is to generate comprehensive Vitest tests for TypeScript/React code based on the analysis results below.
 
 ## Code Analysis Results
@@ -222,44 +179,33 @@ Generate test files in the appropriate locations:
 Begin by loading context (Phase 0 in your prompt).
 """
 
-    # Create SDK client with test_generator agent type
-    try:
-        client = create_client(
-            project_dir=project_dir,
-            spec_dir=spec_dir,
-            model=model,
-            agent_type="test_generator",
-            max_thinking_tokens=max_thinking_tokens,
-        )
-    except Exception as e:
-        error_msg = f"Failed to create Claude SDK client: {e}"
-        logger.error(error_msg)
-        if task_logger:
-            task_logger.log_error(error_msg)
-        return {"generated_files": [], "success": False, "error": error_msg}
+    # Run the shared generator session boilerplate
+    session_result = await run_generator_session(
+        project_dir=project_dir,
+        spec_dir=spec_dir,
+        analysis_results=analysis_results,
+        session_title="VITEST GENERATOR SESSION",
+        session_description="Generating Vitest tests for TypeScript/React code...",
+        prompt_name="test_generator",
+        agent_type="test_generator",
+        session_name="vitest-generator-session",
+        starting_message=starting_message,
+        log_phase=LogPhase.VALIDATION,
+        log_summary=(
+            f"Analyzing {len(analysis_results.get('components', []))} components, "
+            f"{len(analysis_results.get('functions', []))} functions"
+        ),
+        model=model,
+        max_thinking_tokens=max_thinking_tokens,
+        verbose=verbose,
+    )
 
-    # Run the agent session
-    print_status("Running Vitest Test Generator Agent...", "progress")
-    try:
-        response = await client.create_agent_session(
-            name="vitest-generator-session",
-            starting_message=starting_message,
-            system_prompt=prompt,
-        )
-
-        if verbose:
-            logger.info(f"Vitest Generator Agent response: {response}")
-
-        # Log session completion
-        if task_logger:
-            task_logger.log_success("Vitest Generator Agent session completed")
-
-    except Exception as e:
-        error_msg = f"Vitest Generator Agent session failed: {e}"
-        logger.error(error_msg)
-        if task_logger:
-            task_logger.log_error(error_msg)
-        return {"generated_files": [], "success": False, "error": error_msg}
+    if not session_result["success"]:
+        return {
+            "generated_files": [],
+            "success": False,
+            "error": session_result["error"],
+        }
 
     # Scan for newly created test files
     print()
@@ -299,16 +245,12 @@ Begin by loading context (Phase 0 in your prompt).
     validation_success = await validate_vitest_tests(test_files, project_dir)
 
     # Log results
-    if task_logger:
-        if validation_success:
-            task_logger.log_success(
-                f"Generated and validated {len(test_files)} Vitest test files"
-            )
-        else:
-            task_logger.log_entry(
-                LogEntryType.WARNING,
-                f"Generated {len(test_files)} test files but validation failed",
-            )
+    log_generator_result(
+        spec_dir=spec_dir,
+        test_files=test_files,
+        validation_success=validation_success,
+        framework="Vitest",
+    )
 
     return {
         "generated_files": [str(f) for f in test_files],
