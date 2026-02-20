@@ -7,7 +7,7 @@
  * - Approve, override, or delete patterns
  * - See pattern details (confidence, reasoning)
  */
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Sparkles,
@@ -74,7 +74,7 @@ export function PatternReviewPanel() {
   /**
    * Load patterns from backend
    */
-  const loadPatterns = async () => {
+  const loadPatterns = useCallback(async () => {
     if (!currentProject) {
       setError(t('patternReview.noProject'));
       return;
@@ -101,15 +101,14 @@ export function PatternReviewPanel() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [categoryFilter, currentProject, currentSpecId, t]);
 
   /**
    * Load patterns on component mount and when category filter or project changes
    */
   useEffect(() => {
     loadPatterns();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [categoryFilter, currentProject?.id, currentSpecId]);
+  }, [loadPatterns]);
 
   // Filter patterns by category
   const filteredPatterns = categoryFilter === 'all'

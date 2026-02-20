@@ -5,6 +5,7 @@
  * getting pattern details, approving, overriding, and deleting patterns.
  */
 
+import { existsSync } from 'fs';
 import { ipcMain } from 'electron';
 import { IPC_CHANNELS } from '../../shared/constants';
 import type { IPCResult } from '../../shared/types';
@@ -43,10 +44,29 @@ export interface Pattern {
 export type PatternCategory = 'naming-conventions' | 'error-handling' | 'code-organization';
 
 /**
- * Helper to get the backend directory path
+ * Helper to get the backend directory path.
+ *
+ * Checks BACKEND_DIR env var first, then tries several ancestor depths
+ * (dev vs production builds may nest __dirname differently).
  */
 function getBackendDir(): string {
-  // The backend is at apps/backend/ from the project root
+  // Allow explicit override via environment variable
+  const envDir = process.env.BACKEND_DIR;
+  if (envDir && existsSync(envDir)) {
+    return envDir;
+  }
+
+  // Try multiple candidate ancestor depths (dev and prod builds differ)
+  const depths = [4, 3, 5];
+  for (const depth of depths) {
+    const segments = Array(depth).fill('..');
+    const candidate = joinPaths(__dirname, ...segments, 'apps', 'backend');
+    if (existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  // Fallback to original computed path
   const projectRoot = joinPaths(__dirname, '..', '..', '..', '..');
   return joinPaths(projectRoot, 'apps', 'backend');
 }

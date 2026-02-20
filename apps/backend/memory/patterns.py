@@ -7,12 +7,16 @@ Functions for managing code patterns and gotchas (pitfalls to avoid).
 """
 
 import logging
+import re
 from pathlib import Path
 
 from .graphiti_helpers import get_graphiti_memory, is_graphiti_memory_enabled, run_async
 from .paths import get_memory_dir
 
 logger = logging.getLogger(__name__)
+
+# Regex to strip trailing metadata brackets like [category: ...] [confidence: ...] [reasoning: ...]
+_TRAILING_META_RE = re.compile(r"( \[(category|confidence|reasoning): [^\]]*\])+$")
 
 
 def append_gotcha(spec_dir: Path, gotcha: str) -> None:
@@ -129,8 +133,9 @@ def append_pattern(
         for line in content.split("\n"):
             line = line.strip()
             if line.startswith("- "):
-                # Extract just the pattern text (before any metadata)
-                pattern_text = line[2:].split(" [")[0].strip()
+                # Extract just the pattern text (strip trailing metadata brackets)
+                raw = line[2:].strip()
+                pattern_text = _TRAILING_META_RE.sub("", raw).strip()
                 existing_patterns.add(pattern_text)
 
     # Add new pattern if not duplicate

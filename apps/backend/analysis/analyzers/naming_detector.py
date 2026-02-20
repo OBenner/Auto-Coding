@@ -101,16 +101,17 @@ class NamingDetector(BaseAnalyzer):
         conventions["private_prefix"] = "#"  # Modern JS private fields
         conventions["file_style"] = "kebab-case"  # or camelCase depending on project
 
-        # Sample from actual files
-        js_files = collect_files(self.path, "*.js", limit=20) + collect_files(
-            self.path, "*.ts", limit=20
-        )
+        # Sample from actual files (cap combined list to 20 total)
+        js_files = (
+            collect_files(self.path, "*.js", limit=20)
+            + collect_files(self.path, "*.ts", limit=20)
+        )[:20]
         if js_files:
             samples = self._sample_javascript_identifiers(js_files[:10])
             conventions["examples"] = samples
 
             # Detect file naming style
-            file_names = [f.stem for f in js_files[:20]]
+            file_names = [f.stem for f in js_files]
             conventions["file_style"] = self._detect_file_naming_style(file_names)
 
     def _detect_go_conventions(self, conventions: dict[str, Any]) -> None:

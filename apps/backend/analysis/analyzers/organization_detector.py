@@ -16,7 +16,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
 
-from .base import SKIP_DIRS, BaseAnalyzer, _should_skip, collect_files
+from .base import BaseAnalyzer, _should_skip, collect_files
 
 
 class OrganizationDetector(BaseAnalyzer):
@@ -63,9 +63,7 @@ class OrganizationDetector(BaseAnalyzer):
     def _analyze_directory_structure(self) -> None:
         """Analyze how directories are organized."""
         dirs = [
-            d
-            for d in self.path.rglob("*")
-            if d.is_dir() and not any(skip in d.parts for skip in SKIP_DIRS)
+            d for d in self.path.rglob("*") if d.is_dir() and not _should_skip(d.parts)
         ]
 
         # Common organizational patterns

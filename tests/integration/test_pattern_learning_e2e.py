@@ -504,11 +504,10 @@ class TestUserOverrideE2E:
             (p for p in naming_patterns if "snake_case" in p["pattern"]), None
         )
         assert user_pattern is not None
-        assert user_pattern["confidence"] == 1.0
-        assert (
-            "user" in user_pattern.get("reasoning", "").lower()
-            or user_pattern["confidence"] == 1.0
-        )
+        assert user_pattern["confidence"] == pytest.approx(1.0)
+        assert "user" in user_pattern.get("reasoning", "").lower() or user_pattern[
+            "confidence"
+        ] == pytest.approx(1.0)
 
 
 class TestCompleteE2EFlow:
@@ -614,7 +613,7 @@ class TestCompleteE2EFlow:
         persisted_override = next(
             p for p in patterns_new_session if p["pattern"] == user_override
         )
-        assert persisted_override["confidence"] == 1.0
+        assert persisted_override["confidence"] == pytest.approx(1.0)
         assert persisted_override["category"] == "naming-conventions"
 
 
