@@ -392,10 +392,9 @@ async def test_e2e_test_generation_flow(
     coverage_file = spec_dir / "coverage_report.json"
     assert coverage_file.exists(), "Coverage report should be saved to spec directory"
 
-    with open(coverage_file) as f:
-        coverage_data = json.load(f)
+    coverage_data = json.loads(coverage_file.read_text())
 
-    assert coverage_data["overall_coverage"] == 85.5, (
+    assert coverage_data["overall_coverage"] == pytest.approx(85.5), (
         "Coverage should match mock report"
     )
     assert coverage_data["framework"] == "pytest + vitest"

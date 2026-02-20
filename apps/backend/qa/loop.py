@@ -6,6 +6,7 @@ Main QA loop that coordinates reviewer and fixer sessions until
 approval or max iterations.
 """
 
+import asyncio
 import os
 import time as time_module
 from datetime import UTC, datetime
@@ -678,8 +679,10 @@ async def run_qa_validation_loop(
                         :10
                     ],  # Top 10 uncovered
                 }
-                with open(coverage_file, "w", encoding="utf-8") as f:
-                    json.dump(coverage_data, f, indent=2)
+                coverage_json = json.dumps(coverage_data, indent=2)
+                await asyncio.to_thread(
+                    coverage_file.write_text, coverage_json, encoding="utf-8"
+                )
                 debug("qa_loop", f"Saved coverage report to {coverage_file}")
             else:
                 print("   ⚠️  No coverage reports found")

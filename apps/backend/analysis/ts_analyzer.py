@@ -393,7 +393,7 @@ class TypeScriptAnalyzer:
 
         # Pattern for function declarations
         func_pattern = re.compile(
-            r"(?:export\s+)?(?:async\s+)?(?:function|const|let)\s+(\w+)\s*(?:[=:]\s*)?(?:async\s+)?\(([^)]*)\)\s*(?::\s*([\w<>[\]|&]+(?:\s+[\w<>[\]|&]+)*))?\s*(?:=>|{)",
+            r"(?:export\s+)?(?:async\s+)?(?:function|const|let)\s+(\w+)\s*(?:[=:]\s*)?(?:async\s+)?\(([^)]*)\)\s*(?::\s*([\w<>[\]|&]+(?:\s+[\w<>[\]|&]+)*)\s*)?(?:=>|{)",
             re.MULTILINE,
         )
 

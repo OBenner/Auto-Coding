@@ -49,8 +49,8 @@ async def validate_python_tests(
 
         # Check Python syntax
         try:
-            with open(file_path, encoding="utf-8") as f:
-                compile(f.read(), str(file_path), "exec")
+            source = await asyncio.to_thread(file_path.read_text, encoding="utf-8")
+            compile(source, str(file_path), "exec")
             print_status(f"Syntax valid: {test_file.name}", "success")
         except SyntaxError as e:
             print_status(f"Syntax error in {test_file}: {e}", "error")
