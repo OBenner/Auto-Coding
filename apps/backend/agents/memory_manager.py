@@ -695,6 +695,7 @@ async def save_feedback(
     task_description: str,
     agent_type: str,
     context: dict | None = None,
+    rating: int | None = None,
 ) -> bool:
     """
     Save user feedback (accept/reject/modify) to memory and update preferences.
@@ -712,6 +713,7 @@ async def save_feedback(
         context: Optional additional context about the feedback
                  For "modified": should include what was changed
                  For "rejected": should include why it was rejected
+        rating: Optional rating (1-5 for stars, or 0/1 for thumbs down/up)
 
     Returns:
         True if saved successfully, False otherwise
@@ -723,19 +725,24 @@ async def save_feedback(
 
     memory = None
     try:
-        memory = get_graphiti_memory(spec_dir, project_dir)
+        memory = await get_graphiti_memory(spec_dir, project_dir)
         if memory is None:
             if is_debug_enabled():
                 debug_warning("memory", "GraphitiMemory not available for feedback")
             return False
 
         if is_debug_enabled():
+            debug_data = {
+                "feedback_type": feedback_type,
+                "agent_type": agent_type,
+                "task": task_description[:100],
+            }
+            if rating is not None:
+                debug_data["rating"] = rating
             debug(
                 "memory",
                 "Saving user feedback",
-                feedback_type=feedback_type,
-                agent_type=agent_type,
-                task=task_description[:100],
+                **debug_data,
             )
 
         # Save feedback to preference profile via Graphiti
@@ -760,6 +767,8 @@ async def save_feedback(
             "agent_type": agent_type,
             "context": context or {},
         }
+        if rating is not None:
+            episode_data["rating"] = rating
 
         # Build insights based on feedback type
         insights = {
@@ -829,12 +838,15 @@ async def save_feedback(
         )
 
         # Also update preference profile directly
-        profile_result = await memory.add_feedback_to_profile(
-            feedback_type=feedback_enum,
-            task_description=task_description,
-            agent_type=agent_type,
-            context=context or {},
-        )
+        profile_kwargs = {
+            "feedback_type": feedback_enum,
+            "task_description": task_description,
+            "agent_type": agent_type,
+            "context": context or {},
+        }
+        if rating is not None:
+            profile_kwargs["rating"] = rating
+        profile_result = await memory.add_feedback_to_profile(**profile_kwargs)
 
         if result and profile_result:
             logger.info(f"User feedback saved: {feedback_type} for {agent_type} task")
@@ -856,6 +868,186 @@ async def save_feedback(
             operation="save_feedback",
             feedback_type=feedback_type,
             agent_type=agent_type,
+            spec_dir=str(spec_dir),
+            project_dir=str(project_dir),
+        )
+        return False
+    finally:
+        if memory is not None:
+            try:
+                await memory.close()
+            except Exception:
+                pass
+
+
+async def track_improvement(
+    spec_dir: Path,
+    project_dir: Path,
+    improvement_description: str,
+    feedback_ids: list[str] | None = None,
+    before_metrics: dict | None = None,
+    after_metrics: dict | None = None,
+    agent_type: str | None = None,
+    context: dict | None = None,
+) -> bool:
+    """
+    Track an improvement made in response to user feedback.
+
+    This function records when user feedback has led to a measurable improvement
+    in agent behavior, code quality, or user satisfaction. This creates a feedback
+    loop showing how user input directly influences the system.
+
+    Args:
+        spec_dir: Spec directory
+        project_dir: Project root directory
+        improvement_description: Description of what was improved
+        feedback_ids: Optional list of feedback IDs that triggered this improvement
+        before_metrics: Optional metrics before the improvement
+                       (e.g., {"success_rate": 0.6, "avg_rating": 3.2})
+        after_metrics: Optional metrics after the improvement
+                      (e.g., {"success_rate": 0.85, "avg_rating": 4.1})
+        agent_type: Optional agent type that was improved (planner, coder, etc.)
+        context: Optional additional context about the improvement
+
+    Returns:
+        True if tracked successfully, False otherwise
+
+    Example:
+        >>> await track_improvement(
+        ...     spec_dir=Path(".auto-claude/specs/001"),
+        ...     project_dir=Path("."),
+        ...     improvement_description="Improved error handling based on user feedback",
+        ...     feedback_ids=["feedback_123", "feedback_456"],
+        ...     before_metrics={"error_rate": 0.15},
+        ...     after_metrics={"error_rate": 0.03},
+        ...     agent_type="coder"
+        ... )
+    """
+    if not is_graphiti_enabled():
+        if is_debug_enabled():
+            debug("memory", "Graphiti not enabled, skipping improvement tracking")
+        return False
+
+    memory = None
+    try:
+        memory = await get_graphiti_memory(spec_dir, project_dir)
+        if memory is None:
+            if is_debug_enabled():
+                debug_warning(
+                    "memory", "GraphitiMemory not available for improvement tracking"
+                )
+            return False
+
+        if is_debug_enabled():
+            debug_data = {
+                "improvement": improvement_description[:100],
+            }
+            if feedback_ids:
+                debug_data["feedback_count"] = len(feedback_ids)
+            if agent_type:
+                debug_data["agent_type"] = agent_type
+            debug(
+                "memory",
+                "Tracking improvement",
+                **debug_data,
+            )
+
+        # Import episode type
+        from integrations.graphiti.queries_pkg.schema import EPISODE_TYPE_IMPROVEMENT
+
+        # Calculate improvement delta if metrics provided
+        improvement_delta = {}
+        if before_metrics and after_metrics:
+            for key in set(before_metrics.keys()) | set(after_metrics.keys()):
+                before_val = before_metrics.get(key)
+                after_val = after_metrics.get(key)
+                if before_val is not None and after_val is not None:
+                    if isinstance(before_val, (int, float)) and isinstance(
+                        after_val, (int, float)
+                    ):
+                        delta = after_val - before_val
+                        percent_change = (
+                            round(((delta / before_val) * 100), 2)
+                            if before_val != 0
+                            else None
+                        )
+                        improvement_delta[key] = {
+                            "before": before_val,
+                            "after": after_val,
+                            "delta": delta,
+                            "percent_change": percent_change,
+                        }
+
+        # Store improvement in Graphiti as an episode
+        episode_data = {
+            "episode_type": EPISODE_TYPE_IMPROVEMENT,
+            "improvement_description": improvement_description,
+            "feedback_ids": feedback_ids or [],
+            "before_metrics": before_metrics or {},
+            "after_metrics": after_metrics or {},
+            "improvement_delta": improvement_delta,
+            "context": context or {},
+        }
+        if agent_type:
+            episode_data["agent_type"] = agent_type
+
+        # Build insights that show how feedback led to improvement
+        insights = {
+            "what_worked": [
+                f"User feedback led to improvement: {improvement_description[:200]}"
+            ],
+            "discoveries": {
+                "improvements": [
+                    {
+                        "description": improvement_description,
+                        "feedback_count": len(feedback_ids) if feedback_ids else 0,
+                        "metrics_delta": improvement_delta,
+                        "source": "user_feedback_loop",
+                    }
+                ]
+            },
+            "recommendations_for_next_session": [],
+            "_improvement": episode_data,
+        }
+
+        # Add specific recommendations based on metrics
+        if improvement_delta:
+            for metric, delta_data in improvement_delta.items():
+                if delta_data["delta"] > 0:  # Improvement
+                    insights["recommendations_for_next_session"].append(
+                        f"Continue approach that improved {metric} by {delta_data['percent_change']:.1f}%"
+                    )
+
+        # Save to Graphiti
+        result = await memory.save_session_insights(
+            session_num=0,  # Improvements are session-independent
+            insights=insights,
+        )
+
+        if result:
+            logger.info(
+                f"Improvement tracked: {improvement_description[:100]} "
+                f"(based on {len(feedback_ids) if feedback_ids else 0} feedback items)"
+            )
+            if is_debug_enabled():
+                debug_success(
+                    "memory",
+                    "Improvement tracked successfully",
+                    improvement=improvement_description[:100],
+                    feedback_count=len(feedback_ids) if feedback_ids else 0,
+                    metrics_improved=list(improvement_delta.keys()),
+                )
+
+        return bool(result)
+
+    except Exception as e:
+        logger.warning(f"Failed to track improvement: {e}")
+        if is_debug_enabled():
+            debug_error("memory", "Improvement tracking failed", error=str(e))
+        capture_exception(
+            e,
+            operation="track_improvement",
+            improvement=improvement_description[:100],
             spec_dir=str(spec_dir),
             project_dir=str(project_dir),
         )
