@@ -26,8 +26,6 @@ from __future__ import annotations
 import ast
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
-
 
 # =============================================================================
 # DATA CLASSES
@@ -106,6 +104,8 @@ class ApiElement:
     decorators: list[str] = field(default_factory=list)
     is_async: bool = False
     docstring: str | None = None
+    required_params: list[str] = field(default_factory=list)
+    optional_params: list[str] = field(default_factory=list)
 
 
 # =============================================================================
@@ -256,7 +256,9 @@ class BreakingChangeDetector:
                     )
 
             except Exception as e:
-                result.analysis_errors.append(f"Error reading removed file {file_path}: {e}")
+                result.analysis_errors.append(
+                    f"Error reading removed file {file_path}: {e}"
+                )
 
         # Compare files that exist in both versions
         common_files = set(old_files.keys()) & set(new_files.keys())
@@ -308,7 +310,9 @@ class BreakingChangeDetector:
                     )
 
             except Exception as e:
-                result.analysis_errors.append(f"Error analyzing removed file {file_path}: {e}")
+                result.analysis_errors.append(
+                    f"Error analyzing removed file {file_path}: {e}"
+                )
 
         # Compare common files
         common_files = set(old_files.keys()) & set(new_files.keys())
@@ -386,6 +390,31 @@ class BreakingChangeDetector:
             if arg.annotation:
                 param_types[arg.arg] = ast.unparse(arg.annotation)
 
+        # Determine required vs optional params using defaults
+        # node.args.defaults are right-aligned to args (last N args have defaults)
+        num_defaults = len(node.args.defaults)
+        num_args = len(node.args.args)
+        required_params = (
+            [arg.arg for arg in node.args.args[: num_args - num_defaults]]
+            if num_defaults
+            else [arg.arg for arg in node.args.args]
+        )
+        optional_params = (
+            [arg.arg for arg in node.args.args[num_args - num_defaults :]]
+            if num_defaults
+            else []
+        )
+
+        # Also include keyword-only args with defaults as optional
+        for i, kwarg in enumerate(node.args.kwonlyargs):
+            if i < len(node.args.kw_defaults) and node.args.kw_defaults[i] is not None:
+                optional_params.append(kwarg.arg)
+            else:
+                required_params.append(kwarg.arg)
+            params.append(kwarg.arg)
+            if kwarg.annotation:
+                param_types[kwarg.arg] = ast.unparse(kwarg.annotation)
+
         # Extract return type
         return_type = None
         if node.returns:
@@ -419,6 +448,8 @@ class BreakingChangeDetector:
             decorators=decorators,
             is_async=isinstance(node, ast.AsyncFunctionDef),
             docstring=docstring,
+            required_params=required_params,
+            optional_params=optional_params,
         )
 
     def _class_to_api_element(self, node: ast.ClassDef) -> ApiElement:
@@ -513,7 +544,9 @@ class BreakingChangeDetector:
                         file=file_path,
                         old_signature=old_elem.signature,
                         new_signature=new_elem.signature,
-                        migration_guide=self._generate_migration_guide(old_elem, new_elem),
+                        migration_guide=self._generate_migration_guide(
+                            old_elem, new_elem
+                        ),
                     )
                 )
 
@@ -570,11 +603,16 @@ class BreakingChangeDetector:
         if removed_params:
             return "critical"
 
-        # Added required parameters is critical
+        # Added parameters - severity depends on whether they have defaults
         added_params = set(new_elem.params) - set(old_elem.params)
         if added_params:
-            # If we can't determine if they have defaults, assume critical
-            return "high"
+            optional_added = set(new_elem.optional_params) & added_params
+            required_added = added_params - optional_added
+            if required_added:
+                # New required parameters break existing callers
+                return "high"
+            # All added params are optional (have defaults) - lower severity
+            return "medium"
 
         # Reordered parameters is high severity
         if old_elem.params != new_elem.params:
@@ -618,11 +656,13 @@ class BreakingChangeDetector:
                 "Parameters were reordered. Update call sites to use keyword arguments."
             )
 
-        return " ".join(guide_parts) if guide_parts else "Review and update all call sites."
+        return (
+            " ".join(guide_parts)
+            if guide_parts
+            else "Review and update all call sites."
+        )
 
-    def _save_results(
-        self, spec_dir: Path, result: BreakingChangeResult
-    ) -> None:
+    def _save_results(self, spec_dir: Path, result: BreakingChangeResult) -> None:
         """
         Save breaking change results to spec directory.
 
@@ -688,7 +728,9 @@ class BreakingChangeDetector:
         lines.append(f"Total Breaking Changes: {len(result.breaking_changes)}")
 
         if result.should_block:
-            lines.append("\n🚫 CRITICAL BREAKING CHANGES FOUND - SHOULD BLOCK DEPLOYMENT")
+            lines.append(
+                "\n🚫 CRITICAL BREAKING CHANGES FOUND - SHOULD BLOCK DEPLOYMENT"
+            )
 
         # Group by severity
         by_severity = {
@@ -720,7 +762,7 @@ class BreakingChangeDetector:
                 if change.new_signature:
                     lines.append(f"   New: {change.new_signature}")
                 else:
-                    lines.append(f"   New: [REMOVED]")
+                    lines.append("   New: [REMOVED]")
                 if change.migration_guide:
                     lines.append(f"   📖 Migration: {change.migration_guide}")
 

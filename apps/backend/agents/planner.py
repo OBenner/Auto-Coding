@@ -125,14 +125,14 @@ async def run_followup_planner(
             print_status(
                 f"⚠️  Critical issues found: {scan_result.summary.get('critical', 0)} critical, "
                 f"{scan_result.summary.get('high', 0)} high",
-                "warning"
+                "warning",
             )
         elif scan_result.should_warn:
             logger.info("Prevention scanner found warnings")
             print_status(
                 f"Note: {scan_result.summary.get('total_issues', 0)} issues detected "
                 f"(see prevention_scan.json)",
-                "info"
+                "info",
             )
         else:
             logger.info("Prevention scanner found no critical issues")

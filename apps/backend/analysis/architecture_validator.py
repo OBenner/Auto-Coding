@@ -28,8 +28,6 @@ import re
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
-
 
 # =============================================================================
 # DATA CLASSES
@@ -191,9 +189,7 @@ class ArchitectureValidator:
             List of file paths to analyze
         """
         if changed_files:
-            return [
-                project_dir / f for f in changed_files if self._is_analyzable(f)
-            ]
+            return [project_dir / f for f in changed_files if self._is_analyzable(f)]
 
         # Find all Python files
         files = list(project_dir.glob("**/*.py"))
@@ -212,9 +208,7 @@ class ArchitectureValidator:
         }
 
         return [
-            f
-            for f in files
-            if not any(skip_dir in f.parts for skip_dir in skip_dirs)
+            f for f in files if not any(skip_dir in f.parts for skip_dir in skip_dirs)
         ]
 
     def _is_analyzable(self, file_path: str) -> bool:
@@ -253,19 +247,31 @@ class ArchitectureValidator:
 
                 # Detect import organization
                 lines = content.split("\n")
-                import_section = []
-                for line in lines:
+                import_line_indices = []
+                for idx, line in enumerate(lines):
                     if line.startswith(("import ", "from ")):
-                        import_section.append(line)
-                    elif import_section and line.strip() and not line.startswith("#"):
+                        import_line_indices.append(idx)
+                    elif (
+                        import_line_indices
+                        and line.strip()
+                        and not line.startswith("#")
+                    ):
                         break
 
-                if import_section:
-                    # Check if imports are grouped
-                    has_blank_lines = any(
-                        i + 1 < len(import_section) and not import_section[i + 1].strip()
-                        for i in range(len(import_section) - 1)
-                    )
+                if import_line_indices:
+                    # Check if there are blank lines between import lines
+                    # in the original source (indicating grouped imports)
+                    has_blank_lines = False
+                    for j in range(len(import_line_indices) - 1):
+                        current_idx = import_line_indices[j]
+                        next_idx = import_line_indices[j + 1]
+                        # Check if any line between two consecutive imports is blank
+                        for between in range(current_idx + 1, next_idx):
+                            if not lines[between].strip():
+                                has_blank_lines = True
+                                break
+                        if has_blank_lines:
+                            break
                     if has_blank_lines:
                         import_patterns["grouped_imports"] += 1
                     else:
@@ -292,10 +298,13 @@ class ArchitectureValidator:
                                 naming_patterns["class"]["lowercase"] += 1
 
                 except SyntaxError:
+                    # SyntaxError means file can't be parsed; skip pattern discovery for this file
                     pass
 
             except Exception as e:
-                result.analysis_errors.append(f"Error discovering patterns in {file_path}: {e}")
+                result.analysis_errors.append(
+                    f"Error discovering patterns in {file_path}: {e}"
+                )
 
         # Convert counters to patterns
         total_files = len(files)
@@ -352,10 +361,10 @@ class ArchitectureValidator:
         - Missing error context
         """
         # Find the dominant error handling pattern
-        dominant_pattern = None
+        _dominant_pattern = None
         for pattern in result.patterns:
             if pattern.pattern_type == "error_handling" and pattern.confidence > 0.5:
-                dominant_pattern = pattern.pattern_name
+                _dominant_pattern = pattern.pattern_name
                 break
 
         for file_path in files:
@@ -401,7 +410,9 @@ class ArchitectureValidator:
                             )
 
             except Exception as e:
-                result.analysis_errors.append(f"Error analyzing error handling in {file_path}: {e}")
+                result.analysis_errors.append(
+                    f"Error analyzing error handling in {file_path}: {e}"
+                )
 
     def _validate_naming_consistency(
         self, files: list[Path], result: ArchitecturalAnalysisResult
@@ -442,9 +453,8 @@ class ArchitectureValidator:
                         if isinstance(node, ast.FunctionDef):
                             if not node.name.startswith("_"):  # Skip private functions
                                 # Check for camelCase when snake_case is dominant
-                                if (
-                                    dominant_function_pattern == "snake_case"
-                                    and any(c.isupper() for c in node.name[1:])
+                                if dominant_function_pattern == "snake_case" and any(
+                                    c.isupper() for c in node.name[1:]
                                 ):
                                     result.issues.append(
                                         ArchitecturalIssue(
@@ -482,10 +492,13 @@ class ArchitectureValidator:
                                 )
 
                 except SyntaxError:
+                    # SyntaxError means file can't be parsed; skip naming validation for this file
                     pass
 
             except Exception as e:
-                result.analysis_errors.append(f"Error analyzing naming in {file_path}: {e}")
+                result.analysis_errors.append(
+                    f"Error analyzing naming in {file_path}: {e}"
+                )
 
     def _validate_import_organization(
         self, files: list[Path], result: ArchitecturalAnalysisResult
@@ -501,7 +514,10 @@ class ArchitectureValidator:
         # Find dominant import pattern
         dominant_import_pattern = None
         for pattern in result.patterns:
-            if pattern.pattern_type == "import_organization" and pattern.confidence > 0.6:
+            if (
+                pattern.pattern_type == "import_organization"
+                and pattern.confidence > 0.6
+            ):
                 dominant_import_pattern = pattern.pattern_name
                 break
 
@@ -565,7 +581,9 @@ class ArchitectureValidator:
                         )
 
             except Exception as e:
-                result.analysis_errors.append(f"Error analyzing imports in {file_path}: {e}")
+                result.analysis_errors.append(
+                    f"Error analyzing imports in {file_path}: {e}"
+                )
 
     def _validate_class_structure(
         self, files: list[Path], result: ArchitecturalAnalysisResult
@@ -610,7 +628,9 @@ class ArchitectureValidator:
                             methods = [
                                 item
                                 for item in node.body
-                                if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
+                                if isinstance(
+                                    item, (ast.FunctionDef, ast.AsyncFunctionDef)
+                                )
                             ]
 
                             found_private = False
@@ -634,10 +654,13 @@ class ArchitectureValidator:
                                     )
 
                 except SyntaxError:
+                    # SyntaxError means file can't be parsed; skip class structure validation
                     pass
 
             except Exception as e:
-                result.analysis_errors.append(f"Error analyzing class structure in {file_path}: {e}")
+                result.analysis_errors.append(
+                    f"Error analyzing class structure in {file_path}: {e}"
+                )
 
     def _save_results(
         self, spec_dir: Path, result: ArchitecturalAnalysisResult
@@ -650,6 +673,8 @@ class ArchitectureValidator:
             result: Analysis result to save
         """
         import json
+        import os
+        import tempfile
 
         spec_dir = Path(spec_dir)
         spec_dir.mkdir(parents=True, exist_ok=True)
@@ -659,7 +684,9 @@ class ArchitectureValidator:
         data = {
             "files_analyzed": result.files_analyzed,
             "total_issues": len(result.issues),
-            "critical_issues": len([i for i in result.issues if i.severity == "critical"]),
+            "critical_issues": len(
+                [i for i in result.issues if i.severity == "critical"]
+            ),
             "high_issues": len([i for i in result.issues if i.severity == "high"]),
             "medium_issues": len([i for i in result.issues if i.severity == "medium"]),
             "low_issues": len([i for i in result.issues if i.severity == "low"]),
@@ -691,8 +718,21 @@ class ArchitectureValidator:
             "errors": result.analysis_errors,
         }
 
-        with open(output_file, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2)
+        # Atomic write: write to temp file first, then rename
+        fd, tmp_path = tempfile.mkstemp(
+            dir=str(spec_dir), suffix=".tmp", prefix="architecture_analysis_"
+        )
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2)
+            os.replace(tmp_path, str(output_file))
+        except BaseException:
+            # Clean up temp file on failure
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+            raise
 
     def format_report(self, result: ArchitecturalAnalysisResult) -> str:
         """
@@ -814,9 +854,7 @@ def main() -> None:
     import argparse
     import json
 
-    parser = argparse.ArgumentParser(
-        description="Validate architectural consistency"
-    )
+    parser = argparse.ArgumentParser(description="Validate architectural consistency")
     parser.add_argument("project_dir", type=Path, help="Path to project root")
     parser.add_argument("--spec-dir", type=Path, help="Path to spec directory")
     parser.add_argument("--json", action="store_true", help="Output as JSON")

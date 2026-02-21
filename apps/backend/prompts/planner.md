@@ -223,12 +223,14 @@ Based on your Phase 0 investigation and Phase 1 context files, identify:
 Run the scanner:
 
 ```python
-# Scan a specific directory
-result = scanner.scan(directory="apps/backend/services/")
+# Scan the project directory
+result = scanner.scan(project_dir=project_dir, spec_dir=spec_dir)
 
-# Or scan specific files
+# Or scan specific changed files
 result = scanner.scan(
-    file_paths=["apps/backend/api/routes.py", "apps/backend/models/user.py"]
+    project_dir=project_dir,
+    spec_dir=spec_dir,
+    changed_files=["apps/backend/api/routes.py", "apps/backend/models/user.py"]
 )
 ```
 
@@ -244,29 +246,29 @@ Review the scan results:
 
 ```python
 # Check if implementation should be blocked
-if result.should_block():
-    print(f"BLOCKING ISSUES FOUND:")
-    for issue in result.get_critical_issues():
-        print(f"  - {issue['type']}: {issue['message']}")
+if result.should_block:
+    print("BLOCKING ISSUES FOUND:")
+    print(f"  Critical: {result.summary.get('critical', 0)}")
+    print(f"  High: {result.summary.get('high', 0)}")
 
 # Check for warnings
-if result.should_warn():
-    print(f"WARNINGS:")
-    for warning in result.get_warnings():
-        print(f"  - {warning['type']}: {warning['message']}")
+if result.should_warn:
+    print("WARNINGS:")
+    print(f"  Medium: {result.summary.get('medium', 0)}")
 
 # Get formatted report
-print(result.format_report())
+scanner = PreventionScanner()
+print(scanner.format_report(result))
 ```
 
 ### 2.5.4: Adjust Plan Based on Results
 
-**If BLOCKING issues found** (should_block() returns True):
+**If BLOCKING issues found** (`result.should_block` is True):
 1. Document the issues in `context.json` under a new `prevention_scan_results` section
 2. Add subtasks to the implementation plan to address these issues FIRST
 3. Consider changing the workflow type if major refactoring is needed
 
-**If WARNINGS found** (should_warn() returns True):
+**If WARNINGS found** (`result.should_warn` is True):
 1. Add comments or notes to relevant subtasks with mitigation strategies
 2. Include verification steps that specifically check for these issues
 3. Add architectural guidance in subtask descriptions

@@ -22,12 +22,9 @@ Usage:
 
 from __future__ import annotations
 
-import ast
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
-
 
 # =============================================================================
 # DATA CLASSES
@@ -98,9 +95,12 @@ class PerformanceAnalyzer:
 
     # Patterns that indicate database queries
     DB_QUERY_PATTERNS = [
-        r"\.query\(",  # SQLAlchemy, Django ORM
-        r"\.filter\(",  # Django ORM, SQLAlchemy
-        r"\.get\(",  # ORM get operations
+        r"\.query\(",  # SQLAlchemy query
+        r"\.objects\.filter\(",  # Django ORM filter
+        r"\.objects\.get\(",  # Django ORM get
+        r"\.objects\.all\(",  # Django ORM all
+        r"\.objects\.exclude\(",  # Django ORM exclude
+        r"session\.query\(",  # SQLAlchemy session query
         r"\.execute\(",  # Raw SQL execution
         r"\.fetchall\(",  # Database fetch operations
         r"\.fetchone\(",
@@ -229,9 +229,7 @@ class PerformanceAnalyzer:
         }
 
         return [
-            f
-            for f in files
-            if not any(skip_dir in f.parts for skip_dir in skip_dirs)
+            f for f in files if not any(skip_dir in f.parts for skip_dir in skip_dirs)
         ]
 
     def _is_analyzable(self, file_path: str) -> bool:
@@ -446,9 +444,7 @@ class PerformanceAnalyzer:
             except Exception as e:
                 result.analysis_errors.append(f"Error analyzing {file_path}: {e}")
 
-    def _save_results(
-        self, spec_dir: Path, result: PerformanceAnalysisResult
-    ) -> None:
+    def _save_results(self, spec_dir: Path, result: PerformanceAnalysisResult) -> None:
         """
         Save performance analysis results to spec directory.
 

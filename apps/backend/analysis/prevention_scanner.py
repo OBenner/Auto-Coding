@@ -24,28 +24,29 @@ Usage:
 from __future__ import annotations
 
 import json
+import os
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 # Import individual scanners
 from analysis.architecture_validator import (
-    ArchitectureValidator,
     ArchitecturalAnalysisResult,
+    ArchitectureValidator,
 )
 from analysis.breaking_change_detector import (
     BreakingChangeDetector,
     BreakingChangeResult,
 )
 from analysis.performance_analyzer import (
-    PerformanceAnalyzer,
     PerformanceAnalysisResult,
+    PerformanceAnalyzer,
 )
-from analysis.security_scanner import SecurityScanner, SecurityScanResult
 
 # Import configuration
 from analysis.prevention_config import PreventionConfig, load_prevention_config
-
+from analysis.security_scanner import SecurityScanner, SecurityScanResult
 
 # =============================================================================
 # DATA CLASSES
@@ -212,86 +213,43 @@ class PreventionScanner:
 
         # Security issues
         if result.security:
-            critical_count += len(result.security.secrets)
+            secrets = getattr(result.security, "secrets", [])
+            vulnerabilities = getattr(result.security, "vulnerabilities", [])
+            critical_count += len(secrets)
             critical_count += len(
-                [v for v in result.security.vulnerabilities if v.severity == "critical"]
+                [v for v in vulnerabilities if v.severity == "critical"]
             )
-            high_count += len(
-                [v for v in result.security.vulnerabilities if v.severity == "high"]
-            )
-            medium_count += len(
-                [v for v in result.security.vulnerabilities if v.severity == "medium"]
-            )
-            low_count += len(
-                [v for v in result.security.vulnerabilities if v.severity == "low"]
-            )
-            total_issues += len(result.security.secrets) + len(
-                result.security.vulnerabilities
-            )
+            high_count += len([v for v in vulnerabilities if v.severity == "high"])
+            medium_count += len([v for v in vulnerabilities if v.severity == "medium"])
+            low_count += len([v for v in vulnerabilities if v.severity == "low"])
+            total_issues += len(secrets) + len(vulnerabilities)
 
         # Performance issues
         if result.performance:
-            critical_count += len(
-                [i for i in result.performance.issues if i.severity == "critical"]
-            )
-            high_count += len(
-                [i for i in result.performance.issues if i.severity == "high"]
-            )
-            medium_count += len(
-                [i for i in result.performance.issues if i.severity == "medium"]
-            )
-            low_count += len(
-                [i for i in result.performance.issues if i.severity == "low"]
-            )
-            total_issues += len(result.performance.issues)
+            perf_issues = getattr(result.performance, "issues", [])
+            critical_count += len([i for i in perf_issues if i.severity == "critical"])
+            high_count += len([i for i in perf_issues if i.severity == "high"])
+            medium_count += len([i for i in perf_issues if i.severity == "medium"])
+            low_count += len([i for i in perf_issues if i.severity == "low"])
+            total_issues += len(perf_issues)
 
         # Breaking changes
         if result.breaking_changes:
-            critical_count += len(
-                [
-                    c
-                    for c in result.breaking_changes.breaking_changes
-                    if c.severity == "critical"
-                ]
-            )
-            high_count += len(
-                [
-                    c
-                    for c in result.breaking_changes.breaking_changes
-                    if c.severity == "high"
-                ]
-            )
-            medium_count += len(
-                [
-                    c
-                    for c in result.breaking_changes.breaking_changes
-                    if c.severity == "medium"
-                ]
-            )
-            low_count += len(
-                [
-                    c
-                    for c in result.breaking_changes.breaking_changes
-                    if c.severity == "low"
-                ]
-            )
-            total_issues += len(result.breaking_changes.breaking_changes)
+            bc_changes = getattr(result.breaking_changes, "breaking_changes", [])
+            critical_count += len([c for c in bc_changes if c.severity == "critical"])
+            high_count += len([c for c in bc_changes if c.severity == "high"])
+            medium_count += len([c for c in bc_changes if c.severity == "medium"])
+            low_count += len([c for c in bc_changes if c.severity == "low"])
+            total_issues += len(bc_changes)
 
         # Architecture issues
         if result.architecture:
-            critical_count += len(
-                [i for i in result.architecture.issues if i.severity == "critical"]
-            )
-            high_count += len(
-                [i for i in result.architecture.issues if i.severity == "high"]
-            )
-            medium_count += len(
-                [i for i in result.architecture.issues if i.severity == "medium"]
-            )
-            low_count += len(
-                [i for i in result.architecture.issues if i.severity == "low"]
-            )
-            total_issues += len(result.architecture.issues)
+            arch_issues = getattr(result.architecture, "issues", [])
+            critical_count += len([i for i in arch_issues if i.severity == "critical"])
+            high_count += len([i for i in arch_issues if i.severity == "high"])
+            medium_count += len([i for i in arch_issues if i.severity == "medium"])
+            low_count += len([i for i in arch_issues if i.severity == "low"])
+            total_issues += len(arch_issues)
 
         # Determine overall status using config
         result.has_critical_issues = critical_count > 0 or high_count > 0
@@ -312,25 +270,22 @@ class PreventionScanner:
         # Track which scanners ran and found issues
         if result.security:
             result.summary["scanners_run"].append("security")
-            if (
-                len(result.security.secrets) > 0
-                or len(result.security.vulnerabilities) > 0
-            ):
+            if len(secrets) > 0 or len(vulnerabilities) > 0:
                 result.summary["scanners_with_issues"].append("security")
 
         if result.performance:
             result.summary["scanners_run"].append("performance")
-            if len(result.performance.issues) > 0:
+            if len(perf_issues) > 0:
                 result.summary["scanners_with_issues"].append("performance")
 
         if result.breaking_changes:
             result.summary["scanners_run"].append("breaking_changes")
-            if len(result.breaking_changes.breaking_changes) > 0:
+            if len(bc_changes) > 0:
                 result.summary["scanners_with_issues"].append("breaking_changes")
 
         if result.architecture:
             result.summary["scanners_run"].append("architecture")
-            if len(result.architecture.issues) > 0:
+            if len(arch_issues) > 0:
                 result.summary["scanners_with_issues"].append("architecture")
 
     def _save_results(self, spec_dir: Path, result: PreventionScanResult) -> None:
@@ -389,8 +344,20 @@ class PreventionScanner:
                 "should_warn": result.architecture.should_warn,
             }
 
-        with open(output_file, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2)
+        # Atomic write: write to temp file first, then rename
+        fd, tmp_path = tempfile.mkstemp(
+            dir=str(spec_dir), suffix=".tmp", prefix="prevention_scan_"
+        )
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2)
+            os.replace(tmp_path, str(output_file))
+        except BaseException:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+            raise
 
     def format_report(self, result: PreventionScanResult) -> str:
         """
@@ -428,14 +395,11 @@ class PreventionScanner:
         )
         scanners_with_issues = result.summary.get("scanners_with_issues", [])
         if scanners_with_issues:
-            lines.append(
-                f"Scanners With Issues: {', '.join(scanners_with_issues)}"
-            )
+            lines.append(f"Scanners With Issues: {', '.join(scanners_with_issues)}")
 
         # Individual scanner reports
         if result.security and (
-            len(result.security.secrets) > 0
-            or len(result.security.vulnerabilities) > 0
+            len(result.security.secrets) > 0 or len(result.security.vulnerabilities) > 0
         ):
             lines.append("\n" + "=" * 80)
             lines.append("SECURITY SCAN")
@@ -457,13 +421,14 @@ class PreventionScanner:
             # Breakdown by issue type
             issue_types = {}
             for issue in result.performance.issues:
-                issue_types[issue.issue_type] = (
-                    issue_types.get(issue.issue_type, 0) + 1
-                )
+                issue_types[issue.issue_type] = issue_types.get(issue.issue_type, 0) + 1
             for issue_type, count in issue_types.items():
                 lines.append(f"  - {issue_type}: {count}")
 
-        if result.breaking_changes and len(result.breaking_changes.breaking_changes) > 0:
+        if (
+            result.breaking_changes
+            and len(result.breaking_changes.breaking_changes) > 0
+        ):
             lines.append("\n" + "=" * 80)
             lines.append("BREAKING CHANGE DETECTION")
             lines.append("-" * 80)
@@ -486,9 +451,15 @@ class PreventionScanner:
             if result.architecture.patterns:
                 lines.append("\nEstablished Patterns:")
                 for pattern in result.architecture.patterns[:5]:  # Top 5 patterns
+                    confidence = getattr(pattern, "confidence", None)
+                    confidence_str = (
+                        f"{confidence:.1%}"
+                        if isinstance(confidence, (int, float))
+                        else "N/A"
+                    )
                     lines.append(
                         f"  - {pattern.pattern_type}: {pattern.pattern_name} "
-                        f"(confidence: {pattern.confidence:.1%})"
+                        f"(confidence: {confidence_str})"
                     )
 
         # Scan errors
@@ -573,16 +544,18 @@ def scan_for_issues(
     Returns:
         PreventionScanResult with all findings
     """
-    scanner = PreventionScanner()
+    config = PreventionConfig(
+        security_enabled=run_security,
+        performance_enabled=run_performance,
+        breaking_changes_enabled=run_breaking_changes,
+        architecture_enabled=run_architecture,
+    )
+    scanner = PreventionScanner(config=config)
     return scanner.scan(
         project_dir=project_dir,
         spec_dir=spec_dir,
         changed_files=changed_files,
         old_dir=old_dir,
-        run_security=run_security,
-        run_performance=run_performance,
-        run_breaking_changes=run_breaking_changes,
-        run_architecture=run_architecture,
     )
 
 
@@ -610,17 +583,13 @@ def main() -> None:
     """CLI entry point for testing."""
     import argparse
 
-    parser = argparse.ArgumentParser(
-        description="Run proactive issue prevention scan"
-    )
+    parser = argparse.ArgumentParser(description="Run proactive issue prevention scan")
     parser.add_argument("project_dir", type=Path, help="Path to project root")
     parser.add_argument("--spec-dir", type=Path, help="Path to spec directory")
     parser.add_argument(
         "--old-dir", type=Path, help="Path to old version for breaking change detection"
     )
-    parser.add_argument(
-        "--no-security", action="store_true", help="Skip security scan"
-    )
+    parser.add_argument("--no-security", action="store_true", help="Skip security scan")
     parser.add_argument(
         "--no-performance", action="store_true", help="Skip performance analysis"
     )
@@ -633,19 +602,23 @@ def main() -> None:
         "--no-architecture", action="store_true", help="Skip architecture validation"
     )
     parser.add_argument("--json", action="store_true", help="Output as JSON")
-    parser.add_argument("--summary", action="store_true", help="Show brief summary only")
+    parser.add_argument(
+        "--summary", action="store_true", help="Show brief summary only"
+    )
 
     args = parser.parse_args()
 
-    scanner = PreventionScanner()
+    config = PreventionConfig(
+        security_enabled=not args.no_security,
+        performance_enabled=not args.no_performance,
+        breaking_changes_enabled=args.breaking_changes,
+        architecture_enabled=not args.no_architecture,
+    )
+    scanner = PreventionScanner(config=config)
     result = scanner.scan(
         project_dir=args.project_dir,
         spec_dir=args.spec_dir,
         old_dir=args.old_dir,
-        run_security=not args.no_security,
-        run_performance=not args.no_performance,
-        run_breaking_changes=args.breaking_changes,
-        run_architecture=not args.no_architecture,
     )
 
     if args.json:

@@ -26,7 +26,6 @@ import os
 from dataclasses import dataclass
 from typing import Literal
 
-
 # Default configuration values
 DEFAULT_SECURITY_ENABLED = True
 DEFAULT_PERFORMANCE_ENABLED = True
@@ -113,7 +112,9 @@ class PreventionConfig:
                 "PREVENTION_BLOCK_ON_CRITICAL", DEFAULT_BLOCK_ON_CRITICAL
             ),
             block_on_high=get_bool("PREVENTION_BLOCK_ON_HIGH", DEFAULT_BLOCK_ON_HIGH),
-            warn_on_medium=get_bool("PREVENTION_WARN_ON_MEDIUM", DEFAULT_WARN_ON_MEDIUM),
+            warn_on_medium=get_bool(
+                "PREVENTION_WARN_ON_MEDIUM", DEFAULT_WARN_ON_MEDIUM
+            ),
             # Scanner Behavior
             fail_on_scan_error=get_bool(
                 "PREVENTION_FAIL_ON_SCAN_ERROR", DEFAULT_FAIL_ON_SCAN_ERROR
