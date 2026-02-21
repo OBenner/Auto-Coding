@@ -204,7 +204,7 @@ def get_failure_metrics(spec_dir: Path) -> dict[str, Any]:
         }
     """
     history = _load_qa_iteration_history(spec_dir)
-    metrics = _load_learning_metrics(spec_dir)
+    metrics = _load_learning_metrics(spec_dir) or {}
 
     if not history:
         return {

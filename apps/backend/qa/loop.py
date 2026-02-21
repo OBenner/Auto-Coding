@@ -887,11 +887,12 @@ async def run_qa_validation_loop(
                     )
 
                     if stored:
+                        rc = analysis.get("root_cause") or {}
                         debug_success(
                             "qa_loop",
                             "Failure analysis stored in Graphiti",
-                            category=analysis["root_cause"].get("category", "unknown"),
-                            confidence=analysis["root_cause"].get("confidence", 0.0),
+                            category=rc.get("category", "unknown"),
+                            confidence=rc.get("confidence", 0.0),
                         )
                     else:
                         debug_warning(

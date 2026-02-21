@@ -41,6 +41,41 @@ MAX_ERROR_CHARS = 10000
 # Maximum diff size to send to the LLM
 MAX_DIFF_CHARS = 15000
 
+# Named pattern constants for heuristic root cause categorization
+SYNTAX_ERROR_PATTERNS = ["syntaxerror", "unexpected token", "invalid syntax"]
+MISSING_DEPENDENCY_PATTERNS = ["modulenotfounderror", "importerror", "cannot find module"]
+LOGIC_ERROR_PATTERNS = ["typeerror", "attributeerror", "referenceerror", "undefined is not"]
+TEST_ERROR_PATTERNS = [
+    "test failed",
+    "assertion",
+    "expected",
+    "actual",
+    "test error",
+    "mock error",
+    "stub error",
+    "beforeeach failed",
+    "aftereach failed",
+    "test setup failed",
+    "test teardown failed",
+    "coverage threshold",
+]
+BUILD_ERROR_PATTERNS = [
+    "compilation error",
+    "compile error",
+    "typescript error",
+    "type error:",
+    "type mismatch",
+    "build failed",
+    "webpack error",
+    "rollup error",
+    "vite error",
+    "bundler error",
+    "eslint",
+    "pylint",
+    "linting error",
+]
+TIMEOUT_PATTERNS = ["timeout", "timed out", "deadline"]
+
 
 def is_analysis_enabled() -> bool:
     """Check if failure analysis is enabled."""
@@ -256,10 +291,7 @@ def _analyze_failure_heuristics(failure_data: dict[str, Any]) -> dict[str, Any]:
     # Categorize based on error patterns
     error_text = " ".join(str(e) for e in errors).lower()
 
-    if any(
-        pattern in error_text
-        for pattern in ["syntaxerror", "unexpected token", "invalid syntax"]
-    ):
+    if any(pattern in error_text for pattern in SYNTAX_ERROR_PATTERNS):
         root_cause["category"] = "syntax_error"
         root_cause["description"] = "Syntax error in code"
         root_cause["confidence"] = 0.9
@@ -268,10 +300,7 @@ def _analyze_failure_heuristics(failure_data: dict[str, Any]) -> dict[str, Any]:
             "Verify code follows language syntax rules",
         ]
 
-    elif any(
-        pattern in error_text
-        for pattern in ["modulenotfounderror", "importerror", "cannot find module"]
-    ):
+    elif any(pattern in error_text for pattern in MISSING_DEPENDENCY_PATTERNS):
         root_cause["category"] = "missing_dependency"
         root_cause["description"] = "Missing or misconfigured dependency"
         root_cause["confidence"] = 0.85
@@ -281,15 +310,7 @@ def _analyze_failure_heuristics(failure_data: dict[str, Any]) -> dict[str, Any]:
             "Update package.json or requirements.txt",
         ]
 
-    elif any(
-        pattern in error_text
-        for pattern in [
-            "typeerror",
-            "attributeerror",
-            "referenceerror",
-            "undefined is not",
-        ]
-    ):
+    elif any(pattern in error_text for pattern in LOGIC_ERROR_PATTERNS):
         root_cause["category"] = "logic_error"
         root_cause["description"] = "Logic or type error in code"
         root_cause["confidence"] = 0.8
@@ -299,23 +320,7 @@ def _analyze_failure_heuristics(failure_data: dict[str, Any]) -> dict[str, Any]:
             "Review function signatures and return values",
         ]
 
-    elif any(
-        pattern in error_text
-        for pattern in [
-            "test failed",
-            "assertion",
-            "expected",
-            "actual",
-            "test error",
-            "mock error",
-            "stub error",
-            "beforeeach failed",
-            "aftereach failed",
-            "test setup failed",
-            "test teardown failed",
-            "coverage threshold",
-        ]
-    ):
+    elif any(pattern in error_text for pattern in TEST_ERROR_PATTERNS):
         root_cause["category"] = "test_failure"
         root_cause["description"] = "Test assertion or setup failed"
         root_cause["confidence"] = 0.9
@@ -326,24 +331,7 @@ def _analyze_failure_heuristics(failure_data: dict[str, Any]) -> dict[str, Any]:
             "Check test lifecycle hooks (setup/teardown)",
         ]
 
-    elif any(
-        pattern in error_text
-        for pattern in [
-            "compilation error",
-            "compile error",
-            "typescript error",
-            "type error:",
-            "type mismatch",
-            "build failed",
-            "webpack error",
-            "rollup error",
-            "vite error",
-            "bundler error",
-            "eslint",
-            "pylint",
-            "linting error",
-        ]
-    ):
+    elif any(pattern in error_text for pattern in BUILD_ERROR_PATTERNS):
         root_cause["category"] = "build_error"
         root_cause["description"] = "Build or compilation error"
         root_cause["confidence"] = 0.85
@@ -354,7 +342,7 @@ def _analyze_failure_heuristics(failure_data: dict[str, Any]) -> dict[str, Any]:
             "Check for missing or incorrect imports",
         ]
 
-    elif any(pattern in error_text for pattern in ["timeout", "timed out", "deadline"]):
+    elif any(pattern in error_text for pattern in TIMEOUT_PATTERNS):
         root_cause["category"] = "timeout"
         root_cause["description"] = "Operation timed out"
         root_cause["confidence"] = 0.85

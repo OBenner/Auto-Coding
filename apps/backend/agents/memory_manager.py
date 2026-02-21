@@ -7,6 +7,7 @@ Handles session memory storage using dual-layer approach:
 - FALLBACK: File-based memory - zero dependencies, always available
 """
 
+import json
 import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -371,7 +372,12 @@ async def get_failure_patterns(
 
         # Search for root cause episodes
         search_query = f"root cause failure {query}"
-        results = await memory._client.graphiti.search(
+        client = getattr(memory, "client", None) or getattr(memory, "_client", None)
+        if client is None:
+            if is_debug_enabled():
+                debug_warning("memory", "No client available on memory instance")
+            return None
+        results = await client.graphiti.search(
             query=search_query,
             group_ids=[memory.group_id],
             num_results=num_results * 2,  # Get extra results for filtering
@@ -392,16 +398,18 @@ async def get_failure_patterns(
         # Parse and filter results
         failure_patterns = []
         for result in results:
-            content = getattr(result, "content", None) or getattr(result, "fact", None)
+            content = (
+                getattr(result, "content", None)
+                or getattr(result, "fact", None)
+                or (result.get("content") if isinstance(result, dict) else None)
+            )
             score = getattr(result, "score", 0.0)
 
             if score < min_score:
                 continue
 
-            if content and EPISODE_TYPE_ROOT_CAUSE in str(content):
+            if content:
                 try:
-                    import json
-
                     data = json.loads(content) if isinstance(content, str) else content
 
                     # Ensure data is a dict

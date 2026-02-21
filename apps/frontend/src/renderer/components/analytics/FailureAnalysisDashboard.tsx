@@ -326,11 +326,11 @@ export function FailureAnalysisDashboard({ failureMetrics, isLoading = false }: 
 
           {/* Date labels */}
           {chartData.dateLabels.map((label, index) => {
-            const x = chartData.padding.left + (index / (chartData.dateLabels.length - 1 || 1)) * chartData.chartWidth;
-            // Use label + x position as unique key since dates could repeat across different time ranges
+            const denom = chartData.dateLabels.length > 1 ? chartData.dateLabels.length - 1 : 1;
+            const x = chartData.padding.left + (index / denom) * chartData.chartWidth;
             return (
               <text
-                key={`date-label-${label}-${x}`}
+                key={`date-label-${trends[index]?.date ?? label}`}
                 x={x}
                 y={chartData.height - chartData.padding.bottom + 20}
                 textAnchor="middle"

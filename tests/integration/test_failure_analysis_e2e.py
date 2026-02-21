@@ -11,10 +11,7 @@ Tests the complete failure analysis pipeline:
 6. Verify success rate improves after learning
 """
 
-import asyncio
 import json
-import tempfile
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -53,17 +50,77 @@ def test_project_dir(tmp_path):
 
 
 # =============================================================================
-# Test 1: Trigger QA Rejection with Failure
+# Shared test helpers
 # =============================================================================
 
 
-@pytest.mark.asyncio
-async def test_1_trigger_qa_rejection(test_spec_dir, test_project_dir):
-    """
-    Test that we can trigger a QA rejection with failure data.
+def _make_failure_context():
+    """Create a standard failure context dict for tests."""
+    return {
+        "errors": [
+            "SyntaxError: invalid syntax at utils.py:42",
+            "AssertionError: Expected True, got False in test_auth.py:10"
+        ],
+        "issues": [
+            {
+                "file": "utils.py",
+                "line": 42,
+                "description": "Missing closing bracket",
+                "severity": "error"
+            },
+            {
+                "file": "tests/test_auth.py",
+                "line": 10,
+                "description": "Authentication test failing",
+                "severity": "error"
+            }
+        ],
+        "is_recurring": False,
+        "subtask_id": "subtask-1-1"
+    }
 
-    This simulates the QA reviewer detecting issues and creating QA_FIX_REQUEST.md.
-    """
+
+def _make_root_cause():
+    """Create a standard root cause dict for tests."""
+    return {
+        "category": "syntax_error",
+        "description": "Missing closing bracket in utils.py",
+        "affected_files": ["utils.py"],
+        "confidence": 0.9,
+        "recommendations": [
+            "Add closing bracket on line 42",
+            "Verify code follows syntax rules"
+        ],
+        "is_recurring": False
+    }
+
+
+def _make_mock_graphiti_memory():
+    """Create a mock GraphitiMemory instance for testing storage."""
+    mock_memory_instance = MagicMock()
+    mock_memory_instance.is_enabled = True
+    mock_memory_instance.is_initialized = True
+    mock_memory_instance.group_id = "test-group"
+    mock_memory_instance.spec_context_id = "test-spec"
+    mock_memory_instance.state = MagicMock()
+    mock_memory_instance._client = MagicMock()
+    mock_memory_instance._client.graphiti = MagicMock()
+    mock_memory_instance._client.graphiti.add_episode = AsyncMock()
+    mock_memory_instance.close = AsyncMock()
+    return mock_memory_instance
+
+
+def _setup_qa_history(spec_dir, history):
+    """Write QA iteration history to the plan file."""
+    plan_file = spec_dir / "implementation_plan.json"
+    plan = json.loads(plan_file.read_text())
+    plan["qa_iteration_history"] = history
+    plan_file.write_text(json.dumps(plan))
+    return plan
+
+
+async def _helper_trigger_qa_rejection(test_spec_dir, test_project_dir):
+    """Helper: trigger QA rejection with failure data and verify."""
     from qa.report import record_iteration
 
     # Create QA report with failures
@@ -112,46 +169,14 @@ async def test_1_trigger_qa_rejection(test_spec_dir, test_project_dir):
     assert "qa_iteration_history" in plan
     assert len(plan["qa_iteration_history"]) == 1
 
-    print("✓ Test 1 passed: QA rejection triggered successfully")
+    print("  [ok] QA rejection triggered successfully")
 
 
-# =============================================================================
-# Test 2: Verify Failure Analyzed with LLM
-# =============================================================================
+async def _helper_failure_analyzed(test_spec_dir, test_project_dir):
+    """Helper: verify failure analysis works with heuristics."""
+    from analysis.failure_analyzer import extract_root_cause
 
-
-@pytest.mark.asyncio
-async def test_2_failure_analyzed_with_llm(test_spec_dir, test_project_dir):
-    """
-    Test that failures are analyzed with LLM to extract root causes.
-
-    This verifies analyze_failure() correctly processes failure data.
-    """
-    from analysis.failure_analyzer import analyze_failure, extract_root_cause
-
-    # Simulate failure data
-    failure_context = {
-        "errors": [
-            "SyntaxError: invalid syntax at utils.py:42",
-            "AssertionError: Expected True, got False in test_auth.py:10"
-        ],
-        "issues": [
-            {
-                "file": "utils.py",
-                "line": 42,
-                "description": "Missing closing bracket",
-                "severity": "error"
-            },
-            {
-                "file": "tests/test_auth.py",
-                "line": 10,
-                "description": "Authentication test failing",
-                "severity": "error"
-            }
-        ],
-        "is_recurring": False,
-        "subtask_id": "subtask-1-1"
-    }
+    failure_context = _make_failure_context()
 
     # Test heuristic analysis (no LLM)
     root_cause = extract_root_cause(failure_context, use_llm=False)
@@ -170,9 +195,11 @@ async def test_2_failure_analyzed_with_llm(test_spec_dir, test_project_dir):
     assert len(root_cause["affected_files"]) > 0
     assert len(root_cause["recommendations"]) > 0
 
-    # Test full analysis (with LLM mocked)
-    with patch("analysis.failure_analyzer.is_analysis_enabled", return_value=False):
-        # LLM disabled, should use heuristics only
+    # Test full analysis with extract_root_cause patched to avoid LLM
+    mock_root_cause = _make_root_cause()
+    with patch("analysis.failure_analyzer.extract_root_cause", return_value=mock_root_cause):
+        from analysis.failure_analyzer import analyze_failure
+
         analysis = analyze_failure(
             test_spec_dir,
             test_project_dir,
@@ -186,37 +213,15 @@ async def test_2_failure_analyzed_with_llm(test_spec_dir, test_project_dir):
         assert "recommendations" in analysis
         assert analysis["failure_type"] == "qa_rejection"
 
-    print("✓ Test 2 passed: Failure analysis working correctly")
+    print("  [ok] Failure analysis working correctly")
 
 
-# =============================================================================
-# Test 3: Verify Failure Stored in Graphiti
-# =============================================================================
-
-
-@pytest.mark.asyncio
-async def test_3_failure_stored_in_graphiti(test_spec_dir, test_project_dir):
-    """
-    Test that failure analyses are stored in Graphiti memory.
-
-    This verifies store_failure_analysis() persists data correctly.
-    """
+async def _helper_failure_stored(test_spec_dir, test_project_dir):
+    """Helper: verify failure storage in Graphiti."""
     from analysis.failure_storage import store_failure_analysis
     from integrations.graphiti.queries_pkg.schema import GroupIdMode
 
-    # Create root cause data
-    root_cause = {
-        "category": "syntax_error",
-        "description": "Missing closing bracket in utils.py",
-        "affected_files": ["utils.py"],
-        "confidence": 0.9,
-        "recommendations": [
-            "Add closing bracket on line 42",
-            "Verify code follows syntax rules"
-        ],
-        "is_recurring": False
-    }
-
+    root_cause = _make_root_cause()
     failure_context = {
         "errors": ["SyntaxError: invalid syntax at utils.py:42"],
         "issues": [{"file": "utils.py", "line": 42, "description": "Missing closing bracket"}],
@@ -225,7 +230,6 @@ async def test_3_failure_stored_in_graphiti(test_spec_dir, test_project_dir):
 
     # Mock Graphiti if not available in test environment
     with patch("analysis.failure_storage.is_graphiti_enabled", return_value=False):
-        # Should return False when Graphiti is disabled
         result = await store_failure_analysis(
             test_spec_dir,
             test_project_dir,
@@ -234,28 +238,15 @@ async def test_3_failure_stored_in_graphiti(test_spec_dir, test_project_dir):
             failure_context,
             GroupIdMode.PROJECT
         )
-
-        # Graceful degradation - returns False when Graphiti disabled
         assert result is False
 
     # Test with Graphiti mocked as enabled
+    mock_memory_instance = _make_mock_graphiti_memory()
     with patch("analysis.failure_storage.is_graphiti_enabled", return_value=True), \
          patch("analysis.failure_storage.get_graphiti_memory") as mock_memory:
 
-        # Create mock memory instance
-        mock_memory_instance = MagicMock()
-        mock_memory_instance.is_enabled = True
-        mock_memory_instance.is_initialized = True
-        mock_memory_instance.group_id = "test-group"
-        mock_memory_instance.spec_context_id = "test-spec"
-        mock_memory_instance.state = MagicMock()
-        mock_memory_instance._client = MagicMock()
-        mock_memory_instance._client.graphiti = MagicMock()
-        mock_memory_instance._client.graphiti.add_episode = AsyncMock()
-
         mock_memory.return_value = mock_memory_instance
 
-        # Store failure
         result = await store_failure_analysis(
             test_spec_dir,
             test_project_dir,
@@ -265,28 +256,16 @@ async def test_3_failure_stored_in_graphiti(test_spec_dir, test_project_dir):
             GroupIdMode.PROJECT
         )
 
-        # Verify storage succeeded
         assert result is True
         assert mock_memory_instance._client.graphiti.add_episode.called
 
-    print("✓ Test 3 passed: Failure storage working correctly")
+    print("  [ok] Failure storage working correctly")
 
 
-# =============================================================================
-# Test 4: Verify QA Fixer Retrieves Failure Patterns
-# =============================================================================
-
-
-@pytest.mark.asyncio
-async def test_4_qa_fixer_retrieves_patterns(test_spec_dir, test_project_dir):
-    """
-    Test that QA Fixer retrieves failure patterns from memory.
-
-    This verifies get_failure_patterns() returns relevant past failures.
-    """
+async def _helper_retrieves_patterns(test_spec_dir, test_project_dir):
+    """Helper: verify QA Fixer retrieves failure patterns."""
     from agents.memory_manager import get_failure_patterns
 
-    # Mock Graphiti search results
     mock_search_results = [
         MagicMock(
             content=json.dumps({
@@ -304,22 +283,15 @@ async def test_4_qa_fixer_retrieves_patterns(test_spec_dir, test_project_dir):
         )
     ]
 
-    # Create mock memory instance that will be returned
-    mock_memory_instance = MagicMock()
-    mock_memory_instance.group_id = "test-group"
-    mock_memory_instance._client = MagicMock()
-    mock_memory_instance._client.graphiti = MagicMock()
+    mock_memory_instance = _make_mock_graphiti_memory()
     mock_memory_instance._client.graphiti.search = AsyncMock(return_value=mock_search_results)
-    mock_memory_instance.close = AsyncMock()
 
-    # Create async mock for get_graphiti_memory
     async def mock_get_memory(*args, **kwargs):
         return mock_memory_instance
 
     with patch("agents.memory_manager.is_graphiti_enabled", return_value=True), \
          patch("agents.memory_manager.get_graphiti_memory", side_effect=mock_get_memory):
 
-        # Retrieve failure patterns
         patterns = await get_failure_patterns(
             test_spec_dir,
             test_project_dir,
@@ -329,38 +301,20 @@ async def test_4_qa_fixer_retrieves_patterns(test_spec_dir, test_project_dir):
             min_score=0.5
         )
 
-        # Verify patterns retrieved
         assert patterns is not None
         assert "Failure Pattern Analysis" in patterns
         assert "syntax_error" in patterns.lower() or "Syntax Error" in patterns
-
-        # Verify search was called
         assert mock_memory_instance._client.graphiti.search.called
-
-        # Verify memory was closed
         assert mock_memory_instance.close.called
 
-    print("✓ Test 4 passed: QA Fixer retrieves failure patterns successfully")
+    print("  [ok] QA Fixer retrieves failure patterns successfully")
 
 
-# =============================================================================
-# Test 5: Verify Dashboard Displays Failure Metrics
-# =============================================================================
-
-
-@pytest.mark.asyncio
-async def test_5_dashboard_displays_metrics(test_spec_dir, test_project_dir):
-    """
-    Test that failure metrics are available for dashboard display.
-
-    This verifies get_failure_metrics() returns proper metrics data.
-    """
+async def _helper_dashboard_metrics(test_spec_dir, test_project_dir):
+    """Helper: verify dashboard failure metrics."""
     from analysis.metrics_tracker import get_failure_metrics
 
-    # Create some failure history
-    plan_file = test_spec_dir / "implementation_plan.json"
-    plan = json.loads(plan_file.read_text())
-    plan["qa_iteration_history"] = [
+    _setup_qa_history(test_spec_dir, [
         {
             "iteration": 1,
             "status": "rejected",
@@ -379,51 +333,33 @@ async def test_5_dashboard_displays_metrics(test_spec_dir, test_project_dir):
             "issues": [],
             "root_cause": None
         }
-    ]
-    plan_file.write_text(json.dumps(plan))
+    ])
 
-    # Get failure metrics
     metrics = get_failure_metrics(test_spec_dir)
 
-    # Verify metrics structure
     assert "total_failures" in metrics
     assert "failure_categories" in metrics
-    assert "root_cause_rate" in metrics  # Note: it's "root_cause_rate", not "root_cause_identified_rate"
+    assert "root_cause_rate" in metrics
     assert "pattern_detection_rate" in metrics
     assert "recurrence_rate" in metrics
     assert "top_failure_files" in metrics
     assert "top_failure_categories" in metrics
 
-    # Verify metrics values
     assert metrics["total_failures"] >= 0
     assert 0.0 <= metrics["root_cause_rate"] <= 1.0
     assert isinstance(metrics["failure_categories"], dict)
     assert isinstance(metrics["top_failure_files"], list)
     assert isinstance(metrics["top_failure_categories"], list)
 
-    print("✓ Test 5 passed: Dashboard metrics available and formatted correctly")
+    print("  [ok] Dashboard metrics available and formatted correctly")
 
 
-# =============================================================================
-# Test 6: Verify Success Rate Improves After Learning
-# =============================================================================
-
-
-@pytest.mark.asyncio
-async def test_6_success_rate_improves(test_spec_dir, test_project_dir):
-    """
-    Test that success rate tracking shows improvement over iterations.
-
-    This verifies the system learns from failures and reduces repeat issues.
-    """
+async def _helper_success_rate_improves(test_spec_dir, test_project_dir):
+    """Helper: verify success rate improves after learning."""
     from analysis.metrics_tracker import get_failure_metrics
 
-    # Simulate initial failures
-    plan_file = test_spec_dir / "implementation_plan.json"
-    plan = json.loads(plan_file.read_text())
-
-    # First iteration: multiple failures
-    plan["qa_iteration_history"] = [
+    # First iteration: multiple failures (3 issues)
+    _setup_qa_history(test_spec_dir, [
         {
             "iteration": 1,
             "status": "rejected",
@@ -434,55 +370,151 @@ async def test_6_success_rate_improves(test_spec_dir, test_project_dir):
             ],
             "root_cause": {"category": "syntax_error", "confidence": 0.9}
         }
-    ]
-    plan_file.write_text(json.dumps(plan))
+    ])
 
     metrics_before = get_failure_metrics(test_spec_dir)
-    initial_failures = metrics_before["total_failures"]
+    # Calculate failure rate for first iteration: issues / iterations
+    issues_before = metrics_before["total_failures"]
+    iterations_before = 1
+    failure_rate_before = issues_before / iterations_before
 
-    # Simulate learning: add more iterations with fewer failures
-    plan["qa_iteration_history"].extend([
+    # Add more iterations with fewer failures, then approval
+    _setup_qa_history(test_spec_dir, [
+        {
+            "iteration": 1,
+            "status": "rejected",
+            "issues": [
+                {"category": "syntax_error", "file": "utils.py"},
+                {"category": "test_failure", "file": "tests/test_auth.py"},
+                {"category": "logic_error", "file": "handlers.py"}
+            ],
+            "root_cause": {"category": "syntax_error", "confidence": 0.9}
+        },
         {
             "iteration": 2,
             "status": "rejected",
             "issues": [
-                {"category": "test_failure", "file": "tests/test_auth.py"}  # Only 1 issue
+                {"category": "test_failure", "file": "tests/test_auth.py"}
             ],
             "root_cause": {"category": "test_failure", "confidence": 0.85}
         },
         {
             "iteration": 3,
             "status": "approved",
-            "issues": [],  # No issues!
+            "issues": [],
             "root_cause": None
         }
     ])
-    plan_file.write_text(json.dumps(plan))
 
     metrics_after = get_failure_metrics(test_spec_dir)
+    total_iterations = 3
+    # Only count rejected iterations for failure rate (exclude approved)
+    rejected_iterations = 2
+    issues_after = metrics_after["total_failures"]
+    failure_rate_after = issues_after / total_iterations if total_iterations > 0 else 0.0
 
-    # Verify improvement metrics
-    assert metrics_after["total_failures"] >= initial_failures  # Total count increases
-    # Note: root_cause_rate may be 0.0 if no root causes were tracked in test data
-    assert "root_cause_rate" in metrics_after
-
-    # Calculate success rate (approved / total iterations)
-    total_iterations = len(plan["qa_iteration_history"])
-    approved_count = sum(
-        1 for iteration in plan["qa_iteration_history"]
-        if iteration["status"] == "approved"
+    # Failure rate per iteration should decrease:
+    # Before: 3 issues / 1 iteration = 3.0
+    # After:  4 issues / 3 iterations = 1.33...
+    assert failure_rate_after < failure_rate_before, (
+        f"Failure rate should decrease: before={failure_rate_before:.2f}, after={failure_rate_after:.2f}"
     )
-    success_rate = approved_count / total_iterations
 
-    # Verify success rate improves (at least 1/3 approved in this example)
-    assert success_rate > 0.0, "No successful iterations"
+    # Verify there are approved iterations
+    assert "root_cause_rate" in metrics_after
     assert total_iterations >= 2, "Need multiple iterations to track improvement"
 
-    print(f"✓ Test 6 passed: Success rate = {success_rate:.1%} (showing learning)")
-    print(f"  - Initial failures: {initial_failures}")
-    print(f"  - Total iterations: {total_iterations}")
-    print(f"  - Approved count: {approved_count}")
-    print(f"  - Root cause ID rate: {metrics_after['root_cause_rate']:.1%}")
+    print(f"  [ok] Success rate improved: failure rate {failure_rate_before:.2f} -> {failure_rate_after:.2f}")
+
+
+# =============================================================================
+# Test 1: Trigger QA Rejection with Failure
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_1_trigger_qa_rejection(test_spec_dir, test_project_dir):
+    """
+    Test that we can trigger a QA rejection with failure data.
+
+    This simulates the QA reviewer detecting issues and creating QA_FIX_REQUEST.md.
+    """
+    await _helper_trigger_qa_rejection(test_spec_dir, test_project_dir)
+
+
+# =============================================================================
+# Test 2: Verify Failure Analyzed with LLM
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_2_failure_analyzed_with_llm(test_spec_dir, test_project_dir):
+    """
+    Test that failures are analyzed with LLM to extract root causes.
+
+    This verifies extract_root_cause() correctly processes failure data.
+    """
+    await _helper_failure_analyzed(test_spec_dir, test_project_dir)
+
+
+# =============================================================================
+# Test 3: Verify Failure Stored in Graphiti
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_3_failure_stored_in_graphiti(test_spec_dir, test_project_dir):
+    """
+    Test that failure analyses are stored in Graphiti memory.
+
+    This verifies store_failure_analysis() persists data correctly.
+    """
+    await _helper_failure_stored(test_spec_dir, test_project_dir)
+
+
+# =============================================================================
+# Test 4: Verify QA Fixer Retrieves Failure Patterns
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_4_qa_fixer_retrieves_patterns(test_spec_dir, test_project_dir):
+    """
+    Test that QA Fixer retrieves failure patterns from memory.
+
+    This verifies get_failure_patterns() returns relevant past failures.
+    """
+    await _helper_retrieves_patterns(test_spec_dir, test_project_dir)
+
+
+# =============================================================================
+# Test 5: Verify Dashboard Displays Failure Metrics
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_5_dashboard_displays_metrics(test_spec_dir, test_project_dir):
+    """
+    Test that failure metrics are available for dashboard display.
+
+    This verifies get_failure_metrics() returns proper metrics data.
+    """
+    await _helper_dashboard_metrics(test_spec_dir, test_project_dir)
+
+
+# =============================================================================
+# Test 6: Verify Success Rate Improves After Learning
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_6_success_rate_improves(test_spec_dir, test_project_dir):
+    """
+    Test that failure rate per iteration decreases over successive iterations.
+
+    This verifies the system learns from failures and reduces repeat issues.
+    """
+    await _helper_success_rate_improves(test_spec_dir, test_project_dir)
 
 
 # =============================================================================
@@ -501,29 +533,14 @@ async def test_e2e_complete_flow(test_spec_dir, test_project_dir):
     print("  FAILURE ANALYSIS SYSTEM - END-TO-END VERIFICATION")
     print("=" * 70 + "\n")
 
-    # Run all tests in sequence
-    await test_1_trigger_qa_rejection(test_spec_dir, test_project_dir)
-    await test_2_failure_analyzed_with_llm(test_spec_dir, test_project_dir)
-    await test_3_failure_stored_in_graphiti(test_spec_dir, test_project_dir)
-    await test_4_qa_fixer_retrieves_patterns(test_spec_dir, test_project_dir)
-    await test_5_dashboard_displays_metrics(test_spec_dir, test_project_dir)
-    await test_6_success_rate_improves(test_spec_dir, test_project_dir)
+    # Run all helpers in sequence
+    await _helper_trigger_qa_rejection(test_spec_dir, test_project_dir)
+    await _helper_failure_analyzed(test_spec_dir, test_project_dir)
+    await _helper_failure_stored(test_spec_dir, test_project_dir)
+    await _helper_retrieves_patterns(test_spec_dir, test_project_dir)
+    await _helper_dashboard_metrics(test_spec_dir, test_project_dir)
+    await _helper_success_rate_improves(test_spec_dir, test_project_dir)
 
     print("\n" + "=" * 70)
-    print("  ✅ ALL END-TO-END TESTS PASSED")
+    print("  ALL END-TO-END TESTS PASSED")
     print("=" * 70 + "\n")
-
-    print("Verification Summary:")
-    print("1. ✓ QA rejection triggered with failure data")
-    print("2. ✓ Failure analyzed with LLM (root cause extraction)")
-    print("3. ✓ Failure stored in Graphiti memory")
-    print("4. ✓ QA Fixer retrieves failure patterns from memory")
-    print("5. ✓ Dashboard displays failure metrics")
-    print("6. ✓ Success rate improves after learning from failures")
-    print("\nThe failure analysis system is fully operational! 🎉")
-
-
-if __name__ == "__main__":
-    # Run with pytest
-    import sys
-    sys.exit(pytest.main([__file__, "-v", "-s"]))

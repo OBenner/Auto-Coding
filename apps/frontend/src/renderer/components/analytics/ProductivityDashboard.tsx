@@ -28,7 +28,7 @@ export function ProductivityDashboard({ projectId }: ProductivityDashboardProps)
   // State
   const [summary, setSummary] = useState<ProductivitySummary | null>(null);
   const [trends, setTrends] = useState<ProductivityTrendPoint[]>([]);
-  const [failureMetrics, setFailureMetrics] = useState<FailureMetrics | null>(null);
+  const [failureMetrics] = useState<FailureMetrics | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isExporting, setIsExporting] = useState(false);

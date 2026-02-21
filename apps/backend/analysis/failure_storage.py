@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Any
 
 from core.sentry import capture_exception
-from graphiti_config import is_graphiti_enabled
+from integrations.graphiti.config import is_graphiti_enabled
 from integrations.graphiti.memory import get_graphiti_memory
 from integrations.graphiti.queries_pkg.schema import (
     EPISODE_TYPE_QA_RESULT,
@@ -81,11 +81,12 @@ async def store_failure_analysis(
         logger.debug("Graphiti not enabled, skipping failure storage")
         return False
 
+    memory = None
     try:
         # Get Graphiti memory instance
         memory = get_graphiti_memory(spec_dir, project_dir, group_id_mode)
 
-        if not memory.is_enabled:
+        if memory is None or not memory.is_enabled:
             logger.debug("Graphiti memory not available, skipping failure storage")
             return False
 
@@ -117,6 +118,12 @@ async def store_failure_analysis(
             category=root_cause.get("category", "unknown"),
         )
         return False
+    finally:
+        if memory is not None:
+            try:
+                await memory.close()
+            except Exception:
+                pass
 
 
 async def store_qa_result(
@@ -149,10 +156,11 @@ async def store_qa_result(
         logger.debug("Graphiti not enabled, skipping QA result storage")
         return False
 
+    memory = None
     try:
         memory = get_graphiti_memory(spec_dir, project_dir, group_id_mode)
 
-        if not memory.is_enabled:
+        if memory is None or not memory.is_enabled:
             return False
 
         if not memory.is_initialized:
@@ -177,6 +185,12 @@ async def store_qa_result(
             passed=passed,
         )
         return False
+    finally:
+        if memory is not None:
+            try:
+                await memory.close()
+            except Exception:
+                pass
 
 
 # =============================================================================
@@ -227,8 +241,12 @@ async def _store_root_cause_episode(
                 "subtask_id": failure_context.get("subtask_id"),
             }
 
-        # Store episode using the client directly
-        await memory._client.graphiti.add_episode(
+        # Store episode using the client
+        client = getattr(memory, "client", None) or getattr(memory, "_client", None)
+        if client is None:
+            logger.warning("No client available on memory instance")
+            return False
+        await client.graphiti.add_episode(
             name=f"root_cause_{failure_type}_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}",
             episode_body=json.dumps(episode_content),
             source=EpisodeType.text,
@@ -299,7 +317,11 @@ async def _store_qa_result_episode(
         }
 
         # Store episode
-        await memory._client.graphiti.add_episode(
+        client = getattr(memory, "client", None) or getattr(memory, "_client", None)
+        if client is None:
+            logger.warning("No client available on memory instance")
+            return False
+        await client.graphiti.add_episode(
             name=f"qa_result_{memory.spec_context_id}_iter{qa_iteration:02d}",
             episode_body=json.dumps(episode_content),
             source=EpisodeType.text,
