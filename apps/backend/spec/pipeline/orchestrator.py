@@ -281,6 +281,9 @@ class SpecOrchestrator:
         task_logger = get_task_logger(self.spec_dir)
         task_logger.start_phase(LogPhase.PLANNING, "Starting spec creation process")
 
+        # Track whether we've already ended the planning phase to avoid double-end
+        self._planning_phase_ended = False
+
         print(
             box(
                 f"Spec Directory: {self.spec_dir}\n"
@@ -334,9 +337,11 @@ class SpecOrchestrator:
         results.append(result)
         if not result.success:
             print_status("Discovery failed", "error")
-            task_logger.end_phase(
-                LogPhase.PLANNING, success=False, message="Discovery failed"
-            )
+            if not self._planning_phase_ended:
+                self._planning_phase_ended = True
+                task_logger.end_phase(
+                    LogPhase.PLANNING, success=False, message="Discovery failed"
+                )
             return False
         # Store summary for subsequent phases (compaction)
         await self._store_phase_summary("discovery")
@@ -348,11 +353,13 @@ class SpecOrchestrator:
         results.append(result)
         if not result.success:
             print_status("Requirements gathering failed", "error")
-            task_logger.end_phase(
-                LogPhase.PLANNING,
-                success=False,
-                message="Requirements gathering failed",
-            )
+            if not self._planning_phase_ended:
+                self._planning_phase_ended = True
+                task_logger.end_phase(
+                    LogPhase.PLANNING,
+                    success=False,
+                    message="Requirements gathering failed",
+                )
             return False
         # Store summary for subsequent phases (compaction)
         await self._store_phase_summary("requirements")
@@ -378,9 +385,13 @@ class SpecOrchestrator:
         results.append(result)
         if not result.success:
             print_status("Complexity assessment failed", "error")
-            task_logger.end_phase(
-                LogPhase.PLANNING, success=False, message="Complexity assessment failed"
-            )
+            if not self._planning_phase_ended:
+                self._planning_phase_ended = True
+                task_logger.end_phase(
+                    LogPhase.PLANNING,
+                    success=False,
+                    message="Complexity assessment failed",
+                )
             return False
 
         # Map of all available phases
@@ -439,20 +450,24 @@ class SpecOrchestrator:
                     f"Phase '{phase_name}' failed: {'; '.join(result.errors)}",
                     LogEntryType.ERROR,
                 )
-                task_logger.end_phase(
-                    LogPhase.PLANNING,
-                    success=False,
-                    message=f"Phase {phase_name} failed",
-                )
+                if not self._planning_phase_ended:
+                    self._planning_phase_ended = True
+                    task_logger.end_phase(
+                        LogPhase.PLANNING,
+                        success=False,
+                        message=f"Phase {phase_name} failed",
+                    )
                 return False
 
         # Summary
         self._print_completion_summary(results, phases_executed)
 
         # End planning phase successfully
-        task_logger.end_phase(
-            LogPhase.PLANNING, success=True, message="Spec creation complete"
-        )
+        if not self._planning_phase_ended:
+            self._planning_phase_ended = True
+            task_logger.end_phase(
+                LogPhase.PLANNING, success=True, message="Spec creation complete"
+            )
 
         # === HUMAN REVIEW CHECKPOINT ===
         return self._run_review_checkpoint(auto_approve)
@@ -682,10 +697,8 @@ class SpecOrchestrator:
                 print_status("Build will not proceed without approval.", "warning")
                 return False
 
-        except SystemExit as e:
-            if e.code != 0:
-                return False
-            raise
+        except SystemExit:
+            return False
         except KeyboardInterrupt:
             print()
             print_status("Review interrupted. Run again to continue.", "info")
