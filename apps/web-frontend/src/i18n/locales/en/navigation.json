@@ -1,0 +1,34 @@
+{
+  "sections": {
+    "main": "Main",
+    "tools": "Tools"
+  },
+  "items": {
+    "dashboard": "Dashboard",
+    "createSpec": "Create Spec",
+    "tasks": "Tasks",
+    "specs": "Specs",
+    "settings": "Settings",
+    "help": "Help & Feedback"
+  },
+  "actions": {
+    "settings": "Settings",
+    "help": "Help & Feedback",
+    "newTask": "New Task",
+    "collapseSidebar": "Collapse Sidebar",
+    "expandSidebar": "Expand Sidebar",
+    "logout": "Logout"
+  },
+  "tooltips": {
+    "settings": "Application Settings",
+    "help": "Help & Feedback",
+    "dashboard": "Go to Dashboard",
+    "createSpec": "Create New Spec",
+    "tasks": "View All Tasks",
+    "specs": "View All Specs"
+  },
+  "messages": {
+    "welcomeBack": "Welcome back",
+    "noProjectSelected": "No project selected"
+  }
+}

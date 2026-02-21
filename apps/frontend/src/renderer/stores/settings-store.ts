@@ -327,6 +327,26 @@ function migrateOnboardingCompleted(settings: AppSettings): AppSettings {
 }
 
 /**
+ * Migrate agent preferences to ensure sensible defaults for existing users.
+ * Populates default values for new agent preference fields if not already set.
+ */
+function migrateAgentPreferences(settings: AppSettings): AppSettings {
+  // Skip if already migrated (any agent preference field is set)
+  if (settings.agentVerbosity !== undefined) {
+    return settings;
+  }
+
+  return {
+    ...settings,
+    agentVerbosity: 'normal',
+    agentRiskTolerance: 'balanced',
+    agentProjectType: 'established',
+    agentCodingStyle: {},
+    agentUserInstructions: [],
+  };
+}
+
+/**
  * Load settings from main process
  */
 export async function loadSettings(): Promise<void> {
@@ -336,8 +356,9 @@ export async function loadSettings(): Promise<void> {
   try {
     const result = await window.electronAPI.getSettings();
     if (result.success && result.data) {
-      // Apply migration for onboardingCompleted flag
-      const migratedSettings = migrateOnboardingCompleted(result.data);
+      // Apply migrations
+      let migratedSettings = migrateOnboardingCompleted(result.data);
+      migratedSettings = migrateAgentPreferences(migratedSettings);
       store.setSettings(migratedSettings);
 
       // If migration changed the settings, persist them

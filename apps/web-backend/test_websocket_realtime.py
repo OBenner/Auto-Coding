@@ -19,6 +19,7 @@ import asyncio
 import json
 import sys
 from datetime import datetime
+
 import websockets
 
 # Test configuration
@@ -29,12 +30,13 @@ TEST_SPEC_ID = "test-001"
 
 class Colors:
     """ANSI color codes for terminal output"""
-    GREEN = '\033[92m'
-    RED = '\033[91m'
-    YELLOW = '\033[93m'
-    BLUE = '\033[94m'
-    RESET = '\033[0m'
-    BOLD = '\033[1m'
+
+    GREEN = "\033[92m"
+    RED = "\033[91m"
+    YELLOW = "\033[93m"
+    BLUE = "\033[94m"
+    RESET = "\033[0m"
+    BOLD = "\033[1m"
 
 
 def print_test(message: str):
@@ -92,18 +94,17 @@ async def test_subscription():
     try:
         async with websockets.connect(WEBSOCKET_URL) as websocket:
             # Subscribe to test spec
-            subscribe_msg = json.dumps({
-                "action": "subscribe",
-                "spec_id": TEST_SPEC_ID
-            })
+            subscribe_msg = json.dumps({"action": "subscribe", "spec_id": TEST_SPEC_ID})
             await websocket.send(subscribe_msg)
             print_success(f"Sent subscribe request for spec: {TEST_SPEC_ID}")
 
             response = await asyncio.wait_for(websocket.recv(), timeout=5.0)
             response_data = json.loads(response)
 
-            if (response_data.get("status") == "subscribed" and
-                response_data.get("spec_id") == TEST_SPEC_ID):
+            if (
+                response_data.get("status") == "subscribed"
+                and response_data.get("spec_id") == TEST_SPEC_ID
+            ):
                 print_success(f"Successfully subscribed: {response_data}")
                 return True
             else:
@@ -122,18 +123,20 @@ async def broadcast_test_event(event_type: str, spec_id: str, data: dict):
     Note: This simulates what the agent runner would do. In a real scenario,
     the agent execution code would call these broadcast functions.
     """
-    from api.websocket import manager
     from api.models.agent_event import (
-        ExecutionEvent, ExecutionProgressData,
-        LogEvent, ErrorEvent
+        ErrorEvent,
+        ExecutionEvent,
+        ExecutionProgressData,
+        LogEvent,
     )
+    from api.websocket import manager
 
     if event_type == "execution":
         event = ExecutionEvent(
             event_type="execution",
             timestamp=datetime.now().isoformat(),
             spec_id=spec_id,
-            data=ExecutionProgressData(**data)
+            data=ExecutionProgressData(**data),
         )
     elif event_type == "log":
         event = LogEvent(
@@ -142,7 +145,7 @@ async def broadcast_test_event(event_type: str, spec_id: str, data: dict):
             spec_id=spec_id,
             log_line=data.get("log_line", ""),
             level=data.get("level", "info"),
-            data=None
+            data=None,
         )
     elif event_type == "error":
         event = ErrorEvent(
@@ -152,7 +155,7 @@ async def broadcast_test_event(event_type: str, spec_id: str, data: dict):
             error_message=data.get("error_message", ""),
             error_type=data.get("error_type"),
             traceback=data.get("traceback"),
-            data=None
+            data=None,
         )
     else:
         raise ValueError(f"Unknown event type: {event_type}")
@@ -169,10 +172,7 @@ async def test_execution_events():
     try:
         async with websockets.connect(WEBSOCKET_URL) as websocket:
             # Subscribe
-            subscribe_msg = json.dumps({
-                "action": "subscribe",
-                "spec_id": TEST_SPEC_ID
-            })
+            subscribe_msg = json.dumps({"action": "subscribe", "spec_id": TEST_SPEC_ID})
             await websocket.send(subscribe_msg)
 
             # Wait for subscription confirmation
@@ -188,7 +188,7 @@ async def test_execution_events():
                         if event.get("event_type") in ["execution", "log", "error"]:
                             received_events.append(event)
                             print_info(f"Received: {event.get('event_type')} event")
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     print_info("Event listening timed out")
 
             # Start broadcaster task
@@ -204,8 +204,8 @@ async def test_execution_events():
                         "phase_progress": 25.0,
                         "overall_progress": 10.0,
                         "message": "Creating implementation plan",
-                        "current_subtask": "subtask-1-1"
-                    }
+                        "current_subtask": "subtask-1-1",
+                    },
                 )
                 print_info("Broadcasted execution event")
                 await asyncio.sleep(0.2)
@@ -214,10 +214,7 @@ async def test_execution_events():
                 await broadcast_test_event(
                     "log",
                     TEST_SPEC_ID,
-                    {
-                        "log_line": "Starting planner agent...",
-                        "level": "info"
-                    }
+                    {"log_line": "Starting planner agent...", "level": "info"},
                 )
                 print_info("Broadcasted log event")
                 await asyncio.sleep(0.2)
@@ -231,23 +228,22 @@ async def test_execution_events():
                         "phase_progress": 75.0,
                         "overall_progress": 30.0,
                         "message": "Finalizing plan",
-                        "current_subtask": "subtask-1-2"
-                    }
+                        "current_subtask": "subtask-1-2",
+                    },
                 )
                 print_info("Broadcasted progress update")
 
             # Run both tasks concurrently
-            await asyncio.gather(
-                listen_for_events(),
-                broadcast_events()
-            )
+            await asyncio.gather(listen_for_events(), broadcast_events())
 
             # Verify received events
             if len(received_events) >= 3:
                 print_success(f"Received {len(received_events)} events")
 
                 # Verify event types
-                execution_events = [e for e in received_events if e["event_type"] == "execution"]
+                execution_events = [
+                    e for e in received_events if e["event_type"] == "execution"
+                ]
                 log_events = [e for e in received_events if e["event_type"] == "log"]
 
                 if len(execution_events) >= 2:
@@ -255,14 +251,21 @@ async def test_execution_events():
 
                     # Verify progress tracking
                     first_exec = execution_events[0]
-                    if (first_exec["data"]["phase"] == "planning" and
-                        first_exec["data"]["phase_progress"] == 25.0):
+                    if (
+                        first_exec["data"]["phase"] == "planning"
+                        and abs(first_exec["data"]["phase_progress"] - 25.0) < 0.01
+                    ):
                         print_success("First execution event has correct data")
 
                     if len(execution_events) > 1:
                         second_exec = execution_events[1]
-                        if second_exec["data"]["phase_progress"] > first_exec["data"]["phase_progress"]:
-                            print_success("Progress tracking works (progress increased)")
+                        if (
+                            second_exec["data"]["phase_progress"]
+                            > first_exec["data"]["phase_progress"]
+                        ):
+                            print_success(
+                                "Progress tracking works (progress increased)"
+                            )
 
                 if len(log_events) >= 1:
                     print_success(f"Received {len(log_events)} log events")
@@ -275,6 +278,7 @@ async def test_execution_events():
     except Exception as e:
         print_error(f"Execution events test failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -286,30 +290,30 @@ async def test_unsubscribe():
     try:
         async with websockets.connect(WEBSOCKET_URL) as websocket:
             # Subscribe
-            await websocket.send(json.dumps({
-                "action": "subscribe",
-                "spec_id": TEST_SPEC_ID
-            }))
+            await websocket.send(
+                json.dumps({"action": "subscribe", "spec_id": TEST_SPEC_ID})
+            )
             await asyncio.wait_for(websocket.recv(), timeout=5.0)
             print_info("Subscribed")
 
             # Unsubscribe
-            await websocket.send(json.dumps({
-                "action": "unsubscribe",
-                "spec_id": TEST_SPEC_ID
-            }))
+            await websocket.send(
+                json.dumps({"action": "unsubscribe", "spec_id": TEST_SPEC_ID})
+            )
             unsub_response = await asyncio.wait_for(websocket.recv(), timeout=5.0)
             unsub_data = json.loads(unsub_response)
 
-            if (unsub_data.get("status") == "unsubscribed" and
-                unsub_data.get("spec_id") == TEST_SPEC_ID):
+            if (
+                unsub_data.get("status") == "unsubscribed"
+                and unsub_data.get("spec_id") == TEST_SPEC_ID
+            ):
                 print_success("Successfully unsubscribed")
 
                 # Broadcast event (should NOT be received)
                 await broadcast_test_event(
                     "log",
                     TEST_SPEC_ID,
-                    {"log_line": "This should not be received", "level": "info"}
+                    {"log_line": "This should not be received", "level": "info"},
                 )
 
                 # Try to receive (should timeout)
@@ -317,7 +321,7 @@ async def test_unsubscribe():
                     await asyncio.wait_for(websocket.recv(), timeout=2.0)
                     print_error("Received event after unsubscribe (should not happen)")
                     return False
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     print_success("No events received after unsubscribe (correct)")
                     return True
             else:
@@ -337,9 +341,10 @@ async def test_multiple_clients():
     received_by_client2 = []
 
     try:
-        async with websockets.connect(WEBSOCKET_URL) as ws1, \
-                   websockets.connect(WEBSOCKET_URL) as ws2:
-
+        async with (
+            websockets.connect(WEBSOCKET_URL) as ws1,
+            websockets.connect(WEBSOCKET_URL) as ws2,
+        ):
             # Subscribe both clients
             await ws1.send(json.dumps({"action": "subscribe", "spec_id": TEST_SPEC_ID}))
             await ws2.send(json.dumps({"action": "subscribe", "spec_id": TEST_SPEC_ID}))
@@ -357,7 +362,7 @@ async def test_multiple_clients():
                         event = json.loads(msg)
                         if event.get("event_type") == "log":
                             received_by_client1.append(event)
-                except (asyncio.TimeoutError, OSError, json.JSONDecodeError):
+                except (TimeoutError, OSError, json.JSONDecodeError):
                     pass  # Listener timeout or connection closed
 
             async def listen_client2():
@@ -367,7 +372,7 @@ async def test_multiple_clients():
                         event = json.loads(msg)
                         if event.get("event_type") == "log":
                             received_by_client2.append(event)
-                except (asyncio.TimeoutError, OSError, json.JSONDecodeError):
+                except (TimeoutError, OSError, json.JSONDecodeError):
                     pass  # Listener timeout or connection closed
 
             async def broadcast():
@@ -375,41 +380,42 @@ async def test_multiple_clients():
                 await broadcast_test_event(
                     "log",
                     TEST_SPEC_ID,
-                    {"log_line": "Multi-client test message", "level": "info"}
+                    {"log_line": "Multi-client test message", "level": "info"},
                 )
                 print_info("Broadcasted test event")
 
             # Run all tasks
-            await asyncio.gather(
-                listen_client1(),
-                listen_client2(),
-                broadcast()
-            )
+            await asyncio.gather(listen_client1(), listen_client2(), broadcast())
 
             # Verify both clients received the event
             if len(received_by_client1) > 0 and len(received_by_client2) > 0:
                 print_success("Both clients received the event")
-                if (received_by_client1[0]["log_line"] ==
-                    received_by_client2[0]["log_line"] ==
-                    "Multi-client test message"):
+                if (
+                    received_by_client1[0]["log_line"]
+                    == received_by_client2[0]["log_line"]
+                    == "Multi-client test message"
+                ):
                     print_success("Both clients received identical event data")
                     return True
 
-            print_error(f"Client 1: {len(received_by_client1)}, Client 2: {len(received_by_client2)}")
+            print_error(
+                f"Client 1: {len(received_by_client1)}, Client 2: {len(received_by_client2)}"
+            )
             return False
 
     except Exception as e:
         print_error(f"Multiple clients test failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
 
 async def run_all_tests():
     """Run all WebSocket tests"""
-    print(f"\n{Colors.BOLD}{'='*60}{Colors.RESET}")
+    print(f"\n{Colors.BOLD}{'=' * 60}{Colors.RESET}")
     print(f"{Colors.BOLD}WebSocket Real-Time Updates Test Suite{Colors.RESET}")
-    print(f"{Colors.BOLD}{'='*60}{Colors.RESET}\n")
+    print(f"{Colors.BOLD}{'=' * 60}{Colors.RESET}\n")
 
     print_info(f"Testing WebSocket endpoint: {WEBSOCKET_URL}")
     print_info(f"Test spec ID: {TEST_SPEC_ID}\n")
@@ -432,20 +438,25 @@ async def run_all_tests():
         except Exception as e:
             print_error(f"Test '{test_name}' crashed: {e}")
             import traceback
+
             traceback.print_exc()
             results.append((test_name, False))
             print()
 
     # Print summary
-    print(f"{Colors.BOLD}{'='*60}{Colors.RESET}")
+    print(f"{Colors.BOLD}{'=' * 60}{Colors.RESET}")
     print(f"{Colors.BOLD}Test Results Summary{Colors.RESET}")
-    print(f"{Colors.BOLD}{'='*60}{Colors.RESET}\n")
+    print(f"{Colors.BOLD}{'=' * 60}{Colors.RESET}\n")
 
     passed = sum(1 for _, result in results if result)
     total = len(results)
 
     for test_name, result in results:
-        status = f"{Colors.GREEN}PASS{Colors.RESET}" if result else f"{Colors.RED}FAIL{Colors.RESET}"
+        status = (
+            f"{Colors.GREEN}PASS{Colors.RESET}"
+            if result
+            else f"{Colors.RED}FAIL{Colors.RESET}"
+        )
         print(f"  {status}  {test_name}")
 
     print(f"\n{Colors.BOLD}Total: {passed}/{total} tests passed{Colors.RESET}\n")
@@ -481,6 +492,7 @@ def main():
     except Exception as e:
         print_error(f"Test suite failed: {e}")
         import traceback
+
         traceback.print_exc()
         return 1
 

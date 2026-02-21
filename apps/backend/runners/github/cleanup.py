@@ -366,10 +366,9 @@ class DataCleaner:
                 for key, entry in items.items():
                     # Check if referenced file exists
                     file_path = entry.get("file_path") or entry.get("path")
-                    if file_path:
-                        if not Path(file_path).exists():
-                            to_remove.append(key)
-                            pruned += 1
+                    if file_path and not Path(file_path).exists():
+                        to_remove.append(key)
+                        pruned += 1
 
                 if to_remove and not dry_run:
                     for key in to_remove:

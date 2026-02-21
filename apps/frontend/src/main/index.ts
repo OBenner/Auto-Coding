@@ -35,7 +35,7 @@ for (const envPath of possibleEnvPaths) {
   }
 }
 
-import { app, BrowserWindow, shell, nativeImage, session, screen } from 'electron';
+import { app, BrowserWindow, shell, nativeImage, session, screen, Menu } from 'electron';
 import { join } from 'path';
 import { accessSync, readFileSync, writeFileSync, rmSync, cpSync, readdirSync, mkdirSync } from 'fs';
 import { electronApp, optimizer, is } from '@electron-toolkit/utils';
@@ -53,6 +53,7 @@ import { initSentryMain } from './sentry';
 import { preWarmToolCache } from './cli-tool-manager';
 import { initializeClaudeProfileManager, getClaudeProfileManager } from './claude-profile-manager';
 import { isMacOS, isWindows } from './platform';
+import { setupMCPLifecycle } from './mcp-manager';
 import type { AppSettings, AuthFailureInfo } from '../shared/types';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -195,7 +196,8 @@ function createWindow(): void {
       sandbox: true,
       contextIsolation: true,
       nodeIntegration: false,
-      backgroundThrottling: false // Prevent terminal lag when window loses focus
+      backgroundThrottling: false, // Prevent terminal lag when window loses focus
+      spellcheck: true
     }
   });
 
@@ -223,6 +225,44 @@ function createWindow(): void {
       console.warn('[main] Failed to open external URL:', details.url, error);
     });
     return { action: 'deny' };
+  });
+
+  // Spell check context menu: show suggestions, "Add to Dictionary", and standard edit actions
+  mainWindow.webContents.on('context-menu', (event, params) => {
+    if (!params.misspelledWord) return;
+    event.preventDefault();
+
+    const menuItems: Electron.MenuItemConstructorOptions[] = params.dictionarySuggestions.map(
+      (suggestion) => ({
+        label: suggestion,
+        click: () => {
+          try {
+            if (mainWindow && typeof mainWindow.webContents.replaceMisspelling === 'function') {
+              mainWindow.webContents.replaceMisspelling(suggestion);
+            }
+          } catch (err) {
+            console.error('[Spellcheck] Failed to replace misspelling:', err);
+          }
+        },
+      })
+    );
+    if (menuItems.length > 0) {
+      menuItems.push({ type: 'separator' });
+    }
+    menuItems.push({
+      label: 'Add to Dictionary',
+      click: () => {
+        try {
+          const ses = mainWindow?.webContents?.session;
+          if (ses && typeof ses.addWordToSpellCheckerDictionary === 'function') {
+            ses.addWordToSpellCheckerDictionary(params.misspelledWord);
+          }
+        } catch (err) {
+          console.error('[Spellcheck] Failed to add word to dictionary:', err);
+        }
+      },
+    });
+    Menu.buildFromTemplate(menuItems).popup({ window: mainWindow ?? undefined });
   });
 
   // Load the renderer
@@ -346,6 +386,10 @@ if (isWindows()) {
   app.commandLine.appendSwitch('disable-gpu-program-cache');
   console.log('[main] Applied Windows GPU cache fixes');
 }
+
+// Setup MCP server lifecycle (starts server if ELECTRON_MCP_ENABLED=true)
+// This integrates with Electron's app lifecycle for automatic startup/shutdown
+setupMCPLifecycle();
 
 // Initialize the application
 app.whenReady().then(() => {

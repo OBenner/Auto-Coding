@@ -41,6 +41,10 @@
       "title": "Notifications",
       "description": "Préférences d'alertes"
     },
+    "feedback": {
+      "title": "Retours",
+      "description": "Paramètres de collecte de retours"
+    },
     "debug": {
       "title": "Debug & Logs",
       "description": "Outils de dépannage"
@@ -48,6 +52,10 @@
     "keyboardShortcuts": {
       "title": "Raccourcis clavier",
       "description": "Personnaliser les raccourcis clavier pour les actions courantes"
+    },
+    "envConfig": {
+      "title": "Config. d'environnement",
+      "description": "Configurer l'authentification Claude et les tokens d'environnement"
     }
   },
   "apiProfiles": {
@@ -311,6 +319,12 @@
     "onReviewNeededDescription": "Notifier quand le QA nécessite votre révision",
     "sound": "Son",
     "soundDescription": "Jouer un son avec les notifications"
+  },
+  "feedback": {
+    "title": "Paramètres de retour",
+    "description": "Configurer les préférences de collecte de retours",
+    "enableFeedback": "Activer la collecte de retours",
+    "enableFeedbackDescription": "Collecter les retours après la fin des tâches de l'agent pour aider à améliorer le système"
   },
   "actions": {
     "save": "Enregistrer les paramètres",

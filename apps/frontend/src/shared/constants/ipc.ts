@@ -29,6 +29,11 @@ export const IPC_CHANNELS = {
   TASK_RECOVER_STUCK: 'task:recoverStuck',
   TASK_CHECK_RUNNING: 'task:checkRunning',
 
+  // Task spec file reading (for task overview display)
+  TASK_SPEC_IMPLEMENTATION_PLAN_GET: 'task:spec:implementationPlanGet',
+  TASK_SPEC_QA_REPORT_GET: 'task:spec:qaReportGet',
+  TASK_SPEC_QA_ESCALATION_GET: 'task:spec:qaEscalationGet',
+
   // Workspace management (for human review)
   // Per-spec architecture: Each spec has its own worktree at .worktrees/{spec-name}/
   TASK_WORKTREE_STATUS: 'task:worktreeStatus',
@@ -43,6 +48,7 @@ export const IPC_CHANNELS = {
   TASK_LIST_WORKTREES: 'task:listWorktrees',
   TASK_ARCHIVE: 'task:archive',
   TASK_UNARCHIVE: 'task:unarchive',
+  TASK_EXPORT: 'task:export',
   TASK_CLEAR_STAGED_STATE: 'task:clearStagedState',
 
   // Task token statistics
@@ -202,6 +208,13 @@ export const IPC_CHANNELS = {
   CONTEXT_GET_MEMORIES: 'context:getMemories',
   CONTEXT_GET_PATTERN_SUGGESTIONS: 'context:getPatternSuggestions',
   CONTEXT_CONFIRM_PATTERN: 'context:confirmPattern',
+
+  // Context viewer operations
+  CONTEXT_GET_STATS: 'context:getStats',
+  CONTEXT_GET_TOKEN_BREAKDOWN: 'context:getTokenBreakdown',
+  CONTEXT_GET_PRIORITIZATION_SCORES: 'context:getPrioritizationScores',
+  CONTEXT_GET_OPTIMIZATION_REPORT: 'context:getOptimizationReport',
+  CONTEXT_EXPORT_SNAPSHOT: 'context:exportSnapshot',
 
   // Session context operations (conversation history tracking)
   SESSION_CONTEXT_GET_HISTORY: 'sessionContext:getHistory',
@@ -610,6 +623,35 @@ export const IPC_CHANNELS = {
   TEMPLATE_PREVIEW: 'template:preview',
   TEMPLATE_CREATE_SPEC: 'template:createSpec',
   TEMPLATE_SUGGEST: 'template:suggest',
+
+  // Pattern operations (codebase pattern learning)
+  PATTERN_LIST: 'pattern:list',
+  PATTERN_GET_CATEGORIES: 'pattern:getCategories',
+  PATTERN_GET_DETAILS: 'pattern:getDetails',
+  PATTERN_APPROVE: 'pattern:approve',
+  PATTERN_OVERRIDE: 'pattern:override',
+  PATTERN_DELETE: 'pattern:delete',
+
+  // Custom template operations (user-created)
+  TEMPLATE_CUSTOM_LIST: 'template:custom:list',
+  TEMPLATE_CUSTOM_SAVE: 'template:custom:save',
+  TEMPLATE_CUSTOM_UPDATE: 'template:custom:update',
+  TEMPLATE_CUSTOM_DELETE: 'template:custom:delete',
+  TEMPLATE_CUSTOM_EXPORT: 'template:custom:export',
+  TEMPLATE_CUSTOM_IMPORT: 'template:custom:import',
+  TEMPLATE_CUSTOM_TEST: 'template:custom:test',
+  // Session Replay operations
+  SESSION_REPLAY_LIST: 'sessionReplay:list',
+  SESSION_REPLAY_GET_SESSION: 'sessionReplay:getSession',
+  SESSION_REPLAY_GET_TIMELINE: 'sessionReplay:getTimeline',
+  SESSION_REPLAY_GET_DECISION_POINTS: 'sessionReplay:getDecisionPoints',
+  SESSION_REPLAY_GET_BOOKMARKS: 'sessionReplay:getBookmarks',
+  SESSION_REPLAY_ADD_BOOKMARK: 'sessionReplay:addBookmark',
+  SESSION_REPLAY_REMOVE_BOOKMARK: 'sessionReplay:removeBookmark',
+  SESSION_REPLAY_GET_ENTRIES: 'sessionReplay:getEntries',
+  SESSION_REPLAY_SEARCH: 'sessionReplay:search',
+  SESSION_REPLAY_EXPORT_SESSION: 'sessionReplay:exportSession',
+  SESSION_REPLAY_EXPORT_ALL: 'sessionReplay:exportAll',
 
   // Feedback submission (adaptive agent learning)
   FEEDBACK_SUBMIT: 'feedback:submit',

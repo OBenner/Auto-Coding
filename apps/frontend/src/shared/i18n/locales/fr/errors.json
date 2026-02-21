@@ -5,5 +5,7 @@
       "titleSuffix": "(Erreur JSON)",
       "description": "⚠️ Erreur d'analyse JSON : {{error}}\n\nLe fichier implementation_plan.json est malformé. Exécutez la correction automatique du backend ou réparez le fichier manuellement."
     }
-  }
+  },
+  "noProjectSelected": "Aucun projet sélectionné",
+  "failedToLoadStats": "Échec du chargement des statistiques"
 }

@@ -65,7 +65,9 @@ export const DEFAULT_APP_SETTINGS = {
   // Keyboard shortcuts (customizable by users)
   keyboardShortcuts: DEFAULT_KEYBOARD_SHORTCUTS,
   // Recent actions for quick actions menu (persisted between sessions)
-  recentActions: []
+  recentActions: [],
+  // Feedback collection (enabled by default)
+  feedbackEnabled: true
 };
 
 // ============================================

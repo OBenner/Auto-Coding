@@ -405,7 +405,7 @@ def setup_workspace(
             try:
                 shutil.copy2(source_file, target_file)
                 security_files_copied.append(filename)
-            except (OSError, PermissionError) as e:
+            except OSError as e:
                 debug_warning(MODULE, f"Failed to copy {filename}: {e}")
                 print_status(
                     f"Warning: Could not copy {filename} to worktree", "warning"

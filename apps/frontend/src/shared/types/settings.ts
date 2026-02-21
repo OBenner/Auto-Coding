@@ -343,6 +343,12 @@ export interface AppSettings {
   keyboardShortcuts?: Record<KeyboardShortcutAction, KeyCombination>;
   // Recent actions for quick actions menu (persisted between sessions)
   recentActions?: RecentAction[];
+  /**
+   * Whether feedback collection is enabled.
+   * Defaults to `true` (opt-out model: feedback is collected unless the user disables it).
+   * When `undefined`, callers should treat it as `true`.
+   */
+  feedbackEnabled?: boolean;
 }
 
 // Auto-Code Source Environment Configuration (for auto-claude repo .env)

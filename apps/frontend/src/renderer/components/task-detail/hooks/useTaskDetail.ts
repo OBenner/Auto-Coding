@@ -1,7 +1,9 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useProjectStore } from '../../../stores/project-store';
 import { checkTaskRunning, isIncompleteHumanReview, getTaskProgress, useTaskStore, loadTasks } from '../../../stores/task-store';
+import { useSettingsStore } from '../../../stores/settings-store';
 import type { Task, TaskLogs, TaskLogPhase, WorktreeStatus, WorktreeDiff, MergeConflict, MergeStats, GitConflictInfo, ImageAttachment } from '../../../../shared/types';
+import type { FeedbackRating } from '../../FeedbackDialog';
 
 /**
  * Validates task subtasks structure to prevent infinite loops during resume.
@@ -91,6 +93,7 @@ export function useTaskDetail({ task }: UseTaskDetailOptions) {
   const [showConflictDialog, setShowConflictDialog] = useState(false);
   const [showPRDialog, setShowPRDialog] = useState(false);
   const [isCreatingPR, setIsCreatingPR] = useState(false);
+  const [showFeedbackDialog, setShowFeedbackDialog] = useState(false);
 
   const selectedProject = useProjectStore((state) => state.getSelectedProject());
   const isRunning = task.status === 'in_progress';
@@ -179,6 +182,33 @@ export function useTaskDetail({ task }: UseTaskDetailOptions) {
   useEffect(() => {
     setFeedbackImages([]);
   }, []);
+
+  // Track previous task status to detect transitions to 'done'
+  // Initialize to a sentinel value to distinguish "never set" from actual status
+  const prevTaskStatusRef = useRef<string | null>(null);
+  const isFirstRenderRef = useRef(true);
+
+  // Automatically show feedback dialog when task completes to 'done' status
+  // Only shows if user has opted in to feedback collection (feedbackEnabled = true)
+  useEffect(() => {
+    // Skip the first render to avoid showing feedback dialog for already-completed tasks
+    if (isFirstRenderRef.current) {
+      isFirstRenderRef.current = false;
+      prevTaskStatusRef.current = task.status;
+      return;
+    }
+
+    const feedbackEnabled = useSettingsStore.getState().settings.feedbackEnabled ?? true;
+
+    // Only trigger on transition from non-done to done status
+    if (task.status === 'done' && prevTaskStatusRef.current !== 'done' && feedbackEnabled) {
+      console.log('[useTaskDetail] Task completed, showing feedback dialog');
+      setShowFeedbackDialog(true);
+    }
+
+    // Update previous status ref
+    prevTaskStatusRef.current = task.status;
+  }, [task.status]);
 
   // Load worktree status when task is in human_review
   useEffect(() => {
@@ -403,6 +433,30 @@ export function useTaskDetail({ task }: UseTaskDetailOptions) {
     }
   }, [task.id, selectedProject]);
 
+  /**
+   * Submits user feedback for the task to the backend.
+   * TODO: Implement actual backend IPC call in subtask-3-4 (feedback-handlers.ts).
+   * Currently a placeholder that logs and closes the dialog without showing success toast.
+   */
+  const handleSubmitFeedback = useCallback(async (rating: FeedbackRating, comment: string): Promise<void> => {
+    if (!selectedProject) {
+      console.error('[handleSubmitFeedback] No selected project');
+      return;
+    }
+
+    try {
+      // TODO: Call backend IPC handler to record feedback
+      // This will be implemented in subtask-3-4 (feedback-handlers.ts)
+      console.log('[handleSubmitFeedback] Feedback recorded (placeholder):', { rating, comment, taskId: task.id });
+
+      // Close the dialog — no success toast since this is a placeholder
+      setShowFeedbackDialog(false);
+    } catch (err) {
+      console.error('[handleSubmitFeedback] Failed to submit feedback:', err);
+      throw err;
+    }
+  }, [task.id, selectedProject]);
+
   // NOTE: Merge preview is NO LONGER auto-loaded on modal open.
   // User must click "Check for Conflicts" button to trigger the expensive preview operation.
   // This improves modal open performance significantly (avoids 1-30+ second Python subprocess).
@@ -525,6 +579,7 @@ export function useTaskDetail({ task }: UseTaskDetailOptions) {
     showConflictDialog,
     showPRDialog,
     isCreatingPR,
+    showFeedbackDialog,
     isLoadingPlan,
 
     // Setters
@@ -560,6 +615,7 @@ export function useTaskDetail({ task }: UseTaskDetailOptions) {
     setShowConflictDialog,
     setShowPRDialog,
     setIsCreatingPR,
+    setShowFeedbackDialog,
 
     // Handlers
     handleLogsScroll,
@@ -570,6 +626,7 @@ export function useTaskDetail({ task }: UseTaskDetailOptions) {
     removeFeedbackImage,
     clearFeedbackImages,
     handleReviewAgain,
+    handleSubmitFeedback,
     reloadPlanForIncompleteTask,
   };
 }

@@ -450,10 +450,9 @@ class ServiceOrchestrator:
             all_healthy = True
 
             for service in self._services:
-                if service.port:
-                    if not self._check_port(service.port):
-                        all_healthy = False
-                        break
+                if service.port and not self._check_port(service.port):
+                    all_healthy = False
+                    break
 
             if all_healthy:
                 return True

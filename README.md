@@ -7,7 +7,8 @@
 Describe what you want. Auto Code creates the spec, writes the code, runs QA, and hands you a clean branch to review.
 
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-green?style=flat-square)](./LICENSE)
-[![CI](https://img.shields.io/github/actions/workflow/status/OBenner/Auto-Coding/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/OBenner/Auto-Coding/actions)
+[![CI](https://img.shields.io/github/actions/workflow/status/OBenner/Auto-Coding/ci.yml?branch=develop&style=flat-square&label=CI)](https://github.com/OBenner/Auto-Coding/actions/workflows/ci.yml?query=branch%3Adevelop)
+[![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=OBenner_Auto-Coding&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=OBenner_Auto-Coding)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue?style=flat-square)]()
 [![Version](https://img.shields.io/badge/version-3.0.0-orange?style=flat-square)](https://github.com/OBenner/Auto-Coding/releases)
 
@@ -98,13 +99,29 @@ Native desktop apps for Windows, macOS, and Linux. Cloud-hosted option also avai
 
 ---
 
+## Search & Navigation
+
+**Looking for something specific?**
+
+- **[📖 Documentation Portal](guides/DOCUMENTATION-PORTAL.md)** - Comprehensive guide to all documentation
+- **[📖 Search Index](docs/search/INDEX.md)** - Comprehensive searchable index with keywords
+- **[🔍 Search Guide](docs/search/SEARCH-GUIDE.md)** - Learn effective search strategies
+- **[✅ Verification Checklist](docs/VERIFICATION-CHECKLIST.md)** - Documentation quality verification
+
+**Quick links:**
+- [Quick Start Guide](guides/QUICK-START.md) - Get started in 15 minutes
+- [CLI Usage Guide](guides/CLI-USAGE.md) - Terminal-only usage
+- [Troubleshooting Guide](guides/TROUBLESHOOTING.md) - Having issues?
+
+---
+
 ## Quick Start
 
-1. **Download** the latest release for your platform from [Releases](https://github.com/OBenner/Auto-Coding/releases)
-2. **Open your project** -- select any git repository folder
-3. **Connect Claude** -- the app walks you through OAuth setup (requires [Claude Pro/Max](https://claude.ai/upgrade))
-4. **Create a task** -- describe what you want to build in plain language
-5. **Watch it work** -- agents plan, code, and validate autonomously; you review and merge
+Get started in under 15 minutes with our comprehensive [Quick Start Guide](guides/QUICK-START.md).
+
+**TL;DR:** Download → Connect Claude → Open Project → Create Task → Watch agents build → Review & merge
+
+[Download the latest release](https://github.com/OBenner/Auto-Coding/releases) for your platform.
 
 ---
 
