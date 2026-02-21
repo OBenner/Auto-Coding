@@ -114,21 +114,27 @@ def cmd_preload(args):
         print("Error: Preloader not available (requires project_dir and cache_dir)")
         return
 
+    # Map confidence level to numeric min_score
+    confidence_to_min_score = {
+        "high": 0.6,
+        "medium": 0.3,
+        "low": 0.1,
+    }
+    min_score = confidence_to_min_score.get(args.min_confidence, 0.3)
+
     # Preload context
     print(f"Preloading context for task: {args.task}")
-    result = builder.preload_context(args.task, confidence_threshold=args.min_confidence)
+    result = builder.preload_context(args.task, min_score=min_score)
 
-    print(f"\nPreloaded {result['files_preloaded']} files:")
+    print(
+        f"\nPreloaded {result['preloaded']} files "
+        f"(cached: {result['cached']}, failed: {result['failed']})"
+    )
     for pred in result["predictions"]:
-        print(f"  - {pred['file_path']} (confidence: {pred['confidence']}, score: {pred['score']:.2f})")
-
-    if result["cache_hits"] > 0:
-        print(f"\nCache hits: {result['cache_hits']} files already cached")
-
-    if result["failed_files"]:
-        print(f"\nFailed to load {len(result['failed_files'])} files:")
-        for fp in result["failed_files"]:
-            print(f"  - {fp}")
+        print(
+            f"  - {pred['file_path']} "
+            f"(confidence: {pred['confidence']}, score: {pred['score']:.2f})"
+        )
 
 
 def cmd_stats(args):
@@ -151,14 +157,12 @@ def cmd_stats(args):
     stats = builder.get_cache_stats()
 
     print("Cache Statistics:")
-    print(f"  Total files cached: {stats['total_files']}")
-    print(f"  Total size: {stats['total_size_bytes']:,} bytes")
-    print(f"  Cache directory: {stats['cache_dir']}")
+    print(f"  Total files cached: {stats['file_count']}")
+    print(f"  Total size: {stats['total_size_kb']:.1f} KB")
+    print(f"  Cache directory: {cache_dir}")
 
-    if stats['total_files'] > 0:
-        print(f"\nCached files:")
-        for file_info in stats.get("files", []):
-            print(f"  - {file_info['file_path']} ({file_info['size_bytes']:,} bytes, cached: {file_info['cached_at']})")
+    if stats.get("oldest_hours", 0) > 0:
+        print(f"  Oldest entry: {stats['oldest_hours']:.1f} hours ago")
 
 
 def cmd_clear(args):

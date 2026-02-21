@@ -9,7 +9,7 @@ Predicts which files will be needed for a task and preloads them into cache.
 from pathlib import Path
 
 from .cache import ContextCache
-from .file_predictor import FilePredictor, FilePrediction
+from .file_predictor import FilePrediction, FilePredictor
 
 
 class ContextPreloader:
@@ -41,7 +41,7 @@ class ContextPreloader:
 
         # Initialize components
         self.predictor = FilePredictor(project_dir)
-        self.cache = ContextCache(cache_dir)
+        self.cache = ContextCache(cache_dir, project_root=project_dir)
 
     def predict_files(
         self,

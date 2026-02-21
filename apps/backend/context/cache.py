@@ -3,6 +3,7 @@ Cache management for preloaded file content.
 """
 
 import json
+import os
 import time
 from pathlib import Path
 from typing import Any
@@ -13,13 +14,16 @@ class ContextCache:
 
     CACHE_VALIDITY_HOURS = 24
 
-    def __init__(self, cache_dir: Path | None):
+    def __init__(self, cache_dir: Path | None, project_root: Path | None = None):
         """
         Initialize context cache.
 
         Args:
             cache_dir: Directory to store cache files (None for testing)
+            project_root: Project root used to resolve relative file paths
         """
+        self.project_root = Path(project_root).resolve() if project_root else None
+
         if cache_dir is None:
             self.cache_dir = None
             self.cache_file = None
@@ -28,6 +32,13 @@ class ContextCache:
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.cache_file = self.cache_dir / "preloaded_context.json"
+
+    def _resolve_path(self, file_path: str) -> Path:
+        """Resolve a file path against the configured project root if needed."""
+        p = Path(file_path)
+        if p.is_absolute() or not self.project_root:
+            return p
+        return self.project_root / p
 
     def get_cached_content(
         self, file_path: str, skip_cache: bool = False
@@ -68,28 +79,23 @@ class ContextCache:
 
         # Check if file has been modified since caching
         try:
-            file_obj = Path(file_path)
+            file_obj = self._resolve_path(file_path)
             if not file_obj.exists():
-                # File no longer exists, invalidate cache
                 return None
 
             current_mtime = file_obj.stat().st_mtime
             cached_mtime = cached_entry.get("file_mtime", 0)
 
             if current_mtime != cached_mtime:
-                # File has been modified, invalidate cache
                 return None
         except (OSError, PermissionError):
-            # Can't access file, invalidate cache
             return None
 
         return cached_entry
 
-    def save_content(
-        self, file_path: str, content: str, file_mtime: float
-    ) -> None:
+    def save_content(self, file_path: str, content: str, file_mtime: float) -> None:
         """
-        Save file content to cache.
+        Save file content to cache using an atomic write pattern.
 
         Args:
             file_path: Path to the file being cached
@@ -115,10 +121,17 @@ class ContextCache:
             "cached_at": time.time(),
         }
 
-        # Save back to disk
-        self.cache_file.write_text(
-            json.dumps(cache_data, indent=2), encoding="utf-8"
-        )
+        # Atomic write: write to temp file, then replace
+        tmp_path = self.cache_file.with_suffix(self.cache_file.suffix + ".tmp")
+        try:
+            tmp_path.write_text(json.dumps(cache_data, indent=2), encoding="utf-8")
+            os.replace(tmp_path, self.cache_file)
+        except OSError:
+            try:
+                if tmp_path.exists():
+                    tmp_path.unlink()
+            except OSError:
+                pass
 
     def clear_cache(self) -> None:
         """Clear all cached content."""
@@ -144,9 +157,7 @@ class ContextCache:
             return {"file_count": 0, "total_size_kb": 0, "oldest_hours": 0}
 
         # Calculate stats
-        total_size = sum(
-            len(entry.get("content", "")) for entry in cache_data.values()
-        )
+        total_size = sum(len(entry.get("content", "")) for entry in cache_data.values())
         oldest_time = min(
             entry.get("cached_at", time.time()) for entry in cache_data.values()
         )

@@ -19,7 +19,9 @@ class FilePrediction:
     score: float  # 0.0 to 1.0, higher is more relevant
     confidence: str  # "high", "medium", "low"
     reason: str  # Why this file was predicted
-    match_factors: list[str] = field(default_factory=list)  # What contributed to the score
+    match_factors: list[str] = field(
+        default_factory=list
+    )  # What contributed to the score
 
     def to_dict(self) -> dict:
         """Convert to dictionary representation."""
@@ -429,7 +431,9 @@ class FilePredictor:
         Returns:
             List of prediction dictionaries sorted by relevance
         """
-        predictions = self.predict_files(task, available_files, max_predictions, min_score)
+        predictions = self.predict_files(
+            task, available_files, max_predictions, min_score
+        )
         return [p.to_dict() for p in predictions]
 
     def _generate_reason(

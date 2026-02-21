@@ -66,9 +66,7 @@ class ContextBuilder:
             PatternDiscoverer(self.project_dir) if self.project_dir else None
         )
         self.redundancy_detector = (
-            RedundancyDetector(
-                self.project_dir, token_estimator=self.token_estimator
-            )
+            RedundancyDetector(self.project_dir, token_estimator=self.token_estimator)
             if self.project_dir
             else None
         )

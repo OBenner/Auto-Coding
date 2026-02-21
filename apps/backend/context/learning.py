@@ -283,7 +283,9 @@ class LearningTracker:
                     file_path=file_path,
                     predicted=is_predicted,
                     actually_used=is_used,
-                    prediction_score=prediction_data["score"] if prediction_data else 0.0,
+                    prediction_score=prediction_data["score"]
+                    if prediction_data
+                    else 0.0,
                     confidence=prediction_data.get("confidence", "medium")
                     if prediction_data
                     else "medium",
