@@ -8,6 +8,18 @@ Auto Code is a multi-agent autonomous coding framework that builds software thro
 
 **CRITICAL: All AI interactions use the Claude Agent SDK (`claude-agent-sdk` package), NOT the Anthropic API directly.**
 
+## Search & Navigation
+
+**Looking for something specific?**
+
+- **[📖 Search Index](docs/search/INDEX.md)** - Comprehensive searchable index with keywords
+- **[🔍 Search Guide](docs/search/SEARCH-GUIDE.md)** - Learn effective search strategies
+
+**Quick links:**
+- [Quick Start Guide](guides/QUICK-START.md) - New to Auto Code? Start here
+- [Troubleshooting Guide](guides/TROUBLESHOOTING.md) - Having issues?
+- [Contributing Guide](CONTRIBUTING.md) - How to contribute
+
 ## Project Structure
 
 ```

@@ -64,6 +64,7 @@ DEFAULT_PHASE_MODELS: dict[str, str] = {
     "planning": "sonnet",  # Changed from "opus" (fix #433)
     "coding": "sonnet",
     "qa": "sonnet",
+    "test_generation": "sonnet",
 }
 
 DEFAULT_PHASE_THINKING: dict[str, str] = {
@@ -71,6 +72,7 @@ DEFAULT_PHASE_THINKING: dict[str, str] = {
     "planning": "high",
     "coding": "medium",
     "qa": "high",
+    "test_generation": "medium",
 }
 
 # Agent-level default model mapping
@@ -130,6 +132,7 @@ class PhaseModelConfig(TypedDict, total=False):
     planning: str
     coding: str
     qa: str
+    test_generation: str
 
 
 class PhaseThinkingConfig(TypedDict, total=False):
@@ -137,6 +140,7 @@ class PhaseThinkingConfig(TypedDict, total=False):
     planning: str
     coding: str
     qa: str
+    test_generation: str
 
 
 class AgentModelConfig(TypedDict, total=False):
@@ -186,7 +190,7 @@ class TaskMetadataConfig(TypedDict, total=False):
     thinkingLevel: str
 
 
-Phase = Literal["spec", "planning", "coding", "qa"]
+Phase = Literal["spec", "planning", "coding", "qa", "test_generation"]
 
 
 def resolve_model_id(model: str) -> str:

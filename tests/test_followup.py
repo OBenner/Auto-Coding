@@ -8,9 +8,6 @@ Tests the ImplementationPlan extension methods that enable follow-up tasks:
 - reset_for_followup(): Transitions plan status back to in_progress
 """
 
-import json
-import pytest
-from datetime import datetime
 from pathlib import Path
 
 from implementation_plan import (

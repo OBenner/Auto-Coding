@@ -20,7 +20,6 @@ sys.path.insert(0, str(Path(__file__).parent / "apps" / "backend"))
 
 from merge.analytics_recorder import (
     MergeAnalyticsRecorder,
-    ConflictPattern,
 )
 from merge.models import MergeReport, MergeStats
 from merge.types import ConflictRegion, ConflictSeverity, ChangeType

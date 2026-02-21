@@ -12,8 +12,6 @@ Tests the complete flow:
 import json
 import pytest
 import sys
-import tempfile
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 # Store original modules for cleanup
@@ -436,7 +434,7 @@ def verify_token():
         })
 
         # Use new_callable=MagicMock to avoid AsyncMock (original is async)
-        with patch('memory.graphiti_helpers.get_graphiti_memory', new_callable=MagicMock, return_value=mock_memory) as mock_get_memory:
+        with patch('memory.graphiti_helpers.get_graphiti_memory', new_callable=MagicMock, return_value=mock_memory):
             # Retrieve context for new session
             from memory.graphiti_helpers import get_graphiti_memory
             memory = get_graphiti_memory(temp_spec_dir, temp_project_dir)

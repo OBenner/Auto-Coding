@@ -66,7 +66,7 @@ def box(
 
     tl, tr, bl, br = icon(tl), icon(tr), icon(bl), icon(br)
     h, v = icon(h), icon(v)
-    ml, mr = icon(ml), icon(mr)
+    icon(ml), icon(mr)  # resolved but not yet used for mid-section borders
 
     inner_width = width - 2  # Account for side borders
     lines = []

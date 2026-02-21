@@ -6,16 +6,20 @@ Main QA loop that coordinates reviewer and fixer sessions until
 approval or max iterations.
 """
 
+import asyncio
 import os
 import time as time_module
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from agents.e2e_generator import generate_e2e_tests
 from agents.memory_manager import save_user_correction
 from agents.test_generator import run_test_generator_session
 from analysis.code_analyzer import CodeAnalyzer
+from analysis.coverage_reporter import collect_coverage, format_coverage_summary
 from analysis.failure_analyzer import analyze_failure, is_analysis_enabled
+from analysis.ts_analyzer import TypeScriptAnalyzer
 from core.client import create_client
 from debug import debug, debug_error, debug_section, debug_success, debug_warning
 from integrations.graphiti.memory import get_graphiti_memory, is_graphiti_enabled
@@ -31,6 +35,7 @@ from phase_config import get_phase_model, get_phase_thinking_budget
 from phase_event import ExecutionPhase, emit_phase
 from progress import count_subtasks, is_build_complete
 from security.constants import PROJECT_DIR_ENV_VAR
+from services.recovery import RecoveryManager
 from task_logger import (
     LogPhase,
     get_task_logger,
@@ -157,18 +162,28 @@ def _move_tests_to_review_directory(
     review_dir.mkdir(exist_ok=True)
     debug("qa_loop", "Created test review directory", review_dir=str(review_dir))
 
-    # Move each generated test file to review directory
+    # Move each generated test file to review directory, preserving relative paths
     moved_files = []
     for file_path_str in generated_files:
         file_path = Path(file_path_str)
+
+        # Reject absolute or upward-traversing paths
+        if file_path.is_absolute() or ".." in file_path.parts:
+            debug_error(
+                "qa_loop",
+                f"Skipping unsafe path: {file_path_str}",
+            )
+            continue
+
         source = project_dir / file_path
-        dest = review_dir / file_path.name
+        dest = review_dir / file_path
+        dest.parent.mkdir(parents=True, exist_ok=True)
 
         if source.exists():
             try:
                 shutil.move(str(source), str(dest))
-                moved_files.append(file_path.name)
-                debug("qa_loop", "Moved test to review", file=file_path.name)
+                moved_files.append(str(file_path))
+                debug("qa_loop", "Moved test to review", file=str(file_path))
             except Exception as e:
                 debug_error("qa_loop", f"Failed to move {file_path.name}: {e}")
         else:
@@ -194,11 +209,11 @@ These tests are waiting for your review and approval before being committed to t
 
 2. **Approve tests** (if they look good):
    ```bash
-   # Copy approved tests to your project's tests/ directory
-   cp {review_dir}/*.py {project_dir / "tests"}/
+   # Copy approved tests to your project (preserving directory structure)
+   cp -r {review_dir}/ {project_dir}/
 
    # Commit them with your changes
-   git add tests/
+   git add tests/ apps/frontend/src/
    git commit -m "Add generated tests for [feature name]"
    ```
 
@@ -460,29 +475,41 @@ async def run_qa_validation_loop(
                         modified_files.extend(subtask.get("files_to_modify", []))
                         modified_files.extend(subtask.get("files_to_create", []))
 
-            # Remove duplicates and filter Python files
-            modified_files = list(set(f for f in modified_files if f.endswith(".py")))
+            # Remove duplicates and filter Python and TypeScript files
+            all_modified_files = list(set(modified_files))
+            python_files = [f for f in all_modified_files if f.endswith(".py")]
+            typescript_files = [
+                f
+                for f in all_modified_files
+                if f.endswith((".ts", ".tsx"))
+                and not f.endswith((".test.ts", ".test.tsx", ".spec.ts", ".spec.tsx"))
+            ]
+            modified_files = python_files + typescript_files
             debug(
                 "qa_loop",
-                f"Found {len(modified_files)} Python files to analyze",
+                f"Found {len(python_files)} Python and {len(typescript_files)} TypeScript files to analyze",
                 files=modified_files[:5],
             )
 
         if modified_files:
             # Analyze code in modified files
-            analyzer = CodeAnalyzer()
+            py_analyzer = CodeAnalyzer()
+            ts_analyzer = TypeScriptAnalyzer()
             combined_analysis = {
                 "functions": [],
                 "classes": [],
+                "components": [],
                 "imports": [],
                 "edge_cases": [],
             }
 
             for file_path in modified_files:
                 full_path = project_dir / file_path
+
+                # Analyze Python files
                 if full_path.exists() and full_path.suffix == ".py":
                     try:
-                        analysis = analyzer.analyze_file(full_path)
+                        analysis = py_analyzer.analyze_file(full_path)
                         combined_analysis["functions"].extend(
                             analysis.get("functions", [])
                         )
@@ -493,16 +520,45 @@ async def run_qa_validation_loop(
                         )
                         debug(
                             "qa_loop",
-                            f"Analyzed {file_path}",
+                            f"Analyzed Python file {file_path}",
                             functions=len(analysis.get("functions", [])),
                             classes=len(analysis.get("classes", [])),
                         )
                     except Exception as e:
                         debug_warning("qa_loop", f"Failed to analyze {file_path}: {e}")
 
-            if combined_analysis["functions"] or combined_analysis["classes"]:
+                # Analyze TypeScript files
+                elif full_path.exists() and full_path.suffix in (".ts", ".tsx"):
+                    try:
+                        analysis = ts_analyzer.analyze_file(full_path)
+                        combined_analysis["components"].extend(
+                            analysis.get("components", [])
+                        )
+                        combined_analysis["functions"].extend(
+                            analysis.get("functions", [])
+                        )
+                        combined_analysis["imports"].extend(analysis.get("imports", []))
+                        combined_analysis["edge_cases"].extend(
+                            analysis.get("edge_cases", [])
+                        )
+                        debug(
+                            "qa_loop",
+                            f"Analyzed TypeScript file {file_path}",
+                            components=len(analysis.get("components", [])),
+                            functions=len(analysis.get("functions", [])),
+                        )
+                    except Exception as e:
+                        debug_warning("qa_loop", f"Failed to analyze {file_path}: {e}")
+
+            if (
+                combined_analysis["functions"]
+                or combined_analysis["classes"]
+                or combined_analysis["components"]
+            ):
                 print(
-                    f"   Found {len(combined_analysis['functions'])} functions and {len(combined_analysis['classes'])} classes"
+                    f"   Found {len(combined_analysis['functions'])} functions, "
+                    f"{len(combined_analysis['classes'])} classes, and "
+                    f"{len(combined_analysis['components'])} components"
                 )
                 print("   Generating tests...")
 
@@ -517,11 +573,15 @@ async def run_qa_validation_loop(
 
                 if test_result.get("success"):
                     generated_files = test_result.get("generated_files", [])
-                    print(f"   ✅ Generated {len(generated_files)} test file(s)")
+                    framework = test_result.get("framework", "pytest")
+                    print(
+                        f"   ✅ Generated {len(generated_files)} {framework} test file(s)"
+                    )
                     debug_success(
                         "qa_loop",
                         "Test generation completed",
                         file_count=len(generated_files),
+                        framework=framework,
                     )
 
                     # Move generated tests to review directory for user approval
@@ -533,12 +593,104 @@ async def run_qa_validation_loop(
                     error = test_result.get("error", "Unknown error")
                     print(f"   ⚠️  Test generation had issues: {error}")
                     debug_warning("qa_loop", f"Test generation incomplete: {error}")
+
+                # Generate E2E tests for user-facing features
+                if combined_analysis.get("components"):
+                    print("\n🎭 Generating E2E tests for user-facing features...")
+                    debug("qa_loop", "Starting E2E test generation")
+
+                    try:
+                        e2e_result = await generate_e2e_tests(
+                            project_dir,
+                            spec_dir,
+                            combined_analysis,
+                            model=model,
+                            verbose=verbose,
+                        )
+
+                        if e2e_result.get("success"):
+                            e2e_files = e2e_result.get("generated_files", [])
+                            print(f"   ✅ Generated {len(e2e_files)} E2E test file(s)")
+                            debug_success(
+                                "qa_loop",
+                                "E2E test generation completed",
+                                file_count=len(e2e_files),
+                            )
+
+                            # Move E2E tests to review directory
+                            if e2e_files:
+                                _move_tests_to_review_directory(
+                                    project_dir, spec_dir, e2e_files
+                                )
+                        else:
+                            error = e2e_result.get("error", "Unknown error")
+                            print(f"   ⚠️  E2E test generation had issues: {error}")
+                            debug_warning(
+                                "qa_loop", f"E2E test generation incomplete: {error}"
+                            )
+                    except Exception as e:
+                        debug_error("qa_loop", f"E2E test generation failed: {e}")
+                        print(f"   ⚠️  E2E test generation failed: {e}")
             else:
                 print("   No testable functions or classes found")
                 debug("qa_loop", "No testable code found in modified files")
         else:
             print("   No modified Python files to analyze")
             debug("qa_loop", "No modified files found in implementation plan")
+
+        # Collect and report test coverage
+        print("\n📊 Collecting test coverage reports...")
+        debug("qa_loop", "Starting coverage collection")
+
+        try:
+            coverage_report = collect_coverage(project_dir, framework=None)
+
+            if coverage_report:
+                coverage_summary = format_coverage_summary(coverage_report)
+                print("\n" + coverage_summary)
+                debug_success(
+                    "qa_loop",
+                    "Coverage collection completed",
+                    overall_coverage=coverage_report.overall_coverage,
+                    framework=coverage_report.framework,
+                )
+
+                # Save coverage report to spec directory
+                coverage_file = spec_dir / "coverage_report.json"
+                import json
+
+                coverage_data = {
+                    "overall_coverage": coverage_report.overall_coverage,
+                    "lines_total": coverage_report.lines_total,
+                    "lines_covered": coverage_report.lines_covered,
+                    "lines_missed": coverage_report.lines_missed,
+                    "framework": coverage_report.framework,
+                    "files": [
+                        {
+                            "file_path": f.file_path,
+                            "coverage_percentage": f.coverage_percentage,
+                            "lines_total": f.lines_total,
+                            "lines_covered": f.lines_covered,
+                            "lines_missed": f.lines_missed,
+                        }
+                        for f in coverage_report.files[:20]  # Top 20 files
+                    ],
+                    "uncovered_files": coverage_report.uncovered_files[
+                        :10
+                    ],  # Top 10 uncovered
+                }
+                coverage_json = json.dumps(coverage_data, indent=2)
+                await asyncio.to_thread(
+                    coverage_file.write_text, coverage_json, encoding="utf-8"
+                )
+                debug("qa_loop", f"Saved coverage report to {coverage_file}")
+            else:
+                print("   ⚠️  No coverage reports found")
+                print("   Run tests with coverage enabled to generate reports")
+                debug("qa_loop", "No coverage reports available")
+        except Exception as e:
+            debug_error("qa_loop", f"Coverage collection failed: {e}")
+            print(f"   ⚠️  Coverage collection failed: {e}")
 
     except Exception as e:
         debug_error("qa_loop", f"Test generation failed: {e}")
@@ -620,9 +772,6 @@ async def run_qa_validation_loop(
 
         if status == "approved":
             emit_phase(ExecutionPhase.COMPLETE, "QA validation passed")
-            # Reset error tracking on success
-            consecutive_errors = 0
-            last_error_context = None
 
             # Record successful iteration
             debug_success(
@@ -777,6 +926,76 @@ async def run_qa_validation_loop(
                     )
 
                 return False
+
+            # Enhanced escalation: Check for early escalation signals
+            # This uses the RecoveryManager to proactively identify high-risk situations
+            should_escalate = False
+            escalation_reason = ""
+
+            try:
+                recovery_manager = RecoveryManager(spec_dir, project_dir)
+
+                # Build error description from QA issues for escalation analysis
+                error_description = f"QA rejection with {len(current_issues)} issue(s)"
+                if current_issues:
+                    # Include first issue description for pattern matching
+                    error_description += f": {current_issues[0].get('title', '')}"
+
+                # Map QA iteration to a pseudo-subtask for recovery tracking
+                qa_subtask_id = f"qa_iteration_{qa_iteration}"
+
+                # Classify the failure type based on issues
+                from services.recovery import FailureType
+
+                failure_type = (
+                    FailureType.VERIFICATION_FAILED
+                )  # QA rejections are verification failures
+
+                # Check if we should escalate early (before max iterations)
+                should_escalate, escalation_reason = (
+                    recovery_manager.should_escalate_early(
+                        qa_subtask_id, failure_type, error_description
+                    )
+                )
+
+                if should_escalate:
+                    debug_error(
+                        "qa_loop",
+                        "Early escalation triggered by enhanced recovery logic",
+                        reason=escalation_reason,
+                        iteration=qa_iteration,
+                        max_iterations=MAX_QA_ITERATIONS,
+                    )
+                    print("\n⚠️  Early Escalation Triggered")
+                    print(f"   Reason: {escalation_reason}")
+                    print(
+                        f"   Escalating at iteration {qa_iteration}/{MAX_QA_ITERATIONS}..."
+                    )
+
+                    # Create escalation file
+                    await escalate_to_human(spec_dir, current_issues, qa_iteration)
+
+                    # End validation phase
+                    if task_logger:
+                        task_logger.end_phase(
+                            LogPhase.VALIDATION,
+                            success=False,
+                            message=f"QA escalated to human after {qa_iteration} iterations: {escalation_reason}",
+                        )
+
+                    # Update Linear
+                    if linear_task and linear_task.task_id:
+                        await linear_qa_max_iterations(spec_dir, qa_iteration)
+                        print(
+                            "\nLinear: Task marked as needing human intervention (early escalation)"
+                        )
+
+                    return False
+
+            except Exception as e:
+                # Don't fail the QA loop if escalation check fails
+                debug_warning("qa_loop", f"Early escalation check failed: {e}")
+                # Continue with normal fixer loop
 
             # Record rejection in Linear
             if linear_task and linear_task.task_id:
