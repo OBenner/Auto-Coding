@@ -27,7 +27,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -90,7 +90,7 @@ jobs:
           Get-ChildItem $archiveName
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: node-pty-win32-${{ matrix.arch }}
           path: apps/frontend/node-pty-*.zip
@@ -98,7 +98,7 @@ jobs:
 
       - name: Upload to release
         if: github.event_name == 'release'
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           files: apps/frontend/node-pty-*.zip
         env:
@@ -120,7 +120,7 @@ jobs:
           find artifacts -type f -name "*.zip"
 
       - name: Upload combined artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: node-pty-prebuilds-all
           path: artifacts/**/*.zip

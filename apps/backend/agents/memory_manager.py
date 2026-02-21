@@ -25,12 +25,17 @@ from debug import (
     debug_warning,
     is_debug_enabled,
 )
-from graphiti_config import get_graphiti_status, is_graphiti_enabled
+from integrations.graphiti.config import get_graphiti_status, is_graphiti_enabled
 
 # Import from parent memory package
 # Now safe since this module is named memory_manager (not memory)
 from memory import save_session_insights as save_file_based_memory
 from memory.graphiti_helpers import get_graphiti_memory
+from memory.patterns import (
+    save_detected_patterns_from_errors,
+    save_detected_patterns_from_naming,
+    save_detected_patterns_from_organization,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -387,9 +392,7 @@ async def get_failure_patterns(
         # Parse and filter results
         failure_patterns = []
         for result in results:
-            content = getattr(result, "content", None) or getattr(
-                result, "fact", None
-            )
+            content = getattr(result, "content", None) or getattr(result, "fact", None)
             score = getattr(result, "score", 0.0)
 
             if score < min_score:
@@ -454,9 +457,7 @@ async def get_failure_patterns(
 
         # Format the failure patterns
         sections = ["## Failure Pattern Analysis\n"]
-        sections.append(
-            "_Similar failures from past builds (learn from history):_\n"
-        )
+        sections.append("_Similar failures from past builds (learn from history):_\n")
 
         # Group patterns by failure type and category
         by_type: dict[str, list[dict]] = {}
@@ -939,6 +940,7 @@ async def save_feedback(
     task_description: str,
     agent_type: str,
     context: dict | None = None,
+    rating: int | None = None,
 ) -> bool:
     """
     Save user feedback (accept/reject/modify) to memory and update preferences.
@@ -956,6 +958,7 @@ async def save_feedback(
         context: Optional additional context about the feedback
                  For "modified": should include what was changed
                  For "rejected": should include why it was rejected
+        rating: Optional rating (1-5 for stars, or 0/1 for thumbs down/up)
 
     Returns:
         True if saved successfully, False otherwise
@@ -974,12 +977,17 @@ async def save_feedback(
             return False
 
         if is_debug_enabled():
+            debug_data = {
+                "feedback_type": feedback_type,
+                "agent_type": agent_type,
+                "task": task_description[:100],
+            }
+            if rating is not None:
+                debug_data["rating"] = rating
             debug(
                 "memory",
                 "Saving user feedback",
-                feedback_type=feedback_type,
-                agent_type=agent_type,
-                task=task_description[:100],
+                **debug_data,
             )
 
         # Save feedback to preference profile via Graphiti
@@ -1004,6 +1012,8 @@ async def save_feedback(
             "agent_type": agent_type,
             "context": context or {},
         }
+        if rating is not None:
+            episode_data["rating"] = rating
 
         # Build insights based on feedback type
         insights = {
@@ -1073,12 +1083,15 @@ async def save_feedback(
         )
 
         # Also update preference profile directly
-        profile_result = await memory.add_feedback_to_profile(
-            feedback_type=feedback_enum,
-            task_description=task_description,
-            agent_type=agent_type,
-            context=context or {},
-        )
+        profile_kwargs = {
+            "feedback_type": feedback_enum,
+            "task_description": task_description,
+            "agent_type": agent_type,
+            "context": context or {},
+        }
+        if rating is not None:
+            profile_kwargs["rating"] = rating
+        profile_result = await memory.add_feedback_to_profile(**profile_kwargs)
 
         if result and profile_result:
             logger.info(f"User feedback saved: {feedback_type} for {agent_type} task")
@@ -1100,6 +1113,186 @@ async def save_feedback(
             operation="save_feedback",
             feedback_type=feedback_type,
             agent_type=agent_type,
+            spec_dir=str(spec_dir),
+            project_dir=str(project_dir),
+        )
+        return False
+    finally:
+        if memory is not None:
+            try:
+                await memory.close()
+            except Exception:
+                pass
+
+
+async def track_improvement(
+    spec_dir: Path,
+    project_dir: Path,
+    improvement_description: str,
+    feedback_ids: list[str] | None = None,
+    before_metrics: dict | None = None,
+    after_metrics: dict | None = None,
+    agent_type: str | None = None,
+    context: dict | None = None,
+) -> bool:
+    """
+    Track an improvement made in response to user feedback.
+
+    This function records when user feedback has led to a measurable improvement
+    in agent behavior, code quality, or user satisfaction. This creates a feedback
+    loop showing how user input directly influences the system.
+
+    Args:
+        spec_dir: Spec directory
+        project_dir: Project root directory
+        improvement_description: Description of what was improved
+        feedback_ids: Optional list of feedback IDs that triggered this improvement
+        before_metrics: Optional metrics before the improvement
+                       (e.g., {"success_rate": 0.6, "avg_rating": 3.2})
+        after_metrics: Optional metrics after the improvement
+                      (e.g., {"success_rate": 0.85, "avg_rating": 4.1})
+        agent_type: Optional agent type that was improved (planner, coder, etc.)
+        context: Optional additional context about the improvement
+
+    Returns:
+        True if tracked successfully, False otherwise
+
+    Example:
+        >>> await track_improvement(
+        ...     spec_dir=Path(".auto-claude/specs/001"),
+        ...     project_dir=Path("."),
+        ...     improvement_description="Improved error handling based on user feedback",
+        ...     feedback_ids=["feedback_123", "feedback_456"],
+        ...     before_metrics={"error_rate": 0.15},
+        ...     after_metrics={"error_rate": 0.03},
+        ...     agent_type="coder"
+        ... )
+    """
+    if not is_graphiti_enabled():
+        if is_debug_enabled():
+            debug("memory", "Graphiti not enabled, skipping improvement tracking")
+        return False
+
+    memory = None
+    try:
+        memory = await get_graphiti_memory(spec_dir, project_dir)
+        if memory is None:
+            if is_debug_enabled():
+                debug_warning(
+                    "memory", "GraphitiMemory not available for improvement tracking"
+                )
+            return False
+
+        if is_debug_enabled():
+            debug_data = {
+                "improvement": improvement_description[:100],
+            }
+            if feedback_ids:
+                debug_data["feedback_count"] = len(feedback_ids)
+            if agent_type:
+                debug_data["agent_type"] = agent_type
+            debug(
+                "memory",
+                "Tracking improvement",
+                **debug_data,
+            )
+
+        # Import episode type
+        from integrations.graphiti.queries_pkg.schema import EPISODE_TYPE_IMPROVEMENT
+
+        # Calculate improvement delta if metrics provided
+        improvement_delta = {}
+        if before_metrics and after_metrics:
+            for key in set(before_metrics.keys()) | set(after_metrics.keys()):
+                before_val = before_metrics.get(key)
+                after_val = after_metrics.get(key)
+                if before_val is not None and after_val is not None:
+                    if isinstance(before_val, (int, float)) and isinstance(
+                        after_val, (int, float)
+                    ):
+                        delta = after_val - before_val
+                        percent_change = (
+                            round(((delta / before_val) * 100), 2)
+                            if before_val != 0
+                            else None
+                        )
+                        improvement_delta[key] = {
+                            "before": before_val,
+                            "after": after_val,
+                            "delta": delta,
+                            "percent_change": percent_change,
+                        }
+
+        # Store improvement in Graphiti as an episode
+        episode_data = {
+            "episode_type": EPISODE_TYPE_IMPROVEMENT,
+            "improvement_description": improvement_description,
+            "feedback_ids": feedback_ids or [],
+            "before_metrics": before_metrics or {},
+            "after_metrics": after_metrics or {},
+            "improvement_delta": improvement_delta,
+            "context": context or {},
+        }
+        if agent_type:
+            episode_data["agent_type"] = agent_type
+
+        # Build insights that show how feedback led to improvement
+        insights = {
+            "what_worked": [
+                f"User feedback led to improvement: {improvement_description[:200]}"
+            ],
+            "discoveries": {
+                "improvements": [
+                    {
+                        "description": improvement_description,
+                        "feedback_count": len(feedback_ids) if feedback_ids else 0,
+                        "metrics_delta": improvement_delta,
+                        "source": "user_feedback_loop",
+                    }
+                ]
+            },
+            "recommendations_for_next_session": [],
+            "_improvement": episode_data,
+        }
+
+        # Add specific recommendations based on metrics
+        if improvement_delta:
+            for metric, delta_data in improvement_delta.items():
+                if delta_data["delta"] > 0:  # Improvement
+                    insights["recommendations_for_next_session"].append(
+                        f"Continue approach that improved {metric} by {delta_data['percent_change']:.1f}%"
+                    )
+
+        # Save to Graphiti
+        result = await memory.save_session_insights(
+            session_num=0,  # Improvements are session-independent
+            insights=insights,
+        )
+
+        if result:
+            logger.info(
+                f"Improvement tracked: {improvement_description[:100]} "
+                f"(based on {len(feedback_ids) if feedback_ids else 0} feedback items)"
+            )
+            if is_debug_enabled():
+                debug_success(
+                    "memory",
+                    "Improvement tracked successfully",
+                    improvement=improvement_description[:100],
+                    feedback_count=len(feedback_ids) if feedback_ids else 0,
+                    metrics_improved=list(improvement_delta.keys()),
+                )
+
+        return bool(result)
+
+    except Exception as e:
+        logger.warning(f"Failed to track improvement: {e}")
+        if is_debug_enabled():
+            debug_error("memory", "Improvement tracking failed", error=str(e))
+        capture_exception(
+            e,
+            operation="track_improvement",
+            improvement=improvement_description[:100],
             spec_dir=str(spec_dir),
             project_dir=str(project_dir),
         )
@@ -1227,3 +1420,134 @@ async def save_session_to_graphiti(
         discoveries,
     )
     return result
+
+
+async def detect_and_save_codebase_patterns(
+    spec_dir: Path, project_dir: Path
+) -> dict[str, int]:
+    """
+    Detect and save codebase patterns using pattern detectors.
+
+    This function runs the three pattern detectors (naming, error handling, organization)
+    on the project directory and saves all detected patterns to memory.
+
+    Args:
+        spec_dir: Spec directory
+        project_dir: Project root directory
+
+    Returns:
+        Dictionary with counts of patterns saved by category:
+        {
+            "naming": 5,
+            "error-handling": 3,
+            "code-organization": 4
+        }
+    """
+    if is_debug_enabled():
+        debug(
+            "memory",
+            "Detecting and saving codebase patterns",
+            project_dir=str(project_dir),
+        )
+
+    pattern_counts = {
+        "naming": 0,
+        "error-handling": 0,
+        "code-organization": 0,
+    }
+
+    try:
+        # Import detectors
+        from analysis.analyzers.error_pattern_detector import ErrorPatternDetector
+        from analysis.analyzers.naming_detector import NamingDetector
+        from analysis.analyzers.organization_detector import OrganizationDetector
+
+        # Detect primary language for naming analysis
+        detected_language = "python"  # default
+        try:
+            from project.stack_detector import StackDetector
+
+            stack = StackDetector(project_dir)
+            stack.detect_languages()
+            langs = stack.stack.languages
+            if langs:
+                detected_language = langs[0]
+        except Exception:
+            pass  # Fall back to "python"
+
+        # Detect naming conventions
+        try:
+            naming_detector = NamingDetector(
+                project_dir, {"language": detected_language}
+            )
+            naming_conventions = naming_detector.detect_naming_conventions()
+            save_detected_patterns_from_naming(spec_dir, naming_conventions)
+            pattern_counts["naming"] = sum(1 for v in naming_conventions.values() if v)
+            if is_debug_enabled():
+                debug(
+                    "memory",
+                    "Naming conventions detected",
+                    count=pattern_counts["naming"],
+                )
+        except Exception as e:
+            logger.warning(f"Failed to detect naming conventions: {e}")
+            if is_debug_enabled():
+                debug_warning("memory", "Naming detection failed", error=str(e))
+
+        # Detect error handling patterns
+        try:
+            error_detector = ErrorPatternDetector(project_dir)
+            error_patterns = error_detector.detect_error_patterns()
+            save_detected_patterns_from_errors(spec_dir, error_patterns)
+            pattern_counts["error-handling"] = sum(
+                1 for v in error_patterns.values() if v
+            )
+            if is_debug_enabled():
+                debug(
+                    "memory",
+                    "Error patterns detected",
+                    count=pattern_counts["error-handling"],
+                )
+        except Exception as e:
+            logger.warning(f"Failed to detect error patterns: {e}")
+            if is_debug_enabled():
+                debug_warning("memory", "Error pattern detection failed", error=str(e))
+
+        # Detect organization patterns
+        try:
+            org_detector = OrganizationDetector(project_dir)
+            org_patterns = org_detector.detect_organization_patterns()
+            save_detected_patterns_from_organization(spec_dir, org_patterns)
+            pattern_counts["code-organization"] = sum(
+                1 for v in org_patterns.values() if v
+            )
+            if is_debug_enabled():
+                debug(
+                    "memory",
+                    "Organization patterns detected",
+                    count=pattern_counts["code-organization"],
+                )
+        except Exception as e:
+            logger.warning(f"Failed to detect organization patterns: {e}")
+            if is_debug_enabled():
+                debug_warning("memory", "Organization detection failed", error=str(e))
+
+        total_patterns = sum(pattern_counts.values())
+        if is_debug_enabled():
+            debug_success(
+                "memory", "Pattern detection complete", total_patterns=total_patterns
+            )
+        logger.info(f"Detected and saved {total_patterns} codebase patterns")
+
+    except Exception as e:
+        logger.warning(f"Pattern detection failed: {e}")
+        if is_debug_enabled():
+            debug_error("memory", "Pattern detection failed", error=str(e))
+        capture_exception(
+            e,
+            operation="detect_and_save_codebase_patterns",
+            spec_dir=str(spec_dir),
+            project_dir=str(project_dir),
+        )
+
+    return pattern_counts

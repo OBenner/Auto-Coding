@@ -1,9 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Download, Loader2, RefreshCw, BarChart3, FileText, Calendar } from 'lucide-react';
+import { Loader2, BarChart3, Calendar } from 'lucide-react';
 import { Button } from '../ui/button';
 import { ScrollArea } from '../ui/scroll-area';
 import { useToast } from '../../hooks/use-toast';
 import { FailureAnalysisDashboard } from './FailureAnalysisDashboard';
+import { QualityTrendChart } from './QualityTrendChart';
+import { QualityAlertCard } from './QualityAlertCard';
+import { DashboardActions } from './DashboardActions';
+import { useQualityStore, loadAllQualityData } from '../../stores/quality-store';
 import type {
   ProductivitySummary,
   ProductivityTrendPoint,
@@ -29,6 +33,14 @@ export function ProductivityDashboard({ projectId }: ProductivityDashboardProps)
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [timeRange, setTimeRange] = useState<TimeRange>('30d');
+
+  // Quality store
+  const { scores: qualityScores, alerts: qualityAlerts, isLoadingScores: isLoadingQuality } =
+    useQualityStore((state) => ({
+      scores: state.scores,
+      alerts: state.alerts,
+      isLoadingScores: state.isLoadingScores,
+    }));
 
   // Calculate date filter based on time range
   const getDateFilter = useCallback((): Pick<ProductivityAnalyticsFilter, 'start_date' | 'end_date'> => {
@@ -93,6 +105,9 @@ export function ProductivityDashboard({ projectId }: ProductivityDashboardProps)
       } else {
         console.error('Failed to load productivity trends:', trendsResult.error);
       }
+
+      // Load quality data for quality trend chart and alerts
+      await loadAllQualityData(projectId);
 
       if (showRefreshToast) {
         toast({
@@ -231,35 +246,13 @@ export function ProductivityDashboard({ projectId }: ProductivityDashboardProps)
               </Button>
             </div>
 
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleRefresh}
-              disabled={isRefreshing}
-            >
-              <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
-              Refresh
-            </Button>
-
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handleExport('json')}
-              disabled={isExporting}
-            >
-              <FileText className="h-4 w-4 mr-2" />
-              Export JSON
-            </Button>
-
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handleExport('csv')}
-              disabled={isExporting}
-            >
-              <Download className="h-4 w-4 mr-2" />
-              Export CSV
-            </Button>
+            <DashboardActions
+              onRefresh={handleRefresh}
+              onExportJson={() => handleExport('json')}
+              onExportCsv={() => handleExport('csv')}
+              isRefreshing={isRefreshing}
+              isExporting={isExporting}
+            />
           </div>
         </div>
       </div>
@@ -305,6 +298,21 @@ export function ProductivityDashboard({ projectId }: ProductivityDashboardProps)
               </div>
             </div>
           )}
+
+          {/* Quality Section */}
+          <div className="space-y-6">
+            {/* Quality Alerts */}
+            <QualityAlertCard
+              alerts={qualityAlerts}
+              isLoading={isLoadingQuality}
+            />
+
+            {/* Quality Trend Chart */}
+            <QualityTrendChart
+              scores={qualityScores}
+              isLoading={isLoadingQuality}
+            />
+          </div>
 
           {/* Breakdown by Type and Complexity */}
           {summary && (

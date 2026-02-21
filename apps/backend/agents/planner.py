@@ -63,7 +63,7 @@ async def run_followup_planner(
         bool: True if planning completed successfully
     """
     from implementation_plan import ImplementationPlan
-    from prompts import get_followup_planner_prompt
+    from prompts_pkg.prompts import get_followup_planner_prompt
 
     # Initialize status manager for ccstatusline
     status_manager = StatusManager(project_dir)
@@ -111,7 +111,12 @@ async def run_followup_planner(
     try:
         # Run single planning session
         async with client:
-            status, response, usage_metadata = await run_agent_session(
+            (
+                status,
+                response,
+                usage_metadata,
+                _,
+            ) = await run_agent_session(
                 client, prompt, spec_dir, verbose, phase=LogPhase.PLANNING
             )
 

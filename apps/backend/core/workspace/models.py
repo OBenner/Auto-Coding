@@ -111,14 +111,14 @@ class MergeLock:
                         try:
                             _os.kill(pid, 0)
                             is_running = True
-                        except (OSError, ProcessLookupError):
+                        except OSError:
                             is_running = False
 
                         if not is_running:
                             # Stale lock - remove it
                             self.lock_file.unlink()
                             continue
-                    except (ValueError, ProcessLookupError):
+                    except ValueError:
                         # Invalid PID or can't check - remove stale lock
                         self.lock_file.unlink()
                         continue
@@ -200,14 +200,14 @@ class SpecNumberLock:
                         try:
                             _os.kill(pid, 0)
                             is_running = True
-                        except (OSError, ProcessLookupError):
+                        except OSError:
                             is_running = False
 
                         if not is_running:
                             # Stale lock - remove it
                             self.lock_file.unlink()
                             continue
-                    except (ValueError, ProcessLookupError):
+                    except ValueError:
                         # Invalid PID or can't check - remove stale lock
                         self.lock_file.unlink()
                         continue

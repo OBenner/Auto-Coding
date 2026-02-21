@@ -676,7 +676,7 @@ The SDK will run invoked agents in parallel automatically.
                                 file_count += 1
                                 if file_count >= MAX_FILE_COUNT:
                                     break
-                    except (OSError, PermissionError):
+                    except OSError:
                         file_count = 0
                     file_count_str = (
                         f"{file_count:,}+"

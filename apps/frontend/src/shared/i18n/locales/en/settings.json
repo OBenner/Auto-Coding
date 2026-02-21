@@ -41,6 +41,10 @@
       "title": "Notifications",
       "description": "Alert preferences"
     },
+    "feedback": {
+      "title": "Feedback",
+      "description": "User feedback collection settings"
+    },
     "debug": {
       "title": "Debug & Logs",
       "description": "Troubleshooting tools"
@@ -48,6 +52,10 @@
     "keyboardShortcuts": {
       "title": "Keyboard Shortcuts",
       "description": "Customize keyboard shortcuts for common actions"
+    },
+    "envConfig": {
+      "title": "Environment Config",
+      "description": "Configure Claude authentication and environment tokens"
     }
   },
   "apiProfiles": {
@@ -311,6 +319,12 @@
     "onReviewNeededDescription": "Notify when QA requires your review",
     "sound": "Sound",
     "soundDescription": "Play sound with notifications"
+  },
+  "feedback": {
+    "title": "Feedback Settings",
+    "description": "Configure feedback collection preferences",
+    "enableFeedback": "Enable Feedback Collection",
+    "enableFeedbackDescription": "Collect feedback after agent tasks complete to help improve the system"
   },
   "actions": {
     "save": "Save Settings",
