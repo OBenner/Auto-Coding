@@ -24,26 +24,26 @@ Remote: `andymik90` (уже добавлен в этом worktree)
 - [~] **PR #1833** — SKIPPED: depends on taskStateManager/XState which our fork does not have
 - [x] **PR #1793** — PR review hangs in bundled app: use getEffectiveSourcePath() and managed Python env in subprocess-runner.ts
 
-## Осталось — Категория 3: Тесты
+## Осталось — Категория 3: Тесты (deferred — require extensive per-test investigation due to codebase divergence)
 
-- [ ] **PR #1772** — 100% test coverage для backend CLI commands. Ветка: `tests-cli-commands`
-- [ ] **PR #1779** — Backend agent test coverage → 94%. Ветка удалена
+- [ ] **PR #1772** — 100% test coverage для backend CLI commands. 12,500+ lines, 13 new test files. Source also includes small bug fixes (BuildState enum, QA status detection). Ветка: `tests-cli-commands`
+- [ ] **PR #1779** — Backend agent test coverage → 94%. ~2,800 lines, QA fixer/reviewer tests, spec validator tests. Ветка удалена
 
 ## Осталось — Категория 4: Фичи (нужна адаптация)
 
-- [ ] **PR #1832** — Symlink Python venvs в worktrees. Ветка: `terminal/improve-worktree-venv`
-- [ ] **PR #1831** — WebGL context manager для терминалов. Ветка: `feature/webgl-context-management`
-- [ ] **PR #1821** — Screenshot paste в чат. Ветка: `auto-claude/224-add-screenshot-paste-capability-to-chat`
-- [ ] **PR #1820** — Refactor PR review → XState. Ветка: `auto-claude/221-refactor-github-pr-review-with-xstate`
+- [~] **PR #1832** — SKIPPED: our fork lacks DependencyStrategy infrastructure (only has node_modules symlinks)
+- [ ] **PR #1831** — WebGL context manager для терминалов. 20 files, +774/-131. Ветка: `feature/webgl-context-management`
+- [ ] **PR #1821** — Screenshot paste в чат. 14 files, +598/-94. Ветка: `auto-claude/224-add-screenshot-paste-capability-to-chat`
+- [~] **PR #1820** — SKIPPED: XState PR review refactor, not applicable
 - [ ] **PR #1819** — Account-aware terminal sessions. Ветка: `auto-claude/229-implement-account-aware-terminal-session-persisten`
-- [ ] **PR #1818** — Fix mark as done on task modal. Ветка: `auto-claude/227-fix-mark-as-done-on-task-modal`
-- [ ] **PR #1817** — Archive button для done tasks. Ветка: `auto-claude/226-add-archive-button-to-done-tasks`
-- [ ] **PR #1816** — Remove deprecated TaskStateMachine. Ветка: `auto-claude/223-remove-deprecated-taskstatemachine-class`
-- [ ] **PR #1829** — Bulk delete/archive chat history. Ветка: `auto-claude/225-bulk-delete-and-archive-chat-history`
-- [ ] **PR #1815** — Refactor roadmap tasks → XState. Ветка: `auto-claude/222-refactor-roadmap-tasks-with-xstate`
-- [ ] **PR #1814** — Manual competitor в roadmap. Ветка: `auto-claude/220-add-manual-competitor-functionality-in-roadmap`
-- [ ] **PR #1790** — User-friendly GitHub API errors. Ветка удалена
-- [ ] **PR #1794** — Unified profile swapping. Ветка удалена
+- [x] **PR #1818** — Fix mark as done on task modal: add keepWorktree option to updateTaskStatus, pass from WorkspaceMessages
+- [ ] **PR #1817** — Archive button для done tasks. 11 files, +301/-84. Ветка: `auto-claude/226-add-archive-button-to-done-tasks`
+- [~] **PR #1816** — SKIPPED: Remove deprecated TaskStateMachine (XState), not applicable
+- [ ] **PR #1829** — Bulk delete/archive chat history. 15 files, +909/-110. Ветка: `auto-claude/225-bulk-delete-and-archive-chat-history`
+- [~] **PR #1815** — SKIPPED: Refactor roadmap tasks → XState, not applicable
+- [ ] **PR #1814** — Manual competitor в roadmap. 18 files, +1037/-152. Ветка: `auto-claude/220-add-manual-competitor-functionality-in-roadmap`
+- [ ] **PR #1790** — User-friendly GitHub API errors. 11 files, +2182/-15. Ветка удалена
+- [ ] **PR #1794** — Unified profile swapping. 10 files, +638/-6. Ветка удалена
 
 ## Заметки
 
