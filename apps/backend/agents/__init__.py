@@ -19,6 +19,7 @@ Explicit re-exports below satisfy CodeQL static analysis.
 # Explicit imports required by CodeQL static analysis
 # (CodeQL doesn't recognize __getattr__ dynamic exports)
 from .code_reviewer import run_code_review_session as run_code_review_session
+from .coder import run_autonomous_agent as run_autonomous_agent
 from .documentation_generator import (
     run_documentation_generator_session as run_documentation_generator_session,
 )
@@ -26,6 +27,7 @@ from .memory_manager import debug_memory_system_status as debug_memory_system_st
 from .memory_manager import get_graphiti_context as get_graphiti_context
 from .memory_manager import save_session_memory as save_session_memory
 from .memory_manager import save_session_to_graphiti as save_session_to_graphiti
+from .planner import run_followup_planner as run_followup_planner
 from .session import post_session_processing as post_session_processing
 from .session import run_agent_session as run_agent_session
 from .utils import find_phase_for_subtask as find_phase_for_subtask
@@ -65,12 +67,4 @@ def __getattr__(name):
         from .base import AUTO_CONTINUE_DELAY_SECONDS, HUMAN_INTERVENTION_FILE
 
         return locals()[name]
-    elif name == "run_autonomous_agent":
-        from .coder import run_autonomous_agent
-
-        return run_autonomous_agent
-    elif name == "run_followup_planner":
-        from .planner import run_followup_planner
-
-        return run_followup_planner
     raise AttributeError(f"module 'agents' has no attribute '{name}'")
