@@ -24,16 +24,16 @@ Remote: `andymik90` (уже добавлен в этом worktree)
 - [~] **PR #1833** — SKIPPED: depends on taskStateManager/XState which our fork does not have
 - [x] **PR #1793** — PR review hangs in bundled app: use getEffectiveSourcePath() and managed Python env in subprocess-runner.ts
 
-## Осталось — Категория 3: Тесты (deferred — require extensive per-test investigation due to codebase divergence)
+## Осталось — Категория 3: Тесты (partially applied)
 
-- [ ] **PR #1772** — 100% test coverage для backend CLI commands. 12,500+ lines, 13 new test files. Source also includes small bug fixes (BuildState enum, QA status detection). Ветка: `tests-cli-commands`
-- [ ] **PR #1779** — Backend agent test coverage → 94%. ~2,800 lines, QA fixer/reviewer tests, spec validator tests. Ветка удалена
+- [x] **PR #1772** (source fixes) — BuildState.RUNNING→BUILDING bug fix, batch_commands QA status detection, .gitignore updates, GitLab API error class, paginated notes fetching (коммиты `3497b85b`, `0cddf898`). *New test files NOT applied — 13 files, 12,500+ lines require per-test investigation.*
+- [x] **PR #1779** (Windows compat + validators) — test_ci_discovery, test_security_scanner, test_service_orchestrator, test_validation_strategy Path.exists mocking, conftest.py new mock modules (коммит `0cddf898`). 3 validator test files added (79 tests, коммит `b6804b92`). *QA fixer/reviewer tests NOT applied — depend on core.error_utils which doesn't exist in our fork.*
 
 ## Осталось — Категория 4: Фичи (нужна адаптация)
 
 - [~] **PR #1832** — SKIPPED: our fork lacks DependencyStrategy infrastructure (only has node_modules symlinks)
 - [~] **PR #1831** — SKIPPED: no terminal infrastructure in our fork (useXterm.ts, terminal-manager.ts, webgl-context-manager.ts all missing)
-- [~] **PR #1821** — SKIPPED: no Insights/chat components in our fork (Insights.tsx, insights-store.ts, insights/ directory all missing)
+- [x] **PR #1821** (backend only) — insights_runner.py image/screenshot support: load_images_from_manifest() with path traversal protection, MIME validation, --images-file CLI arg (коммит `3497b85b`). *Frontend Insights components skipped — not in our fork.*
 - [~] **PR #1820** — SKIPPED: XState PR review refactor, not applicable
 - [~] **PR #1819** — SKIPPED: no terminal infrastructure or state-machines in our fork
 - [x] **PR #1818** — Fix mark as done on task modal: add keepWorktree option to updateTaskStatus, pass from WorkspaceMessages
@@ -41,32 +41,37 @@ Remote: `andymik90` (уже добавлен в этом worktree)
 - [~] **PR #1816** — SKIPPED: Remove deprecated TaskStateMachine (XState), not applicable
 - [~] **PR #1829** — SKIPPED: no ChatHistorySidebar or Insights components in our fork
 - [~] **PR #1815** — SKIPPED: Refactor roadmap tasks → XState, not applicable
-- [~] **PR #1814** — SKIPPED: no Roadmap components or roadmap runner in our fork
+- [x] **PR #1814** (backend only) — competitor_analyzer.py manual competitor preservation: dedicated manual_competitors.json, merge-back logic, dedup by ID (коммит `3497b85b`). *Frontend Roadmap components skipped — not in our fork.*
 - [~] **PR #1790** — SKIPPED: no GitHub Issues components (GitHubErrorDisplay, IssueList) in our fork
 - [~] **PR #1794** — SKIPPED: no profile-scorer.ts or unified-account.ts in our fork
 
 ## Итоговая сводка
 
-**Применено: 11 PRs** (коммиты в ветке `worktree-cherry-pick-andymik90`):
+**Применено: 16 PRs** (коммиты в ветке `worktree-cherry-pick-andymik90`):
 - PR #1834, #1841, #1853, #1844, #1847 — критичные backend баги
 - PR #1797+#1806+#1857 — PR review stability chain (combined)
 - PR #1813, #1843, #1852, #1836 — fullstack/frontend баги (bulk commit)
 - PR #1793 — PR review subprocess path fix
 - PR #1818 — keepWorktree option for task done
+- PR #1772 (source fixes) — BuildState bug, QA status, GitLab API improvements
+- PR #1779 (Windows compat) — test Path.exists mocking, conftest module isolation
+- PR #1814 (backend only) — competitor_analyzer manual competitor preservation
+- PR #1821 (backend only) — insights_runner image/screenshot support
 
-**Пропущено: 16 PRs** (компоненты отсутствуют в нашем форке):
-- 4 PR — зависят от XState/TaskStateManager (#1840, #1833, #1820, #1816, #1815)
+**Пропущено: 13 PRs** (компоненты отсутствуют в нашем форке):
+- 5 PR — зависят от XState/TaskStateManager (#1840, #1833, #1820, #1816, #1815)
 - 1 PR — FileWatcher (#1842)
 - 1 PR — DependencyStrategy (#1832)
-- 3 PR — Terminal infrastructure (#1831, #1819, #1836-terminal part)
-- 2 PR — Insights/Chat (#1821, #1829)
-- 2 PR — Roadmap (#1817, #1814)
+- 3 PR — Terminal infrastructure (#1831, #1819)
+- 1 PR — Chat/Insights frontend (#1829)
 - 1 PR — GitHub Issues components (#1790)
 - 1 PR — Profile scorer (#1794)
 
-**Отложено: 2 PRs** (тесты, требуют ручного анализа):
-- PR #1772 — 12,500+ строк тестов CLI commands
-- PR #1779 — ~2,800 строк тестов агентов
+**Не перенесено (слишком сильное расхождение или отсутствие зависимостей):**
+- PR #1772 — 13 new CLI test files (12,500+ строк) — массовый перенос нецелесообразен
+- PR #1779 — QA fixer/reviewer тесты — зависят от core.error_utils (нет в нашем форке)
+- PR #1817 — Roadmap frontend (нет компонентов)
+- Все XState/terminal/Insights PRs (см. список пропусков выше)
 
 ## Заметки
 
