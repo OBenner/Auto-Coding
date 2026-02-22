@@ -20,9 +20,9 @@ Remote: `andymik90` (уже добавлен в этом worktree)
 - [x] **PR #1843** — Windows: Claude CLI not found — backend only: CLAUDE.md system prompt truncation for Windows CreateProcessW limit. Frontend PATH normalization already handled differently in our fork.
 - [x] **PR #1852** — Dismissed PR review findings visible in UI: active vs dismissed separation in orchestrator, verdict from active only, UI with disputed badges/section, i18n keys.
 - [x] **PR #1836** — Blank terminals after project switch: force SIGWINCH on same-dimension resize, skip buffer replay for Claude-mode terminals on remount.
-- [ ] **PR #1842** — Watch worktree path для implementation_plan.json. 504+/56-, 4 files. Ветка удалена
-- [ ] **PR #1833** — Kanban stuck task state sync. 129+/21-, 8 files. Ветка: `fix/kanban-stuck-task` (depends on XState, needs investigation)
-- [ ] **PR #1793** — PR review зависает в bundled app. Ветка удалена (depends on getEffectiveSourcePath, needs investigation)
+- [~] **PR #1842** — SKIPPED: FileWatcher class does not exist in our fork
+- [~] **PR #1833** — SKIPPED: depends on taskStateManager/XState which our fork does not have
+- [x] **PR #1793** — PR review hangs in bundled app: use getEffectiveSourcePath() and managed Python env in subprocess-runner.ts
 
 ## Осталось — Категория 3: Тесты
 
