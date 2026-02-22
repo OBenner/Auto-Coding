@@ -20,6 +20,7 @@ from datetime import datetime
 from enum import Enum
 from pathlib import Path
 
+from core.file_utils import write_json_atomic
 from services.dead_letter_queue import DeadLetterQueue
 from services.notification_manager import NotificationManager
 
@@ -886,6 +887,34 @@ class RecoveryManager:
             history["subtasks"][subtask_id]["status"] = "stuck"
 
         self._save_attempt_history(history)
+
+        # Also update the subtask status in implementation_plan.json
+        # so that other callers (like is_build_ready_for_qa) see accurate status
+        try:
+            plan_file = self.spec_dir / "implementation_plan.json"
+            if plan_file.exists():
+                with open(plan_file, encoding="utf-8") as f:
+                    plan = json.load(f)
+
+                updated = False
+                for phase in plan.get("phases", []):
+                    for subtask in phase.get("subtasks", []):
+                        if subtask.get("id") == subtask_id:
+                            subtask["status"] = "failed"
+                            stuck_note = f"Marked as stuck: {reason}"
+                            existing = subtask.get("actual_output", "")
+                            subtask["actual_output"] = (
+                                f"{stuck_note}\n{existing}" if existing else stuck_note
+                            )
+                            updated = True
+                            break
+                    if updated:
+                        break
+
+                if updated:
+                    write_json_atomic(plan_file, plan, indent=2)
+        except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+            pass  # Non-fatal: plan update is best-effort
 
     def add_failure_to_dlq(
         self,

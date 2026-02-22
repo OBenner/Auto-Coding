@@ -284,7 +284,7 @@ def mock_coverage_reporter():
 def mock_qa_complete():
     """Mock QA completion check and phase configuration."""
     with contextlib.ExitStack() as stack:
-        stack.enter_context(patch("qa.loop.is_build_complete", return_value=True))
+        stack.enter_context(patch("qa.loop.is_build_ready_for_qa", return_value=True))
         stack.enter_context(patch("qa.loop.is_qa_approved", return_value=False))
         stack.enter_context(
             patch(
