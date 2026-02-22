@@ -70,12 +70,6 @@ const PROVIDER_MODELS: Record<AIProvider, Array<{ value: string; label: string; 
   ]
 };
 
-// Get default model for provider
-const getDefaultModelForProvider = (provider: AIProvider): string => {
-  const models = PROVIDER_MODELS[provider];
-  return models[0]?.value || '';
-};
-
 interface TaskFormFieldsProps {
   // Description field
   description: string;

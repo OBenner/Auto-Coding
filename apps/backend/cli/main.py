@@ -267,6 +267,15 @@ Environment Variables:
         help="Skip approval check and start build anyway (for debugging)",
     )
 
+    # Task restart
+    parser.add_argument(
+        "--restart-from",
+        type=str,
+        default=None,
+        metavar="SUBTASK_ID",
+        help="Restart build from a specific subtask ID (preserves provider/model config)",
+    )
+
     # Base branch for worktree creation
     parser.add_argument(
         "--base-branch",
@@ -694,6 +703,7 @@ def _run_cli() -> None:
         skip_qa=args.skip_qa,
         force_bypass_approval=args.force,
         base_branch=args.base_branch,
+        restart_from=args.restart_from,
     )
 
 

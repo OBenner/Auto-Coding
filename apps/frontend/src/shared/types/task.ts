@@ -318,6 +318,10 @@ export interface TaskMetadata {
   // Multi-model agent orchestration
   agentModels?: Record<string, string>;  // Agent-specific model overrides (e.g., { coder: 'haiku', planner: 'sonnet' })
 
+  // Provider selection
+  provider?: AIProvider;  // AI engine provider (claude, litellm, openrouter, zhipuai)
+  providerModel?: string;  // Provider-specific model ID
+
   // Archive status
   archivedAt?: string;  // ISO date when task was archived
   archivedInVersion?: string;  // Version in which task was archived (from changelog)

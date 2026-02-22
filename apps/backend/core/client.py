@@ -749,20 +749,20 @@ def create_client(
     # This enables runtime provider selection (e.g., --provider zhipuai)
     # When provider override is present, the caller should use the provider
     # abstraction layer instead of this Claude SDK client
-    provider_override = None
     if session_config is not None:
-        # SessionConfig may have provider and model overrides
-        # Check if provider is specified and different from default
-        if hasattr(session_config, 'provider') and session_config.provider:
-            provider_override = session_config.provider
+        if hasattr(session_config, "provider") and session_config.provider:
             logger.info(
-                f"SessionConfig provider override detected: {provider_override}. "
+                f"SessionConfig provider override detected: {session_config.provider}. "
                 f"Note: create_client() creates Claude SDK clients. "
                 f"For alternative providers, use create_engine_provider() instead."
             )
 
     # Log model override from SessionConfig if present
-    if session_config is not None and hasattr(session_config, 'model') and session_config.model:
+    if (
+        session_config is not None
+        and hasattr(session_config, "model")
+        and session_config.model
+    ):
         if session_config.model != model:
             logger.info(
                 f"SessionConfig model override: {session_config.model} "

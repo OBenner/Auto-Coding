@@ -229,6 +229,9 @@ export function TaskEditDialog({ task, open, onOpenChange, onSaved }: TaskEditDi
       metadataUpdates.phaseModels = phaseModels;
       metadataUpdates.phaseThinking = phaseThinking;
     }
+    // Persist provider and model settings
+    if (provider && provider !== 'claude') metadataUpdates.provider = provider;
+    if (providerModel) metadataUpdates.providerModel = providerModel;
     // Always set attachedImages to persist removal when all images are deleted
     metadataUpdates.attachedImages = images.length > 0 ? images : [];
     metadataUpdates.requireReviewBeforeCoding = requireReviewBeforeCoding;

@@ -279,11 +279,14 @@ export function TaskCreationWizard({
     };
 
     // Only update if the current model doesn't match the new provider
+    const providerPrefixMap: Record<AIProvider, string> = {
+      zhipuai: 'glm',
+      openrouter: 'anthropic/',
+      litellm: 'gpt',
+      claude: 'claude'
+    };
     const currentModelBelongsToProvider = providerModel.startsWith(
-      provider === 'zhipuai' ? 'glm' :
-      provider === 'openrouter' ? provider === 'claude' ? 'anthropic/' : 'openai/' :
-      provider === 'litellm' ? 'gpt' :
-      'claude'
+      providerPrefixMap[provider]
     );
 
     if (!currentModelBelongsToProvider) {
@@ -486,6 +489,9 @@ export function TaskCreationWizard({
       if (requireReviewBeforeCoding) metadata.requireReviewBeforeCoding = true;
       // Include agent models if configured
       if (Object.keys(agentModels).length > 0) metadata.agentModels = agentModels;
+      // Include provider and model if non-default
+      if (provider && provider !== 'claude') metadata.provider = provider;
+      if (providerModel) metadata.providerModel = providerModel;
       // Include custom template if selected
       if (selectedCustomTemplateId) metadata.customTemplateId = selectedCustomTemplateId;
       // Always include baseBranch - resolve PROJECT_DEFAULT_BRANCH to actual branch name

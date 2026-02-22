@@ -102,6 +102,14 @@ def handle_build_command(
 
     # Set provider from CLI argument if provided
     if provider:
+        from core.providers.config import AIEngineProvider
+
+        valid_providers = [p.value for p in AIEngineProvider]
+        if provider not in valid_providers:
+            print(
+                f"\nError: Invalid provider '{provider}'. Must be one of: {', '.join(valid_providers)}"
+            )
+            sys.exit(1)
         os.environ["AI_ENGINE_PROVIDER"] = provider
         debug("run.py", f"Provider set from CLI: {provider}")
 

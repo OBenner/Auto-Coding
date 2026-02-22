@@ -11,9 +11,9 @@ Tests the core.providers.adapters.zhipuai module functionality including:
 """
 
 import asyncio
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
+import pytest
 
 # =============================================================================
 # ZHIPUAI MODELS CONSTANT TESTS
@@ -255,6 +255,7 @@ class TestZhipuAISession:
 
         # Mock the import to raise ImportError
         import builtins
+
         original_import = builtins.__import__
 
         def mock_import(name, *args, **kwargs):
@@ -263,6 +264,7 @@ class TestZhipuAISession:
             return original_import(name, *args, **kwargs)
 
         with patch("builtins.__import__", side_effect=mock_import):
+
             async def complete():
                 async for _ in session.complete("Hello"):
                     pass
@@ -390,12 +392,13 @@ class TestZhipuAIProviderCreateSession:
 
         # Mock the zai module import
         mock_zhipuai_client = MagicMock()
-        with patch.dict("sys.modules", {"zai": MagicMock(ZhipuAiClient=mock_zhipuai_client)}):
+        with patch.dict(
+            "sys.modules", {"zai": MagicMock(ZhipuAiClient=mock_zhipuai_client)}
+        ):
             session = provider.create_session(SessionConfig(name="test"))
 
             assert session is not None
             assert session.is_active is True
-
 
     def test_create_session_uses_session_config_model(self):
         """Tests create_session uses model from session config if provided."""
@@ -457,7 +460,9 @@ class TestZhipuAIProviderCreateSession:
         session_config = SessionConfig(name="test-session")
 
         # Mock import to fail
-        with patch("builtins.__import__", side_effect=ImportError("No module named 'zai'")):
+        with patch(
+            "builtins.__import__", side_effect=ImportError("No module named 'zai'")
+        ):
             with pytest.raises(ProviderNotInstalled) as exc_info:
                 provider.create_session(session_config)
             assert "zai-sdk" in str(exc_info.value)
@@ -620,7 +625,7 @@ class TestZhipuAIProviderSupportedModels:
 
     def test_get_supported_models_contains_expected_models(self):
         """Tests get_supported_models contains expected ZhipuAI models."""
-        from core.providers.adapters.zhipuai import ZhipuAIProvider, ZHIPUAI_MODELS
+        from core.providers.adapters.zhipuai import ZHIPUAI_MODELS, ZhipuAIProvider
         from core.providers.config import ProviderConfig
 
         config = ProviderConfig(provider="zhipuai")
@@ -632,7 +637,7 @@ class TestZhipuAIProviderSupportedModels:
 
     def test_get_supported_models_returns_copy(self):
         """Tests get_supported_models returns a copy, not original."""
-        from core.providers.adapters.zhipuai import ZhipuAIProvider, ZHIPUAI_MODELS
+        from core.providers.adapters.zhipuai import ZHIPUAI_MODELS, ZhipuAIProvider
         from core.providers.config import ProviderConfig
 
         config = ProviderConfig(provider="zhipuai")
@@ -809,10 +814,33 @@ class TestZhipuAIProviderHealthCheck:
         )
         provider = ZhipuAIProvider(config)
 
-        # Mock import to fail
-        with patch("builtins.__import__", side_effect=ImportError("No module")):
-            result = provider.health_check()
-            assert result is False
+        # Temporarily remove 'zai' from sys.modules to simulate it not being installed
+        import sys
+
+        original_import = (
+            __builtins__["__import__"]
+            if isinstance(__builtins__, dict)
+            else __builtins__.__import__
+        )
+
+        def selective_import(name, *args, **kwargs):
+            if name == "zai" or name.startswith("zai."):
+                raise ImportError(f"No module named '{name}'")
+            return original_import(name, *args, **kwargs)
+
+        # Remove any cached 'zai' modules
+        saved_modules = {
+            k: sys.modules.pop(k)
+            for k in list(sys.modules)
+            if k == "zai" or k.startswith("zai.")
+        }
+        try:
+            with patch("builtins.__import__", side_effect=selective_import):
+                result = provider.health_check()
+                assert result is False
+        finally:
+            # Restore any removed modules
+            sys.modules.update(saved_modules)
 
     def test_health_check_validates_config_first(self):
         """Tests health_check calls validate_config first."""

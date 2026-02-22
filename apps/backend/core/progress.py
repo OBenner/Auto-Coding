@@ -9,6 +9,7 @@ Enhanced with colored output, icons, and better visual formatting.
 """
 
 import json
+import logging
 from pathlib import Path
 
 from core.plan_normalization import normalize_subtask_aliases
@@ -463,7 +464,9 @@ def get_next_subtask(spec_dir: Path, restart_from: str | None = None) -> dict | 
                 phase_id = (
                     phase_id_value if phase_id_value is not None else phase.get("phase")
                 )
-                for subtask_idx, subtask in enumerate(phase.get("subtasks", phase.get("chunks", []))):
+                for subtask_idx, subtask in enumerate(
+                    phase.get("subtasks", phase.get("chunks", []))
+                ):
                     if subtask.get("id") == restart_from:
                         restart_phase_index = phase_idx
                         restart_subtask_index = subtask_idx
@@ -479,14 +482,16 @@ def get_next_subtask(spec_dir: Path, restart_from: str | None = None) -> dict | 
                 # First, check if the restart subtask itself is completed
                 # If so, we need to find the next pending subtask
                 current_phase = phases[restart_phase_index]
-                subtasks = current_phase.get("subtasks", current_phase.get("chunks", []))
+                subtasks = current_phase.get(
+                    "subtasks", current_phase.get("chunks", [])
+                )
 
                 # Start from the restart subtask and look for the next pending one
                 for i in range(restart_subtask_index, len(subtasks)):
                     subtask = subtasks[i]
                     status = subtask.get("status", "pending")
-                    if status in {"pending", "not_started", "not started"}:
-                        # Found next pending subtask
+                    if status != "completed":
+                        # Found next non-completed subtask
                         subtask_out, _changed = normalize_subtask_aliases(subtask)
                         return {
                             **subtask_out,
@@ -501,10 +506,14 @@ def get_next_subtask(spec_dir: Path, restart_from: str | None = None) -> dict | 
                 for i, phase in enumerate(phases):
                     phase_id_value = phase.get("id")
                     phase_id_raw = (
-                        phase_id_value if phase_id_value is not None else phase.get("phase")
+                        phase_id_value
+                        if phase_id_value is not None
+                        else phase.get("phase")
                     )
                     phase_id_key = (
-                        str(phase_id_raw) if phase_id_raw is not None else f"unknown:{i}"
+                        str(phase_id_raw)
+                        if phase_id_raw is not None
+                        else f"unknown:{i}"
                     )
                     subtasks_list = phase.get("subtasks", phase.get("chunks", []))
                     phase_complete[phase_id_key] = all(
@@ -516,7 +525,9 @@ def get_next_subtask(spec_dir: Path, restart_from: str | None = None) -> dict | 
                     phase = phases[phase_idx]
                     phase_id_value = phase.get("id")
                     phase_id = (
-                        phase_id_value if phase_id_value is not None else phase.get("phase")
+                        phase_id_value
+                        if phase_id_value is not None
+                        else phase.get("phase")
                     )
                     depends_on_raw = phase.get("depends_on", [])
                     if isinstance(depends_on_raw, list):
@@ -527,14 +538,16 @@ def get_next_subtask(spec_dir: Path, restart_from: str | None = None) -> dict | 
                         depends_on = [str(depends_on_raw)]
 
                     # Check if dependencies are satisfied
-                    deps_satisfied = all(phase_complete.get(dep, False) for dep in depends_on)
+                    deps_satisfied = all(
+                        phase_complete.get(dep, False) for dep in depends_on
+                    )
                     if not deps_satisfied:
                         continue
 
                     # Find first pending subtask in this phase
                     for subtask in phase.get("subtasks", phase.get("chunks", [])):
                         status = subtask.get("status", "pending")
-                        if status in {"pending", "not_started", "not started"}:
+                        if status != "completed":
                             subtask_out, _changed = normalize_subtask_aliases(subtask)
                             return {
                                 **subtask_out,
@@ -545,7 +558,11 @@ def get_next_subtask(spec_dir: Path, restart_from: str | None = None) -> dict | 
 
                 # All subsequent subtasks are complete
                 return None
-            # If restart_from subtask not found, fall through to normal flow
+            # If restart_from subtask not found, log warning and fall through to normal flow
+            logging.getLogger(__name__).warning(
+                f"restart_from subtask '{restart_from}' not found in plan, "
+                "falling through to normal flow"
+            )
 
         # Build a map of phase completion
         phase_complete: dict[str, bool] = {}

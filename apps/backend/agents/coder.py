@@ -264,8 +264,8 @@ async def run_autonomous_agent(
     # Restore provider config if restarting
     if restart_from:
         try:
-            from implementation_plan import ImplementationPlan
             from core.providers.config import get_provider_config
+            from implementation_plan import ImplementationPlan
 
             plan_file = spec_dir / "implementation_plan.json"
             if plan_file.exists():
@@ -279,9 +279,19 @@ async def run_autonomous_agent(
                     if saved_provider:
                         os.environ["AI_ENGINE_PROVIDER"] = saved_provider
                         logger.info(f"Restored provider from config: {saved_provider}")
-                    if saved_model and provider_config:
-                        # Use the saved model
-                        provider_config.model = saved_model
+                    if saved_model:
+                        # Restore model via provider-specific env var
+                        model_env_map = {
+                            "claude": "CLAUDE_MODEL",
+                            "litellm": "LITELLM_MODEL",
+                            "openrouter": "OPENROUTER_MODEL",
+                            "zhipuai": "ZHIPUAI_MODEL",
+                        }
+                        env_key = model_env_map.get(
+                            saved_provider or provider_config.provider
+                        )
+                        if env_key:
+                            os.environ[env_key] = saved_model
                         logger.info(f"Restored model from config: {saved_model}")
         except Exception as e:
             logger.warning(f"Failed to restore provider config: {e}")
@@ -696,8 +706,8 @@ async def run_autonomous_agent(
 
                 # Persist provider configuration to implementation plan
                 try:
-                    from implementation_plan import ImplementationPlan
                     from core.providers.config import get_provider_config
+                    from implementation_plan import ImplementationPlan
 
                     plan_file = spec_dir / "implementation_plan.json"
                     if plan_file.exists():
@@ -709,7 +719,9 @@ async def run_autonomous_agent(
                                 "model": provider_config.get_model_for_provider(),
                             }
                             await plan.async_save(plan_file)
-                            logger.debug("Provider config persisted to implementation_plan.json")
+                            logger.debug(
+                                "Provider config persisted to implementation_plan.json"
+                            )
                 except Exception as e:
                     logger.warning(f"Failed to persist provider config to plan: {e}")
             else:

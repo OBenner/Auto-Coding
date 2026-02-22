@@ -11,14 +11,13 @@ End-to-end tests for the task restart functionality including:
 """
 
 import json
-import os
-from pathlib import Path
-from unittest.mock import MagicMock, patch
-
-import pytest
 
 # Add backend directory to path if not already added by conftest
 import sys
+from pathlib import Path
+
+import pytest
+
 backend_path = Path(__file__).parent.parent.parent / "apps" / "backend"
 if str(backend_path) not in sys.path:
     sys.path.insert(0, str(backend_path))
@@ -51,19 +50,19 @@ class TestTaskRestartFromSubtask:
                         {
                             "id": "subtask-1-1",
                             "description": "Completed subtask 1",
-                            "status": "completed"
+                            "status": "completed",
                         },
                         {
                             "id": "subtask-1-2",
                             "description": "Completed subtask 2",
-                            "status": "completed"
+                            "status": "completed",
                         },
                         {
                             "id": "subtask-1-3",
                             "description": "Pending subtask 3",
-                            "status": "pending"
-                        }
-                    ]
+                            "status": "pending",
+                        },
+                    ],
                 },
                 {
                     "id": "phase-2",
@@ -73,15 +72,12 @@ class TestTaskRestartFromSubtask:
                         {
                             "id": "subtask-2-1",
                             "description": "Pending subtask 4",
-                            "status": "pending"
+                            "status": "pending",
                         }
-                    ]
-                }
+                    ],
+                },
             ],
-            "provider_config": {
-                "provider": "zhipuai",
-                "model": "glm-4-flash-250414"
-            }
+            "provider_config": {"provider": "zhipuai", "model": "glm-4-flash-250414"},
         }
 
         plan_file = spec_dir / "implementation_plan.json"
@@ -113,20 +109,17 @@ class TestTaskRestartFromSubtask:
                         {
                             "id": "subtask-1-1",
                             "description": "Completed subtask",
-                            "status": "completed"
+                            "status": "completed",
                         },
                         {
                             "id": "subtask-1-2",
                             "description": "Pending subtask",
-                            "status": "pending"
-                        }
-                    ]
+                            "status": "pending",
+                        },
+                    ],
                 }
             ],
-            "provider_config": {
-                "provider": "claude",
-                "model": "claude-sonnet-4-5"
-            }
+            "provider_config": {"provider": "claude", "model": "claude-sonnet-4-5"},
         }
 
         plan_file = spec_dir / "implementation_plan.json"
@@ -157,15 +150,12 @@ class TestTaskRestartFromSubtask:
                         {
                             "id": "subtask-1-1",
                             "description": "Pending subtask",
-                            "status": "pending"
+                            "status": "pending",
                         }
-                    ]
+                    ],
                 }
             ],
-            "provider_config": {
-                "provider": "litellm",
-                "model": "gpt-4o"
-            }
+            "provider_config": {"provider": "litellm", "model": "gpt-4o"},
         }
 
         plan_file = spec_dir / "implementation_plan.json"
@@ -196,30 +186,27 @@ class TestTaskRestartFromSubtask:
                         {
                             "id": "subtask-1-1",
                             "description": "Completed",
-                            "status": "completed"
+                            "status": "completed",
                         },
                         {
                             "id": "subtask-1-2",
                             "description": "Completed",
-                            "status": "completed"
+                            "status": "completed",
                         },
                         {
                             "id": "subtask-1-3",
                             "description": "Pending",
-                            "status": "pending"
+                            "status": "pending",
                         },
                         {
                             "id": "subtask-1-4",
                             "description": "Pending",
-                            "status": "pending"
-                        }
-                    ]
+                            "status": "pending",
+                        },
+                    ],
                 }
             ],
-            "provider_config": {
-                "provider": "openrouter",
-                "model": "claude-sonnet-4-5"
-            }
+            "provider_config": {"provider": "openrouter", "model": "claude-sonnet-4-5"},
         }
 
         plan_file = spec_dir / "implementation_plan.json"
@@ -250,9 +237,9 @@ class TestTaskRestartFromSubtask:
                         {
                             "id": "subtask-1-1",
                             "description": "All completed in phase 1",
-                            "status": "completed"
+                            "status": "completed",
                         }
-                    ]
+                    ],
                 },
                 {
                     "id": "phase-2",
@@ -262,9 +249,9 @@ class TestTaskRestartFromSubtask:
                         {
                             "id": "subtask-2-1",
                             "description": "All completed in phase 2",
-                            "status": "completed"
+                            "status": "completed",
                         }
-                    ]
+                    ],
                 },
                 {
                     "id": "phase-3",
@@ -274,15 +261,12 @@ class TestTaskRestartFromSubtask:
                         {
                             "id": "subtask-3-1",
                             "description": "Pending in phase 3",
-                            "status": "pending"
+                            "status": "pending",
                         }
-                    ]
-                }
+                    ],
+                },
             ],
-            "provider_config": {
-                "provider": "zhipuai",
-                "model": "glm-4-flash-250414"
-            }
+            "provider_config": {"provider": "zhipuai", "model": "glm-4-flash-250414"},
         }
 
         plan_file = spec_dir / "implementation_plan.json"
@@ -313,10 +297,7 @@ class TestProviderConfigPreservation:
         plan = {
             "feature": "Test Feature",
             "phases": [],
-            "provider_config": {
-                "provider": "zhipuai",
-                "model": "glm-4-flash-250414"
-            }
+            "provider_config": {"provider": "zhipuai", "model": "glm-4-flash-250414"},
         }
 
         plan_file = spec_dir / "implementation_plan.json"
@@ -332,8 +313,6 @@ class TestProviderConfigPreservation:
 
     def test_provider_config_restored_on_restart(self, temp_dir):
         """Tests that provider config is restored when restarting task."""
-        from core.providers.config import get_provider_config, ProviderConfig
-
         spec_dir = temp_dir / "specs" / "007-provider-restore"
         spec_dir.mkdir(parents=True)
 
@@ -349,15 +328,12 @@ class TestProviderConfigPreservation:
                         {
                             "id": "subtask-1-1",
                             "description": "Pending subtask",
-                            "status": "pending"
+                            "status": "pending",
                         }
-                    ]
+                    ],
                 }
             ],
-            "provider_config": {
-                "provider": "litellm",
-                "model": "gpt-4o"
-            }
+            "provider_config": {"provider": "litellm", "model": "gpt-4o"},
         }
 
         plan_file = spec_dir / "implementation_plan.json"
@@ -379,7 +355,7 @@ class TestProviderConfigPreservation:
             ("claude", "claude-sonnet-4-5"),
             ("litellm", "gpt-4o"),
             ("openrouter", "claude-opus-4-5"),
-            ("zhipuai", "glm-4-flash-250414")
+            ("zhipuai", "glm-4-flash-250414"),
         ]
 
         for idx, (provider, model) in enumerate(combinations):
@@ -389,10 +365,7 @@ class TestProviderConfigPreservation:
             plan = {
                 "feature": f"Test {provider}",
                 "phases": [],
-                "provider_config": {
-                    "provider": provider,
-                    "model": model
-                }
+                "provider_config": {"provider": provider, "model": model},
             }
 
             plan_file = spec_dir / "implementation_plan.json"
@@ -424,11 +397,11 @@ class TestProviderConfigPreservation:
                         {
                             "id": "subtask-1-1",
                             "description": "Pending subtask",
-                            "status": "pending"
+                            "status": "pending",
                         }
-                    ]
+                    ],
                 }
-            ]
+            ],
         }
 
         plan_file = spec_dir / "implementation_plan.json"
@@ -451,8 +424,9 @@ class TestRestartCLIIntegration:
 
     def test_build_command_accepts_restart_from(self, temp_dir):
         """Tests handle_build_command accepts restart_from parameter."""
-        from cli.build_commands import handle_build_command
         import inspect
+
+        from cli.build_commands import handle_build_command
 
         sig = inspect.signature(handle_build_command)
         assert "restart_from" in sig.parameters
@@ -464,8 +438,9 @@ class TestRestartCLIIntegration:
 
     def test_restart_from_parameter_type(self):
         """Tests that restart_from parameter accepts string or None."""
-        from cli.build_commands import handle_build_command
         import inspect
+
+        from cli.build_commands import handle_build_command
 
         sig = inspect.signature(handle_build_command)
         param = sig.parameters["restart_from"]
@@ -503,19 +478,19 @@ class TestTaskRestartWorkflow:
                         {
                             "id": "subtask-1-1",
                             "description": "Create base structure",
-                            "status": "completed"
+                            "status": "completed",
                         },
                         {
                             "id": "subtask-1-2",
                             "description": "Add configuration",
-                            "status": "completed"
+                            "status": "completed",
                         },
                         {
                             "id": "subtask-1-3",
                             "description": "Implement core logic",
-                            "status": "pending"
-                        }
-                    ]
+                            "status": "pending",
+                        },
+                    ],
                 },
                 {
                     "id": "phase-2",
@@ -526,15 +501,12 @@ class TestTaskRestartWorkflow:
                         {
                             "id": "subtask-2-1",
                             "description": "Add advanced features",
-                            "status": "pending"
+                            "status": "pending",
                         }
-                    ]
-                }
+                    ],
+                },
             ],
-            "provider_config": {
-                "provider": "zhipuai",
-                "model": "glm-4-flash-250414"
-            }
+            "provider_config": {"provider": "zhipuai", "model": "glm-4-flash-250414"},
         }
 
         plan_file = spec_dir / "implementation_plan.json"
@@ -579,7 +551,7 @@ class TestTaskRestartWorkflow:
             ("claude", "claude-sonnet-4-5"),
             ("litellm", "gpt-4o"),
             ("openrouter", "claude-opus-4-5"),
-            ("zhipuai", "glm-4-flash-250414")
+            ("zhipuai", "glm-4-flash-250414"),
         ]
 
         for idx, (provider, model) in enumerate(providers):
@@ -597,20 +569,17 @@ class TestTaskRestartWorkflow:
                             {
                                 "id": "subtask-1-1",
                                 "description": "Completed",
-                                "status": "completed"
+                                "status": "completed",
                             },
                             {
                                 "id": "subtask-1-2",
                                 "description": "Pending",
-                                "status": "pending"
-                            }
-                        ]
+                                "status": "pending",
+                            },
+                        ],
                     }
                 ],
-                "provider_config": {
-                    "provider": provider,
-                    "model": model
-                }
+                "provider_config": {"provider": provider, "model": model},
             }
 
             plan_file = spec_dir / "implementation_plan.json"
@@ -646,20 +615,17 @@ class TestTaskRestartWorkflow:
                         {
                             "id": "subtask-1-1",
                             "description": "All completed",
-                            "status": "completed"
+                            "status": "completed",
                         },
                         {
                             "id": "subtask-1-2",
                             "description": "All completed",
-                            "status": "completed"
-                        }
-                    ]
+                            "status": "completed",
+                        },
+                    ],
                 }
             ],
-            "provider_config": {
-                "provider": "claude",
-                "model": "claude-sonnet-4-5"
-            }
+            "provider_config": {"provider": "claude", "model": "claude-sonnet-4-5"},
         }
 
         plan_file = spec_dir / "implementation_plan.json"
@@ -689,9 +655,9 @@ class TestTaskRestartWorkflow:
                         {
                             "id": "subtask-1-1",
                             "description": "Still pending",
-                            "status": "pending"
+                            "status": "pending",
                         }
-                    ]
+                    ],
                 },
                 {
                     "id": "phase-2",
@@ -701,15 +667,12 @@ class TestTaskRestartWorkflow:
                         {
                             "id": "subtask-2-1",
                             "description": "Blocked by phase 1",
-                            "status": "pending"
+                            "status": "pending",
                         }
-                    ]
-                }
+                    ],
+                },
             ],
-            "provider_config": {
-                "provider": "zhipuai",
-                "model": "glm-4-flash-250414"
-            }
+            "provider_config": {"provider": "zhipuai", "model": "glm-4-flash-250414"},
         }
 
         plan_file = spec_dir / "implementation_plan.json"

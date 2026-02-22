@@ -6,7 +6,6 @@ Handles follow-up planner sessions for adding new subtasks to completed specs.
 """
 
 import logging
-import os
 from pathlib import Path
 
 from analysis.prevention_scanner import PreventionScanner

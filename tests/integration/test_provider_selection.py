@@ -13,13 +13,14 @@ Tests the CLI provider and model selection functionality including:
 
 import json
 import os
-from pathlib import Path
-from unittest.mock import MagicMock, patch
-
-import pytest
 
 # Add backend directory to path if not already added by conftest
 import sys
+from pathlib import Path
+from unittest.mock import patch
+
+import pytest
+
 backend_path = Path(__file__).parent.parent.parent / "apps" / "backend"
 if str(backend_path) not in sys.path:
     sys.path.insert(0, str(backend_path))
@@ -35,8 +36,9 @@ class TestCLIProviderArgumentParsing:
 
     def test_parse_args_with_provider_zhipuai(self):
         """Tests CLI parsing accepts --provider zhipuai."""
-        from cli.main import parse_args
         import sys
+
+        from cli.main import parse_args
 
         # Mock sys.argv for argparse
         original_argv = sys.argv
@@ -49,8 +51,9 @@ class TestCLIProviderArgumentParsing:
 
     def test_parse_args_with_provider_claude(self):
         """Tests CLI parsing accepts --provider claude."""
-        from cli.main import parse_args
         import sys
+
+        from cli.main import parse_args
 
         original_argv = sys.argv
         sys.argv = ["run.py", "--spec", "001", "--provider", "claude"]
@@ -62,8 +65,9 @@ class TestCLIProviderArgumentParsing:
 
     def test_parse_args_with_provider_litellm(self):
         """Tests CLI parsing accepts --provider litellm."""
-        from cli.main import parse_args
         import sys
+
+        from cli.main import parse_args
 
         original_argv = sys.argv
         sys.argv = ["run.py", "--spec", "001", "--provider", "litellm"]
@@ -75,8 +79,9 @@ class TestCLIProviderArgumentParsing:
 
     def test_parse_args_with_provider_openrouter(self):
         """Tests CLI parsing accepts --provider openrouter."""
-        from cli.main import parse_args
         import sys
+
+        from cli.main import parse_args
 
         original_argv = sys.argv
         sys.argv = ["run.py", "--spec", "001", "--provider", "openrouter"]
@@ -88,8 +93,9 @@ class TestCLIProviderArgumentParsing:
 
     def test_parse_args_provider_defaults_to_none(self):
         """Tests provider argument defaults to None when not specified."""
-        from cli.main import parse_args
         import sys
+
+        from cli.main import parse_args
 
         original_argv = sys.argv
         sys.argv = ["run.py", "--spec", "001"]
@@ -101,8 +107,9 @@ class TestCLIProviderArgumentParsing:
 
     def test_parse_args_with_invalid_provider_rejected(self):
         """Tests CLI rejects invalid provider names."""
-        from cli.main import parse_args
         import sys
+
+        from cli.main import parse_args
 
         original_argv = sys.argv
         sys.argv = ["run.py", "--spec", "001", "--provider", "invalid_provider"]
@@ -119,8 +126,9 @@ class TestCLIModelArgumentParsing:
 
     def test_parse_args_with_model(self):
         """Tests CLI parsing accepts --model flag."""
-        from cli.main import parse_args
         import sys
+
+        from cli.main import parse_args
 
         original_argv = sys.argv
         sys.argv = ["run.py", "--spec", "001", "--model", "glm-4-flash-250414"]
@@ -132,8 +140,9 @@ class TestCLIModelArgumentParsing:
 
     def test_parse_args_with_claude_model(self):
         """Tests CLI parsing accepts Claude model."""
-        from cli.main import parse_args
         import sys
+
+        from cli.main import parse_args
 
         original_argv = sys.argv
         sys.argv = ["run.py", "--spec", "001", "--model", "claude-sonnet-4-5-20250929"]
@@ -145,8 +154,9 @@ class TestCLIModelArgumentParsing:
 
     def test_parse_args_with_gpt_model(self):
         """Tests CLI parsing accepts GPT model."""
-        from cli.main import parse_args
         import sys
+
+        from cli.main import parse_args
 
         original_argv = sys.argv
         sys.argv = ["run.py", "--spec", "001", "--model", "gpt-4o"]
@@ -158,8 +168,9 @@ class TestCLIModelArgumentParsing:
 
     def test_parse_args_model_defaults_to_none(self):
         """Tests model argument defaults to None when not specified."""
-        from cli.main import parse_args
         import sys
+
+        from cli.main import parse_args
 
         original_argv = sys.argv
         sys.argv = ["run.py", "--spec", "001"]
@@ -171,11 +182,20 @@ class TestCLIModelArgumentParsing:
 
     def test_parse_args_with_provider_and_model(self):
         """Tests CLI parsing accepts both --provider and --model flags."""
-        from cli.main import parse_args
         import sys
 
+        from cli.main import parse_args
+
         original_argv = sys.argv
-        sys.argv = ["run.py", "--spec", "001", "--provider", "zhipuai", "--model", "glm-4-flash-250414"]
+        sys.argv = [
+            "run.py",
+            "--spec",
+            "001",
+            "--provider",
+            "zhipuai",
+            "--model",
+            "glm-4-flash-250414",
+        ]
         try:
             args = parse_args()
             assert args.provider == "zhipuai"
@@ -204,17 +224,22 @@ class TestProviderSelectionBehavior:
 
         # Mock the run_autonomous_agent to avoid actual execution
         # Note: Must patch at the module level since it's imported lazily
-        with patch("agent.run_autonomous_agent"):
+        with patch("agents.run_autonomous_agent"):
             with patch("cli.utils.validate_environment", return_value=True):
                 with patch("cli.build_commands.ReviewState") as mock_review_state:
                     mock_review_state.return_value.is_approval_valid.return_value = True
-                    with patch("cli.build_commands.check_existing_build", return_value=False):
-                        with patch("cli.build_commands.choose_workspace") as mock_workspace:
+                    with patch(
+                        "cli.build_commands.check_existing_build", return_value=False
+                    ):
+                        with patch(
+                            "cli.build_commands.choose_workspace"
+                        ) as mock_workspace:
                             # Return direct mode to avoid worktree complexity
                             from workspace import WorkspaceMode
+
                             mock_workspace.return_value = WorkspaceMode.DIRECT
 
-                            with patch("agent.sync_spec_to_source"):
+                            with patch("agents.sync_spec_to_source"):
                                 handle_build_command(
                                     project_dir=project_dir,
                                     spec_dir=spec_dir,
@@ -248,16 +273,22 @@ class TestProviderSelectionBehavior:
         os.environ["AI_ENGINE_PROVIDER"] = "claude"
 
         try:
-            with patch("agent.run_autonomous_agent"):
+            with patch("agents.run_autonomous_agent"):
                 with patch("cli.utils.validate_environment", return_value=True):
                     with patch("cli.build_commands.ReviewState") as mock_review_state:
                         mock_review_state.return_value.is_approval_valid.return_value = True
-                        with patch("cli.build_commands.check_existing_build", return_value=False):
-                            with patch("cli.build_commands.choose_workspace") as mock_workspace:
+                        with patch(
+                            "cli.build_commands.check_existing_build",
+                            return_value=False,
+                        ):
+                            with patch(
+                                "cli.build_commands.choose_workspace"
+                            ) as mock_workspace:
                                 from workspace import WorkspaceMode
+
                                 mock_workspace.return_value = WorkspaceMode.DIRECT
 
-                                with patch("agent.sync_spec_to_source"):
+                                with patch("agents.sync_spec_to_source"):
                                     # Call with provider=None (should use existing env var)
                                     handle_build_command(
                                         project_dir=project_dir,
@@ -274,7 +305,9 @@ class TestProviderSelectionBehavior:
                                     )
 
                                     # Provider should remain claude
-                                    assert os.environ.get("AI_ENGINE_PROVIDER") == "claude"
+                                    assert (
+                                        os.environ.get("AI_ENGINE_PROVIDER") == "claude"
+                                    )
         finally:
             # Restore original
             if original_provider is not None:
@@ -301,10 +334,7 @@ class TestProviderConfigPersistence:
         plan = {
             "feature": "Test Feature",
             "phases": [],
-            "provider_config": {
-                "provider": "zhipuai",
-                "model": "glm-4-flash-250414"
-            }
+            "provider_config": {"provider": "zhipuai", "model": "glm-4-flash-250414"},
         }
 
         plan_file = spec_dir / "implementation_plan.json"
@@ -329,10 +359,7 @@ class TestProviderConfigPersistence:
         plan = {
             "feature": "Test Feature",
             "phases": [],
-            "provider_config": {
-                "provider": "litellm",
-                "model": "gpt-4o"
-            }
+            "provider_config": {"provider": "litellm", "model": "gpt-4o"},
         }
 
         plan_file = spec_dir / "implementation_plan.json"
@@ -377,8 +404,9 @@ class TestProviderOverride:
 
     def test_cli_provider_overrides_environment(self, temp_dir):
         """Tests CLI --provider flag overrides environment variable."""
-        from cli.main import parse_args
         import sys
+
+        from cli.main import parse_args
 
         # Set environment variable
         os.environ["AI_ENGINE_PROVIDER"] = "claude"
@@ -398,20 +426,17 @@ class TestProviderOverride:
 
     def test_session_config_provider_override(self):
         """Tests SessionConfig.provider overrides ProviderConfig.provider."""
-        from core.providers.config import ProviderConfig
         from core.providers.base import SessionConfig
+        from core.providers.config import ProviderConfig
 
         # Create provider config with claude
         provider_config = ProviderConfig(
-            provider="claude",
-            anthropic_api_key="test-key"
+            provider="claude", anthropic_api_key="test-key"
         )
 
         # Create session config with zhipuai override
         session_config = SessionConfig(
-            name="test-session",
-            provider="zhipuai",
-            model="glm-4-flash"
+            name="test-session", provider="zhipuai", model="glm-4-flash"
         )
 
         # Session config should have different provider
@@ -420,21 +445,21 @@ class TestProviderOverride:
 
     def test_session_config_model_override(self):
         """Tests SessionConfig.model overrides provider default model."""
-        from core.providers.config import ProviderConfig
         from core.providers.base import SessionConfig
+        from core.providers.config import ProviderConfig
 
-        # Create provider config with default model
-        provider_config = ProviderConfig(
+        # Create provider config with default model (verifies it doesn't conflict)
+        ProviderConfig(
             provider="zhipuai",
             zhipuai_api_key="test-key",
-            zhipuai_model="glm-4.7"  # Default
+            zhipuai_model="glm-4.7",  # Default
         )
 
         # Create session config with model override
         session_config = SessionConfig(
             name="test-session",
             provider=None,  # Use provider default
-            model="glm-4-flash-250414"  # Override model
+            model="glm-4-flash-250414",  # Override model
         )
 
         # Session config should have different model
@@ -466,10 +491,7 @@ class TestProviderModelValidation:
         from core.providers.adapters.zhipuai import ZhipuAIProvider
         from core.providers.config import ProviderConfig
 
-        config = ProviderConfig(
-            provider="zhipuai",
-            zhipuai_api_key="test-key"
-        )
+        config = ProviderConfig(provider="zhipuai", zhipuai_api_key="test-key")
 
         provider = ZhipuAIProvider(config)
         models = provider.get_supported_models()
@@ -484,10 +506,7 @@ class TestProviderModelValidation:
         from core.providers.adapters.claude import ClaudeAgentProvider
         from core.providers.config import ProviderConfig
 
-        config = ProviderConfig(
-            provider="claude",
-            anthropic_api_key="test-key"
-        )
+        config = ProviderConfig(provider="claude", anthropic_api_key="test-key")
 
         provider = ClaudeAgentProvider(config)
         models = provider.get_supported_models()
@@ -506,11 +525,20 @@ class TestProviderSelectionIntegration:
 
     def test_full_provider_selection_workflow(self, temp_dir, temp_git_repo):
         """Tests complete workflow: CLI args -> environment -> execution."""
-        from cli.main import parse_args
         import sys
 
+        from cli.main import parse_args
+
         original_argv = sys.argv
-        sys.argv = ["run.py", "--spec", "001", "--provider", "zhipuai", "--model", "glm-4-flash-250414"]
+        sys.argv = [
+            "run.py",
+            "--spec",
+            "001",
+            "--provider",
+            "zhipuai",
+            "--model",
+            "glm-4-flash-250414",
+        ]
 
         try:
             # Parse CLI arguments
@@ -531,10 +559,7 @@ class TestProviderSelectionIntegration:
         plan = {
             "feature": "Test Feature",
             "phases": [],
-            "provider_config": {
-                "provider": args.provider,
-                "model": args.model
-            }
+            "provider_config": {"provider": args.provider, "model": args.model},
         }
 
         plan_file = spec_dir / "implementation_plan.json"
@@ -562,10 +587,7 @@ class TestProviderSelectionIntegration:
             plan = {
                 "feature": f"Test {provider}",
                 "phases": [],
-                "provider_config": {
-                    "provider": provider,
-                    "model": "test-model"
-                }
+                "provider_config": {"provider": provider, "model": "test-model"},
             }
 
             plan_file = spec_dir / "implementation_plan.json"

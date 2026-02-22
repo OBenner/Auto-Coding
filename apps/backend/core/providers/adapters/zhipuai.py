@@ -42,9 +42,9 @@ logger = logging.getLogger(__name__)
 # Common models available through ZhipuAI
 ZHIPUAI_MODELS = [
     "glm-4-flash-250414",  # Free model
-    "glm-4.7",              # Default production model
-    "glm-4-air",            # Lightweight model
-    "glm-4-plus",           # Enhanced model
+    "glm-4.7",  # Default production model
+    "glm-4-air",  # Lightweight model
+    "glm-4-plus",  # Enhanced model
 ]
 
 

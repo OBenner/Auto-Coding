@@ -99,18 +99,18 @@ Expected output: "Hello from GLM!"
                         "verification": {
                             "type": "command",
                             "command": "python hello_glm.py",
-                            "expected": "Hello from GLM!"
+                            "expected": "Hello from GLM!",
                         },
-                        "status": "pending"
+                        "status": "pending",
                     }
-                ]
+                ],
             }
         ],
         "summary": {
             "total_phases": 1,
             "total_subtasks": 1,
-            "services_involved": ["backend"]
-        }
+            "services_involved": ["backend"],
+        },
     }
     (spec_dir / "implementation_plan.json").write_text(json.dumps(plan, indent=2))
 
@@ -122,7 +122,7 @@ def check_api_key() -> bool:
     api_key = os.environ.get("ZHIPUAI_API_KEY") or os.environ.get("ZAI_API_KEY")
     if not api_key:
         return False
-    print(f"✓ ZHIPUAI_API_KEY is set (length: {len(api_key)} chars)")
+    print("✓ ZHIPUAI_API_KEY is set")
     return True
 
 
@@ -134,7 +134,7 @@ def test_cli_flags() -> bool:
             cwd=backend_path,
             capture_output=True,
             text=True,
-            timeout=10
+            timeout=10,
         )
 
         help_text = result.stdout
@@ -180,16 +180,13 @@ def test_provider_factory() -> bool:
         from core.providers.config import ProviderConfig
         from core.providers.factory import create_engine_provider
 
-        config = ProviderConfig(
-            provider="zhipuai",
-            zhipuai_api_key="test_key_12345"
-        )
+        config = ProviderConfig(provider="zhipuai", zhipuai_api_key="test_key_12345")
 
         provider = create_engine_provider(config)
         if provider.name != "zhipuai":
             print(f"✗ Provider name is not 'zhipuai': {provider.name}")
             return False
-        print(f"✓ Provider factory creates zhipuai provider successfully")
+        print("✓ Provider factory creates zhipuai provider successfully")
 
         return True
     except ImportError as e:
@@ -218,7 +215,9 @@ def run_e2e_test(spec_dir: Path, project_dir: Path) -> bool:
         print("    export ZHIPUAI_API_KEY=your_key_here")
         print("  Then run:")
         print(f"    cd {backend_path}")
-        print(f"    python run.py --spec 139-e2e-glm-test --provider zhipuai --model glm-4-flash-250414 --project-dir {project_dir}")
+        print(
+            f"    python run.py --spec 139-e2e-glm-test --provider zhipuai --model glm-4-flash-250414 --project-dir {project_dir}"
+        )
         return False
 
     # Run the task
@@ -226,14 +225,18 @@ def run_e2e_test(spec_dir: Path, project_dir: Path) -> bool:
         cmd = [
             sys.executable,
             "run.py",
-            "--spec", "139-e2e-glm-test",
-            "--provider", "zhipuai",
-            "--model", "glm-4-flash-250414",
-            "--project-dir", str(project_dir),
-            "--verbose"
+            "--spec",
+            "139-e2e-glm-test",
+            "--provider",
+            "zhipuai",
+            "--model",
+            "glm-4-flash-250414",
+            "--project-dir",
+            str(project_dir),
+            "--verbose",
         ]
 
-        print(f"\nRunning command:")
+        print("\nRunning command:")
         print(f"  cd {backend_path}")
         print(f"  {' '.join(cmd)}\n")
 
@@ -242,7 +245,7 @@ def run_e2e_test(spec_dir: Path, project_dir: Path) -> bool:
             cwd=backend_path,
             capture_output=True,
             text=True,
-            timeout=300  # 5 minute timeout
+            timeout=300,  # 5 minute timeout
         )
 
         # Check output
@@ -263,9 +266,13 @@ def run_e2e_test(spec_dir: Path, project_dir: Path) -> bool:
         print("✓ GLM-4-Flash model was used")
 
         # Check if task completed
+        if result.returncode != 0:
+            print(f"✗ Process exited with non-zero return code: {result.returncode}")
+            print(f"\nOutput:\n{output}")
+            return False
+
         if "completed" not in output.lower() and "finished" not in output.lower():
             print("✗ Task did not complete successfully")
-            print(f"\nReturn code: {result.returncode}")
             print(f"\nOutput:\n{output}")
             return False
         print("✓ Task completed successfully")
@@ -282,11 +289,15 @@ def run_e2e_test(spec_dir: Path, project_dir: Path) -> bool:
             [sys.executable, str(hello_file)],
             capture_output=True,
             text=True,
-            timeout=10
+            timeout=10,
         )
 
+        if run_result.returncode != 0:
+            print(f"✗ hello_glm.py exited with return code: {run_result.returncode}")
+            return False
+
         if "Hello from GLM!" not in run_result.stdout:
-            print(f"✗ hello_glm.py did not output expected message")
+            print("✗ hello_glm.py did not output expected message")
             print(f"  Output: {run_result.stdout}")
             return False
         print("✓ hello_glm.py outputs 'Hello from GLM!'")
@@ -298,6 +309,7 @@ def run_e2e_test(spec_dir: Path, project_dir: Path) -> bool:
     except Exception as e:
         print(f"✗ Error running E2E test: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -345,6 +357,7 @@ def main():
             # Cleanup test spec
             if spec_dir.exists():
                 import shutil
+
                 shutil.rmtree(spec_dir)
 
     # Summary
@@ -356,7 +369,9 @@ def main():
         print("✓ All automated checks passed")
         print("\nTo complete full E2E verification:")
         print("  1. Set ZHIPUAI_API_KEY environment variable")
-        print("  2. Run: python apps/backend/run.py --spec 139-e2e-glm-test --provider zhipuai --model glm-4-flash-250414")
+        print(
+            "  2. Run: python apps/backend/run.py --spec 139-e2e-glm-test --provider zhipuai --model glm-4-flash-250414"
+        )
         print("  3. Verify hello_glm.py is created and runs correctly")
         return 0
     else:
