@@ -195,7 +195,7 @@ export function registerCodeReviewTrigger(): void {
         );
 
         // Get runner environment with authentication
-        const env = await getRunnerEnv(project);
+        const env = await getRunnerEnv();
 
         // Execute the Python subprocess
         const { promise } = runPythonSubprocess<any>({
