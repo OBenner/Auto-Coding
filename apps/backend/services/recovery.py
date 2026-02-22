@@ -14,15 +14,22 @@ Key Features:
 """
 
 import json
+import logging
 import subprocess
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from enum import Enum
 from pathlib import Path
 
 from core.file_utils import write_json_atomic
 from services.dead_letter_queue import DeadLetterQueue
 from services.notification_manager import NotificationManager
+
+# Recovery manager configuration
+ATTEMPT_WINDOW_SECONDS = 7200  # Only count attempts within last 2 hours
+MAX_ATTEMPT_HISTORY_PER_SUBTASK = 50  # Cap stored attempts per subtask
+
+logger = logging.getLogger(__name__)
 
 
 class FailureType(Enum):
@@ -187,8 +194,8 @@ class RecoveryManager:
             "subtasks": {},
             "stuck_subtasks": [],
             "metadata": {
-                "created_at": datetime.now().isoformat(),
-                "last_updated": datetime.now().isoformat(),
+                "created_at": datetime.now(UTC).isoformat(),
+                "last_updated": datetime.now(UTC).isoformat(),
             },
         }
         with open(self.attempt_history_file, "w", encoding="utf-8") as f:
@@ -200,8 +207,8 @@ class RecoveryManager:
             "commits": [],
             "last_good_commit": None,
             "metadata": {
-                "created_at": datetime.now().isoformat(),
-                "last_updated": datetime.now().isoformat(),
+                "created_at": datetime.now(UTC).isoformat(),
+                "last_updated": datetime.now(UTC).isoformat(),
             },
         }
         with open(self.build_commits_file, "w", encoding="utf-8") as f:
@@ -360,7 +367,7 @@ class RecoveryManager:
 
     def _save_attempt_history(self, data: dict) -> None:
         """Save attempt history to JSON file."""
-        data["metadata"]["last_updated"] = datetime.now().isoformat()
+        data["metadata"]["last_updated"] = datetime.now(UTC).isoformat()
         with open(self.attempt_history_file, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
 
@@ -376,7 +383,7 @@ class RecoveryManager:
 
     def _save_build_commits(self, data: dict) -> None:
         """Save build commits to JSON file."""
-        data["metadata"]["last_updated"] = datetime.now().isoformat()
+        data["metadata"]["last_updated"] = datetime.now(UTC).isoformat()
         with open(self.build_commits_file, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
 
@@ -520,17 +527,42 @@ class RecoveryManager:
 
     def get_attempt_count(self, subtask_id: str) -> int:
         """
-        Get how many times this subtask has been attempted.
+        Get how many times this subtask has been attempted within the time window.
+
+        Only counts attempts within ATTEMPT_WINDOW_SECONDS (default: 2 hours).
+        This prevents unbounded accumulation across crash/restart cycles.
 
         Args:
             subtask_id: ID of the subtask
 
         Returns:
-            Number of attempts
+            Number of attempts within the time window
         """
         history = self._load_attempt_history()
         subtask_data = history["subtasks"].get(subtask_id, {})
-        return len(subtask_data.get("attempts", []))
+        attempts = subtask_data.get("attempts", [])
+
+        if not attempts:
+            return 0
+
+        # Filter to only count recent attempts within the time window
+        cutoff = datetime.now(UTC) - timedelta(seconds=ATTEMPT_WINDOW_SECONDS)
+        recent_count = 0
+        for attempt in attempts:
+            ts_str = attempt.get("timestamp", "")
+            if not ts_str:
+                recent_count += 1  # Count attempts without timestamp
+                continue
+            try:
+                ts = datetime.fromisoformat(ts_str)
+                # Handle naive timestamps (from before UTC migration)
+                if ts.tzinfo is None:
+                    ts = ts.replace(tzinfo=UTC)
+                if ts >= cutoff:
+                    recent_count += 1
+            except (ValueError, TypeError):
+                recent_count += 1  # Count unparseable timestamps
+        return recent_count
 
     def record_attempt(
         self,
@@ -559,12 +591,19 @@ class RecoveryManager:
         # Add the attempt
         attempt = {
             "session": session,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "approach": approach,
             "success": success,
             "error": error,
         }
         history["subtasks"][subtask_id]["attempts"].append(attempt)
+
+        # Trim attempt history to prevent unbounded growth
+        attempts = history["subtasks"][subtask_id]["attempts"]
+        if len(attempts) > MAX_ATTEMPT_HISTORY_PER_SUBTASK:
+            history["subtasks"][subtask_id]["attempts"] = attempts[
+                -MAX_ATTEMPT_HISTORY_PER_SUBTASK:
+            ]
 
         # Update status
         if success:
@@ -826,7 +865,7 @@ class RecoveryManager:
         commit_record = {
             "hash": commit_hash,
             "subtask_id": subtask_id,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
 
         commits["commits"].append(commit_record)
@@ -871,7 +910,7 @@ class RecoveryManager:
         stuck_entry = {
             "subtask_id": subtask_id,
             "reason": reason,
-            "escalated_at": datetime.now().isoformat(),
+            "escalated_at": datetime.now(UTC).isoformat(),
             "attempt_count": self.get_attempt_count(subtask_id),
         }
 

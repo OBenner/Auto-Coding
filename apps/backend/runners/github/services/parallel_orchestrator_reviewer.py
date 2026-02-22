@@ -878,16 +878,35 @@ The SDK will run invoked agents in parallel automatically.
                 f"{len(validated_findings) - len(routed_findings)} dropped (low confidence)"
             )
 
-            # Use routed findings for verdict and summary
-            unique_findings = routed_findings
+            # Separate active findings (drive verdict) from dismissed (shown in UI only)
+            active_findings = []
+            dismissed_findings = []
+            for f in routed_findings:
+                if f.validation_status == "dismissed_false_positive":
+                    dismissed_findings.append(f)
+                else:
+                    active_findings.append(f)
 
+            safe_print(
+                f"[ParallelOrchestrator] Final: {len(active_findings)} active, "
+                f"{len(dismissed_findings)} disputed by validator",
+                flush=True,
+            )
             logger.info(
-                f"[ParallelOrchestrator] Review complete: {len(unique_findings)} findings"
+                f"[PRReview] Final findings: {len(active_findings)} active, "
+                f"{len(dismissed_findings)} disputed"
             )
 
-            # Generate verdict (includes merge conflict check and branch-behind check)
+            # All findings (active + dismissed) go in the result for UI display
+            all_review_findings = routed_findings
+            logger.info(
+                f"[ParallelOrchestrator] Review complete: {len(all_review_findings)} findings "
+                f"({len(active_findings)} active, {len(dismissed_findings)} disputed)"
+            )
+
+            # Generate verdict from ACTIVE findings only (dismissed don't affect verdict)
             verdict, verdict_reasoning, blockers = self._generate_verdict(
-                unique_findings,
+                active_findings,
                 has_merge_conflicts=context.has_merge_conflicts,
                 merge_state_status=context.merge_state_status,
             )
@@ -897,7 +916,7 @@ The SDK will run invoked agents in parallel automatically.
                 verdict=verdict,
                 verdict_reasoning=verdict_reasoning,
                 blockers=blockers,
-                findings=unique_findings,
+                findings=all_review_findings,
                 agents_invoked=final_agents,
             )
 
@@ -942,7 +961,7 @@ The SDK will run invoked agents in parallel automatically.
                 pr_number=context.pr_number,
                 repo=self.config.repo,
                 success=True,
-                findings=unique_findings,
+                findings=all_review_findings,
                 summary=summary,
                 overall_status=overall_status,
                 verdict=verdict,

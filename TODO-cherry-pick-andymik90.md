@@ -16,13 +16,13 @@ Remote: `andymik90` (уже добавлен в этом worktree)
 - [x] **PR #1797 + #1806 + #1857** — PR review stability chain: three-tier recovery, Pydantic schema normalization, file/line preservation in recovery. Applied as combined changeset. All 2605 tests pass.
 
 ## Осталось — Категория 2: Баг-фиксы fullstack/frontend
-- [ ] **PR #1813** — OOM prevention, orphaned agents при overnight builds. 896+/44-, 11 files. Ветка удалена
-- [ ] **PR #1843** — Windows: Claude CLI not found (PATH overwrite, prompt size, cwd). 326+/24-, 8 files. Ветка удалена
+- [x] **PR #1813** — OOM prevention, orphaned agents: LadybugDB lock retry, recovery time-window, attempt trimming, OOM log caps, circuit breaker, agent cleanup on close. All 2631 tests pass.
+- [x] **PR #1843** — Windows: Claude CLI not found — backend only: CLAUDE.md system prompt truncation for Windows CreateProcessW limit. Frontend PATH normalization already handled differently in our fork.
+- [x] **PR #1852** — Dismissed PR review findings visible in UI: active vs dismissed separation in orchestrator, verdict from active only, UI with disputed badges/section, i18n keys.
+- [x] **PR #1836** — Blank terminals after project switch: force SIGWINCH on same-dimension resize, skip buffer replay for Claude-mode terminals on remount.
 - [ ] **PR #1842** — Watch worktree path для implementation_plan.json. 504+/56-, 4 files. Ветка удалена
-- [ ] **PR #1833** — Kanban stuck task state sync. 129+/21-, 8 files. Ветка: `fix/kanban-stuck-task`
-- [ ] **PR #1836** — Blank terminals после project switch. Ветка: `fix/terminal-blank-project-switch`
-- [ ] **PR #1852** — Dismissed PR review findings видны в UI. Ветка удалена
-- [ ] **PR #1793** — PR review зависает в bundled app. Ветка удалена
+- [ ] **PR #1833** — Kanban stuck task state sync. 129+/21-, 8 files. Ветка: `fix/kanban-stuck-task` (depends on XState, needs investigation)
+- [ ] **PR #1793** — PR review зависает в bundled app. Ветка удалена (depends on getEffectiveSourcePath, needs investigation)
 
 ## Осталось — Категория 3: Тесты
 

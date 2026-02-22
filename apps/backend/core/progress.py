@@ -9,9 +9,12 @@ Enhanced with colored output, icons, and better visual formatting.
 """
 
 import json
+import logging
 from pathlib import Path
 
 from core.plan_normalization import normalize_subtask_aliases
+
+logger = logging.getLogger(__name__)
 from core.timing_history import get_timing_history
 from ui import (
     Icons,
@@ -315,8 +318,8 @@ def print_progress_summary(spec_dir: Path, show_next: bool = True) -> None:
                         f"  {icon(Icons.WARNING)} Circular Fixes: {recovery_stats['circular_fixes']}"
                     )
 
-        except (OSError, json.JSONDecodeError, UnicodeDecodeError):
-            pass  # Ignore corrupted/unreadable progress files
+        except (OSError, json.JSONDecodeError, UnicodeDecodeError) as e:
+            logger.debug(f"Failed to load plan file for phase summary: {e}")
     else:
         print()
         print_status("No implementation subtasks yet - planner needs to run", "pending")

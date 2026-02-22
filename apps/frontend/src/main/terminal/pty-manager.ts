@@ -320,6 +320,20 @@ export function writeToPty(terminal: TerminalProcess, data: string): void {
  * Resize a PTY process
  */
 export function resizePty(terminal: TerminalProcess, cols: number, rows: number): void {
+  const prevCols = terminal.pty.cols;
+  const prevRows = terminal.pty.rows;
+
+  // If dimensions are unchanged, force SIGWINCH via a resize cycle.
+  // On macOS/Linux, ioctl(TIOCSWINSZ) only sends SIGWINCH when size actually
+  // changes. This matters after project switch: PTY persists with old dimensions,
+  // terminal remounts at same size, TUI apps (Claude Code) never get SIGWINCH
+  // and never redraw — leaving the terminal blank.
+  if (prevCols === cols && prevRows === rows) {
+    debugLog('[PtyManager] Same-dimension resize detected, forcing SIGWINCH cycle for terminal:', terminal.id);
+    terminal.pty.resize(Math.max(1, cols - 1), rows);
+  }
+
+  debugLog('[PtyManager] Resizing PTY - terminal:', terminal.id, 'from:', prevCols, 'x', prevRows, 'to:', cols, 'x', rows);
   terminal.pty.resize(cols, rows);
 }
 

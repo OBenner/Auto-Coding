@@ -4,7 +4,7 @@ import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import { SerializeAddon } from '@xterm/addon-serialize';
 import { terminalBufferManager } from '../../lib/terminal-buffer-manager';
-import { registerOutputCallback, unregisterOutputCallback } from '../../stores/terminal-store';
+import { registerOutputCallback, unregisterOutputCallback, useTerminalStore } from '../../stores/terminal-store';
 
 // Type augmentation for navigator.userAgentData (modern User-Agent Client Hints API)
 interface NavigatorUAData {
@@ -257,8 +257,24 @@ export function useXterm({ terminalId, onCommandEnter, onResize, onDimensionsRea
     // This now includes ANSI codes for proper formatting/colors/prompt
     const bufferedOutput = terminalBufferManager.get(terminalId);
     if (bufferedOutput && bufferedOutput.length > 0) {
-      xterm.write(bufferedOutput);
-      // Clear buffer after replay to avoid duplicate output
+      // For Claude-mode terminals that are NOT being restored for the first time
+      // (i.e., project switch remount), skip buffer replay.
+      // Reason: the buffer contains serialized state + accumulated raw PTY output
+      // from the TUI during the unmount period. This concatenation creates garbled
+      // display. The forced SIGWINCH (from pty-manager) will make Claude Code redraw
+      // its full TUI properly.
+      // For initial restore (isRestored=true), we DO replay to show the saved state
+      // as a loading preview while claude --continue starts.
+      const terminal = useTerminalStore.getState().terminals.find(t => t.id === terminalId);
+      const isClaudeActive = terminal?.isClaudeMode || terminal?.pendingClaudeResume;
+      const isInitialRestore = terminal?.isRestored === true;
+
+      if (isClaudeActive && !isInitialRestore) {
+        // Skip buffer replay for Claude-mode terminal on project switch remount
+      } else {
+        xterm.write(bufferedOutput);
+      }
+      // Clear buffer after replay (or skip) to avoid duplicate output
       terminalBufferManager.clear(terminalId);
     }
 
