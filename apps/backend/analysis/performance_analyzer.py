@@ -486,8 +486,22 @@ class PerformanceAnalyzer:
             "errors": result.analysis_errors,
         }
 
-        with open(output_file, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2)
+        import os
+        import tempfile
+
+        fd, tmp_path = tempfile.mkstemp(
+            dir=str(spec_dir), suffix=".tmp", prefix="performance_analysis_"
+        )
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2)
+            os.replace(tmp_path, str(output_file))
+        except BaseException:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass  # Best-effort cleanup
+            raise
 
     def format_report(self, result: PerformanceAnalysisResult) -> str:
         """

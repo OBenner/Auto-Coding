@@ -517,7 +517,7 @@ def greet():
     """Say hello in different languages: 你好, مرحبا, שלום"""
     return "Hello 世界"
 '''
-        (temp_project_dir / "unicode.py").write_text(code)
+        (temp_project_dir / "unicode.py").write_text(code, encoding="utf-8")
 
         validator = ArchitectureValidator()
         result = validator.analyze(temp_project_dir)

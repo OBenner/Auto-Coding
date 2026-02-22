@@ -207,11 +207,8 @@ class BreakingChangeDetector:
             # Compare APIs
             changes.extend(self._compare_apis(old_api, new_api, file_path))
 
-        except SyntaxError as e:
-            # Can't parse - might be incomplete code
-            pass
-        except Exception as e:
-            # Other errors - log but don't fail
+        except SyntaxError:
+            # Can't parse source code - skip this file
             pass
 
         return changes
@@ -345,20 +342,17 @@ class BreakingChangeDetector:
 
         api_elements = []
 
-        for node in ast.walk(tree):
-            # Extract functions
+        for node in tree.body:
+            # Extract module-level functions
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                # Only include public functions (not starting with _)
                 if not node.name.startswith("_"):
                     api_elements.append(self._function_to_api_element(node))
 
-            # Extract classes
+            # Extract module-level classes and their public methods
             elif isinstance(node, ast.ClassDef):
-                # Only include public classes
                 if not node.name.startswith("_"):
                     api_elements.append(self._class_to_api_element(node))
 
-                    # Extract public methods
                     for item in node.body:
                         if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
                             if not item.name.startswith("_"):
@@ -707,8 +701,22 @@ class BreakingChangeDetector:
             "errors": result.analysis_errors,
         }
 
-        with open(output_file, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2)
+        import os
+        import tempfile
+
+        fd, tmp_path = tempfile.mkstemp(
+            dir=str(spec_dir), suffix=".tmp", prefix="breaking_changes_"
+        )
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2)
+            os.replace(tmp_path, str(output_file))
+        except BaseException:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass  # Best-effort cleanup
+            raise
 
     def format_report(self, result: BreakingChangeResult) -> str:
         """

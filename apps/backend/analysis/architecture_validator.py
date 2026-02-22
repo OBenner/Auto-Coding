@@ -360,13 +360,6 @@ class ArchitectureValidator:
         - Inconsistent exception handling patterns
         - Missing error context
         """
-        # Find the dominant error handling pattern
-        _dominant_pattern = None
-        for pattern in result.patterns:
-            if pattern.pattern_type == "error_handling" and pattern.confidence > 0.5:
-                _dominant_pattern = pattern.pattern_name
-                break
-
         for file_path in files:
             try:
                 content = file_path.read_text(encoding="utf-8")
@@ -731,7 +724,7 @@ class ArchitectureValidator:
             try:
                 os.unlink(tmp_path)
             except OSError:
-                pass
+                pass  # Best-effort cleanup; temp file may already be removed
             raise
 
     def format_report(self, result: ArchitecturalAnalysisResult) -> str:

@@ -10,8 +10,10 @@ from pathlib import Path
 
 from analysis.prevention_scanner import PreventionScanner
 from core.client import create_client
+from implementation_plan import ImplementationPlan
 from phase_config import get_phase_model, get_phase_thinking_budget
 from phase_event import ExecutionPhase, emit_phase
+from prompts_pkg.prompts import get_followup_planner_prompt
 from task_logger import (
     LogPhase,
     get_task_logger,
@@ -63,9 +65,6 @@ async def run_followup_planner(
     Returns:
         bool: True if planning completed successfully
     """
-    from implementation_plan import ImplementationPlan
-    from prompts_pkg.prompts import get_followup_planner_prompt
-
     # Initialize status manager for ccstatusline
     status_manager = StatusManager(project_dir)
     status_manager.set_active(spec_dir.name, BuildState.PLANNING)

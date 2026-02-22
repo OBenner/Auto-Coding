@@ -43,7 +43,7 @@ class TestRunFollowupPlanner:
         # Mock dependencies
         with patch('agents.planner.create_client') as mock_create_client, \
              patch('agents.planner.get_followup_planner_prompt') as mock_get_prompt, \
-             patch('agents.planner.run_agent_session') as mock_run_session, \
+             patch('agents.planner.run_agent_session', new_callable=AsyncMock) as mock_run_session, \
              patch('agents.planner.StatusManager'), \
              patch('agents.planner.get_task_logger'), \
              patch('agents.planner.emit_phase'), \
@@ -60,12 +60,12 @@ class TestRunFollowupPlanner:
             mock_get_prompt.return_value = "Test prompt"
 
             # Mock successful session
-            mock_run_session.return_value = AsyncMock(return_value=(
+            mock_run_session.return_value = (
                 "success",
                 "Planning completed",
                 {"input_tokens": 100, "output_tokens": 50},
                 None,
-            ))()
+            )
 
             # Mock scanner
             mock_scanner = MagicMock()
@@ -108,7 +108,7 @@ class TestRunFollowupPlanner:
 
         with patch('agents.planner.create_client') as mock_create_client, \
              patch('agents.planner.get_followup_planner_prompt') as mock_get_prompt, \
-             patch('agents.planner.run_agent_session') as mock_run_session, \
+             patch('agents.planner.run_agent_session', new_callable=AsyncMock) as mock_run_session, \
              patch('agents.planner.StatusManager'), \
              patch('agents.planner.get_task_logger'), \
              patch('agents.planner.emit_phase'), \
@@ -124,12 +124,12 @@ class TestRunFollowupPlanner:
             mock_get_prompt.return_value = "Test prompt"
 
             # Mock error status
-            mock_run_session.return_value = AsyncMock(return_value=(
+            mock_run_session.return_value = (
                 "error",
                 "Planning failed",
                 {},
                 None,
-            ))()
+            )
 
             # Mock scanner
             mock_scanner = MagicMock()
@@ -185,7 +185,7 @@ class TestRunFollowupPlanner:
 
         with patch('agents.planner.create_client') as mock_create_client, \
              patch('agents.planner.get_followup_planner_prompt') as mock_get_prompt, \
-             patch('agents.planner.run_agent_session') as mock_run_session, \
+             patch('agents.planner.run_agent_session', new_callable=AsyncMock) as mock_run_session, \
              patch('agents.planner.StatusManager'), \
              patch('agents.planner.get_task_logger'), \
              patch('agents.planner.emit_phase'), \
@@ -203,12 +203,12 @@ class TestRunFollowupPlanner:
             mock_get_prompt.return_value = "Test prompt"
 
             # Mock successful session
-            mock_run_session.return_value = AsyncMock(return_value=(
+            mock_run_session.return_value = (
                 "success",
                 "Planning completed",
                 {"input_tokens": 100, "output_tokens": 50},
                 None,
-            ))()
+            )
 
             # Mock scanner
             mock_scanner = MagicMock()
@@ -263,7 +263,7 @@ class TestRunFollowupPlanner:
 
         with patch('agents.planner.create_client') as mock_create_client, \
              patch('agents.planner.get_followup_planner_prompt') as mock_get_prompt, \
-             patch('agents.planner.run_agent_session') as mock_run_session, \
+             patch('agents.planner.run_agent_session', new_callable=AsyncMock) as mock_run_session, \
              patch('agents.planner.StatusManager'), \
              patch('agents.planner.get_task_logger'), \
              patch('agents.planner.emit_phase'), \
@@ -280,12 +280,12 @@ class TestRunFollowupPlanner:
 
             mock_get_prompt.return_value = "Test prompt"
 
-            mock_run_session.return_value = AsyncMock(return_value=(
+            mock_run_session.return_value = (
                 "success",
                 "Planning completed",
                 {"input_tokens": 100, "output_tokens": 50},
                 None,
-            ))()
+            )
 
             # Mock scanner
             mock_scanner = MagicMock()
@@ -331,7 +331,7 @@ class TestRunFollowupPlanner:
 
         with patch('agents.planner.create_client') as mock_create_client, \
              patch('agents.planner.get_followup_planner_prompt') as mock_get_prompt, \
-             patch('agents.planner.run_agent_session') as mock_run_session, \
+             patch('agents.planner.run_agent_session', new_callable=AsyncMock) as mock_run_session, \
              patch('agents.planner.StatusManager'), \
              patch('agents.planner.get_task_logger'), \
              patch('agents.planner.emit_phase'), \
@@ -346,12 +346,12 @@ class TestRunFollowupPlanner:
 
             mock_get_prompt.return_value = "Test prompt"
 
-            mock_run_session.return_value = AsyncMock(return_value=(
+            mock_run_session.return_value = (
                 "success",
                 "Planning completed",
                 {"input_tokens": 100, "output_tokens": 50},
                 None,
-            ))()
+            )
 
             # Mock scanner
             mock_scanner = MagicMock()
@@ -392,7 +392,7 @@ class TestRunFollowupPlanner:
 
         with patch('agents.planner.create_client') as mock_create_client, \
              patch('agents.planner.get_followup_planner_prompt'), \
-             patch('agents.planner.run_agent_session') as mock_run_session, \
+             patch('agents.planner.run_agent_session', new_callable=AsyncMock) as mock_run_session, \
              patch('agents.planner.StatusManager'), \
              patch('agents.planner.get_task_logger'), \
              patch('agents.planner.emit_phase'), \
@@ -452,7 +452,7 @@ class TestRunFollowupPlanner:
 
         with patch('agents.planner.create_client') as mock_create_client, \
              patch('agents.planner.get_followup_planner_prompt'), \
-             patch('agents.planner.run_agent_session') as mock_run_session, \
+             patch('agents.planner.run_agent_session', new_callable=AsyncMock) as mock_run_session, \
              patch('agents.planner.StatusManager'), \
              patch('agents.planner.get_task_logger'), \
              patch('agents.planner.emit_phase'), \
@@ -465,12 +465,12 @@ class TestRunFollowupPlanner:
             mock_client.__aexit__ = AsyncMock(return_value=None)
             mock_create_client.return_value = mock_client
 
-            mock_run_session.return_value = AsyncMock(return_value=(
+            mock_run_session.return_value = (
                 "error",
                 "Error",
                 {},
                 None,
-            ))()
+            )
 
             # Mock scanner that raises exception
             mock_scanner = MagicMock()
@@ -508,7 +508,7 @@ class TestEdgeCases:
 
         with patch('agents.planner.create_client'), \
              patch('agents.planner.get_followup_planner_prompt'), \
-             patch('agents.planner.run_agent_session') as mock_run_session, \
+             patch('agents.planner.run_agent_session', new_callable=AsyncMock) as mock_run_session, \
              patch('agents.planner.StatusManager'), \
              patch('agents.planner.get_task_logger'), \
              patch('agents.planner.emit_phase'), \
@@ -516,12 +516,12 @@ class TestEdgeCases:
              patch('agents.planner.box'), \
              patch('agents.planner.PreventionScanner'):
 
-            mock_run_session.return_value = AsyncMock(return_value=(
+            mock_run_session.return_value = (
                 "error",
                 "Error",
                 {},
                 None,
-            ))()
+            )
 
             # Call with verbose=True
             await run_followup_planner(

@@ -161,18 +161,27 @@ class PreventionScanner:
                     raise RuntimeError(error_msg) from e
 
         # Run breaking change detection (requires old version for comparison)
-        if self.config.breaking_changes_enabled and old_dir:
-            try:
-                result.breaking_changes = self.breaking_change_detector.analyze(
-                    old_dir=old_dir,
-                    new_dir=project_dir,
-                    spec_dir=spec_dir if self.config.save_reports else None,
+        if self.config.breaking_changes_enabled:
+            if not old_dir:
+                error_msg = (
+                    "Breaking-change scan enabled but old_dir not provided; "
+                    "skipping breaking-change detection"
                 )
-            except Exception as e:
-                error_msg = f"Breaking change detection failed: {e}"
                 result.scan_errors.append(error_msg)
                 if self.config.fail_on_scan_error:
-                    raise RuntimeError(error_msg) from e
+                    raise RuntimeError(error_msg)
+            else:
+                try:
+                    result.breaking_changes = self.breaking_change_detector.analyze(
+                        old_dir=old_dir,
+                        new_dir=project_dir,
+                        spec_dir=spec_dir if self.config.save_reports else None,
+                    )
+                except Exception as e:
+                    error_msg = f"Breaking change detection failed: {e}"
+                    result.scan_errors.append(error_msg)
+                    if self.config.fail_on_scan_error:
+                        raise RuntimeError(error_msg) from e
 
         # Run architecture validation
         if self.config.architecture_enabled:
@@ -356,7 +365,7 @@ class PreventionScanner:
             try:
                 os.unlink(tmp_path)
             except OSError:
-                pass
+                pass  # Best-effort cleanup; temp file may already be removed
             raise
 
     def format_report(self, result: PreventionScanResult) -> str:

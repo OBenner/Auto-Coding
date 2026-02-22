@@ -208,7 +208,7 @@ Minimal overhead - just subtasks, no phases.
 ### 2.5.1: Import and Initialize Scanner
 
 ```python
-from apps.backend.analysis.prevention_scanner import PreventionScanner
+from analysis.prevention_scanner import PreventionScanner
 
 scanner = PreventionScanner()
 ```
