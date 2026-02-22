@@ -653,48 +653,38 @@ class ArchitectureValidator:
             result: Analysis result to save
         """
 
-        from analysis.io_utils import atomic_json_write, count_by_severity
+        from analysis.io_utils import (
+            atomic_json_write,
+            build_issue_summary,
+            prepare_save_dir,
+        )
 
-        spec_dir = Path(spec_dir)
-        spec_dir.mkdir(parents=True, exist_ok=True)
+        spec_dir, output_file = prepare_save_dir(spec_dir, "architecture_analysis.json")
 
-        output_file = spec_dir / "architecture_analysis.json"
-        sev_counts = count_by_severity(result.issues)
-
-        data = {
-            "files_analyzed": result.files_analyzed,
-            "total_issues": len(result.issues),
-            "critical_issues": sev_counts["critical"],
-            "high_issues": sev_counts["high"],
-            "medium_issues": sev_counts["medium"],
-            "low_issues": sev_counts["low"],
-            "has_critical_issues": result.has_critical_issues,
-            "should_warn": result.should_warn,
-            "patterns": [
-                {
-                    "pattern_type": pattern.pattern_type,
-                    "pattern_name": pattern.pattern_name,
-                    "frequency": pattern.frequency,
-                    "confidence": pattern.confidence,
-                    "examples": pattern.examples[:5],  # Limit examples
-                }
-                for pattern in result.patterns
-            ],
-            "issues": [
-                {
-                    "severity": issue.severity,
-                    "issue_type": issue.issue_type,
-                    "title": issue.title,
-                    "description": issue.description,
-                    "file": issue.file,
-                    "line": issue.line,
-                    "suggestion": issue.suggestion,
-                    "pattern": issue.pattern,
-                }
-                for issue in result.issues
-            ],
-            "errors": result.analysis_errors,
-        }
+        data = build_issue_summary(result)
+        data["patterns"] = [
+            {
+                "pattern_type": pattern.pattern_type,
+                "pattern_name": pattern.pattern_name,
+                "frequency": pattern.frequency,
+                "confidence": pattern.confidence,
+                "examples": pattern.examples[:5],
+            }
+            for pattern in result.patterns
+        ]
+        data["issues"] = [
+            {
+                "severity": issue.severity,
+                "issue_type": issue.issue_type,
+                "title": issue.title,
+                "description": issue.description,
+                "file": issue.file,
+                "line": issue.line,
+                "suggestion": issue.suggestion,
+                "pattern": issue.pattern,
+            }
+            for issue in result.issues
+        ]
 
         atomic_json_write(
             data, output_file, dir=spec_dir, prefix="architecture_analysis_"

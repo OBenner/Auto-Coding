@@ -79,6 +79,48 @@ def count_by_severity(items: list, *, attr: str = "severity") -> dict[str, int]:
     return {k: len(v) for k, v in groups.items()}
 
 
+def prepare_save_dir(spec_dir: str | Path, filename: str) -> tuple[Path, Path]:
+    """Ensure *spec_dir* exists and return ``(spec_dir, output_file)``."""
+    spec_dir = Path(spec_dir)
+    spec_dir.mkdir(parents=True, exist_ok=True)
+    return spec_dir, spec_dir / filename
+
+
+def build_issue_summary(
+    result: Any,
+    *,
+    items_attr: str = "issues",
+) -> dict[str, Any]:
+    """Build the common portion of a ``_save_results`` data dict.
+
+    Extracts ``files_analyzed``, severity counts, ``has_critical_issues``,
+    ``should_warn`` (or ``should_block``), and ``analysis_errors`` from
+    *result*.
+    """
+    items = getattr(result, items_attr, [])
+    sev = count_by_severity(items)
+    summary: dict[str, Any] = {
+        "files_analyzed": getattr(result, "files_analyzed", 0),
+        f"total_{items_attr}": len(items),
+        "critical_issues": sev["critical"],
+        "high_issues": sev["high"],
+        "medium_issues": sev["medium"],
+        "low_issues": sev["low"],
+    }
+    # Attach boolean flags when present
+    for flag in (
+        "has_critical_issues",
+        "has_breaking_changes",
+        "should_warn",
+        "should_block",
+    ):
+        val = getattr(result, flag, None)
+        if val is not None:
+            summary[flag] = val
+    summary["errors"] = getattr(result, "analysis_errors", [])
+    return summary
+
+
 def should_skip_path(path: Path, skip_dirs: frozenset[str] = SKIP_DIRS) -> bool:
     """Return True if *path* contains any of the *skip_dirs* components."""
     return any(part in skip_dirs for part in path.parts)

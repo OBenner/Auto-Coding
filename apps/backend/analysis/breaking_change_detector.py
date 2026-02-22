@@ -665,37 +665,28 @@ class BreakingChangeDetector:
             result: Result to save
         """
 
-        from analysis.io_utils import atomic_json_write, count_by_severity
+        from analysis.io_utils import (
+            atomic_json_write,
+            build_issue_summary,
+            prepare_save_dir,
+        )
 
-        spec_dir = Path(spec_dir)
-        spec_dir.mkdir(parents=True, exist_ok=True)
+        spec_dir, output_file = prepare_save_dir(spec_dir, "breaking_changes.json")
 
-        output_file = spec_dir / "breaking_changes.json"
-        sev_counts = count_by_severity(result.breaking_changes)
-
-        data = {
-            "files_analyzed": result.files_analyzed,
-            "total_breaking_changes": len(result.breaking_changes),
-            "critical_changes": sev_counts["critical"],
-            "high_changes": sev_counts["high"],
-            "medium_changes": sev_counts["medium"],
-            "has_breaking_changes": result.has_breaking_changes,
-            "should_block": result.should_block,
-            "breaking_changes": [
-                {
-                    "severity": change.severity,
-                    "change_type": change.change_type,
-                    "title": change.title,
-                    "description": change.description,
-                    "file": change.file,
-                    "old_signature": change.old_signature,
-                    "new_signature": change.new_signature,
-                    "migration_guide": change.migration_guide,
-                }
-                for change in result.breaking_changes
-            ],
-            "errors": result.analysis_errors,
-        }
+        data = build_issue_summary(result, items_attr="breaking_changes")
+        data["breaking_changes"] = [
+            {
+                "severity": change.severity,
+                "change_type": change.change_type,
+                "title": change.title,
+                "description": change.description,
+                "file": change.file,
+                "old_signature": change.old_signature,
+                "new_signature": change.new_signature,
+                "migration_guide": change.migration_guide,
+            }
+            for change in result.breaking_changes
+        ]
 
         atomic_json_write(data, output_file, dir=spec_dir, prefix="breaking_changes_")
 

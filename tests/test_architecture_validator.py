@@ -144,7 +144,7 @@ class TestArchitecturalPattern:
         assert pattern.pattern_type == "naming_function"
         assert pattern.pattern_name == "snake_case"
         assert pattern.frequency == 10
-        assert pattern.confidence == 0.9
+        assert pattern.confidence == pytest.approx(0.9)
         assert len(pattern.examples) == 2
 
 
