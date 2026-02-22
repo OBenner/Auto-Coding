@@ -500,6 +500,8 @@ def get_next_subtask(spec_dir: Path) -> dict | None:
     if not plan_file.exists():
         return None
 
+    stuck_subtask_ids = _load_stuck_subtask_ids(spec_dir)
+
     try:
         with open(plan_file, encoding="utf-8") as f:
             plan = json.load(f)
@@ -517,8 +519,11 @@ def get_next_subtask(spec_dir: Path) -> dict | None:
                 str(phase_id_raw) if phase_id_raw is not None else f"unknown:{i}"
             )
             subtasks = phase.get("subtasks", phase.get("chunks", []))
+            # Stuck subtasks count as "resolved" for phase dependency purposes.
+            # This prevents one stuck subtask from blocking all downstream phases.
             phase_complete[phase_id_key] = all(
-                s.get("status") == "completed" for s in subtasks
+                s.get("status") == "completed" or s.get("id") in stuck_subtask_ids
+                for s in subtasks
             )
 
         # Find next available subtask
@@ -540,8 +545,10 @@ def get_next_subtask(spec_dir: Path) -> dict | None:
             if not deps_satisfied:
                 continue
 
-            # Find first pending subtask in this phase
+            # Find first pending subtask in this phase (skip stuck ones)
             for subtask in phase.get("subtasks", phase.get("chunks", [])):
+                if subtask.get("id") in stuck_subtask_ids:
+                    continue
                 status = subtask.get("status", "pending")
                 if status in {"pending", "not_started", "not started"}:
                     subtask_out, _changed = normalize_subtask_aliases(subtask)

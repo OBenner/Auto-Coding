@@ -1097,6 +1097,53 @@ export function registerTaskExecutionHandlers(
           projectStore.invalidateTasksCache(project.id);
         }
 
+          // Clear attempt_history.json to break infinite recovery loops.
+          // Without this, the backend re-reads stuck markers from attempt_history
+          // and immediately re-stucks the same subtasks after recovery.
+          const specDirsToClean = new Set<string>([specDir]);
+          if (mainSpecDir !== specDir) specDirsToClean.add(mainSpecDir);
+          if (worktreeSpecDir && worktreeSpecDir !== specDir) specDirsToClean.add(worktreeSpecDir);
+
+          for (const dir of specDirsToClean) {
+            const attemptHistoryPath = path.join(dir, 'memory', 'attempt_history.json');
+            const historyContent = safeReadFileSync(attemptHistoryPath);
+            if (!historyContent) continue;
+
+            try {
+              const history = JSON.parse(historyContent);
+
+              // Collect stuck subtask IDs before clearing
+              const stuckIds = new Set<string>(
+                (history.stuck_subtasks || [])
+                  .map((s: { subtask_id?: string }) => s.subtask_id)
+                  .filter((id: string | undefined): id is string => Boolean(id))
+              );
+
+              // Clear stuck_subtasks array
+              history.stuck_subtasks = [];
+
+              // Reset attempt entries for previously-stuck subtasks
+              if (history.subtasks && stuckIds.size > 0) {
+                for (const stuckId of stuckIds) {
+                  if (history.subtasks[stuckId]) {
+                    history.subtasks[stuckId] = { attempts: [], status: 'pending' };
+                  }
+                }
+              }
+
+              history.metadata = {
+                ...history.metadata,
+                last_updated: new Date().toISOString()
+              };
+
+              atomicWriteFileSync(attemptHistoryPath, JSON.stringify(history, null, 2));
+              console.log(`[Recovery] Cleared attempt_history.json at: ${dir} (reset ${stuckIds.size} stuck entries)`);
+            } catch (historyErr) {
+              console.warn(`[Recovery] Could not parse attempt_history at ${dir}:`, historyErr);
+            }
+          }
+        }
+
         // Stop file watcher if it was watching this task
         fileWatcher.unwatch(taskId);
 
