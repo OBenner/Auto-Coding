@@ -13,9 +13,7 @@ Remote: `andymik90` (уже добавлен в этом worktree)
 - [~] **PR #1840** — SKIPPED: не применим, наш форк не имеет TaskStateManager/XState
 
 ## Осталось — Категория 1: Критичные баг-фиксы бэкенда
-- [ ] **PR #1797** — PR review: three-tier recovery для structured output failures. 378+/22-, 6 files. Ветка удалена
-- [ ] **PR #1806** — PR review: упрощение Pydantic schemas. 703+/600-, 6 files. Ветка удалена
-- [ ] **PR #1857** — Сохранение file/line info при PR review recovery. Ветка удалена
+- [x] **PR #1797 + #1806 + #1857** — PR review stability chain: three-tier recovery, Pydantic schema normalization, file/line preservation in recovery. Applied as combined changeset. All 2605 tests pass.
 
 ## Осталось — Категория 2: Баг-фиксы fullstack/frontend
 - [ ] **PR #1813** — OOM prevention, orphaned agents при overnight builds. 896+/44-, 11 files. Ветка удалена

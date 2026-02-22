@@ -579,6 +579,13 @@ The SDK will run invoked agents in parallel automatically.
         except ValueError:
             severity = ReviewSeverity.MEDIUM
 
+        # Try verification.code_examined first (richer evidence), fall back to evidence
+        evidence = finding_data.evidence
+        if hasattr(finding_data, "verification") and finding_data.verification:
+            code_examined = getattr(finding_data.verification, "code_examined", None)
+            if code_examined:
+                evidence = code_examined
+
         return PRReviewFinding(
             id=finding_id,
             file=finding_data.file,
@@ -588,7 +595,7 @@ The SDK will run invoked agents in parallel automatically.
             category=category,
             severity=severity,
             suggested_fix=finding_data.suggested_fix or "",
-            evidence=finding_data.evidence,
+            evidence=evidence,
         )
 
     async def review(self, context: PRContext) -> PRReviewResult:

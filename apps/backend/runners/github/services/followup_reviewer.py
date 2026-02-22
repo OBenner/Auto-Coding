@@ -37,7 +37,8 @@ try:
     from .category_utils import map_category
     from .io_utils import safe_print
     from .prompt_manager import PromptManager
-    from .pydantic_models import FollowupReviewResponse
+    from .pydantic_models import FollowupExtractionResponse, FollowupReviewResponse
+    from .recovery_utils import create_finding_from_summary
 except (ImportError, ValueError, SystemError):
     from gh_client import GHClient
     from models import (
@@ -50,7 +51,11 @@ except (ImportError, ValueError, SystemError):
     from services.category_utils import map_category
     from services.io_utils import safe_print
     from services.prompt_manager import PromptManager
-    from services.pydantic_models import FollowupReviewResponse
+    from services.pydantic_models import (
+        FollowupExtractionResponse,
+        FollowupReviewResponse,
+    )
+    from services.recovery_utils import create_finding_from_summary
 
 logger = logging.getLogger(__name__)
 
@@ -766,8 +771,16 @@ Analyze this follow-up review context and provide your structured response.
                         )
                         return None
 
-            logger.warning("No structured output received from AI")
-            return None
+            # No structured output — attempt extraction recovery
+            logger.warning(
+                "No structured output received from AI - attempting extraction recovery"
+            )
+            safe_print(
+                "[Followup] No structured output - attempting extraction recovery",
+                flush=True,
+            )
+            extraction_result = await self._attempt_extraction_call(user_message, model)
+            return extraction_result
 
         except ValueError as e:
             # OAuth token not found
@@ -837,6 +850,112 @@ Analyze this follow-up review context and provide your structured response.
             "comment_findings": comment_findings,
             "verdict": result.verdict,
             "verdict_reasoning": result.verdict_reasoning,
+        }
+
+    async def _attempt_extraction_call(
+        self,
+        original_prompt: str,
+        model: str,
+    ) -> dict[str, Any] | None:
+        """Extraction recovery: re-call with minimal schema.
+
+        Uses FollowupExtractionResponse (~6 fields) instead of full
+        FollowupReviewResponse (~20+ fields) for near-100% validation success.
+        """
+        try:
+            from claude_agent_sdk import ClaudeAgentOptions, query
+            from phase_config import get_thinking_budget
+
+            extraction_prompt = (
+                "You are extracting findings from a code review.\n\n"
+                "Review the context below and extract:\n"
+                "1. A verdict (READY_TO_MERGE, MERGE_WITH_CHANGES, "
+                "NEEDS_REVISION, or BLOCKED)\n"
+                "2. A brief verdict reasoning\n"
+                "3. Any new findings with severity, description, file, and line\n\n"
+                f"{original_prompt[:10000]}"
+            )
+
+            schema = FollowupExtractionResponse.model_json_schema()
+            thinking_budget = get_thinking_budget("low")
+
+            async for message in query(
+                prompt=extraction_prompt,
+                options=ClaudeAgentOptions(
+                    model=model,
+                    system_prompt="You extract structured findings from code reviews.",
+                    allowed_tools=[],
+                    max_turns=2,
+                    max_thinking_tokens=thinking_budget,
+                    output_format={
+                        "type": "json_schema",
+                        "schema": schema,
+                    },
+                ),
+            ):
+                msg_type = type(message).__name__
+
+                if msg_type == "AssistantMessage":
+                    # Check ToolUseBlock for StructuredOutput
+                    content = getattr(message, "content", [])
+                    for block in content:
+                        if (
+                            type(block).__name__ == "ToolUseBlock"
+                            and getattr(block, "name", "") == "StructuredOutput"
+                        ):
+                            structured_data = getattr(block, "input", None)
+                            if structured_data:
+                                extraction = FollowupExtractionResponse.model_validate(
+                                    structured_data
+                                )
+                                return self._convert_extraction_to_internal(extraction)
+
+                    # Check direct structured_output attribute
+                    if (
+                        hasattr(message, "structured_output")
+                        and message.structured_output
+                    ):
+                        extraction = FollowupExtractionResponse.model_validate(
+                            message.structured_output
+                        )
+                        return self._convert_extraction_to_internal(extraction)
+
+            logger.info("[Followup] Extraction call produced no structured output")
+            return None
+
+        except Exception as e:
+            logger.warning(f"[Followup] Extraction recovery failed: {e}")
+            return None
+
+    def _convert_extraction_to_internal(
+        self, extraction: FollowupExtractionResponse
+    ) -> dict[str, Any]:
+        """Convert extraction response to internal dict format."""
+        new_findings = []
+        for i, summary in enumerate(extraction.new_finding_summaries):
+            finding = create_finding_from_summary(
+                summary=f"{summary.severity.upper()}: {summary.description}",
+                index=i,
+                id_prefix="FR",
+                file=summary.file,
+                line=summary.line,
+            )
+            new_findings.append(finding)
+
+        safe_print(
+            f"[Followup] Extraction recovery: {len(new_findings)} findings, "
+            f"verdict={extraction.verdict}",
+            flush=True,
+        )
+
+        return {
+            "finding_resolutions": [],
+            "new_findings": new_findings,
+            "comment_findings": [],
+            "verdict": extraction.verdict,
+            "verdict_reasoning": (
+                f"[Recovered via extraction] {extraction.verdict_reasoning}"
+            ),
         }
 
     def _apply_ai_resolutions(
