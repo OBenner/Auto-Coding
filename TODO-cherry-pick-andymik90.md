@@ -7,19 +7,17 @@ Remote: `andymik90` (уже добавлен в этом worktree)
 
 - [x] **PR #1834** — FalkorDB → LadybugDB migration (коммит `2f59d196`)
 - [x] **PR #1841** — Greenfield project spec creation crash (коммит `1889f145`)
+- [x] **PR #1853** — QA validation deadlock fix (коммит `5dc52b0a`)
+- [x] **PR #1844** — Planning crash + resume recovery (коммит `7a61e863`)
+- [x] **PR #1847** — Self-healing file paths in coder pipeline (коммит `0896bca4`)
+- [~] **PR #1840** — SKIPPED: не применим, наш форк не имеет TaskStateManager/XState
 
 ## Осталось — Категория 1: Критичные баг-фиксы бэкенда
-
-- [ ] **PR #1853** — QA validation deadlock (stuck/failed subtasks блокируют QA). 676+/56-, 11 files. Ветка: `fix/qa-validation-stuck-subtasks`
-- [ ] **PR #1847** — Self-healing невалидных file paths в coder pipeline (fuzzy matching). 1372+/6-, 4 files. Ветка: `fix/crash-on-spec-path`
-- [ ] **PR #1844** — Planning phase crash + resume recovery. 159+/47-, 4 files. Ветка удалена, брать дифф через API: `gh api repos/AndyMik90/Auto-Claude/pulls/1844/files`
 - [ ] **PR #1797** — PR review: three-tier recovery для structured output failures. 378+/22-, 6 files. Ветка удалена
 - [ ] **PR #1806** — PR review: упрощение Pydantic schemas. 703+/600-, 6 files. Ветка удалена
 - [ ] **PR #1857** — Сохранение file/line info при PR review recovery. Ветка удалена
 
 ## Осталось — Категория 2: Баг-фиксы fullstack/frontend
-
-- [ ] **PR #1840** — Stuck-after-planning: `terminalEventSeen` не очищается при restart. 27+/0-, 2 files. Ветка удалена
 - [ ] **PR #1813** — OOM prevention, orphaned agents при overnight builds. 896+/44-, 11 files. Ветка удалена
 - [ ] **PR #1843** — Windows: Claude CLI not found (PATH overwrite, prompt size, cwd). 326+/24-, 8 files. Ветка удалена
 - [ ] **PR #1842** — Watch worktree path для implementation_plan.json. 504+/56-, 4 files. Ветка удалена
