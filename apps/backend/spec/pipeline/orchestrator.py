@@ -365,7 +365,14 @@ class SpecOrchestrator:
         await self._store_phase_summary("requirements")
 
         # Rename spec folder with better name from requirements
-        rename_spec_dir_from_requirements(self.spec_dir)
+        # IMPORTANT: Update self.spec_dir after rename so subsequent phases use the correct path
+        new_spec_dir = rename_spec_dir_from_requirements(self.spec_dir)
+        if new_spec_dir != self.spec_dir:
+            self.spec_dir = new_spec_dir
+            self.validator = SpecValidator(self.spec_dir)
+            # Update phase executor to use the renamed directory
+            phase_executor.spec_dir = self.spec_dir
+            phase_executor.spec_validator = self.validator
 
         # Update task description from requirements
         req = requirements.load_requirements(self.spec_dir)
@@ -730,19 +737,25 @@ class SpecOrchestrator:
         The functionality has been moved to models.rename_spec_dir_from_requirements.
 
         Returns:
-            True if successful or not needed, False on error
+            True if successful or not needed, False if prerequisites are missing
         """
-        result = rename_spec_dir_from_requirements(self.spec_dir)
-        # Update self.spec_dir if it was renamed
-        if result and self.spec_dir.name.endswith("-pending"):
-            # Find the renamed directory
-            parent = self.spec_dir.parent
-            prefix = self.spec_dir.name[:4]  # e.g., "001-"
-            for candidate in parent.iterdir():
-                if (
-                    candidate.name.startswith(prefix)
-                    and "pending" not in candidate.name
-                ):
-                    self.spec_dir = candidate
-                    break
-        return result
+        # Check prerequisites first
+        requirements_file = self.spec_dir / "requirements.json"
+        if not requirements_file.exists():
+            return False
+
+        try:
+            with open(requirements_file, encoding="utf-8") as f:
+                req = json.load(f)
+            task_desc = req.get("task_description", "")
+            if not task_desc:
+                return False
+        except (json.JSONDecodeError, OSError):
+            return False
+
+        # Attempt rename
+        new_spec_dir = rename_spec_dir_from_requirements(self.spec_dir)
+        if new_spec_dir != self.spec_dir:
+            self.spec_dir = new_spec_dir
+            self.validator = SpecValidator(self.spec_dir)
+        return True
