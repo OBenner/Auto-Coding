@@ -40,5 +40,8 @@ zai-sdk>=0.2.2
 # Pydantic for structured output schemas
 pydantic>=2.0.0
 
+# tiktoken - Token counting for accurate context window estimation
+tiktoken>=0.5.0
+
 # Error tracking (optional - requires SENTRY_DSN environment variable)
 sentry-sdk>=2.0.0

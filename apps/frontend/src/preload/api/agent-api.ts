@@ -9,6 +9,8 @@
  * - Linear integration
  * - GitHub integration
  * - Shell operations
+ * - Session context operations
+ * - Productivity analytics
  */
 
 import { createRoadmapAPI, RoadmapAPI } from './modules/roadmap-api';
@@ -19,6 +21,8 @@ import { createLinearAPI, LinearAPI } from './modules/linear-api';
 import { createGitHubAPI, GitHubAPI } from './modules/github-api';
 import { createGitLabAPI, GitLabAPI } from './modules/gitlab-api';
 import { createShellAPI, ShellAPI } from './modules/shell-api';
+import { createSessionContextAPI, SessionContextAPI } from './modules/session-context-api';
+import { createProductivityAnalyticsAPI, ProductivityAnalyticsAPI } from './modules/productivity-analytics-api';
 
 /**
  * Combined Agent API interface
@@ -32,7 +36,9 @@ export interface AgentAPI extends
   LinearAPI,
   GitHubAPI,
   GitLabAPI,
-  ShellAPI {}
+  ShellAPI,
+  SessionContextAPI,
+  ProductivityAnalyticsAPI {}
 
 /**
  * Creates the complete Agent API by combining all module APIs
@@ -48,6 +54,8 @@ export const createAgentAPI = (): AgentAPI => {
   const githubAPI = createGitHubAPI();
   const gitlabAPI = createGitLabAPI();
   const shellAPI = createShellAPI();
+  const sessionContextAPI = createSessionContextAPI();
+  const productivityAnalyticsAPI = createProductivityAnalyticsAPI();
 
   return {
     // Roadmap API
@@ -72,7 +80,13 @@ export const createAgentAPI = (): AgentAPI => {
     ...gitlabAPI,
 
     // Shell Operations API
-    ...shellAPI
+    ...shellAPI,
+
+    // Session Context API
+    ...sessionContextAPI,
+
+    // Productivity Analytics API
+    ...productivityAnalyticsAPI
   };
 };
 
@@ -85,5 +99,7 @@ export type {
   LinearAPI,
   GitHubAPI,
   GitLabAPI,
-  ShellAPI
+  ShellAPI,
+  SessionContextAPI,
+  ProductivityAnalyticsAPI
 };

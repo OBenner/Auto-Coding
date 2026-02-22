@@ -18,7 +18,9 @@ import {
   Globe,
   Code,
   Bug,
-  Users
+  Users,
+  Keyboard,
+  MessageSquare
 } from 'lucide-react';
 
 // GitLab icon component (lucide-react doesn't have one)
@@ -41,8 +43,11 @@ import {
 } from '../ui/full-screen-dialog';
 import { Button } from '../ui/button';
 import { ScrollArea } from '../ui/scroll-area';
+import { Label } from '../ui/label';
+import { Switch } from '../ui/switch';
 import { cn } from '../../lib/utils';
 import { useSettings } from './hooks/useSettings';
+import { SettingsSection } from './SettingsSection';
 import { ThemeSettings } from './ThemeSettings';
 import { DisplaySettings } from './DisplaySettings';
 import { LanguageSettings } from './LanguageSettings';
@@ -51,6 +56,7 @@ import { AdvancedSettings } from './AdvancedSettings';
 import { DevToolsSettings } from './DevToolsSettings';
 import { DebugSettings } from './DebugSettings';
 import { AccountSettings } from './AccountSettings';
+import { KeyboardShortcutsSettings } from './KeyboardShortcutsSettings';
 import { ProjectSelector } from './ProjectSelector';
 import { ProjectSettingsContent, ProjectSettingsSection } from './ProjectSettingsContent';
 import { useProjectStore } from '../../stores/project-store';
@@ -65,7 +71,7 @@ interface AppSettingsDialogProps {
 }
 
 // App-level settings sections
-export type AppSection = 'appearance' | 'display' | 'language' | 'devtools' | 'agent' | 'paths' | 'accounts' | 'updates' | 'notifications' | 'debug';
+export type AppSection = 'appearance' | 'display' | 'language' | 'devtools' | 'agent' | 'paths' | 'accounts' | 'updates' | 'notifications' | 'feedback' | 'keyboardShortcuts' | 'debug';
 
 interface NavItemConfig<T extends string> {
   id: T;
@@ -82,6 +88,8 @@ const appNavItemsConfig: NavItemConfig<AppSection>[] = [
   { id: 'accounts', icon: Users },
   { id: 'updates', icon: Package },
   { id: 'notifications', icon: Bell },
+  { id: 'feedback', icon: MessageSquare },
+  { id: 'keyboardShortcuts', icon: Keyboard },
   { id: 'debug', icon: Bug }
 ];
 
@@ -195,6 +203,35 @@ export function AppSettingsDialog({ open, onOpenChange, initialSection, initialP
         return <AdvancedSettings settings={settings} onSettingsChange={setSettings} section="updates" version={version} />;
       case 'notifications':
         return <AdvancedSettings settings={settings} onSettingsChange={setSettings} section="notifications" version={version} />;
+      case 'feedback':
+        return (
+          <SettingsSection
+            title={t('feedback.title')}
+            description={t('feedback.description')}
+          >
+            <div className="space-y-4">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1 space-y-1">
+                  <Label htmlFor="feedbackEnabled" className="text-sm font-medium text-foreground">
+                    {t('feedback.enableFeedback')}
+                  </Label>
+                  <p className="text-sm text-muted-foreground">
+                    {t('feedback.enableFeedbackDescription')}
+                  </p>
+                </div>
+                <Switch
+                  id="feedbackEnabled"
+                  checked={settings.feedbackEnabled ?? true}
+                  onCheckedChange={(checked) =>
+                    setSettings({ ...settings, feedbackEnabled: checked })
+                  }
+                />
+              </div>
+            </div>
+          </SettingsSection>
+        );
+      case 'keyboardShortcuts':
+        return <KeyboardShortcutsSettings isOpen={open} />;
       case 'debug':
         return <DebugSettings />;
       default:

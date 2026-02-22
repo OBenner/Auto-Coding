@@ -482,7 +482,7 @@ class TestFactoryFunctions:
             "core.providers.factory._create_claude_provider"
         ) as mock_create:
             mock_create.return_value = MagicMock()
-            provider = create_engine_provider(config)
+            create_engine_provider(config)
             mock_create.assert_called_once_with(config)
 
     def test_create_engine_provider_litellm_dispatches_correctly(self):
@@ -496,7 +496,7 @@ class TestFactoryFunctions:
             "core.providers.factory._create_litellm_provider"
         ) as mock_create:
             mock_create.return_value = MagicMock()
-            provider = create_engine_provider(config)
+            create_engine_provider(config)
             mock_create.assert_called_once_with(config)
 
     def test_create_engine_provider_openrouter_dispatches_correctly(self):
@@ -512,7 +512,7 @@ class TestFactoryFunctions:
             "core.providers.factory._create_openrouter_provider"
         ) as mock_create:
             mock_create.return_value = MagicMock()
-            provider = create_engine_provider(config)
+            create_engine_provider(config)
             mock_create.assert_called_once_with(config)
 
 
@@ -536,7 +536,7 @@ class TestClaudeProviderFactory:
         assert "Test error" in str(error)
 
         # Verify _create_claude_provider exists and is callable
-        config = ProviderConfig(provider="claude", anthropic_api_key="test-key")
+        ProviderConfig(provider="claude", anthropic_api_key="test-key")
         assert callable(_create_claude_provider)
 
         # The import error path is tested indirectly - if the adapter module

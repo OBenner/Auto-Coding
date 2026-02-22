@@ -45,6 +45,10 @@
     "jsdom": "^27.4.0"
   },
   "dependencies": {
+    "cmdk": "^1.1.1",
     "lucide-react": "^0.562.0"
+  },
+  "overrides": {
+    "minimatch": ">=10.2.1"
   }
 }

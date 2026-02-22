@@ -79,5 +79,22 @@
     "alreadyExisted": "already existed",
     "noWorktree": "No worktree found for this task",
     "resultsDescriptionWithSkipped": "{{success}} succeeded, {{skipped}} skipped, {{failed}} failed"
+  },
+  "batchQA": {
+    "title": "Batch QA",
+    "description": "Run QA validation on {{count}} selected task(s)",
+    "running": "Running QA ({{current}} of {{total}})...",
+    "resultsDescription": "{{success}} succeeded, {{failed}} failed",
+    "resultsDescriptionWithSkipped": "{{success}} succeeded, {{skipped}} skipped, {{failed}} failed",
+    "runAll": "Run QA on All",
+    "runningQA": "Running QA on task {{current}} of {{total}}",
+    "completed": "completed",
+    "succeeded": "succeeded",
+    "skipped": "skipped",
+    "failed": "failed",
+    "notReady": "Task not ready for QA",
+    "unknownError": "An unknown error occurred",
+    "noIssues": "No issues found",
+    "issuesFound": "{{count}} issue(s) found"
   }
 }

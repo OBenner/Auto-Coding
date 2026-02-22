@@ -249,7 +249,7 @@ def init_sentry(
             if 0 <= parsed <= 1:
                 traces_sample_rate = parsed
     except (ValueError, TypeError):
-        pass
+        logger.debug("Invalid SENTRY_TRACES_SAMPLE_RATE value, using default")
 
     # Configure logging integration to capture errors and warnings
     logging_integration = LoggingIntegration(

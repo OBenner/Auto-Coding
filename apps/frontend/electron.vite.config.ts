@@ -43,13 +43,17 @@ export default defineConfig({
         'debug',
         'ms',
         // Minimatch for glob pattern matching in worktree handlers
-        'minimatch'
+        'minimatch',
+        // Model Context Protocol SDK for embedded MCP server
+        '@modelcontextprotocol/sdk'
       ]
     })],
     build: {
       rollupOptions: {
         input: {
-          index: resolve(__dirname, 'src/main/index.ts')
+          index: resolve(__dirname, 'src/main/index.ts'),
+          'mcp-server': resolve(__dirname, 'src/main/mcp-server.ts'),
+          'mcp-server-wrapper': resolve(__dirname, 'src/main/mcp-server-wrapper.ts')
         },
         // Only node-pty needs to be external (native module rebuilt by electron-builder)
         external: ['@lydell/node-pty']
