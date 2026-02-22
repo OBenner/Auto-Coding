@@ -664,25 +664,21 @@ class BreakingChangeDetector:
             spec_dir: Spec directory path
             result: Result to save
         """
-        import json
+
+        from analysis.io_utils import atomic_json_write, count_by_severity
 
         spec_dir = Path(spec_dir)
         spec_dir.mkdir(parents=True, exist_ok=True)
 
         output_file = spec_dir / "breaking_changes.json"
+        sev_counts = count_by_severity(result.breaking_changes)
 
         data = {
             "files_analyzed": result.files_analyzed,
             "total_breaking_changes": len(result.breaking_changes),
-            "critical_changes": len(
-                [c for c in result.breaking_changes if c.severity == "critical"]
-            ),
-            "high_changes": len(
-                [c for c in result.breaking_changes if c.severity == "high"]
-            ),
-            "medium_changes": len(
-                [c for c in result.breaking_changes if c.severity == "medium"]
-            ),
+            "critical_changes": sev_counts["critical"],
+            "high_changes": sev_counts["high"],
+            "medium_changes": sev_counts["medium"],
             "has_breaking_changes": result.has_breaking_changes,
             "should_block": result.should_block,
             "breaking_changes": [
@@ -701,22 +697,7 @@ class BreakingChangeDetector:
             "errors": result.analysis_errors,
         }
 
-        import os
-        import tempfile
-
-        fd, tmp_path = tempfile.mkstemp(
-            dir=str(spec_dir), suffix=".tmp", prefix="breaking_changes_"
-        )
-        try:
-            with os.fdopen(fd, "w", encoding="utf-8") as f:
-                json.dump(data, f, indent=2)
-            os.replace(tmp_path, str(output_file))
-        except BaseException:
-            try:
-                os.unlink(tmp_path)
-            except OSError:
-                pass  # Best-effort cleanup
-            raise
+        atomic_json_write(data, output_file, dir=spec_dir, prefix="breaking_changes_")
 
     def format_report(self, result: BreakingChangeResult) -> str:
         """
@@ -740,20 +721,11 @@ class BreakingChangeDetector:
                 "\n🚫 CRITICAL BREAKING CHANGES FOUND - SHOULD BLOCK DEPLOYMENT"
             )
 
-        # Group by severity
-        by_severity = {
-            "critical": [],
-            "high": [],
-            "medium": [],
-            "low": [],
-            "info": [],
-        }
+        from analysis.io_utils import SEVERITY_ORDER, group_by_severity
 
-        for change in result.breaking_changes:
-            by_severity[change.severity].append(change)
+        by_severity = group_by_severity(result.breaking_changes)
 
-        # Report each severity level
-        for severity in ["critical", "high", "medium", "low", "info"]:
+        for severity in SEVERITY_ORDER:
             changes = by_severity[severity]
             if not changes:
                 continue

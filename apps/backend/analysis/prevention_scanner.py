@@ -24,8 +24,6 @@ Usage:
 from __future__ import annotations
 
 import json
-import os
-import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -39,6 +37,7 @@ from analysis.breaking_change_detector import (
     BreakingChangeDetector,
     BreakingChangeResult,
 )
+from analysis.io_utils import atomic_json_write
 from analysis.performance_analyzer import (
     PerformanceAnalysisResult,
     PerformanceAnalyzer,
@@ -353,20 +352,7 @@ class PreventionScanner:
                 "should_warn": result.architecture.should_warn,
             }
 
-        # Atomic write: write to temp file first, then rename
-        fd, tmp_path = tempfile.mkstemp(
-            dir=str(spec_dir), suffix=".tmp", prefix="prevention_scan_"
-        )
-        try:
-            with os.fdopen(fd, "w", encoding="utf-8") as f:
-                json.dump(data, f, indent=2)
-            os.replace(tmp_path, str(output_file))
-        except BaseException:
-            try:
-                os.unlink(tmp_path)
-            except OSError:
-                pass  # Best-effort cleanup; temp file may already be removed
-            raise
+        atomic_json_write(data, output_file, dir=spec_dir, prefix="prevention_scan_")
 
     def format_report(self, result: PreventionScanResult) -> str:
         """

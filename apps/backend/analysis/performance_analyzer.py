@@ -217,20 +217,9 @@ class PerformanceAnalyzer:
         for ext in ["**/*.py", "**/*.js", "**/*.ts", "**/*.tsx"]:
             files.extend(project_dir.glob(ext))
 
-        # Filter out common directories to skip
-        skip_dirs = {
-            "node_modules",
-            ".venv",
-            "venv",
-            "__pycache__",
-            ".git",
-            "dist",
-            "build",
-        }
+        from analysis.io_utils import should_skip_path
 
-        return [
-            f for f in files if not any(skip_dir in f.parts for skip_dir in skip_dirs)
-        ]
+        return [f for f in files if not should_skip_path(f)]
 
     def _is_analyzable(self, file_path: str) -> bool:
         """Check if file is analyzable (Python or JavaScript/TypeScript)."""
@@ -452,22 +441,22 @@ class PerformanceAnalyzer:
             spec_dir: Spec directory path
             result: Analysis result to save
         """
-        import json
+
+        from analysis.io_utils import atomic_json_write, count_by_severity
 
         spec_dir = Path(spec_dir)
         spec_dir.mkdir(parents=True, exist_ok=True)
 
         output_file = spec_dir / "performance_analysis.json"
+        sev_counts = count_by_severity(result.issues)
 
         data = {
             "files_analyzed": result.files_analyzed,
             "total_issues": len(result.issues),
-            "critical_issues": len(
-                [i for i in result.issues if i.severity == "critical"]
-            ),
-            "high_issues": len([i for i in result.issues if i.severity == "high"]),
-            "medium_issues": len([i for i in result.issues if i.severity == "medium"]),
-            "low_issues": len([i for i in result.issues if i.severity == "low"]),
+            "critical_issues": sev_counts["critical"],
+            "high_issues": sev_counts["high"],
+            "medium_issues": sev_counts["medium"],
+            "low_issues": sev_counts["low"],
             "has_critical_issues": result.has_critical_issues,
             "should_warn": result.should_warn,
             "issues": [
@@ -486,22 +475,9 @@ class PerformanceAnalyzer:
             "errors": result.analysis_errors,
         }
 
-        import os
-        import tempfile
-
-        fd, tmp_path = tempfile.mkstemp(
-            dir=str(spec_dir), suffix=".tmp", prefix="performance_analysis_"
+        atomic_json_write(
+            data, output_file, dir=spec_dir, prefix="performance_analysis_"
         )
-        try:
-            with os.fdopen(fd, "w", encoding="utf-8") as f:
-                json.dump(data, f, indent=2)
-            os.replace(tmp_path, str(output_file))
-        except BaseException:
-            try:
-                os.unlink(tmp_path)
-            except OSError:
-                pass  # Best-effort cleanup
-            raise
 
     def format_report(self, result: PerformanceAnalysisResult) -> str:
         """
@@ -523,20 +499,11 @@ class PerformanceAnalyzer:
         if result.has_critical_issues:
             lines.append("\n⚠️  CRITICAL PERFORMANCE ISSUES FOUND")
 
-        # Group by severity
-        by_severity = {
-            "critical": [],
-            "high": [],
-            "medium": [],
-            "low": [],
-            "info": [],
-        }
+        from analysis.io_utils import SEVERITY_ORDER, group_by_severity
 
-        for issue in result.issues:
-            by_severity[issue.severity].append(issue)
+        by_severity = group_by_severity(result.issues)
 
-        # Report each severity level
-        for severity in ["critical", "high", "medium", "low", "info"]:
+        for severity in SEVERITY_ORDER:
             issues = by_severity[severity]
             if not issues:
                 continue
