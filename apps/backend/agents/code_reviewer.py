@@ -77,9 +77,6 @@ async def run_code_review_session(
 
     # Get task logger for streaming markers
     task_logger = get_task_logger(spec_dir)
-    current_tool = None
-    message_count = 0
-    tool_count = 0
 
     # Load code review prompt with dynamically-injected project-specific MCP tools
     # For now, we'll use a placeholder until subtask-1-2 creates the prompt

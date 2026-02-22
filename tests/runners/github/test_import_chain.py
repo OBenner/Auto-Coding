@@ -108,7 +108,6 @@ class TestImportChain:
         runners_dir = backend_dir / "runners" / "github"
 
         original_path = sys.path.copy()
-        original_cwd = Path.cwd()
 
         try:
             # Simulate being in the runner.py context

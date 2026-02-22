@@ -11,8 +11,6 @@ Tests for the code review agent session covering:
 - Report file creation and parsing
 """
 
-import asyncio
-import json
 import sys
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
