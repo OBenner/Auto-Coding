@@ -45,6 +45,30 @@ Remote: `andymik90` (уже добавлен в этом worktree)
 - [~] **PR #1790** — SKIPPED: no GitHub Issues components (GitHubErrorDisplay, IssueList) in our fork
 - [~] **PR #1794** — SKIPPED: no profile-scorer.ts or unified-account.ts in our fork
 
+## Осталось — Категория 5: Утилитарные модули и QA тесты (WIP)
+
+Перенос утилитарных модулей из AndyMik90 форка для разблокировки QA тестов.
+
+**Готово (не закоммичено):**
+- [x] `apps/backend/core/error_utils.py` — NEW: is_tool_concurrency_error, is_rate_limit_error, is_authentication_error, safe_receive_messages
+- [x] `apps/backend/agents/base.py` — MODIFIED: retry constants, pause file constants, sanitize_error_message()
+- [x] `apps/backend/security/tool_input_validator.py` — MODIFIED: TOOL_REQUIRED_KEYS, validate_tool_input(), get_safe_tool_input()
+- [x] `apps/backend/debug.py` — MODIFIED: comment rename Auto-Code → Auto-Claude
+- [x] `apps/backend/core/debug.py` — MODIFIED: comment rename + Python 3.12 compat (isinstance tuple syntax)
+- [x] `tests/conftest.py` — MODIFIED: added mock entries for new modules
+- [x] `tests/qa_test_helpers.py` — NEW: shared QA test helpers (adapted for our fork — stub qa package to bypass circular imports)
+
+**WIP (тесты не проходят, нужна доработка):**
+- [ ] `tests/test_qa_fixer.py` — NEW: 12/14 тестов падают — `patch('qa.fixer.get_iteration_history')` не работает т.к. fixer использует lazy import `from .report import get_iteration_history` внутри функции. Нужно патчить `qa.report.get_iteration_history` или использовать другой подход к мокам.
+- [ ] `tests/test_qa_reviewer.py` — NEW: 3/13 тестов падают — memory integration тесты: mock объекты не подхватываются (нужно использовать `patch.object` или патчить реальные модули).
+
+**Резюме проблем с QA тестами:**
+1. Наш форк использует `RecoveryManager`, iteration history, coverage validation — которых нет в оригинальных тестах
+2. Fixer делает lazy import `from .report import get_iteration_history` внутри `run_qa_fixer_session()` — patch по `qa.fixer.get_iteration_history` не работает
+3. Reviewer вызывает `run_coverage_validation()` перед сессией — нужен отдельный мок
+4. Оба модуля возвращают 2-tuple (status, text), а не 3-tuple как в оригинале
+5. ErrorDetection тесты убраны — наши модули не используют `is_rate_limit_error` напрямую
+
 ## Итоговая сводка
 
 **Применено: 16 PRs** (коммиты в ветке `worktree-cherry-pick-andymik90`):
@@ -58,6 +82,10 @@ Remote: `andymik90` (уже добавлен в этом worktree)
 - PR #1814 (backend only) — competitor_analyzer manual competitor preservation
 - PR #1821 (backend only) — insights_runner image/screenshot support
 
+**Дополнительно перенесено (утилитарные модули):**
+- core/error_utils.py, agents/base.py, security/tool_input_validator.py, debug.py, core/debug.py
+- Эти модули разблокировали 165 ранее падавших тестов (2710 → 2875)
+
 **Пропущено: 13 PRs** (компоненты отсутствуют в нашем форке):
 - 5 PR — зависят от XState/TaskStateManager (#1840, #1833, #1820, #1816, #1815)
 - 1 PR — FileWatcher (#1842)
@@ -69,7 +97,6 @@ Remote: `andymik90` (уже добавлен в этом worktree)
 
 **Не перенесено (слишком сильное расхождение или отсутствие зависимостей):**
 - PR #1772 — 13 new CLI test files (12,500+ строк) — массовый перенос нецелесообразен
-- PR #1779 — QA fixer/reviewer тесты — зависят от core.error_utils (нет в нашем форке)
 - PR #1817 — Roadmap frontend (нет компонентов)
 - Все XState/terminal/Insights PRs (см. список пропусков выше)
 

@@ -3,7 +3,7 @@
 Debug Logging Utility
 =====================
 
-Centralized debug logging for the Auto-Code framework.
+Centralized debug logging for the Auto-Claude framework.
 Controlled via environment variables:
   - DEBUG=true          Enable debug mode
   - DEBUG_LEVEL=1|2|3   Log verbosity (1=basic, 2=detailed, 3=verbose)
@@ -82,7 +82,7 @@ def _format_value(value: Any, max_length: int = 200) -> str:
     if value is None:
         return "None"
 
-    if isinstance(value, dict | list):
+    if isinstance(value, (dict, list)):
         try:
             formatted = json.dumps(value, indent=2, default=str)
             if len(formatted) > max_length:
