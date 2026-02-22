@@ -1,6 +1,6 @@
 # Spec Creation Pipeline Architecture
 
-This document provides comprehensive documentation of Auto Claude's spec creation system, covering the multi-phase pipeline, complexity assessment, phase compaction, validation strategy, and integration guides.
+This document provides comprehensive documentation of Auto Code's spec creation system, covering the multi-phase pipeline, complexity assessment, phase compaction, validation strategy, and integration guides.
 
 ## Overview
 

@@ -22,6 +22,43 @@ vi.mock('electron', () => ({
   }
 }));
 
+/**
+ * Wait for a file to appear on disk (handles async writes).
+ * The ProjectStore uses fire-and-forget async writes (saveAsync) that may not
+ * have flushed to disk by the time a synchronous assertion runs.
+ */
+async function waitForFile(filePath: string, timeout = 2000): Promise<string> {
+  const start = Date.now();
+  while (Date.now() - start < timeout) {
+    if (existsSync(filePath)) {
+      try {
+        const raw = readFileSync(filePath, 'utf-8');
+        // Validate it's complete JSON (not a partial write)
+        JSON.parse(raw);
+        return raw;
+      } catch {
+        // File exists but JSON is incomplete/invalid - keep waiting
+      }
+    }
+    await new Promise(r => setTimeout(r, 10));
+  }
+  throw new Error(`File ${filePath} did not appear (with valid JSON) within ${timeout}ms`);
+}
+
+/**
+ * Wait for the ProjectStore's async initialization to complete.
+ * The constructor fires initializeAsync() in the background (fire-and-forget),
+ * which can race with subsequent method calls on macOS. This helper
+ * yields enough event-loop ticks for the async init (mkdir + readFile) to finish.
+ */
+async function waitForStoreInit(): Promise<void> {
+  // Two async I/O ops in initializeAsync (mkdir + readFile) plus microtask overhead.
+  // Yielding a few times ensures they complete before we proceed.
+  for (let i = 0; i < 5; i++) {
+    await new Promise(r => setTimeout(r, 10));
+  }
+}
+
 // Setup test directories with unique secure temp dir
 function setupTestDirs(): void {
   // Create a unique, secure temporary directory
@@ -48,7 +85,11 @@ describe('ProjectStore', () => {
     vi.resetModules();
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    // Wait for any in-flight async saves to complete before cleanup.
+    // ProjectStore uses fire-and-forget saveAsync() which can still be
+    // writing to disk when afterEach runs, causing ENOTEMPTY on macOS.
+    await new Promise(r => setTimeout(r, 50));
     cleanupTestDirs();
     vi.clearAllMocks();
   });
@@ -112,15 +153,16 @@ describe('ProjectStore', () => {
     it('should persist project to disk', async () => {
       const { ProjectStore } = await import('../project-store');
       const store = new ProjectStore();
+      await waitForStoreInit();
 
       store.addProject(TEST_PROJECT_PATH);
 
-      // Check file exists
+      // Wait for the async save to flush to disk
       const storePath = path.join(USER_DATA_PATH, 'store', 'projects.json');
-      expect(existsSync(storePath)).toBe(true);
+      const raw = await waitForFile(storePath);
 
       // Check content
-      const content = JSON.parse(readFileSync(storePath, 'utf-8'));
+      const content = JSON.parse(raw);
       expect(content.projects).toHaveLength(1);
       expect(content.projects[0].path).toBe(TEST_PROJECT_PATH);
     });
@@ -150,13 +192,29 @@ describe('ProjectStore', () => {
     it('should persist removal to disk', async () => {
       const { ProjectStore } = await import('../project-store');
       const store = new ProjectStore();
+      await waitForStoreInit();
 
       const project = store.addProject(TEST_PROJECT_PATH);
+      // Wait for addProject's async save to complete before removing
+      const storePath = path.join(USER_DATA_PATH, 'store', 'projects.json');
+      await waitForFile(storePath);
+
       store.removeProject(project.id);
 
-      // Check file content
-      const storePath = path.join(USER_DATA_PATH, 'store', 'projects.json');
-      const content = JSON.parse(readFileSync(storePath, 'utf-8'));
+      // Wait for the removal save to flush - file already exists but content changes
+      // Poll until projects array is empty
+      const start = Date.now();
+      let content: { projects: unknown[] } = { projects: [1] };
+      while (Date.now() - start < 2000) {
+        try {
+          const raw = readFileSync(storePath, 'utf-8');
+          content = JSON.parse(raw);
+          if (content.projects.length === 0) break;
+        } catch {
+          // File may be partially written - keep polling
+        }
+        await new Promise(r => setTimeout(r, 10));
+      }
       expect(content.projects).toHaveLength(0);
     });
   });
@@ -222,6 +280,7 @@ describe('ProjectStore', () => {
     it('should update settings and return updated project', async () => {
       const { ProjectStore } = await import('../project-store');
       const store = new ProjectStore();
+      await waitForStoreInit();
 
       const project = store.addProject(TEST_PROJECT_PATH);
       const updated = store.updateProjectSettings(project.id, {
@@ -237,6 +296,7 @@ describe('ProjectStore', () => {
     it('should update updatedAt timestamp', async () => {
       const { ProjectStore } = await import('../project-store');
       const store = new ProjectStore();
+      await waitForStoreInit();
 
       const project = store.addProject(TEST_PROJECT_PATH);
       const originalUpdatedAt = project.updatedAt;
@@ -252,13 +312,28 @@ describe('ProjectStore', () => {
     it('should persist settings changes', async () => {
       const { ProjectStore } = await import('../project-store');
       const store = new ProjectStore();
+      await waitForStoreInit();
 
       const project = store.addProject(TEST_PROJECT_PATH);
+      // Wait for addProject's async save to flush
+      const storePath = path.join(USER_DATA_PATH, 'store', 'projects.json');
+      await waitForFile(storePath);
+
       store.updateProjectSettings(project.id, { model: 'sonnet' });
 
-      // Read directly from file
-      const storePath = path.join(USER_DATA_PATH, 'store', 'projects.json');
-      const content = JSON.parse(readFileSync(storePath, 'utf-8'));
+      // Wait for the settings save to flush
+      const start = Date.now();
+      let content: { projects: Array<{ settings: { model?: string } }> } = { projects: [] };
+      while (Date.now() - start < 2000) {
+        try {
+          const raw = readFileSync(storePath, 'utf-8');
+          content = JSON.parse(raw);
+          if (content.projects[0]?.settings?.model === 'sonnet') break;
+        } catch {
+          // File may be partially written - keep polling
+        }
+        await new Promise(r => setTimeout(r, 10));
+      }
       expect(content.projects[0].settings.model).toBe('sonnet');
     });
   });
@@ -571,6 +646,9 @@ describe('ProjectStore', () => {
       const { ProjectStore } = await import('../project-store');
       const store = new ProjectStore();
 
+      // Wait for async initialization to load the file from disk
+      await waitForStoreInit();
+
       const projects = store.getProjects();
 
       expect(projects).toHaveLength(1);
@@ -585,6 +663,9 @@ describe('ProjectStore', () => {
 
       const { ProjectStore } = await import('../project-store');
       const store = new ProjectStore();
+
+      // Wait for async initialization to attempt loading the corrupted file
+      await waitForStoreInit();
 
       const projects = store.getProjects();
 
@@ -611,9 +692,10 @@ describe('ProjectStore', () => {
 
       const { ProjectStore } = await import('../project-store');
       const store = new ProjectStore();
+      await waitForStoreInit();
 
       const project = store.addProject(TEST_PROJECT_PATH);
-      const result = store.archiveTasks(project.id, ['001-test-task'], '1.0.0');
+      const result = await store.archiveTasks(project.id, ['001-test-task'], '1.0.0');
 
       expect(result).toBe(true);
 
@@ -660,9 +742,10 @@ describe('ProjectStore', () => {
 
       const { ProjectStore } = await import('../project-store');
       const store = new ProjectStore();
+      await waitForStoreInit();
 
       const project = store.addProject(TEST_PROJECT_PATH);
-      const result = store.archiveTasks(project.id, ['002-multi-location'], '2.0.0');
+      const result = await store.archiveTasks(project.id, ['002-multi-location'], '2.0.0');
 
       expect(result).toBe(true);
 
@@ -709,9 +792,10 @@ describe('ProjectStore', () => {
 
       const { ProjectStore } = await import('../project-store');
       const store = new ProjectStore();
+      await waitForStoreInit();
 
       const project = store.addProject(TEST_PROJECT_PATH);
-      const result = store.archiveTasks(project.id, ['003-worktree-only'], '1.0.0');
+      const result = await store.archiveTasks(project.id, ['003-worktree-only'], '1.0.0');
 
       expect(result).toBe(true);
 
@@ -726,13 +810,14 @@ describe('ProjectStore', () => {
     it('should skip non-existent task gracefully', async () => {
       const { ProjectStore } = await import('../project-store');
       const store = new ProjectStore();
+      await waitForStoreInit();
 
       // Create .auto-claude directory so project is recognized
       mkdirSync(path.join(TEST_PROJECT_PATH, '.auto-claude'), { recursive: true });
 
       const project = store.addProject(TEST_PROJECT_PATH);
       // Task doesn't exist anywhere
-      const result = store.archiveTasks(project.id, ['nonexistent-task']);
+      const result = await store.archiveTasks(project.id, ['nonexistent-task']);
 
       // Should return true (no errors) since missing tasks are skipped
       expect(result).toBe(true);
@@ -748,6 +833,7 @@ describe('ProjectStore', () => {
 
       const { ProjectStore } = await import('../project-store');
       const store = new ProjectStore();
+      await waitForStoreInit();
 
       const project = store.addProject(TEST_PROJECT_PATH);
 
@@ -763,7 +849,7 @@ describe('ProjectStore', () => {
 
       for (const maliciousId of maliciousIds) {
         // These should be rejected and not cause any file operations
-        const result = store.archiveTasks(project.id, [maliciousId]);
+        const result = await store.archiveTasks(project.id, [maliciousId]);
         // Should return true since invalid IDs are skipped, not treated as errors
         expect(result).toBe(true);
       }
@@ -772,8 +858,9 @@ describe('ProjectStore', () => {
     it('should return false for non-existent project', async () => {
       const { ProjectStore } = await import('../project-store');
       const store = new ProjectStore();
+      await waitForStoreInit();
 
-      const result = store.archiveTasks('nonexistent-project-id', ['some-task']);
+      const result = await store.archiveTasks('nonexistent-project-id', ['some-task']);
 
       expect(result).toBe(false);
     });
@@ -817,9 +904,10 @@ describe('ProjectStore', () => {
 
       const { ProjectStore } = await import('../project-store');
       const store = new ProjectStore();
+      await waitForStoreInit();
 
       const project = store.addProject(TEST_PROJECT_PATH);
-      const result = store.unarchiveTasks(project.id, ['004-unarchive-test']);
+      const result = await store.unarchiveTasks(project.id, ['004-unarchive-test']);
 
       expect(result).toBe(true);
 
@@ -860,6 +948,10 @@ describe('ProjectStore', () => {
 
       const { ProjectStore } = await import('../project-store');
       const store = new ProjectStore();
+      // Wait for async init to complete so it doesn't race with addProject
+      // and overwrite in-memory data (the constructor fires initializeAsync
+      // in the background which reloads this.data from disk).
+      await waitForStoreInit();
 
       const project = store.addProject(TEST_PROJECT_PATH);
 
@@ -869,10 +961,12 @@ describe('ProjectStore', () => {
       expect(tasksBefore[0].metadata?.archivedAt).toBeUndefined();
 
       // Archive the task
-      await store.archiveTasks(project.id, ['005-cache-test']);
+      const archiveResult = await store.archiveTasks(project.id, ['005-cache-test']);
+      expect(archiveResult).toBe(true);
 
       // After archiving, cache should be invalidated and getTasks should return updated data
       const tasksAfter = await store.getTasks(project.id);
+      expect(tasksAfter).toHaveLength(1);
       expect(tasksAfter[0].metadata?.archivedAt).toBeDefined();
     });
 
@@ -894,11 +988,16 @@ describe('ProjectStore', () => {
 
       const { ProjectStore } = await import('../project-store');
       const store = new ProjectStore();
+      // Wait for async init to complete so it doesn't race with addProject
+      // and overwrite in-memory data (the constructor fires initializeAsync
+      // in the background which reloads this.data from disk).
+      await waitForStoreInit();
 
       const project = store.addProject(TEST_PROJECT_PATH);
 
       // First call should populate cache
       const tasksBefore = await store.getTasks(project.id);
+      expect(tasksBefore).toHaveLength(1);
       expect(tasksBefore[0].title).toBe('Initial Feature');
 
       // Modify the file directly (simulating external change)
@@ -907,6 +1006,7 @@ describe('ProjectStore', () => {
 
       // Without invalidation, should still return cached data
       const tasksCached = await store.getTasks(project.id);
+      expect(tasksCached).toHaveLength(1);
       expect(tasksCached[0].title).toBe('Initial Feature');
 
       // Invalidate cache
@@ -914,6 +1014,7 @@ describe('ProjectStore', () => {
 
       // Now should return fresh data
       const tasksAfterInvalidation = await store.getTasks(project.id);
+      expect(tasksAfterInvalidation).toHaveLength(1);
       expect(tasksAfterInvalidation[0].title).toBe('Updated Feature');
     });
   });
@@ -959,6 +1060,7 @@ describe('ProjectStore', () => {
 
       const { ProjectStore } = await import('../project-store');
       const store = new ProjectStore();
+      await waitForStoreInit();
 
       const project = store.addProject(TEST_PROJECT_PATH);
       const tasks = await store.getTasks(project.id);

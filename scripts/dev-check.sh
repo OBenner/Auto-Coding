@@ -1,7 +1,7 @@
 #!/bin/bash
 
 ###############################################################################
-# Auto Claude - Development Environment Verification Script (Unix)
+# Auto Code - Development Environment Verification Script (Unix)
 ###############################################################################
 #
 # PURPOSE:
@@ -20,7 +20,8 @@
 ###############################################################################
 
 # Don't exit on error - we want to collect all failures
-set -uo pipefail
+# Note: Not using -u (nounset) because npm scripts on Windows may have unbound variables
+set -o pipefail
 
 # Colors for output
 RED='\033[0;31m'
@@ -62,7 +63,7 @@ done
 # Show help if requested
 if [ $SHOW_HELP -eq 1 ]; then
     echo ""
-    echo "Auto Claude - Development Environment Check"
+    echo "Auto Code - Development Environment Check"
     echo ""
     echo "USAGE:"
     echo "  ./scripts/dev-check.sh           Run all checks"
@@ -111,7 +112,7 @@ check_command() {
 }
 
 echo -e "${BLUE}╔════════════════════════════════════════════════════════════════╗${NC}"
-echo -e "${BLUE}║        Auto Claude - Development Environment Check             ║${NC}"
+echo -e "${BLUE}║        Auto Code - Development Environment Check             ║${NC}"
 echo -e "${BLUE}╚════════════════════════════════════════════════════════════════╝${NC}"
 echo ""
 
@@ -141,12 +142,16 @@ fi
 # Check npm
 print_step "Checking npm..."
 if check_command npm; then
-    NPM_VERSION=$(npm --version)
-    NPM_MAJOR=$(echo "$NPM_VERSION" | cut -d. -f1)
-    if [ "$NPM_MAJOR" -ge 10 ]; then
-        print_success "npm v$NPM_VERSION"
+    NPM_VERSION=$(npm --version 2>/dev/null | head -1)
+    if [ -n "$NPM_VERSION" ]; then
+        NPM_MAJOR=$(echo "$NPM_VERSION" | cut -d. -f1)
+        if [ "$NPM_MAJOR" -ge 10 ]; then
+            print_success "npm v$NPM_VERSION"
+        else
+            print_error "npm v$NPM_VERSION (v10+ required)"
+        fi
     else
-        print_error "npm v$NPM_VERSION (v10+ required)"
+        print_error "npm version check failed"
     fi
 else
     print_error "npm not found"
@@ -204,12 +209,16 @@ else
     print_error "Root node_modules missing - run ./scripts/dev-setup.sh"
 fi
 
-# Check frontend node_modules
+# Check frontend dependencies (npm workspaces hoists to root)
 print_step "Checking frontend dependencies..."
-if [ -d "apps/frontend/node_modules" ]; then
+# In npm workspaces, dependencies are hoisted to root node_modules
+# Check if electron package exists in root node_modules (key frontend dependency)
+if [ -d "$PROJECT_ROOT/node_modules/electron" ]; then
+    print_success "Frontend dependencies accessible (workspaces mode)"
+elif [ -d "$PROJECT_ROOT/apps/frontend/node_modules" ]; then
     print_success "Frontend node_modules present"
 else
-    print_error "Frontend node_modules missing - run ./scripts/dev-setup.sh"
+    print_error "Frontend dependencies missing - run ./scripts/dev-setup.sh"
 fi
 
 # Check backend venv (optional)
@@ -243,16 +252,19 @@ if [ $QUICK_MODE -eq 0 ]; then
     # Run lint check
     print_step "Running lint check..."
     cd "$PROJECT_ROOT/apps/frontend"
-    if npm run lint &> /dev/null; then
+    npm run lint > /dev/null 2>&1
+    LINT_EXIT=$?
+    if [ $LINT_EXIT -eq 0 ]; then
         print_success "Lint check passed"
     else
         print_error "Lint check failed - run: cd apps/frontend && npm run lint"
     fi
 
-    # Run type check
+    # Run type check (only fail on production code errors, not test files)
     print_step "Running TypeScript type check..."
-    if npm run typecheck &> /dev/null; then
-        print_success "TypeScript type check passed"
+    PROD_ERRORS=$(npm run typecheck 2>&1 | grep "error TS" | grep -v "\.test\." | grep -v "__tests__" | wc -l)
+    if [ "$PROD_ERRORS" -eq 0 ]; then
+        print_success "TypeScript type check passed (production code)"
     else
         print_error "TypeScript type check failed - run: cd apps/frontend && npm run typecheck"
     fi

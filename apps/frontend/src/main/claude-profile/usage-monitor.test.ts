@@ -66,7 +66,7 @@ vi.mock('./credential-utils', () => ({
 }));
 
 // Mock global fetch
-global.fetch = vi.fn(() =>
+(global as Record<string, unknown>).fetch = vi.fn(() =>
   Promise.resolve({
     ok: true,
     status: 200,
@@ -78,7 +78,7 @@ global.fetch = vi.fn(() =>
       seven_day_reset_at: '2025-01-20T12:00:00Z'
     })
   } as unknown as Response)
-) as any;
+);
 
 describe('usage-monitor', () => {
   beforeEach(() => {
@@ -162,9 +162,14 @@ describe('usage-monitor', () => {
       expect(monitor1).toBe(monitor2);
     });
 
-    it('should start monitoring when settings allow', () => {
+    it('should start monitoring when settings allow', async () => {
       const monitor = getUsageMonitor();
       monitor.start();
+
+      // start() is internally async: it calls checkUsageAndSwap() and sets
+      // intervalId in the .then() callback via scheduleNext(). With fake timers,
+      // we need to flush microtasks so the promise chain resolves.
+      await vi.advanceTimersByTimeAsync(0);
 
       // Verify monitor started (has intervalId set)
       expect(monitor['intervalId']).not.toBeNull();
@@ -186,10 +191,12 @@ describe('usage-monitor', () => {
       monitor.stop();
     });
 
-    it('should stop monitoring', () => {
+    it('should stop monitoring', async () => {
       const monitor = getUsageMonitor();
 
       monitor.start();
+      // Flush microtasks so start()'s async checkUsageAndSwap resolves and scheduleNext sets intervalId
+      await vi.advanceTimersByTimeAsync(0);
       expect(monitor['intervalId']).not.toBeNull();
 
       monitor.stop();
@@ -209,7 +216,7 @@ describe('usage-monitor', () => {
         profileName: 'Test Profile',
         fetchedAt: new Date()
       };
-      monitor['currentUsage'] = seeded as any;
+      (monitor as unknown as { currentUsage: typeof seeded })['currentUsage'] = seeded;
 
       const usage = monitor.getCurrentUsage();
 
@@ -740,7 +747,7 @@ describe('usage-monitor', () => {
       } as unknown as Response);
 
       const monitor = getUsageMonitor();
-      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
       // 401 errors should throw
       await expect(
@@ -771,7 +778,7 @@ describe('usage-monitor', () => {
       } as unknown as Response);
 
       const monitor = getUsageMonitor();
-      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
       // 403 errors should throw
       await expect(
@@ -793,7 +800,7 @@ describe('usage-monitor', () => {
       } as unknown as Response);
 
       const monitor = getUsageMonitor();
-      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
       const usage = await monitor['fetchUsageViaAPI']('valid-token', 'test-profile-1', 'Test Profile', undefined);
 
@@ -808,7 +815,7 @@ describe('usage-monitor', () => {
       mockFetch.mockRejectedValueOnce(new Error('Network timeout'));
 
       const monitor = getUsageMonitor();
-      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
       const usage = await monitor['fetchUsageViaAPI']('valid-token', 'test-profile-1', 'Test Profile', undefined);
 
@@ -830,7 +837,7 @@ describe('usage-monitor', () => {
       } as unknown as Response);
 
       const monitor = getUsageMonitor();
-      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
       const usage = await monitor['fetchUsageViaAPI']('valid-token', 'test-profile-1', 'Test Profile', undefined);
 
@@ -851,7 +858,7 @@ describe('usage-monitor', () => {
       } as unknown as Response);
 
       const monitor = getUsageMonitor();
-      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
       // 401 errors should throw with proper message
       await expect(
@@ -877,7 +884,7 @@ describe('usage-monitor', () => {
 
     it('should handle empty credential string', async () => {
       const monitor = getUsageMonitor();
-      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
       const usage = await monitor['fetchUsage']('test-profile-1', '');
 
@@ -908,7 +915,7 @@ describe('usage-monitor', () => {
         getProfilesSortedByAvailability: vi.fn(() => []),
         setActiveProfile: vi.fn(),
         getProfileToken: vi.fn(() => null)
-      } as any);
+      } as unknown as ReturnType<typeof import('../claude-profile-manager').getClaudeProfileManager>);
 
       const monitor = getUsageMonitor();
 
@@ -958,7 +965,7 @@ describe('usage-monitor', () => {
       });
 
       const monitor = getUsageMonitor();
-      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
       const usage = await monitor['fetchUsageViaAPI']('zai-api-key', 'zai-profile-1', 'z.ai Profile', undefined);
 
@@ -990,7 +997,7 @@ describe('usage-monitor', () => {
       });
 
       const monitor = getUsageMonitor();
-      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
       const usage = await monitor['fetchUsageViaAPI']('zhipu-api-key', 'zhipu-profile-1', 'ZHIPU Profile', undefined);
 
@@ -1066,7 +1073,7 @@ describe('usage-monitor', () => {
         });
 
         const monitor = getUsageMonitor();
-        const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
         // Should fall back to OAuth profile
         const credential = await monitor['getCredential']();
@@ -1091,7 +1098,7 @@ describe('usage-monitor', () => {
         });
 
         const monitor = getUsageMonitor();
-        const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
         const credential = await monitor['getCredential']();
 
@@ -1110,7 +1117,7 @@ describe('usage-monitor', () => {
         });
 
         const monitor = getUsageMonitor();
-        const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
         const credential = await monitor['getCredential']();
 
@@ -1149,12 +1156,15 @@ describe('usage-monitor', () => {
           getProfilesSortedByAvailability: vi.fn(() => []),
           setActiveProfile: vi.fn(),
           getProfileToken: vi.fn(() => 'mock-decrypted-token')
-        } as any);
+        } as unknown as ReturnType<typeof import('../claude-profile-manager').getClaudeProfileManager>);
 
         const monitor = getUsageMonitor();
 
         // Should start with default values for missing fields
         monitor.start();
+
+        // start() is internally async - flush microtasks so intervalId is set
+        await vi.advanceTimersByTimeAsync(0);
 
         // Should have started monitoring
         expect(monitor['intervalId']).not.toBeNull();
@@ -1190,12 +1200,15 @@ describe('usage-monitor', () => {
           getProfilesSortedByAvailability: vi.fn(() => []),
           setActiveProfile: vi.fn(),
           getProfileToken: vi.fn(() => 'mock-decrypted-token')
-        } as any);
+        } as unknown as ReturnType<typeof import('../claude-profile-manager').getClaudeProfileManager>);
 
         const monitor = getUsageMonitor();
 
         // Should not crash when checking thresholds
         monitor.start();
+
+        // start() is internally async - flush microtasks so intervalId is set
+        await vi.advanceTimersByTimeAsync(0);
 
         // Should have started successfully
         expect(monitor['intervalId']).not.toBeNull();
@@ -1338,7 +1351,7 @@ describe('usage-monitor', () => {
     describe('Mixed OAuth/API profile environments', () => {
       it('should handle environment with both OAuth and API profiles', async () => {
         const monitor = getUsageMonitor();
-        const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
         // Mock both OAuth and API profiles
         mockLoadProfilesFile.mockResolvedValueOnce({
@@ -1370,7 +1383,7 @@ describe('usage-monitor', () => {
 
       it('should switch from API profile back to OAuth profile', async () => {
         const monitor = getUsageMonitor();
-        const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
         // First, active API profile
         mockLoadProfilesFile.mockResolvedValueOnce({
@@ -1436,7 +1449,7 @@ describe('usage-monitor', () => {
       } as unknown as Response);
 
       const monitor = getUsageMonitor();
-      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
       const profileId = 'test-profile-cooldown';
 
       // Call fetchUsageViaAPI which should fail and record timestamp
@@ -1447,7 +1460,7 @@ describe('usage-monitor', () => {
       expect(failureTimestamp).toBeDefined();
       expect(typeof failureTimestamp).toBe('number');
       // Should be recent (within last second)
-      expect(Date.now() - failureTimestamp!).toBeLessThan(1000);
+      expect(Date.now() - (failureTimestamp as number)).toBeLessThan(1000);
 
       consoleSpy.mockRestore();
     });
@@ -1526,7 +1539,7 @@ describe('usage-monitor', () => {
 
   describe('Race condition prevention via activeProfile parameter', () => {
     it('should use passed activeProfile instead of re-detecting', async () => {
-      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
       const mockFetch = vi.mocked(global.fetch);
       mockFetch.mockResolvedValueOnce({

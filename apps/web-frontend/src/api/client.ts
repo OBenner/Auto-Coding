@@ -1,262 +1,303 @@
 /**
  * API Client
  *
- * REST API client for communicating with the Auto Claude web backend.
+ * REST API client for communicating with the Auto Code web backend.
  * Provides methods for task/spec management and agent execution.
  */
 
 import type {
-  AgentCancelResponse,
-  AgentRunRequest,
-  AgentRunResponse,
-  AgentStatusResponse,
-  ApiConfig,
-  ApiError,
-  SpecDetail,
-  SpecListResponse,
-  TaskDetail,
-  TaskListResponse,
+	AgentCancelResponse,
+	AgentRunRequest,
+	AgentRunResponse,
+	AgentStatusResponse,
+	ApiConfig,
+	ApiError,
+	SpecDetail,
+	SpecListResponse,
+	TaskDetail,
+	TaskListResponse,
 } from "./types";
 
 /**
  * Default API configuration from environment variables
  */
 const DEFAULT_CONFIG: ApiConfig = {
-  baseUrl: import.meta.env.VITE_API_URL || "http://localhost:8000",
-  wsUrl: import.meta.env.VITE_WS_URL || "ws://localhost:8000",
-  timeout: 30000, // 30 seconds
-  debug: import.meta.env.VITE_DEBUG === "true",
+	baseUrl: import.meta.env.VITE_API_URL || "http://localhost:8000",
+	wsUrl: import.meta.env.VITE_WS_URL || "ws://localhost:8000",
+	timeout: 30000, // 30 seconds
+	debug: import.meta.env.VITE_DEBUG === "true",
 };
 
 /**
- * API Client for Auto Claude web backend
+ * API Client for Auto Code web backend
  */
 export class ApiClient {
-  private config: ApiConfig;
+	private config: ApiConfig;
 
-  constructor(config: Partial<ApiConfig> = {}) {
-    this.config = { ...DEFAULT_CONFIG, ...config };
-    this.log("ApiClient initialized", this.config);
-  }
+	constructor(config: Partial<ApiConfig> = {}) {
+		this.config = { ...DEFAULT_CONFIG, ...config };
+		this.log("ApiClient initialized", this.config);
+	}
 
-  /**
-   * Internal logging helper
-   */
-  private log(message: string, ...args: unknown[]): void {
-    if (this.config.debug) {
-      console.log(`[ApiClient] ${message}`, ...args);
-    }
-  }
+	/**
+	 * Internal logging helper
+	 */
+	private log(message: string, ...args: unknown[]): void {
+		if (this.config.debug) {
+			console.log(`[ApiClient] ${message}`, ...args);
+		}
+	}
 
-  /**
-   * Generic fetch wrapper with error handling
-   */
-  private async fetch<T>(
-    endpoint: string,
-    options: RequestInit = {}
-  ): Promise<T> {
-    const url = `${this.config.baseUrl}${endpoint}`;
-    this.log(`Fetching ${options.method || "GET"} ${url}`, options);
+	/**
+	 * Generic fetch wrapper with error handling
+	 */
+	private async fetch<T>(
+		endpoint: string,
+		options: RequestInit = {},
+	): Promise<T> {
+		const url = `${this.config.baseUrl}${endpoint}`;
+		this.log(`Fetching ${options.method || "GET"} ${url}`, options);
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(
-      () => controller.abort(),
-      this.config.timeout
-    );
+		const controller = new AbortController();
+		const timeoutId = setTimeout(() => controller.abort(), this.config.timeout);
 
-    try {
-      const response = await fetch(url, {
-        ...options,
-        signal: controller.signal,
-        headers: {
-          "Content-Type": "application/json",
-          ...options.headers,
-        },
-      });
+		try {
+			const response = await fetch(url, {
+				...options,
+				signal: controller.signal,
+				headers: {
+					"Content-Type": "application/json",
+					...options.headers,
+				},
+			});
 
-      clearTimeout(timeoutId);
+			clearTimeout(timeoutId);
 
-      // Handle HTTP errors
-      if (!response.ok) {
-        const error: ApiError = await response
-          .json()
-          .catch(() => ({ detail: response.statusText }));
-        throw new Error(error.detail || `HTTP ${response.status}: ${response.statusText}`);
-      }
+			// Handle HTTP errors
+			if (!response.ok) {
+				const error: ApiError = await response
+					.json()
+					.catch(() => ({ detail: response.statusText }));
+				throw new Error(
+					error.detail || `HTTP ${response.status}: ${response.statusText}`,
+				);
+			}
 
-      // Handle 204 No Content
-      if (response.status === 204) {
-        return {} as T;
-      }
+			// Handle 204 No Content
+			if (response.status === 204) {
+				return {} as T;
+			}
 
-      const data = await response.json();
-      this.log(`Response from ${url}:`, data);
-      return data;
-    } catch (error) {
-      clearTimeout(timeoutId);
+			const data = await response.json();
+			this.log(`Response from ${url}:`, data);
+			return data;
+		} catch (error) {
+			clearTimeout(timeoutId);
 
-      if (error instanceof Error) {
-        if (error.name === "AbortError") {
-          throw new Error(`Request timeout after ${this.config.timeout}ms`);
-        }
-        throw error;
-      }
+			if (error instanceof Error) {
+				if (error.name === "AbortError") {
+					throw new Error(`Request timeout after ${this.config.timeout}ms`);
+				}
+				throw error;
+			}
 
-      throw new Error("Unknown error occurred");
-    }
-  }
+			throw new Error("Unknown error occurred");
+		}
+	}
 
-  // ============================================
-  // TASK ENDPOINTS
-  // ============================================
+	// ============================================
+	// TASK ENDPOINTS
+	// ============================================
 
-  /**
-   * List all tasks/specs
-   */
-  async listTasks(): Promise<TaskListResponse> {
-    return this.fetch<TaskListResponse>("/api/tasks");
-  }
+	/**
+	 * List all tasks/specs
+	 */
+	async listTasks(): Promise<TaskListResponse> {
+		return this.fetch<TaskListResponse>("/api/tasks");
+	}
 
-  /**
-   * Get detailed information for a specific task
-   */
-  async getTask(taskId: string): Promise<TaskDetail> {
-    return this.fetch<TaskDetail>(`/api/tasks/${taskId}`);
-  }
+	/**
+	 * Get detailed information for a specific task
+	 */
+	async getTask(taskId: string): Promise<TaskDetail> {
+		return this.fetch<TaskDetail>(`/api/tasks/${taskId}`);
+	}
 
-  /**
-   * Check task API health
-   */
-  async checkTasksHealth(): Promise<{ status: string }> {
-    return this.fetch<{ status: string }>("/api/tasks/health");
-  }
+	/**
+	 * Create a new task/spec
+	 */
+	async createTask(request: {
+		name: string;
+		description: string;
+	}): Promise<{ spec_id: string; status: string }> {
+		return this.fetch<{ spec_id: string; status: string }>("/api/specs", {
+			method: "POST",
+			body: JSON.stringify(request),
+		});
+	}
 
-  // ============================================
-  // SPEC ENDPOINTS
-  // ============================================
+	/**
+	 * Check task API health
+	 */
+	async checkTasksHealth(): Promise<{ status: string }> {
+		return this.fetch<{ status: string }>("/api/tasks/health");
+	}
 
-  /**
-   * List all specs (alias for listTasks)
-   */
-  async listSpecs(): Promise<SpecListResponse> {
-    return this.fetch<SpecListResponse>("/api/specs");
-  }
+	// ============================================
+	// SPEC ENDPOINTS
+	// ============================================
 
-  /**
-   * Get detailed information for a specific spec
-   */
-  async getSpec(specId: string): Promise<SpecDetail> {
-    return this.fetch<SpecDetail>(`/api/specs/${specId}`);
-  }
+	/**
+	 * List all specs (alias for listTasks)
+	 */
+	async listSpecs(): Promise<SpecListResponse> {
+		return this.fetch<SpecListResponse>("/api/specs");
+	}
 
-  /**
-   * Check spec API health
-   */
-  async checkSpecsHealth(): Promise<{ status: string }> {
-    return this.fetch<{ status: string }>("/api/specs/health");
-  }
+	/**
+	 * Get detailed information for a specific spec
+	 */
+	async getSpec(specId: string): Promise<SpecDetail> {
+		return this.fetch<SpecDetail>(`/api/specs/${specId}`);
+	}
 
-  // ============================================
-  // AGENT ENDPOINTS
-  // ============================================
+	/**
+	 * Check spec API health
+	 */
+	async checkSpecsHealth(): Promise<{ status: string }> {
+		return this.fetch<{ status: string }>("/api/specs/health");
+	}
 
-  /**
-   * Start an agent execution task
-   */
-  async runAgent(request: AgentRunRequest): Promise<AgentRunResponse> {
-    return this.fetch<AgentRunResponse>("/api/agents/run", {
-      method: "POST",
-      body: JSON.stringify(request),
-    });
-  }
+	// ============================================
+	// AGENT ENDPOINTS
+	// ============================================
 
-  /**
-   * Get the status of a running agent task
-   */
-  async getAgentStatus(taskId: string): Promise<AgentStatusResponse> {
-    return this.fetch<AgentStatusResponse>(`/api/agents/status/${taskId}`);
-  }
+	/**
+	 * Start an agent execution task
+	 */
+	async runAgent(request: AgentRunRequest): Promise<AgentRunResponse> {
+		return this.fetch<AgentRunResponse>("/api/agents/run", {
+			method: "POST",
+			body: JSON.stringify(request),
+		});
+	}
 
-  /**
-   * Cancel a running agent task
-   */
-  async cancelAgent(taskId: string): Promise<AgentCancelResponse> {
-    return this.fetch<AgentCancelResponse>(`/api/agents/cancel/${taskId}`, {
-      method: "POST",
-    });
-  }
+	/**
+	 * Get the status of a running agent task
+	 */
+	async getAgentStatus(taskId: string): Promise<AgentStatusResponse> {
+		return this.fetch<AgentStatusResponse>(`/api/agents/status/${taskId}`);
+	}
 
-  /**
-   * Check agent API health
-   */
-  async checkAgentsHealth(): Promise<{ status: string }> {
-    return this.fetch<{ status: string }>("/api/agents/health");
-  }
+	/**
+	 * Cancel a running agent task
+	 */
+	async cancelAgent(taskId: string): Promise<AgentCancelResponse> {
+		return this.fetch<AgentCancelResponse>(`/api/agents/cancel/${taskId}`, {
+			method: "POST",
+		});
+	}
 
-  // ============================================
-  // AUTH ENDPOINTS
-  // ============================================
+	/**
+	 * Check agent API health
+	 */
+	async checkAgentsHealth(): Promise<{ status: string }> {
+		return this.fetch<{ status: string }>("/api/agents/health");
+	}
 
-  /**
-   * Verify authentication token
-   */
-  async verifyAuth(token: string): Promise<{ valid: boolean }> {
-    return this.fetch<{ valid: boolean }>("/api/auth/verify", {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
-  }
+	// ============================================
+	// AUTH ENDPOINTS
+	// ============================================
 
-  /**
-   * Get auth system status
-   */
-  async getAuthStatus(): Promise<{ status: string }> {
-    return this.fetch<{ status: string }>("/api/auth/status");
-  }
+	/**
+	 * Verify authentication token
+	 * Returns {valid: false} for 401 errors instead of throwing
+	 */
+	async verifyAuth(token: string): Promise<{ valid: boolean }> {
+		const url = `${this.config.baseUrl}/api/auth/verify`;
+		this.log(`Verifying auth token`);
 
-  // ============================================
-  // UTILITY METHODS
-  // ============================================
+		try {
+			const response = await fetch(url, {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					Authorization: `Bearer ${token}`,
+				},
+			});
 
-  /**
-   * Update API configuration
-   */
-  updateConfig(config: Partial<ApiConfig>): void {
-    this.config = { ...this.config, ...config };
-    this.log("Config updated", this.config);
-  }
+			// Clear token on 401 (invalid/expired token)
+			if (response.status === 401) {
+				this.log("Token verification failed: 401 Unauthorized");
+				return { valid: false };
+			}
 
-  /**
-   * Get current configuration
-   */
-  getConfig(): Readonly<ApiConfig> {
-    return { ...this.config };
-  }
+			if (!response.ok) {
+				const error: ApiError = await response
+					.json()
+					.catch(() => ({ detail: response.statusText }));
+				throw new Error(error.detail || `HTTP ${response.status}`);
+			}
 
-  /**
-   * Health check for all API endpoints
-   */
-  async healthCheck(): Promise<{
-    tasks: boolean;
-    specs: boolean;
-    agents: boolean;
-    auth: boolean;
-  }> {
-    const results = await Promise.allSettled([
-      this.checkTasksHealth(),
-      this.checkSpecsHealth(),
-      this.checkAgentsHealth(),
-      this.getAuthStatus(),
-    ]);
+			await response.json();
+			this.log("Token verified successfully");
+			return { valid: true };
+		} catch (error) {
+			this.log("Token verification error:", error);
+			// Network errors or other issues - treat as invalid
+			return { valid: false };
+		}
+	}
 
-    return {
-      tasks: results[0].status === "fulfilled",
-      specs: results[1].status === "fulfilled",
-      agents: results[2].status === "fulfilled",
-      auth: results[3].status === "fulfilled",
-    };
-  }
+	/**
+	 * Get auth system status
+	 */
+	async getAuthStatus(): Promise<{ status: string }> {
+		return this.fetch<{ status: string }>("/api/auth/status");
+	}
+
+	// ============================================
+	// UTILITY METHODS
+	// ============================================
+
+	/**
+	 * Update API configuration
+	 */
+	updateConfig(config: Partial<ApiConfig>): void {
+		this.config = { ...this.config, ...config };
+		this.log("Config updated", this.config);
+	}
+
+	/**
+	 * Get current configuration
+	 */
+	getConfig(): Readonly<ApiConfig> {
+		return { ...this.config };
+	}
+
+	/**
+	 * Health check for all API endpoints
+	 */
+	async healthCheck(): Promise<{
+		tasks: boolean;
+		specs: boolean;
+		agents: boolean;
+		auth: boolean;
+	}> {
+		const results = await Promise.allSettled([
+			this.checkTasksHealth(),
+			this.checkSpecsHealth(),
+			this.checkAgentsHealth(),
+			this.getAuthStatus(),
+		]);
+
+		return {
+			tasks: results[0].status === "fulfilled",
+			specs: results[1].status === "fulfilled",
+			agents: results[2].status === "fulfilled",
+			auth: results[3].status === "fulfilled",
+		};
+	}
 }
 
 /**
@@ -269,5 +310,5 @@ export const apiClient = new ApiClient();
  * Create a new API client with custom configuration
  */
 export function createApiClient(config: Partial<ApiConfig> = {}): ApiClient {
-  return new ApiClient(config);
+	return new ApiClient(config);
 }

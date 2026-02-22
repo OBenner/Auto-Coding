@@ -49,8 +49,9 @@ try:
     from .pydantic_models import ParallelFollowupResponse
     from .sdk_utils import process_sdk_stream
 except (ImportError, ValueError, SystemError):
-    from runners.github.context_gatherer import _validate_git_ref
     from core.client import create_client
+    from phase_config import get_thinking_budget, resolve_model_id
+    from runners.github.context_gatherer import _validate_git_ref
     from runners.github.gh_client import GHClient
     from runners.github.models import (
         BRANCH_BEHIND_BLOCKER_MSG,
@@ -61,7 +62,6 @@ except (ImportError, ValueError, SystemError):
         PRReviewResult,
         ReviewSeverity,
     )
-    from phase_config import get_thinking_budget, resolve_model_id
     from runners.github.services.category_utils import map_category
     from runners.github.services.io_utils import safe_print
     from runners.github.services.pr_worktree_manager import PRWorktreeManager
@@ -548,7 +548,7 @@ The SDK will run invoked agents in parallel automatically.
                 result_text = stream_result["result_text"]
                 structured_output = stream_result["structured_output"]
                 agents_invoked = stream_result["agents_invoked"]
-                msg_count = stream_result["msg_count"]
+                stream_result["msg_count"]
 
             self._report_progress(
                 "finalizing",

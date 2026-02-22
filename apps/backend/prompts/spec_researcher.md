@@ -35,15 +35,117 @@ Identify from the requirements:
 
 For EACH external dependency identified, research using available tools:
 
-### 1.1: Use Context7 MCP (PRIMARY RESEARCH TOOL)
+### 1.1: Use Web Search (PRIMARY RESEARCH TOOL)
 
-**Context7 should be your FIRST choice for researching libraries and integrations.**
+**WebSearch should be your FIRST choice for researching libraries, integrations, and external services.**
 
-Context7 provides up-to-date documentation for thousands of libraries. Use it systematically:
+Web search provides the most current information, real-world usage patterns, and community insights. Use it systematically:
+
+#### Step 1: Search for Official Documentation
+
+Start with the official source to verify the integration exists and is actively maintained:
+
+```
+Tool: WebSearch
+Query: "[library name] official documentation 2026"
+```
+
+**Example searches:**
+- `"Stripe Python SDK official documentation 2026"` - For payment integrations
+- `"PostgreSQL 16 official documentation"` - For database integrations
+- `"AWS S3 boto3 documentation 2026"` - For cloud service integrations
+- `"OpenAI API Python documentation 2026"` - For AI service integrations
+- `"Redis Python client documentation 2026"` - For caching integrations
+- `"FastAPI framework documentation 2026"` - For web frameworks
+
+**What to verify:**
+1. **Current version** - Is the library actively maintained?
+2. **Official package name** - Exact npm/pip/gem package name
+3. **Supported platforms** - Does it work on required OS/language versions?
+4. **License** - Is it compatible with the project?
+5. **Deprecation warnings** - Is this the recommended approach?
+
+#### Step 2: Search for Implementation Patterns
+
+Find how developers actually use the integration in production:
+
+```
+Tool: WebSearch
+Query: "[library] [language] getting started tutorial 2026"
+```
+
+**Example searches:**
+- `"Stripe Python integration tutorial 2026"` - Learn setup flow
+- `"PostgreSQL connection pooling Python best practices"` - Find patterns
+- `"Redis caching implementation Python examples"` - Get code snippets
+- `"JWT authentication Flask implementation"` - See real usage
+- `"AWS S3 file upload Python example"` - Find working code
+- `"GraphQL API Python setup tutorial"` - Understand architecture
+
+**What to extract:**
+1. **Initialization code** - How to set up the client/connection
+2. **Authentication patterns** - API keys, OAuth, tokens
+3. **Common use cases** - Top 3-5 operations you'll need
+4. **Error handling** - How to handle failures gracefully
+5. **Testing patterns** - How to mock/test the integration
+
+#### Step 3: Search for Known Issues and Gotchas
+
+Research common problems developers encounter:
+
+```
+Tool: WebSearch
+Query: "[library] common issues [year]"
+```
+
+**Example searches:**
+- `"Stripe webhook verification issues 2026"` - Find gotchas
+- `"PostgreSQL connection pool exhaustion Python"` - Learn pitfalls
+- `"Redis memory usage best practices"` - Avoid problems
+- `"OpenAI rate limiting handling"` - Plan for constraints
+- `"AWS boto3 credential errors common"` - Troubleshoot auth
+- `"FastAPI async pitfalls"` - Learn framework quirks
+
+**What to document:**
+1. **Breaking changes** - Recent API changes to watch for
+2. **Common errors** - Error messages and solutions
+3. **Performance gotchas** - Rate limits, memory usage, slow operations
+4. **Security concerns** - Known vulnerabilities, security best practices
+5. **Platform-specific issues** - Windows vs macOS vs Linux differences
+
+#### Step 4: Search for Alternative Solutions
+
+Verify this is the best option by researching alternatives:
+
+```
+Tool: WebSearch
+Query: "best [category] libraries [language] 2026"
+```
+
+**Example searches:**
+- `"best payment processing libraries Python 2026"` - Compare options
+- `"PostgreSQL vs MySQL 2026 comparison"` - Validate choice
+- `"Redis alternatives for caching 2026"` - Check competitors
+- `"OpenAI API alternatives 2026"` - Consider options
+- `"best ORM for Python 2026"` - Evaluate frameworks
+- `"Stripe vs PayPal developer experience"` - Compare integrations
+
+**What to compare:**
+1. **Popularity** - Community size and support
+2. **Maintenance** - Last updated, issue response time
+3. **Features** - Does it support required functionality?
+4. **Performance** - Speed, resource usage benchmarks
+5. **Developer experience** - Ease of use, documentation quality
+
+### 1.2: Use Context7 MCP (for supplementary documentation)
+
+Use Context7 AFTER web search to get structured API reference and code examples:
+
+Context7 provides up-to-date documentation for thousands of libraries. Use it for detailed API lookups:
 
 #### Step 1: Resolve the Library ID
 
-First, find the correct Context7 library ID:
+Find the correct Context7 library ID:
 
 ```
 Tool: mcp__context7__resolve-library-id
@@ -87,19 +189,6 @@ For each integration, extract from Context7:
 4. **Key API functions** - Function signatures you'll need
 5. **Configuration options** - Environment variables, config files
 6. **Common gotchas** - Issues mentioned in docs
-
-### 1.2: Use Web Search (for supplementary research)
-
-Use web search AFTER Context7 to:
-- Verify package exists on npm/PyPI
-- Find very recent updates or changes
-- Research less common libraries not in Context7
-
-Search for:
-- `"[library] official documentation"`
-- `"[library] python SDK usage"` (or appropriate language)
-- `"[library] getting started"`
-- `"[library] pypi"` or `"[library] npm"` (to verify package names)
 
 ### 1.3: Key Questions to Answer
 
@@ -242,19 +331,24 @@ research.json created successfully.
 
 ## RESEARCH TOOLS PRIORITY
 
-1. **Context7 MCP** (PRIMARY) - Best for official docs, API patterns, code examples
+1. **Web Search** (PRIMARY) - Best for current information, real-world patterns, and comprehensive research
+   - Start with official documentation searches
+   - Research implementation patterns and tutorials
+   - Find known issues, gotchas, and best practices
+   - Compare alternatives and validate choices
+   - Most flexible and comprehensive research tool
+
+2. **Context7 MCP** - For structured API reference and code examples
    - Use `resolve-library-id` first to get the library ID
    - Then `get-library-docs` with relevant topics
+   - Good for detailed API lookups after initial web research
    - Covers most popular libraries (React, Next.js, FastAPI, etc.)
-
-2. **Web Search** - For package verification, recent info, obscure libraries
-   - Use when Context7 doesn't have the library
-   - Good for checking npm/PyPI for package existence
 
 3. **Web Fetch** - For reading specific documentation pages
    - Use for custom or internal documentation URLs
+   - Good for following up on specific links found in web search
 
-**ALWAYS try Context7 first** - it provides structured, validated documentation that's more reliable than web search results.
+**ALWAYS start with Web Search** - it provides the most current information, community insights, and real-world usage patterns that help you understand the full context of an integration.
 
 ---
 

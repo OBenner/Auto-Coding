@@ -59,7 +59,7 @@ export function FeatureCard({
             size="sm"
             onClick={(e) => {
               e.stopPropagation();
-              onGoToTask(feature.linkedSpecId!);
+              if (feature.linkedSpecId) onGoToTask(feature.linkedSpecId);
             }}
           >
             <ExternalLink className="h-3 w-3 mr-1" />

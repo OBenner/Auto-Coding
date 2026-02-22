@@ -19,6 +19,7 @@ export const IPC_CHANNELS = {
   // Task operations
   TASK_LIST: 'task:list',
   TASK_CREATE: 'task:create',
+  TASK_CREATE_FROM_TEMPLATE: 'task:createFromTemplate',
   TASK_DELETE: 'task:delete',
   TASK_UPDATE: 'task:update',
   TASK_START: 'task:start',
@@ -27,6 +28,11 @@ export const IPC_CHANNELS = {
   TASK_UPDATE_STATUS: 'task:updateStatus',
   TASK_RECOVER_STUCK: 'task:recoverStuck',
   TASK_CHECK_RUNNING: 'task:checkRunning',
+
+  // Task spec file reading (for task overview display)
+  TASK_SPEC_IMPLEMENTATION_PLAN_GET: 'task:spec:implementationPlanGet',
+  TASK_SPEC_QA_REPORT_GET: 'task:spec:qaReportGet',
+  TASK_SPEC_QA_ESCALATION_GET: 'task:spec:qaEscalationGet',
 
   // Workspace management (for human review)
   // Per-spec architecture: Each spec has its own worktree at .worktrees/{spec-name}/
@@ -42,7 +48,14 @@ export const IPC_CHANNELS = {
   TASK_LIST_WORKTREES: 'task:listWorktrees',
   TASK_ARCHIVE: 'task:archive',
   TASK_UNARCHIVE: 'task:unarchive',
+  TASK_EXPORT: 'task:export',
   TASK_CLEAR_STAGED_STATE: 'task:clearStagedState',
+
+  // Task token statistics
+  TASK_TOKEN_STATS_GET: 'task:tokenStats:get',
+
+  // Batch operations
+  TASK_BATCH_RUN_QA: 'task:batchRunQA',
 
   // Task events (main -> renderer)
   TASK_PROGRESS: 'task:progress',
@@ -193,6 +206,21 @@ export const IPC_CHANNELS = {
   CONTEXT_MEMORY_STATUS: 'context:memoryStatus',
   CONTEXT_SEARCH_MEMORIES: 'context:searchMemories',
   CONTEXT_GET_MEMORIES: 'context:getMemories',
+  CONTEXT_GET_PATTERN_SUGGESTIONS: 'context:getPatternSuggestions',
+  CONTEXT_CONFIRM_PATTERN: 'context:confirmPattern',
+
+  // Context viewer operations
+  CONTEXT_GET_STATS: 'context:getStats',
+  CONTEXT_GET_TOKEN_BREAKDOWN: 'context:getTokenBreakdown',
+  CONTEXT_GET_PRIORITIZATION_SCORES: 'context:getPrioritizationScores',
+  CONTEXT_GET_OPTIMIZATION_REPORT: 'context:getOptimizationReport',
+  CONTEXT_EXPORT_SNAPSHOT: 'context:exportSnapshot',
+
+  // Session context operations (conversation history tracking)
+  SESSION_CONTEXT_GET_HISTORY: 'sessionContext:getHistory',
+  SESSION_CONTEXT_GET_SUMMARIES: 'sessionContext:getSummaries',
+  SESSION_CONTEXT_GET_CODE_REFS: 'sessionContext:getCodeRefs',
+  SESSION_CONTEXT_GET_ALL_SESSIONS: 'sessionContext:getAllSessions',
 
   // Environment configuration
   ENV_GET: 'env:get',
@@ -231,6 +259,7 @@ export const IPC_CHANNELS = {
 
   // GitHub integration
   GITHUB_GET_REPOSITORIES: 'github:getRepositories',
+  GITHUB_GET_PULL_REQUESTS: 'github:getPullRequests',
   GITHUB_GET_ISSUES: 'github:getIssues',
   GITHUB_GET_ISSUE: 'github:getIssue',
   GITHUB_GET_ISSUE_COMMENTS: 'github:getIssueComments',
@@ -439,6 +468,17 @@ export const IPC_CHANNELS = {
   GITHUB_CODE_REVIEW_COMPLETE: 'github:code-review:complete',
   GITHUB_CODE_REVIEW_ERROR: 'github:code-review:error',
 
+  // Merge Analytics operations
+  MERGE_ANALYTICS_GET_HISTORY: 'mergeAnalytics:getHistory',
+  MERGE_ANALYTICS_GET_SUMMARY: 'mergeAnalytics:getSummary',
+  MERGE_ANALYTICS_GET_PATTERNS: 'mergeAnalytics:getPatterns',
+  MERGE_ANALYTICS_EXPORT: 'mergeAnalytics:export',
+
+  // Productivity Analytics operations
+  PRODUCTIVITY_ANALYTICS_GET_SUMMARY: 'productivityAnalytics:getSummary',
+  PRODUCTIVITY_ANALYTICS_GET_TRENDS: 'productivityAnalytics:getTrends',
+  PRODUCTIVITY_ANALYTICS_EXPORT: 'productivityAnalytics:export',
+
   // Memory Infrastructure status (LadybugDB - no Docker required)
   MEMORY_STATUS: 'memory:status',
   MEMORY_LIST_DATABASES: 'memory:listDatabases',
@@ -457,7 +497,7 @@ export const IPC_CHANNELS = {
   OLLAMA_PULL_MODEL: 'ollama:pullModel',
   OLLAMA_PULL_PROGRESS: 'ollama:pullProgress',
 
-  // Auto Claude source environment configuration
+  // Auto Code source environment configuration
   AUTOBUILD_SOURCE_ENV_GET: 'autobuild:source:env:get',
   AUTOBUILD_SOURCE_ENV_UPDATE: 'autobuild:source:env:update',
   AUTOBUILD_SOURCE_ENV_CHECK_TOKEN: 'autobuild:source:env:checkToken',
@@ -503,6 +543,7 @@ export const IPC_CHANNELS = {
   // File explorer operations
   FILE_EXPLORER_LIST: 'fileExplorer:list',
   FILE_EXPLORER_READ: 'fileExplorer:read',
+  FILE_EXPLORER_WRITE: 'fileExplorer:write',
 
   // Git operations
   GIT_GET_BRANCHES: 'git:getBranches',
@@ -573,5 +614,69 @@ export const IPC_CHANNELS = {
   // Queue routing events (main -> renderer)
   QUEUE_PROFILE_SWAPPED: 'queue:profileSwapped',      // Task switched to different profile
   QUEUE_SESSION_CAPTURED: 'queue:sessionCaptured',    // Session ID captured from running task
-  QUEUE_BLOCKED_NO_PROFILES: 'queue:blockedNoProfiles' // All profiles unavailable
+  QUEUE_BLOCKED_NO_PROFILES: 'queue:blockedNoProfiles', // All profiles unavailable
+
+  // Plugin management operations
+  PLUGIN_LIST: 'plugin:list',
+  PLUGIN_ENABLE: 'plugin:enable',
+  PLUGIN_DISABLE: 'plugin:disable',
+  PLUGIN_INSTALL: 'plugin:install',
+  PLUGIN_UNINSTALL: 'plugin:uninstall',
+
+  // Template operations
+  TEMPLATE_LIST: 'template:list',
+  TEMPLATE_GET: 'template:get',
+  TEMPLATE_GET_CATEGORIES: 'template:getCategories',
+  TEMPLATE_SEARCH: 'template:search',
+  TEMPLATE_PREVIEW: 'template:preview',
+  TEMPLATE_CREATE_SPEC: 'template:createSpec',
+  TEMPLATE_SUGGEST: 'template:suggest',
+
+  // Pattern operations (codebase pattern learning)
+  PATTERN_LIST: 'pattern:list',
+  PATTERN_GET_CATEGORIES: 'pattern:getCategories',
+  PATTERN_GET_DETAILS: 'pattern:getDetails',
+  PATTERN_APPROVE: 'pattern:approve',
+  PATTERN_OVERRIDE: 'pattern:override',
+  PATTERN_DELETE: 'pattern:delete',
+
+  // Custom template operations (user-created)
+  TEMPLATE_CUSTOM_LIST: 'template:custom:list',
+  TEMPLATE_CUSTOM_SAVE: 'template:custom:save',
+  TEMPLATE_CUSTOM_UPDATE: 'template:custom:update',
+  TEMPLATE_CUSTOM_DELETE: 'template:custom:delete',
+  TEMPLATE_CUSTOM_EXPORT: 'template:custom:export',
+  TEMPLATE_CUSTOM_IMPORT: 'template:custom:import',
+  TEMPLATE_CUSTOM_TEST: 'template:custom:test',
+  // Session Replay operations
+  SESSION_REPLAY_LIST: 'sessionReplay:list',
+  SESSION_REPLAY_GET_SESSION: 'sessionReplay:getSession',
+  SESSION_REPLAY_GET_TIMELINE: 'sessionReplay:getTimeline',
+  SESSION_REPLAY_GET_DECISION_POINTS: 'sessionReplay:getDecisionPoints',
+  SESSION_REPLAY_GET_BOOKMARKS: 'sessionReplay:getBookmarks',
+  SESSION_REPLAY_ADD_BOOKMARK: 'sessionReplay:addBookmark',
+  SESSION_REPLAY_REMOVE_BOOKMARK: 'sessionReplay:removeBookmark',
+  SESSION_REPLAY_GET_ENTRIES: 'sessionReplay:getEntries',
+  SESSION_REPLAY_SEARCH: 'sessionReplay:search',
+  SESSION_REPLAY_EXPORT_SESSION: 'sessionReplay:exportSession',
+  SESSION_REPLAY_EXPORT_ALL: 'sessionReplay:exportAll',
+
+  // Feedback submission (adaptive agent learning)
+  FEEDBACK_SUBMIT: 'feedback:submit',
+
+  // Scheduler operations
+  SCHEDULER_SCHEDULE_BUILD: 'scheduler:scheduleBuild',
+  SCHEDULER_GET_STATUS: 'scheduler:getStatus',
+  SCHEDULER_CANCEL_BUILD: 'scheduler:cancelBuild',
+  SCHEDULER_START: 'scheduler:start',
+  SCHEDULER_STOP: 'scheduler:stop',
+  SCHEDULER_GET_BUILDS: 'scheduler:getBuilds',
+
+  // Scheduler events (main -> renderer)
+  SCHEDULER_BUILD_SCHEDULED: 'scheduler:buildScheduled',
+  SCHEDULER_BUILD_CANCELLED: 'scheduler:buildCancelled',
+  SCHEDULER_STATUS_CHANGED: 'scheduler:statusChanged',
+  SCHEDULER_BUILD_PROGRESS: 'scheduler:buildProgress',
+  SCHEDULER_BUILD_COMPLETE: 'scheduler:buildComplete',
+  SCHEDULER_BUILD_FAILED: 'scheduler:buildFailed'
 } as const;

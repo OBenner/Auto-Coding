@@ -42,32 +42,24 @@ try:
         debug_detailed,
         debug_error,
         debug_success,
-        debug_verbose,
         debug_warning,
-        is_debug_enabled,
     )
 except ImportError:
 
     def debug(*args, **kwargs):
-        pass
+        """No-op fallback when debug module is unavailable."""
 
     def debug_detailed(*args, **kwargs):
-        pass
-
-    def debug_verbose(*args, **kwargs):
-        pass
+        """No-op fallback when debug module is unavailable."""
 
     def debug_success(*args, **kwargs):
-        pass
+        """No-op fallback when debug module is unavailable."""
 
     def debug_error(*args, **kwargs):
-        pass
+        """No-op fallback when debug module is unavailable."""
 
     def debug_warning(*args, **kwargs):
-        pass
-
-    def is_debug_enabled():
-        return False
+        """No-op fallback when debug module is unavailable."""
 
 
 # Import merge system
@@ -145,6 +137,28 @@ MODULE = "workspace"
 # - _heuristic_merge
 
 
+def _has_uncommitted_changes(project_dir: Path) -> bool:
+    """Check if there are uncommitted changes in the working directory."""
+    result = run_git(["status", "--porcelain"], cwd=project_dir)
+    return bool(result.stdout.strip()) if result.returncode == 0 else False
+
+
+def _stash_changes(project_dir: Path, spec_name: str) -> bool:
+    """Stash uncommitted changes before merge. Returns True if stash was created."""
+    result = run_git(
+        ["stash", "push", "-m", f"auto-stash before merge {spec_name}"],
+        cwd=project_dir,
+    )
+    # Check if stash was actually created (not "No local changes to save")
+    return result.returncode == 0 and "No local changes" not in result.stdout
+
+
+def _unstash_changes(project_dir: Path) -> bool:
+    """Restore stashed changes after merge."""
+    result = run_git(["stash", "pop"], cwd=project_dir)
+    return result.returncode == 0
+
+
 def merge_existing_build(
     project_dir: Path,
     spec_name: str,
@@ -184,6 +198,45 @@ def merge_existing_build(
         print(highlight(f"  python auto-claude/run.py --spec {spec_name}"))
         return False
 
+    # Auto-stash uncommitted changes before merge
+    did_stash = False
+    if _has_uncommitted_changes(project_dir):
+        print(muted("  Stashing uncommitted changes..."))
+        did_stash = _stash_changes(project_dir, spec_name)
+        if did_stash:
+            print(muted("  Changes stashed, will restore after merge."))
+
+    try:
+        return _do_merge(
+            project_dir,
+            spec_name,
+            worktree_path,
+            no_commit,
+            use_smart_merge,
+            base_branch,
+        )
+    finally:
+        # Always restore stashed changes
+        if did_stash:
+            print(muted("  Restoring stashed changes..."))
+            if _unstash_changes(project_dir):
+                print(muted("  Stashed changes restored."))
+            else:
+                print_status(
+                    "Failed to restore stashed changes. Run 'git stash pop' manually.",
+                    "warning",
+                )
+
+
+def _do_merge(
+    project_dir: Path,
+    spec_name: str,
+    worktree_path: Path,
+    no_commit: bool,
+    use_smart_merge: bool,
+    base_branch: str | None,
+) -> bool:
+    """Internal merge logic, separated for auto-stash wrapper."""
     # Detect current branch - this is where user wants changes merged
     # Normal workflow: user is on their feature branch (e.g., version/2.5.5)
     # and wants to merge the spec changes into it, then PR to main
@@ -958,9 +1011,7 @@ def _check_git_conflicts(project_dir: Path, spec_name: str) -> dict:
             debug_warning(MODULE, "Could not find merge base")
             return result
 
-        _merge_base = (
-            merge_base_result.stdout.strip()
-        )  # Reserved for future conflict detection
+        # merge_base_result.stdout.strip() available for future conflict detection
 
         # Get commit hashes
         main_commit_result = run_git(

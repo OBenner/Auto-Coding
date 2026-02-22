@@ -45,7 +45,9 @@ def main():
         sys.exit(1)
 
     # Run the async function
-    result = asyncio.run(request_rereview(project_dir, pr_number, reviewers, team_reviewers))
+    result = asyncio.run(
+        request_rereview(project_dir, pr_number, reviewers, team_reviewers)
+    )
 
     # Print result as JSON
     print(json.dumps(result))
@@ -55,7 +57,10 @@ def main():
 
 
 async def request_rereview(
-    project_dir: str, pr_number: int, reviewers: list[str], team_reviewers: list[str] | None = None
+    project_dir: str,
+    pr_number: int,
+    reviewers: list[str],
+    team_reviewers: list[str] | None = None,
 ) -> dict:
     """
     Request re-review on a GitHub PR.

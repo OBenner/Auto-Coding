@@ -10,14 +10,20 @@
     "roadmap": "Feuille de route",
     "ideation": "Idéation",
     "changelog": "Journal des modifications",
+    "scheduler": "Planificateur",
     "context": "Contexte",
+    "sessionContext": "Contexte de session",
     "githubIssues": "Issues GitHub",
     "githubPRs": "PRs GitHub",
     "gitlabIssues": "Issues GitLab",
     "gitlabMRs": "MRs GitLab",
+    "plugins": "Plugins",
     "worktrees": "Worktrees",
     "agentTools": "Aperçu MCP",
-    "codeEditor": "Éditeur de code"
+    "analytics": "Analytique",
+    "mergeAnalytics": "Analyse des fusions",
+    "sessions": "Relecture de session",
+    "feedback": "Retour d'information"
   },
   "actions": {
     "settings": "Paramètres",
@@ -31,7 +37,7 @@
     "help": "Aide & Feedback"
   },
   "messages": {
-    "initializeToCreateTasks": "Initialisez Auto Claude pour créer des tâches"
+    "initializeToCreateTasks": "Initialisez Auto-Coding pour créer des tâches"
   },
   "updateBanner": {
     "title": "Mise à jour disponible",
@@ -82,19 +88,5 @@
     "pathChangeWarningDescription": "Le changement d'installation CLI utilisera un binaire Claude Code différent. Les sessions en cours continueront à utiliser l'installation précédente jusqu'à leur redémarrage.",
     "switchInstallationConfirm": "Changer",
     "versionUnknown": "version inconnue"
-  },
-  "ariaLabels": {
-    "navigateTo": "Naviguer vers {{view}} ({{shortcut}})",
-    "navigateToView": "Naviguer vers {{view}}",
-    "collapseSidebar": "Réduire la barre latérale",
-    "expandSidebar": "Développer la barre latérale",
-    "settingsButton": "Ouvrir les paramètres",
-    "helpButton": "Ouvrir l'aide et les commentaires",
-    "newTaskButton": "Créer une nouvelle tâche",
-    "mainNavigation": "Navigation principale",
-    "projectSection": "Section projet",
-    "toolsSection": "Section outils",
-    "sidebarToggle": "Basculer la barre latérale",
-    "navigationMenu": "Menu de navigation"
   }
 }

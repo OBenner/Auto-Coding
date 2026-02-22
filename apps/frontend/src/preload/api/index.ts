@@ -4,6 +4,7 @@ import { TaskAPI, createTaskAPI } from './task-api';
 import { SettingsAPI, createSettingsAPI } from './settings-api';
 import { FileAPI, createFileAPI } from './file-api';
 import { AgentAPI, createAgentAPI } from './agent-api';
+import { TemplateAPI, createTemplateAPI } from './template-api';
 import type { IdeationAPI } from './modules/ideation-api';
 import type { InsightsAPI } from './modules/insights-api';
 import { AppUpdateAPI, createAppUpdateAPI } from './app-update-api';
@@ -15,6 +16,14 @@ import { McpAPI, createMcpAPI } from './modules/mcp-api';
 import { ProfileAPI, createProfileAPI } from './profile-api';
 import { ScreenshotAPI, createScreenshotAPI } from './screenshot-api';
 import { QueueAPI, createQueueAPI } from './queue-api';
+import { PluginAPI, createPluginAPI } from './plugin-api';
+import type { PatternAPI } from './modules/pattern-api';
+import { createPatternAPI } from './modules/pattern-api';
+import type { SessionReplayAPI } from './modules/session-replay-api';
+import { createSessionReplayAPI } from './modules/session-replay-api';
+import { ContextViewerAPI, createContextViewerAPI } from './modules/context-viewer-api';
+import { SchedulerAPI, createSchedulerAPI } from './scheduler-api';
+import { FeedbackAPI, createFeedbackAPI } from './feedback-api';
 
 export interface ElectronAPI extends
   ProjectAPI,
@@ -23,6 +32,7 @@ export interface ElectronAPI extends
   SettingsAPI,
   FileAPI,
   AgentAPI,
+  TemplateAPI,
   IdeationAPI,
   InsightsAPI,
   AppUpdateAPI,
@@ -31,10 +41,19 @@ export interface ElectronAPI extends
   ClaudeCodeAPI,
   McpAPI,
   ProfileAPI,
-  ScreenshotAPI {
+  ScreenshotAPI,
+  PluginAPI,
+  ContextViewerAPI,
+  FeedbackAPI {
   github: GitHubAPI;
   /** Queue routing API for rate limit recovery */
   queue: QueueAPI;
+  /** Pattern learning API for codebase patterns */
+  pattern: PatternAPI;
+  /** Session replay API for learning and review */
+  sessionReplay: SessionReplayAPI;
+  /** Scheduler API for build scheduling and queue management */
+  scheduler: SchedulerAPI;
 }
 
 export const createElectronAPI = (): ElectronAPI => ({
@@ -43,15 +62,22 @@ export const createElectronAPI = (): ElectronAPI => ({
   ...createTaskAPI(),
   ...createSettingsAPI(),
   ...createFileAPI(),
-  ...createAgentAPI(),  // Includes: Roadmap, Ideation, Insights, Changelog, Linear, GitHub, GitLab, Shell
+  ...createTemplateAPI(),
+  ...createAgentAPI(),  // Includes: Roadmap, Ideation, Insights, Changelog, Linear, GitHub, GitLab, Shell, SessionContext
   ...createAppUpdateAPI(),
   ...createDebugAPI(),
   ...createClaudeCodeAPI(),
   ...createMcpAPI(),
   ...createProfileAPI(),
   ...createScreenshotAPI(),
+  ...createPluginAPI(),
+  ...createContextViewerAPI(),
+  ...createFeedbackAPI(),
   github: createGitHubAPI(),
-  queue: createQueueAPI()  // Queue routing for rate limit recovery
+  queue: createQueueAPI(),  // Queue routing for rate limit recovery
+  pattern: createPatternAPI(),
+  sessionReplay: createSessionReplayAPI(),
+  scheduler: createSchedulerAPI()
 });
 
 // Export individual API creators for potential use in tests or specialized contexts
@@ -63,6 +89,7 @@ export {
   createSettingsAPI,
   createFileAPI,
   createAgentAPI,
+  createTemplateAPI,
   createAppUpdateAPI,
   createProfileAPI,
   createGitHubAPI,
@@ -70,7 +97,13 @@ export {
   createClaudeCodeAPI,
   createMcpAPI,
   createScreenshotAPI,
-  createQueueAPI
+  createQueueAPI,
+  createPluginAPI,
+  createPatternAPI,
+  createSessionReplayAPI,
+  createContextViewerAPI,
+  createSchedulerAPI,
+  createFeedbackAPI
 };
 
 export type {
@@ -80,6 +113,7 @@ export type {
   SettingsAPI,
   FileAPI,
   AgentAPI,
+  TemplateAPI,
   IdeationAPI,
   InsightsAPI,
   AppUpdateAPI,
@@ -90,5 +124,11 @@ export type {
   ClaudeCodeAPI,
   McpAPI,
   ScreenshotAPI,
-  QueueAPI
+  QueueAPI,
+  PluginAPI,
+  PatternAPI,
+  SessionReplayAPI,
+  ContextViewerAPI,
+  SchedulerAPI,
+  FeedbackAPI
 };

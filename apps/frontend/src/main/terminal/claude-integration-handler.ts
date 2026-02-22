@@ -9,7 +9,8 @@ import { promises as fsPromises } from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
 import { IPC_CHANNELS } from '../../shared/constants';
-import { getClaudeProfileManager, initializeClaudeProfileManager } from '../claude-profile-manager';
+import { getClaudeProfileManager, initializeClaudeProfileManager, type ClaudeProfileManager } from '../claude-profile-manager';
+import type { ClaudeProfile } from '../../shared/types';
 import { getCredentialsFromKeychain, clearKeychainCache } from '../claude-profile/credential-utils';
 import { getUsageMonitor } from '../claude-profile/usage-monitor';
 import { getEmailFromConfigDir } from '../claude-profile/profile-utils';
@@ -883,13 +884,13 @@ export function handleClaudeExit(
  */
 interface ExecuteProfileCommandOptions {
   needsEnvOverride: boolean;
-  activeProfile: any;
+  activeProfile: ClaudeProfile | null;
   cwdCommand: string;
   pathPrefix: string;
   escapedClaudeCmd: string;
   extraFlags: string | undefined;
   terminal: TerminalProcess;
-  profileManager: any;
+  profileManager: ClaudeProfileManager;
   projectPath: string | undefined;
   startTime: number;
   getWindow: WindowGetter;
@@ -1113,7 +1114,7 @@ export function invokeClaude(
     // Try to execute using profile-specific method (configDir or temp-file)
     const executed = executeProfileCommand({
       needsEnvOverride,
-      activeProfile,
+      activeProfile: activeProfile ?? null,
       cwdCommand,
       pathPrefix,
       escapedClaudeCmd,
@@ -1168,7 +1169,7 @@ export function invokeClaude(
  *
  * Uses `claude --continue` which resumes the most recent conversation in the
  * current directory. This is simpler and more reliable than tracking session IDs,
- * since Auto Claude already restores terminals to their correct cwd/projectPath.
+ * since Auto Code already restores terminals to their correct cwd/projectPath.
  *
  * Note: The sessionId parameter is kept for backwards compatibility but is ignored.
  * Claude Code's --resume flag expects user-named sessions (set via /rename), not
@@ -1191,7 +1192,7 @@ export function resumeClaude(
     const pathPrefix = buildPathPrefix(claudeEnv.PATH || '');
 
     // Always use --continue which resumes the most recent session in the current directory.
-    // This is more reliable than --resume with session IDs since Auto Claude already restores
+    // This is more reliable than --resume with session IDs since Auto Code already restores
     // terminals to their correct cwd/projectPath.
     //
     // Note: We clear claudeSessionId because --continue doesn't track specific sessions,
@@ -1317,7 +1318,7 @@ export async function invokeClaudeAsync(
     // Try to execute using profile-specific method (configDir or temp-file) with async file operations
     const executed = await executeProfileCommandAsync({
       needsEnvOverride,
-      activeProfile,
+      activeProfile: activeProfile ?? null,
       cwdCommand,
       pathPrefix,
       escapedClaudeCmd,
@@ -1404,7 +1405,7 @@ export async function resumeClaudeAsync(
     const pathPrefix = buildPathPrefix(claudeEnv.PATH || '');
 
     // Always use --continue which resumes the most recent session in the current directory.
-    // This is more reliable than --resume with session IDs since Auto Claude already restores
+    // This is more reliable than --resume with session IDs since Auto Code already restores
     // terminals to their correct cwd/projectPath.
     //
     // Note: We clear claudeSessionId because --continue doesn't track specific sessions,

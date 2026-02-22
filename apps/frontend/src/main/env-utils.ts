@@ -16,7 +16,8 @@ import { promises as fsPromises } from 'fs';
 import { execFileSync, execFile } from 'child_process';
 import { promisify } from 'util';
 import { getSentryEnvForSubprocess } from './sentry';
-import { isWindows, isUnix, getPathDelimiter, getNpmCommand } from './platform';
+import { isWindows, isUnix, getPathDelimiter, getNpmCommand, getCurrentOS } from './platform';
+import { getCommonBinPaths } from './platform/paths';
 
 const execFileAsync = promisify(execFile);
 
@@ -112,38 +113,10 @@ function getNpmGlobalPrefix(): string | null {
 /**
  * Common binary directories that should be in PATH
  * These are locations where commonly used tools are installed
+ *
+ * Centralized in platform/paths module for consistent path management.
  */
-export const COMMON_BIN_PATHS: Record<string, string[]> = {
-  darwin: [
-    '/opt/homebrew/bin',      // Apple Silicon Homebrew
-    '/usr/local/bin',         // Intel Homebrew / system
-    '/usr/local/share/dotnet', // .NET SDK
-    '/opt/homebrew/sbin',     // Apple Silicon Homebrew sbin
-    '/usr/local/sbin',        // Intel Homebrew sbin
-    '~/.local/bin',           // User-local binaries (Claude CLI)
-    '~/.dotnet/tools',        // .NET global tools
-  ],
-  linux: [
-    '/usr/local/bin',
-    '/usr/bin',               // System binaries (Python, etc.)
-    '/snap/bin',              // Snap packages
-    '~/.local/bin',           // User-local binaries
-    '~/.dotnet/tools',        // .NET global tools
-    '/usr/sbin',              // System admin binaries
-  ],
-  win32: [
-    // Windows usually handles PATH better, but we can add common locations
-    'C:\\Program Files\\Git\\cmd',
-    'C:\\Program Files\\GitHub CLI',
-    // Node.js and npm paths - critical for packaged Electron apps that don't inherit full PATH
-    'C:\\Program Files\\nodejs',                  // Standard Node.js installer (64-bit)
-    'C:\\Program Files (x86)\\nodejs',            // 32-bit Node.js on 64-bit Windows
-    '~\\AppData\\Local\\Programs\\nodejs',        // NVM for Windows / user install
-    '~\\AppData\\Roaming\\npm',                   // npm global scripts (claude.cmd lives here)
-    '~\\scoop\\apps\\nodejs\\current',            // Scoop package manager
-    'C:\\ProgramData\\chocolatey\\bin',           // Chocolatey package manager
-  ],
-};
+export const COMMON_BIN_PATHS: Record<string, string[]> = getCommonBinPaths();
 
 /**
  * Essential system directories that must always be in PATH
@@ -161,7 +134,7 @@ const ESSENTIAL_SYSTEM_PATHS: string[] = ['/usr/bin', '/bin', '/usr/sbin', '/sbi
  * @returns Array of expanded paths (without existence checking)
  */
 function getExpandedPlatformPaths(additionalPaths?: string[]): string[] {
-  const platform = process.platform as 'darwin' | 'linux' | 'win32';
+  const platform = getCurrentOS();
   const homeDir = os.homedir();
 
   // Get platform-specific paths and expand home directory

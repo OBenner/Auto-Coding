@@ -112,7 +112,7 @@ function generateLogEntry(index: number, baseTime: number): TaskLogEntry {
 }
 
 function generatePhaseLog(
-  phase: string,
+  _phase: string,
   entryCount: number,
   baseTime: number,
   status: 'pending' | 'active' | 'completed' | 'failed'
@@ -151,7 +151,7 @@ function generateLargeLogs(totalEntries: number): TaskLogs {
 
 // Main execution
 const args = process.argv.slice(2);
-const entryCount = parseInt(args[0]) || 1000;
+const entryCount = parseInt(args[0], 10) || 1000;
 const outputFile = args[1] || join(__dirname, '..', 'test-logs.json');
 
 console.log(`Generating ${entryCount} log entries...`);

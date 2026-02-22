@@ -55,7 +55,7 @@ def get_isolated_git_env(base_env: dict | None = None) -> dict:
     for key in GIT_ENV_VARS_TO_CLEAR:
         env.pop(key, None)
 
-    # Disable user's pre-commit hooks during Auto-Claude managed git operations
+    # Disable user's pre-commit hooks during Auto-Code managed git operations
     # to prevent double-hook execution and potential conflicts
     env["HUSKY"] = "0"
 
@@ -79,9 +79,8 @@ def get_git_executable() -> str:
     if _cached_git_path is not None:
         return _cached_git_path
 
-    git_path = _find_git_executable()
-    _cached_git_path = git_path
-    return git_path
+    _cached_git_path = _find_git_executable()
+    return _cached_git_path
 
 
 def _find_git_executable() -> str:

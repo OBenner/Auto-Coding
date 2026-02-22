@@ -81,15 +81,17 @@ export function compareVersions(a: string, b: string): number {
 
   // Both have prereleases - compare type then number
   const prereleaseOrder: Record<string, number> = { alpha: 0, beta: 1, rc: 2 };
-  const typeA = prereleaseOrder[parsedA.prerelease?.type] ?? 1;
-  const typeB = prereleaseOrder[parsedB.prerelease?.type] ?? 1;
+  const typeA = parsedA.prerelease?.type ? prereleaseOrder[parsedA.prerelease.type] ?? 1 : 1;
+  const typeB = parsedB.prerelease?.type ? prereleaseOrder[parsedB.prerelease.type] ?? 1 : 1;
 
   if (typeA > typeB) return 1;
   if (typeA < typeB) return -1;
 
   // Same prerelease type, compare numbers
-  if (parsedA.prerelease?.num > parsedB.prerelease?.num) return 1;
-  if (parsedA.prerelease?.num < parsedB.prerelease?.num) return -1;
+  const numA = parsedA.prerelease?.num ?? 0;
+  const numB = parsedB.prerelease?.num ?? 0;
+  if (numA > numB) return 1;
+  if (numA < numB) return -1;
 
   return 0;
 }

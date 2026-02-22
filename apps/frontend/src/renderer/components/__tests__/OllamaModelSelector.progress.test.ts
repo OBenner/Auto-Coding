@@ -5,7 +5,7 @@ import { describe, it, expect } from 'vitest';
  * Tests for speed, time, and percentage calculations
  */
 
-interface ProgressTracking {
+interface _ProgressTracking {
   lastCompleted: number;
   lastUpdate: number;
 }

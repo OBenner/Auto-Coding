@@ -7,7 +7,6 @@ Handles batch processing of similar issues.
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 try:
@@ -113,7 +112,7 @@ class BatchProcessor:
                             AutoFixStatus.COMPLETED,
                         ]:
                             existing_states.append(issue_num)
-                    except (ValueError, json.JSONDecodeError):
+                    except ValueError:
                         continue
 
             exclude_issues = set(existing_states)

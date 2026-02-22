@@ -23,8 +23,8 @@ try:
 except (ImportError, ValueError, SystemError):
     from analysis.test_discovery import TestDiscovery
     from category_utils import map_category
-    from runners.github.context_gatherer import PRContext
     from core.client import create_client
+    from runners.github.context_gatherer import PRContext
     from runners.github.models import PRReviewFinding, ReviewSeverity
 
 logger = logging.getLogger(__name__)
@@ -385,7 +385,7 @@ async def run_tests(
                 proc.communicate(),
                 timeout=300.0,  # 5 min max
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.error("[Orchestrator] Tests timed out after 5 minutes")
             proc.kill()
             return TestResult(executed=True, passed=False, error="Timeout after 5min")

@@ -61,7 +61,7 @@ class ResponseParser:
                 result = json.loads(json_match.group(1))
                 safe_print(f"[AI] Quick scan result: {result}")
                 return result
-        except (json.JSONDecodeError, ValueError) as e:
+        except ValueError as e:
             safe_print(f"[AI] Failed to parse scan result: {e}")
 
         return default_result
@@ -118,7 +118,7 @@ class ResponseParser:
                             redundant_with=f.get("redundant_with"),
                         )
                     )
-        except (json.JSONDecodeError, KeyError, ValueError) as e:
+        except (KeyError, ValueError) as e:
             safe_print(f"Failed to parse findings: {e}")
 
         return findings
@@ -148,7 +148,7 @@ class ResponseParser:
                             suggestion=issue.get("suggestion", ""),
                         )
                     )
-        except (json.JSONDecodeError, KeyError, ValueError) as e:
+        except (KeyError, ValueError) as e:
             safe_print(f"Failed to parse structural issues: {e}")
 
         return issues
@@ -181,7 +181,7 @@ class ResponseParser:
                             response_comment=triage.get("response_comment"),
                         )
                     )
-        except (json.JSONDecodeError, KeyError, ValueError) as e:
+        except (KeyError, ValueError) as e:
             safe_print(f"Failed to parse AI comment triages: {e}")
 
         return triages
@@ -219,7 +219,7 @@ class ResponseParser:
                 result.priority = data.get("priority", "medium")
                 result.comment = data.get("comment")
 
-        except (json.JSONDecodeError, KeyError, ValueError) as e:
+        except (KeyError, ValueError) as e:
             safe_print(f"Failed to parse triage result: {e}")
 
         return result

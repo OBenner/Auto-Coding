@@ -115,7 +115,7 @@ export function IdeaDetailPanel({ idea, onClose, onConvert, onGoToTask, onDismis
       )}
       {isConverted && idea.taskId && onGoToTask && (
         <div className="shrink-0 p-4 border-t border-border">
-          <Button className="w-full" onClick={() => onGoToTask(idea.taskId!)}>
+          <Button className="w-full" onClick={() => idea.taskId && onGoToTask(idea.taskId)}>
             <ExternalLink className="h-4 w-4 mr-2" />
             {t('common:ideation.goToTask')}
           </Button>

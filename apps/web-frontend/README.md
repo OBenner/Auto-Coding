@@ -1,6 +1,6 @@
-# Auto Claude Web Interface
+# Auto Code Web Interface
 
-Browser-based UI for Auto Claude autonomous coding framework. Connects to the Auto Claude backend API to provide task management, real-time agent progress, and spec creation from any device.
+Browser-based UI for Auto Code autonomous coding framework. Connects to the Auto Code backend API to provide task management, real-time agent progress, and spec creation from any device.
 
 ## Features
 
@@ -15,7 +15,7 @@ Browser-based UI for Auto Claude autonomous coding framework. Connects to the Au
 
 - Node.js >= 24.0.0
 - npm >= 10.0.0
-- Auto Claude backend running (see `apps/web-backend/`)
+- Auto Code backend running (see `apps/web-backend/`)
 
 ### Quick Start
 
@@ -126,7 +126,7 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) for deployment instructions (created in phase
 
 - **Backend API** - `apps/web-backend/` - FastAPI server
 - **Desktop UI** - `apps/frontend/` - Electron desktop app
-- **Core Backend** - `apps/backend/` - Auto Claude core logic
+- **Core Backend** - `apps/backend/` - Auto Code core logic
 
 ## License
 

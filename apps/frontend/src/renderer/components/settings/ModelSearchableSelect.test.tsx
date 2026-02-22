@@ -87,7 +87,7 @@ describe('ModelSearchableSelect', () => {
 
   it('should display loading state while fetching', async () => {
     mockDiscoverModels.mockImplementation(
-      () => new Promise(() => {}) // Never resolves
+      () => new Promise(() => { /* Never resolves - intentionally pending */ })
     );
 
     render(

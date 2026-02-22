@@ -1,3 +1,4 @@
+import { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Target,
@@ -13,11 +14,14 @@ import {
   GitPullRequest,
   ListChecks,
   Clock,
-  ExternalLink
+  ExternalLink,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Badge } from '../ui/badge';
+import { Button } from '../ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip';
 import { cn, formatRelativeTime } from '../../lib/utils';
 import {
@@ -51,8 +55,29 @@ interface TaskMetadataProps {
   task: Task;
 }
 
+const COLLAPSED_MAX_HEIGHT = 192; // ~8 lines at 24px line height
+const COLLAPSED_MAX_HEIGHT_CLASS = 'max-h-48'; // 48 * 0.25rem = 12rem = 192px
+
 export function TaskMetadata({ task }: TaskMetadataProps) {
-  const { t } = useTranslation(['tasks', 'errors']);
+  const { t } = useTranslation(['tasks', 'errors', 'common']);
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [isOverflowing, setIsOverflowing] = useState(false);
+  const descriptionRef = useRef<HTMLDivElement>(null);
+
+  // Detect if description overflows the collapsed height (using ResizeObserver for accuracy)
+  useEffect(() => {
+    const el = descriptionRef.current;
+    if (!el) return;
+
+    const updateOverflow = () => {
+      setIsOverflowing(el.scrollHeight > COLLAPSED_MAX_HEIGHT);
+    };
+    updateOverflow();
+
+    const resizeObserver = new ResizeObserver(updateOverflow);
+    resizeObserver.observe(el);
+    return () => resizeObserver.disconnect();
+  }, [task.description]);
 
   // Handle JSON error description with i18n
   const displayDescription = (() => {
@@ -87,7 +112,7 @@ export function TaskMetadata({ task }: TaskMetadataProps) {
                 className={cn('text-xs', TASK_CATEGORY_COLORS[task.metadata.category])}
               >
                 {CategoryIcon[task.metadata.category] && (() => {
-                  const Icon = CategoryIcon[task.metadata.category!];
+                  const Icon = CategoryIcon[task.metadata.category];
                   return <Icon className="h-3 w-3 mr-1" />;
                 })()}
                 {TASK_CATEGORY_LABELS[task.metadata.category]}
@@ -152,17 +177,47 @@ export function TaskMetadata({ task }: TaskMetadataProps) {
         </div>
       </div>
 
-      {/* Description - Primary Content */}
+      {/* Description - Primary Content (expandable for long descriptions) */}
       {displayDescription && (
-        <div className="bg-muted/30 rounded-lg px-4 py-3 border border-border/50 overflow-hidden max-w-full">
+        <div className="bg-muted/30 rounded-lg px-4 py-3 border border-border/50 overflow-hidden max-w-full relative">
           <div
-            className="prose prose-sm dark:prose-invert max-w-none overflow-hidden prose-p:text-foreground/90 prose-p:leading-relaxed prose-headings:text-foreground prose-strong:text-foreground prose-li:text-foreground/90 prose-ul:my-2 prose-li:my-0.5 prose-a:break-all prose-pre:overflow-x-auto prose-img:max-w-full [&_img]:!max-w-full [&_img]:h-auto [&_code]:break-all [&_code]:whitespace-pre-wrap [&_*]:max-w-full"
-            style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}
+            ref={descriptionRef}
+            className={cn(
+              "prose prose-sm dark:prose-invert max-w-none overflow-hidden prose-p:text-foreground/90 prose-p:leading-relaxed prose-headings:text-foreground prose-strong:text-foreground prose-li:text-foreground/90 prose-ul:my-2 prose-li:my-0.5 prose-a:break-all prose-pre:overflow-x-auto prose-img:max-w-full [&_img]:!max-w-full [&_img]:h-auto [&_code]:break-all [&_code]:whitespace-pre-wrap [&_*]:max-w-full",
+              !isExpanded && isOverflowing && COLLAPSED_MAX_HEIGHT_CLASS
+            )}
+            style={{ overflowWrap: 'anywhere' }}
           >
             <ReactMarkdown remarkPlugins={[remarkGfm]}>
               {displayDescription}
             </ReactMarkdown>
           </div>
+          {/* Gradient overlay and expand button */}
+          {isOverflowing && !isExpanded && (
+            <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-muted/80 to-transparent pointer-events-none rounded-b-lg" />
+          )}
+          {isOverflowing && (
+            <div className="flex justify-center pt-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsExpanded(!isExpanded)}
+                className="text-xs text-muted-foreground hover:text-foreground gap-1 h-6"
+              >
+                {isExpanded ? (
+                  <>
+                    <ChevronUp className="h-3 w-3" />
+                    {t('common:buttons.showLess', 'Show less')}
+                  </>
+                ) : (
+                  <>
+                    <ChevronDown className="h-3 w-3" />
+                    {t('common:buttons.showMore', 'Show more')}
+                  </>
+                )}
+              </Button>
+            </div>
+          )}
         </div>
       )}
 
@@ -226,7 +281,7 @@ export function TaskMetadata({ task }: TaskMetadataProps) {
               </h3>
               <button
                 type="button"
-                onClick={() => window.electronAPI.openExternal(task.metadata?.prUrl!)}
+                onClick={() => task.metadata?.prUrl && window.electronAPI.openExternal(task.metadata.prUrl)}
                 className="text-sm text-info hover:underline flex items-center gap-1.5 bg-transparent border-none cursor-pointer p-0 text-left"
               >
                 {task.metadata.prUrl}

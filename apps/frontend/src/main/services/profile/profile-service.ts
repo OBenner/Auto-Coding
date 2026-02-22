@@ -14,7 +14,8 @@ import Anthropic, {
 } from '@anthropic-ai/sdk';
 
 import { loadProfilesFile, generateProfileId, atomicModifyProfiles } from './profile-manager';
-import type { APIProfile, TestConnectionResult, ModelInfo, DiscoverModelsResult } from '@shared/types/profile';
+import type { APIProfile, TestConnectionResult, ModelInfo, DiscoverModelsResult } from '../../../shared/types/profile';
+import { getProviderByBaseUrl } from '../../../shared/constants/api-profiles';
 
 /**
  * Input type for creating a profile (without id, createdAt, updatedAt)
@@ -232,7 +233,7 @@ export async function updateProfile(input: UpdateProfileInput): Promise<APIProfi
   });
 
   // Find and return the updated profile
-  const updatedProfile = modifiedFile.profiles.find((p) => p.id === input.id)!;
+  const updatedProfile = modifiedFile.profiles.find((p) => p.id === input.id) as NonNullable<typeof modifiedFile.profiles[number]>;
   return updatedProfile;
 }
 
@@ -553,6 +554,18 @@ export async function discoverModels(
     const error: Error & { errorType?: string } = new Error('Connection timeout. The endpoint did not respond.');
     error.errorType = 'timeout';
     throw error;
+  }
+
+  // Check if this provider has predefined models (doesn't support /v1/models)
+  const provider = getProviderByBaseUrl(normalizedUrl);
+  if (provider && !provider.supportsModelListing) {
+    // Return predefined models from the catalog
+    console.log(`[discoverModels] Provider ${provider.id} doesn't support model listing, using predefined models`);
+    const models: ModelInfo[] = provider.models.map(m => ({
+      id: m.id,
+      display_name: m.name
+    }));
+    return { models };
   }
 
   try {

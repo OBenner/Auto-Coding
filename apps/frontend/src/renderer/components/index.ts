@@ -12,3 +12,5 @@ export * from './Changelog';
 export * from './WelcomeScreen';
 export * from './EnvConfigModal';
 export * from './AddProjectModal';
+export * from './templates';
+export * from './SessionContextIndicator';

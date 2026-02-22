@@ -43,19 +43,20 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-import platform
 import sys
 from pathlib import Path
 
+# Add backend to path first so we can import platform abstraction
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+
+from core.platform import is_windows
+
 # Fix Windows console encoding for Unicode output (emojis, special chars)
-if platform.system() == "Windows":
+if is_windows():
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     if hasattr(sys.stderr, "reconfigure"):
         sys.stderr.reconfigure(encoding="utf-8", errors="replace")
-
-# Add backend to path
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 # Validate platform-specific dependencies BEFORE any imports that might
 # trigger graphiti_core -> real_ladybug -> pywintypes import chain (ACS-253)
@@ -389,7 +390,7 @@ async def cmd_code_review_pr(args) -> int:
         medium = sum(1 for f in findings if f.severity.value == "medium")
         low = sum(1 for f in findings if f.severity.value == "low")
 
-        safe_print(f"\nBy Severity:")
+        safe_print("\nBy Severity:")
         if critical:
             safe_print(f"  CRITICAL: {critical}")
         if high:
@@ -624,8 +625,6 @@ async def cmd_analyze_preview(args) -> int:
 
     This is the "proactive" workflow for reviewing issue groupings before action.
     """
-    import json
-
     config = get_config(args)
     orchestrator = GitHubOrchestrator(
         project_dir=args.project,
@@ -693,8 +692,6 @@ async def cmd_approve_batches(args) -> int:
 
     Usage: runner.py approve-batches approved_batches.json
     """
-    import json
-
     config = get_config(args)
     orchestrator = GitHubOrchestrator(
         project_dir=args.project,

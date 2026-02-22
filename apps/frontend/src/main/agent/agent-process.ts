@@ -608,7 +608,7 @@ export class AgentProcessManager {
         if (phaseChanged && currentPhase !== 'idle' && currentPhase !== phaseUpdate.phase) {
           // Type guard to narrow currentPhase to CompletablePhase
           const isCompletablePhase = (phase: ExecutionProgressData['phase']): phase is CompletablePhase => {
-            return ['planning', 'coding', 'qa_review', 'qa_fixing'].includes(phase);
+            return ['planning', 'coding', 'test_generation', 'qa_review', 'qa_fixing'].includes(phase);
           };
           if (isCompletablePhase(currentPhase) && !completedPhases.includes(currentPhase)) {
             completedPhases.push(currentPhase);
@@ -646,7 +646,13 @@ export class AgentProcessManager {
           currentSubtask,
           message: lastMessage,
           sequenceNumber: ++sequenceNumber,
-          completedPhases: [...completedPhases]
+          completedPhases: [...completedPhases],
+          ...(phaseUpdate.resources && {
+            cpu_percent: phaseUpdate.resources.cpu_percent,
+            memory_mb: phaseUpdate.resources.memory_mb,
+            memory_percent: phaseUpdate.resources.memory_percent,
+            elapsed_seconds: phaseUpdate.resources.elapsed_seconds
+          })
         });
       }
     };

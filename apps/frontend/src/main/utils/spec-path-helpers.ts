@@ -5,7 +5,7 @@
  * to ensure consistent validation and path resolution.
  */
 import path from 'path';
-import { existsSync, readdirSync } from 'fs';
+import { Dirent, promises as fsPromises } from 'fs';
 import { getTaskWorktreeDir } from '../worktree-paths';
 
 /**
@@ -25,6 +25,35 @@ export function isValidTaskId(taskId: string): boolean {
 }
 
 /**
+ * Helper to check if a file exists asynchronously
+ *
+ * @param filePath - The path to check for existence
+ * @returns Promise resolving to true if the file/directory exists, false otherwise
+ */
+export async function fileExists(filePath: string): Promise<boolean> {
+  try {
+    await fsPromises.access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Helper to read directory contents asynchronously
+ *
+ * @param dirPath - The directory path to read
+ * @returns Promise resolving to array of Dirent objects, or empty array on error
+ */
+export async function readDirectory(dirPath: string): Promise<Dirent[]> {
+  try {
+    return await fsPromises.readdir(dirPath, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+}
+
+/**
  * Find ALL spec paths for a task, checking main directory and worktrees
  * A task can exist in multiple locations (main + worktree), so return all paths
  *
@@ -32,17 +61,17 @@ export function isValidTaskId(taskId: string): boolean {
  * @param specsBaseDir - The relative path to specs directory (e.g., '.auto-claude/specs')
  * @param taskId - The task/spec ID to find
  * @param logPrefix - Optional prefix for log messages (defaults to '[SpecPathHelpers]')
- * @returns Array of absolute paths where the spec exists
+ * @returns Promise resolving to array of absolute paths where the spec exists
  */
-export function findAllSpecPaths(
+export async function findAllSpecPathsAsync(
   projectPath: string,
   specsBaseDir: string,
   taskId: string,
   logPrefix: string = '[SpecPathHelpers]'
-): string[] {
+): Promise<string[]> {
   // Validate taskId to prevent path traversal
   if (!isValidTaskId(taskId)) {
-    console.error(`${logPrefix} findAllSpecPaths: Invalid taskId rejected: ${taskId}`);
+    console.error(`${logPrefix} findAllSpecPathsAsync: Invalid taskId rejected: ${taskId}`);
     return [];
   }
 
@@ -50,19 +79,19 @@ export function findAllSpecPaths(
 
   // 1. Check main specs directory
   const mainSpecPath = path.join(projectPath, specsBaseDir, taskId);
-  if (existsSync(mainSpecPath)) {
+  if (await fileExists(mainSpecPath)) {
     paths.push(mainSpecPath);
   }
 
   // 2. Check worktrees
   const worktreesDir = getTaskWorktreeDir(projectPath);
-  if (existsSync(worktreesDir)) {
+  if (await fileExists(worktreesDir)) {
     try {
-      const worktrees = readdirSync(worktreesDir, { withFileTypes: true });
+      const worktrees = await readDirectory(worktreesDir);
       for (const worktree of worktrees) {
         if (!worktree.isDirectory()) continue;
         const worktreeSpecPath = path.join(worktreesDir, worktree.name, specsBaseDir, taskId);
-        if (existsSync(worktreeSpecPath)) {
+        if (await fileExists(worktreeSpecPath)) {
           paths.push(worktreeSpecPath);
         }
       }

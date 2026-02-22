@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Download, RefreshCw, AlertCircle } from 'lucide-react';
 import { debugLog } from '../shared/utils/debug-logger';
@@ -43,8 +43,13 @@ import { GitLabIssues } from './components/GitLabIssues';
 import { GitHubPRs } from './components/github-prs';
 import { GitLabMergeRequests } from './components/gitlab-merge-requests';
 import { Changelog } from './components/Changelog';
+import { CalendarView } from './components/Scheduler/CalendarView';
+import { QueueView } from './components/Scheduler/QueueView';
 import { Worktrees } from './components/Worktrees';
+import { SessionList } from './components/session-replay/SessionList';
 import { AgentTools } from './components/AgentTools';
+import { ProductivityDashboard } from './components/analytics/ProductivityDashboard';
+import { FeedbackDashboard } from './components/FeedbackDashboard';
 import { WelcomeScreen } from './components/WelcomeScreen';
 import { RateLimitModal } from './components/RateLimitModal';
 import { SDKRateLimitModal } from './components/SDKRateLimitModal';
@@ -52,6 +57,7 @@ import { AuthFailureModal } from './components/AuthFailureModal';
 import { VersionWarningModal } from './components/VersionWarningModal';
 import { OnboardingWizard } from './components/onboarding';
 import { AppUpdateNotification } from './components/AppUpdateNotification';
+import { AgentAttentionNotification } from './components/AgentAttentionNotification';
 import { ProactiveSwapListener } from './components/ProactiveSwapListener';
 import { GitHubSetupModal } from './components/GitHubSetupModal';
 import { useProjectStore, loadProjects, addProject, initializeProject, removeProject } from './stores/project-store';
@@ -59,6 +65,8 @@ import { useTaskStore, loadTasks } from './stores/task-store';
 import { useSettingsStore, loadSettings, loadProfiles, saveSettings } from './stores/settings-store';
 import { useClaudeProfileStore } from './stores/claude-profile-store';
 import { useTerminalStore, restoreTerminalSessions } from './stores/terminal-store';
+import { useQuickActionsStore } from './stores/quick-actions-store';
+import { canRepeatAction, getActionLabel, getTimeAgo } from './stores/quick-actions-store';
 import { initializeGitHubListeners } from './stores/github';
 import { initDownloadProgressListener } from './stores/download-store';
 import { GlobalDownloadIndicator } from './components/GlobalDownloadIndicator';
@@ -70,6 +78,7 @@ import type { Task, Project, ColorTheme } from '../shared/types';
 import { ProjectTabBar } from './components/ProjectTabBar';
 import { AddProjectModal } from './components/AddProjectModal';
 import { ViewStateProvider } from './contexts/ViewStateContext';
+import { CommandPalette, type CommandAction } from './components/CommandPalette';
 
 // Version constant for version-specific warnings (e.g., reauthentication notices)
 const VERSION_WARNING_275 = '2.7.5';
@@ -141,6 +150,7 @@ export function App() {
   const [settingsInitialSection, setSettingsInitialSection] = useState<AppSection | undefined>(undefined);
   const [settingsInitialProjectSection, setSettingsInitialProjectSection] = useState<ProjectSettingsSection | undefined>(undefined);
   const [activeView, setActiveView] = useState<SidebarView>('kanban');
+  const [sessionFilterSpecId, setSessionFilterSpecId] = useState<string | undefined>(undefined);
   const [isOnboardingWizardOpen, setIsOnboardingWizardOpen] = useState(false);
   const [isVersionWarningModalOpen, setIsVersionWarningModalOpen] = useState(false);
   const [isRefreshingTasks, setIsRefreshingTasks] = useState(false);
@@ -154,7 +164,7 @@ export function App() {
   const [skippedInitProjectId, setSkippedInitProjectId] = useState<string | null>(null);
   const [showAddProjectModal, setShowAddProjectModal] = useState(false);
 
-  // GitHub setup state (shown after Auto Claude init)
+  // GitHub setup state (shown after Auto Code init)
   const [showGitHubSetup, setShowGitHubSetup] = useState(false);
   const [gitHubSetupProject, setGitHubSetupProject] = useState<Project | null>(null);
 
@@ -162,6 +172,12 @@ export function App() {
   const [showRemoveProjectDialog, setShowRemoveProjectDialog] = useState(false);
   const [removeProjectError, setRemoveProjectError] = useState<string | null>(null);
   const [projectToRemove, setProjectToRemove] = useState<Project | null>(null);
+
+  // Command palette state
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+
+  // Quick actions store
+  const recentActions = useQuickActionsStore((state) => state.recentActions);
 
   // Setup drag sensors
   const sensors = useSensors(
@@ -314,6 +330,13 @@ export function App() {
     }
   }, [settings.language, i18n]);
 
+  // Clear session filter when switching away from sessions view
+  useEffect(() => {
+    if (activeView !== 'sessions') {
+      setSessionFilterSpecId(undefined);
+    }
+  }, [activeView]);
+
   // Listen for open-app-settings events (e.g., from project settings)
   useEffect(() => {
     const handleOpenAppSettings = (event: Event) => {
@@ -403,6 +426,12 @@ export function App() {
           console.error('Failed to add project:', error);
         }
       }
+
+      // Cmd/Ctrl+K: Open command palette
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        setIsCommandPaletteOpen(true);
+      }
     };
 
     window.addEventListener('keydown', handleKeyDown);
@@ -458,9 +487,9 @@ export function App() {
       : 'default';
 
     if (colorTheme === 'default') {
-      root.removeAttribute('data-theme');
+      delete root.dataset.theme;
     } else {
-      root.setAttribute('data-theme', colorTheme);
+      root.dataset.theme = colorTheme;
     }
 
     applyTheme();
@@ -484,7 +513,7 @@ export function App() {
     const root = document.documentElement;
     const scale = settings.uiScale ?? UI_SCALE_DEFAULT;
     const clampedScale = Math.max(UI_SCALE_MIN, Math.min(UI_SCALE_MAX, scale));
-    root.setAttribute('data-ui-scale', clampedScale.toString());
+    root.dataset.uiScale = clampedScale.toString();
   }, [settings.uiScale]);
 
   // Update selected task when tasks change (for real-time updates)
@@ -619,6 +648,12 @@ export function App() {
     setShowAddProjectModal(true);
   };
 
+  const handleViewTaskSessions = (task: Task) => {
+    setSessionFilterSpecId(task.specId);
+    setActiveView('sessions');
+    setSelectedTask(null); // Close the modal
+  };
+
   const handleProjectAdded = (project: Project, needsInit: boolean) => {
     openProjectTab(project.id);
     if (needsInit) {
@@ -727,7 +762,7 @@ export function App() {
       } else {
         // Initialization failed - show error but keep dialog open
         console.warn('[InitDialog] Initialization failed, showing error');
-        const errorMessage = result?.error || 'Failed to initialize Auto Claude. Please try again.';
+        const errorMessage = result?.error || 'Failed to initialize Auto Code. Please try again.';
         setInitError(errorMessage);
         setIsInitializing(false);
       }
@@ -804,6 +839,111 @@ export function App() {
     }
   };
 
+  // Define command palette actions
+  const commandActions = useMemo<CommandAction[]>(() => [
+    {
+      id: 'new-task',
+      label: 'common:commands.newTask',
+      description: 'common:commands.newTaskDescription',
+      shortcut: '⌘N',
+      icon: null,
+      onSelect: () => setIsNewTaskDialogOpen(true),
+      keywords: ['create', 'new', 'task', 'spec']
+    },
+    {
+      id: 'open-settings',
+      label: 'common:commands.openSettings',
+      description: 'common:commands.openSettingsDescription',
+      shortcut: '⌘,',
+      icon: null,
+      onSelect: () => setIsSettingsDialogOpen(true),
+      keywords: ['settings', 'preferences', 'config']
+    },
+    {
+      id: 'view-kanban',
+      label: 'common:commands.viewKanban',
+      description: 'common:commands.viewKanbanDescription',
+      shortcut: 'G then K',
+      icon: null,
+      onSelect: () => setActiveView('kanban'),
+      keywords: ['kanban', 'board', 'tasks']
+    },
+    {
+      id: 'view-terminals',
+      label: 'common:commands.viewTerminals',
+      description: 'common:commands.viewTerminalsDescription',
+      shortcut: 'G then T',
+      icon: null,
+      onSelect: () => setActiveView('terminals'),
+      keywords: ['terminal', 'terminals', 'console', 'shell']
+    },
+    {
+      id: 'view-roadmap',
+      label: 'common:commands.viewRoadmap',
+      description: 'common:commands.viewRoadmapDescription',
+      icon: null,
+      onSelect: () => setActiveView('roadmap'),
+      keywords: ['roadmap', 'timeline', 'plan']
+    },
+    {
+      id: 'view-context',
+      label: 'common:commands.viewContext',
+      description: 'common:commands.viewContextDescription',
+      icon: null,
+      onSelect: () => setActiveView('context'),
+      keywords: ['context', 'memory', 'graph']
+    },
+    {
+      id: 'add-project',
+      label: 'common:commands.addProject',
+      description: 'common:commands.addProjectDescription',
+      shortcut: '⌘T',
+      icon: null,
+      onSelect: handleAddProject,
+      keywords: ['project', 'add', 'new']
+    }
+  ], [setIsNewTaskDialogOpen, setIsSettingsDialogOpen, setActiveView, handleAddProject]);
+
+  // Convert recent actions to command actions
+  const recentCommandActions = useMemo<CommandAction[]>(() => {
+    return recentActions
+      .filter(canRepeatAction)
+      .map((action) => ({
+        id: `recent-${action.id}`,
+        label: getActionLabel(action),
+        description: `Quick action performed ${getTimeAgo(action.timestamp)}`,
+        icon: null,
+        onSelect: () => {
+          // TODO: Implement action replay functionality
+          console.log('[CommandPalette] Replay action:', action);
+        },
+        keywords: ['recent', 'quick', 'repeat', action.type, action.label]
+      }));
+  }, [recentActions]);
+
+  // Command groups with recent actions and general commands
+  const commandGroups = useMemo(() => {
+    const groups = [];
+
+    // Add recent actions group if there are any
+    if (recentCommandActions.length > 0) {
+      groups.push({
+        id: 'recent-actions',
+        label: 'Recent Actions',
+        commands: recentCommandActions
+      });
+    }
+
+    // Add general commands group
+    groups.push({
+      id: 'general',
+      label: 'General',
+      commands: commandActions
+    });
+
+    return groups;
+  }, [recentCommandActions, commandActions]);
+
   return (
     <ViewStateProvider>
       <TooltipProvider>
@@ -873,6 +1013,22 @@ export function App() {
                     isActive={activeView === 'terminals'}
                   />
                 </div>
+                {activeView === 'scheduler' && (activeProjectId || selectedProjectId) && (
+                  <div className="flex flex-col h-full overflow-hidden">
+                    <div className="flex-1 overflow-auto">
+                      <div className="p-6 space-y-6">
+                        <CalendarView
+                          projectId={activeProjectId || selectedProjectId!}
+                          builds={[]}
+                        />
+                        <QueueView
+                          projectId={activeProjectId || selectedProjectId!}
+                          builds={[]}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
                 {activeView === 'roadmap' && (activeProjectId || selectedProjectId) && (
                   <Roadmap projectId={activeProjectId || selectedProjectId!} onGoToTask={handleGoToTask} />
                 )}
@@ -931,6 +1087,18 @@ export function App() {
                   <Worktrees projectId={activeProjectId || selectedProjectId!} />
                 )}
                 {activeView === 'agent-tools' && <AgentTools />}
+                {activeView === 'sessions' && (
+                  <SessionList
+                    projectId={activeProjectId || selectedProjectId!}
+                    specId={sessionFilterSpecId}
+                  />
+                )}
+                {activeView === 'analytics' && (activeProjectId || selectedProjectId) && (
+                  <ProductivityDashboard projectId={activeProjectId || selectedProjectId!} />
+                )}
+                {activeView === 'feedback' && (activeProjectId || selectedProjectId) && (
+                  <FeedbackDashboard projectId={activeProjectId || selectedProjectId!} />
+                )}
               </>
             ) : (
               <WelcomeScreen
@@ -952,6 +1120,7 @@ export function App() {
           onOpenChange={(open) => !open && handleCloseTaskDetail()}
           onSwitchToTerminals={() => setActiveView('terminals')}
           onOpenInbuiltTerminal={handleOpenInbuiltTerminal}
+          onViewSessions={selectedTask ? () => handleViewTaskSessions(selectedTask) : undefined}
         />
 
         {/* Dialogs */}
@@ -992,7 +1161,7 @@ export function App() {
           onProjectAdded={handleProjectAdded}
         />
 
-        {/* Initialize Auto Claude Dialog */}
+        {/* Initialize Auto Code Dialog */}
         <Dialog open={showInitDialog} onOpenChange={(open) => {
           console.warn('[InitDialog] onOpenChange called', { open, pendingProject: !!pendingProject, isInitializing, initSuccess });
           // Only trigger skip if user manually closed the dialog
@@ -1071,7 +1240,7 @@ export function App() {
           </DialogContent>
         </Dialog>
 
-        {/* GitHub Setup Modal - shows after Auto Claude init to configure GitHub */}
+        {/* GitHub Setup Modal - shows after Auto Code init to configure GitHub */}
         {gitHubSetupProject && (
           <GitHubSetupModal
             open={showGitHubSetup}
@@ -1150,8 +1319,18 @@ export function App() {
         {/* App Update Notification - shows when new app version is available */}
         <AppUpdateNotification />
 
+        {/* Agent Attention Notification - shows toast when agent requires attention */}
+        <AgentAttentionNotification />
+
         {/* Global Download Indicator - shows Ollama model download progress */}
         <GlobalDownloadIndicator />
+
+        {/* Command Palette - triggered with Cmd/Ctrl+K */}
+        <CommandPalette
+          open={isCommandPaletteOpen}
+          onOpenChange={setIsCommandPaletteOpen}
+          commandGroups={commandGroups}
+        />
 
         {/* Toast notifications */}
         <Toaster />

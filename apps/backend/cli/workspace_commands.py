@@ -325,21 +325,15 @@ def _detect_parallel_task_conflicts(
 try:
     from debug import (
         debug,
-        debug_detailed,
         debug_error,
         debug_section,
         debug_success,
         debug_verbose,
-        is_debug_enabled,
     )
 except ImportError:
 
     def debug(*args, **kwargs):
         """Fallback debug function when debug module is not available."""
-        pass
-
-    def debug_detailed(*args, **kwargs):
-        """Fallback debug_detailed function when debug module is not available."""
         pass
 
     def debug_verbose(*args, **kwargs):
@@ -357,10 +351,6 @@ except ImportError:
     def debug_section(*args, **kwargs):
         """Fallback debug_section function when debug module is not available."""
         pass
-
-    def is_debug_enabled():
-        """Fallback is_debug_enabled function when debug module is not available."""
-        return False
 
 
 MODULE = "cli.workspace_commands"
@@ -1218,3 +1208,236 @@ def worktree_summary_command(project_dir: Path) -> dict:
             "categories": {},
             "warning": None,
         }
+
+
+def handle_merge_analytics_list_command(
+    project_dir: Path, limit: int = 100, task_id: str | None = None
+) -> None:
+    """
+    Handle the --merge-analytics-list command.
+
+    Shows merge operation history with timestamps and outcomes.
+
+    Args:
+        project_dir: Project root directory
+        limit: Maximum number of operations to show (default: 100)
+        task_id: Optional filter by task ID
+    """
+    from merge.analytics_recorder import MergeAnalyticsRecorder
+
+    print_banner()
+    print("\n" + "=" * 70)
+    print("  MERGE OPERATION HISTORY")
+    print("=" * 70)
+    print()
+
+    # Initialize analytics recorder
+    analytics_dir = project_dir / ".auto-claude"
+    recorder = MergeAnalyticsRecorder(analytics_dir)
+
+    # Get operation history
+    operations = recorder.get_operation_history(limit=limit, task_id=task_id)
+
+    if not operations:
+        print("  No merge operations found.")
+        if task_id:
+            print(f"  (filtered by task: {task_id})")
+        print()
+        return
+
+    # Display operations
+    for op in operations:
+        status_icon = icon(Icons.SUCCESS) if op.success else icon(Icons.ERROR)
+        print(f"  {status_icon} {op.operation_id}")
+        print(f"       Timestamp: {op.timestamp.strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"       Tasks: {', '.join(op.tasks_merged)}")
+        print(f"       Files: {op.stats.files_processed} processed")
+        print(
+            f"       Auto-merged: {op.stats.files_auto_merged}, "
+            f"AI-merged: {op.stats.files_ai_merged}"
+        )
+        print(
+            f"       Conflicts: {op.stats.conflicts_detected} detected, "
+            f"{op.stats.conflicts_auto_resolved} auto-resolved"
+        )
+        print(f"       Duration: {op.duration_seconds:.1f}s")
+        if op.error:
+            print(f"       Error: {op.error}")
+        print()
+
+    print("-" * 70)
+    print(f"  Showing {len(operations)} operations")
+    if task_id:
+        print(f"  Filtered by task: {task_id}")
+    print()
+
+
+def handle_merge_analytics_summary_command(project_dir: Path) -> None:
+    """
+    Handle the --merge-analytics-summary command.
+
+    Shows aggregated statistics across all merge operations.
+
+    Args:
+        project_dir: Project root directory
+    """
+    from merge.analytics_recorder import MergeAnalyticsRecorder
+
+    print_banner()
+    print("\n" + "=" * 70)
+    print("  MERGE ANALYTICS SUMMARY")
+    print("=" * 70)
+    print()
+
+    # Initialize analytics recorder
+    analytics_dir = project_dir / ".auto-claude"
+    recorder = MergeAnalyticsRecorder(analytics_dir)
+
+    # Get analytics
+    analytics = recorder.get_analytics()
+
+    if analytics.total_operations == 0:
+        print("  No merge operations recorded yet.")
+        print()
+        return
+
+    # Display summary statistics
+    print(f"  {icon(Icons.INFO)} Total Operations: {analytics.total_operations}")
+    print(
+        f"       Success: {analytics.successful_operations}, "
+        f"Failed: {analytics.failed_operations}"
+    )
+    print(f"       Success Rate: {analytics.success_rate * 100:.1f}%")
+    print()
+
+    print(f"  {icon(Icons.FILE)} Files Merged: {analytics.total_files_merged}")
+    print(f"       Auto-merge Rate: {analytics.auto_merge_rate * 100:.1f}%")
+    print()
+
+    print(f"  {icon(Icons.WARNING)} Conflicts: {analytics.total_conflicts}")
+    print()
+
+    print(f"  {icon(Icons.THINKING)} AI Usage:")
+    print(f"       Calls: {analytics.total_ai_calls}")
+    print(f"       Tokens: {analytics.total_tokens_used:,}")
+    print()
+
+    print(
+        f"  {icon(Icons.TIME)} Average Duration: {analytics.average_duration_seconds:.1f}s"
+    )
+    print()
+
+    # Show top conflict patterns
+    if analytics.conflict_patterns:
+        print("  " + icon(Icons.WARNING) + " Top Conflict Patterns:")
+        for i, pattern in enumerate(analytics.conflict_patterns[:10], 1):
+            print(f"       {i}. {pattern.file_path} ({pattern.location})")
+            print(f"          Occurrences: {pattern.occurrence_count}")
+            print(f"          Severity: {pattern.severity.value}")
+            print(f"          Tasks: {', '.join(pattern.tasks_involved)}")
+        print()
+
+    print("-" * 70)
+    print()
+
+
+def handle_merge_analytics_export_command(
+    project_dir: Path, output_path: str | None = None, format: str = "json"
+) -> None:
+    """
+    Handle the --merge-analytics-export command.
+
+    Exports merge analytics to a file for reporting.
+
+    Args:
+        project_dir: Project root directory
+        output_path: Output file path (default: ./merge_analytics.{format})
+        format: Export format ('json' or 'csv')
+    """
+    import csv
+    from datetime import datetime
+
+    from merge.analytics_recorder import MergeAnalyticsRecorder
+
+    print_banner()
+    print("\n" + "=" * 70)
+    print("  EXPORT MERGE ANALYTICS")
+    print("=" * 70)
+    print()
+
+    # Initialize analytics recorder
+    analytics_dir = project_dir / ".auto-claude"
+    recorder = MergeAnalyticsRecorder(analytics_dir)
+
+    # Determine output path
+    if output_path is None:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_path = f"merge_analytics_{timestamp}.{format}"
+
+    output_file = Path(output_path)
+
+    try:
+        if format == "json":
+            # Export as JSON
+            recorder.export_analytics(output_file)
+            print(f"  {icon(Icons.SUCCESS)} Exported analytics to: {output_file}")
+            print()
+        elif format == "csv":
+            # Export as CSV
+            operations = recorder.get_operation_history(limit=10000)
+
+            with open(output_file, "w", newline="", encoding="utf-8") as f:
+                writer = csv.writer(f)
+
+                # Write header
+                writer.writerow(
+                    [
+                        "Operation ID",
+                        "Timestamp",
+                        "Tasks",
+                        "Files Processed",
+                        "Auto-merged",
+                        "AI-merged",
+                        "Conflicts Detected",
+                        "Conflicts Auto-resolved",
+                        "Duration (s)",
+                        "Success",
+                        "Error",
+                    ]
+                )
+
+                # Write data rows
+                for op in operations:
+                    writer.writerow(
+                        [
+                            op.operation_id,
+                            op.timestamp.isoformat(),
+                            ";".join(op.tasks_merged),
+                            op.stats.files_processed,
+                            op.stats.files_auto_merged,
+                            op.stats.files_ai_merged,
+                            op.stats.conflicts_detected,
+                            op.stats.conflicts_auto_resolved,
+                            f"{op.duration_seconds:.1f}",
+                            "Yes" if op.success else "No",
+                            op.error or "",
+                        ]
+                    )
+
+            print(
+                f"  {icon(Icons.SUCCESS)} Exported {len(operations)} operations to: {output_file}"
+            )
+            print()
+        else:
+            print(f"  {icon(Icons.ERROR)} Unknown format: {format}")
+            print("  Supported formats: json, csv")
+            print()
+            return
+
+    except Exception as e:
+        print(f"  {icon(Icons.ERROR)} Export failed: {e}")
+        print()
+        return
+
+    print("-" * 70)
+    print()

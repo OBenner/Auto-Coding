@@ -4,6 +4,7 @@ import type { APIProfile, ProfileFormData, TestConnectionResult, ModelInfo } fro
 import { DEFAULT_APP_SETTINGS } from '../../shared/constants';
 import { toast } from '../hooks/use-toast';
 import { markSettingsLoaded } from '../lib/sentry';
+import { initializeKeyboardShortcuts } from './keyboard-shortcuts-store';
 
 interface SettingsState {
   settings: AppSettings;
@@ -86,6 +87,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
     try {
       const result = await window.electronAPI.saveAPIProfile(profile);
       if (result.success && result.data) {
+        const savedProfile = result.data;
         // Re-fetch profiles from backend to get authoritative activeProfileId
         // (backend only auto-activates the first profile)
         try {
@@ -99,14 +101,14 @@ export const useSettingsStore = create<SettingsState>((set) => ({
           } else {
             // Fallback: add profile locally but don't assume activeProfileId
             set((state) => ({
-              profiles: [...state.profiles, result.data!],
+              profiles: [...state.profiles, savedProfile],
               profilesLoading: false
             }));
           }
         } catch {
           // Fallback on fetch error: add profile locally
           set((state) => ({
-            profiles: [...state.profiles, result.data!],
+            profiles: [...state.profiles, savedProfile],
             profilesLoading: false
           }));
         }
@@ -131,9 +133,10 @@ export const useSettingsStore = create<SettingsState>((set) => ({
     try {
       const result = await window.electronAPI.updateAPIProfile(profile);
       if (result.success && result.data) {
+        const updatedProfile = result.data;
         set((state) => ({
           profiles: state.profiles.map((p) =>
-            p.id === result.data?.id ? result.data! : p
+            p.id === updatedProfile.id ? updatedProfile : p
           ),
           profilesLoading: false
         }));
@@ -324,6 +327,26 @@ function migrateOnboardingCompleted(settings: AppSettings): AppSettings {
 }
 
 /**
+ * Migrate agent preferences to ensure sensible defaults for existing users.
+ * Populates default values for new agent preference fields if not already set.
+ */
+function migrateAgentPreferences(settings: AppSettings): AppSettings {
+  // Skip if already migrated (any agent preference field is set)
+  if (settings.agentVerbosity !== undefined) {
+    return settings;
+  }
+
+  return {
+    ...settings,
+    agentVerbosity: 'normal',
+    agentRiskTolerance: 'balanced',
+    agentProjectType: 'established',
+    agentCodingStyle: {},
+    agentUserInstructions: [],
+  };
+}
+
+/**
  * Load settings from main process
  */
 export async function loadSettings(): Promise<void> {
@@ -333,8 +356,9 @@ export async function loadSettings(): Promise<void> {
   try {
     const result = await window.electronAPI.getSettings();
     if (result.success && result.data) {
-      // Apply migration for onboardingCompleted flag
-      const migratedSettings = migrateOnboardingCompleted(result.data);
+      // Apply migrations
+      let migratedSettings = migrateOnboardingCompleted(result.data);
+      migratedSettings = migrateAgentPreferences(migratedSettings);
       store.setSettings(migratedSettings);
 
       // If migration changed the settings, persist them
@@ -343,6 +367,9 @@ export async function loadSettings(): Promise<void> {
           onboardingCompleted: migratedSettings.onboardingCompleted
         });
       }
+
+      // Initialize keyboard shortcuts from localStorage
+      initializeKeyboardShortcuts();
 
       // Only mark settings as loaded on SUCCESS
       // This ensures Sentry respects user's opt-out preference even if settings fail to load
@@ -394,5 +421,32 @@ export async function loadProfiles(): Promise<void> {
     store.setProfilesError(error instanceof Error ? error.message : 'Failed to load profiles');
   } finally {
     store.setProfilesLoading(false);
+  }
+}
+
+/**
+ * Get recent actions from settings
+ * Returns the recentActions array from current settings
+ */
+export function getRecentActions(): import('../../shared/types/settings').RecentAction[] {
+  const store = useSettingsStore.getState();
+  return store.settings.recentActions || [];
+}
+
+/**
+ * Save recent actions to settings
+ * Updates the recentActions array in settings and persists to disk
+ */
+export async function saveRecentActions(actions: import('../../shared/types/settings').RecentAction[]): Promise<boolean> {
+  const store = useSettingsStore.getState();
+  try {
+    const result = await window.electronAPI.saveSettings({ recentActions: actions });
+    if (result.success) {
+      store.updateSettings({ recentActions: actions });
+      return true;
+    }
+    return false;
+  } catch {
+    return false;
   }
 }

@@ -84,6 +84,99 @@ Identify documentation gaps across these categories:
    - Complex or confusing areas
    - Onboarding blockers
 
+### Research Documentation Best Practices (Using WebSearch)
+
+**WebSearch should be used AFTER local documentation analysis to validate documentation approaches and discover proven patterns.**
+
+After identifying documentation gaps locally, use web search to research documentation best practices and proven techniques. This helps validate your approach and discover effective documentation patterns.
+
+#### Step 1: Search for Documentation Best Practices
+
+When you identify a documentation gap, search for established documentation patterns:
+
+```
+Tool: WebSearch
+Query: "[documentation type] best practices [language/framework] 2026"
+```
+
+**Example searches:**
+- `"API documentation best practices TypeScript 2026"` - For API docs
+- `"README best practices open source 2026"` - For README improvements
+- `"JSDoc best practices TypeScript 2026"` - For inline documentation
+- `"code examples documentation best practices 2026"` - For examples
+- `"architecture documentation best practices 2026"` - For system docs
+- `"onboarding documentation best practices 2026"` - For getting started
+- `"troubleshooting guide best practices 2026"` - For debugging docs
+- `"migration guide best practices 2026"` - For upgrade docs
+- `"contributing guidelines best practices 2026"` - For contributor docs
+
+**What to verify:**
+1. **Documentation standards** - What do successful projects document?
+2. **Structure patterns** - How should docs be organized?
+3. **Content types** - What documentation types are essential?
+4. **Audience considerations** - How to write for different readers?
+5. **Maintenance approach** - How to keep docs up-to-date?
+
+#### Step 2: Search for Documentation Examples
+
+Find real-world examples to understand effective documentation:
+
+```
+Tool: WebSearch
+Query: "[documentation type] good examples [domain] 2026"
+```
+
+**Example searches:**
+- `"excellent README examples TypeScript projects 2026"` - See great READMEs
+- `"API documentation examples best libraries 2026"` - Learn API doc patterns
+- `"getting started guide examples React 2026"` - See onboarding docs
+- `"architecture documentation examples 2026"` - Learn system doc patterns
+- `"code comment examples best practices 2026"` - See inline doc patterns
+- `"troubleshooting documentation examples 2026"` - Learn debugging docs
+- `"TypeScript JSDoc examples comprehensive 2026"` - See type documentation
+- `"changelog best practices examples 2026"` - Learn version docs
+
+**What to extract:**
+1. **Document structure** - How are docs organized?
+2. **Writing style** - What tone and voice work best?
+3. **Code examples** - How are examples presented?
+4. **Navigation** - How do users find information?
+5. **Visual aids** - What diagrams/screenshots help?
+
+#### Step 3: Search for Common Documentation Pitfalls
+
+Research problems others encountered with documentation:
+
+```
+Tool: WebSearch
+Query: "[documentation type] common mistakes problems 2026"
+```
+
+**Example searches:**
+- `"API documentation common mistakes to avoid 2026"` - Avoid doc errors
+- `"README documentation mistakes 2026"` - Learn README pitfalls
+- `"code comments anti-patterns 2026"` - Avoid comment mistakes
+- `"documentation maintenance problems 2026"` - Handle doc decay
+- `"outdated documentation detection 2026"` - Catch stale docs
+- `"over-documentation problems 2026"` - Avoid too much detail
+- `"missing error documentation issues 2026"` - Document errors properly
+- `"incomplete examples common problems 2026"` - Write complete examples
+
+**What to document:**
+1. **Stale docs** - How to prevent documentation decay?
+2. **Missing context** - What context is often missing?
+3. **Incomplete examples** - What makes examples unhelpful?
+4. **Jargon overuse** - How to write clearly?
+5. **Organization issues** - What structures confuse readers?
+
+**Integration into analysis:**
+- Use search results to validate your documentation suggestions
+- Reference successful projects in your `proposedContent` field
+- Document documentation standards in your rationale
+- Include examples of effective documentation patterns
+- Suggest documentation maintenance strategies based on research
+- Reference style guides (Google, Microsoft, etc.) where applicable
+
 ## Output Format
 
 Write your findings to `{output_dir}/documentation_gaps_ideas.json`:

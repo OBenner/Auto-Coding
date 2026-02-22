@@ -1,6 +1,6 @@
 # Token Optimization Guide
 
-Practical strategies for reducing token consumption and associated costs when using Auto Claude.
+Practical strategies for reducing token consumption and associated costs when using Auto Code.
 
 ## Quick Reference
 
@@ -53,7 +53,7 @@ Add a logout feature to the app
 
 ### Minimize Context Window Usage
 
-Each MCP server adds ~10-30K tokens of context. Auto Claude loads only what's needed per agent type, but you can further optimize.
+Each MCP server adds ~10-30K tokens of context. Auto Code loads only what's needed per agent type, but you can further optimize.
 
 ### Agent MCP Server Loading
 
@@ -91,7 +91,7 @@ Each MCP server adds ~10-30K tokens of context. Auto Claude loads only what's ne
 
 ### Default Model Assignments
 
-Auto Claude assigns models by phase. You can override via task metadata or CLI.
+Auto Code assigns models by phase. You can override via task metadata or CLI.
 
 | Phase | Default Model | Thinking Level |
 |-------|---------------|----------------|
@@ -141,7 +141,7 @@ Extended thinking tokens are billed as **output tokens** (2-5x more expensive th
 
 ### Automatic Budget Selection
 
-Auto Claude's `suggest_thinking_budget()` function analyzes:
+Auto Code's `suggest_thinking_budget()` function analyzes:
 - Description length (< 100 chars = simple)
 - File count (1-3 files = simple)
 - Service count (1 service = simpler scope)

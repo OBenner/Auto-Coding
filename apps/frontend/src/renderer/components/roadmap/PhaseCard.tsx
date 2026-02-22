@@ -87,6 +87,9 @@ export function PhaseCard({
         <h4 className="text-sm font-medium mb-2">Features ({features.length})</h4>
         <div className="grid gap-2">
           {features.slice(0, 5).map((feature) => (
+            // biome-ignore lint/a11y/noNoninteractiveElementInteractions: Clickable feature card
+            // biome-ignore lint/a11y/noStaticElementInteractions: Clickable feature card
+            // biome-ignore lint/a11y/useKeyWithClickEvents: Feature selection card
             <div
               key={feature.id}
               className="flex items-center justify-between p-2 rounded-md bg-muted/50 hover:bg-muted cursor-pointer transition-colors"
@@ -113,7 +116,7 @@ export function PhaseCard({
                   className="h-6 px-2"
                   onClick={(e) => {
                     e.stopPropagation();
-                    onGoToTask(feature.linkedSpecId!);
+                    if (feature.linkedSpecId) onGoToTask(feature.linkedSpecId);
                   }}
                 >
                   <ExternalLink className="h-3 w-3 mr-1" />

@@ -137,6 +137,7 @@ export function AgentProfileSettings() {
 
     return (
       <button
+        type="button"
         key={profile.id}
         onClick={() => handleSelectProfile(profile.id)}
         className={cn(

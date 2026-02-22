@@ -443,7 +443,7 @@ export function Worktrees({ projectId }: WorktreesProps) {
             Worktrees
           </h2>
           <p className="text-sm text-muted-foreground mt-1">
-            Manage isolated workspaces for your Auto Claude tasks
+            Manage isolated workspaces for your Auto Code tasks
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -479,6 +479,7 @@ export function Worktrees({ projectId }: WorktreesProps) {
         <div className="flex items-center justify-between py-2 mb-4 border-b border-border shrink-0">
           <div className="flex items-center gap-3">
             <button
+              type="button"
               onClick={isAllSelected ? deselectAll : selectAll}
               className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
             >
@@ -532,7 +533,7 @@ export function Worktrees({ projectId }: WorktreesProps) {
           </div>
           <h3 className="text-lg font-semibold text-foreground">No Worktrees</h3>
           <p className="text-sm text-muted-foreground mt-2 max-w-md">
-            Worktrees are created automatically when Auto Claude builds features.
+            Worktrees are created automatically when Auto Code builds features.
             You can also create terminal worktrees from the Agent Terminals tab.
           </p>
         </div>

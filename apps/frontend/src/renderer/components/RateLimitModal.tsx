@@ -38,28 +38,6 @@ export function RateLimitModal() {
   const [isAddingProfile, setIsAddingProfile] = useState(false);
   const [newProfileName, setNewProfileName] = useState('');
 
-  // Load profiles and auto-switch settings when modal opens
-  useEffect(() => {
-    if (isModalOpen) {
-      loadClaudeProfiles();
-      loadAutoSwitchSettings();
-
-      // Pre-select the suggested profile if available
-      if (rateLimitInfo?.suggestedProfileId) {
-        setSelectedProfileId(rateLimitInfo.suggestedProfileId);
-      }
-    }
-  }, [isModalOpen, rateLimitInfo?.suggestedProfileId, loadAutoSwitchSettings]);
-
-  // Reset selection when modal closes
-  useEffect(() => {
-    if (!isModalOpen) {
-      setSelectedProfileId(null);
-      setIsAddingProfile(false);
-      setNewProfileName('');
-    }
-  }, [isModalOpen]);
-
   const loadAutoSwitchSettings = async () => {
     try {
       const result = await window.electronAPI.getAutoSwitchSettings();
@@ -70,6 +48,29 @@ export function RateLimitModal() {
       debugError('[RateLimitModal] Failed to load auto-switch settings:', err);
     }
   };
+
+  // Load profiles and auto-switch settings when modal opens
+  // biome-ignore lint/correctness/useExhaustiveDependencies: loadAutoSwitchSettings is stable and doesn't need to trigger re-render
+  useEffect(() => {
+    if (isModalOpen) {
+      loadClaudeProfiles();
+      loadAutoSwitchSettings();
+
+      // Pre-select the suggested profile if available
+      if (rateLimitInfo?.suggestedProfileId) {
+        setSelectedProfileId(rateLimitInfo.suggestedProfileId);
+      }
+    }
+  }, [isModalOpen, rateLimitInfo?.suggestedProfileId]);
+
+  // Reset selection when modal closes
+  useEffect(() => {
+    if (!isModalOpen) {
+      setSelectedProfileId(null);
+      setIsAddingProfile(false);
+      setNewProfileName('');
+    }
+  }, [isModalOpen]);
 
   const handleAutoSwitchToggle = async (enabled: boolean) => {
     setIsLoadingSettings(true);

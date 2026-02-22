@@ -21,6 +21,7 @@ import { setUpdateChannel, setUpdateChannelWithDowngradeCheck } from '../app-upd
 import { getSettingsPath, readSettingsFile } from '../settings-utils';
 import { configureTools, getToolPath, getToolInfo, isPathFromWrongPlatform, preWarmToolCache } from '../cli-tool-manager';
 import { parseEnvFile } from './utils';
+import { getCurrentOS, isMacOS, isWindows } from '../platform';
 
 const settingsPath = getSettingsPath();
 
@@ -61,7 +62,7 @@ const detectAutoBuildSourcePath = (): string | null => {
   const debug = process.env.DEBUG === '1' || process.env.DEBUG === 'true';
 
   if (debug) {
-    console.warn('[detectAutoBuildSourcePath] Platform:', process.platform);
+    console.warn('[detectAutoBuildSourcePath] Platform:', getCurrentOS());
     console.warn('[detectAutoBuildSourcePath] Is dev:', is.dev);
     console.warn('[detectAutoBuildSourcePath] __dirname:', __dirname);
     console.warn('[detectAutoBuildSourcePath] app.getAppPath():', app.getAppPath());
@@ -85,7 +86,7 @@ const detectAutoBuildSourcePath = (): string | null => {
     }
   }
 
-  console.warn('[detectAutoBuildSourcePath] Could not auto-detect Auto Claude source path. Please configure manually in settings.');
+  console.warn('[detectAutoBuildSourcePath] Could not auto-detect Auto Code source path. Please configure manually in settings.');
   console.warn('[detectAutoBuildSourcePath] Set DEBUG=1 environment variable for detailed path checking.');
   return null;
 };
@@ -137,7 +138,7 @@ export function registerSettingsHandlers(
       // Migration: Clear CLI tool paths that are from a different platform
       // Fixes issue where Windows paths persisted on macOS (and vice versa)
       // when settings were synced/transferred between platforms
-      // See: https://github.com/AndyMik90/Auto-Claude/issues/XXX
+      // See: https://github.com/OBenner/Auto-Coding/issues/XXX
       const pathFields = ['pythonPath', 'gitPath', 'githubCLIPath', 'claudePath', 'autoBuildPath'] as const;
       for (const field of pathFields) {
         const pathValue = settings[field];
@@ -470,12 +471,10 @@ export function registerSettingsHandlers(
           };
         }
 
-        const platform = process.platform;
-
-        if (platform === 'darwin') {
+        if (isMacOS()) {
           // macOS: Use execFileSync with argument array to prevent injection
           execFileSync('open', ['-a', 'Terminal', resolvedPath], { stdio: 'ignore' });
-        } else if (platform === 'win32') {
+        } else if (isWindows()) {
           // Windows: Use cmd.exe directly with argument array
           // /C tells cmd to execute the command and terminate
           // /K keeps the window open after executing cd
@@ -504,6 +503,7 @@ export function registerSettingsHandlers(
               opened = true;
               break;
             } catch {
+              // Try next terminal
             }
           }
 
@@ -667,8 +667,8 @@ export function registerSettingsHandlers(
 
         // Generate content
         const lines: string[] = [
-          '# Auto Claude Framework Environment Variables',
-          '# Managed by Auto Claude UI',
+          '# Auto Code Framework Environment Variables',
+          '# Managed by Auto Code UI',
           '',
           '# Claude Code OAuth Token (REQUIRED)',
           `CLAUDE_CODE_OAUTH_TOKEN=${existingVars['CLAUDE_CODE_OAUTH_TOKEN'] || ''}`,

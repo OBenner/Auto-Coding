@@ -15,8 +15,9 @@ This module provides:
 Uses lazy imports to avoid circular dependencies.
 """
 
-# Explicit import required by CodeQL static analysis
+# Explicit imports required by CodeQL static analysis
 # (CodeQL doesn't recognize __getattr__ dynamic exports)
+from .documentation_generator import run_documentation_generator_session
 from .utils import sync_spec_to_source
 
 __all__ = [
@@ -24,6 +25,7 @@ __all__ = [
     "run_autonomous_agent",
     "run_followup_planner",
     "run_code_review_session",
+    "run_documentation_generator_session",
     # Memory
     "debug_memory_system_status",
     "get_graphiti_context",
@@ -39,9 +41,6 @@ __all__ = [
     "find_subtask_in_plan",
     "find_phase_for_subtask",
     "sync_spec_to_source",
-    # Constants
-    "AUTO_CONTINUE_DELAY_SECONDS",
-    "HUMAN_INTERVENTION_FILE",
 ]
 
 
@@ -77,6 +76,10 @@ def __getattr__(name):
         from .code_reviewer import run_code_review_session
 
         return run_code_review_session
+    elif name == "run_documentation_generator_session":
+        from .documentation_generator import run_documentation_generator_session
+
+        return run_documentation_generator_session
     elif name in ("post_session_processing", "run_agent_session"):
         from .session import post_session_processing, run_agent_session
 
