@@ -117,7 +117,8 @@ class CodeReviewService:
             "low": ReviewSeverity.LOW,
             "info": ReviewSeverity.LOW,
         }
-        return severity_map.get(scanner_severity.lower(), ReviewSeverity.MEDIUM)
+        key = str(scanner_severity).lower() if scanner_severity else ""
+        return severity_map.get(key, ReviewSeverity.MEDIUM)
 
     def _map_category(self, scanner_source: str) -> ReviewCategory:
         """
@@ -136,7 +137,8 @@ class CodeReviewService:
             "semgrep": ReviewCategory.SECURITY,
             "dependency_check": ReviewCategory.SECURITY,
         }
-        return category_map.get(scanner_source.lower(), ReviewCategory.SECURITY)
+        key = str(scanner_source).lower() if scanner_source else ""
+        return category_map.get(key, ReviewCategory.SECURITY)
 
     def _convert_vulnerability_to_finding(
         self, vuln: SecurityVulnerability
@@ -156,7 +158,7 @@ class CodeReviewService:
         finding_id = self._generate_finding_id(file_path, line_num, vuln.title)
 
         # Build description with CWE reference if available
-        description = vuln.description
+        description = vuln.description or ""
         if vuln.cwe:
             description += f"\n\n**CWE Reference**: {vuln.cwe}"
 
@@ -202,7 +204,7 @@ class CodeReviewService:
             description=(
                 f"A potential secret or credential was detected in this file.\n\n"
                 f"**Pattern**: {pattern}\n"
-                f"**Matched Text**: {secret.get('matched_text', '[REDACTED]')}\n\n"
+                f"**Matched Text**: [REDACTED]\n\n"
                 "**Action Required**: Remove this secret immediately and rotate the credential."
             ),
             file=file_path,
@@ -242,11 +244,14 @@ class CodeReviewService:
         # Extract file paths from context
         if changed_files is None:
             # Handle both object.path and plain strings
-            changed_files = [getattr(f, 'path', f) for f in context.changed_files]
+            changed_files = [getattr(f, "path", f) for f in context.changed_files]
 
-        # Run security scan
+        # Run security scan (offload blocking I/O to a thread)
+        import asyncio
+
         spec_dir = self.github_dir / "pr" / f"pr_{getattr(context, 'pr_number', 0)}"
-        scan_result = self.scanner.scan(
+        scan_result = await asyncio.to_thread(
+            self.scanner.scan,
             project_dir=self.project_dir,
             spec_dir=spec_dir if spec_dir.exists() else None,
             changed_files=changed_files,
@@ -356,7 +361,7 @@ class CodeReviewService:
         category_counts = {}
         for finding in findings:
             # Handle both enum.value and plain string
-            cat = getattr(finding.category, 'value', finding.category)
+            cat = getattr(finding.category, "value", finding.category)
             category_counts[cat] = category_counts.get(cat, 0) + 1
 
         return {
@@ -403,9 +408,7 @@ class CodeReviewService:
                 "❌ **Recommendation**: Do not merge until critical issues are resolved.\n"
             )
         else:
-            body_parts.append(
-                "⚠️ **Recommendation**: Review findings before merging.\n"
-            )
+            body_parts.append("⚠️ **Recommendation**: Review findings before merging.\n")
 
         # Group findings by severity
         by_severity = {
@@ -515,11 +518,18 @@ class CodeReviewService:
             )
 
         # Post review using gh_client
-        review_id = await gh_client.pr_review(
-            pr_number=pr_number,
-            body=review_body,
-            event=event,
-        )
+        try:
+            review_id = await gh_client.pr_review(
+                pr_number=pr_number,
+                body=review_body,
+                event=event,
+            )
+        except Exception as exc:
+            safe_print(
+                f"[CodeReview] Failed to post review to PR #{pr_number}: {type(exc).__name__}",
+                flush=True,
+            )
+            raise
 
         self._report_progress(
             "post_review",

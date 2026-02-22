@@ -10,20 +10,24 @@ Memory Integration:
 - Saves code review findings (vulnerabilities, patterns, recommendations) after session
 """
 
+import logging
 from pathlib import Path
 
 # Memory integration for cross-session learning
-from agents.memory_manager import get_graphiti_context, save_session_memory
+from agents.memory_manager import get_graphiti_context
 from claude_agent_sdk import ClaudeSDKClient
 from debug import debug, debug_detailed, debug_error, debug_section, debug_success
-from security.tool_input_validator import get_safe_tool_input
 from task_logger import (
-    LogEntryType,
     LogPhase,
     get_task_logger,
 )
 
 from .session import run_agent_session
+
+logger = logging.getLogger(__name__)
+
+# Maximum characters for memory context to avoid unbounded prompt growth
+_MAX_MEMORY_CONTEXT_LEN = 4000
 
 # =============================================================================
 # CODE REVIEW SESSION
@@ -69,10 +73,7 @@ async def run_code_review_session(
         pr_number=pr_number,
     )
 
-    print(f"\n{'=' * 70}")
-    print(f"  CODE REVIEW SESSION {review_session}")
-    print("  Analyzing code for security, performance, and style issues...")
-    print(f"{'=' * 70}\n")
+    logger.info("Code review session %d started", review_session)
 
     # Get task logger for streaming markers
     task_logger = get_task_logger(spec_dir)
@@ -120,8 +121,13 @@ Spec directory: {spec_dir}
         },
     )
     if review_memory_context:
+        # Truncate memory context to prevent unbounded prompt growth
+        if len(review_memory_context) > _MAX_MEMORY_CONTEXT_LEN:
+            review_memory_context = (
+                review_memory_context[:_MAX_MEMORY_CONTEXT_LEN] + "\n...(truncated)"
+            )
         prompt += "\n\n" + review_memory_context
-        print("✓ Memory context loaded for code reviewer")
+        logger.info("Memory context loaded for code reviewer")
         debug_success("code_reviewer", "Graphiti memory context loaded for review")
 
     # Add session context
@@ -160,8 +166,9 @@ This is attempt {previous_error.get("consecutive_errors", 1) + 1}. If you fail t
 ---
 
 """
-        print(
-            f"\n⚠️  Retry with self-correction context (attempt {previous_error.get('consecutive_errors', 1) + 1})"
+        logger.warning(
+            "Retry with self-correction context (attempt %d)",
+            previous_error.get("consecutive_errors", 1) + 1,
         )
 
     try:
@@ -207,9 +214,10 @@ This is attempt {previous_error.get("consecutive_errors", 1) + 1}. If you fail t
 
     except Exception as e:
         debug_error("code_reviewer", f"Code review session error: {e}")
+        logger.exception("Code review session failed")
         if task_logger:
             task_logger.log_error(
-                f"Code review session error: {e}",
+                f"Code review session error: {type(e).__name__}",
                 LogPhase.CODING,
             )
-        return ("error", str(e))
+        return ("error", f"Code review failed: {type(e).__name__}")

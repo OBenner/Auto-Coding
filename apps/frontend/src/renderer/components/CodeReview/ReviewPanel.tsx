@@ -22,14 +22,20 @@ interface ReviewPanelProps {
   onViewFindings?: () => void;
 }
 
-// Custom comparator for React.memo
+// Custom comparator for React.memo - compares status, findings content, and callbacks
 function reviewPanelPropsAreEqual(prevProps: ReviewPanelProps, nextProps: ReviewPanelProps): boolean {
-  return (
-    prevProps.status === nextProps.status &&
-    prevProps.findings?.length === nextProps.findings?.length &&
-    prevProps.onRunReview === nextProps.onRunReview &&
-    prevProps.onViewFindings === nextProps.onViewFindings
-  );
+  if (
+    prevProps.status !== nextProps.status ||
+    prevProps.onRunReview !== nextProps.onRunReview ||
+    prevProps.onViewFindings !== nextProps.onViewFindings
+  ) {
+    return false;
+  }
+  const prevFindings = prevProps.findings ?? [];
+  const nextFindings = nextProps.findings ?? [];
+  if (prevFindings.length !== nextFindings.length) return false;
+  // Shallow compare finding ids to detect content changes
+  return prevFindings.every((f, i) => f.id === nextFindings[i].id);
 }
 
 export const ReviewPanel = memo(function ReviewPanel({
@@ -42,7 +48,7 @@ export const ReviewPanel = memo(function ReviewPanel({
 
   const isAnalyzing = status === 'analyzing';
   const isComplete = status === 'complete';
-  const hasFindingsCount = findings.length;
+  const findingsCount = findings.length;
 
   const getSeverityColor = (severity: ReviewFinding['severity']) => {
     switch (severity) {
@@ -63,10 +69,10 @@ export const ReviewPanel = memo(function ReviewPanel({
     if (isAnalyzing) {
       return <Loader2 className="h-5 w-5 animate-spin text-primary" />;
     }
-    if (isComplete && hasFindingsCount === 0) {
+    if (isComplete && findingsCount === 0) {
       return <CheckCircle className="h-5 w-5 text-green-400" />;
     }
-    if (isComplete && hasFindingsCount > 0) {
+    if (isComplete && findingsCount > 0) {
       return <AlertTriangle className="h-5 w-5 text-warning" />;
     }
     return <Shield className="h-5 w-5 text-muted-foreground" />;
@@ -103,7 +109,7 @@ export const ReviewPanel = memo(function ReviewPanel({
 
       <CardContent className="pt-0">
         {/* Empty state */}
-        {status === 'idle' && hasFindingsCount === 0 && (
+        {status === 'idle' && findingsCount === 0 && (
           <div className="py-6 text-center">
             <p className="text-sm text-muted-foreground mb-4">
               {t('codeReview:empty.description')}
@@ -132,11 +138,11 @@ export const ReviewPanel = memo(function ReviewPanel({
         )}
 
         {/* Complete state with findings */}
-        {isComplete && hasFindingsCount > 0 && (
+        {isComplete && findingsCount > 0 && (
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-sm text-muted-foreground">
-                {t('codeReview:findingsCount', { count: hasFindingsCount })}
+                {t('codeReview:findingsCount', { count: findingsCount })}
               </span>
               {onViewFindings && (
                 <Button
@@ -161,12 +167,12 @@ export const ReviewPanel = memo(function ReviewPanel({
                   {t(`codeReview:severity.${finding.severity}`)}
                 </Badge>
               ))}
-              {hasFindingsCount > 3 && (
+              {findingsCount > 3 && (
                 <Badge
                   variant="outline"
                   className="text-[10px] px-1.5 py-0.5 bg-muted text-muted-foreground border-border"
                 >
-                  +{hasFindingsCount - 3}
+                  +{findingsCount - 3}
                 </Badge>
               )}
             </div>
@@ -174,7 +180,7 @@ export const ReviewPanel = memo(function ReviewPanel({
         )}
 
         {/* Complete state with no findings */}
-        {isComplete && hasFindingsCount === 0 && (
+        {isComplete && findingsCount === 0 && (
           <div className="py-4 text-center">
             <CheckCircle className="h-8 w-8 text-green-400 mx-auto mb-3" />
             <p className="text-sm text-muted-foreground">

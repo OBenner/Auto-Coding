@@ -4,8 +4,9 @@
   "reviewInProgress": "Revue en Cours",
   "reviewComplete": "Revue Terminée",
   "noFindings": "Aucun problème trouvé",
-  "findingsCount": "{{count}} résultat",
-  "findingsCount_plural": "{{count}} résultats",
+  "findingsCount_zero": "Aucun résultat",
+  "findingsCount_one": "{{count}} résultat",
+  "findingsCount_other": "{{count}} résultats",
   "status": {
     "idle": "Prêt",
     "analyzing": "Analyse...",

@@ -24,24 +24,30 @@ print()
 print("[1/4] Testing core module imports...")
 try:
     from agents.code_reviewer import run_code_review_session
+
     print("  ✓ agents.code_reviewer imports")
 
     from prompts_pkg import get_code_review_prompt
+
     print("  ✓ prompts_pkg imports")
 
     from runners.github.services.code_review_service import CodeReviewService
+
     print("  ✓ code_review_service imports")
 
-    from runners.github.models import PRReviewFinding, ReviewSeverity, ReviewCategory
+    from runners.github.models import PRReviewFinding, ReviewCategory, ReviewSeverity
+
     print("  ✓ models import")
 
     from analysis.security_scanner import SecurityScanner
+
     print("  ✓ security_scanner imports")
 
     print("✓ All core modules import successfully")
 except ImportError as e:
     print(f"✗ Import failed: {e}")
     import traceback
+
     traceback.print_exc()
     sys.exit(1)
 
@@ -85,6 +91,7 @@ token = "ghp_1234567890abcdefghijklmnopqrstuvwxyz"
 except Exception as e:
     print(f"✗ Security scanner test failed: {e}")
     import traceback
+
     traceback.print_exc()
     sys.exit(1)
 
@@ -128,6 +135,7 @@ try:
 except Exception as e:
     print(f"✗ Review findings test failed: {e}")
     import traceback
+
     traceback.print_exc()
     sys.exit(1)
 
@@ -156,10 +164,18 @@ try:
         )
 
         # Verify service has required methods
-        assert hasattr(service, 'review_code_changes'), "Missing review_code_changes method"
-        assert hasattr(service, 'post_review_to_github'), "Missing post_review_to_github method"
-        assert hasattr(service, 'should_block_merge'), "Missing should_block_merge method"
-        assert hasattr(service, 'get_findings_summary'), "Missing get_findings_summary method"
+        assert hasattr(service, "review_code_changes"), (
+            "Missing review_code_changes method"
+        )
+        assert hasattr(service, "post_review_to_github"), (
+            "Missing post_review_to_github method"
+        )
+        assert hasattr(service, "should_block_merge"), (
+            "Missing should_block_merge method"
+        )
+        assert hasattr(service, "get_findings_summary"), (
+            "Missing get_findings_summary method"
+        )
 
         print("✓ CodeReviewService instantiates correctly")
         print("✓ All required methods present")
@@ -200,15 +216,15 @@ try:
 
         # Test should_block_merge
         should_block = service.should_block_merge(mock_findings)
-        assert should_block == True, "Should block merge with critical issues"
+        assert should_block is True, "Should block merge with critical issues"
         print("✓ should_block_merge works correctly")
 
         # Test get_findings_summary
         summary = service.get_findings_summary(mock_findings)
-        assert summary['total'] == 2, "Summary total count incorrect"
-        assert summary['by_severity']['critical'] == 1, "Critical count incorrect"
-        assert summary['by_severity']['low'] == 1, "Low count incorrect"
-        assert summary['should_block'] == True, "Should block flag incorrect"
+        assert summary["total"] == 2, "Summary total count incorrect"
+        assert summary["by_severity"]["critical"] == 1, "Critical count incorrect"
+        assert summary["by_severity"]["low"] == 1, "Low count incorrect"
+        assert summary["should_block"] is True, "Should block flag incorrect"
         print("✓ get_findings_summary works correctly")
 
         # Test _format_review_body
@@ -221,6 +237,7 @@ try:
 except Exception as e:
     print(f"✗ Code review service test failed: {e}")
     import traceback
+
     traceback.print_exc()
     sys.exit(1)
 
@@ -241,8 +258,12 @@ print("  • Agent prompt: apps/backend/prompts/code_review_agent.md")
 print("  • Review service: apps/backend/runners/github/services/code_review_service.py")
 print("  • Security scanner: apps/backend/analysis/security_scanner.py")
 print("  • GitHub integration: apps/backend/runners/github/runner.py (code-review-pr)")
-print("  • Frontend UI: apps/frontend/src/renderer/components/CodeReview/ReviewPanel.tsx")
-print("  • Frontend IPC: apps/frontend/src/main/ipc-handlers/github/repository-handlers.ts")
+print(
+    "  • Frontend UI: apps/frontend/src/renderer/components/CodeReview/ReviewPanel.tsx"
+)
+print(
+    "  • Frontend IPC: apps/frontend/src/main/ipc-handlers/github/repository-handlers.ts"
+)
 print()
 print("End-to-End Flow Status: ✓ VERIFIED")
 print()

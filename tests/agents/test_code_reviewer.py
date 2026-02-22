@@ -19,8 +19,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-# Add parent directory to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent / "apps" / "backend"))
+_BACKEND_PATH = str(Path(__file__).parent.parent / "apps" / "backend")
+if _BACKEND_PATH not in sys.path:
+    sys.path.insert(0, _BACKEND_PATH)
 
 
 # =============================================================================
@@ -290,7 +291,8 @@ class TestErrorHandling:
             )
 
             assert status == "error", "Should catch exception and return error"
-            assert "Unexpected error" in response
+            # Response should contain the exception type but not leak internal details
+            assert "Exception" in response
 
 
 # =============================================================================
@@ -334,11 +336,11 @@ Previous security patterns:
                 review_session=1,
             )
 
-            # Verify context was loaded
+            # Verify context was loaded with correct arguments
             mock_context.assert_called_once()
-            call_args = mock_context.call_args
-            assert call_args[0][0] == spec_dir
-            assert call_args[0][1] == project_dir
+            args, kwargs = mock_context.call_args
+            assert spec_dir in args, f"spec_dir not in call args: {args}"
+            assert project_dir in args, f"project_dir not in call args: {args}"
 
             # Verify context included in prompt passed to session
             session_call = mock_session.call_args

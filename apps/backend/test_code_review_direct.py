@@ -24,6 +24,7 @@ print("[1/6] Testing code review agent...")
 try:
     sys.path.insert(0, str(Path(__file__).parent))
     from agents.code_reviewer import run_code_review_session
+
     print("✓ Code review agent imports successfully")
     print(f"  Function: {run_code_review_session.__name__}")
     print(f"  Module: {run_code_review_session.__module__}")
@@ -35,6 +36,7 @@ except Exception as e:
 print("\n[2/6] Testing code review prompt...")
 try:
     from prompts_pkg import get_code_review_prompt
+
     print("✓ Code review prompt imports successfully")
 
     # Test prompt generation
@@ -52,6 +54,7 @@ try:
 except Exception as e:
     print(f"✗ Prompt test failed: {e}")
     import traceback
+
     traceback.print_exc()
     sys.exit(1)
 
@@ -68,11 +71,11 @@ try:
         test_dir = Path(tmpdir)
         test_file = test_dir / "test.py"
         test_file.write_text("""
-# Security test patterns
-API_KEY = "sk-1234567890abcdefghijklmnopqrstuvwx"
-AWS_KEY = "AKIA1234567890ABCDEF"
-PASSWORD = "my_secret_password_123"
-""")
+# Security test patterns (synthetic, not real credentials)
+API_KEY = "sk-test-fake-0000000000000000000000000"
+AWS_KEY = "AKIAIOSFODNN7EXAMPLE"
+PASSWORD = "test_only_not_real_123"
+""")  # noqa: S105
 
         result = scanner.scan(
             project_dir=test_dir,
@@ -92,6 +95,7 @@ PASSWORD = "my_secret_password_123"
 except Exception as e:
     print(f"✗ Security scanner test failed: {e}")
     import traceback
+
     traceback.print_exc()
     sys.exit(1)
 
@@ -104,7 +108,6 @@ try:
     models_path = Path(__file__).parent / "runners" / "github" / "models.py"
     spec = importlib.util.spec_from_file_location("gh_models", models_path)
     models_module = importlib.util.module_from_spec(spec)
-    sys.modules["gh_models"] = models_module
     spec.loader.exec_module(models_module)
 
     PRReviewFinding = models_module.PRReviewFinding
@@ -120,7 +123,7 @@ try:
     print("✓ ReviewSeverity enum works")
 
     # Test category enum
-    assert ReviewCategory.SECURITY == "security"
+    assert ReviewCategory.SECURITY.value == "security"
     print("✓ ReviewCategory enum works")
 
     # Test finding creation
@@ -156,6 +159,7 @@ try:
 except Exception as e:
     print(f"✗ Models test failed: {e}")
     import traceback
+
     traceback.print_exc()
     sys.exit(1)
 
@@ -165,10 +169,15 @@ try:
     # Import directly to avoid orchestrator import chain
     import importlib.util
 
-    service_path = Path(__file__).parent / "runners" / "github" / "services" / "code_review_service.py"
+    service_path = (
+        Path(__file__).parent
+        / "runners"
+        / "github"
+        / "services"
+        / "code_review_service.py"
+    )
     spec = importlib.util.spec_from_file_location("code_review_service", service_path)
     code_review_module = importlib.util.module_from_spec(spec)
-    sys.modules["code_review_service"] = code_review_module
     spec.loader.exec_module(code_review_module)
 
     CodeReviewService = code_review_module.CodeReviewService
@@ -197,11 +206,11 @@ try:
         print("✓ CodeReviewService instantiates")
 
         # Test methods exist
-        assert hasattr(service, 'review_code_changes')
-        assert hasattr(service, 'post_review_to_github')
-        assert hasattr(service, 'should_block_merge')
-        assert hasattr(service, 'get_findings_summary')
-        assert hasattr(service, '_format_review_body')
+        assert hasattr(service, "review_code_changes")
+        assert hasattr(service, "post_review_to_github")
+        assert hasattr(service, "should_block_merge")
+        assert hasattr(service, "get_findings_summary")
+        assert hasattr(service, "_format_review_body")
         print("✓ All required methods present")
 
         # Test with mock findings
@@ -225,13 +234,13 @@ try:
 
         # Test should_block_merge
         should_block = service.should_block_merge(mock_findings)
-        assert should_block == True
+        assert should_block is True
         print("✓ should_block_merge works")
 
         # Test summary
         summary = service.get_findings_summary(mock_findings)
-        assert summary['total'] == 1
-        assert summary['by_severity']['critical'] == 1
+        assert summary["total"] == 1
+        assert summary["by_severity"]["critical"] == 1
         print("✓ get_findings_summary works")
 
         # Test format
@@ -243,6 +252,7 @@ try:
 except Exception as e:
     print(f"✗ Service test failed: {e}")
     import traceback
+
     traceback.print_exc()
     sys.exit(1)
 
@@ -252,7 +262,7 @@ try:
     import subprocess
 
     result = subprocess.run(
-        ["python", "runners/github/runner.py", "--help"],
+        [sys.executable, "runners/github/runner.py", "--help"],
         capture_output=True,
         text=True,
         timeout=10,

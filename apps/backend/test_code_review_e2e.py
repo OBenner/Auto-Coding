@@ -30,10 +30,15 @@ print()
 print("[1/5] Testing module imports...")
 try:
     from agents.code_reviewer import run_code_review_session
-    from prompts_pkg import get_code_review_prompt
-    from runners.github.services.code_review_service import CodeReviewService
-    from runners.github.models import GitHubRunnerConfig, PRReviewFinding, ReviewSeverity
     from analysis.security_scanner import SecurityScanner
+    from prompts_pkg import get_code_review_prompt
+    from runners.github.models import (
+        GitHubRunnerConfig,
+        PRReviewFinding,
+        ReviewSeverity,
+    )
+    from runners.github.services.code_review_service import CodeReviewService
+
     print("✓ All modules import successfully")
 except ImportError as e:
     print(f"✗ Import failed: {e}")
@@ -47,13 +52,13 @@ try:
     with tempfile.TemporaryDirectory() as tmpdir:
         test_dir = Path(tmpdir)
 
-        # Create a test file with a potential security issue (hardcoded secret pattern)
+        # Create a test file with a potential security issue (synthetic patterns only)
         test_file = test_dir / "test.py"
         test_file.write_text("""
-# Test file with potential security issue
-API_KEY = "sk-1234567890abcdef"
-password = "hardcoded_password"
-""")
+# Test file with potential security issue (synthetic, not real credentials)
+API_KEY = "sk-test-fake-0000000000000000"
+password = "test_only_not_real"
+""")  # noqa: S105
 
         # Run security scan
         result = scanner.scan(
@@ -72,11 +77,14 @@ password = "hardcoded_password"
         if len(result.secrets) > 0:
             print("✓ Security scanner detects secrets")
         else:
-            print("⚠ Security scanner did not detect test secrets (pattern may need tuning)")
+            print(
+                "⚠ Security scanner did not detect test secrets (pattern may need tuning)"
+            )
 
 except Exception as e:
     print(f"✗ Security scanner test failed: {e}")
     import traceback
+
     traceback.print_exc()
     sys.exit(1)
 
@@ -88,15 +96,15 @@ try:
         github_dir = project_dir / ".github"
         github_dir.mkdir()
 
-        # Create a test file with security issue
+        # Create a test file with security issue (synthetic patterns)
         test_file = project_dir / "app.py"
         test_file.write_text("""
 import os
 # Potential security issue - eval
 result = eval(user_input)
-# Potential secret
-AWS_KEY = "AKIA1234567890ABCDEF"
-""")
+# Potential secret (synthetic, not real)
+AWS_KEY = "AKIAIOSFODNN7EXAMPLE"
+""")  # noqa: S105
 
         # Create config
         config = GitHubRunnerConfig(
@@ -155,10 +163,10 @@ AWS_KEY = "AKIA1234567890ABCDEF"
 
             # Verify finding structure
             first_finding = findings[0]
-            assert hasattr(first_finding, 'severity'), "Finding missing severity"
-            assert hasattr(first_finding, 'category'), "Finding missing category"
-            assert hasattr(first_finding, 'title'), "Finding missing title"
-            assert hasattr(first_finding, 'description'), "Finding missing description"
+            assert hasattr(first_finding, "severity"), "Finding missing severity"
+            assert hasattr(first_finding, "category"), "Finding missing category"
+            assert hasattr(first_finding, "title"), "Finding missing title"
+            assert hasattr(first_finding, "description"), "Finding missing description"
             print("✓ Findings have correct structure")
 
             # Test should_block_merge
@@ -167,7 +175,9 @@ AWS_KEY = "AKIA1234567890ABCDEF"
 
             # Test summary
             summary = service.get_findings_summary(findings)
-            print(f"  Summary: {summary['total']} total, {summary['by_severity']} by severity")
+            print(
+                f"  Summary: {summary['total']} total, {summary['by_severity']} by severity"
+            )
             print("✓ Code review service summary works")
         else:
             print("⚠ No findings generated (patterns may need adjustment)")
@@ -175,6 +185,7 @@ AWS_KEY = "AKIA1234567890ABCDEF"
 except Exception as e:
     print(f"✗ Code review service test failed: {e}")
     import traceback
+
     traceback.print_exc()
     sys.exit(1)
 
@@ -249,6 +260,7 @@ try:
 except Exception as e:
     print(f"✗ Review body formatting test failed: {e}")
     import traceback
+
     traceback.print_exc()
     sys.exit(1)
 
@@ -259,10 +271,11 @@ try:
 
     # Test that code-review-pr command is registered
     result = subprocess.run(
-        ["python", "runners/github/runner.py", "--help"],
+        [sys.executable, "runners/github/runner.py", "--help"],
         capture_output=True,
         text=True,
         timeout=10,
+        cwd=Path(__file__).parent,
     )
 
     if "code-review-pr" in result.stdout:
@@ -274,6 +287,7 @@ try:
 except Exception as e:
     print(f"✗ CLI command test failed: {e}")
     import traceback
+
     traceback.print_exc()
     sys.exit(1)
 

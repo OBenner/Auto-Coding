@@ -204,18 +204,27 @@ export function registerCodeReviewTrigger(): void {
           cwd: project.path,
           env,
           onStdout: (line: string) => {
-            console.log('[Code Review]', line);
+            // Redact potential secrets from log output
+            const sanitized = line.replace(
+              /(token|key|secret|password|credential)[=: ]+\S+/gi,
+              '$1=[REDACTED]'
+            );
+            console.log('[Code Review]', sanitized);
           },
           onStderr: (line: string) => {
-            console.error('[Code Review Error]', line);
+            const sanitized = line.replace(
+              /(token|key|secret|password|credential)[=: ]+\S+/gi,
+              '$1=[REDACTED]'
+            );
+            console.error('[Code Review Error]', sanitized);
           },
-          onComplete: (stdout: string, stderr: string) => {
+          onComplete: (stdout: string, _stderr: string) => {
             // Try to parse findings from output
             try {
               return parseJSONFromOutput(stdout);
             } catch {
-              // If no JSON, return stdout as message
-              return { message: stdout };
+              // If no JSON, return stdout as message (truncated for safety)
+              return { message: (stdout || '').slice(0, 2000) };
             }
           },
         });

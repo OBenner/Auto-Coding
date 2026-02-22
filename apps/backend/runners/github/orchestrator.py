@@ -1421,6 +1421,8 @@ class GitHubOrchestrator:
 
             safe_print("[DEBUG orchestrator] Gathering PR context...")
             pr_context = await gatherer.gather()
+            if pr_context is None:
+                raise RuntimeError(f"Failed to gather context for PR #{pr_number}")
             safe_print(
                 f"[DEBUG orchestrator] Context gathered: {pr_context.title} "
                 f"({len(pr_context.changed_files)} files changed)",
@@ -1464,10 +1466,11 @@ class GitHubOrchestrator:
 
             # Get summary statistics
             summary = code_review_service.get_findings_summary(findings)
+            by_sev = summary.get("by_severity", {})
             safe_print(
-                f"[CodeReview] Summary: {summary['total']} total findings "
-                f"({summary['by_severity']['critical']} critical, "
-                f"{summary['by_severity']['high']} high)",
+                f"[CodeReview] Summary: {summary.get('total', 0)} total findings "
+                f"({by_sev.get('critical', 0)} critical, "
+                f"{by_sev.get('high', 0)} high)",
                 flush=True,
             )
 

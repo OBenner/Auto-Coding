@@ -4,8 +4,9 @@
   "reviewInProgress": "Review in Progress",
   "reviewComplete": "Review Complete",
   "noFindings": "No issues found",
-  "findingsCount": "{{count}} finding",
-  "findingsCount_plural": "{{count}} findings",
+  "findingsCount_zero": "No findings",
+  "findingsCount_one": "{{count}} finding",
+  "findingsCount_other": "{{count}} findings",
   "status": {
     "idle": "Ready",
     "analyzing": "Analyzing...",
