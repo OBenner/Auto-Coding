@@ -23,7 +23,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-
 # =============================================================================
 # MOCK SETUP - Install mocks, import module, then immediately restore
 # =============================================================================
@@ -37,18 +36,42 @@ if _backend_path not in sys.path:
 
 # Modules we need to mock for the import to succeed
 _MODULES_TO_MOCK = [
-    "claude_agent_sdk", "claude_agent_sdk.types",
-    "ui", "progress", "task_logger", "linear_updater", "client",
-    "core.client", "core.model_fallback",
-    "agents", "agents.memory_manager", "agents.session", "agents.e2e_generator",
-    "agents.test_generator", "agents.coder", "agents.planner", "agents.code_reviewer",
-    "agents.documentation_generator", "agents.utils", "agents.base",
-    "debug", "phase_config", "phase_event",
-    "security.tool_input_validator", "security.constants", "services.recovery",
-    "analysis.coverage_analyzer", "analysis.code_analyzer", "analysis.coverage_reporter",
-    "analysis.failure_analyzer", "analysis.ts_analyzer",
-    "prompts_pkg", "spec.coverage_config",
-    "integrations", "integrations.graphiti", "integrations.graphiti.memory",
+    "claude_agent_sdk",
+    "claude_agent_sdk.types",
+    "ui",
+    "progress",
+    "task_logger",
+    "linear_updater",
+    "client",
+    "core.client",
+    "core.model_fallback",
+    "agents",
+    "agents.memory_manager",
+    "agents.session",
+    "agents.e2e_generator",
+    "agents.test_generator",
+    "agents.coder",
+    "agents.planner",
+    "agents.code_reviewer",
+    "agents.documentation_generator",
+    "agents.utils",
+    "agents.base",
+    "debug",
+    "phase_config",
+    "phase_event",
+    "security.tool_input_validator",
+    "security.constants",
+    "services.recovery",
+    "analysis.coverage_analyzer",
+    "analysis.code_analyzer",
+    "analysis.coverage_reporter",
+    "analysis.failure_analyzer",
+    "analysis.ts_analyzer",
+    "prompts_pkg",
+    "spec.coverage_config",
+    "integrations",
+    "integrations.graphiti",
+    "integrations.graphiti.memory",
 ]
 
 # Save original modules
@@ -81,11 +104,20 @@ _mock_spec_coverage.get_minimum_coverage_for_file = MagicMock()
 _mock_spec_coverage.matches_pattern = MagicMock()
 
 _mocks = {
-    "claude_agent_sdk": MagicMock(ClaudeSDKClient=MagicMock, ClaudeAgentOptions=MagicMock),
+    "claude_agent_sdk": MagicMock(
+        ClaudeSDKClient=MagicMock, ClaudeAgentOptions=MagicMock
+    ),
     "claude_agent_sdk.types": MagicMock(),
     "ui": MagicMock(print_status=MagicMock()),
-    "progress": MagicMock(count_subtasks=MagicMock(return_value=(3, 3)), is_build_complete=MagicMock(return_value=True)),
-    "task_logger": MagicMock(LogPhase=MagicMock(), LogEntryType=MagicMock(), get_task_logger=MagicMock(return_value=None)),
+    "progress": MagicMock(
+        count_subtasks=MagicMock(return_value=(3, 3)),
+        is_build_complete=MagicMock(return_value=True),
+    ),
+    "task_logger": MagicMock(
+        LogPhase=MagicMock(),
+        LogEntryType=MagicMock(),
+        get_task_logger=MagicMock(return_value=None),
+    ),
     "linear_updater": MagicMock(is_linear_enabled=MagicMock(return_value=False)),
     "client": MagicMock(),
     "core.client": MagicMock(create_client=MagicMock()),
@@ -104,7 +136,9 @@ _mocks = {
     "debug": MagicMock(),
     "phase_config": MagicMock(resolve_model_id=MagicMock(return_value="claude-haiku")),
     "phase_event": MagicMock(),
-    "security.tool_input_validator": MagicMock(get_safe_tool_input=MagicMock(return_value=None)),
+    "security.tool_input_validator": MagicMock(
+        get_safe_tool_input=MagicMock(return_value=None)
+    ),
     "security.constants": MagicMock(),
     "services.recovery": MagicMock(),
     "analysis.coverage_analyzer": _mock_coverage_analyzer,
@@ -112,7 +146,9 @@ _mocks = {
     "analysis.coverage_reporter": MagicMock(),
     "analysis.failure_analyzer": MagicMock(),
     "analysis.ts_analyzer": MagicMock(),
-    "prompts_pkg": MagicMock(get_qa_reviewer_prompt=MagicMock(return_value="QA reviewer prompt")),
+    "prompts_pkg": MagicMock(
+        get_qa_reviewer_prompt=MagicMock(return_value="QA reviewer prompt")
+    ),
     "spec.coverage_config": _mock_spec_coverage,
     "integrations": MagicMock(),
     "integrations.graphiti": MagicMock(),
@@ -180,8 +216,8 @@ def mock_client():
 
 async def aiter_empty():
     """Empty async iterator for mock receive_response."""
-    return
-    yield  # noqa: RET504
+    for _ in []:
+        yield
 
 
 def make_text_message(text):
@@ -211,7 +247,9 @@ class TestRunCoverageValidation:
 
     def test_config_load_failure(self, project_dir, spec_dir):
         """Returns skipped when coverage config fails to load."""
-        with patch("qa.reviewer.load_coverage_config", side_effect=RuntimeError("bad config")):
+        with patch(
+            "qa.reviewer.load_coverage_config", side_effect=RuntimeError("bad config")
+        ):
             success, summary, data = run_coverage_validation(project_dir, spec_dir)
 
         assert success is True
@@ -292,7 +330,9 @@ class TestUpdateQaSignoffWithCoverage:
         """Returns False when plan has no qa_signoff."""
         plan_no_signoff = {"spec_name": "test", "phases": []}
 
-        with patch("qa.criteria.load_implementation_plan", return_value=plan_no_signoff):
+        with patch(
+            "qa.criteria.load_implementation_plan", return_value=plan_no_signoff
+        ):
             result = update_qa_signoff_with_coverage(spec_dir, {"passed": True})
         assert result is False
 
@@ -339,16 +379,33 @@ class TestRunQaAgentSession:
         )
 
         with (
-            patch("qa.reviewer.run_coverage_validation", return_value=(True, "Coverage OK", None)),
+            patch(
+                "qa.reviewer.run_coverage_validation",
+                return_value=(True, "Coverage OK", None),
+            ),
             patch("qa.reviewer.get_qa_reviewer_prompt", return_value="Review prompt"),
-            patch("qa.reviewer.get_graphiti_context", new_callable=AsyncMock, return_value=None),
+            patch(
+                "qa.reviewer.get_graphiti_context",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
             patch("qa.reviewer.get_task_logger", return_value=None),
-            patch("qa.criteria.get_qa_signoff_status", return_value={"status": "approved", "qa_session": 1}),
-            patch("qa.reviewer.save_session_memory", new_callable=AsyncMock, return_value=(True, "f")),
+            patch(
+                "qa.criteria.get_qa_signoff_status",
+                return_value={"status": "approved", "qa_session": 1},
+            ),
+            patch(
+                "qa.reviewer.save_session_memory",
+                new_callable=AsyncMock,
+                return_value=(True, "f"),
+            ),
         ):
             status, response = await run_qa_agent_session(
-                client=mock_client, project_dir=project_dir, spec_dir=spec_dir,
-                qa_session=1, max_iterations=3,
+                client=mock_client,
+                project_dir=project_dir,
+                spec_dir=spec_dir,
+                qa_session=1,
+                max_iterations=3,
             )
 
         assert status == "approved"
@@ -362,19 +419,38 @@ class TestRunQaAgentSession:
         )
 
         with (
-            patch("qa.reviewer.run_coverage_validation", return_value=(True, "Coverage OK", None)),
+            patch(
+                "qa.reviewer.run_coverage_validation",
+                return_value=(True, "Coverage OK", None),
+            ),
             patch("qa.reviewer.get_qa_reviewer_prompt", return_value="Review prompt"),
-            patch("qa.reviewer.get_graphiti_context", new_callable=AsyncMock, return_value=None),
+            patch(
+                "qa.reviewer.get_graphiti_context",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
             patch("qa.reviewer.get_task_logger", return_value=None),
-            patch("qa.criteria.get_qa_signoff_status", return_value={
-                "status": "rejected",
-                "issues_found": [{"type": "critical", "title": "Bug", "location": "test.py:10"}],
-            }),
-            patch("qa.reviewer.save_session_memory", new_callable=AsyncMock, return_value=(True, "f")),
+            patch(
+                "qa.criteria.get_qa_signoff_status",
+                return_value={
+                    "status": "rejected",
+                    "issues_found": [
+                        {"type": "critical", "title": "Bug", "location": "test.py:10"}
+                    ],
+                },
+            ),
+            patch(
+                "qa.reviewer.save_session_memory",
+                new_callable=AsyncMock,
+                return_value=(True, "f"),
+            ),
         ):
             status, response = await run_qa_agent_session(
-                client=mock_client, project_dir=project_dir, spec_dir=spec_dir,
-                qa_session=1, max_iterations=3,
+                client=mock_client,
+                project_dir=project_dir,
+                spec_dir=spec_dir,
+                qa_session=1,
+                max_iterations=3,
             )
 
         assert status == "rejected"
@@ -388,15 +464,25 @@ class TestRunQaAgentSession:
         )
 
         with (
-            patch("qa.reviewer.run_coverage_validation", return_value=(True, "Coverage OK", None)),
+            patch(
+                "qa.reviewer.run_coverage_validation",
+                return_value=(True, "Coverage OK", None),
+            ),
             patch("qa.reviewer.get_qa_reviewer_prompt", return_value="Review prompt"),
-            patch("qa.reviewer.get_graphiti_context", new_callable=AsyncMock, return_value=None),
+            patch(
+                "qa.reviewer.get_graphiti_context",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
             patch("qa.reviewer.get_task_logger", return_value=None),
             patch("qa.criteria.get_qa_signoff_status", return_value=None),
         ):
             status, msg = await run_qa_agent_session(
-                client=mock_client, project_dir=project_dir, spec_dir=spec_dir,
-                qa_session=1, max_iterations=3,
+                client=mock_client,
+                project_dir=project_dir,
+                spec_dir=spec_dir,
+                qa_session=1,
+                max_iterations=3,
             )
 
         assert status == "error"
@@ -408,14 +494,24 @@ class TestRunQaAgentSession:
         mock_client.query = AsyncMock(side_effect=RuntimeError("Connection lost"))
 
         with (
-            patch("qa.reviewer.run_coverage_validation", return_value=(True, "Coverage OK", None)),
+            patch(
+                "qa.reviewer.run_coverage_validation",
+                return_value=(True, "Coverage OK", None),
+            ),
             patch("qa.reviewer.get_qa_reviewer_prompt", return_value="Review prompt"),
-            patch("qa.reviewer.get_graphiti_context", new_callable=AsyncMock, return_value=None),
+            patch(
+                "qa.reviewer.get_graphiti_context",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
             patch("qa.reviewer.get_task_logger", return_value=None),
         ):
             status, msg = await run_qa_agent_session(
-                client=mock_client, project_dir=project_dir, spec_dir=spec_dir,
-                qa_session=1, max_iterations=3,
+                client=mock_client,
+                project_dir=project_dir,
+                spec_dir=spec_dir,
+                qa_session=1,
+                max_iterations=3,
             )
 
         assert status == "error"
@@ -429,16 +525,32 @@ class TestRunQaAgentSession:
         )
 
         with (
-            patch("qa.reviewer.run_coverage_validation", return_value=(True, "Coverage OK", None)),
+            patch(
+                "qa.reviewer.run_coverage_validation",
+                return_value=(True, "Coverage OK", None),
+            ),
             patch("qa.reviewer.get_qa_reviewer_prompt", return_value="BASE PROMPT"),
-            patch("qa.reviewer.get_graphiti_context", new_callable=AsyncMock, return_value="## Memory\nUse pattern Y for validation"),
+            patch(
+                "qa.reviewer.get_graphiti_context",
+                new_callable=AsyncMock,
+                return_value="## Memory\nUse pattern Y for validation",
+            ),
             patch("qa.reviewer.get_task_logger", return_value=None),
-            patch("qa.criteria.get_qa_signoff_status", return_value={"status": "approved"}),
-            patch("qa.reviewer.save_session_memory", new_callable=AsyncMock, return_value=(True, "f")),
+            patch(
+                "qa.criteria.get_qa_signoff_status", return_value={"status": "approved"}
+            ),
+            patch(
+                "qa.reviewer.save_session_memory",
+                new_callable=AsyncMock,
+                return_value=(True, "f"),
+            ),
         ):
             status, _ = await run_qa_agent_session(
-                client=mock_client, project_dir=project_dir, spec_dir=spec_dir,
-                qa_session=1, max_iterations=3,
+                client=mock_client,
+                project_dir=project_dir,
+                spec_dir=spec_dir,
+                qa_session=1,
+                max_iterations=3,
             )
 
         assert status == "approved"
@@ -447,7 +559,9 @@ class TestRunQaAgentSession:
         assert "Use pattern Y for validation" in prompt_sent
 
     @pytest.mark.asyncio
-    async def test_previous_error_context_in_prompt(self, spec_dir, project_dir, mock_client):
+    async def test_previous_error_context_in_prompt(
+        self, spec_dir, project_dir, mock_client
+    ):
         """Previous error context is added to the prompt for self-correction."""
         mock_client.receive_response = MagicMock(
             return_value=aiter_messages(make_text_message("Fixed"))
@@ -459,16 +573,33 @@ class TestRunQaAgentSession:
         }
 
         with (
-            patch("qa.reviewer.run_coverage_validation", return_value=(True, "Coverage OK", None)),
+            patch(
+                "qa.reviewer.run_coverage_validation",
+                return_value=(True, "Coverage OK", None),
+            ),
             patch("qa.reviewer.get_qa_reviewer_prompt", return_value="Review prompt"),
-            patch("qa.reviewer.get_graphiti_context", new_callable=AsyncMock, return_value=None),
+            patch(
+                "qa.reviewer.get_graphiti_context",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
             patch("qa.reviewer.get_task_logger", return_value=None),
-            patch("qa.criteria.get_qa_signoff_status", return_value={"status": "approved"}),
-            patch("qa.reviewer.save_session_memory", new_callable=AsyncMock, return_value=(True, "f")),
+            patch(
+                "qa.criteria.get_qa_signoff_status", return_value={"status": "approved"}
+            ),
+            patch(
+                "qa.reviewer.save_session_memory",
+                new_callable=AsyncMock,
+                return_value=(True, "f"),
+            ),
         ):
             status, _ = await run_qa_agent_session(
-                client=mock_client, project_dir=project_dir, spec_dir=spec_dir,
-                qa_session=2, max_iterations=3, previous_error=prev_error,
+                client=mock_client,
+                project_dir=project_dir,
+                spec_dir=spec_dir,
+                qa_session=2,
+                max_iterations=3,
+                previous_error=prev_error,
             )
 
         assert status == "approved"
@@ -477,7 +608,9 @@ class TestRunQaAgentSession:
         assert "Agent did not update" in prompt_sent
 
     @pytest.mark.asyncio
-    async def test_coverage_data_added_to_signoff(self, spec_dir, project_dir, mock_client):
+    async def test_coverage_data_added_to_signoff(
+        self, spec_dir, project_dir, mock_client
+    ):
         """Coverage data is added to signoff via update_qa_signoff_with_coverage."""
         mock_client.receive_response = MagicMock(
             return_value=aiter_messages(make_text_message("approved"))
@@ -485,37 +618,65 @@ class TestRunQaAgentSession:
         coverage_data = {"passed": True, "total_coverage": 90.0}
 
         with (
-            patch("qa.reviewer.run_coverage_validation", return_value=(True, "Coverage OK", coverage_data)),
+            patch(
+                "qa.reviewer.run_coverage_validation",
+                return_value=(True, "Coverage OK", coverage_data),
+            ),
             patch("qa.reviewer.get_qa_reviewer_prompt", return_value="Review prompt"),
-            patch("qa.reviewer.get_graphiti_context", new_callable=AsyncMock, return_value=None),
+            patch(
+                "qa.reviewer.get_graphiti_context",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
             patch("qa.reviewer.get_task_logger", return_value=None),
-            patch("qa.criteria.get_qa_signoff_status", return_value={"status": "approved"}),
+            patch(
+                "qa.criteria.get_qa_signoff_status", return_value={"status": "approved"}
+            ),
             patch("qa.reviewer.update_qa_signoff_with_coverage") as mock_update,
-            patch("qa.reviewer.save_session_memory", new_callable=AsyncMock, return_value=(True, "f")),
+            patch(
+                "qa.reviewer.save_session_memory",
+                new_callable=AsyncMock,
+                return_value=(True, "f"),
+            ),
         ):
             status, _ = await run_qa_agent_session(
-                client=mock_client, project_dir=project_dir, spec_dir=spec_dir,
-                qa_session=1, max_iterations=3,
+                client=mock_client,
+                project_dir=project_dir,
+                spec_dir=spec_dir,
+                qa_session=1,
+                max_iterations=3,
             )
 
         assert status == "approved"
         mock_update.assert_called_once_with(spec_dir, coverage_data)
 
     @pytest.mark.asyncio
-    async def test_error_details_empty_response(self, spec_dir, project_dir, mock_client):
+    async def test_error_details_empty_response(
+        self, spec_dir, project_dir, mock_client
+    ):
         """Error message includes details when agent produces no output."""
         mock_client.receive_response = MagicMock(return_value=aiter_empty())
 
         with (
-            patch("qa.reviewer.run_coverage_validation", return_value=(True, "Coverage OK", None)),
+            patch(
+                "qa.reviewer.run_coverage_validation",
+                return_value=(True, "Coverage OK", None),
+            ),
             patch("qa.reviewer.get_qa_reviewer_prompt", return_value="Review prompt"),
-            patch("qa.reviewer.get_graphiti_context", new_callable=AsyncMock, return_value=None),
+            patch(
+                "qa.reviewer.get_graphiti_context",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
             patch("qa.reviewer.get_task_logger", return_value=None),
             patch("qa.criteria.get_qa_signoff_status", return_value=None),
         ):
             status, msg = await run_qa_agent_session(
-                client=mock_client, project_dir=project_dir, spec_dir=spec_dir,
-                qa_session=1, max_iterations=3,
+                client=mock_client,
+                project_dir=project_dir,
+                spec_dir=spec_dir,
+                qa_session=1,
+                max_iterations=3,
             )
 
         assert status == "error"
@@ -531,17 +692,33 @@ class TestRunQaAgentSession:
         coverage_data = {"passed": True, "total_coverage": 88.5, "files_analyzed": 5}
 
         with (
-            patch("qa.reviewer.run_coverage_validation", return_value=(True, "Coverage passed", coverage_data)),
+            patch(
+                "qa.reviewer.run_coverage_validation",
+                return_value=(True, "Coverage passed", coverage_data),
+            ),
             patch("qa.reviewer.get_qa_reviewer_prompt", return_value="Review prompt"),
-            patch("qa.reviewer.get_graphiti_context", new_callable=AsyncMock, return_value=None),
+            patch(
+                "qa.reviewer.get_graphiti_context",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
             patch("qa.reviewer.get_task_logger", return_value=None),
-            patch("qa.criteria.get_qa_signoff_status", return_value={"status": "approved"}),
+            patch(
+                "qa.criteria.get_qa_signoff_status", return_value={"status": "approved"}
+            ),
             patch("qa.reviewer.update_qa_signoff_with_coverage"),
-            patch("qa.reviewer.save_session_memory", new_callable=AsyncMock, return_value=(True, "f")),
+            patch(
+                "qa.reviewer.save_session_memory",
+                new_callable=AsyncMock,
+                return_value=(True, "f"),
+            ),
         ):
             await run_qa_agent_session(
-                client=mock_client, project_dir=project_dir, spec_dir=spec_dir,
-                qa_session=1, max_iterations=3,
+                client=mock_client,
+                project_dir=project_dir,
+                spec_dir=spec_dir,
+                qa_session=1,
+                max_iterations=3,
             )
 
         prompt_sent = mock_client.query.call_args[0][0]
@@ -549,24 +726,42 @@ class TestRunQaAgentSession:
         assert "88.5" in prompt_sent
 
     @pytest.mark.asyncio
-    async def test_failed_coverage_warning_in_prompt(self, spec_dir, project_dir, mock_client):
+    async def test_failed_coverage_warning_in_prompt(
+        self, spec_dir, project_dir, mock_client
+    ):
         """Failed coverage adds warning to prompt."""
         mock_client.receive_response = MagicMock(
             return_value=aiter_messages(make_text_message("reviewed"))
         )
 
         with (
-            patch("qa.reviewer.run_coverage_validation", return_value=(False, "Coverage failed", {"passed": False})),
+            patch(
+                "qa.reviewer.run_coverage_validation",
+                return_value=(False, "Coverage failed", {"passed": False}),
+            ),
             patch("qa.reviewer.get_qa_reviewer_prompt", return_value="Review prompt"),
-            patch("qa.reviewer.get_graphiti_context", new_callable=AsyncMock, return_value=None),
+            patch(
+                "qa.reviewer.get_graphiti_context",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
             patch("qa.reviewer.get_task_logger", return_value=None),
-            patch("qa.criteria.get_qa_signoff_status", return_value={"status": "rejected"}),
+            patch(
+                "qa.criteria.get_qa_signoff_status", return_value={"status": "rejected"}
+            ),
             patch("qa.reviewer.update_qa_signoff_with_coverage"),
-            patch("qa.reviewer.save_session_memory", new_callable=AsyncMock, return_value=(True, "f")),
+            patch(
+                "qa.reviewer.save_session_memory",
+                new_callable=AsyncMock,
+                return_value=(True, "f"),
+            ),
         ):
             await run_qa_agent_session(
-                client=mock_client, project_dir=project_dir, spec_dir=spec_dir,
-                qa_session=1, max_iterations=3,
+                client=mock_client,
+                project_dir=project_dir,
+                spec_dir=spec_dir,
+                qa_session=1,
+                max_iterations=3,
             )
 
         prompt_sent = mock_client.query.call_args[0][0]

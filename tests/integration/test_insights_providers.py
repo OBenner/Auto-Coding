@@ -7,7 +7,7 @@ and end-to-end chat functionality with different providers.
 
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -29,7 +29,7 @@ class TestProviderSelectionFlow:
             sys.executable,
             "runners/insights_runner.py",
             "--project-dir",
-            "/tmp/test_project",
+            "/fake/test_project",
             "--message",
             "Test message",
             "--provider",
@@ -47,12 +47,14 @@ class TestProviderSelectionFlow:
         parser.add_argument(
             "--provider",
             default="claude",
-            choices=["claude", "litellm", "openrouter", "openai"],
+            choices=["claude", "litellm", "openrouter", "openai", "ollama"],
         )
         parser.add_argument("--project-dir")
         parser.add_argument("--message")
 
-        args = parser.parse_args(["--project-dir", "/tmp", "--message", "test"])
+        args = parser.parse_args(
+            ["--project-dir", "/fake/project", "--message", "test"]
+        )
         assert args.provider == "claude"
 
 
@@ -100,7 +102,7 @@ class TestModelCatalogConsistency:
 
         assert "OPENROUTER_MODELS" in content
         assert "openai/gpt-4o" in content
-        assert "google/gemini-2.0-flash-001" in content
+        assert "google/gemini-2.5-flash" in content
 
     def test_get_models_for_provider_function_exists(self):
         """Test that getModelsForProvider helper function exists"""
@@ -250,21 +252,21 @@ class TestModelSelectorUIIntegration:
         assert "getModelsForProvider" in content
 
     def test_insights_model_selector_includes_openai(self):
-        """Test that InsightsModelSelector includes OpenAI provider"""
-        selector_path = (
+        """Test that InsightsModelSelector uses shared provider definitions including OpenAI"""
+        providers_path = (
             REPO_ROOT
             / "apps"
             / "frontend"
             / "src"
-            / "renderer"
-            / "components"
-            / "InsightsModelSelector.tsx"
+            / "shared"
+            / "constants"
+            / "insights-providers.ts"
         )
 
-        if not selector_path.exists():
-            pytest.skip(f"InsightsModelSelector.tsx not found at {selector_path}")
+        if not providers_path.exists():
+            pytest.skip(f"insights-providers.ts not found at {providers_path}")
 
-        content = selector_path.read_text(encoding="utf-8")
+        content = providers_path.read_text(encoding="utf-8")
 
         assert "openai" in content
 

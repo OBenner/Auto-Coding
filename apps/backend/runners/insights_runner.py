@@ -204,8 +204,17 @@ Current question: {message}"""
         # Create provider config - use env-based config for non-Claude providers
         provider_config = ProviderConfig.from_env()
         provider_config.provider = provider
+        resolved_model = resolve_model_id(model)
         if provider == "claude":
-            provider_config.claude_model = resolve_model_id(model)
+            provider_config.claude_model = resolved_model
+        elif provider == "openai":
+            provider_config.openai_model = resolved_model
+        elif provider == "openrouter":
+            provider_config.openrouter_model = resolved_model
+        elif provider == "litellm":
+            provider_config.litellm_model = resolved_model
+        elif provider == "ollama":
+            provider_config.ollama_model = resolved_model
         if not provider_config.is_valid():
             errors = provider_config.get_validation_errors()
             raise RuntimeError("; ".join(errors))
@@ -402,7 +411,7 @@ def main():
     parser.add_argument(
         "--provider",
         default="claude",
-        choices=["claude", "litellm", "openrouter", "openai"],
+        choices=["claude", "litellm", "openrouter", "openai", "ollama"],
         help="LLM provider to use (default: claude)",
     )
     args = parser.parse_args()

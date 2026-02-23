@@ -126,6 +126,31 @@ def _create_openai_provider(config: "ProviderConfig") -> "AIEngineProvider":
     return OpenAIProvider(config)
 
 
+def _create_ollama_provider(config: "ProviderConfig") -> "AIEngineProvider":
+    """
+    Create an Ollama provider.
+
+    Args:
+        config: ProviderConfig with Ollama settings
+
+    Returns:
+        OllamaProvider instance
+
+    Raises:
+        ProviderNotInstalled: If openai package is not installed
+        ProviderError: If provider creation fails
+    """
+    try:
+        from core.providers.adapters.ollama import OllamaProvider
+    except ImportError as e:
+        raise ProviderNotInstalled(
+            "Ollama adapter not installed. Install with: pip install openai"
+        ) from e
+
+    logger.debug(f"Creating Ollama provider with model: {config.ollama_model}")
+    return OllamaProvider(config)
+
+
 def create_engine_provider(config: "ProviderConfig") -> "AIEngineProvider":
     """
     Create an AI engine provider based on configuration.
@@ -166,10 +191,12 @@ def create_engine_provider(config: "ProviderConfig") -> "AIEngineProvider":
         return _create_openrouter_provider(config)
     elif provider == "openai":
         return _create_openai_provider(config)
+    elif provider == "ollama":
+        return _create_ollama_provider(config)
     else:
         raise ProviderError(
             f"Unknown AI engine provider: {provider}. "
-            f"Supported providers: claude, litellm, openrouter, openai"
+            f"Supported providers: claude, litellm, openrouter, openai, ollama"
         )
 
 
@@ -180,4 +207,4 @@ def get_available_provider_names() -> list[str]:
     Returns:
         List of provider name strings
     """
-    return ["claude", "litellm", "openrouter", "openai"]
+    return ["claude", "litellm", "openrouter", "openai", "ollama"]

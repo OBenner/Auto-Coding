@@ -25,7 +25,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-
 # =============================================================================
 # FakeRecoveryAction - used in tests (defined before mock setup)
 # =============================================================================
@@ -66,18 +65,42 @@ if _backend_path not in sys.path:
 
 # Modules we need to mock for the import to succeed
 _MODULES_TO_MOCK = [
-    "claude_agent_sdk", "claude_agent_sdk.types",
-    "ui", "progress", "task_logger", "linear_updater", "client",
-    "core.client", "core.model_fallback",
-    "agents", "agents.memory_manager", "agents.session", "agents.e2e_generator",
-    "agents.test_generator", "agents.coder", "agents.planner", "agents.code_reviewer",
-    "agents.documentation_generator", "agents.utils", "agents.base",
-    "debug", "phase_config", "phase_event",
-    "security.tool_input_validator", "security.constants", "services.recovery",
-    "analysis.coverage_analyzer", "analysis.code_analyzer", "analysis.coverage_reporter",
-    "analysis.failure_analyzer", "analysis.ts_analyzer",
-    "prompts_pkg", "spec.coverage_config",
-    "integrations", "integrations.graphiti", "integrations.graphiti.memory",
+    "claude_agent_sdk",
+    "claude_agent_sdk.types",
+    "ui",
+    "progress",
+    "task_logger",
+    "linear_updater",
+    "client",
+    "core.client",
+    "core.model_fallback",
+    "agents",
+    "agents.memory_manager",
+    "agents.session",
+    "agents.e2e_generator",
+    "agents.test_generator",
+    "agents.coder",
+    "agents.planner",
+    "agents.code_reviewer",
+    "agents.documentation_generator",
+    "agents.utils",
+    "agents.base",
+    "debug",
+    "phase_config",
+    "phase_event",
+    "security.tool_input_validator",
+    "security.constants",
+    "services.recovery",
+    "analysis.coverage_analyzer",
+    "analysis.code_analyzer",
+    "analysis.coverage_reporter",
+    "analysis.failure_analyzer",
+    "analysis.ts_analyzer",
+    "prompts_pkg",
+    "spec.coverage_config",
+    "integrations",
+    "integrations.graphiti",
+    "integrations.graphiti.memory",
 ]
 
 # Save original modules
@@ -103,11 +126,20 @@ _mock_model_fallback = MagicMock()
 _mock_model_fallback.MODEL_FALLBACK_CHAIN = {"sonnet": ["haiku"], "opus": ["sonnet"]}
 
 _mocks = {
-    "claude_agent_sdk": MagicMock(ClaudeSDKClient=MagicMock, ClaudeAgentOptions=MagicMock),
+    "claude_agent_sdk": MagicMock(
+        ClaudeSDKClient=MagicMock, ClaudeAgentOptions=MagicMock
+    ),
     "claude_agent_sdk.types": MagicMock(),
     "ui": MagicMock(print_status=MagicMock()),
-    "progress": MagicMock(count_subtasks=MagicMock(return_value=(3, 3)), is_build_complete=MagicMock(return_value=True)),
-    "task_logger": MagicMock(LogPhase=MagicMock(), LogEntryType=MagicMock(), get_task_logger=MagicMock(return_value=None)),
+    "progress": MagicMock(
+        count_subtasks=MagicMock(return_value=(3, 3)),
+        is_build_complete=MagicMock(return_value=True),
+    ),
+    "task_logger": MagicMock(
+        LogPhase=MagicMock(),
+        LogEntryType=MagicMock(),
+        get_task_logger=MagicMock(return_value=None),
+    ),
     "linear_updater": MagicMock(is_linear_enabled=MagicMock(return_value=False)),
     "client": MagicMock(),
     "core.client": MagicMock(create_client=MagicMock()),
@@ -126,7 +158,9 @@ _mocks = {
     "debug": MagicMock(),
     "phase_config": MagicMock(resolve_model_id=MagicMock(return_value="claude-haiku")),
     "phase_event": MagicMock(),
-    "security.tool_input_validator": MagicMock(get_safe_tool_input=MagicMock(return_value=None)),
+    "security.tool_input_validator": MagicMock(
+        get_safe_tool_input=MagicMock(return_value=None)
+    ),
     "security.constants": MagicMock(),
     "services.recovery": _mock_recovery,
     "analysis.coverage_analyzer": MagicMock(),
@@ -134,7 +168,9 @@ _mocks = {
     "analysis.coverage_reporter": MagicMock(),
     "analysis.failure_analyzer": MagicMock(),
     "analysis.ts_analyzer": MagicMock(),
-    "prompts_pkg": MagicMock(get_qa_reviewer_prompt=MagicMock(return_value="QA reviewer prompt")),
+    "prompts_pkg": MagicMock(
+        get_qa_reviewer_prompt=MagicMock(return_value="QA reviewer prompt")
+    ),
     "spec.coverage_config": MagicMock(),
     "integrations": MagicMock(),
     "integrations.graphiti": MagicMock(),
@@ -220,8 +256,8 @@ def mock_recovery_mgr():
 
 async def aiter_empty():
     """Empty async iterator for mock receive_response."""
-    return
-    yield  # noqa: RET504
+    for _ in []:
+        yield
 
 
 def make_text_message(text):
@@ -281,7 +317,10 @@ class TestRunQaFixerSession:
         spec.mkdir()
 
         status, msg = await run_qa_fixer_session(
-            client=mock_client, spec_dir=spec, fix_session=1, project_dir=tmp_path,
+            client=mock_client,
+            spec_dir=spec,
+            fix_session=1,
+            project_dir=tmp_path,
         )
         assert status == "error"
         assert "QA_FIX_REQUEST.md not found" in msg
@@ -301,7 +340,10 @@ class TestRunQaFixerSession:
             patch("qa.fixer.load_qa_fixer_prompt", return_value="Fix prompt"),
         ):
             status, msg = await run_qa_fixer_session(
-                client=mock_client, spec_dir=spec_dir, fix_session=1, project_dir=project_dir,
+                client=mock_client,
+                spec_dir=spec_dir,
+                fix_session=1,
+                project_dir=project_dir,
             )
         assert status == "circular"
         assert "Circular fix" in msg
@@ -322,13 +364,30 @@ class TestRunQaFixerSession:
             patch("qa.report.has_recurring_issues", return_value=(False, [])),
             patch("qa.report.record_iteration", return_value=True),
             patch("qa.fixer.load_qa_fixer_prompt", return_value="Fix prompt"),
-            patch("qa.criteria.get_qa_signoff_status", return_value={"status": "fixes_applied", "ready_for_qa_revalidation": True}),
+            patch(
+                "qa.criteria.get_qa_signoff_status",
+                return_value={
+                    "status": "fixes_applied",
+                    "ready_for_qa_revalidation": True,
+                },
+            ),
             patch("qa.criteria.is_fixes_applied", return_value=True),
-            patch("qa.fixer.get_graphiti_context", new_callable=AsyncMock, return_value=None),
-            patch("qa.fixer.save_session_memory", new_callable=AsyncMock, return_value=(True, "file")),
+            patch(
+                "qa.fixer.get_graphiti_context",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
+            patch(
+                "qa.fixer.save_session_memory",
+                new_callable=AsyncMock,
+                return_value=(True, "file"),
+            ),
         ):
             status, response = await run_qa_fixer_session(
-                client=mock_client, spec_dir=spec_dir, fix_session=1, project_dir=project_dir,
+                client=mock_client,
+                spec_dir=spec_dir,
+                fix_session=1,
+                project_dir=project_dir,
             )
         assert status == "fixed"
         assert "Applied fix" in response
@@ -349,13 +408,26 @@ class TestRunQaFixerSession:
             patch("qa.report.has_recurring_issues", return_value=(False, [])),
             patch("qa.report.record_iteration", return_value=True),
             patch("qa.fixer.load_qa_fixer_prompt", return_value="Fix prompt"),
-            patch("qa.criteria.get_qa_signoff_status", return_value={"status": "rejected"}),
+            patch(
+                "qa.criteria.get_qa_signoff_status", return_value={"status": "rejected"}
+            ),
             patch("qa.criteria.is_fixes_applied", return_value=False),
-            patch("qa.fixer.get_graphiti_context", new_callable=AsyncMock, return_value=None),
-            patch("qa.fixer.save_session_memory", new_callable=AsyncMock, return_value=(True, "file")),
+            patch(
+                "qa.fixer.get_graphiti_context",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
+            patch(
+                "qa.fixer.save_session_memory",
+                new_callable=AsyncMock,
+                return_value=(True, "file"),
+            ),
         ):
             status, _response = await run_qa_fixer_session(
-                client=mock_client, spec_dir=spec_dir, fix_session=1, project_dir=project_dir,
+                client=mock_client,
+                spec_dir=spec_dir,
+                fix_session=1,
+                project_dir=project_dir,
             )
         assert status == "fixed"
 
@@ -374,13 +446,27 @@ class TestRunQaFixerSession:
             patch("qa.report.has_recurring_issues", return_value=(False, [])),
             patch("qa.report.record_iteration", return_value=True),
             patch("qa.fixer.load_qa_fixer_prompt", return_value="BASE PROMPT"),
-            patch("qa.criteria.get_qa_signoff_status", return_value={"status": "fixes_applied"}),
+            patch(
+                "qa.criteria.get_qa_signoff_status",
+                return_value={"status": "fixes_applied"},
+            ),
             patch("qa.criteria.is_fixes_applied", return_value=True),
-            patch("qa.fixer.get_graphiti_context", new_callable=AsyncMock, return_value="## Memory Context\nPrevious fix used pattern X"),
-            patch("qa.fixer.save_session_memory", new_callable=AsyncMock, return_value=(True, "file")),
+            patch(
+                "qa.fixer.get_graphiti_context",
+                new_callable=AsyncMock,
+                return_value="## Memory Context\nPrevious fix used pattern X",
+            ),
+            patch(
+                "qa.fixer.save_session_memory",
+                new_callable=AsyncMock,
+                return_value=(True, "file"),
+            ),
         ):
             status, _ = await run_qa_fixer_session(
-                client=mock_client, spec_dir=spec_dir, fix_session=1, project_dir=project_dir,
+                client=mock_client,
+                spec_dir=spec_dir,
+                fix_session=1,
+                project_dir=project_dir,
             )
         assert status == "fixed"
         prompt_sent = mock_client.query.call_args[0][0]
@@ -403,7 +489,9 @@ class TestRecoveryActions:
         """Recovery action 'skip' returns 'stuck' status."""
         mock_client.query = AsyncMock(side_effect=RuntimeError("Agent failed"))
         mock_recovery_mgr.determine_recovery_action = MagicMock(
-            return_value=FakeRecoveryAction(action="skip", reason="Max retries exceeded")
+            return_value=FakeRecoveryAction(
+                action="skip", reason="Max retries exceeded"
+            )
         )
 
         with (
@@ -412,10 +500,17 @@ class TestRecoveryActions:
             patch("qa.report.has_recurring_issues", return_value=(False, [])),
             patch("qa.report.record_iteration", return_value=True),
             patch("qa.fixer.load_qa_fixer_prompt", return_value="Fix prompt"),
-            patch("qa.fixer.get_graphiti_context", new_callable=AsyncMock, return_value=None),
+            patch(
+                "qa.fixer.get_graphiti_context",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
         ):
             status, msg = await run_qa_fixer_session(
-                client=mock_client, spec_dir=spec_dir, fix_session=1, project_dir=project_dir,
+                client=mock_client,
+                spec_dir=spec_dir,
+                fix_session=1,
+                project_dir=project_dir,
             )
         assert status == "stuck"
         assert "Max retries exceeded" in msg
@@ -428,7 +523,9 @@ class TestRecoveryActions:
         """Recovery action 'escalate' returns 'escalate' status."""
         mock_client.query = AsyncMock(side_effect=RuntimeError("Critical failure"))
         mock_recovery_mgr.determine_recovery_action = MagicMock(
-            return_value=FakeRecoveryAction(action="escalate", reason="Critical: auth failed")
+            return_value=FakeRecoveryAction(
+                action="escalate", reason="Critical: auth failed"
+            )
         )
 
         with (
@@ -437,10 +534,17 @@ class TestRecoveryActions:
             patch("qa.report.has_recurring_issues", return_value=(False, [])),
             patch("qa.report.record_iteration", return_value=True),
             patch("qa.fixer.load_qa_fixer_prompt", return_value="Fix prompt"),
-            patch("qa.fixer.get_graphiti_context", new_callable=AsyncMock, return_value=None),
+            patch(
+                "qa.fixer.get_graphiti_context",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
         ):
             status, msg = await run_qa_fixer_session(
-                client=mock_client, spec_dir=spec_dir, fix_session=1, project_dir=project_dir,
+                client=mock_client,
+                spec_dir=spec_dir,
+                fix_session=1,
+                project_dir=project_dir,
             )
         assert status == "escalate"
         assert "Critical: auth failed" in msg
@@ -452,7 +556,9 @@ class TestRecoveryActions:
         """Exhausting MAX_FIXER_ITERATIONS returns 'stuck'."""
         mock_client.query = AsyncMock(side_effect=RuntimeError("Failed"))
         mock_recovery_mgr.determine_recovery_action = MagicMock(
-            return_value=FakeRecoveryAction(action="continue", reason="Context exhausted")
+            return_value=FakeRecoveryAction(
+                action="continue", reason="Context exhausted"
+            )
         )
 
         with (
@@ -462,16 +568,25 @@ class TestRecoveryActions:
             patch("qa.report.record_iteration", return_value=True),
             patch("qa.fixer.load_qa_fixer_prompt", return_value="Fix prompt"),
             patch("qa.fixer.MAX_FIXER_ITERATIONS", 2),
-            patch("qa.fixer.get_graphiti_context", new_callable=AsyncMock, return_value=None),
+            patch(
+                "qa.fixer.get_graphiti_context",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
         ):
             status, msg = await run_qa_fixer_session(
-                client=mock_client, spec_dir=spec_dir, fix_session=1, project_dir=project_dir,
+                client=mock_client,
+                spec_dir=spec_dir,
+                fix_session=1,
+                project_dir=project_dir,
             )
         assert status == "stuck"
         assert "exhausting all recovery attempts" in msg
 
     @pytest.mark.asyncio
-    async def test_recovery_retry_then_success(self, spec_dir, project_dir, mock_recovery_mgr):
+    async def test_recovery_retry_then_success(
+        self, spec_dir, project_dir, mock_recovery_mgr
+    ):
         """Recovery action 'retry' retries, then succeeds on second attempt."""
         call_count = 0
 
@@ -488,7 +603,9 @@ class TestRecoveryActions:
         )
 
         mock_recovery_mgr.determine_recovery_action = MagicMock(
-            return_value=FakeRecoveryAction(action="retry", reason="Transient, retrying")
+            return_value=FakeRecoveryAction(
+                action="retry", reason="Transient, retrying"
+            )
         )
 
         with (
@@ -497,13 +614,27 @@ class TestRecoveryActions:
             patch("qa.report.has_recurring_issues", return_value=(False, [])),
             patch("qa.report.record_iteration", return_value=True),
             patch("qa.fixer.load_qa_fixer_prompt", return_value="Fix prompt"),
-            patch("qa.criteria.get_qa_signoff_status", return_value={"status": "fixes_applied"}),
+            patch(
+                "qa.criteria.get_qa_signoff_status",
+                return_value={"status": "fixes_applied"},
+            ),
             patch("qa.criteria.is_fixes_applied", return_value=True),
-            patch("qa.fixer.get_graphiti_context", new_callable=AsyncMock, return_value=None),
-            patch("qa.fixer.save_session_memory", new_callable=AsyncMock, return_value=(True, "file")),
+            patch(
+                "qa.fixer.get_graphiti_context",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
+            patch(
+                "qa.fixer.save_session_memory",
+                new_callable=AsyncMock,
+                return_value=(True, "file"),
+            ),
         ):
             status, _response = await run_qa_fixer_session(
-                client=client, spec_dir=spec_dir, fix_session=1, project_dir=project_dir,
+                client=client,
+                spec_dir=spec_dir,
+                fix_session=1,
+                project_dir=project_dir,
             )
         assert status == "fixed"
         assert call_count == 2
@@ -526,23 +657,42 @@ class TestRecoveryActions:
         with (
             patch("qa.fixer.RecoveryManager", return_value=mock_recovery_mgr),
             patch("qa.report.get_iteration_history", return_value=history),
-            patch("qa.report.has_recurring_issues", return_value=(True, [{"title": "Bug A", "count": 3}])),
+            patch(
+                "qa.report.has_recurring_issues",
+                return_value=(True, [{"title": "Bug A", "count": 3}]),
+            ),
             patch("qa.report.record_iteration", return_value=True),
             patch("qa.fixer.load_qa_fixer_prompt", return_value="Fix prompt"),
-            patch("qa.criteria.get_qa_signoff_status", return_value={"status": "fixes_applied"}),
+            patch(
+                "qa.criteria.get_qa_signoff_status",
+                return_value={"status": "fixes_applied"},
+            ),
             patch("qa.criteria.is_fixes_applied", return_value=True),
-            patch("qa.fixer.get_graphiti_context", new_callable=AsyncMock, return_value=None),
-            patch("qa.fixer.save_session_memory", new_callable=AsyncMock, return_value=(True, "file")),
+            patch(
+                "qa.fixer.get_graphiti_context",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
+            patch(
+                "qa.fixer.save_session_memory",
+                new_callable=AsyncMock,
+                return_value=(True, "file"),
+            ),
         ):
             status, _ = await run_qa_fixer_session(
-                client=mock_client, spec_dir=spec_dir, fix_session=1, project_dir=project_dir,
+                client=mock_client,
+                spec_dir=spec_dir,
+                fix_session=1,
+                project_dir=project_dir,
             )
         assert status == "fixed"
         captured = capsys.readouterr()
         assert "Recurring issues detected" in captured.out
 
     @pytest.mark.asyncio
-    async def test_project_dir_derived_from_spec_dir(self, spec_dir, mock_client, mock_recovery_mgr):
+    async def test_project_dir_derived_from_spec_dir(
+        self, spec_dir, mock_client, mock_recovery_mgr
+    ):
         """When project_dir is None, it's derived from spec_dir (3 parents up)."""
         mock_client.receive_response = MagicMock(
             return_value=aiter_messages(make_text_message("ok"))
@@ -554,13 +704,27 @@ class TestRecoveryActions:
             patch("qa.report.has_recurring_issues", return_value=(False, [])),
             patch("qa.report.record_iteration", return_value=True),
             patch("qa.fixer.load_qa_fixer_prompt", return_value="Fix prompt"),
-            patch("qa.criteria.get_qa_signoff_status", return_value={"status": "fixes_applied"}),
+            patch(
+                "qa.criteria.get_qa_signoff_status",
+                return_value={"status": "fixes_applied"},
+            ),
             patch("qa.criteria.is_fixes_applied", return_value=True),
-            patch("qa.fixer.get_graphiti_context", new_callable=AsyncMock, return_value=None),
-            patch("qa.fixer.save_session_memory", new_callable=AsyncMock, return_value=(True, "file")),
+            patch(
+                "qa.fixer.get_graphiti_context",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
+            patch(
+                "qa.fixer.save_session_memory",
+                new_callable=AsyncMock,
+                return_value=(True, "file"),
+            ),
         ):
             status, _ = await run_qa_fixer_session(
-                client=mock_client, spec_dir=spec_dir, fix_session=1, project_dir=None,
+                client=mock_client,
+                spec_dir=spec_dir,
+                fix_session=1,
+                project_dir=None,
             )
         assert status == "fixed"
 

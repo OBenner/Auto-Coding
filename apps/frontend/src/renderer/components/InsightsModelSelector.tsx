@@ -19,6 +19,7 @@ import {
 } from './ui/select';
 import { DEFAULT_AGENT_PROFILES, AVAILABLE_MODELS } from '../../shared/constants';
 import { getModelsForProvider } from '../../shared/constants/api-profiles';
+import { INSIGHTS_TO_API_PROVIDER, getInsightsProviderOptions } from '../../shared/constants/insights-providers';
 import type { InsightsModelConfig, InsightsProvider, ModelType } from '../../shared/types';
 import { CustomModelModal } from './CustomModelModal';
 
@@ -33,14 +34,6 @@ const iconMap: Record<string, React.ElementType> = {
   Scale,
   Zap,
   Sparkles
-};
-
-// Map Insights provider IDs to API provider IDs
-const INSIGHTS_TO_API_PROVIDER: Record<InsightsProvider, string> = {
-  claude: 'anthropic',
-  litellm: 'litellm',
-  openrouter: 'openrouter',
-  openai: 'openai'
 };
 
 /**
@@ -86,12 +79,7 @@ export function InsightsModelSelector({
   }, [currentConfig?.provider]);
 
   // Build provider options with i18n
-  const insightsProviders = useMemo(() => [
-    { id: 'claude' as InsightsProvider, label: t('dialogs:customModel.providers.claude'), description: t('dialogs:customModel.providers.claudeDesc') },
-    { id: 'openai' as InsightsProvider, label: t('dialogs:customModel.providers.openai'), description: t('dialogs:customModel.providers.openaiDesc') },
-    { id: 'litellm' as InsightsProvider, label: t('dialogs:customModel.providers.litellm'), description: t('dialogs:customModel.providers.litellmDesc') },
-    { id: 'openrouter' as InsightsProvider, label: t('dialogs:customModel.providers.openrouter'), description: t('dialogs:customModel.providers.openrouterDesc') }
-  ], [t]);
+  const insightsProviders = useMemo(() => getInsightsProviderOptions(t), [t]);
 
   // Default to 'balanced' if no config, or if 'auto' profile was selected (not applicable for insights)
   const rawProfileId = currentConfig?.profileId || 'balanced';

@@ -1,14 +1,17 @@
 """
-OpenAI Provider Adapter
+Ollama Provider Adapter
 ========================
 
-Wraps the OpenAI API to implement the AIEngineProvider interface.
-This enables direct access to OpenAI models (GPT-4o, o1, o3, etc.).
+Wraps the Ollama API to implement the AIEngineProvider interface.
+This enables running local LLMs via Ollama (Llama, DeepSeek, CodeLlama, etc.).
+
+Ollama uses an OpenAI-compatible API, so this adapter leverages the openai
+package pointed at the local Ollama server.
 
 Environment Variables:
-    OPENAI_API_KEY: API key from platform.openai.com (required)
-    OPENAI_MODEL: Model identifier (default: gpt-4o)
-    OPENAI_BASE_URL: Optional custom API base URL
+    OLLAMA_MODEL: Model identifier (e.g., llama3, deepseek-r1:7b) (required)
+    OLLAMA_BASE_URL: API base URL (default: http://localhost:11434)
+    OLLAMA_API_KEY: Optional API key for authenticated instances
 """
 
 import logging
@@ -28,43 +31,43 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_OPENAI_MODEL = "gpt-4o"
+DEFAULT_OLLAMA_BASE_URL = "http://localhost:11434"
 
-# Popular OpenAI models (updated February 2026)
-OPENAI_MODELS = [
-    "gpt-5.2",
-    "gpt-5.2-pro",
-    "gpt-5",
-    "gpt-5-mini",
-    "gpt-4o",
-    "gpt-4o-mini",
-    "o4-mini",
-    "o3",
-    "o3-mini",
-    "o3-pro",
+# Popular Ollama models
+OLLAMA_MODELS = [
+    "llama3.3",
+    "llama3.1",
+    "deepseek-r1",
+    "deepseek-r1:7b",
+    "qwen2.5",
+    "qwen2.5-coder",
+    "codellama",
+    "mistral",
+    "gemma2",
+    "phi4",
 ]
 
 
-class OpenAISession(AgentSession):
-    """Agent session for OpenAI provider.
+class OllamaSession(AgentSession):
+    """Agent session for Ollama provider.
 
-    Manages conversation history and provides message sending interface.
+    Uses the OpenAI-compatible API that Ollama exposes at /v1/*.
     """
 
     def __init__(
         self,
         session_id: str,
         model: str,
-        api_key: str,
+        base_url: str = DEFAULT_OLLAMA_BASE_URL,
         system_prompt: str = "",
-        base_url: str | None = None,
+        api_key: str | None = None,
         temperature: float | None = None,
         max_tokens: int | None = None,
     ):
-        super().__init__(session_id, provider_name="openai")
+        super().__init__(session_id, provider_name="ollama")
         self._model = model
+        self._base_url = base_url.rstrip("/")
         self._api_key = api_key
-        self._base_url = base_url
         self._temperature = temperature
         self._max_tokens = max_tokens
         self._messages: list[dict[str, str]] = []
@@ -87,14 +90,16 @@ class OpenAISession(AgentSession):
                 from openai import AsyncOpenAI
             except ImportError as e:
                 raise ProviderNotInstalled(
-                    "OpenAI provider requires the openai package. "
+                    "Ollama provider requires the openai package. "
                     "Install with: pip install openai\n"
                     f"Error: {e}"
                 )
 
-            client_kwargs: dict[str, Any] = {"api_key": self._api_key}
-            if self._base_url:
-                client_kwargs["base_url"] = self._base_url
+            # Ollama exposes an OpenAI-compatible endpoint at /v1
+            client_kwargs: dict[str, Any] = {
+                "base_url": f"{self._base_url}/v1",
+                "api_key": self._api_key or "ollama",  # Ollama ignores API key
+            }
 
             self._client = AsyncOpenAI(**client_kwargs)
 
@@ -147,8 +152,8 @@ class OpenAISession(AgentSession):
                         yield content
 
         except Exception as e:
-            logger.error(f"OpenAI completion error: {e}")
-            raise ProviderError(f"OpenAI completion failed: {e}") from e
+            logger.error(f"Ollama completion error: {e}")
+            raise ProviderError(f"Ollama completion failed: {e}") from e
 
     def clear_history(self, keep_system: bool = True) -> None:
         if keep_system:
@@ -161,66 +166,67 @@ class OpenAISession(AgentSession):
         super().close()
         self._messages = []
         self._client = None
-        logger.debug(f"OpenAI session {self.session_id} closed")
+        logger.debug(f"Ollama session {self.session_id} closed")
 
 
-class OpenAIProvider(AIEngineProvider):
-    """OpenAI provider implementation.
+class OllamaProvider(AIEngineProvider):
+    """Ollama provider implementation.
 
-    Provides direct access to OpenAI models (GPT-4o, o1, o3, etc.).
+    Provides access to local LLMs running via Ollama.
+    Uses Ollama's OpenAI-compatible API endpoint.
     """
 
     def __init__(self, config: "ProviderConfig"):
         self._config = config
-        self._active_session: OpenAISession | None = None
+        self._active_session: OllamaSession | None = None
         self._validation_errors: list[str] = []
 
     @property
     def name(self) -> str:
-        return "openai"
+        return "ollama"
 
     @property
     def config(self) -> "ProviderConfig":
         return self._config
 
-    def create_session(self, config: SessionConfig) -> OpenAISession:
-        api_key = self._config.openai_api_key
-        if not api_key:
+    def create_session(self, config: SessionConfig) -> OllamaSession:
+        model = config.model or self._config.ollama_model
+        if not model:
             raise ProviderConfigError(
-                "OpenAI provider requires an API key. "
-                "Set OPENAI_API_KEY environment variable."
+                "Ollama provider requires a model. "
+                "Set OLLAMA_MODEL environment variable."
             )
 
         try:
             from openai import AsyncOpenAI  # noqa: F401
         except ImportError as e:
             raise ProviderNotInstalled(
-                "OpenAI provider requires the openai package. "
+                "Ollama provider requires the openai package. "
                 "Install with: pip install openai\n"
                 f"Error: {e}"
             )
 
-        model = config.model or self._config.openai_model or DEFAULT_OPENAI_MODEL
-        base_url = self._config.openai_base_url or None
+        base_url = self._config.ollama_base_url or DEFAULT_OLLAMA_BASE_URL
+        api_key = self._config.ollama_api_key or None
 
         if config.extra:
             model = config.extra.get("model", model)
             base_url = config.extra.get("base_url", base_url)
 
-        session_id = f"openai-{uuid.uuid4().hex[:12]}"
+        session_id = f"ollama-{uuid.uuid4().hex[:12]}"
 
-        session = OpenAISession(
+        session = OllamaSession(
             session_id=session_id,
             model=model,
-            api_key=api_key,
-            system_prompt=config.system_prompt,
             base_url=base_url,
+            system_prompt=config.system_prompt,
+            api_key=api_key,
             temperature=config.temperature,
             max_tokens=config.max_tokens,
         )
 
         self._active_session = session
-        logger.info(f"Created OpenAI session {session_id} (model={model})")
+        logger.info(f"Created Ollama session {session_id} (model={model})")
         return session
 
     async def send_message(self, message: str) -> AsyncIterator[str]:
@@ -234,14 +240,14 @@ class OpenAIProvider(AIEngineProvider):
             yield chunk
 
     def get_supported_models(self) -> list[str]:
-        return OPENAI_MODELS.copy()
+        return OLLAMA_MODELS.copy()
 
     def validate_config(self) -> bool:
         self._validation_errors = []
 
-        if not self._config.openai_api_key:
+        if not self._config.ollama_model:
             self._validation_errors.append(
-                "OpenAI provider requires OPENAI_API_KEY environment variable"
+                "Ollama provider requires OLLAMA_MODEL environment variable"
             )
             return False
 
@@ -262,7 +268,7 @@ class OpenAIProvider(AIEngineProvider):
             self._validation_errors.append("openai package is not installed")
             return False
 
-    def get_active_session(self) -> OpenAISession | None:
+    def get_active_session(self) -> OllamaSession | None:
         if self._active_session and self._active_session.is_active:
             return self._active_session
         return None
@@ -271,9 +277,9 @@ class OpenAIProvider(AIEngineProvider):
         if self._active_session:
             self._active_session.close()
             self._active_session = None
-        logger.debug("OpenAI provider closed")
+        logger.debug("Ollama provider closed")
 
     def __repr__(self) -> str:
         return (
-            f"OpenAIProvider(name={self.name!r}, model={self._config.openai_model!r})"
+            f"OllamaProvider(name={self.name!r}, model={self._config.ollama_model!r})"
         )

@@ -160,7 +160,7 @@ import type { ThinkingLevel } from './settings';
 import type { ModelType } from './task';
 
 // Model configuration for insights sessions
-export type InsightsProvider = 'claude' | 'litellm' | 'openrouter' | 'openai';
+export type InsightsProvider = 'claude' | 'litellm' | 'openrouter' | 'openai' | 'ollama';
 
 export interface InsightsModelConfig {
   profileId: string;           // 'complex' | 'balanced' | 'quick' | 'custom'

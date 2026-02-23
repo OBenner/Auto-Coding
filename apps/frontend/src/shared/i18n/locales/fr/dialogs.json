@@ -149,11 +149,13 @@
       "claude": "Claude (Anthropic)",
       "claudeDesc": "Modèles Claude officiels d'Anthropic",
       "openai": "OpenAI",
-      "openaiDesc": "Modèles GPT-4o, o1, o3 via OpenAI",
+      "openaiDesc": "Modèles GPT-5.2, o3, o4-mini via OpenAI",
       "litellm": "LiteLLM",
       "litellmDesc": "100+ modèles via LiteLLM",
       "openrouter": "OpenRouter",
-      "openrouterDesc": "400+ modèles via OpenRouter"
+      "openrouterDesc": "400+ modèles via OpenRouter",
+      "ollama": "Ollama (Local)",
+      "ollamaDesc": "Exécuter des LLM localement via Ollama"
     }
   },
   "removeProject": {

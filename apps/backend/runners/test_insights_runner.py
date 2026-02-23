@@ -18,7 +18,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 sys.modules["core.dependency_validator"] = MagicMock()
 sys.modules["core.auth"] = MagicMock()
 
-PROVIDER_CHOICES = ["claude", "litellm", "openrouter", "openai"]
+PROVIDER_CHOICES = ["claude", "litellm", "openrouter", "openai", "ollama"]
 
 
 def _make_parser() -> argparse.ArgumentParser:
@@ -38,7 +38,13 @@ class TestProviderArgumentParsing:
         parser = _make_parser()
         with patch(
             "sys.argv",
-            ["insights_runner.py", "--project-dir", "/tmp/test", "--message", "test"],
+            [
+                "insights_runner.py",
+                "--project-dir",
+                "/fake/test_project",
+                "--message",
+                "test",
+            ],
         ):
             args = parser.parse_args()
             assert args.provider == "claude"
@@ -52,7 +58,7 @@ class TestProviderArgumentParsing:
             [
                 "insights_runner.py",
                 "--project-dir",
-                "/tmp/test",
+                "/fake/test_project",
                 "--message",
                 "test",
                 "--provider",
@@ -70,7 +76,7 @@ class TestProviderArgumentParsing:
             [
                 "insights_runner.py",
                 "--project-dir",
-                "/tmp/test",
+                "/fake/test_project",
                 "--message",
                 "test",
                 "--provider",
