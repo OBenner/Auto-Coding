@@ -152,6 +152,7 @@ import type {
 } from './integrations';
 import type { APIProfile, ProfilesFile, TestConnectionResult, DiscoverModelsResult } from './profile';
 import type { TemplateInfo, TemplateCategory, GeneratedSpec } from './template';
+import type { FeedbackSummary, ImprovementData } from '../../preload/api/feedback-api';
 
 // Electron API exposed via contextBridge
 // Tab state interface (persisted in main process)
@@ -934,6 +935,14 @@ export interface ElectronAPI {
     specId?: string
   ) => Promise<IPCResult<{ specId: string; specPath: string }>>;
   suggestTemplates: (projectId: string, taskDescription: string) => Promise<IPCResult<string[]>>;
+  // Custom agent template operations (user-created templates)
+  listCustomTemplates: () => Promise<IPCResult<import('./template').CustomTemplate[]>>;
+  saveCustomTemplate: (template: Omit<import('./template').CustomTemplate, 'id' | 'createdAt' | 'updatedAt'>) => Promise<IPCResult<import('./template').CustomTemplate & { validationErrors?: string[] }>>;
+  updateCustomTemplate: (template: import('./template').CustomTemplate) => Promise<IPCResult<import('./template').CustomTemplate & { validationErrors?: string[] }>>;
+  deleteCustomTemplate: (templateId: string) => Promise<IPCResult>;
+  exportCustomTemplate: (templateId: string) => Promise<IPCResult<string>>; // Returns JSON string
+  importCustomTemplate: (jsonData: string) => Promise<IPCResult<import('./template').CustomTemplate & { validationErrors?: string[] }>>;
+  testCustomTemplate: (templateId: string, testInput: string) => Promise<IPCResult<GeneratedSpec>>;
 
   // Feedback submission (adaptive agent learning)
   submitFeedback?: (request: {
@@ -945,8 +954,16 @@ export interface ElectronAPI {
   }) => Promise<IPCResult<{ recorded: boolean; reason?: string }>>;
 
 
+  // Feedback analytics operations
+  getFeedbackSummary?: (projectId: string, days: number) => Promise<IPCResult<FeedbackSummary>>;
+  exportFeedbackData?: (projectId: string, format: 'json' | 'csv', days: number) => Promise<IPCResult<string>>;
+  getImprovements?: (projectId: string, days: number) => Promise<IPCResult<ImprovementData[]>>;
+
   // Queue Routing API (rate limit recovery)
   queue: import('../../preload/api/queue-api').QueueAPI;
+
+  // Pattern learning API (codebase patterns)
+  pattern: import('../../preload/api/modules/pattern-api').PatternAPI;
   // Session Replay API for learning and review
   sessionReplay: import('../../preload/api/modules/session-replay-api').SessionReplayAPI;
   // Scheduler API for build scheduling and queue management

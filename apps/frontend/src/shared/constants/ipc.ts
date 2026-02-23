@@ -460,6 +460,14 @@ export const IPC_CHANNELS = {
   GITHUB_TRIAGE_COMPLETE: 'github:triage:complete',
   GITHUB_TRIAGE_ERROR: 'github:triage:error',
 
+  // GitHub Code Review operations
+  GITHUB_CODE_REVIEW_TRIGGER: 'github:code-review:trigger',
+
+  // GitHub Code Review events (main -> renderer)
+  GITHUB_CODE_REVIEW_PROGRESS: 'github:code-review:progress',
+  GITHUB_CODE_REVIEW_COMPLETE: 'github:code-review:complete',
+  GITHUB_CODE_REVIEW_ERROR: 'github:code-review:error',
+
   // Merge Analytics operations
   MERGE_ANALYTICS_GET_HISTORY: 'mergeAnalytics:getHistory',
   MERGE_ANALYTICS_GET_SUMMARY: 'mergeAnalytics:getSummary',
@@ -624,6 +632,22 @@ export const IPC_CHANNELS = {
   TEMPLATE_CREATE_SPEC: 'template:createSpec',
   TEMPLATE_SUGGEST: 'template:suggest',
 
+  // Pattern operations (codebase pattern learning)
+  PATTERN_LIST: 'pattern:list',
+  PATTERN_GET_CATEGORIES: 'pattern:getCategories',
+  PATTERN_GET_DETAILS: 'pattern:getDetails',
+  PATTERN_APPROVE: 'pattern:approve',
+  PATTERN_OVERRIDE: 'pattern:override',
+  PATTERN_DELETE: 'pattern:delete',
+
+  // Custom template operations (user-created)
+  TEMPLATE_CUSTOM_LIST: 'template:custom:list',
+  TEMPLATE_CUSTOM_SAVE: 'template:custom:save',
+  TEMPLATE_CUSTOM_UPDATE: 'template:custom:update',
+  TEMPLATE_CUSTOM_DELETE: 'template:custom:delete',
+  TEMPLATE_CUSTOM_EXPORT: 'template:custom:export',
+  TEMPLATE_CUSTOM_IMPORT: 'template:custom:import',
+  TEMPLATE_CUSTOM_TEST: 'template:custom:test',
   // Session Replay operations
   SESSION_REPLAY_LIST: 'sessionReplay:list',
   SESSION_REPLAY_GET_SESSION: 'sessionReplay:getSession',

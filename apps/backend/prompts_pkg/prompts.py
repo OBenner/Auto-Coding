@@ -12,6 +12,8 @@ import re
 import subprocess
 from pathlib import Path
 
+from agents.templates.storage import load_template
+
 from .project_context import (
     detect_project_capabilities,
     get_mcp_tools_for_project,
@@ -648,3 +650,69 @@ The project root is: `{project_dir}`
 
 """
     return spec_context + base_prompt
+
+
+def get_code_review_prompt(spec_dir: Path, project_dir: Path) -> str:
+    """
+    Load the code review agent prompt with spec paths injected.
+
+    Args:
+        spec_dir: Directory containing the spec files
+        project_dir: Root directory of the project
+
+    Returns:
+        The code review agent prompt content with paths injected
+    """
+    base_prompt = _load_prompt_file("code_review_agent.md")
+
+    spec_context = f"""## SPEC LOCATION
+
+Your spec and progress files are located at:
+- Spec: `{spec_dir}/spec.md`
+- Implementation plan: `{spec_dir}/implementation_plan.json`
+- Code review output: `{spec_dir}/code_review_report.md`
+
+The project root is: `{project_dir}`
+
+---
+
+"""
+    return spec_context + base_prompt
+
+
+def load_custom_template_prompt(template_name: str, project_dir: Path) -> str:
+    """
+    Load a custom agent template prompt by name.
+
+    Loads the template from .auto-claude/templates/{template_name}.json
+    and returns the custom_prompt field.
+
+    Args:
+        template_name: Name of the custom template (e.g., "documentation-agent")
+        project_dir: Root directory of the project
+
+    Returns:
+        The custom prompt content as a string
+
+    Raises:
+        FileNotFoundError: If the template doesn't exist
+        ValueError: If the template is invalid or has no prompt
+    """
+    # Load template from storage
+    template = load_template(template_name, project_dir)
+
+    if template is None:
+        raise FileNotFoundError(
+            f"Custom template '{template_name}' not found.\n"
+            f"Expected location: {project_dir}/.auto-claude/templates/{template_name}.json\n"
+            f"Make sure the template exists and is properly formatted."
+        )
+
+    # Validate template has a prompt
+    if not template.custom_prompt or not template.custom_prompt.strip():
+        raise ValueError(
+            f"Template '{template_name}' has no custom prompt defined.\n"
+            f"Templates must include a custom_prompt field with at least 20 characters."
+        )
+
+    return template.custom_prompt

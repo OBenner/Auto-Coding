@@ -357,6 +357,59 @@ const browserMockAPI: ElectronAPI = {
     data: []
   }),
 
+  // Custom Agent Template Operations
+  listCustomTemplates: async () => ({
+    success: true,
+    data: []
+  }),
+  saveCustomTemplate: async (template: Omit<import('../../shared/types/template').CustomTemplate, 'id' | 'createdAt' | 'updatedAt'>) => ({
+    success: true,
+    data: {
+      id: `custom-template-${Date.now()}`,
+      ...template,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    }
+  }),
+  updateCustomTemplate: async (template: import('../../shared/types/template').CustomTemplate) => ({
+    success: true,
+    data: {
+      ...template,
+      updatedAt: new Date()
+    }
+  }),
+  deleteCustomTemplate: async (_templateId: string) => ({
+    success: true
+  }),
+  exportCustomTemplate: async (_templateId: string) => ({
+    success: true,
+    data: '{"mock": "template"}'
+  }),
+  importCustomTemplate: async (_jsonData: string) => ({
+    success: true,
+    data: {
+      id: `custom-template-${Date.now()}`,
+      name: 'Imported Template',
+      description: 'Imported from JSON',
+      category: 'other' as const,
+      parameters: {},
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      isPublic: false
+    }
+  }),
+  testCustomTemplate: async (_templateId: string, _testInput: string) => ({
+    success: true,
+    data: {
+      title: 'Test Result',
+      description: 'Template test result',
+      rationale: 'Test rationale',
+      user_stories: [],
+      acceptance_criteria: [],
+      technical_details: 'Test details'
+    }
+  }),
+
   // Queue Routing API (rate limit recovery)
   queue: {
     getRunningTasksByProfile: async () => ({ success: true, data: { byProfile: {}, totalRunning: 0 } }),
@@ -367,6 +420,16 @@ const browserMockAPI: ElectronAPI = {
     onQueueProfileSwapped: () => () => {},
     onQueueSessionCaptured: () => () => {},
     onQueueBlockedNoProfiles: () => () => {}
+  },
+
+  // Pattern learning API (codebase patterns)
+  pattern: {
+    listPatterns: async () => ({ success: true, data: [] }),
+    getPatternCategories: async () => ({ success: true, data: ['naming-conventions' as const, 'error-handling' as const, 'code-organization' as const] }),
+    getPatternDetails: async () => ({ success: true, data: { index: 1, id: '1', text: 'Mock pattern', category: 'naming-conventions', confidence: 'high' as const, reasoning: 'Mock reasoning' } }),
+    approvePattern: async () => ({ success: true, data: undefined }),
+    overridePattern: async () => ({ success: true, data: undefined }),
+    deletePattern: async () => ({ success: true, data: undefined })
   },
 
   // Session Replay API

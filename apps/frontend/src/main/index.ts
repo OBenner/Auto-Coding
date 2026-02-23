@@ -53,6 +53,7 @@ import { initSentryMain } from './sentry';
 import { preWarmToolCache } from './cli-tool-manager';
 import { initializeClaudeProfileManager, getClaudeProfileManager } from './claude-profile-manager';
 import { isMacOS, isWindows } from './platform';
+import { setupMCPLifecycle } from './mcp-manager';
 import type { AppSettings, AuthFailureInfo } from '../shared/types';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -385,6 +386,10 @@ if (isWindows()) {
   app.commandLine.appendSwitch('disable-gpu-program-cache');
   console.log('[main] Applied Windows GPU cache fixes');
 }
+
+// Setup MCP server lifecycle (starts server if ELECTRON_MCP_ENABLED=true)
+// This integrates with Electron's app lifecycle for automatic startup/shutdown
+setupMCPLifecycle();
 
 // Initialize the application
 app.whenReady().then(() => {

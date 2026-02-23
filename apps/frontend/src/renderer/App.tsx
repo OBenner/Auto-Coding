@@ -49,6 +49,7 @@ import { Worktrees } from './components/Worktrees';
 import { SessionList } from './components/session-replay/SessionList';
 import { AgentTools } from './components/AgentTools';
 import { ProductivityDashboard } from './components/analytics/ProductivityDashboard';
+import { FeedbackDashboard } from './components/FeedbackDashboard';
 import { WelcomeScreen } from './components/WelcomeScreen';
 import { RateLimitModal } from './components/RateLimitModal';
 import { SDKRateLimitModal } from './components/SDKRateLimitModal';
@@ -1094,6 +1095,9 @@ export function App() {
                 )}
                 {activeView === 'analytics' && (activeProjectId || selectedProjectId) && (
                   <ProductivityDashboard projectId={activeProjectId || selectedProjectId!} />
+                )}
+                {activeView === 'feedback' && (activeProjectId || selectedProjectId) && (
+                  <FeedbackDashboard projectId={activeProjectId || selectedProjectId!} />
                 )}
               </>
             ) : (
