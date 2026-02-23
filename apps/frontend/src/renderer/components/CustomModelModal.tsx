@@ -29,45 +29,16 @@ interface CustomModelModalProps {
   open?: boolean;
 }
 
-// Provider options for Insights mode
-const INSIGHTS_PROVIDERS: Array<{ id: InsightsProvider; label: string; description: string }> = [
-  { id: 'claude', label: 'Claude (Anthropic)', description: 'Official Anthropic Claude models' },
-  { id: 'litellm', label: 'LiteLLM', description: '100+ models via LiteLLM' },
-  { id: 'openrouter', label: 'OpenRouter', description: '400+ models via OpenRouter' }
-];
-
 // Map Insights provider IDs to API provider IDs
 const INSIGHTS_TO_API_PROVIDER: Record<InsightsProvider, string> = {
   claude: 'anthropic',
-  litellm: 'litellm',  // LiteLLM is not in API profiles, will use generic tiers
-  openrouter: 'openrouter'
+  litellm: 'litellm',
+  openrouter: 'openrouter',
+  openai: 'openai'
 };
 
-/**
- * Get provider-specific model label for a model tier
- */
-function getModelLabelForProvider(modelTier: ModelType, providerId: InsightsProvider): string {
-  const apiProviderId = INSIGHTS_TO_API_PROVIDER[providerId];
-
-  // LiteLLM doesn't have predefined models, use generic labels
-  if (providerId === 'litellm') {
-    return AVAILABLE_MODELS.find(m => m.value === modelTier)?.label || modelTier;
-  }
-
-  // Get provider-specific model label
-  const models = getModelsForProvider(apiProviderId);
-  const model = models.find(m => m.tier === modelTier);
-
-  if (model) {
-    return model.name;
-  }
-
-  // Fallback to generic label
-  return AVAILABLE_MODELS.find(m => m.value === modelTier)?.label || modelTier;
-}
-
 export function CustomModelModal({ currentConfig, onSave, onClose, open = true }: CustomModelModalProps) {
-  const { t } = useTranslation('dialogs');
+  const { t } = useTranslation(['dialogs', 'common']);
   const [model, setModel] = useState<ModelType>(
     currentConfig?.model || 'sonnet'
   );
@@ -77,6 +48,14 @@ export function CustomModelModal({ currentConfig, onSave, onClose, open = true }
   const [provider, setProvider] = useState<InsightsProvider>(
     currentConfig?.provider || 'claude'
   );
+
+  // Build provider options with i18n
+  const insightsProviders = useMemo(() => [
+    { id: 'claude' as InsightsProvider, label: t('dialogs:customModel.providers.claude'), description: t('dialogs:customModel.providers.claudeDesc') },
+    { id: 'openai' as InsightsProvider, label: t('dialogs:customModel.providers.openai'), description: t('dialogs:customModel.providers.openaiDesc') },
+    { id: 'litellm' as InsightsProvider, label: t('dialogs:customModel.providers.litellm'), description: t('dialogs:customModel.providers.litellmDesc') },
+    { id: 'openrouter' as InsightsProvider, label: t('dialogs:customModel.providers.openrouter'), description: t('dialogs:customModel.providers.openrouterDesc') }
+  ], [t]);
 
   // Sync internal state when modal opens or config changes
   useEffect(() => {
@@ -122,21 +101,21 @@ export function CustomModelModal({ currentConfig, onSave, onClose, open = true }
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>{t('customModel.title')}</DialogTitle>
+          <DialogTitle>{t('dialogs:customModel.title')}</DialogTitle>
           <DialogDescription>
-            {t('customModel.description')}
+            {t('dialogs:customModel.description')}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
           <div className="space-y-2">
-            <Label htmlFor="provider-select">Provider</Label>
+            <Label htmlFor="provider-select">{t('dialogs:customModel.provider')}</Label>
             <Select value={provider} onValueChange={(v) => setProvider(v as InsightsProvider)}>
               <SelectTrigger id="provider-select">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {INSIGHTS_PROVIDERS.map((p) => (
+                {insightsProviders.map((p) => (
                   <SelectItem key={p.id} value={p.id}>
                     <div className="flex flex-col">
                       <span className="font-medium">{p.label}</span>
@@ -149,7 +128,7 @@ export function CustomModelModal({ currentConfig, onSave, onClose, open = true }
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="model-select">{t('customModel.model')}</Label>
+            <Label htmlFor="model-select">{t('dialogs:customModel.model')}</Label>
             <Select value={model} onValueChange={(v) => setModel(v as ModelType)}>
               <SelectTrigger id="model-select">
                 <SelectValue />
@@ -170,7 +149,7 @@ export function CustomModelModal({ currentConfig, onSave, onClose, open = true }
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="thinking-select">{t('customModel.thinkingLevel')}</Label>
+            <Label htmlFor="thinking-select">{t('dialogs:customModel.thinkingLevel')}</Label>
             <Select value={thinkingLevel} onValueChange={(v) => setThinkingLevel(v as ThinkingLevel)}>
               <SelectTrigger id="thinking-select">
                 <SelectValue />
@@ -193,10 +172,10 @@ export function CustomModelModal({ currentConfig, onSave, onClose, open = true }
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>
-            {t('customModel.cancel')}
+            {t('dialogs:customModel.cancel')}
           </Button>
           <Button onClick={handleSave}>
-            {t('customModel.apply')}
+            {t('dialogs:customModel.apply')}
           </Button>
         </DialogFooter>
       </DialogContent>

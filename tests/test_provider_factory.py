@@ -452,7 +452,8 @@ class TestFactoryFunctions:
         assert "claude" in names
         assert "litellm" in names
         assert "openrouter" in names
-        assert len(names) == 3
+        assert "openai" in names
+        assert len(names) == 4
 
     def test_create_engine_provider_unknown_raises_error(self):
         """Tests create_engine_provider() raises error for unknown provider."""
@@ -624,12 +625,13 @@ class TestAIEngineProviderEnum:
         assert isinstance(AIEngineProvider.CLAUDE.value, str)
         assert isinstance(AIEngineProvider.LITELLM.value, str)
         assert isinstance(AIEngineProvider.OPENROUTER.value, str)
+        assert isinstance(AIEngineProvider.OPENAI.value, str)
 
     def test_enum_count(self):
         """Tests AIEngineProvider has expected number of values."""
         from core.providers.config import AIEngineProvider
 
-        assert len(AIEngineProvider) == 3
+        assert len(AIEngineProvider) == 4
 
 
 # =============================================================================

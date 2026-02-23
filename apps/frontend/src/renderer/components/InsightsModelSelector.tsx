@@ -1,4 +1,5 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Brain, Scale, Zap, Sparkles, Sliders, Check } from 'lucide-react';
 import { Button } from './ui/button';
 import {
@@ -34,18 +35,12 @@ const iconMap: Record<string, React.ElementType> = {
   Sparkles
 };
 
-// Provider options for Insights mode
-const INSIGHTS_PROVIDERS: Array<{ id: InsightsProvider; label: string; description: string }> = [
-  { id: 'claude', label: 'Claude (Anthropic)', description: 'Official Anthropic Claude models' },
-  { id: 'litellm', label: 'LiteLLM', description: '100+ models via LiteLLM' },
-  { id: 'openrouter', label: 'OpenRouter', description: '400+ models via OpenRouter' }
-];
-
 // Map Insights provider IDs to API provider IDs
 const INSIGHTS_TO_API_PROVIDER: Record<InsightsProvider, string> = {
   claude: 'anthropic',
-  litellm: 'litellm',  // LiteLLM is not in API profiles, will use generic tiers
-  openrouter: 'openrouter'
+  litellm: 'litellm',
+  openrouter: 'openrouter',
+  openai: 'openai'
 };
 
 /**
@@ -76,12 +71,27 @@ export function InsightsModelSelector({
   onConfigChange,
   disabled
 }: InsightsModelSelectorProps) {
+  const { t } = useTranslation(['dialogs', 'common']);
   const [showCustomModal, setShowCustomModal] = useState(false);
 
-  // Provider state (default to 'claude' for backward compatibility)
+  // Provider state - sync with currentConfig to avoid stale state
   const [selectedProvider, setSelectedProvider] = useState<InsightsProvider>(
     currentConfig?.provider || 'claude'
   );
+
+  // Sync selectedProvider when currentConfig changes externally
+  useEffect(() => {
+    const configProvider = currentConfig?.provider || 'claude';
+    setSelectedProvider(configProvider);
+  }, [currentConfig?.provider]);
+
+  // Build provider options with i18n
+  const insightsProviders = useMemo(() => [
+    { id: 'claude' as InsightsProvider, label: t('dialogs:customModel.providers.claude'), description: t('dialogs:customModel.providers.claudeDesc') },
+    { id: 'openai' as InsightsProvider, label: t('dialogs:customModel.providers.openai'), description: t('dialogs:customModel.providers.openaiDesc') },
+    { id: 'litellm' as InsightsProvider, label: t('dialogs:customModel.providers.litellm'), description: t('dialogs:customModel.providers.litellmDesc') },
+    { id: 'openrouter' as InsightsProvider, label: t('dialogs:customModel.providers.openrouter'), description: t('dialogs:customModel.providers.openrouterDesc') }
+  ], [t]);
 
   // Default to 'balanced' if no config, or if 'auto' profile was selected (not applicable for insights)
   const rawProfileId = currentConfig?.profileId || 'balanced';
@@ -142,10 +152,10 @@ export function InsightsModelSelector({
   const getDisplayText = () => {
     if (selectedProfileId === 'custom' && currentConfig) {
       const modelLabel = getModelLabelForProvider(currentConfig.model, currentConfig.provider);
-      const providerLabel = INSIGHTS_PROVIDERS.find(p => p.id === currentConfig.provider)?.label || currentConfig.provider;
+      const providerLabel = insightsProviders.find(p => p.id === currentConfig.provider)?.label || currentConfig.provider;
       return `${providerLabel}: ${modelLabel} + ${currentConfig.thinkingLevel}`;
     }
-    const providerLabel = INSIGHTS_PROVIDERS.find(p => p.id === selectedProvider)?.label || selectedProvider;
+    const providerLabel = insightsProviders.find(p => p.id === selectedProvider)?.label || selectedProvider;
     const modelLabel = providerModelLabel || profile?.name || 'Balanced';
     return `${providerLabel} - ${profile?.name || modelLabel}`;
   };
@@ -155,10 +165,10 @@ export function InsightsModelSelector({
       {/* Provider Selector */}
       <Select value={selectedProvider} onValueChange={(value) => handleProviderChange(value as InsightsProvider)} disabled={disabled}>
         <SelectTrigger className="h-8 w-[140px]">
-          <SelectValue placeholder="Provider" />
+          <SelectValue placeholder={t('dialogs:customModel.provider')} />
         </SelectTrigger>
         <SelectContent align="end">
-          {INSIGHTS_PROVIDERS.map((provider) => (
+          {insightsProviders.map((provider) => (
             <SelectItem key={provider.id} value={provider.id}>
               <div className="flex flex-col">
                 <span className="font-medium">{provider.label}</span>
@@ -186,7 +196,7 @@ export function InsightsModelSelector({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-64">
-          <DropdownMenuLabel>Agent Profile</DropdownMenuLabel>
+          <DropdownMenuLabel>{t('dialogs:customModel.agentProfile')}</DropdownMenuLabel>
           {DEFAULT_AGENT_PROFILES.filter(p => !p.isAutoProfile).map((p) => {
             const ProfileIcon = iconMap[p.icon || 'Brain'];
             const isSelected = selectedProfileId === p.id;
@@ -217,9 +227,9 @@ export function InsightsModelSelector({
           >
             <Sliders className="h-4 w-4 shrink-0" />
             <div className="flex-1">
-              <div className="font-medium">Custom...</div>
+              <div className="font-medium">{t('dialogs:customModel.custom')}</div>
               <div className="text-xs text-muted-foreground">
-                Choose model & thinking level
+                {t('dialogs:customModel.customDesc')}
               </div>
             </div>
             {selectedProfileId === 'custom' && (

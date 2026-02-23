@@ -137,10 +137,24 @@
   "customModel": {
     "title": "Configuration du modèle personnalisé",
     "description": "Configurez le modèle et le niveau de réflexion pour cette session de chat.",
+    "provider": "Fournisseur",
     "model": "Modèle",
     "thinkingLevel": "Niveau de réflexion",
     "cancel": "Annuler",
-    "apply": "Appliquer"
+    "apply": "Appliquer",
+    "agentProfile": "Profil de l'agent",
+    "custom": "Personnalisé...",
+    "customDesc": "Choisir le modèle et le niveau de réflexion",
+    "providers": {
+      "claude": "Claude (Anthropic)",
+      "claudeDesc": "Modèles Claude officiels d'Anthropic",
+      "openai": "OpenAI",
+      "openaiDesc": "Modèles GPT-4o, o1, o3 via OpenAI",
+      "litellm": "LiteLLM",
+      "litellmDesc": "100+ modèles via LiteLLM",
+      "openrouter": "OpenRouter",
+      "openrouterDesc": "400+ modèles via OpenRouter"
+    }
   },
   "removeProject": {
     "title": "Retirer le projet ?",

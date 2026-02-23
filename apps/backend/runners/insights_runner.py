@@ -152,20 +152,24 @@ async def run_with_sdk(
 ) -> None:
     """Run the chat using AI provider with streaming."""
     if not PROVIDERS_AVAILABLE:
-        print("Provider system not available, falling back to simple mode", file=sys.stderr)
-        run_simple(project_dir, message, history)
-        return
-
-    if not get_auth_token():
         print(
-            "No authentication token found, falling back to simple mode",
+            "Provider system not available, falling back to simple mode",
             file=sys.stderr,
         )
         run_simple(project_dir, message, history)
         return
 
-    # Ensure SDK can find the token
-    ensure_claude_code_oauth_token()
+    # Claude provider requires OAuth token; other providers use their own credentials
+    if provider == "claude":
+        if not get_auth_token():
+            print(
+                "No authentication token found, falling back to simple mode",
+                file=sys.stderr,
+            )
+            run_simple(project_dir, message, history)
+            return
+        # Ensure SDK can find the token
+        ensure_claude_code_oauth_token()
 
     system_prompt = build_system_prompt(project_dir)
     project_path = Path(project_dir).resolve()
@@ -197,18 +201,21 @@ Current question: {message}"""
     )
 
     try:
-        # Create provider config with specified provider and model
-        provider_config = ProviderConfig(
-            provider=provider,
-            anthropic_api_key="",  # Will use OAuth
-            claude_model=resolve_model_id(model),
-        )
+        # Create provider config - use env-based config for non-Claude providers
+        provider_config = ProviderConfig.from_env()
+        provider_config.provider = provider
+        if provider == "claude":
+            provider_config.claude_model = resolve_model_id(model)
+        if not provider_config.is_valid():
+            errors = provider_config.get_validation_errors()
+            raise RuntimeError("; ".join(errors))
 
         # Create the provider instance
         ai_provider = create_engine_provider(provider_config)
 
         # Create a temporary spec directory for the session (required by provider)
         import tempfile
+
         with tempfile.TemporaryDirectory() as temp_dir:
             spec_dir = Path(temp_dir)
 
@@ -306,8 +313,10 @@ Current question: {message}"""
             )
 
             # Clean up session
-            session.close()
-            ai_provider.close()
+            try:
+                session.close()
+            finally:
+                ai_provider.close()
 
     except Exception as e:
         print(f"Error using AI provider: {e}", file=sys.stderr)
@@ -393,7 +402,7 @@ def main():
     parser.add_argument(
         "--provider",
         default="claude",
-        choices=["claude", "litellm", "openrouter"],
+        choices=["claude", "litellm", "openrouter", "openai"],
         help="LLM provider to use (default: claude)",
     )
     args = parser.parse_args()
@@ -441,7 +450,9 @@ def main():
     # Run the async SDK function
     debug("insights_runner", "Running SDK query")
     asyncio.run(
-        run_with_sdk(project_dir, user_message, history, model, thinking_level, provider)
+        run_with_sdk(
+            project_dir, user_message, history, model, thinking_level, provider
+        )
     )
     debug_success("insights_runner", "Query completed")
 

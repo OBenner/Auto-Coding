@@ -24,6 +24,8 @@ import { projectStore } from "../project-store";
 import { insightsService } from "../insights-service";
 import { safeSendToRenderer } from "./utils";
 
+const DEFAULT_INSIGHTS_PROVIDER = 'claude' as const;
+
 /**
  * Helper to check if a file exists asynchronously
  */
@@ -56,7 +58,7 @@ async function getInsightsFeatureSettings(): Promise<InsightsModelConfig> {
         profileId: "balanced", // Default profile for settings-based config
         model: featureModels.insights ?? DEFAULT_FEATURE_MODELS.insights,
         thinkingLevel: featureThinking.insights ?? DEFAULT_FEATURE_THINKING.insights,
-        provider: "claude", // Default provider for backward compatibility
+        provider: DEFAULT_INSIGHTS_PROVIDER,
       };
     }
   } catch (error) {

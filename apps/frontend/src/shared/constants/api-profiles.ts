@@ -86,6 +86,19 @@ export const GLM_MODELS: ModelPreset[] = [
 ];
 
 // ============================================
+// OpenAI Models (Direct API)
+// ============================================
+export const OPENAI_MODELS: ModelPreset[] = [
+  { id: 'gpt-4o', name: 'GPT-4o', tier: 'opus', contextWindow: 128000, description: 'Most capable multimodal model' },
+  { id: 'gpt-4o-mini', name: 'GPT-4o Mini', tier: 'haiku', contextWindow: 128000, description: 'Fast and affordable' },
+  { id: 'gpt-4-turbo', name: 'GPT-4 Turbo', tier: 'sonnet', contextWindow: 128000, description: 'GPT-4 Turbo with vision' },
+  { id: 'o3', name: 'O3', tier: 'opus', contextWindow: 200000, description: 'Advanced reasoning model' },
+  { id: 'o3-mini', name: 'O3 Mini', tier: 'sonnet', contextWindow: 200000, description: 'Efficient reasoning model' },
+  { id: 'o1', name: 'O1', tier: 'opus', contextWindow: 200000, description: 'Reasoning model' },
+  { id: 'o1-mini', name: 'O1 Mini', tier: 'sonnet', contextWindow: 128000, description: 'Compact reasoning model' },
+];
+
+// ============================================
 // Provider Presets with Model Catalogs
 // ============================================
 export const API_PROVIDER_PRESETS: readonly ApiProviderPreset[] = [
@@ -95,6 +108,13 @@ export const API_PROVIDER_PRESETS: readonly ApiProviderPreset[] = [
     labelKey: 'settings:apiProfiles.presets.anthropic',
     supportsModelListing: true,
     models: ANTHROPIC_MODELS
+  },
+  {
+    id: 'openai',
+    baseUrl: 'https://api.openai.com/v1',
+    labelKey: 'settings:apiProfiles.presets.openai',
+    supportsModelListing: true,
+    models: OPENAI_MODELS
   },
   {
     id: 'openrouter',

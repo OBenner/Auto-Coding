@@ -137,10 +137,24 @@
   "customModel": {
     "title": "Custom Model Configuration",
     "description": "Configure the model and thinking level for this chat session.",
+    "provider": "Provider",
     "model": "Model",
     "thinkingLevel": "Thinking Level",
     "cancel": "Cancel",
-    "apply": "Apply"
+    "apply": "Apply",
+    "agentProfile": "Agent Profile",
+    "custom": "Custom...",
+    "customDesc": "Choose model & thinking level",
+    "providers": {
+      "claude": "Claude (Anthropic)",
+      "claudeDesc": "Official Anthropic Claude models",
+      "openai": "OpenAI",
+      "openaiDesc": "GPT-4o, o1, o3 models via OpenAI",
+      "litellm": "LiteLLM",
+      "litellmDesc": "100+ models via LiteLLM",
+      "openrouter": "OpenRouter",
+      "openrouterDesc": "400+ models via OpenRouter"
+    }
   },
   "removeProject": {
     "title": "Remove Project?",

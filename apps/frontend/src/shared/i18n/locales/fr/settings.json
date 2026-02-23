@@ -64,6 +64,7 @@
     "addButton": "Ajouter un profil",
     "presets": {
       "anthropic": "Anthropic",
+      "openai": "OpenAI",
       "openrouter": "OpenRouter",
       "groq": "Groq",
       "glmGlobal": "GLM (Global)",
