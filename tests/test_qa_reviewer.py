@@ -17,76 +17,23 @@ Mocks are installed only during import and immediately restored.
 """
 
 import json
-import sys
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from qa_test_helpers import (
+    aiter_empty,
+    aiter_messages,
+    create_base_mocks,
+    ensure_backend_path,
+    install_mocks_and_import,
+    make_text_message,
+    restore_modules,
+)
 
 # =============================================================================
 # MOCK SETUP - Install mocks, import module, then immediately restore
 # =============================================================================
-# qa.reviewer imports from many modules. qa/__init__.py triggers qa.loop which
-# imports even more. We mock everything needed for the import chain, then
-# immediately restore sys.modules to prevent contamination of other tests.
-
-_backend_path = str(Path(__file__).parent.parent / "apps" / "backend")
-if _backend_path not in sys.path:
-    sys.path.insert(0, _backend_path)
-
-# Modules we need to mock for the import to succeed
-_MODULES_TO_MOCK = [
-    "claude_agent_sdk",
-    "claude_agent_sdk.types",
-    "ui",
-    "progress",
-    "task_logger",
-    "linear_updater",
-    "client",
-    "core.client",
-    "core.model_fallback",
-    "agents",
-    "agents.memory_manager",
-    "agents.session",
-    "agents.e2e_generator",
-    "agents.test_generator",
-    "agents.coder",
-    "agents.planner",
-    "agents.code_reviewer",
-    "agents.documentation_generator",
-    "agents.utils",
-    "agents.base",
-    "debug",
-    "phase_config",
-    "phase_event",
-    "security.tool_input_validator",
-    "security.constants",
-    "services.recovery",
-    "analysis.coverage_analyzer",
-    "analysis.code_analyzer",
-    "analysis.coverage_reporter",
-    "analysis.failure_analyzer",
-    "analysis.ts_analyzer",
-    "prompts_pkg",
-    "spec.coverage_config",
-    "integrations",
-    "integrations.graphiti",
-    "integrations.graphiti.memory",
-]
-
-# Save original modules
-_saved = {}
-for _name in _MODULES_TO_MOCK:
-    if _name in sys.modules:
-        _saved[_name] = sys.modules[_name]
-
-# Install mocks
-_mock_agents_pkg = MagicMock()
-_mock_agents_pkg.__path__ = []
-
-_mock_mm = MagicMock()
-_mock_mm.get_graphiti_context = AsyncMock(return_value=None)
-_mock_mm.save_session_memory = AsyncMock(return_value=(True, "file"))
+ensure_backend_path()
 
 _mock_session = MagicMock()
 _mock_session.save_token_stats = MagicMock(return_value=True)
@@ -103,60 +50,15 @@ _mock_spec_coverage.CriticalPath = MagicMock
 _mock_spec_coverage.get_minimum_coverage_for_file = MagicMock()
 _mock_spec_coverage.matches_pattern = MagicMock()
 
-_mocks = {
-    "claude_agent_sdk": MagicMock(
-        ClaudeSDKClient=MagicMock, ClaudeAgentOptions=MagicMock
-    ),
-    "claude_agent_sdk.types": MagicMock(),
-    "ui": MagicMock(print_status=MagicMock()),
-    "progress": MagicMock(
-        count_subtasks=MagicMock(return_value=(3, 3)),
-        is_build_complete=MagicMock(return_value=True),
-    ),
-    "task_logger": MagicMock(
-        LogPhase=MagicMock(),
-        LogEntryType=MagicMock(),
-        get_task_logger=MagicMock(return_value=None),
-    ),
-    "linear_updater": MagicMock(is_linear_enabled=MagicMock(return_value=False)),
-    "client": MagicMock(),
-    "core.client": MagicMock(create_client=MagicMock()),
-    "core.model_fallback": MagicMock(),
-    "agents": _mock_agents_pkg,
-    "agents.memory_manager": _mock_mm,
-    "agents.session": _mock_session,
-    "agents.e2e_generator": MagicMock(),
-    "agents.test_generator": MagicMock(),
-    "agents.coder": MagicMock(),
-    "agents.planner": MagicMock(),
-    "agents.code_reviewer": MagicMock(),
-    "agents.documentation_generator": MagicMock(),
-    "agents.utils": MagicMock(),
-    "agents.base": MagicMock(),
-    "debug": MagicMock(),
-    "phase_config": MagicMock(resolve_model_id=MagicMock(return_value="claude-haiku")),
-    "phase_event": MagicMock(),
-    "security.tool_input_validator": MagicMock(
-        get_safe_tool_input=MagicMock(return_value=None)
-    ),
-    "security.constants": MagicMock(),
-    "services.recovery": MagicMock(),
-    "analysis.coverage_analyzer": _mock_coverage_analyzer,
-    "analysis.code_analyzer": MagicMock(),
-    "analysis.coverage_reporter": MagicMock(),
-    "analysis.failure_analyzer": MagicMock(),
-    "analysis.ts_analyzer": MagicMock(),
-    "prompts_pkg": MagicMock(
-        get_qa_reviewer_prompt=MagicMock(return_value="QA reviewer prompt")
-    ),
-    "spec.coverage_config": _mock_spec_coverage,
-    "integrations": MagicMock(),
-    "integrations.graphiti": MagicMock(),
-    "integrations.graphiti.memory": MagicMock(),
-}
+_mocks = create_base_mocks(
+    **{
+        "agents.session": _mock_session,
+        "analysis.coverage_analyzer": _mock_coverage_analyzer,
+        "spec.coverage_config": _mock_spec_coverage,
+    }
+)
 
-for _name, _mock in _mocks.items():
-    sys.modules[_name] = _mock
+_saved = install_mocks_and_import(_mocks)
 
 # Import the module under test (this triggers the full import chain)
 from qa.reviewer import (  # noqa: E402
@@ -166,11 +68,7 @@ from qa.reviewer import (  # noqa: E402
 )
 
 # Immediately restore all modules to prevent contamination of other test files
-for _name in _MODULES_TO_MOCK:
-    if _name in _saved:
-        sys.modules[_name] = _saved[_name]
-    elif _name in sys.modules:
-        del sys.modules[_name]
+restore_modules(_saved)
 
 
 # =============================================================================
@@ -210,31 +108,8 @@ def mock_client():
 
 
 # =============================================================================
-# HELPERS
+# HELPERS (shared helpers imported from qa_test_helpers)
 # =============================================================================
-
-
-async def aiter_empty():
-    """Empty async iterator for mock receive_response."""
-    for _ in []:
-        yield
-
-
-def make_text_message(text):
-    """Create a mock AssistantMessage with a TextBlock."""
-    block = MagicMock()
-    type(block).__name__ = "TextBlock"
-    block.text = text
-    msg = MagicMock()
-    type(msg).__name__ = "AssistantMessage"
-    msg.content = [block]
-    return msg
-
-
-async def aiter_messages(*msgs):
-    """Create an async iterator from messages."""
-    for m in msgs:
-        yield m
 
 
 # =============================================================================
