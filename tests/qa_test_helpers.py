@@ -165,6 +165,20 @@ def restore_modules(saved):
             del sys.modules[name]
 
 
+def create_mock_client():
+    """Create a mock Claude SDK client for QA tests.
+
+    Returns a pre-configured AsyncMock with query, receive_response,
+    and async context manager support.
+    """
+    client = AsyncMock()
+    client.query = AsyncMock()
+    client.receive_response = MagicMock(return_value=aiter_empty())
+    client.__aenter__ = AsyncMock(return_value=client)
+    client.__aexit__ = AsyncMock(return_value=None)
+    return client
+
+
 async def aiter_empty():
     """Empty async iterator for mock receive_response."""
     if False:

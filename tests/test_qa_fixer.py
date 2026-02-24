@@ -26,6 +26,7 @@ from qa_test_helpers import (
     aiter_empty,
     aiter_messages,
     create_base_mocks,
+    create_mock_client,
     ensure_backend_path,
     install_mocks_and_import,
     make_text_message,
@@ -123,12 +124,7 @@ def project_dir(spec_dir):
 @pytest.fixture
 def mock_client():
     """Create a mock Claude SDK client."""
-    client = AsyncMock()
-    client.query = AsyncMock()
-    client.receive_response = MagicMock(return_value=aiter_empty())
-    client.__aenter__ = AsyncMock(return_value=client)
-    client.__aexit__ = AsyncMock(return_value=None)
-    return client
+    return create_mock_client()
 
 
 @pytest.fixture

@@ -251,81 +251,91 @@ Current question: {message}"""
                 max_thinking_tokens=max_thinking_tokens,
             )
 
-            # Send the query
-            await session.query(full_prompt)
+            # Stream and clean up with proper try/finally
+            try:
+                # Send the query
+                await session.query(full_prompt)
 
-            # Stream the response
-            response_text = ""
-            current_tool = None
+                # Stream the response
+                response_text = ""
+                current_tool = None
 
-            async for msg in session.receive_response():
-                msg_type = type(msg).__name__
-                debug_detailed("insights_runner", "Received message", msg_type=msg_type)
+                async for msg in session.receive_response():
+                    msg_type = type(msg).__name__
+                    debug_detailed(
+                        "insights_runner", "Received message", msg_type=msg_type
+                    )
 
-                if msg_type == "AssistantMessage" and hasattr(msg, "content"):
-                    for block in msg.content:
-                        block_type = type(block).__name__
-                        debug_detailed(
-                            "insights_runner", "Processing block", block_type=block_type
-                        )
-                        if block_type == "TextBlock" and hasattr(block, "text"):
-                            text = block.text
+                    if msg_type == "AssistantMessage" and hasattr(msg, "content"):
+                        for block in msg.content:
+                            block_type = type(block).__name__
                             debug_detailed(
-                                "insights_runner", "Text block", text_length=len(text)
+                                "insights_runner",
+                                "Processing block",
+                                block_type=block_type,
                             )
-                            # Print text with newline to ensure proper line separation for parsing
-                            print(text, flush=True)
-                            response_text += text
-                        elif block_type == "ToolUseBlock" and hasattr(block, "name"):
-                            # Emit tool start marker for UI feedback
-                            tool_name = block.name
-                            tool_input = ""
+                            if block_type == "TextBlock" and hasattr(block, "text"):
+                                text = block.text
+                                debug_detailed(
+                                    "insights_runner",
+                                    "Text block",
+                                    text_length=len(text),
+                                )
+                                # Print text with newline to ensure proper line separation for parsing
+                                print(text, flush=True)
+                                response_text += text
+                            elif block_type == "ToolUseBlock" and hasattr(
+                                block, "name"
+                            ):
+                                # Emit tool start marker for UI feedback
+                                tool_name = block.name
+                                tool_input = ""
 
-                            # Extract a brief description of what the tool is doing
-                            if hasattr(block, "input") and block.input:
-                                inp = block.input
-                                if isinstance(inp, dict):
-                                    if "pattern" in inp:
-                                        tool_input = f"pattern: {inp['pattern']}"
-                                    elif "file_path" in inp:
-                                        # Shorten path for display
-                                        fp = inp["file_path"]
-                                        if len(fp) > 50:
-                                            fp = "..." + fp[-47:]
-                                        tool_input = fp
-                                    elif "path" in inp:
-                                        tool_input = inp["path"]
+                                # Extract a brief description of what the tool is doing
+                                if hasattr(block, "input") and block.input:
+                                    inp = block.input
+                                    if isinstance(inp, dict):
+                                        if "pattern" in inp:
+                                            tool_input = f"pattern: {inp['pattern']}"
+                                        elif "file_path" in inp:
+                                            # Shorten path for display
+                                            fp = inp["file_path"]
+                                            if len(fp) > 50:
+                                                fp = "..." + fp[-47:]
+                                            tool_input = fp
+                                        elif "path" in inp:
+                                            tool_input = inp["path"]
 
-                            current_tool = tool_name
+                                current_tool = tool_name
+                                print(
+                                    f"__TOOL_START__:{json.dumps({'name': tool_name, 'input': tool_input})}",
+                                    flush=True,
+                                )
+
+                    elif msg_type == "ToolResult":
+                        # Tool finished executing
+                        if current_tool:
                             print(
-                                f"__TOOL_START__:{json.dumps({'name': tool_name, 'input': tool_input})}",
+                                f"__TOOL_END__:{json.dumps({'name': current_tool})}",
                                 flush=True,
                             )
+                            current_tool = None
 
-                elif msg_type == "ToolResult":
-                    # Tool finished executing
-                    if current_tool:
-                        print(
-                            f"__TOOL_END__:{json.dumps({'name': current_tool})}",
-                            flush=True,
-                        )
-                        current_tool = None
+                # Ensure we have a newline at the end
+                if response_text and not response_text.endswith("\n"):
+                    print()
 
-            # Ensure we have a newline at the end
-            if response_text and not response_text.endswith("\n"):
-                print()
-
-            debug(
-                "insights_runner",
-                "Response complete",
-                response_length=len(response_text),
-            )
-
-            # Clean up session
-            try:
-                session.close()
+                debug(
+                    "insights_runner",
+                    "Response complete",
+                    response_length=len(response_text),
+                )
             finally:
-                ai_provider.close()
+                # Clean up session and provider regardless of success/failure
+                try:
+                    session.close()
+                finally:
+                    ai_provider.close()
 
     except Exception as e:
         print(f"Error using AI provider: {e}", file=sys.stderr)
