@@ -11,6 +11,7 @@ import {
   ExternalLink,
   TrendingUp,
   Trash2,
+  Archive,
 } from 'lucide-react';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
@@ -30,10 +31,15 @@ export function FeatureDetailPanel({
   onConvertToSpec,
   onGoToTask,
   onDelete,
+  onArchive,
   competitorInsights = [],
 }: FeatureDetailPanelProps) {
   const { t } = useTranslation('common');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  const handleArchive = () => {
+    onArchive?.(feature.id);
+  };
 
   const handleDelete = () => {
     if (onDelete) {
@@ -216,23 +222,44 @@ export function FeatureDetailPanel({
       </ScrollArea>
 
       {/* Actions */}
-      {feature.linkedSpecId ? (
-        <div className="shrink-0 p-4 border-t border-border">
-          <Button className="w-full" onClick={() => feature.linkedSpecId && onGoToTask(feature.linkedSpecId)}>
-            <ExternalLink className="h-4 w-4 mr-2" />
-            Go to Task
+      {(() => {
+        const archiveButton = feature.status === 'done' && (
+          <Button
+            variant="outline"
+            className="w-full"
+            onClick={handleArchive}
+            aria-label={t('accessibility.archiveFeatureAriaLabel')}
+          >
+            <Archive className="h-4 w-4 mr-2" />
+            {t('roadmap.archiveFeature')}
           </Button>
-        </div>
-      ) : (
-        feature.status !== 'done' && (
+        );
+
+        if (feature.linkedSpecId) return (
+          <div className="shrink-0 p-4 border-t border-border space-y-2">
+            <Button className="w-full" onClick={() => { if (feature.linkedSpecId) onGoToTask(feature.linkedSpecId); }}>
+              <ExternalLink className="h-4 w-4 mr-2" />
+              {t('roadmap.goToTask')}
+            </Button>
+            {archiveButton}
+          </div>
+        );
+
+        if (feature.status === 'done') return (
+          <div className="shrink-0 p-4 border-t border-border">
+            {archiveButton}
+          </div>
+        );
+
+        return (
           <div className="shrink-0 p-4 border-t border-border">
             <Button className="w-full" onClick={() => onConvertToSpec(feature)}>
               <Zap className="h-4 w-4 mr-2" />
-              Convert to Auto-Build Task
+              {t('roadmap.convertToTask')}
             </Button>
           </div>
-        )
-      )}
+        );
+      })()}
 
       {/* Delete Confirmation */}
       {showDeleteConfirm && (

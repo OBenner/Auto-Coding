@@ -7,7 +7,6 @@ import type {
   IPCResult,
   ConversationHistory,
   SessionContextSummary,
-  OptimizedContext
 } from '../../shared/types';
 import { projectStore } from '../project-store';
 import {

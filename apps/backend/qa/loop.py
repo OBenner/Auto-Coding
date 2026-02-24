@@ -33,7 +33,7 @@ from linear_updater import (
 )
 from phase_config import get_phase_model, get_phase_thinking_budget
 from phase_event import ExecutionPhase, emit_phase
-from progress import count_subtasks, is_build_complete
+from progress import count_subtasks, is_build_ready_for_qa
 from security.constants import PROJECT_DIR_ENV_VAR
 from services.recovery import RecoveryManager
 from task_logger import (
@@ -313,21 +313,26 @@ async def run_qa_validation_loop(
     # Initialize task logger for the validation phase
     task_logger = get_task_logger(spec_dir)
 
-    # Verify build is complete
-    if not is_build_complete(spec_dir):
-        debug_warning("qa_loop", "Build is not complete, cannot run QA")
-        print("\n❌ Build is not complete. Cannot run QA validation.")
-        completed, total = count_subtasks(spec_dir)
-        debug("qa_loop", "Build progress", completed=completed, total=total)
-        print(f"   Progress: {completed}/{total} subtasks completed")
-        return False
-
-    # Emit phase event at start of QA validation (before any early returns)
-    emit_phase(ExecutionPhase.QA_REVIEW, "Starting QA validation")
-
     # Check if there's pending human feedback that needs to be processed
     fix_request_file = spec_dir / "QA_FIX_REQUEST.md"
     has_human_feedback = fix_request_file.exists()
+
+    # Human feedback takes priority — if the user explicitly asked to proceed,
+    # skip the build completeness gate entirely
+    if not has_human_feedback:
+        # Verify build is ready for QA (all subtasks in terminal state)
+        if not is_build_ready_for_qa(spec_dir):
+            debug_warning(
+                "qa_loop", "Build is not ready for QA - subtasks still in progress"
+            )
+            print("\n❌ Build is not ready for QA validation.")
+            completed, total = count_subtasks(spec_dir)
+            debug("qa_loop", "Build progress", completed=completed, total=total)
+            print(f"   Progress: {completed}/{total} subtasks completed")
+            return False
+
+    # Emit phase event at start of QA validation (before any early returns)
+    emit_phase(ExecutionPhase.QA_REVIEW, "Starting QA validation")
 
     # Detect if the file was manually edited by the user
     is_user_correction, correction_details = check_user_correction(spec_dir)

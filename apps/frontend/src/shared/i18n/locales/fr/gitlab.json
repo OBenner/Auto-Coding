@@ -55,7 +55,12 @@
     "creating": "Création...",
     "cancel": "Annuler",
     "done": "Terminé",
-    "close": "Fermer"
+    "close": "Fermer",
+    "progress": {
+      "fetchingIssue": "Récupération des détails de l'issue...",
+      "creatingTask": "Création de la tâche à partir de l'issue...",
+      "complete": "Investigation terminée"
+    }
   },
   "settings": {
     "enableIssues": "Activer les issues GitLab",

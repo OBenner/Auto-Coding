@@ -8,8 +8,10 @@ about a codebase. It can also suggest tasks based on the conversation.
 
 import argparse
 import asyncio
+import base64
 import json
 import sys
+import tempfile
 from pathlib import Path
 
 # Add auto-claude to path
@@ -116,6 +118,115 @@ def load_project_context(project_dir: str) -> str:
     )
 
 
+ALLOWED_MIME_TYPES = frozenset(
+    ["image/png", "image/jpeg", "image/jpg", "image/gif", "image/webp"]
+)
+
+MAX_IMAGE_FILE_SIZE = 10 * 1024 * 1024  # 10 MB (aligned with frontend MAX_IMAGE_SIZE)
+MAX_IMAGE_COUNT = 10  # Maximum number of images per manifest
+
+
+def load_images_from_manifest(manifest_path: str) -> list[dict]:
+    """Load images from a manifest JSON file.
+
+    The manifest contains an array of objects with 'path' and 'mimeType' fields.
+    Each image file is read as binary and encoded to base64.
+
+    Returns a list of dicts with 'media_type' and 'data' (base64-encoded) fields.
+    """
+    images = []
+    tmp_dir = Path(tempfile.gettempdir()).resolve()
+
+    try:
+        with open(manifest_path, encoding="utf-8") as f:
+            manifest = json.load(f)
+
+        for entry in manifest:
+            if len(images) >= MAX_IMAGE_COUNT:
+                debug(
+                    "insights_runner",
+                    f"Image limit reached ({MAX_IMAGE_COUNT}), skipping remaining images",
+                )
+                break
+
+            image_path = entry.get("path")
+            mime_type = entry.get("mimeType", "image/png")
+
+            if not image_path:
+                debug_error(
+                    "insights_runner",
+                    "Image entry missing path field",
+                )
+                continue
+
+            # Validate path is within temp directory before checking existence
+            try:
+                resolved = Path(image_path).resolve()
+                if not resolved.is_relative_to(tmp_dir):
+                    debug_error(
+                        "insights_runner",
+                        f"Image path outside temp directory, skipping: {image_path}",
+                    )
+                    continue
+            except (ValueError, OSError):
+                debug_error(
+                    "insights_runner",
+                    f"Invalid image path, skipping: {image_path}",
+                )
+                continue
+
+            if not resolved.exists():
+                debug_error(
+                    "insights_runner",
+                    f"Image file not found: {image_path}",
+                )
+                continue
+
+            # Validate MIME type against allowlist
+            if mime_type not in ALLOWED_MIME_TYPES:
+                debug_error(
+                    "insights_runner",
+                    f"Invalid MIME type '{mime_type}', skipping: {image_path}",
+                )
+                continue
+
+            # Validate file size
+            file_size = resolved.stat().st_size
+            if file_size > MAX_IMAGE_FILE_SIZE:
+                debug_error(
+                    "insights_runner",
+                    f"Image too large ({file_size} bytes), skipping: {image_path}",
+                )
+                continue
+
+            try:
+                with open(resolved, "rb") as img_f:
+                    image_data = base64.b64encode(img_f.read()).decode("utf-8")
+                images.append(
+                    {
+                        "media_type": mime_type,
+                        "data": image_data,
+                    }
+                )
+                debug(
+                    "insights_runner",
+                    "Loaded image",
+                    path=image_path,
+                    mime_type=mime_type,
+                    size_bytes=file_size,
+                )
+            except Exception as e:
+                debug_error(
+                    "insights_runner",
+                    f"Failed to read image {image_path}: {e}",
+                )
+
+    except (json.JSONDecodeError, OSError) as e:
+        debug_error("insights_runner", f"Failed to load images manifest: {e}")
+
+    return images
+
+
 def build_system_prompt(project_dir: str) -> str:
     """Build the system prompt for the insights agent."""
     context = load_project_context(project_dir)
@@ -148,6 +259,7 @@ async def run_with_sdk(
     history: list,
     model: str = "sonnet",  # Shorthand - resolved via API Profile if configured
     thinking_level: str = "medium",
+    images: list[dict] | None = None,
     provider: str = "claude",
 ) -> None:
     """Run the chat using AI provider with streaming."""
@@ -156,7 +268,7 @@ async def run_with_sdk(
             "Provider system not available, falling back to simple mode",
             file=sys.stderr,
         )
-        run_simple(project_dir, message, history)
+        run_simple(project_dir, message, history, images)
         return
 
     # Claude provider requires OAuth token; other providers use their own credentials
@@ -166,7 +278,7 @@ async def run_with_sdk(
                 "No authentication token found, falling back to simple mode",
                 file=sys.stderr,
             )
-            run_simple(project_dir, message, history)
+            run_simple(project_dir, message, history, images)
             return
         # Ensure SDK can find the token
         ensure_claude_code_oauth_token()
@@ -253,8 +365,24 @@ Current question: {message}"""
 
             # Stream and clean up with proper try/finally
             try:
-                # Send the query
-                await session.query(full_prompt)
+                # Build the query - images are stored for reference but provider doesn't support multi-modal input yet
+                if images:
+                    debug(
+                        "insights_runner",
+                        "Images attached but provider does not support multi-modal input",
+                        image_count=len(images),
+                    )
+
+                    # TODO: When the provider adds support for multi-modal content blocks, update this.
+                    image_note = f"\n\n[Note: The user attached {len(images)} image(s), but the current provider does not support multi-modal input. Please ask the user to describe the image content instead.]"
+                    print(
+                        "Warning: Image attachments cannot be sent to the model in provider mode. Sending text-only query.",
+                        file=sys.stderr,
+                    )
+                    await session.query(full_prompt + image_note)
+                else:
+                    # Send the query as plain text
+                    await session.query(full_prompt)
 
                 # Stream the response
                 response_text = ""
@@ -342,12 +470,20 @@ Current question: {message}"""
         import traceback
 
         traceback.print_exc(file=sys.stderr)
-        run_simple(project_dir, message, history)
+        run_simple(project_dir, message, history, images)
 
 
-def run_simple(project_dir: str, message: str, history: list) -> None:
+def run_simple(
+    project_dir: str, message: str, history: list, images: list[dict] | None = None
+) -> None:
     """Simple fallback mode without SDK - uses subprocess to call claude CLI."""
     import subprocess
+
+    if images:
+        print(
+            "Warning: Image attachments are not supported in simple mode and will be skipped.",
+            file=sys.stderr,
+        )
 
     system_prompt = build_system_prompt(project_dir)
 
@@ -419,6 +555,10 @@ def main():
         help="Thinking level for extended reasoning (default: medium)",
     )
     parser.add_argument(
+        "--images-file",
+        help="Path to JSON manifest file listing image file paths and MIME types",
+    )
+    parser.add_argument(
         "--provider",
         default="claude",
         choices=["claude", "litellm", "openrouter", "openai", "ollama"],
@@ -466,11 +606,25 @@ def main():
         debug_error("insights_runner", f"Failed to load history: {e}")
         history = []
 
+    # Load images from manifest file if provided
+    images = None
+    if args.images_file:
+        debug("insights_runner", "Loading images from manifest", file=args.images_file)
+        images = load_images_from_manifest(args.images_file)
+        if images:
+            debug(
+                "insights_runner",
+                "Loaded images for multi-modal query",
+                image_count=len(images),
+            )
+        else:
+            debug("insights_runner", "No valid images loaded from manifest")
+
     # Run the async SDK function
     debug("insights_runner", "Running SDK query")
     asyncio.run(
         run_with_sdk(
-            project_dir, user_message, history, model, thinking_level, provider
+            project_dir, user_message, history, model, thinking_level, images, provider
         )
     )
     debug_success("insights_runner", "Query completed")

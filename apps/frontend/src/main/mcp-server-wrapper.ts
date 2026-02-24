@@ -25,9 +25,6 @@ import { getMCPLogLevel } from './mcp-manager.js';
 // Constants
 // ============================================================================
 
-/** Default log level */
-const DEFAULT_LOG_LEVEL = 'info';
-
 /** Default server startup timeout in milliseconds */
 const DEFAULT_STARTUP_TIMEOUT = 5000;
 
