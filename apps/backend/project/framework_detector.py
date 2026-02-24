@@ -38,6 +38,8 @@ class FrameworkDetector:
         self.detect_ruby_frameworks()
         self.detect_php_frameworks()
         self.detect_dart_frameworks()
+        self.detect_go_frameworks()
+        self.detect_rust_frameworks()
         return self.frameworks
 
     def detect_nodejs_frameworks(self) -> None:
@@ -263,3 +265,44 @@ class FrameworkDetector:
             self.frameworks.append("shelf")
         if "aqueduct" in content_lower:
             self.frameworks.append("aqueduct")
+
+    def detect_go_frameworks(self) -> None:
+        """Detect Go frameworks from go.mod."""
+        content = self.parser.read_text("go.mod")
+        if not content:
+            return
+
+        # Detect Go frameworks
+        go_framework_deps = {
+            "gin-gonic/gin": "gin",
+            "labstack/echo": "echo",
+            "gofiber/fiber": "fiber",
+            "go-chi/chi": "chi",
+            "gorilla/mux": "gorilla",
+            "beego/beego": "beego",
+            "revel/revel": "revel",
+        }
+
+        for dep, framework in go_framework_deps.items():
+            if dep in content:
+                self.frameworks.append(framework)
+
+    def detect_rust_frameworks(self) -> None:
+        """Detect Rust frameworks from Cargo.toml."""
+        content = self.parser.read_text("Cargo.toml")
+        if not content:
+            return
+
+        # Detect Rust frameworks
+        rust_framework_deps = {
+            "actix-web": "actix",
+            "axum": "axum",
+            "rocket": "rocket",
+            "warp": "warp",
+            "tide": "tide",
+            "poem": "poem",
+        }
+
+        for dep, framework in rust_framework_deps.items():
+            if dep in content:
+                self.frameworks.append(framework)
