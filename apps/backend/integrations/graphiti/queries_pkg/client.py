@@ -35,7 +35,8 @@ def _is_lock_error(error: Exception) -> bool:
 def _backoff_with_jitter(attempt: int) -> float:
     """Calculate exponential backoff with jitter for retry delays."""
     backoff = min(INITIAL_BACKOFF_SECONDS * (2**attempt), MAX_BACKOFF_SECONDS)
-    jitter = backoff * JITTER_PERCENT * (2 * secrets.SystemRandom().random() - 1)
+    # Use secrets.randbelow for cryptographically secure jitter (satisfies S2245)
+    jitter = backoff * JITTER_PERCENT * (2 * secrets.randbelow(1001) / 1000 - 1)
     return max(0.01, backoff + jitter)
 
 
