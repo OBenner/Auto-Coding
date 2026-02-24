@@ -23,7 +23,7 @@ try:
     )
     from .io_utils import safe_print
 except (ImportError, ValueError, SystemError):
-    from models import (
+    from runners.github.models import (
         AICommentTriage,
         AICommentVerdict,
         PRReviewFinding,
@@ -33,7 +33,7 @@ except (ImportError, ValueError, SystemError):
         TriageCategory,
         TriageResult,
     )
-    from services.io_utils import safe_print
+    from runners.github.services.io_utils import safe_print
 
 # Evidence-based validation replaces confidence scoring
 # Findings without evidence are filtered out instead of using confidence thresholds

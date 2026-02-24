@@ -33,7 +33,12 @@ from ui import Icons, bold
 @pytest.fixture(autouse=True)
 def cleanup_recovery_state():
     """Cleanup test data before and after each test."""
-    spec_dir = Path(__file__).parent.parent / ".auto-claude" / "specs" / "064-intelligent-error-recovery"
+    spec_dir = (
+        Path(__file__).parent.parent
+        / ".auto-claude"
+        / "specs"
+        / "064-intelligent-error-recovery"
+    )
     project_dir = Path(__file__).parent.parent
     recovery_manager = RecoveryManager(spec_dir, project_dir)
 
@@ -41,7 +46,7 @@ def cleanup_recovery_state():
         "test-subtask-e2e-1",
         "test-subtask-e2e-2",
         "test-subtask-e2e-3",
-        "test-subtask-e2e-circular"
+        "test-subtask-e2e-circular",
     ]
 
     # Cleanup before test
@@ -67,7 +72,12 @@ def test_first_attempt():
     print("TEST 1: First Attempt (No History)")
     print("=" * 70)
 
-    spec_dir = Path(__file__).parent.parent / ".auto-claude" / "specs" / "064-intelligent-error-recovery"
+    spec_dir = (
+        Path(__file__).parent.parent
+        / ".auto-claude"
+        / "specs"
+        / "064-intelligent-error-recovery"
+    )
     project_dir = Path(__file__).parent.parent
 
     # Get recovery context for first attempt
@@ -79,7 +89,9 @@ def test_first_attempt():
     print(f"✓ Recovery hints: {recovery_hints}")
 
     assert attempt_count == 0, f"Expected 0 attempts, got {attempt_count}"
-    assert recovery_hints is None, f"Expected None for first attempt, got {recovery_hints}"
+    assert recovery_hints is None, (
+        f"Expected None for first attempt, got {recovery_hints}"
+    )
 
     print("✅ TEST 1 PASSED: First attempt has no history\n")
 
@@ -90,7 +102,12 @@ def test_record_attempt_and_retrieve():
     print("TEST 2: Record Attempt and Retrieve Context")
     print("=" * 70)
 
-    spec_dir = Path(__file__).parent.parent / ".auto-claude" / "specs" / "064-intelligent-error-recovery"
+    spec_dir = (
+        Path(__file__).parent.parent
+        / ".auto-claude"
+        / "specs"
+        / "064-intelligent-error-recovery"
+    )
     project_dir = Path(__file__).parent.parent
 
     # Create recovery manager
@@ -103,7 +120,7 @@ def test_record_attempt_and_retrieve():
         session=1,
         success=False,
         approach="Tried implementing async await pattern",
-        error="SyntaxError: invalid syntax"
+        error="SyntaxError: invalid syntax",
     )
 
     print(f"✓ Recorded failed attempt for {test_subtask_id}")
@@ -131,7 +148,12 @@ def test_multiple_attempts_with_stuck_notification():
     print("TEST 3: Multiple Attempts → Stuck Notification")
     print("=" * 70)
 
-    spec_dir = Path(__file__).parent.parent / ".auto-claude" / "specs" / "064-intelligent-error-recovery"
+    spec_dir = (
+        Path(__file__).parent.parent
+        / ".auto-claude"
+        / "specs"
+        / "064-intelligent-error-recovery"
+    )
     project_dir = Path(__file__).parent.parent
 
     # Create recovery manager
@@ -142,8 +164,14 @@ def test_multiple_attempts_with_stuck_notification():
     # Record 3 failed attempts
     approaches = [
         ("Tried implementing async await pattern", "SyntaxError: invalid syntax"),
-        ("Attempted refactor to use callbacks", "TypeError: callback is not a function"),
-        ("Switched to Promise-based approach", "ReferenceError: Promise is not defined"),
+        (
+            "Attempted refactor to use callbacks",
+            "TypeError: callback is not a function",
+        ),
+        (
+            "Switched to Promise-based approach",
+            "ReferenceError: Promise is not defined",
+        ),
     ]
 
     for i, (approach, error) in enumerate(approaches, 1):
@@ -152,14 +180,14 @@ def test_multiple_attempts_with_stuck_notification():
             session=i,
             success=False,
             approach=approach,
-            error=error
+            error=error,
         )
         print(f"✓ Recorded attempt {i}: {approach[:50]}...")
 
     # Mark subtask as stuck
     recovery_manager.mark_subtask_stuck(
         test_subtask_id,
-        "Multiple different approaches failed with syntax and type errors"
+        "Multiple different approaches failed with syntax and type errors",
     )
     print(f"✓ Marked {test_subtask_id} as stuck")
 
@@ -173,7 +201,7 @@ def test_multiple_attempts_with_stuck_notification():
             subtask_id=test_subtask_id,
             reason="Multiple different approaches failed with syntax and type errors",
             attempt_count=3,
-            spec_dir=spec_dir
+            spec_dir=spec_dir,
         )
 
         notification_output = sys.stdout.getvalue()
@@ -187,15 +215,18 @@ def test_multiple_attempts_with_stuck_notification():
 
     # Verify notification content
     assert test_subtask_id in notification_output, "Subtask ID not in notification"
-    assert "Manual Intervention Required" in notification_output, "Stuck message not in notification"
+    assert "Manual Intervention Required" in notification_output, (
+        "Stuck message not in notification"
+    )
     assert "3" in notification_output, "Attempt count not in notification"
     assert "spec" in notification_output.lower(), "Spec location not in notification"
 
     # Verify stuck state
     stuck_subtasks = recovery_manager.get_stuck_subtasks()
     assert len(stuck_subtasks) > 0, "No stuck subtasks recorded"
-    assert any(s["subtask_id"] == test_subtask_id for s in stuck_subtasks), \
+    assert any(s["subtask_id"] == test_subtask_id for s in stuck_subtasks), (
         f"Test subtask not in stuck list: {stuck_subtasks}"
+    )
 
     print("✅ TEST 3 PASSED: Multiple attempts → Stuck notification triggered\n")
 
@@ -206,7 +237,12 @@ def test_recovery_context_in_prompts():
     print("TEST 4: Recovery Context Integration in Prompts")
     print("=" * 70)
 
-    spec_dir = Path(__file__).parent.parent / ".auto-claude" / "specs" / "064-intelligent-error-recovery"
+    spec_dir = (
+        Path(__file__).parent.parent
+        / ".auto-claude"
+        / "specs"
+        / "064-intelligent-error-recovery"
+    )
     project_dir = Path(__file__).parent.parent
 
     # Create recovery manager
@@ -220,14 +256,14 @@ def test_recovery_context_in_prompts():
         session=1,
         success=False,
         approach="Used Python asyncio library",
-        error="ImportError: No module named 'asyncio'"
+        error="ImportError: No module named 'asyncio'",
     )
     recovery_manager.record_attempt(
         subtask_id=test_subtask_id,
         session=2,
         success=False,
         approach="Tried threading module instead",
-        error="RuntimeError: Thread deadlock detected"
+        error="RuntimeError: Thread deadlock detected",
     )
 
     print(f"✓ Recorded 2 failed attempts for {test_subtask_id}")
@@ -248,12 +284,13 @@ def test_recovery_context_in_prompts():
     # Verify recovery hints contain useful information
     assert attempt_count == 2, f"Expected 2 attempts, got {attempt_count}"
     assert recovery_hints is not None, "Expected recovery hints"
-    assert any("Previous attempts" in h for h in recovery_hints), \
+    assert any("Previous attempts" in h for h in recovery_hints), (
         "Missing attempt count info in hints"
-    assert any("FAILED" in h for h in recovery_hints), \
-        "Missing failure status in hints"
-    assert any("DIFFERENT approach" in h for h in recovery_hints), \
+    )
+    assert any("FAILED" in h for h in recovery_hints), "Missing failure status in hints"
+    assert any("DIFFERENT approach" in h for h in recovery_hints), (
         "Missing guidance to try different approach"
+    )
 
     print("\n✅ TEST 4 PASSED: Recovery context properly formatted for prompts\n")
 
@@ -264,7 +301,12 @@ def test_metrics_reporting():
     print("TEST 5: Recovery Metrics Reporting")
     print("=" * 70)
 
-    spec_dir = Path(__file__).parent.parent / ".auto-claude" / "specs" / "064-intelligent-error-recovery"
+    spec_dir = (
+        Path(__file__).parent.parent
+        / ".auto-claude"
+        / "specs"
+        / "064-intelligent-error-recovery"
+    )
     project_dir = Path(__file__).parent.parent
 
     # Get recovery metrics summary
@@ -290,7 +332,7 @@ def test_metrics_reporting():
                 "failed_recoveries",
                 "circular_fixes",
                 "success_rate",
-                "avg_iterations"
+                "avg_iterations",
             ]
             found_keys = [k for k in possible_keys if k in metrics_summary]
             print(f"\n✓ Found {len(found_keys)} metric keys: {found_keys}")
@@ -308,7 +350,12 @@ def test_circular_fix_detection():
     print("TEST 6: Circular Fix Detection")
     print("=" * 70)
 
-    spec_dir = Path(__file__).parent.parent / ".auto-claude" / "specs" / "064-intelligent-error-recovery"
+    spec_dir = (
+        Path(__file__).parent.parent
+        / ".auto-claude"
+        / "specs"
+        / "064-intelligent-error-recovery"
+    )
     project_dir = Path(__file__).parent.parent
 
     # Create recovery manager
@@ -329,14 +376,13 @@ def test_circular_fix_detection():
             session=i,
             success=False,
             approach=approach,
-            error=error
+            error=error,
         )
         print(f"✓ Recorded attempt {i}: {approach[:50]}...")
 
     # Check if circular fix is detected
     is_circular = recovery_manager.is_circular_fix(
-        test_subtask_id,
-        "Using async await pattern again"
+        test_subtask_id, "Using async await pattern again"
     )
 
     print(f"\n✓ Circular fix detected: {is_circular}")
@@ -353,7 +399,12 @@ def cleanup_test_data():
     print("CLEANUP: Removing Test Data")
     print("=" * 70)
 
-    spec_dir = Path(__file__).parent.parent / ".auto-claude" / "specs" / "064-intelligent-error-recovery"
+    spec_dir = (
+        Path(__file__).parent.parent
+        / ".auto-claude"
+        / "specs"
+        / "064-intelligent-error-recovery"
+    )
     memory_dir = spec_dir / "memory"
 
     # Reset test subtasks
@@ -363,7 +414,7 @@ def cleanup_test_data():
         "test-subtask-e2e-1",
         "test-subtask-e2e-2",
         "test-subtask-e2e-3",
-        "test-subtask-e2e-circular"
+        "test-subtask-e2e-circular",
     ]
 
     for subtask_id in test_subtasks:

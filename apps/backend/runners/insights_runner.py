@@ -32,14 +32,19 @@ env_file = Path(__file__).parent.parent / ".env"
 if env_file.exists():
     load_dotenv(env_file)
 
+# Import provider abstraction for multi-backend support
+# Claude Agent SDK remains the default and recommended provider
 try:
-    from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient
+    from core.providers import create_engine_provider
+    from core.providers.base import SessionConfig
+    from core.providers.config import ProviderConfig
 
-    SDK_AVAILABLE = True
+    PROVIDERS_AVAILABLE = True
 except ImportError:
-    SDK_AVAILABLE = False
-    ClaudeAgentOptions = None
-    ClaudeSDKClient = None
+    PROVIDERS_AVAILABLE = False
+    create_engine_provider = None
+    SessionConfig = None
+    ProviderConfig = None
 
 from core.auth import ensure_claude_code_oauth_token, get_auth_token
 from debug import (
@@ -247,23 +252,28 @@ async def run_with_sdk(
     model: str = "sonnet",  # Shorthand - resolved via API Profile if configured
     thinking_level: str = "medium",
     images: list[dict] | None = None,
+    provider: str = "claude",
 ) -> None:
-    """Run the chat using Claude SDK with streaming."""
-    if not SDK_AVAILABLE:
-        print("Claude SDK not available, falling back to simple mode", file=sys.stderr)
-        run_simple(project_dir, message, history, images)
-        return
-
-    if not get_auth_token():
+    """Run the chat using AI provider with streaming."""
+    if not PROVIDERS_AVAILABLE:
         print(
-            "No authentication token found, falling back to simple mode",
+            "Provider system not available, falling back to simple mode",
             file=sys.stderr,
         )
         run_simple(project_dir, message, history, images)
         return
 
-    # Ensure SDK can find the token
-    ensure_claude_code_oauth_token()
+    # Claude provider requires OAuth token; other providers use their own credentials
+    if provider == "claude":
+        if not get_auth_token():
+            print(
+                "No authentication token found, falling back to simple mode",
+                file=sys.stderr,
+            )
+            run_simple(project_dir, message, history, images)
+            return
+        # Ensure SDK can find the token
+        ensure_claude_code_oauth_token()
 
     system_prompt = build_system_prompt(project_dir)
     project_path = Path(project_dir).resolve()
@@ -291,115 +301,164 @@ Current question: {message}"""
         model=model,
         thinking_level=thinking_level,
         max_thinking_tokens=max_thinking_tokens,
+        provider=provider,
     )
 
     try:
-        # Build options dict - only include max_thinking_tokens if not None
-        options_kwargs = {
-            "model": resolve_model_id(model),  # Resolve via API Profile if configured
-            "system_prompt": system_prompt,
-            "allowed_tools": ["Read", "Glob", "Grep"],
-            "max_turns": 30,  # Allow sufficient turns for codebase exploration
-            "cwd": str(project_path),
-        }
+        # Create provider config - use env-based config for non-Claude providers
+        provider_config = ProviderConfig.from_env()
+        provider_config.provider = provider
+        resolved_model = resolve_model_id(model)
+        if provider == "claude":
+            provider_config.claude_model = resolved_model
+        elif provider == "openai":
+            provider_config.openai_model = resolved_model
+        elif provider == "openrouter":
+            provider_config.openrouter_model = resolved_model
+        elif provider == "litellm":
+            provider_config.litellm_model = resolved_model
+        elif provider == "ollama":
+            provider_config.ollama_model = resolved_model
+        if not provider_config.is_valid():
+            errors = provider_config.get_validation_errors()
+            raise RuntimeError("; ".join(errors))
 
-        # Only add thinking tokens if the thinking level is not "none"
-        if max_thinking_tokens is not None:
-            options_kwargs["max_thinking_tokens"] = max_thinking_tokens
+        # Create the provider instance
+        ai_provider = create_engine_provider(provider_config)
 
-        # Create Claude SDK client with appropriate settings for insights
-        client = ClaudeSDKClient(options=ClaudeAgentOptions(**options_kwargs))
+        # Create a temporary spec directory for the session (required by provider)
+        import tempfile
 
-        # Use async context manager pattern
-        async with client:
-            # Build the query - images are stored for reference but SDK doesn't support multi-modal input yet
-            if images:
-                debug(
-                    "insights_runner",
-                    "Images attached but SDK does not support multi-modal input",
-                    image_count=len(images),
-                )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            spec_dir = Path(temp_dir)
 
-                # TODO: When the SDK adds support for multi-modal content blocks, update this.
-                image_note = f"\n\n[Note: The user attached {len(images)} image(s), but the current SDK version does not support multi-modal input. Please ask the user to describe the image content instead.]"
-                print(
-                    "Warning: Image attachments cannot be sent to the model in SDK mode. Sending text-only query.",
-                    file=sys.stderr,
-                )
-                await client.query(full_prompt + image_note)
-            else:
-                # Send the query as plain text
-                await client.query(full_prompt)
-
-            # Stream the response
-            response_text = ""
-            current_tool = None
-
-            async for msg in client.receive_response():
-                msg_type = type(msg).__name__
-                debug_detailed("insights_runner", "Received message", msg_type=msg_type)
-
-                if msg_type == "AssistantMessage" and hasattr(msg, "content"):
-                    for block in msg.content:
-                        block_type = type(block).__name__
-                        debug_detailed(
-                            "insights_runner", "Processing block", block_type=block_type
-                        )
-                        if block_type == "TextBlock" and hasattr(block, "text"):
-                            text = block.text
-                            debug_detailed(
-                                "insights_runner", "Text block", text_length=len(text)
-                            )
-                            # Print text with newline to ensure proper line separation for parsing
-                            print(text, flush=True)
-                            response_text += text
-                        elif block_type == "ToolUseBlock" and hasattr(block, "name"):
-                            # Emit tool start marker for UI feedback
-                            tool_name = block.name
-                            tool_input = ""
-
-                            # Extract a brief description of what the tool is doing
-                            if hasattr(block, "input") and block.input:
-                                inp = block.input
-                                if isinstance(inp, dict):
-                                    if "pattern" in inp:
-                                        tool_input = f"pattern: {inp['pattern']}"
-                                    elif "file_path" in inp:
-                                        # Shorten path for display
-                                        fp = inp["file_path"]
-                                        if len(fp) > 50:
-                                            fp = "..." + fp[-47:]
-                                        tool_input = fp
-                                    elif "path" in inp:
-                                        tool_input = inp["path"]
-
-                            current_tool = tool_name
-                            print(
-                                f"__TOOL_START__:{json.dumps({'name': tool_name, 'input': tool_input})}",
-                                flush=True,
-                            )
-
-                elif msg_type == "ToolResult":
-                    # Tool finished executing
-                    if current_tool:
-                        print(
-                            f"__TOOL_END__:{json.dumps({'name': current_tool})}",
-                            flush=True,
-                        )
-                        current_tool = None
-
-            # Ensure we have a newline at the end
-            if response_text and not response_text.endswith("\n"):
-                print()
-
-            debug(
-                "insights_runner",
-                "Response complete",
-                response_length=len(response_text),
+            # Build session configuration
+            session_config = SessionConfig(
+                name="insights-session",
+                system_prompt=system_prompt,
+                model=resolve_model_id(model),
+                tools=["Read", "Glob", "Grep"],
+                working_directory=str(project_path),
+                extra={
+                    "agent_type": "coder",  # Use coder agent type for insights
+                    "max_turns": 30,  # Allow sufficient turns for codebase exploration
+                    "max_thinking_tokens": max_thinking_tokens,
+                },
             )
 
+            # Create session
+            session = ai_provider.create_session(
+                config=session_config,
+                project_dir=project_path,
+                spec_dir=spec_dir,
+                agent_type="coder",
+                max_thinking_tokens=max_thinking_tokens,
+            )
+
+            # Stream and clean up with proper try/finally
+            try:
+                # Build the query - images are stored for reference but provider doesn't support multi-modal input yet
+                if images:
+                    debug(
+                        "insights_runner",
+                        "Images attached but provider does not support multi-modal input",
+                        image_count=len(images),
+                    )
+
+                    # TODO: When the provider adds support for multi-modal content blocks, update this.
+                    image_note = f"\n\n[Note: The user attached {len(images)} image(s), but the current provider does not support multi-modal input. Please ask the user to describe the image content instead.]"
+                    print(
+                        "Warning: Image attachments cannot be sent to the model in provider mode. Sending text-only query.",
+                        file=sys.stderr,
+                    )
+                    await session.query(full_prompt + image_note)
+                else:
+                    # Send the query as plain text
+                    await session.query(full_prompt)
+
+                # Stream the response
+                response_text = ""
+                current_tool = None
+
+                async for msg in session.receive_response():
+                    msg_type = type(msg).__name__
+                    debug_detailed(
+                        "insights_runner", "Received message", msg_type=msg_type
+                    )
+
+                    if msg_type == "AssistantMessage" and hasattr(msg, "content"):
+                        for block in msg.content:
+                            block_type = type(block).__name__
+                            debug_detailed(
+                                "insights_runner",
+                                "Processing block",
+                                block_type=block_type,
+                            )
+                            if block_type == "TextBlock" and hasattr(block, "text"):
+                                text = block.text
+                                debug_detailed(
+                                    "insights_runner",
+                                    "Text block",
+                                    text_length=len(text),
+                                )
+                                # Print text with newline to ensure proper line separation for parsing
+                                print(text, flush=True)
+                                response_text += text
+                            elif block_type == "ToolUseBlock" and hasattr(
+                                block, "name"
+                            ):
+                                # Emit tool start marker for UI feedback
+                                tool_name = block.name
+                                tool_input = ""
+
+                                # Extract a brief description of what the tool is doing
+                                if hasattr(block, "input") and block.input:
+                                    inp = block.input
+                                    if isinstance(inp, dict):
+                                        if "pattern" in inp:
+                                            tool_input = f"pattern: {inp['pattern']}"
+                                        elif "file_path" in inp:
+                                            # Shorten path for display
+                                            fp = inp["file_path"]
+                                            if len(fp) > 50:
+                                                fp = "..." + fp[-47:]
+                                            tool_input = fp
+                                        elif "path" in inp:
+                                            tool_input = inp["path"]
+
+                                current_tool = tool_name
+                                print(
+                                    f"__TOOL_START__:{json.dumps({'name': tool_name, 'input': tool_input})}",
+                                    flush=True,
+                                )
+
+                    elif msg_type == "ToolResult":
+                        # Tool finished executing
+                        if current_tool:
+                            print(
+                                f"__TOOL_END__:{json.dumps({'name': current_tool})}",
+                                flush=True,
+                            )
+                            current_tool = None
+
+                # Ensure we have a newline at the end
+                if response_text and not response_text.endswith("\n"):
+                    print()
+
+                debug(
+                    "insights_runner",
+                    "Response complete",
+                    response_length=len(response_text),
+                )
+            finally:
+                # Clean up session and provider regardless of success/failure
+                try:
+                    session.close()
+                finally:
+                    ai_provider.close()
+
     except Exception as e:
-        print(f"Error using Claude SDK: {e}", file=sys.stderr)
+        print(f"Error using AI provider: {e}", file=sys.stderr)
         import traceback
 
         traceback.print_exc(file=sys.stderr)
@@ -491,6 +550,12 @@ def main():
         "--images-file",
         help="Path to JSON manifest file listing image file paths and MIME types",
     )
+    parser.add_argument(
+        "--provider",
+        default="claude",
+        choices=["claude", "litellm", "openrouter", "openai", "ollama"],
+        help="LLM provider to use (default: claude)",
+    )
     args = parser.parse_args()
 
     debug_section("insights_runner", "Starting Insights Chat")
@@ -499,6 +564,7 @@ def main():
     user_message = args.message
     model = args.model
     thinking_level = args.thinking_level
+    provider = args.provider
 
     debug(
         "insights_runner",
@@ -507,6 +573,7 @@ def main():
         message_length=len(user_message),
         model=model,
         thinking_level=thinking_level,
+        provider=provider,
     )
 
     # Load history from file if provided, otherwise parse inline JSON
@@ -548,7 +615,9 @@ def main():
     # Run the async SDK function
     debug("insights_runner", "Running SDK query")
     asyncio.run(
-        run_with_sdk(project_dir, user_message, history, model, thinking_level, images)
+        run_with_sdk(
+            project_dir, user_message, history, model, thinking_level, images, provider
+        )
     )
     debug_success("insights_runner", "Query completed")
 

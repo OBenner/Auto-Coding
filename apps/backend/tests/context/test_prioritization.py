@@ -81,7 +81,9 @@ def sample_matches():
 class TestPrioritizationIntegration:
     """Test suite for prioritization integration."""
 
-    def test_builder_has_prioritization_components(self, temp_project, mock_project_index):
+    def test_builder_has_prioritization_components(
+        self, temp_project, mock_project_index
+    ):
         """Test that ContextBuilder initializes prioritization components."""
         builder = ContextBuilder(
             project_dir=temp_project,

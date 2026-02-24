@@ -47,10 +47,15 @@ try:
     from .pydantic_models import AgentAgreement, ParallelOrchestratorResponse
     from .sdk_utils import process_sdk_stream
 except (ImportError, ValueError, SystemError):
-    from context_gatherer import PRContext, PRContextGatherer, _validate_git_ref
     from core.client import create_client
-    from gh_client import GHClient
-    from models import (
+    from phase_config import get_thinking_budget, resolve_model_id
+    from runners.github.context_gatherer import (
+        PRContext,
+        PRContextGatherer,
+        _validate_git_ref,
+    )
+    from runners.github.gh_client import GHClient
+    from runners.github.models import (
         BRANCH_BEHIND_BLOCKER_MSG,
         BRANCH_BEHIND_REASONING,
         GitHubRunnerConfig,
@@ -59,12 +64,14 @@ except (ImportError, ValueError, SystemError):
         PRReviewResult,
         ReviewSeverity,
     )
-    from phase_config import get_thinking_budget, resolve_model_id
-    from services.category_utils import map_category
-    from services.io_utils import safe_print
-    from services.pr_worktree_manager import PRWorktreeManager
-    from services.pydantic_models import AgentAgreement, ParallelOrchestratorResponse
-    from services.sdk_utils import process_sdk_stream
+    from runners.github.services.category_utils import map_category
+    from runners.github.services.io_utils import safe_print
+    from runners.github.services.pr_worktree_manager import PRWorktreeManager
+    from runners.github.services.pydantic_models import (
+        AgentAgreement,
+        ParallelOrchestratorResponse,
+    )
+    from runners.github.services.sdk_utils import process_sdk_stream
 
 
 logger = logging.getLogger(__name__)

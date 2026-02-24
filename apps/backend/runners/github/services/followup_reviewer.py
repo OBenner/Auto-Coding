@@ -40,22 +40,22 @@ try:
     from .pydantic_models import FollowupExtractionResponse, FollowupReviewResponse
     from .recovery_utils import create_finding_from_summary
 except (ImportError, ValueError, SystemError):
-    from gh_client import GHClient
-    from models import (
+    from runners.github.gh_client import GHClient
+    from runners.github.models import (
         MergeVerdict,
         PRReviewFinding,
         PRReviewResult,
         ReviewCategory,
         ReviewSeverity,
     )
-    from services.category_utils import map_category
-    from services.io_utils import safe_print
-    from services.prompt_manager import PromptManager
-    from services.pydantic_models import (
+    from runners.github.services.category_utils import map_category
+    from runners.github.services.io_utils import safe_print
+    from runners.github.services.prompt_manager import PromptManager
+    from runners.github.services.pydantic_models import (
         FollowupExtractionResponse,
         FollowupReviewResponse,
     )
-    from services.recovery_utils import create_finding_from_summary
+    from runners.github.services.recovery_utils import create_finding_from_summary
 
 logger = logging.getLogger(__name__)
 
