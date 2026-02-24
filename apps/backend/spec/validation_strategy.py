@@ -125,6 +125,9 @@ PROJECT_TYPE_INDICATORS = {
     "ruby": {
         "files": ["Gemfile"],
     },
+    "php": {
+        "files": ["composer.json"],
+    },
 }
 
 
@@ -188,6 +191,8 @@ def detect_project_type(project_dir: Path) -> str:
         return "go"
     if (project_dir / "Gemfile").exists():
         return "ruby"
+    if (project_dir / "composer.json").exists():
+        return "php"
 
     # Check for simple HTML/CSS
     html_files = list(project_dir.glob("*.html"))
@@ -260,6 +265,7 @@ class ValidationStrategyBuilder:
             "rust": self._strategy_for_rust,
             "go": self._strategy_for_go,
             "ruby": self._strategy_for_ruby,
+            "php": self._strategy_for_php,
         }
 
         builder_func = strategy_builders.get(project_type, self._strategy_default)
@@ -767,6 +773,44 @@ class ValidationStrategyBuilder:
             steps=steps,
             test_types_required=["unit"],
             reasoning="Ruby project requires RSpec tests.",
+        )
+
+    def _strategy_for_php(
+        self, project_dir: Path, risk_level: str
+    ) -> ValidationStrategy:
+        """
+        Validation strategy for PHP projects.
+        """
+        steps = []
+
+        if risk_level != "trivial":
+            steps.append(
+                ValidationStep(
+                    name="PHPUnit Tests",
+                    command="./vendor/bin/phpunit",
+                    expected_outcome="All tests pass",
+                    step_type="test",
+                    required=True,
+                    blocking=True,
+                )
+            )
+            steps.append(
+                ValidationStep(
+                    name="PHP Code Sniffer",
+                    command="./vendor/bin/phpcs",
+                    expected_outcome="No coding standard violations",
+                    step_type="test",
+                    required=True,
+                    blocking=risk_level in ["high", "critical"],
+                )
+            )
+
+        return ValidationStrategy(
+            risk_level=risk_level,
+            project_type="php",
+            steps=steps,
+            test_types_required=["unit"],
+            reasoning="PHP project requires PHPUnit tests and code standard checks.",
         )
 
     def _strategy_for_electron(
