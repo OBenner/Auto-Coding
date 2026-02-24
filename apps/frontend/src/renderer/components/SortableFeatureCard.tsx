@@ -10,7 +10,8 @@ import {
   TooltipContent,
   TooltipTrigger
 } from './ui/tooltip';
-import { Play, ExternalLink, TrendingUp, Layers, ThumbsUp } from 'lucide-react';
+import { Play, ExternalLink, TrendingUp, Layers, ThumbsUp, Archive } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import {
   ROADMAP_PRIORITY_COLORS,
   ROADMAP_PRIORITY_LABELS,
@@ -25,6 +26,7 @@ interface SortableFeatureCardProps {
   onClick: () => void;
   onConvertToSpec?: (feature: RoadmapFeature) => void;
   onGoToTask?: (specId: string) => void;
+  onArchive?: (featureId: string) => void;
 }
 
 export function SortableFeatureCard({
@@ -32,8 +34,10 @@ export function SortableFeatureCard({
   roadmap,
   onClick,
   onConvertToSpec,
-  onGoToTask
+  onGoToTask,
+  onArchive
 }: SortableFeatureCardProps) {
+  const { t } = useTranslation('common');
   const {
     attributes,
     listeners,
@@ -132,7 +136,7 @@ export function SortableFeatureCard({
             </div>
             <h3 className="font-medium text-sm leading-snug line-clamp-2">{feature.title}</h3>
           </div>
-          <div className="shrink-0">
+          <div className="shrink-0 flex items-center gap-1">
             {feature.linkedSpecId ? (
               <Button
                 variant="outline"
@@ -146,7 +150,7 @@ export function SortableFeatureCard({
                 }}
               >
                 <ExternalLink className="h-3 w-3 mr-1" />
-                Task
+                {t('roadmap.task')}
               </Button>
             ) : (
               feature.status !== 'done' &&
@@ -161,9 +165,24 @@ export function SortableFeatureCard({
                   }}
                 >
                   <Play className="h-3 w-3 mr-1" />
-                  Build
+                  {t('roadmap.build')}
                 </Button>
               )
+            )}
+            {feature.status === 'done' && onArchive && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2"
+                title={t('roadmap.archiveFeature')}
+                aria-label={t('accessibility.archiveFeatureAriaLabel')}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onArchive(feature.id);
+                }}
+              >
+                <Archive className="h-3 w-3" />
+              </Button>
             )}
           </div>
         </div>

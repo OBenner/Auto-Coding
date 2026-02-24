@@ -100,6 +100,22 @@ async function ensureProfileManagerInitialized(): Promise<
 }
 
 /**
+ * Get the spec directory for file watching, preferring the worktree path if it exists.
+ * When a task runs in a worktree, implementation_plan.json is written there,
+ * not in the main project's spec directory.
+ */
+function getSpecDirForWatcher(projectPath: string, specsBaseDir: string, specId: string): string {
+  const worktreePath = findTaskWorktree(projectPath, specId);
+  if (worktreePath) {
+    const worktreeSpecDir = path.join(worktreePath, specsBaseDir, specId);
+    if (existsSync(path.join(worktreeSpecDir, 'implementation_plan.json'))) {
+      return worktreeSpecDir;
+    }
+  }
+  return path.join(projectPath, specsBaseDir, specId);
+}
+
+/**
  * Register task execution handlers (start, stop, review, status management, recovery)
  */
 export function registerTaskExecutionHandlers(
@@ -200,9 +216,14 @@ export function registerTaskExecutionHandlers(
       }
 
       // Start file watcher for this task
-      fileWatcher.watch(taskId, specDir);
+      // Use worktree path if it exists, since the backend writes implementation_plan.json there
+      const watchSpecDir = getSpecDirForWatcher(project.path, specsBaseDir, task.specId);
+      fileWatcher.watch(taskId, watchSpecDir).catch((err) => {
+        console.error(`[TASK_START] Failed to watch spec dir for ${taskId}:`, err);
+      });
 
       // Check if spec.md exists (indicates spec creation was already done or in progress)
+      // Check main project path for spec file (spec is created before worktree)
       const specFilePath = path.join(specDir, AUTO_BUILD_PATHS.SPEC_FILE);
       const hasSpec = existsSync(specFilePath);
 
@@ -318,7 +339,9 @@ export function registerTaskExecutionHandlers(
     const DEBUG = process.env.DEBUG === 'true';
 
     agentManager.killTask(taskId);
-    fileWatcher.unwatch(taskId);
+    fileWatcher.unwatch(taskId).catch((err) => {
+      console.error('[TASK_STOP] Failed to unwatch:', err);
+    });
 
     // Notify status change IMMEDIATELY for instant UI feedback
     const ipcSentAt = Date.now();
@@ -791,7 +814,11 @@ export function registerTaskExecutionHandlers(
           console.warn('[TASK_UPDATE_STATUS] Auto-starting task:', taskId);
 
           // Start file watcher for this task
-          fileWatcher.watch(taskId, specDir);
+          // Use worktree path if it exists, since the backend writes implementation_plan.json there
+          const watchSpecDir = getSpecDirForWatcher(project.path, specsBaseDir, task.specId);
+          fileWatcher.watch(taskId, watchSpecDir).catch((err) => {
+            console.error(`[TASK_UPDATE_STATUS] Failed to watch spec dir for ${taskId}:`, err);
+          });
 
           // Check if spec.md exists
           const specFilePath = path.join(specDir, AUTO_BUILD_PATHS.SPEC_FILE);
@@ -1149,7 +1176,9 @@ export function registerTaskExecutionHandlers(
         }
 
         // Stop file watcher if it was watching this task
-        fileWatcher.unwatch(taskId);
+        fileWatcher.unwatch(taskId).catch((err) => {
+          console.error('[TASK_RECOVER_STUCK] Failed to unwatch:', err);
+        });
 
         // Auto-restart the task if requested
         let autoRestarted = false;
