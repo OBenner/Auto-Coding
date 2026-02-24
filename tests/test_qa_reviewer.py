@@ -27,13 +27,14 @@ from qa_test_helpers import (
     ensure_backend_path,
     install_mocks_and_import,
     make_text_message,
+    restore_backend_path,
     restore_modules,
 )
 
 # =============================================================================
 # MOCK SETUP - Install mocks, import module, then immediately restore
 # =============================================================================
-ensure_backend_path()
+_original_sys_path = ensure_backend_path()
 
 _mock_session = MagicMock()
 _mock_session.save_token_stats = MagicMock(return_value=True)
@@ -67,8 +68,9 @@ from qa.reviewer import (  # noqa: E402
     update_qa_signoff_with_coverage,
 )
 
-# Immediately restore all modules to prevent contamination of other test files
+# Immediately restore all modules and sys.path to prevent contamination
 restore_modules(_saved)
+restore_backend_path(_original_sys_path)
 
 
 # =============================================================================
@@ -101,7 +103,7 @@ def mock_client():
     """Create a mock Claude SDK client."""
     client = AsyncMock()
     client.query = AsyncMock()
-    client.receive_response = AsyncMock(return_value=aiter_empty())
+    client.receive_response = MagicMock(return_value=aiter_empty())
     client.__aenter__ = AsyncMock(return_value=client)
     client.__aexit__ = AsyncMock(return_value=None)
     return client
@@ -177,6 +179,43 @@ class TestRunCoverageValidation:
         assert success is False
         assert "Tests failed" in summary
         assert data is None
+
+    def test_successful_validation(self, project_dir, spec_dir):
+        """Returns success and coverage_data when validation passes."""
+        mock_config = MagicMock()
+        mock_config.minimum_coverage = 80
+        mock_config.config_source = "default"
+        mock_config.critical_paths = []
+
+        mock_result = MagicMock()
+        mock_result.success = True
+        mock_result.report_path = None
+        mock_result.total_coverage = 92.0
+        mock_result.files = ["apps/backend/foo.py"]
+
+        mock_analyzer = MagicMock()
+        mock_analyzer.check_pytest_cov_installed.return_value = (True, "5.0.0")
+        mock_analyzer.run_coverage.return_value = mock_result
+
+        validation = MagicMock(passed=True, issues=[], critical_path_failures=0)
+
+        with (
+            patch("qa.reviewer.load_coverage_config", return_value=mock_config),
+            patch("qa.reviewer.CoverageAnalyzer", return_value=mock_analyzer),
+            patch("qa.reviewer.validate_coverage", return_value=validation),
+            patch("qa.reviewer.format_validation_summary", return_value="Summary"),
+            patch("qa.reviewer.format_coverage_report", return_value="Report"),
+        ):
+            success, summary, data = run_coverage_validation(project_dir, spec_dir)
+
+        assert success is True
+        assert summary == "Summary"
+        assert data["passed"] is True
+        assert data["total_coverage"] == 92.0
+        assert data["files_analyzed"] == 1
+        assert data["issues_count"] == 0
+        assert data["critical_path_failures"] == 0
+        assert data["minimum_required"] == 80
 
 
 # =============================================================================

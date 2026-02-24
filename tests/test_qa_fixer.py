@@ -29,6 +29,7 @@ from qa_test_helpers import (
     ensure_backend_path,
     install_mocks_and_import,
     make_text_message,
+    restore_backend_path,
     restore_modules,
 )
 
@@ -62,7 +63,7 @@ class FakeRecoveryAction:
 # =============================================================================
 # MOCK SETUP - Install mocks, import module, then immediately restore
 # =============================================================================
-ensure_backend_path()
+_original_sys_path = ensure_backend_path()
 
 _mock_recovery = MagicMock()
 _mock_recovery.RecoveryAction = FakeRecoveryAction
@@ -89,8 +90,9 @@ from qa.fixer import (  # noqa: E402
     run_qa_fixer_session,
 )
 
-# Immediately restore all modules to prevent contamination of other test files
+# Immediately restore all modules and sys.path to prevent contamination
 restore_modules(_saved)
+restore_backend_path(_original_sys_path)
 
 
 # =============================================================================
@@ -123,7 +125,7 @@ def mock_client():
     """Create a mock Claude SDK client."""
     client = AsyncMock()
     client.query = AsyncMock()
-    client.receive_response = AsyncMock(return_value=aiter_empty())
+    client.receive_response = MagicMock(return_value=aiter_empty())
     client.__aenter__ = AsyncMock(return_value=client)
     client.__aexit__ = AsyncMock(return_value=None)
     return client

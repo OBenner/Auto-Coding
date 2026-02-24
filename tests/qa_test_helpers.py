@@ -52,10 +52,20 @@ QA_MODULES_TO_MOCK = [
 
 
 def ensure_backend_path():
-    """Add apps/backend to sys.path if not already present."""
+    """Add apps/backend to sys.path if not already present.
+
+    Returns the original sys.path snapshot for use with restore_backend_path().
+    """
+    original = list(sys.path)
     backend_path = str(Path(__file__).parent.parent / "apps" / "backend")
     if backend_path not in sys.path:
         sys.path.insert(0, backend_path)
+    return original
+
+
+def restore_backend_path(original_sys_path):
+    """Restore sys.path to the state before ensure_backend_path() was called."""
+    sys.path[:] = original_sys_path
 
 
 def create_base_mocks(**overrides):
@@ -157,7 +167,7 @@ def restore_modules(saved):
 
 async def aiter_empty():
     """Empty async iterator for mock receive_response."""
-    for _ in []:
+    if False:
         yield
 
 
