@@ -939,7 +939,6 @@ async def run_autonomous_agent(
                     )
 
                 first_run = False
-                status = "continue"
                 continue
 
             # Get attempt count for recovery context

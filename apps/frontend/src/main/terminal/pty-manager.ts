@@ -328,9 +328,14 @@ export function resizePty(terminal: TerminalProcess, cols: number, rows: number)
   // changes. This matters after project switch: PTY persists with old dimensions,
   // terminal remounts at same size, TUI apps (Claude Code) never get SIGWINCH
   // and never redraw — leaving the terminal blank.
-  if (prevCols === cols && prevRows === rows) {
+  // Skip on Windows where SIGWINCH does not exist.
+  if (!isWindows() && prevCols === cols && prevRows === rows) {
     debugLog('[PtyManager] Same-dimension resize detected, forcing SIGWINCH cycle for terminal:', terminal.id);
-    terminal.pty.resize(Math.max(1, cols - 1), rows);
+    if (cols > 1) {
+      terminal.pty.resize(cols - 1, rows);
+    } else if (rows > 1) {
+      terminal.pty.resize(cols, rows - 1);
+    }
   }
 
   debugLog('[PtyManager] Resizing PTY - terminal:', terminal.id, 'from:', prevCols, 'x', prevRows, 'to:', cols, 'x', rows);

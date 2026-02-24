@@ -243,6 +243,9 @@ export function ReviewFindings({
       {disputedFindings.length > 0 && (
         <div className="rounded-lg border border-purple-500/20 bg-purple-500/5">
           <button
+            type="button"
+            aria-expanded={disputedExpanded}
+            aria-controls="disputed-findings"
             onClick={() => setDisputedExpanded(!disputedExpanded)}
             className="w-full flex items-center gap-2 p-3 text-sm font-medium text-purple-500 hover:bg-purple-500/10 transition-colors"
           >
@@ -255,7 +258,7 @@ export function ReviewFindings({
             <span>{t('prReview.disputedByValidator', { count: disputedFindings.length })}</span>
           </button>
           {disputedExpanded && (
-            <div className="px-3 pb-3 space-y-2">
+            <div id="disputed-findings" className="px-3 pb-3 space-y-2">
               <p className="text-xs text-muted-foreground italic">
                 {t('prReview.disputedSectionHint')}
               </p>

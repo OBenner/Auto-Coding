@@ -704,8 +704,10 @@ class SpecOrchestrator:
                 print_status("Build will not proceed without approval.", "warning")
                 return False
 
-        except SystemExit:
-            return False
+        except SystemExit as e:
+            if e.code != 0:
+                return False
+            raise
         except KeyboardInterrupt:
             print()
             print_status("Review interrupted. Run again to continue.", "info")

@@ -592,7 +592,7 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       return {
         tasks: updateTaskAtIndex(state.tasks, index, (t) => ({
           ...t,
-          logs: [...(t.logs || []), log].slice(-MAX_LOG_ENTRIES)
+          logs: [...(t.logs || []).slice(-(MAX_LOG_ENTRIES - 1)), log]
         }))
       };
     }),
@@ -607,7 +607,7 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       return {
         tasks: updateTaskAtIndex(state.tasks, index, (t) => ({
           ...t,
-          logs: [...(t.logs || []), ...logs].slice(-MAX_LOG_ENTRIES)
+          logs: [...(t.logs || []).slice(-(MAX_LOG_ENTRIES - logs.length)), ...logs].slice(-MAX_LOG_ENTRIES)
         }))
       };
     }),

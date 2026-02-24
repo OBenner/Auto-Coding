@@ -147,6 +147,8 @@ class TestValidateAutoClaudeFallback:
         """Should warn when project_index.json exists at auto-claude/ level."""
         from spec.validate_pkg.validators.prereqs_validator import PrereqsValidator
 
+        clean_project_index_files(spec_dir)
+
         # The validator checks spec_dir.parent.parent for the auto-claude index
         # Create project_index.json at the correct level (two levels up from spec_dir)
         auto_build_index = spec_dir.parent.parent / "project_index.json"
@@ -164,6 +166,8 @@ class TestValidateAutoClaudeFallback:
     def test_fix_suggests_copy_command(self, spec_dir: Path):
         """Suggested fix should include cp command when auto-claude index exists."""
         from spec.validate_pkg.validators.prereqs_validator import PrereqsValidator
+
+        clean_project_index_files(spec_dir)
 
         # Create project_index.json at the auto-claude level (two levels up)
         auto_build_index = spec_dir.parent.parent / "project_index.json"

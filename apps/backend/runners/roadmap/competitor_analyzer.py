@@ -166,9 +166,10 @@ Output your findings to competitor_analysis.json.
     def _get_manual_competitors(self) -> list[dict]:
         """Extract manually-added competitors from the dedicated manual file and analysis file.
 
-        Reads from manual_competitors.json (primary, never overwritten by agent) and
-        falls back to competitor_analysis.json. Deduplicates by competitor ID.
-        Returns a list of competitor dicts where source == 'manual'.
+        All entries from the dedicated manual file (manual_competitors.json) are
+        treated as manual regardless of their source field.  Falls back to entries
+        marked source='manual' in competitor_analysis.json.  Deduplicates by
+        competitor ID.
         """
         competitors_by_id: dict[str, dict] = {}
 
@@ -228,7 +229,8 @@ Output your findings to competitor_analysis.json.
         }
 
         for competitor in manual_competitors:
-            if competitor.get("id") not in existing_ids:
+            cid = competitor.get("id")
+            if cid and cid not in existing_ids:
                 data.setdefault("competitors", []).append(competitor)
 
         write_json_atomic(self.analysis_file, data, indent=2)

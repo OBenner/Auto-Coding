@@ -1294,8 +1294,12 @@ The SDK will run invoked agents in parallel automatically.
                             line=nf.get("line", 0),
                         )
                     )
-                except Exception:
-                    pass
+                except Exception as e:
+                    # Skip malformed findings during text fallback parsing;
+                    # partial recovery is better than failing the entire review.
+                    logger.debug(
+                        "Skipping malformed finding during text parsing: %s", e
+                    )
 
         # Only return if we got any useful data
         if resolved_ids or unresolved_ids or new_finding_ids or findings:

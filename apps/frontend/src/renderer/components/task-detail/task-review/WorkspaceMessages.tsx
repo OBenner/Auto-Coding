@@ -1,5 +1,6 @@
 import { AlertCircle, GitMerge, Loader2, Check, RotateCcw } from 'lucide-react';
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Button } from '../../ui/button';
 import { persistTaskStatus } from '../../../stores/task-store';
 import type { Task } from '../../../../shared/types';
@@ -96,6 +97,7 @@ interface StagedInProjectMessageProps {
  * Displays message when changes have already been staged in the main project
  */
 export function StagedInProjectMessage({ task, projectPath, hasWorktree = false, onClose, onReviewAgain }: StagedInProjectMessageProps) {
+  const { t } = useTranslation('tasks');
   const [isDeleting, setIsDeleting] = useState(false);
   const [isMarkingDone, setIsMarkingDone] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
@@ -141,13 +143,13 @@ export function StagedInProjectMessage({ task, projectPath, hasWorktree = false,
     try {
       const result = await persistTaskStatus(task.id, 'done', { keepWorktree: true });
       if (!result.success) {
-        setError(result.error || 'Failed to mark as done');
+        setError(result.error || t('markDoneFailed'));
         return;
       }
       onClose?.();
     } catch (err) {
       console.error('Error marking task as done:', err);
-      setError(err instanceof Error ? err.message : 'Failed to mark as done');
+      setError(err instanceof Error ? err.message : t('markDoneFailed'));
     } finally {
       setIsMarkingDone(false);
     }

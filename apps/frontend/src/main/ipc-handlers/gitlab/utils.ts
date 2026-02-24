@@ -17,11 +17,12 @@ const DEFAULT_GITLAB_URL = 'https://gitlab.com';
  * Custom error class for GitLab API errors with status code
  */
 export class GitLabAPIError extends Error {
-  statusCode: number;
+  readonly statusCode: number;
   constructor(message: string, statusCode: number) {
     super(message);
     this.name = 'GitLabAPIError';
     this.statusCode = statusCode;
+    Object.setPrototypeOf(this, GitLabAPIError.prototype);
   }
 }
 

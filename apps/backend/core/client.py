@@ -39,6 +39,7 @@ WINDOWS_MAX_SYSTEM_PROMPT_CHARS = 20000
 WINDOWS_TRUNCATION_MESSAGE = (
     "\n\n[... CLAUDE.md truncated due to Windows command-line length limit ...]"
 )
+CLAUDE_MD_HEADER = "\n\n# Project Instructions (from CLAUDE.md)\n\n"
 
 # =============================================================================
 # Project Index Cache
@@ -1116,9 +1117,23 @@ def create_client(
                     WINDOWS_MAX_SYSTEM_PROMPT_CHARS
                     - len(base_prompt)
                     - len(WINDOWS_TRUNCATION_MESSAGE)
-                    - len("\n\n# Project Instructions (from CLAUDE.md)\n\n")
+                    - len(CLAUDE_MD_HEADER)
                 )
-                if len(claude_md_content) > max_claude_md_chars > 0:
+                if max_claude_md_chars <= 0:
+                    # Base prompt alone already exceeds the limit; replace
+                    # CLAUDE.md entirely with the truncation notice.
+                    claude_md_content = WINDOWS_TRUNCATION_MESSAGE
+                    was_truncated = True
+                    logger.warning(
+                        "CLAUDE.md omitted: base prompt (%d chars) exceeds "
+                        "Windows command-line budget (%d chars)",
+                        len(base_prompt),
+                        WINDOWS_MAX_SYSTEM_PROMPT_CHARS,
+                    )
+                    print(
+                        "   - CLAUDE.md: omitted (base prompt exceeds Windows command-line limit)"
+                    )
+                elif len(claude_md_content) > max_claude_md_chars:
                     claude_md_content = (
                         claude_md_content[:max_claude_md_chars]
                         + WINDOWS_TRUNCATION_MESSAGE
@@ -1127,7 +1142,7 @@ def create_client(
                         "   - CLAUDE.md: truncated (exceeded Windows command-line limit)"
                     )
                     was_truncated = True
-            base_prompt = f"{base_prompt}\n\n# Project Instructions (from CLAUDE.md)\n\n{claude_md_content}"
+            base_prompt = f"{base_prompt}{CLAUDE_MD_HEADER}{claude_md_content}"
             if not was_truncated:
                 print("   - CLAUDE.md: included in system prompt")
         else:

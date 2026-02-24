@@ -36,8 +36,8 @@ Extract from these files:
 - **From context.json**: Files to modify, files to reference, patterns
 
 **IMPORTANT**: If any input file is missing, empty, or shows 0 files, this is likely a **greenfield/new project**. Adapt accordingly:
-- Skip sections that reference existing code (e.g., "Files to Modify", "Patterns to Follow")
-- Instead, focus on files to CREATE and the initial project structure
+- Keep all required sections, but mark "N/A (greenfield)" where they reference existing code (e.g., "Files to Modify", "Patterns to Follow")
+- Focus on files to CREATE and the initial project structure
 - Define the tech stack, dependencies, and setup instructions from scratch
 - Use industry best practices as patterns rather than referencing existing code
 

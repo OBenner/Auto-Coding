@@ -18,9 +18,6 @@ import importlib.util
 import sys
 from pathlib import Path
 
-import pytest
-from pydantic import ValidationError
-
 # Direct imports to avoid runners package chain.
 # We have a models.py name collision: tools_pkg/models.py (AGENT_CONFIGS)
 # and runners/github/models.py (PRReviewFinding). Handle carefully.
@@ -36,11 +33,7 @@ sys.path.insert(0, str(_services_path))
 
 # 2. Import recovery_utils at module level BEFORE tools_pkg/models.py
 #    gets cached in sys.modules (it also has a models.py)
-from recovery_utils import (
-    create_finding_from_summary,
-    generate_recovery_finding_id,
-    parse_severity_from_summary,
-)
+from recovery_utils import create_finding_from_summary
 
 # 3. For AGENT_CONFIGS, load tools_pkg/models.py via importlib to avoid
 #    the models.py name collision with runners/github/models.py

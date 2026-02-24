@@ -161,7 +161,7 @@ def is_build_ready_for_qa(spec_dir: Path) -> bool:
         terminal = 0
 
         for phase in plan.get("phases", []):
-            for subtask in phase.get("subtasks", []):
+            for subtask in phase.get("subtasks", phase.get("chunks", [])):
                 total += 1
                 status = subtask.get("status", "pending")
                 subtask_id = subtask.get("id")

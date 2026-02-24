@@ -97,7 +97,7 @@ export function registerInvestigateIssue(
           phase: 'fetching',
           issueIid,
           progress: 10,
-          message: 'Fetching issue details...'
+          message: 'investigation.progress.fetchingIssue'
         });
 
         const encodedProject = encodeProjectPath(config.project);
@@ -123,7 +123,7 @@ export function registerInvestigateIssue(
           phase: 'creating_task',
           issueIid,
           progress: 50,
-          message: 'Creating task from issue...'
+          message: 'investigation.progress.creatingTask'
         });
 
         // Create spec for the issue with notes
@@ -145,7 +145,7 @@ export function registerInvestigateIssue(
           phase: 'complete',
           issueIid,
           progress: 100,
-          message: 'Investigation complete'
+          message: 'investigation.progress.complete'
         });
 
         // Send result

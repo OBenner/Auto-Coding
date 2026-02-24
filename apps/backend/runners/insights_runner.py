@@ -123,6 +123,7 @@ ALLOWED_MIME_TYPES = frozenset(
 )
 
 MAX_IMAGE_FILE_SIZE = 10 * 1024 * 1024  # 10 MB (aligned with frontend MAX_IMAGE_SIZE)
+MAX_IMAGE_COUNT = 10  # Maximum number of images per manifest
 
 
 def load_images_from_manifest(manifest_path: str) -> list[dict]:
@@ -141,6 +142,13 @@ def load_images_from_manifest(manifest_path: str) -> list[dict]:
             manifest = json.load(f)
 
         for entry in manifest:
+            if len(images) >= MAX_IMAGE_COUNT:
+                debug(
+                    "insights_runner",
+                    f"Image limit reached ({MAX_IMAGE_COUNT}), skipping remaining images",
+                )
+                break
+
             image_path = entry.get("path")
             mime_type = entry.get("mimeType", "image/png")
 

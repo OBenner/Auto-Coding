@@ -568,10 +568,13 @@ def test_get_attempt_count_boundary_just_inside_and_outside(test_env):
     temp_dir, spec_dir, project_dir = test_env
     manager = RecoveryManager(spec_dir, project_dir)
 
-    # 1 second inside the window (1h 59m 59s ago) - should be included
-    inside_time = (datetime.now(UTC) - timedelta(seconds=7199)).isoformat()
-    # 10 seconds outside the window (2h 10s ago) - should be excluded
-    outside_time = (datetime.now(UTC) - timedelta(seconds=7210)).isoformat()
+    # Use a single base timestamp to avoid clock drift between calls
+    base_now = datetime.now(UTC)
+
+    # 10 minutes inside the window (1h 50m ago) - should be included
+    inside_time = (base_now - timedelta(minutes=110)).isoformat()
+    # 5 minutes outside the window (2h 5m ago) - should be excluded
+    outside_time = (base_now - timedelta(minutes=125)).isoformat()
 
     history = manager._load_attempt_history()
     history["subtasks"]["test-boundary"] = {

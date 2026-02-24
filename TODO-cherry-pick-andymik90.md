@@ -58,16 +58,10 @@ Remote: `andymik90` (уже добавлен в этом worktree)
 - [x] `tests/conftest.py` — MODIFIED: added mock entries for new modules
 - [x] `tests/qa_test_helpers.py` — NEW: shared QA test helpers (adapted for our fork — stub qa package to bypass circular imports)
 
-**WIP (тесты не проходят, нужна доработка):**
-- [ ] `tests/test_qa_fixer.py` — NEW: 12/14 тестов падают — `patch('qa.fixer.get_iteration_history')` не работает т.к. fixer использует lazy import `from .report import get_iteration_history` внутри функции. Нужно патчить `qa.report.get_iteration_history` или использовать другой подход к мокам.
-- [ ] `tests/test_qa_reviewer.py` — NEW: 3/13 тестов падают — memory integration тесты: mock объекты не подхватываются (нужно использовать `patch.object` или патчить реальные модули).
-
-**Резюме проблем с QA тестами:**
-1. Наш форк использует `RecoveryManager`, iteration history, coverage validation — которых нет в оригинальных тестах
-2. Fixer делает lazy import `from .report import get_iteration_history` внутри `run_qa_fixer_session()` — patch по `qa.fixer.get_iteration_history` не работает
-3. Reviewer вызывает `run_coverage_validation()` перед сессией — нужен отдельный мок
-4. Оба модуля возвращают 2-tuple (status, text), а не 3-tuple как в оригинале
-5. ErrorDetection тесты убраны — наши модули не используют `is_rate_limit_error` напрямую
+**RESOLVED (merged from develop):**
+- [x] `tests/test_qa_fixer.py` — 14/14 тестов проходят (merged from develop via PR #85)
+- [x] `tests/test_qa_reviewer.py` — 18/18 тестов проходят (merged from develop via PR #85)
+- [x] `tests/qa_test_helpers.py` — shared mock helpers (merged from develop)
 
 ## Итоговая сводка
 

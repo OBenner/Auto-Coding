@@ -384,8 +384,15 @@ class TestEdgeCases:
         """Test handling of non-existent directory."""
         fake_dir = Path("/nonexistent/path")
 
-        # Should not crash, may have errors - mock exists to avoid permission error
-        with patch.object(Path, 'exists', return_value=False):
+        # Targeted mock: only return False for paths under /nonexistent
+        _original_exists = Path.exists
+
+        def _selective_exists(self):
+            if str(self).startswith("/nonexistent"):
+                return False
+            return _original_exists(self)
+
+        with patch.object(Path, 'exists', _selective_exists):
             result = scanner.scan(fake_dir)
             assert isinstance(result, SecurityScanResult)
 

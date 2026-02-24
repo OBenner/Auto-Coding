@@ -71,9 +71,12 @@ def sanitize_error_message(error_message: str, max_length: int = 500) -> str:
     # Pattern: key-... (generic API keys)
     sanitized = re.sub(r"\bkey-[a-zA-Z0-9._\-]{20,}\b", "[REDACTED_API_KEY]", sanitized)
 
-    # Pattern: Bearer ... (bearer tokens)
+    # Pattern: Bearer ... (bearer tokens, case-insensitive)
     sanitized = re.sub(
-        r"\bBearer\s+[a-zA-Z0-9._\-]{20,}\b", "Bearer [REDACTED_TOKEN]", sanitized
+        r"\bBearer\s+[a-zA-Z0-9._\-]{20,}\b",
+        "Bearer [REDACTED_TOKEN]",
+        sanitized,
+        flags=re.IGNORECASE,
     )
 
     # Pattern: token= or token: followed by long strings

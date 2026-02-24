@@ -14,6 +14,7 @@ from collections.abc import AsyncIterator
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from claude_agent_sdk import ClaudeSDKClient
     from claude_agent_sdk.types import Message
 
 logger = logging.getLogger(__name__)
@@ -131,7 +132,7 @@ def is_authentication_error(error: Exception) -> bool:
 
 
 async def safe_receive_messages(
-    client,
+    client: ClaudeSDKClient,
     *,
     caller: str = "agent",
 ) -> AsyncIterator[Message]:
@@ -172,10 +173,12 @@ async def safe_receive_messages(
                         retry_info = (
                             f" (retry in {retry_after}s)" if retry_after else ""
                         )
-                        logger.warning(f"[{caller}] Rate limit event{retry_info}")
+                        logger.warning("[%s] Rate limit event%s", caller, retry_info)
                     else:
                         logger.debug(
-                            f"[{caller}] Skipping unknown SDK message type: {original_type}"
+                            "[%s] Skipping unknown SDK message type: %s",
+                            caller,
+                            original_type,
                         )
                     continue
             yield msg
@@ -184,5 +187,5 @@ async def safe_receive_messages(
     except Exception as e:
         # If the generator itself raises (e.g., transport error), log and stop
         # gracefully so callers can process whatever was collected so far.
-        logger.error(f"[{caller}] SDK response stream terminated unexpectedly: {e}")
+        logger.error("[%s] SDK response stream terminated unexpectedly: %s", caller, e)
         return
