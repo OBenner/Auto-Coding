@@ -14,10 +14,14 @@ from project_analyzer import (
 )
 
 from .constants import ALLOWLIST_FILENAME, PROFILE_FILENAME
+from .language_rules import LANGUAGE_SECURITY_RULES, LANGUAGE_SECURITY_SCANNERS
 
 __all__ = [
     "get_security_profile",
     "reset_profile_cache",
+    "get_security_scanners",
+    "get_security_rules",
+    "get_all_security_scanners",
 ]
 
 # =============================================================================
@@ -123,3 +127,75 @@ def reset_profile_cache() -> None:
     _cache["spec_dir"] = None
     _cache["profile_mtime"] = None
     _cache["allowlist_mtime"] = None
+
+
+# =============================================================================
+# LANGUAGE SECURITY INTEGRATION
+# =============================================================================
+
+
+def get_security_scanners(language: str) -> set[str]:
+    """
+    Get security scanners for a specific language.
+
+    Args:
+        language: Programming language name (lowercase)
+
+    Returns:
+        Set of security scanner commands for the language.
+        Empty set if language not found.
+
+    Example:
+        >>> scanners = get_security_scanners("go")
+        >>> print(scanners)
+        {'gosec', 'staticcheck', 'govulncheck'}
+    """
+    return LANGUAGE_SECURITY_SCANNERS.get(language.lower(), set())
+
+
+def get_security_rules(language: str) -> dict[str, list[str]]:
+    """
+    Get security rules for a specific language.
+
+    Args:
+        language: Programming language name (lowercase)
+
+    Returns:
+        Dict containing:
+        - dangerous_functions: List of functions with security risks
+        - unsafe_patterns: List of unsafe code patterns
+        - secure_alternatives: List of recommended secure practices
+        Empty dict if language not found.
+
+    Example:
+        >>> rules = get_security_rules("php")
+        >>> print(rules["dangerous_functions"])
+        ['eval', 'exec', 'system', ...]
+    """
+    return LANGUAGE_SECURITY_RULES.get(language.lower(), {})
+
+
+def get_all_security_scanners(profile: SecurityProfile) -> set[str]:
+    """
+    Get all security scanners for languages detected in a security profile.
+
+    Args:
+        profile: SecurityProfile with detected languages
+
+    Returns:
+        Combined set of all security scanners for detected languages
+
+    Example:
+        >>> profile = get_security_profile(project_dir)
+        >>> scanners = get_all_security_scanners(profile)
+        >>> print(scanners)
+        {'gosec', 'cargo-audit', 'phpstan', 'bandit'}
+    """
+    all_scanners: set[str] = set()
+
+    # Get scanners for each detected language
+    for language in profile.detected_stack.languages:
+        scanners = get_security_scanners(language)
+        all_scanners.update(scanners)
+
+    return all_scanners
