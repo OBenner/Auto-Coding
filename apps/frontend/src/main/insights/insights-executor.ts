@@ -113,6 +113,7 @@ export class InsightsExecutor extends EventEmitter {
     if (modelConfig) {
       const modelId = MODEL_ID_MAP[modelConfig.model] || MODEL_ID_MAP['sonnet'];
       args.push('--model', modelId);
+      args.push('--provider', modelConfig.provider);
       args.push('--thinking-level', modelConfig.thinkingLevel);
     }
 

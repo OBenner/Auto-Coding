@@ -57,6 +57,19 @@ _POTENTIALLY_MOCKED_MODULES = [
     'claude_code_sdk.types',
     'claude_agent_sdk',
     'claude_agent_sdk.types',
+    'agents',
+    'agents.code_reviewer',
+    'agents.memory_manager',
+    'agents.session',
+    'agents.coder',
+    'agents.planner',
+    'agents.e2e_generator',
+    'agents.test_generator',
+    'agents.documentation_generator',
+    'agents.utils',
+    'agents.base',
+    'core.client',
+    'core.model_fallback',
     'ui',
     'progress',
     'task_logger',
@@ -66,6 +79,23 @@ _POTENTIALLY_MOCKED_MODULES = [
     'review',
     'validate_spec',
     'graphiti_providers',
+    # Additional modules mocked by test_qa_fixer / test_qa_reviewer
+    'debug',
+    'phase_config',
+    'phase_event',
+    'security.tool_input_validator',
+    'security.constants',
+    'services.recovery',
+    'analysis.coverage_analyzer',
+    'analysis.code_analyzer',
+    'analysis.coverage_reporter',
+    'analysis.failure_analyzer',
+    'analysis.ts_analyzer',
+    'prompts_pkg',
+    'spec.coverage_config',
+    'integrations',
+    'integrations.graphiti',
+    'integrations.graphiti.memory',
 ]
 
 # Store original module references at import time (before any mocking)
@@ -113,6 +143,32 @@ def pytest_runtest_setup(item):
         'test_spec_pipeline': {'claude_code_sdk', 'claude_code_sdk.types', 'init', 'client', 'review', 'task_logger', 'ui', 'validate_spec'},
         'test_spec_complexity': {'claude_code_sdk', 'claude_code_sdk.types', 'claude_agent_sdk', 'claude_agent_sdk.types'},
         'test_spec_phases': {'claude_code_sdk', 'claude_code_sdk.types', 'claude_agent_sdk', 'graphiti_providers', 'validate_spec', 'client'},
+        'test_qa_fixer': {
+            'claude_agent_sdk', 'claude_agent_sdk.types', 'ui', 'progress', 'task_logger',
+            'linear_updater', 'client', 'core.client', 'core.model_fallback',
+            'agents', 'agents.memory_manager', 'agents.session', 'agents.e2e_generator',
+            'agents.test_generator', 'agents.coder', 'agents.planner', 'agents.code_reviewer',
+            'agents.documentation_generator', 'agents.utils', 'agents.base',
+            'debug', 'phase_config', 'phase_event',
+            'security.tool_input_validator', 'security.constants', 'services.recovery',
+            'analysis.coverage_analyzer', 'analysis.code_analyzer', 'analysis.coverage_reporter',
+            'analysis.failure_analyzer', 'analysis.ts_analyzer',
+            'prompts_pkg', 'spec.coverage_config',
+            'integrations', 'integrations.graphiti', 'integrations.graphiti.memory',
+        },
+        'test_qa_reviewer': {
+            'claude_agent_sdk', 'claude_agent_sdk.types', 'ui', 'progress', 'task_logger',
+            'linear_updater', 'client', 'core.client', 'core.model_fallback',
+            'agents', 'agents.memory_manager', 'agents.session', 'agents.e2e_generator',
+            'agents.test_generator', 'agents.coder', 'agents.planner', 'agents.code_reviewer',
+            'agents.documentation_generator', 'agents.utils', 'agents.base',
+            'debug', 'phase_config', 'phase_event',
+            'security.tool_input_validator', 'security.constants', 'services.recovery',
+            'analysis.coverage_analyzer', 'analysis.code_analyzer', 'analysis.coverage_reporter',
+            'analysis.failure_analyzer', 'analysis.ts_analyzer',
+            'prompts_pkg', 'spec.coverage_config',
+            'integrations', 'integrations.graphiti', 'integrations.graphiti.memory',
+        },
     }
 
     # Get the mocks that the current test module needs to preserve
@@ -132,6 +188,13 @@ def pytest_runtest_setup(item):
                     sys.modules[name] = _original_module_state[name]
                 else:
                     del sys.modules[name]
+                # Also clean parent package attribute for dotted names
+                # (e.g. agents.code_reviewer leaves a MagicMock on agents.code_reviewer attr)
+                if '.' in name:
+                    parent, attr = name.rsplit('.', 1)
+                    parent_mod = sys.modules.get(parent)
+                    if parent_mod and hasattr(parent_mod, attr) and isinstance(getattr(parent_mod, attr), MagicMock):
+                        delattr(parent_mod, attr)
                 cleaned_up = True
 
     # If we cleaned up mocks, we need to reload modules that might have cached

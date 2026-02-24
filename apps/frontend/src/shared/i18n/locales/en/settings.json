@@ -64,10 +64,12 @@
     "addButton": "Add Profile",
     "presets": {
       "anthropic": "Anthropic",
+      "openai": "OpenAI",
       "openrouter": "OpenRouter",
       "groq": "Groq",
       "glmGlobal": "GLM (Global)",
-      "glmChina": "GLM (China)"
+      "glmChina": "GLM (China)",
+      "ollama": "Ollama (Local)"
     },
     "fields": {
       "name": "Name",
