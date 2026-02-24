@@ -207,7 +207,7 @@ class TestRunCoverageValidation:
         assert success is True
         assert summary == "Summary"
         assert data["passed"] is True
-        assert data["total_coverage"] == 92.0
+        assert data["total_coverage"] == pytest.approx(92.0)
         assert data["files_analyzed"] == 1
         assert data["issues_count"] == 0
         assert data["critical_path_failures"] == 0

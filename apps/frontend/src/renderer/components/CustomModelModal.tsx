@@ -17,9 +17,8 @@ import {
   SelectTrigger,
   SelectValue
 } from './ui/select';
-import { AVAILABLE_MODELS, THINKING_LEVELS } from '../../shared/constants';
-import { getModelsForProvider } from '../../shared/constants/api-profiles';
-import { INSIGHTS_TO_API_PROVIDER, getInsightsProviderOptions } from '../../shared/constants/insights-providers';
+import { THINKING_LEVELS } from '../../shared/constants';
+import { getInsightsProviderOptions, getAvailableModelsForProvider } from '../../shared/constants/insights-providers';
 import type { InsightsModelConfig, InsightsProvider } from '../../shared/types';
 import type { ModelType, ThinkingLevel } from '../../shared/types';
 
@@ -55,26 +54,7 @@ export function CustomModelModal({ currentConfig, onSave, onClose, open = true }
   }, [open, currentConfig]);
 
   // Get available models for the selected provider
-  const availableModels = useMemo(() => {
-    if (provider === 'litellm') {
-      // LiteLLM supports all tiers, use generic labels
-      return AVAILABLE_MODELS;
-    }
-
-    // Get provider-specific models
-    const apiProviderId = INSIGHTS_TO_API_PROVIDER[provider];
-    const models = getModelsForProvider(apiProviderId);
-
-    // Filter to only models with known tiers (opus, sonnet, haiku)
-    const tieredModels = models.filter(m => m.tier === 'opus' || m.tier === 'sonnet' || m.tier === 'haiku');
-
-    // Map to the format expected by the select component
-    return tieredModels.map(m => ({
-      value: m.tier as ModelType,
-      label: m.name,
-      description: m.description
-    }));
-  }, [provider]);
+  const availableModels = useMemo(() => getAvailableModelsForProvider(provider), [provider]);
 
   const handleSave = () => {
     onSave({

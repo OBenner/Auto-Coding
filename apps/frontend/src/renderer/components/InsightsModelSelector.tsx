@@ -17,9 +17,8 @@ import {
   SelectTrigger,
   SelectValue
 } from './ui/select';
-import { DEFAULT_AGENT_PROFILES, AVAILABLE_MODELS } from '../../shared/constants';
-import { getModelsForProvider } from '../../shared/constants/api-profiles';
-import { INSIGHTS_TO_API_PROVIDER, getInsightsProviderOptions } from '../../shared/constants/insights-providers';
+import { DEFAULT_AGENT_PROFILES } from '../../shared/constants';
+import { getInsightsProviderOptions, getModelLabelForProvider } from '../../shared/constants/insights-providers';
 import type { InsightsModelConfig, InsightsProvider, ModelType } from '../../shared/types';
 import { CustomModelModal } from './CustomModelModal';
 
@@ -35,29 +34,6 @@ const iconMap: Record<string, React.ElementType> = {
   Zap,
   Sparkles
 };
-
-/**
- * Get provider-specific model label for a model tier
- */
-function getModelLabelForProvider(modelTier: ModelType, providerId: InsightsProvider): string {
-  const apiProviderId = INSIGHTS_TO_API_PROVIDER[providerId];
-
-  // LiteLLM doesn't have predefined models, use generic labels
-  if (providerId === 'litellm') {
-    return AVAILABLE_MODELS.find(m => m.value === modelTier)?.label || modelTier;
-  }
-
-  // Get provider-specific model label
-  const models = getModelsForProvider(apiProviderId);
-  const model = models.find(m => m.tier === modelTier);
-
-  if (model) {
-    return model.name;
-  }
-
-  // Fallback to generic label
-  return AVAILABLE_MODELS.find(m => m.value === modelTier)?.label || modelTier;
-}
 
 export function InsightsModelSelector({
   currentConfig,
