@@ -242,7 +242,7 @@ export const useRoadmapStore = create<RoadmapState>((set) => ({
 
   // Add a new feature to the roadmap
   addFeature: (featureData) => {
-    const newId = `feature-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
+    const newId = `feature-${Date.now()}-${crypto.randomUUID().substring(0, 9)}`;
     const newFeature: RoadmapFeature = {
       ...featureData,
       id: newId
@@ -265,7 +265,7 @@ export const useRoadmapStore = create<RoadmapState>((set) => ({
 
   // Add a manual competitor to the competitor analysis
   addCompetitor: (input) => {
-    const newId = `competitor-manual-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
+    const newId = `competitor-manual-${Date.now()}-${crypto.randomUUID().substring(0, 9)}`;
     const newCompetitor: Competitor = {
       id: newId,
       name: input.name,
