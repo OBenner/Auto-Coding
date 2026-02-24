@@ -33,16 +33,16 @@ Remote: `andymik90` (уже добавлен в этом worktree)
 ## Осталось — Категория 4: Фичи (нужна адаптация)
 
 - [~] **PR #1832** — SKIPPED: our fork lacks DependencyStrategy infrastructure (only has node_modules symlinks)
-- [~] **PR #1831** — SKIPPED: no terminal infrastructure in our fork (useXterm.ts, terminal-manager.ts, webgl-context-manager.ts all missing)
-- [x] **PR #1821** (backend only) — insights_runner.py image/screenshot support: load_images_from_manifest() with path traversal protection, MIME validation, --images-file CLI arg (коммит `3497b85b`). *Frontend Insights components skipped — not in our fork.*
+- [x] **PR #1831** — Terminal GPU acceleration settings, safe error logging, WebGL lazy loading, crash diagnostic handlers. Applied: 5 files updated + 1 test created, 12 files already had changes.
+- [x] **PR #1821** — insights_runner.py image/screenshot support (backend, коммит `3497b85b`) + frontend: image upload UI, paste/drag-drop, screenshot capture, image preview in messages.
 - [~] **PR #1820** — SKIPPED: XState PR review refactor, not applicable
 - [~] **PR #1819** — SKIPPED: no terminal infrastructure or state-machines in our fork
 - [x] **PR #1818** — Fix mark as done on task modal: add keepWorktree option to updateTaskStatus, pass from WorkspaceMessages
-- [~] **PR #1817** — SKIPPED: no Roadmap.tsx component in our fork
+- [x] **PR #1817** — Roadmap feature archive with confirmation dialog, i18n for all roadmap action labels. Applied: 10 files updated.
 - [~] **PR #1816** — SKIPPED: Remove deprecated TaskStateMachine (XState), not applicable
-- [~] **PR #1829** — SKIPPED: no ChatHistorySidebar or Insights components in our fork
+- [x] **PR #1829** — Insights session archive/unarchive, bulk operations, ChatHistorySidebar selection mode, session ID validation. Applied: 15 files updated.
 - [~] **PR #1815** — SKIPPED: Refactor roadmap tasks → XState, not applicable
-- [x] **PR #1814** (backend only) — competitor_analyzer.py manual competitor preservation: dedicated manual_competitors.json, merge-back logic, dedup by ID (коммит `3497b85b`). *Frontend Roadmap components skipped — not in our fork.*
+- [x] **PR #1814** — competitor_analyzer.py manual competitor preservation (backend, коммит `3497b85b`) + frontend: AddCompetitorDialog, competitor save/persist, i18n. Applied: 16 files updated + 1 new.
 - [~] **PR #1790** — SKIPPED: no GitHub Issues components (GitHubErrorDisplay, IssueList) in our fork
 - [~] **PR #1794** — SKIPPED: no profile-scorer.ts or unified-account.ts in our fork
 
@@ -66,7 +66,7 @@ Remote: `andymik90` (уже добавлен в этом worktree)
 
 ## Итоговая сводка
 
-**Применено: 16 PRs** (коммиты в ветке `worktree-cherry-pick-andymik90`):
+**Применено: 22 PRs** (коммиты в ветке `worktree-cherry-pick-andymik90`):
 - PR #1834, #1841, #1853, #1844, #1847 — критичные backend баги
 - PR #1797+#1806+#1857 — PR review stability chain (combined)
 - PR #1813, #1843, #1852, #1836 — fullstack/frontend баги (bulk commit)
@@ -74,26 +74,26 @@ Remote: `andymik90` (уже добавлен в этом worktree)
 - PR #1818 — keepWorktree option for task done
 - PR #1772 (source fixes) — BuildState bug, QA status, GitLab API improvements
 - PR #1779 (Windows compat) — test Path.exists mocking, conftest module isolation
-- PR #1814 (backend only) — competitor_analyzer manual competitor preservation
-- PR #1821 (backend only) — insights_runner image/screenshot support
+- PR #1814 — competitor_analyzer backend + frontend (AddCompetitorDialog, save/persist, i18n)
+- PR #1821 — insights_runner backend + frontend (image upload UI, paste/drag-drop, screenshot capture)
+- PR #1842 — FileWatcher concurrency (pendingWatches, cancellation, deduplication)
+- PR #1831 — Terminal GPU acceleration settings, WebGL lazy loading, crash diagnostics
+- PR #1829 — Insights session archive/unarchive, bulk operations, ChatHistorySidebar selection mode
+- PR #1817 — Roadmap feature archive with confirmation dialog, i18n for all roadmap actions
 
 **Дополнительно перенесено (утилитарные модули):**
 - core/error_utils.py, agents/base.py, security/tool_input_validator.py, debug.py, core/debug.py
 - Эти модули разблокировали 165 ранее падавших тестов (2710 → 2875)
 
-**Пропущено: 13 PRs** (компоненты отсутствуют в нашем форке):
+**Пропущено: 7 PRs** (компоненты отсутствуют в нашем форке):
 - 5 PR — зависят от XState/TaskStateManager (#1840, #1833, #1820, #1816, #1815)
-- 1 PR — FileWatcher (#1842)
 - 1 PR — DependencyStrategy (#1832)
-- 3 PR — Terminal infrastructure (#1831, #1819)
-- 1 PR — Chat/Insights frontend (#1829)
-- 1 PR — GitHub Issues components (#1790)
-- 1 PR — Profile scorer (#1794)
+- 1 PR — Terminal state-machine (#1819)
 
-**Не перенесено (слишком сильное расхождение или отсутствие зависимостей):**
+**Не перенесено (слишком сильное расхождение):**
 - PR #1772 — 13 new CLI test files (12,500+ строк) — массовый перенос нецелесообразен
-- PR #1817 — Roadmap frontend (нет компонентов)
-- Все XState/terminal/Insights PRs (см. список пропусков выше)
+- PR #1790 — GitHub Issues components (отсутствуют GitHubErrorDisplay, IssueList в нашем форке)
+- PR #1794 — Profile scorer (profile-scorer.ts существует, но PR зависит от unified-account.ts)
 
 ## Заметки
 
@@ -102,4 +102,4 @@ Remote: `andymik90` (уже добавлен в этом worktree)
 - Для PR с удалёнными ветками брать дифф через: `gh api repos/AndyMik90/Auto-Claude/pulls/{номер}/files`
 - Remote `andymik90` уже добавлен, доступные ветки уже зафетчены
 - Backend-изменения переносятся легче, frontend — может требовать адаптацию из-за XState и другой архитектуры
-- Основная причина пропуска: наш форк не имеет terminal infrastructure (xterm), Insights/Chat UI, Roadmap UI, state-machines, которые есть в AndyMik90 форке
+- Изначально 6 PRs были ошибочно пропущены как "отсутствующие компоненты" (#1842, #1831, #1829, #1821, #1817, #1814) — компоненты присутствовали в нашем форке, исправлено
