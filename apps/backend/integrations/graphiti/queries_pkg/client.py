@@ -7,7 +7,7 @@ Uses LadybugDB as the embedded graph database (no Docker required, Python 3.12+)
 
 import asyncio
 import logging
-import random
+import secrets
 import sys
 from datetime import UTC, datetime
 
@@ -35,7 +35,7 @@ def _is_lock_error(error: Exception) -> bool:
 def _backoff_with_jitter(attempt: int) -> float:
     """Calculate exponential backoff with jitter for retry delays."""
     backoff = min(INITIAL_BACKOFF_SECONDS * (2**attempt), MAX_BACKOFF_SECONDS)
-    jitter = backoff * JITTER_PERCENT * (2 * random.random() - 1)
+    jitter = backoff * JITTER_PERCENT * (2 * secrets.SystemRandom().random() - 1)
     return max(0.01, backoff + jitter)
 
 

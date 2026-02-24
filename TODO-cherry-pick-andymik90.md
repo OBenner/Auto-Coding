@@ -13,6 +13,7 @@ Remote: `andymik90` (уже добавлен в этом worktree)
 - [~] **PR #1840** — SKIPPED: не применим, наш форк не имеет TaskStateManager/XState
 
 ## Осталось — Категория 1: Критичные баг-фиксы бэкенда
+
 - [x] **PR #1797 + #1806 + #1857** — PR review stability chain: three-tier recovery, Pydantic schema normalization, file/line preservation in recovery. Applied as combined changeset. All 2605 tests pass.
 
 ## Осталось — Категория 2: Баг-фиксы fullstack/frontend

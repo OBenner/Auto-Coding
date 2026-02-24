@@ -624,7 +624,8 @@ class TestGraphitiClientRetryLogic:
         config = MagicMock()
         config.llm_provider = "openai"
         config.embedder_provider = "openai"
-        config.get_db_path.return_value = Path("/tmp/test-db")
+        import tempfile
+        config.get_db_path.return_value = Path(tempfile.gettempdir()) / "test-db"
         config.get_provider_summary.return_value = "openai/openai"
         return config
 
