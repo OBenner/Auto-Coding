@@ -436,7 +436,7 @@ if err := scanner.Err(); err != nil {
 ### Package Organization
 
 **Package structure:**
-```
+```text
 my-project/
 ├── cmd/
 │   └── myapp/

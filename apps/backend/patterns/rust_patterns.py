@@ -608,7 +608,7 @@ async fn main() -> std::io::Result<()> {
     dev::{forward_ready, Service, ServiceRequest, ServiceResponse, Transform},
     Error,
 };
-use futures::future::LocalBoxFuture;
+use futures::future::{ready, LocalBoxFuture, Ready};
 
 pub struct Logger;
 
@@ -781,8 +781,11 @@ async fn main() {
     axum::serve(listener, app).await.unwrap();
 }""",
     "axum_middleware": """use axum::{
+    extract::Request,
+    http::StatusCode,
     middleware::{self, Next},
     response::Response,
+    routing::get,
     Router,
 };
 

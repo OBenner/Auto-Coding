@@ -995,7 +995,7 @@ class ValidationStrategyBuilder:
                 )
             )
 
-        if project_type in ["php", "laravel", "symfony"]:
+        if project_type in ["php", "laravel", "symfony", "codeigniter"]:
             security_steps.append(
                 ValidationStep(
                     name="PHPStan Security Analysis",

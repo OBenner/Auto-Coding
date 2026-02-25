@@ -64,7 +64,7 @@ LANGUAGE_SECURITY_RULES: dict[str, dict[str, list[str]]] = {
             "syscall.Exec",  # Command injection risk
             "template.HTML",  # XSS risk if not sanitized
             "sql.Query",  # SQL injection risk without parameterization
-            "ioutil.ReadFile",  # Path traversal risk
+            "os.ReadFile",  # Path traversal risk (formerly ioutil.ReadFile, deprecated since Go 1.16)
             "http.Get",  # SSRF risk without validation
         ],
         "unsafe_patterns": [

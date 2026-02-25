@@ -276,13 +276,16 @@ class Calculator
 }
 
 // $calc->add('1', '2'); // TypeError in strict mode""",
-    "nullable_types": """function findUser(?int $id): ?User
+    "nullable_types": """class UserService
 {
-    if ($id === null) {
-        return null;
-    }
+    public function findUser(?int $id): ?User
+    {
+        if ($id === null) {
+            return null;
+        }
 
-    return $this->repository->find($id);
+        return $this->repository->find($id);
+    }
 }""",
     "union_types": """function process(int|float $number): int|float
 {

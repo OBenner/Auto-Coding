@@ -309,8 +309,8 @@ PACKAGE_PATTERNS = {
     "package_declaration": """package packagename
 
 import (
-    "fmt"
     "context"
+    "fmt"
 
     "github.com/user/package"
 )""",
