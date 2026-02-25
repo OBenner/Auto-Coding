@@ -319,7 +319,8 @@
             "command": "cd apps/frontend && grep -c 'annotation' src/shared/i18n/locales/en/common.json",
             "expected": "1"
           },
-          "status": "pending"
+          "status": "completed",
+          "notes": "Added 'annotation' section to both EN and FR locale files with keys for title, add/edit/delete annotations, placeholders, counts with pluralization, and show/hide annotations actions."
         },
         {
           "id": "subtask-6-2",
