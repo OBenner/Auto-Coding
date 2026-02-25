@@ -669,6 +669,12 @@ export const IPC_CHANNELS = {
   // Feedback submission (adaptive agent learning)
   FEEDBACK_SUBMIT: 'feedback:submit',
 
+  // Annotation operations (UX feedback loop)
+  ANNOTATION_SUBMIT: 'annotation:submit',
+  ANNOTATION_GET: 'annotation:get',
+  ANNOTATION_DELETE: 'annotation:delete',
+  ANNOTATION_LIST: 'annotation:list',
+
   // Scheduler operations
   SCHEDULER_SCHEDULE_BUILD: 'scheduler:scheduleBuild',
   SCHEDULER_GET_STATUS: 'scheduler:getStatus',
