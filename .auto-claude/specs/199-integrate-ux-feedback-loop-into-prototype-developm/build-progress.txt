@@ -270,3 +270,36 @@ Phase 6 (Integration & i18n): 0/4 pending
 Overall: 11/16 subtasks completed (69%)
 
 === END SESSION 18 ===
+
+Session 19 (Coder - subtask-5-5):
+- [COMPLETED] subtask-5-5: Create AnnotationToggle toolbar button component
+  - Created apps/frontend/src/renderer/components/annotations/AnnotationToggle.tsx with:
+    - Toggle button with MousePointer2 icon from lucide-react
+    - Visual indication when annotation mode is active (secondary variant + ring + pulsing dot)
+    - Tooltip with context-aware text (enable/disable)
+    - Props for size/className/iconOnly customization
+    - Proper ARIA labels and aria-pressed state for accessibility
+    - Integration with annotation store (toggleAnnotationMode, isAnnotationMode)
+    - i18n translation keys (annotation:* namespace)
+    - useMemo for efficient variant calculation
+    - Dev-only rendering handled at integration level (App.tsx)
+  - Updated annotations/index.ts barrel export to include AnnotationToggle and AnnotationToggleProps
+  - Committed: feat(annotations): create AnnotationToggle toolbar button component
+  - Verified: npm run typecheck passes
+
+=== SUBTASK PROGRESS ===
+Phase 1 (Setup & Types): 3/3 completed ✅
+Phase 2 (State Management): 1/1 completed ✅
+Phase 3 (Spec Generation Service): 1/1 completed ✅
+Phase 4 (IPC & MCP Integration): 2/2 completed ✅
+Phase 5 (UI Components): 5/5 completed ✅
+- ✅ subtask-5-1: Create annotation component types and initial barrel export
+- ✅ subtask-5-2: Create AnnotationOverlay component for visual selection
+- ✅ subtask-5-3: Create AnnotationForm component for description and severity input
+- ✅ subtask-5-4: Create AnnotationList component to display session annotations
+- ✅ subtask-5-5: Create AnnotationToggle toolbar button component
+Phase 6 (Integration & i18n): 0/4 pending
+
+Overall: 12/16 subtasks completed (75%)
+
+=== END SESSION 19 ===

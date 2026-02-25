@@ -937,5 +937,24 @@
     "categoryNaming": "Conventions de nommage",
     "categoryErrorHandling": "Gestion d'erreurs",
     "categoryOrganization": "Organisation du code"
+  },
+  "annotation": {
+    "title": "Annotations",
+    "addAnnotation": "Ajouter une annotation",
+    "editAnnotation": "Modifier l'annotation",
+    "deleteAnnotation": "Supprimer l'annotation",
+    "noAnnotations": "Aucune annotation pour le moment",
+    "noAnnotationsDescription": "Ajoutez des annotations pour donner votre avis sur ce contenu",
+    "saveAnnotation": "Enregistrer l'annotation",
+    "cancelAnnotation": "Annuler",
+    "annotationPlaceholder": "Saisissez votre annotation...",
+    "deleteTitle": "Supprimer l'annotation",
+    "deleteDescription": "Êtes-vous sûr de vouloir supprimer cette annotation ?",
+    "deleteConfirm": "Supprimer",
+    "annotationCount": "{{count}} annotation",
+    "annotationCount_plural": "{{count}} annotations",
+    "showAnnotations": "Afficher les annotations",
+    "hideAnnotations": "Masquer les annotations",
+    "annotations": "Annotations"
   }
 }

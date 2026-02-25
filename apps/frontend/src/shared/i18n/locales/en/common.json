@@ -942,5 +942,24 @@
     "categoryNaming": "Naming Conventions",
     "categoryErrorHandling": "Error Handling",
     "categoryOrganization": "Code Organization"
+  },
+  "annotation": {
+    "title": "Annotations",
+    "addAnnotation": "Add Annotation",
+    "editAnnotation": "Edit Annotation",
+    "deleteAnnotation": "Delete Annotation",
+    "noAnnotations": "No annotations yet",
+    "noAnnotationsDescription": "Add annotations to provide feedback on this content",
+    "saveAnnotation": "Save Annotation",
+    "cancelAnnotation": "Cancel",
+    "annotationPlaceholder": "Enter your annotation...",
+    "deleteTitle": "Delete Annotation",
+    "deleteDescription": "Are you sure you want to delete this annotation?",
+    "deleteConfirm": "Delete",
+    "annotationCount": "{{count}} annotation",
+    "annotationCount_plural": "{{count}} annotations",
+    "showAnnotations": "Show Annotations",
+    "hideAnnotations": "Hide Annotations",
+    "annotations": "Annotations"
   }
 }
