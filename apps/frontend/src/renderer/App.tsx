@@ -79,6 +79,14 @@ import { ProjectTabBar } from './components/ProjectTabBar';
 import { AddProjectModal } from './components/AddProjectModal';
 import { ViewStateProvider } from './contexts/ViewStateContext';
 import { CommandPalette, type CommandAction } from './components/CommandPalette';
+import {
+  AnnotationOverlay,
+  AnnotationForm,
+  AnnotationList,
+  AnnotationToggle
+} from './components/annotations';
+import { useAnnotationStore } from './stores/annotation-store';
+import type { AnnotationFormData } from '../shared/types/annotation';
 
 // Version constant for version-specific warnings (e.g., reauthentication notices)
 const VERSION_WARNING_275 = '2.7.5';
@@ -178,6 +186,20 @@ export function App() {
 
   // Quick actions store
   const recentActions = useQuickActionsStore((state) => state.recentActions);
+
+  // Annotation store (dev-only)
+  const isAnnotationMode = useAnnotationStore((state) => state.isAnnotationMode);
+  const draftAnnotation = useAnnotationStore((state) => state.draftAnnotation);
+  const annotations = useAnnotationStore((state) => state.annotations);
+  const submitDraftAnnotation = useAnnotationStore((state) => state.submitDraftAnnotation);
+  const cancelDraftAnnotation = useAnnotationStore((state) => state.cancelDraftAnnotation);
+  const deleteAnnotation = useAnnotationStore((state) => state.deleteAnnotation);
+  const updateAnnotation = useAnnotationStore((state) => state.updateAnnotation);
+  const [annotationStatusFilter, setAnnotationStatusFilter] = useState<'all' | 'draft' | 'submitted' | 'processing' | 'completed' | 'failed'>('all');
+  const [isAnnotationListOpen, setIsAnnotationListOpen] = useState(false);
+
+  // Current route context for annotations
+  const currentRoute = activeView;
 
   // Setup drag sensors
   const sensors = useSensors(
@@ -944,6 +966,33 @@ export function App() {
     return groups;
   }, [recentCommandActions, commandActions]);
 
+  // Annotation handlers (dev-only)
+  const handleAnnotationSubmit = async (formData: AnnotationFormData) => {
+    await submitDraftAnnotation(formData);
+  };
+
+  const handleAnnotationCancel = () => {
+    cancelDraftAnnotation();
+  };
+
+  const handleAnnotationDelete = async (annotationId: string) => {
+    await deleteAnnotation(annotationId);
+    return true;
+  };
+
+  const handleAnnotationEdit = async (annotationId: string, newDescription: string) => {
+    await updateAnnotation(annotationId, { description: newDescription });
+    return true;
+  };
+
+  const handleAnnotationRegenerate = async (annotationId: string) => {
+    // Re-submit annotation to regenerate spec
+    const annotation = annotations.find(a => a.id === annotationId);
+    if (annotation) {
+      await updateAnnotation(annotationId, { status: 'submitted' });
+    }
+  };
+
   return (
     <ViewStateProvider>
       <TooltipProvider>
@@ -990,6 +1039,31 @@ export function App() {
                 )}
               </DragOverlay>
             </DndContext>
+          )}
+
+          {/* Dev-only annotation toolbar */}
+          {process.env.NODE_ENV === 'development' && (
+            <div className="flex items-center justify-between px-4 py-2 border-b border-border bg-muted/30">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground font-medium">DEV TOOLS</span>
+                <div className="h-4 w-px bg-border" />
+                <AnnotationToggle />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => setIsAnnotationListOpen(true)}
+                >
+                  View Annotations ({annotations.length})
+                </Button>
+              </div>
+              {isAnnotationMode && (
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+                  Annotation mode active
+                </div>
+              )}
+            </div>
           )}
 
           {/* Main content area */}
@@ -1331,6 +1405,38 @@ export function App() {
           onOpenChange={setIsCommandPaletteOpen}
           commandGroups={commandGroups}
         />
+
+        {/* Annotation Components - Development Only */}
+        {process.env.NODE_ENV === 'development' && (
+          <>
+            {/* Annotation Overlay - visual selection when annotation mode is active */}
+            <AnnotationOverlay currentRoute={currentRoute} />
+
+            {/* Annotation Form - appears when draft annotation exists */}
+            {draftAnnotation && (
+              <AnnotationForm
+                coordinates={draftAnnotation.coordinates}
+                screenshot={draftAnnotation.screenshot}
+                onSubmit={handleAnnotationSubmit}
+                onCancel={handleAnnotationCancel}
+              />
+            )}
+
+            {/* Annotation List - dialog showing all annotations */}
+            <Dialog open={isAnnotationListOpen} onOpenChange={setIsAnnotationListOpen}>
+              <DialogContent className="max-w-2xl h-[600px] flex flex-col p-0">
+                <AnnotationList
+                  annotations={annotations}
+                  statusFilter={annotationStatusFilter}
+                  onStatusFilterChange={setAnnotationStatusFilter}
+                  onDeleteAnnotation={handleAnnotationDelete}
+                  onEditAnnotation={handleAnnotationEdit}
+                  onRegenerateSpec={handleAnnotationRegenerate}
+                />
+              </DialogContent>
+            </Dialog>
+          </>
+        )}
 
         {/* Toast notifications */}
         <Toaster />
