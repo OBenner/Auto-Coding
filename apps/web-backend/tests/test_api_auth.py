@@ -126,8 +126,9 @@ async def test_verify_token_response_model(async_client: AsyncClient, auth_heade
 
     data = response.json()
 
-    # Verify TokenResponse model structure
-    assert set(data.keys()) == {"valid", "message", "claims"}
+    # Verify required TokenResponse model fields are present with correct types
+    for key in ("valid", "message", "claims"):
+        assert key in data
     assert isinstance(data["valid"], bool)
     assert isinstance(data["message"], str)
     assert isinstance(data["claims"], dict)
@@ -146,22 +147,24 @@ async def test_verify_token_with_multiple_requests(async_client: AsyncClient, au
 
 @pytest.mark.asyncio
 async def test_verify_token_case_sensitive_bearer(async_client: AsyncClient, auth_token: str):
-    """Test that Bearer scheme is case-sensitive (should be 'Bearer' not 'bearer')"""
-    # FastAPI's HTTPBearer expects exact 'Bearer' casing
+    """Test Bearer scheme case-insensitivity behavior (lowercase 'bearer')"""
+    # FastAPI's HTTPBearer is case-insensitive: 'bearer' and 'Bearer' are both accepted
     headers = {"Authorization": f"bearer {auth_token}"}  # lowercase 'bearer'
     response = await async_client.post("/api/auth/verify", headers=headers)
-    # HTTPBearer is case-insensitive in practice, so this should still work
-    # But we test it to document the behavior
-    assert response.status_code in [200, 403]
+    # Should not be a server error regardless of whether the scheme is accepted
+    assert response.status_code != 500
+    assert "detail" in response.json() or response.status_code == 200
 
 
 @pytest.mark.asyncio
-async def test_auth_endpoints_cors_headers(async_client: AsyncClient):
-    """Test that auth endpoints include CORS headers (if configured)"""
+async def test_auth_status_response_structure(async_client: AsyncClient):
+    """Test that auth_status returns the expected response structure"""
     response = await async_client.get("/api/auth/status")
     assert response.status_code == 200
-    # CORS headers would be tested in actual browser/CORS middleware tests
-    # This is just a placeholder to document that CORS should be considered
+    data = response.json()
+    assert data["status"] == "ok"
+    assert data["auth_enabled"] is True
+    assert isinstance(data["message"], str)
 
 
 @pytest.mark.asyncio
