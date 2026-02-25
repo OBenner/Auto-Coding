@@ -9,3 +9,4 @@ export type {
 
 export { AnnotationOverlay } from './AnnotationOverlay';
 export { AnnotationForm } from './AnnotationForm';
+export { AnnotationList } from './AnnotationList';
