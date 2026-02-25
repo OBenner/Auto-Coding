@@ -24,6 +24,9 @@ export function IssueCard({ issue, isSelected, onToggle }: IssueCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
   return (
+    // biome-ignore lint/a11y/noNoninteractiveElementInteractions: Clickable card for selection
+    // biome-ignore lint/a11y/noStaticElementInteractions: Clickable card for selection
+    // biome-ignore lint/a11y/useKeyWithClickEvents: Keyboard handled via nested checkbox
     <div
       className={`
         rounded-lg border border-border p-3 cursor-pointer transition-colors
@@ -86,6 +89,7 @@ export function IssueCard({ issue, isSelected, onToggle }: IssueCardProps) {
           {/* Expandable description */}
           {issue.description && (
             <button
+              type="button"
               onClick={(e) => {
                 e.stopPropagation();
                 setIsExpanded(!isExpanded);

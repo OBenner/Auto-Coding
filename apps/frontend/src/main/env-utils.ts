@@ -16,7 +16,7 @@ import { promises as fsPromises } from 'fs';
 import { execFileSync, execFile } from 'child_process';
 import { promisify } from 'util';
 import { getSentryEnvForSubprocess } from './sentry';
-import { isWindows, isUnix, getPathDelimiter, getNpmCommand } from './platform';
+import { isWindows, isUnix, getPathDelimiter, getNpmCommand, getCurrentOS } from './platform';
 
 const execFileAsync = promisify(execFile);
 
@@ -95,7 +95,7 @@ function getNpmGlobalPrefix(): string | null {
     const normalizedPath = path.normalize(binPath);
 
     return fs.existsSync(normalizedPath) ? normalizedPath : null;
-  } catch (error) {
+  } catch (_error) {
     // Fallback for Windows: try default npm global location when npm.cmd is not in PATH
     // This happens when the packaged app launches from GUI without full shell environment
     if (isWindows()) {
@@ -161,7 +161,7 @@ const ESSENTIAL_SYSTEM_PATHS: string[] = ['/usr/bin', '/bin', '/usr/sbin', '/sbi
  * @returns Array of expanded paths (without existence checking)
  */
 function getExpandedPlatformPaths(additionalPaths?: string[]): string[] {
-  const platform = process.platform as 'darwin' | 'linux' | 'win32';
+  const platform = getCurrentOS();
   const homeDir = os.homedir();
 
   // Get platform-specific paths and expand home directory

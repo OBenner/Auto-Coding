@@ -1,7 +1,7 @@
 import { ipcMain } from 'electron';
 import type { BrowserWindow } from 'electron';
 import path from 'path';
-import { existsSync, readFileSync } from 'fs';
+import { promises as fsPromises } from 'fs';
 import { spawn } from 'child_process';
 import { IPC_CHANNELS, getSpecsDir, AUTO_BUILD_PATHS } from '../../../shared/constants';
 import type {
@@ -12,9 +12,6 @@ import type {
 } from '../../../shared/types';
 import { projectStore } from '../../project-store';
 import { getMemoryService, isKuzuAvailable } from '../../memory-service';
-import {
-  getGraphitiDatabaseDetails
-} from './utils';
 import { getEffectiveSourcePath } from '../../updater/path-resolver';
 import {
   loadGraphitiStateFromSpecs,
@@ -26,16 +23,28 @@ import { getConfiguredPythonPath } from '../../python-env-manager';
 import { getAugmentedEnv } from '../../env-utils';
 
 /**
+ * Check if a file exists
+ */
+async function fileExists(filePath: string): Promise<boolean> {
+  try {
+    await fsPromises.access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Load project index from file
  */
-function loadProjectIndex(projectPath: string): ProjectIndex | null {
+async function loadProjectIndex(projectPath: string): Promise<ProjectIndex | null> {
   const indexPath = path.join(projectPath, AUTO_BUILD_PATHS.PROJECT_INDEX);
-  if (!existsSync(indexPath)) {
+  if (!(await fileExists(indexPath))) {
     return null;
   }
 
   try {
-    const content = readFileSync(indexPath, 'utf-8');
+    const content = await fsPromises.readFile(indexPath, 'utf-8');
     return JSON.parse(content);
   } catch {
     return null;
@@ -74,7 +83,7 @@ async function loadRecentMemories(
   if (recentMemories.length === 0) {
     const specsBaseDir = getSpecsDir(autoBuildPath);
     const specsDir = path.join(projectPath, specsBaseDir);
-    recentMemories = loadFileBasedMemories(specsDir, 20);
+    recentMemories = await loadFileBasedMemories(specsDir, 20);
   }
 
   return recentMemories;
@@ -97,13 +106,13 @@ export function registerProjectContextHandlers(
 
       try {
         // Load project index
-        const projectIndex = loadProjectIndex(project.path);
+        const projectIndex = await loadProjectIndex(project.path);
 
         // Load graphiti state from most recent spec
-        const memoryState = loadGraphitiStateFromSpecs(project.path, project.autoBuildPath);
+        const memoryState = await loadGraphitiStateFromSpecs(project.path, project.autoBuildPath);
 
         // Build memory status
-        const memoryStatus = buildMemoryStatus(
+        const memoryStatus = await buildMemoryStatus(
           project.path,
           project.autoBuildPath,
           memoryState
@@ -209,7 +218,7 @@ export function registerProjectContextHandlers(
         });
 
         // Read the new index
-        const projectIndex = loadProjectIndex(project.path);
+        const projectIndex = await loadProjectIndex(project.path);
         if (projectIndex) {
           return { success: true, data: projectIndex };
         }

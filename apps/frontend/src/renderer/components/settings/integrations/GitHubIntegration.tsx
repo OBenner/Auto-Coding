@@ -71,6 +71,7 @@ export function GitHubIntegration({
   debugLog('Render - envConfig:', envConfig ? { githubEnabled: envConfig.githubEnabled, hasToken: !!envConfig.githubToken, defaultBranch: envConfig.defaultBranch } : null);
 
   // Fetch repos when entering oauth-success mode
+  // biome-ignore lint/correctness/useExhaustiveDependencies: fetchUserRepos is stable
   useEffect(() => {
     if (authMode === 'oauth-success') {
       fetchUserRepos();
@@ -78,6 +79,7 @@ export function GitHubIntegration({
   }, [authMode]);
 
   // Fetch branches when GitHub is enabled and project path is available
+  // biome-ignore lint/correctness/useExhaustiveDependencies: fetchBranches is stable
   useEffect(() => {
     debugLog(`useEffect[branches] - githubEnabled: ${envConfig?.githubEnabled}, projectPath: ${projectPath}`);
     if (envConfig?.githubEnabled && projectPath) {
@@ -86,7 +88,6 @@ export function GitHubIntegration({
     } else {
       debugLog('useEffect[branches] - Skipping fetchBranches (conditions not met)');
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [envConfig?.githubEnabled, projectPath]);
 
   /**

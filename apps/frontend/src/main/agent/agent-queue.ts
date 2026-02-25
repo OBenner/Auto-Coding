@@ -170,7 +170,7 @@ export class AgentQueueManager {
       config
     });
 
-    const autoBuildSource = this.processManager.getAutoBuildSourcePath();
+    const autoBuildSource = await this.processManager.getAutoBuildSourcePath();
 
     if (!autoBuildSource) {
       debugError('[Agent Queue] Auto-build source path not found');
@@ -233,7 +233,7 @@ export class AgentQueueManager {
       refresh
     });
 
-    const autoBuildSource = this.processManager.getAutoBuildSourcePath();
+    const autoBuildSource = await this.processManager.getAutoBuildSourcePath();
 
     if (!autoBuildSource) {
       debugError('[Agent Queue] Auto-build source path not found');
@@ -304,7 +304,7 @@ export class AgentQueueManager {
     debugLog('[Agent Queue] Spawning ideation process:', { projectId, projectPath });
 
     // Run from auto-claude source directory so imports work correctly
-    const autoBuildSource = this.processManager.getAutoBuildSourcePath();
+    const autoBuildSource = await this.processManager.getAutoBuildSourcePath();
     const cwd = autoBuildSource || process.cwd();
 
     // Ensure Python environment is ready before spawning
@@ -324,7 +324,7 @@ export class AgentQueueManager {
 
 
     // Get combined environment variables
-    const combinedEnv = this.processManager.getCombinedEnv(projectPath);
+    const combinedEnv = await this.processManager.getCombinedEnv(projectPath);
 
     // Get best available Claude profile environment (automatically handles rate limits)
     const profileResult = getBestAvailableProfileEnv();
@@ -632,7 +632,7 @@ export class AgentQueueManager {
     debugLog('[Agent Queue] Spawning roadmap process:', { projectId, projectPath });
 
     // Run from auto-claude source directory so imports work correctly
-    const autoBuildSource = this.processManager.getAutoBuildSourcePath();
+    const autoBuildSource = await this.processManager.getAutoBuildSourcePath();
     const cwd = autoBuildSource || process.cwd();
 
     // Ensure Python environment is ready before spawning
@@ -652,7 +652,7 @@ export class AgentQueueManager {
 
 
     // Get combined environment variables
-    const combinedEnv = this.processManager.getCombinedEnv(projectPath);
+    const combinedEnv = await this.processManager.getCombinedEnv(projectPath);
 
     // Get best available Claude profile environment (automatically handles rate limits)
     const profileResult = getBestAvailableProfileEnv();

@@ -4,7 +4,7 @@
 
 import type { IpcMainEvent, IpcMainInvokeEvent, BrowserWindow } from "electron";
 import { app } from "electron";
-import { existsSync, readFileSync } from "fs";
+import { promises as fsPromises } from "fs";
 import path from "path";
 import {
   IPC_CHANNELS,
@@ -24,14 +24,26 @@ import { debugLog, debugError } from "../../../shared/utils/debug-logger";
 import { safeSendToRenderer } from "../utils";
 
 /**
+ * Check if a file exists
+ */
+async function fileExists(filePath: string): Promise<boolean> {
+  try {
+    await fsPromises.access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Read ideation feature settings from the settings file
  */
-function getIdeationFeatureSettings(): { model?: string; thinkingLevel?: string } {
+async function getIdeationFeatureSettings(): Promise<{ model?: string; thinkingLevel?: string }> {
   const settingsPath = path.join(app.getPath("userData"), "settings.json");
 
   try {
-    if (existsSync(settingsPath)) {
-      const content = readFileSync(settingsPath, "utf-8");
+    if (await fileExists(settingsPath)) {
+      const content = await fsPromises.readFile(settingsPath, "utf-8");
       const settings: AppSettings = { ...DEFAULT_APP_SETTINGS, ...JSON.parse(content) };
 
       // Get ideation-specific settings
@@ -57,15 +69,15 @@ function getIdeationFeatureSettings(): { model?: string; thinkingLevel?: string 
 /**
  * Start ideation generation for a project
  */
-export function startIdeationGeneration(
+export async function startIdeationGeneration(
   _event: IpcMainEvent,
   projectId: string,
   config: IdeationConfig,
   agentManager: AgentManager,
   mainWindow: BrowserWindow | null
-): void {
+): Promise<void> {
   // Get feature settings and merge with config
-  const featureSettings = getIdeationFeatureSettings();
+  const featureSettings = await getIdeationFeatureSettings();
   const configWithSettings: IdeationConfig = {
     ...config,
     model: config.model || featureSettings.model,
@@ -110,15 +122,15 @@ export function startIdeationGeneration(
 /**
  * Refresh ideation session (regenerate with new ideas)
  */
-export function refreshIdeationSession(
+export async function refreshIdeationSession(
   _event: IpcMainEvent,
   projectId: string,
   config: IdeationConfig,
   agentManager: AgentManager,
   mainWindow: BrowserWindow | null
-): void {
+): Promise<void> {
   // Get feature settings and merge with config
-  const featureSettings = getIdeationFeatureSettings();
+  const featureSettings = await getIdeationFeatureSettings();
   const configWithSettings: IdeationConfig = {
     ...config,
     model: config.model || featureSettings.model,

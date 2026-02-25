@@ -2,8 +2,12 @@ import { create } from 'zustand';
 import type {
   PRReviewProgress,
   PRReviewResult,
-  NewCommitsCheck
+  NewCommitsCheck,
+  InlineComment
 } from '../../../preload/api/modules/github-api';
+
+// Re-export InlineComment for convenience
+export type { InlineComment };
 
 /**
  * PR review state for a single PR
@@ -21,6 +25,8 @@ interface PRReviewState {
   error: string | null;
   /** Cached result of new commits check - updated when detail view checks */
   newCommitsCheck: NewCommitsCheck | null;
+  /** Inline comments for this PR - fetched from GitHub */
+  inlineComments: InlineComment[] | null;
 }
 
 interface PRReviewStoreState {
@@ -35,11 +41,14 @@ interface PRReviewStoreState {
   setPRReviewResult: (projectId: string, result: PRReviewResult, options?: { preserveNewCommitsCheck?: boolean }) => void;
   setPRReviewError: (projectId: string, prNumber: number, error: string) => void;
   setNewCommitsCheck: (projectId: string, prNumber: number, check: NewCommitsCheck) => void;
+  setInlineComments: (projectId: string, prNumber: number, comments: InlineComment[]) => void;
+  clearInlineComments: (projectId: string, prNumber: number) => void;
   clearPRReview: (projectId: string, prNumber: number) => void;
 
   // Selectors
   getPRReviewState: (projectId: string, prNumber: number) => PRReviewState | null;
   getActivePRReviews: (projectId: string) => PRReviewState[];
+  getInlineComments: (projectId: string, prNumber: number) => InlineComment[] | null;
 }
 
 export const usePRReviewStore = create<PRReviewStoreState>((set, get) => ({
@@ -62,7 +71,8 @@ export const usePRReviewStore = create<PRReviewStoreState>((set, get) => ({
           result: null,
           previousResult: null,
           error: null,
-          newCommitsCheck: existing?.newCommitsCheck ?? null
+          newCommitsCheck: existing?.newCommitsCheck ?? null,
+          inlineComments: existing?.inlineComments ?? null
         }
       }
     };
@@ -92,7 +102,8 @@ export const usePRReviewStore = create<PRReviewStoreState>((set, get) => ({
           result: null,
           previousResult: existing?.result ?? null,  // Preserve for follow-up continuity
           error: null,
-          newCommitsCheck: existing?.newCommitsCheck ?? null
+          newCommitsCheck: existing?.newCommitsCheck ?? null,
+          inlineComments: existing?.inlineComments ?? null
         }
       }
     };
@@ -113,7 +124,8 @@ export const usePRReviewStore = create<PRReviewStoreState>((set, get) => ({
           result: existing?.result ?? null,
           previousResult: existing?.previousResult ?? null,
           error: null,
-          newCommitsCheck: existing?.newCommitsCheck ?? null
+          newCommitsCheck: existing?.newCommitsCheck ?? null,
+          inlineComments: existing?.inlineComments ?? null
         }
       }
     };
@@ -136,7 +148,8 @@ export const usePRReviewStore = create<PRReviewStoreState>((set, get) => ({
           error: result.error ?? null,
           // Clear new commits check when review completes (it was just reviewed)
           // BUT preserve it during preload/refresh to avoid race condition
-          newCommitsCheck: options?.preserveNewCommitsCheck ? (existing?.newCommitsCheck ?? null) : null
+          newCommitsCheck: options?.preserveNewCommitsCheck ? (existing?.newCommitsCheck ?? null) : null,
+          inlineComments: existing?.inlineComments ?? null
         }
       }
     };
@@ -157,7 +170,8 @@ export const usePRReviewStore = create<PRReviewStoreState>((set, get) => ({
           result: existing?.result ?? null,
           previousResult: existing?.previousResult ?? null,
           error,
-          newCommitsCheck: existing?.newCommitsCheck ?? null
+          newCommitsCheck: existing?.newCommitsCheck ?? null,
+          inlineComments: existing?.inlineComments ?? null
         }
       }
     };
@@ -180,7 +194,8 @@ export const usePRReviewStore = create<PRReviewStoreState>((set, get) => ({
             result: null,
             previousResult: null,
             error: null,
-            newCommitsCheck: check
+            newCommitsCheck: check,
+            inlineComments: null
           }
         }
       };
@@ -191,6 +206,57 @@ export const usePRReviewStore = create<PRReviewStoreState>((set, get) => ({
         [key]: {
           ...existing,
           newCommitsCheck: check
+        }
+      }
+    };
+  }),
+
+  setInlineComments: (projectId: string, prNumber: number, comments: InlineComment[]) => set((state) => {
+    const key = `${projectId}:${prNumber}`;
+    const existing = state.prReviews[key];
+    if (!existing) {
+      // Create a minimal state if none exists
+      return {
+        prReviews: {
+          ...state.prReviews,
+          [key]: {
+            prNumber,
+            projectId,
+            isReviewing: false,
+            startedAt: null,
+            progress: null,
+            result: null,
+            previousResult: null,
+            error: null,
+            newCommitsCheck: null,
+            inlineComments: comments
+          }
+        }
+      };
+    }
+    return {
+      prReviews: {
+        ...state.prReviews,
+        [key]: {
+          ...existing,
+          inlineComments: comments
+        }
+      }
+    };
+  }),
+
+  clearInlineComments: (projectId: string, prNumber: number) => set((state) => {
+    const key = `${projectId}:${prNumber}`;
+    const existing = state.prReviews[key];
+    if (!existing) {
+      return state;
+    }
+    return {
+      prReviews: {
+        ...state.prReviews,
+        [key]: {
+          ...existing,
+          inlineComments: null
         }
       }
     };
@@ -214,6 +280,12 @@ export const usePRReviewStore = create<PRReviewStoreState>((set, get) => ({
     return Object.values(prReviews).filter(
       review => review.projectId === projectId && review.isReviewing
     );
+  },
+
+  getInlineComments: (projectId: string, prNumber: number) => {
+    const { prReviews } = get();
+    const key = `${projectId}:${prNumber}`;
+    return prReviews[key]?.inlineComments ?? null;
   }
 }));
 

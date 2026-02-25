@@ -256,12 +256,17 @@ function SessionItem({
   }
 
   return (
+    // biome-ignore lint/a11y/useSemanticElements: Using div with role="button" for complex styling and layout
     <div
+      role="button"
+      tabIndex={0}
       className={cn(
         'group relative cursor-pointer px-2 py-2 transition-colors hover:bg-muted',
+        'focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-1',
         isActive && 'bg-primary/10 hover:bg-primary/15'
       )}
       onClick={onSelect}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect(); } }}
     >
       {/* Content with reserved space for the menu button */}
       <div className="flex items-center gap-1.5 pr-7">

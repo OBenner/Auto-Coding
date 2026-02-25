@@ -1,7 +1,7 @@
 import { spawn } from 'child_process';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { existsSync, readFileSync } from 'fs';
+import { promises as fsPromises } from 'fs';
 import { app } from 'electron';
 
 // ESM-compatible __dirname
@@ -40,8 +40,19 @@ const CLI_TOOL_ENV_MAP: Readonly<Record<CliTool, string>> = {
   gh: 'GITHUB_CLI_PATH'
 } as const;
 
+/**
+ * Async file existence check helper
+ */
+async function fileExists(filePath: string): Promise<boolean> {
+  try {
+    await fsPromises.access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
-function deriveGitBashPath(gitExePath: string): string | null {
+async function deriveGitBashPath(gitExePath: string): Promise<string | null> {
   if (!isWindows()) {
     return null;
   }
@@ -75,14 +86,14 @@ function deriveGitBashPath(gitExePath: string): string | null {
     // Bash.exe is in Git/bin/bash.exe
     const bashPath = path.join(gitRoot, 'bin', 'bash.exe');
 
-    if (existsSync(bashPath)) {
+    if (await fileExists(bashPath)) {
       console.log('[AgentProcess] Derived git-bash path:', bashPath);
       return bashPath;
     }
 
     // Fallback: check one level up if gitRoot didn't work
     const altBashPath = path.join(path.dirname(gitRoot), 'bin', 'bash.exe');
-    if (existsSync(altBashPath)) {
+    if (await fileExists(altBashPath)) {
       console.log('[AgentProcess] Found git-bash at alternate path:', altBashPath);
       return altBashPath;
     }
@@ -170,9 +181,9 @@ export class AgentProcessManager {
     return env;
   }
 
-  private setupProcessEnvironment(
+  private async setupProcessEnvironment(
     extraEnv: Record<string, string>
-  ): NodeJS.ProcessEnv {
+  ): Promise<NodeJS.ProcessEnv> {
     // Get best available Claude profile environment (automatically handles rate limits)
     const profileResult = getBestAvailableProfileEnv();
     const profileEnv = profileResult.env;
@@ -187,7 +198,7 @@ export class AgentProcessManager {
       try {
         const gitInfo = getToolInfo('git');
         if (gitInfo.found && gitInfo.path) {
-          const bashPath = deriveGitBashPath(gitInfo.path);
+          const bashPath = await deriveGitBashPath(gitInfo.path);
           if (bashPath) {
             gitBashEnv['CLAUDE_CODE_GIT_BASH_PATH'] = bashPath;
             console.log('[AgentProcess] Setting CLAUDE_CODE_GIT_BASH_PATH:', bashPath);
@@ -334,14 +345,14 @@ export class AgentProcessManager {
   /**
    * Get the auto-claude source path (detects automatically if not configured)
    */
-  getAutoBuildSourcePath(): string | null {
+  async getAutoBuildSourcePath(): Promise<string | null> {
     // Use runners/spec_runner.py as the validation marker - this is the file actually needed
-    const validatePath = (p: string): boolean => {
-      return existsSync(p) && existsSync(path.join(p, 'runners', 'spec_runner.py'));
+    const validatePath = async (p: string): Promise<boolean> => {
+      return await fileExists(p) && await fileExists(path.join(p, 'runners', 'spec_runner.py'));
     };
 
     // If manually configured AND valid, use that
-    if (this.autoBuildSourcePath && validatePath(this.autoBuildSourcePath)) {
+    if (this.autoBuildSourcePath && await validatePath(this.autoBuildSourcePath)) {
       return this.autoBuildSourcePath;
     }
 
@@ -358,7 +369,7 @@ export class AgentProcessManager {
     ];
 
     for (const p of possiblePaths) {
-      if (validatePath(p)) {
+      if (await validatePath(p)) {
         return p;
       }
     }
@@ -380,7 +391,7 @@ export class AgentProcessManager {
 
     console.log(`[${context}] Python environment not ready, waiting for initialization...`);
 
-    const autoBuildSource = this.getAutoBuildSourcePath();
+    const autoBuildSource = await this.getAutoBuildSourcePath();
     if (!autoBuildSource) {
       const error = 'auto-build source not found';
       console.error(`[${context}] Cannot initialize Python - ${error}`);
@@ -427,13 +438,13 @@ export class AgentProcessManager {
    * Parse environment variables from a .env file content.
    * Filters out empty values to prevent overriding valid tokens from profiles.
    */
-  private parseEnvFile(envPath: string): Record<string, string> {
-    if (!existsSync(envPath)) {
+  private async parseEnvFile(envPath: string): Promise<Record<string, string>> {
+    if (!await fileExists(envPath)) {
       return {};
     }
 
     try {
-      const envContent = readFileSync(envPath, 'utf-8');
+      const envContent = await fsPromises.readFile(envPath, 'utf-8');
       const envVars: Record<string, string> = {};
 
       // Handle both Unix (\n) and Windows (\r\n) line endings
@@ -472,7 +483,7 @@ export class AgentProcessManager {
    * Load environment variables from project's .auto-claude/.env file
    * This contains frontend-configured settings like memory/Graphiti configuration
    */
-  private loadProjectEnv(projectPath: string): Record<string, string> {
+  private async loadProjectEnv(projectPath: string): Promise<Record<string, string>> {
     // Find project by path to get autoBuildPath
     const projects = projectStore.getProjects();
     const project = projects.find((p) => p.path === projectPath);
@@ -482,20 +493,20 @@ export class AgentProcessManager {
     }
 
     const envPath = path.join(projectPath, project.autoBuildPath, '.env');
-    return this.parseEnvFile(envPath);
+    return await this.parseEnvFile(envPath);
   }
 
   /**
    * Load environment variables from auto-claude .env file
    */
-  loadAutoBuildEnv(): Record<string, string> {
-    const autoBuildSource = this.getAutoBuildSourcePath();
+  async loadAutoBuildEnv(): Promise<Record<string, string>> {
+    const autoBuildSource = await this.getAutoBuildSourcePath();
     if (!autoBuildSource) {
       return {};
     }
 
     const envPath = path.join(autoBuildSource, '.env');
-    return this.parseEnvFile(envPath);
+    return await this.parseEnvFile(envPath);
   }
 
   /**
@@ -512,7 +523,7 @@ export class AgentProcessManager {
     this.killProcess(taskId);
 
     const spawnId = this.state.generateSpawnId();
-    const env = this.setupProcessEnvironment(extraEnv);
+    const env = await this.setupProcessEnvironment(extraEnv);
 
     // Get Python environment (PYTHONPATH for bundled packages, etc.)
     const pythonEnv = pythonEnvManager.getPythonEnv();
@@ -799,15 +810,15 @@ export class AgentProcessManager {
    * 3. Project's .auto-claude/.env - Frontend-configured settings (memory, integrations)
    * 4. Project settings (graphitiMcpUrl, useClaudeMd) - Runtime overrides
    */
-  getCombinedEnv(projectPath: string): Record<string, string> {
+  async getCombinedEnv(projectPath: string): Promise<Record<string, string>> {
     // Load app-wide memory settings from settings.json
     // This bridges onboarding config to backend agents
     const appSettings = (readSettingsFile() || {}) as Partial<AppSettings>;
     const memoryEnv = buildMemoryEnvVars(appSettings as AppSettings);
 
     // Existing env sources
-    const autoBuildEnv = this.loadAutoBuildEnv();
-    const projectFileEnv = this.loadProjectEnv(projectPath);
+    const autoBuildEnv = await this.loadAutoBuildEnv();
+    const projectFileEnv = await this.loadProjectEnv(projectPath);
     const projectSettingsEnv = this.getProjectEnvVars(projectPath);
 
     // Priority: app-wide memory -> backend .env -> project .env -> project settings

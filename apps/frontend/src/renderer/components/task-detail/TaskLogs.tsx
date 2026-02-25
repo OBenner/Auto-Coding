@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useRef, useCallback, useEffect } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import {
   Terminal,
   Loader2,
@@ -19,10 +20,10 @@ import {
   Cpu
 } from 'lucide-react';
 import { Badge } from '../ui/badge';
-import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '../ui/collapsible';
 import { cn } from '../../lib/utils';
 import type { Task, TaskLogs, TaskLogPhase, TaskPhaseLog, TaskLogEntry, TaskMetadata } from '../../../shared/types';
-import type { PhaseModelConfig, PhaseThinkingConfig, ThinkingLevel, ModelTypeShort } from '../../../shared/types/settings';
+import type { PhaseModelConfig, ThinkingLevel, ModelTypeShort } from '../../../shared/types/settings';
+import { useVirtualizedLogs } from '../../hooks/useVirtualizedLogs';
 
 interface TaskLogsProps {
   task: Task;
@@ -108,6 +109,9 @@ function getPhaseConfig(
   return null;
 }
 
+// Number of items to render outside the visible area for smoother scrolling
+const OVERSCAN = 5;
+
 export function TaskLogs({
   task,
   phaseLogs,
@@ -119,46 +123,150 @@ export function TaskLogs({
   onLogsScroll,
   onTogglePhase
 }: TaskLogsProps) {
-  return (
-    <div
-      ref={logsContainerRef}
-      className="h-full overflow-y-auto scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent"
-      onScroll={onLogsScroll}
-    >
-      <div className="p-4 space-y-2">
-        {isLoadingLogs ? (
-          <div className="flex items-center justify-center py-8">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-          </div>
-        ) : phaseLogs ? (
-          <>
-            {/* Phase-based collapsible logs */}
-            {(['planning', 'coding', 'validation'] as TaskLogPhase[]).map((phase) => (
-              <PhaseLogSection
-                key={phase}
-                phase={phase}
-                phaseLog={phaseLogs.phases[phase]}
-                isExpanded={expandedPhases.has(phase)}
-                onToggle={() => onTogglePhase(phase)}
-                isTaskStuck={isStuck}
-                phaseConfig={getPhaseConfig(task.metadata, phase)}
-              />
-            ))}
-            <div ref={logsEndRef} />
-          </>
-        ) : task.logs && task.logs.length > 0 ? (
-          // Fallback to legacy raw logs if no phase logs exist
+  const parentRef = useRef<HTMLDivElement>(null);
+
+  const {
+    flattenedItems,
+    count,
+    toggleDetail,
+    estimateSize,
+    hasLogs
+  } = useVirtualizedLogs(phaseLogs, expandedPhases);
+
+  // Set up the virtualizer with dynamic measurement
+  const rowVirtualizer = useVirtualizer({
+    count,
+    getScrollElement: () => parentRef.current,
+    estimateSize,
+    overscan: OVERSCAN,
+    // Enable measuring for dynamic heights
+    measureElement: (element) => {
+      return element.getBoundingClientRect().height;
+    },
+  });
+
+  // Re-measure all items when flattenedItems change (expand/collapse)
+  useEffect(() => {
+    // Small delay to allow DOM to update before measuring
+    const timer = setTimeout(() => {
+      rowVirtualizer.measure();
+    }, 10);
+    return () => clearTimeout(timer);
+  }, [flattenedItems, rowVirtualizer]);
+
+  // Create toggle handler for phase headers
+  const createPhaseToggleHandler = useCallback(
+    (phase: TaskLogPhase) => {
+      return () => onTogglePhase(phase);
+    },
+    [onTogglePhase]
+  );
+
+  // Create toggle handler for log entry details
+  const createDetailToggleHandler = useCallback(
+    (phase: TaskLogPhase, entryIndex: number) => {
+      return () => toggleDetail(phase, entryIndex);
+    },
+    [toggleDetail]
+  );
+
+  if (isLoadingLogs) {
+    return (
+      <div className="flex items-center justify-center py-8">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  // Fallback to legacy raw logs if no phase logs exist
+  if (!phaseLogs && task.logs && task.logs.length > 0) {
+    return (
+      <div
+        ref={logsContainerRef}
+        className="h-full overflow-y-auto scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent"
+        onScroll={onLogsScroll}
+      >
+        <div className="p-4">
           <pre className="text-xs font-mono text-muted-foreground whitespace-pre-wrap break-all">
             {task.logs.join('')}
             <div ref={logsEndRef} />
           </pre>
-        ) : (
-          <div className="text-center text-sm text-muted-foreground py-8">
-            <Terminal className="mx-auto mb-2 h-8 w-8 opacity-50" />
-            <p>No logs yet</p>
-            <p className="text-xs mt-1">Logs will appear here when the task runs</p>
-          </div>
-        )}
+        </div>
+      </div>
+    );
+  }
+
+  // Empty state
+  if (!hasLogs || count === 0) {
+    return (
+      <div className="text-center text-sm text-muted-foreground py-8">
+        <Terminal className="mx-auto mb-2 h-8 w-8 opacity-50" />
+        <p>No logs yet</p>
+        <p className="text-xs mt-1">Logs will appear here when the task runs</p>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      ref={parentRef}
+      className="h-full overflow-y-auto scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent"
+      onScroll={onLogsScroll}
+    >
+      <div className="p-4">
+        {/* The large inner element to hold all of the items */}
+        <div
+          style={{
+            height: `${rowVirtualizer.getTotalSize()}px`,
+            width: '100%',
+            position: 'relative',
+          }}
+        >
+          {/* Only the visible items in the virtualizer */}
+          {rowVirtualizer.getVirtualItems().map((virtualItem) => {
+            const item = flattenedItems[virtualItem.index];
+            if (!item) return null;
+
+            return (
+              <div
+                key={item.key}
+                data-index={virtualItem.index}
+                ref={rowVirtualizer.measureElement}
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  transform: `translateY(${virtualItem.start}px)`,
+                }}
+              >
+                {item.type === 'phase-header' ? (
+                  <div className="pb-2">
+                    <PhaseLogSection
+                      phase={item.phase}
+                      phaseLog={item.phaseLog || null}
+                      isExpanded={item.isPhaseExpanded || false}
+                      onToggle={createPhaseToggleHandler(item.phase)}
+                      isTaskStuck={isStuck}
+                      phaseConfig={getPhaseConfig(task.metadata, item.phase)}
+                    />
+                  </div>
+                ) : (
+                  item.entry && (
+                    <div className="ml-6 border-l-2 border-border pl-4 py-1">
+                      <LogEntry
+                        entry={item.entry}
+                        isExpanded={item.isDetailExpanded || false}
+                        onToggleExpand={createDetailToggleHandler(item.phase, item.entryIndex || 0)}
+                      />
+                    </div>
+                  )
+                )}
+              </div>
+            );
+          })}
+        </div>
+        <div ref={logsEndRef} />
       </div>
     </div>
   );
@@ -222,74 +330,61 @@ function PhaseLogSection({ phase, phaseLog, isExpanded, onToggle, isTaskStuck, p
   const isInterrupted = isTaskStuck && status === 'active';
 
   return (
-    <Collapsible open={isExpanded} onOpenChange={onToggle}>
-      <CollapsibleTrigger asChild>
-        <button
-          className={cn(
-            'w-full flex items-center justify-between p-3 rounded-lg border transition-colors',
-            'hover:bg-secondary/50',
-            status === 'active' && !isInterrupted && PHASE_COLORS[phase],
-            isInterrupted && 'border-warning/30 bg-warning/5',
-            status === 'completed' && 'border-success/30 bg-success/5',
-            status === 'failed' && 'border-destructive/30 bg-destructive/5',
-            status === 'pending' && 'border-border bg-secondary/30'
-          )}
-        >
-          <div className="flex items-center gap-2">
-            {isExpanded ? (
-              <ChevronDown className="h-4 w-4 text-muted-foreground" />
-            ) : (
-              <ChevronRight className="h-4 w-4 text-muted-foreground" />
-            )}
-            <Icon className={cn('h-4 w-4', isInterrupted ? 'text-warning' : status === 'active' ? PHASE_COLORS[phase].split(' ')[0] : 'text-muted-foreground')} />
-            <span className="font-medium text-sm">{PHASE_LABELS[phase]}</span>
-            {hasEntries && (
-              <span className="text-xs text-muted-foreground">
-                ({phaseLog?.entries.length} entries)
-              </span>
-            )}
+    <button
+      onClick={onToggle}
+      className={cn(
+        'w-full flex items-center justify-between p-3 rounded-lg border transition-colors',
+        'hover:bg-secondary/50',
+        status === 'active' && !isInterrupted && PHASE_COLORS[phase],
+        isInterrupted && 'border-warning/30 bg-warning/5',
+        status === 'completed' && 'border-success/30 bg-success/5',
+        status === 'failed' && 'border-destructive/30 bg-destructive/5',
+        status === 'pending' && 'border-border bg-secondary/30'
+      )}
+    >
+      <div className="flex items-center gap-2">
+        {isExpanded ? (
+          <ChevronDown className="h-4 w-4 text-muted-foreground" />
+        ) : (
+          <ChevronRight className="h-4 w-4 text-muted-foreground" />
+        )}
+        <Icon className={cn('h-4 w-4', isInterrupted ? 'text-warning' : status === 'active' ? PHASE_COLORS[phase].split(' ')[0] : 'text-muted-foreground')} />
+        <span className="font-medium text-sm">{PHASE_LABELS[phase]}</span>
+        {hasEntries && (
+          <span className="text-xs text-muted-foreground">
+            ({phaseLog?.entries.length} entries)
+          </span>
+        )}
+      </div>
+      <div className="flex items-center gap-2">
+        {/* Model and thinking level indicator */}
+        {phaseConfig && (
+          <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+            <div className="flex items-center gap-0.5" title={`Model: ${phaseConfig.model}`}>
+              <Cpu className="h-3 w-3" />
+              <span>{phaseConfig.model}</span>
+            </div>
+            <span className="text-muted-foreground/50">|</span>
+            <div className="flex items-center gap-0.5" title={`Thinking: ${phaseConfig.thinking}`}>
+              <Brain className="h-3 w-3" />
+              <span>{phaseConfig.thinking}</span>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            {/* Model and thinking level indicator */}
-            {phaseConfig && (
-              <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-                <div className="flex items-center gap-0.5" title={`Model: ${phaseConfig.model}`}>
-                  <Cpu className="h-3 w-3" />
-                  <span>{phaseConfig.model}</span>
-                </div>
-                <span className="text-muted-foreground/50">|</span>
-                <div className="flex items-center gap-0.5" title={`Thinking: ${phaseConfig.thinking}`}>
-                  <Brain className="h-3 w-3" />
-                  <span>{phaseConfig.thinking}</span>
-                </div>
-              </div>
-            )}
-            {getStatusBadge()}
-          </div>
-        </button>
-      </CollapsibleTrigger>
-      <CollapsibleContent>
-        <div className="mt-1 ml-6 border-l-2 border-border pl-4 py-2 space-y-1">
-          {!hasEntries ? (
-            <p className="text-xs text-muted-foreground italic">No logs yet</p>
-          ) : (
-            phaseLog?.entries.map((entry, idx) => (
-              <LogEntry key={`${entry.timestamp}-${idx}`} entry={entry} />
-            ))
-          )}
-        </div>
-      </CollapsibleContent>
-    </Collapsible>
+        )}
+        {getStatusBadge()}
+      </div>
+    </button>
   );
 }
 
 // Log Entry Component
 interface LogEntryProps {
   entry: TaskLogEntry;
+  isExpanded: boolean;
+  onToggleExpand: () => void;
 }
 
-function LogEntry({ entry }: LogEntryProps) {
-  const [isExpanded, setIsExpanded] = useState(false);
+function LogEntry({ entry, isExpanded, onToggleExpand }: LogEntryProps) {
   const hasDetail = Boolean(entry.detail);
 
   const getToolInfo = (toolName: string) => {
@@ -359,7 +454,7 @@ function LogEntry({ entry }: LogEntryProps) {
           </div>
           {hasDetail && (
             <button
-              onClick={() => setIsExpanded(!isExpanded)}
+              onClick={onToggleExpand}
               className={cn(
                 'flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded',
                 'text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors',
@@ -400,7 +495,7 @@ function LogEntry({ entry }: LogEntryProps) {
           <SubphaseBadge />
           {hasDetail && (
             <button
-              onClick={() => setIsExpanded(!isExpanded)}
+              onClick={onToggleExpand}
               className={cn(
                 'flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded shrink-0',
                 'text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors',
@@ -453,7 +548,7 @@ function LogEntry({ entry }: LogEntryProps) {
         <SubphaseBadge />
         {hasDetail && (
           <button
-            onClick={() => setIsExpanded(!isExpanded)}
+            onClick={onToggleExpand}
             className={cn(
               'flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded shrink-0',
               'text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors',

@@ -37,7 +37,7 @@ export function DebugSettings() {
       } else {
         setError(t('debug.errorReporting.saveFailed', 'Failed to save error reporting setting'));
       }
-    } catch (err) {
+    } catch (_err) {
       setError(t('debug.errorReporting.saveFailed', 'Failed to save error reporting setting'));
     }
   };
@@ -200,6 +200,7 @@ export function DebugSettings() {
                 </h4>
                 <div className="space-y-1 max-h-48 overflow-y-auto">
                   {debugInfo.recentErrors.map((error, index) => (
+                    // biome-ignore lint/suspicious/noArrayIndexKey: String error items without unique IDs
                     <div key={index} className="text-xs font-mono text-muted-foreground bg-muted/30 px-2 py-1 rounded">
                       {error}
                     </div>

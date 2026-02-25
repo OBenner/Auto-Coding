@@ -50,9 +50,15 @@ import os
 import subprocess
 from pathlib import Path
 
+# Add auto-claude to path (parent of runners/) - needed before core.platform import
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+# Import platform detection after sys.path is configured
+from core.platform import is_windows
+
 # Configure safe encoding on Windows BEFORE any imports that might print
 # This handles both TTY and piped output (e.g., from Electron)
-if sys.platform == "win32":
+if is_windows():
     for _stream_name in ("stdout", "stderr"):
         _stream = getattr(sys, _stream_name)
         # Method 1: Try reconfigure (works for TTY)
@@ -79,9 +85,6 @@ if sys.platform == "win32":
     if "_new_stream" in dir():
         del _new_stream
 
-# Add auto-claude to path (parent of runners/)
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
 # Validate platform-specific dependencies BEFORE any imports that might
 # trigger graphiti_core -> real_ladybug -> pywintypes import chain (ACS-253)
 from core.dependency_validator import validate_platform_dependencies
@@ -105,7 +108,6 @@ from core.sentry import capture_exception, init_sentry
 
 init_sentry(component="spec-runner")
 
-from core.platform import is_windows
 from debug import debug, debug_error, debug_section, debug_success
 from phase_config import resolve_model_id
 from review import ReviewState

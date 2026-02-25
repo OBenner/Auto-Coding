@@ -79,7 +79,7 @@ export function OAuthStep({ onNext, onBack, onSkip }: OAuthStepProps) {
   );
 
   // Reusable function to load Claude profiles
-  const loadClaudeProfiles = async () => {
+  const loadClaudeProfiles = useCallback(async () => {
     setIsLoadingProfiles(true);
     setError(null);
     try {
@@ -95,12 +95,12 @@ export function OAuthStep({ onNext, onBack, onSkip }: OAuthStepProps) {
     } finally {
       setIsLoadingProfiles(false);
     }
-  };
+  }, []);
 
   // Load Claude profiles on mount
   useEffect(() => {
     loadClaudeProfiles();
-  }, []);
+  }, [loadClaudeProfiles]);
 
   // Profile management handlers - following patterns from IntegrationSettings.tsx
   const handleAddProfile = async () => {
@@ -239,7 +239,7 @@ export function OAuthStep({ onNext, onBack, onSkip }: OAuthStepProps) {
 
     // Reload profiles to get updated auth state
     await loadClaudeProfiles();
-  }, []);
+  }, [loadClaudeProfiles]);
 
   // Handle auth terminal error
   const handleAuthTerminalError = useCallback((error: string) => {

@@ -164,6 +164,12 @@
     "claudeCodeChangelog": "View Claude Code Changelog",
     "claudeCodeChangelogAriaLabel": "View Claude Code Changelog (opens in new window)"
   },
+  "codeEditor": {
+    "unsavedChangesTitle": "Unsaved Changes",
+    "unsavedChangesDescription": "You have unsaved changes. What would you like to do?",
+    "discardChanges": "Discard Changes",
+    "saveAndSwitch": "Save & Switch"
+  },
   "versionWarning": {
     "title": "Action Required",
     "subtitle": "Version 2.7.5 Update",

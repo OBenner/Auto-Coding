@@ -68,6 +68,9 @@ export function SortableProjectTab({
     >
       <Tooltip delayDuration={200}>
         <TooltipTrigger asChild>
+          {/* biome-ignore lint/a11y/noNoninteractiveElementInteractions: This clickable div is part of a sortable tab component */}
+          {/* biome-ignore lint/a11y/useKeyWithClickEvents: Tab selection is handled by parent component */}
+          {/* biome-ignore lint/a11y/noStaticElementInteractions: Sortable tab requires div for drag functionality */}
           <div
             className={cn(
               'flex-1 flex items-center gap-1 sm:gap-2',
@@ -162,7 +165,7 @@ export function SortableProjectTab({
               onClick={onClose}
               aria-label={t('projectTab.closeTabAriaLabel')}
             >
-              <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>

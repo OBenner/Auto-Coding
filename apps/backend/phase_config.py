@@ -62,6 +62,57 @@ DEFAULT_PHASE_THINKING: dict[str, str] = {
     "qa": "high",
 }
 
+# Agent-level default model mapping
+# Maps each agent type from AGENT_CONFIGS to a default model shorthand
+# Used for multi-model orchestration where different agents can use different models
+AGENT_DEFAULT_MODELS: dict[str, str] = {
+    # ═══════════════════════════════════════════════════════════════════════
+    # SPEC CREATION AGENTS (Use sonnet for spec phases)
+    # ═══════════════════════════════════════════════════════════════════════
+    "spec_gatherer": "sonnet",
+    "spec_researcher": "sonnet",
+    "spec_writer": "sonnet",
+    "spec_critic": "sonnet",  # Uses ultrathink for self-critique
+    "spec_discovery": "sonnet",
+    "spec_context": "sonnet",
+    "spec_validation": "sonnet",
+    "spec_compaction": "sonnet",
+    # ═══════════════════════════════════════════════════════════════════════
+    # BUILD AGENTS (Use sonnet for planning and coding)
+    # ═══════════════════════════════════════════════════════════════════════
+    "planner": "sonnet",
+    "coder": "sonnet",
+    # ═══════════════════════════════════════════════════════════════════════
+    # QA AGENTS (Use sonnet for quality assurance)
+    # ═══════════════════════════════════════════════════════════════════════
+    "qa_reviewer": "sonnet",
+    "qa_fixer": "sonnet",
+    # ═══════════════════════════════════════════════════════════════════════
+    # UTILITY AGENTS (Use haiku for lightweight tasks)
+    # ═══════════════════════════════════════════════════════════════════════
+    "insights": "haiku",  # Lightweight memory extraction
+    "merge_resolver": "haiku",  # Simple conflict resolution
+    "commit_message": "haiku",  # Quick commit message generation
+    # ═══════════════════════════════════════════════════════════════════════
+    # PR AGENTS (Use sonnet for code review)
+    # ═══════════════════════════════════════════════════════════════════════
+    "pr_reviewer": "sonnet",
+    "pr_orchestrator_parallel": "sonnet",
+    "pr_followup_parallel": "sonnet",
+    # ═══════════════════════════════════════════════════════════════════════
+    # ANALYSIS AGENTS (Use sonnet for analysis, haiku for batch)
+    # ═══════════════════════════════════════════════════════════════════════
+    "analysis": "sonnet",
+    "batch_analysis": "haiku",  # Batch processing
+    "batch_validation": "haiku",  # Batch validation
+    # ═══════════════════════════════════════════════════════════════════════
+    # ROADMAP & IDEATION (Use sonnet for strategic thinking)
+    # ═══════════════════════════════════════════════════════════════════════
+    "roadmap_discovery": "sonnet",
+    "competitor_analysis": "sonnet",
+    "ideation": "sonnet",
+}
+
 
 class PhaseModelConfig(TypedDict, total=False):
     spec: str
@@ -77,12 +128,49 @@ class PhaseThinkingConfig(TypedDict, total=False):
     qa: str
 
 
+class AgentModelConfig(TypedDict, total=False):
+    """Agent-level model configuration for multi-model orchestration"""
+
+    # Spec creation agents
+    spec_gatherer: str
+    spec_researcher: str
+    spec_writer: str
+    spec_critic: str
+    spec_discovery: str
+    spec_context: str
+    spec_validation: str
+    spec_compaction: str
+    # Build agents
+    planner: str
+    coder: str
+    # QA agents
+    qa_reviewer: str
+    qa_fixer: str
+    # Utility agents
+    insights: str
+    merge_resolver: str
+    commit_message: str
+    # PR agents
+    pr_reviewer: str
+    pr_orchestrator_parallel: str
+    pr_followup_parallel: str
+    # Analysis agents
+    analysis: str
+    batch_analysis: str
+    batch_validation: str
+    # Roadmap & Ideation agents
+    roadmap_discovery: str
+    competitor_analysis: str
+    ideation: str
+
+
 class TaskMetadataConfig(TypedDict, total=False):
     """Structure of model-related fields in task_metadata.json"""
 
     isAutoProfile: bool
     phaseModels: PhaseModelConfig
     phaseThinking: PhaseThinkingConfig
+    agentModels: AgentModelConfig
     model: str
     thinkingLevel: str
 
@@ -214,6 +302,57 @@ def get_phase_model(
     return resolve_model_id(DEFAULT_PHASE_MODELS[phase])
 
 
+def get_agent_model(
+    spec_dir: Path,
+    agent_type: str,
+    cli_model: str | None = None,
+) -> str:
+    """
+    Get the resolved model ID for a specific agent type.
+
+    Priority:
+    1. CLI argument (if provided)
+    2. Environment variable AGENT_MODEL_<agent_type> (if set)
+    3. Agent-specific config from task_metadata.json agentModels (if present)
+    4. AGENT_DEFAULT_MODELS (if agent_type exists)
+    5. Fallback to "sonnet"
+
+    Args:
+        spec_dir: Path to the spec directory
+        agent_type: Agent type (e.g., 'coder', 'planner', 'qa_reviewer')
+        cli_model: Model from CLI argument (optional)
+
+    Returns:
+        Resolved full model ID
+    """
+    # CLI argument takes precedence
+    if cli_model:
+        return resolve_model_id(cli_model)
+
+    # Check for environment variable override
+    env_var_name = f"AGENT_MODEL_{agent_type.upper()}"
+    env_model = os.environ.get(env_var_name)
+    if env_model:
+        return resolve_model_id(env_model)
+
+    # Load task metadata
+    metadata = load_task_metadata(spec_dir)
+
+    if metadata:
+        # Check for agent-specific config
+        if metadata.get("agentModels"):
+            agent_models = metadata["agentModels"]
+            if agent_type in agent_models:
+                return resolve_model_id(agent_models[agent_type])
+
+    # Fall back to default agent configuration
+    if agent_type in AGENT_DEFAULT_MODELS:
+        return resolve_model_id(AGENT_DEFAULT_MODELS[agent_type])
+
+    # Final fallback to sonnet
+    return resolve_model_id("sonnet")
+
+
 def get_phase_thinking(
     spec_dir: Path,
     phase: Phase,
@@ -300,6 +439,91 @@ def get_phase_config(
     thinking_budget = get_thinking_budget(thinking_level)
 
     return model_id, thinking_level, thinking_budget
+
+
+# Complexity thresholds for suggest_thinking_budget()
+COMPLEXITY_THRESHOLDS: dict[str, int] = {
+    "description_short": 100,
+    "description_medium": 400,
+    "description_long": 800,
+    "files_simple": 3,
+    "files_medium": 8,
+    "services_simple": 2,
+    "services_medium": 4,
+}
+
+# Output constraint templates for get_output_constraint()
+OUTPUT_CONSTRAINT_TEMPLATES: dict[str, str] = {
+    "summary": "Respond in {limit} words or less",
+    "brief": "Keep your response under {limit} words",
+    "concise": "Provide a concise response in {limit} words or fewer",
+    "strict": "Your response MUST NOT exceed {limit} words",
+}
+
+
+def suggest_thinking_budget(
+    description: str, file_count: int, service_count: int
+) -> str:
+    """
+    Suggest a thinking budget level based on task complexity.
+
+    Args:
+        description: Task description text
+        file_count: Number of files in the project
+        service_count: Number of services
+
+    Returns:
+        Thinking level string ('low', 'medium', 'high', 'ultrathink')
+    """
+    score = 0
+
+    # Description score (0-3)
+    desc_len = len(description)
+    if desc_len >= COMPLEXITY_THRESHOLDS["description_long"]:
+        score += 3
+    elif desc_len >= COMPLEXITY_THRESHOLDS["description_medium"]:
+        score += 2
+    elif desc_len >= COMPLEXITY_THRESHOLDS["description_short"]:
+        score += 1
+
+    # Files score (0-2)
+    if file_count >= COMPLEXITY_THRESHOLDS["files_medium"]:
+        score += 2
+    elif file_count >= COMPLEXITY_THRESHOLDS["files_simple"]:
+        score += 1
+
+    # Services score (0-2)
+    if service_count >= COMPLEXITY_THRESHOLDS["services_medium"]:
+        score += 2
+    elif service_count >= COMPLEXITY_THRESHOLDS["services_simple"]:
+        score += 1
+
+    # Map score to thinking level
+    if score >= 6:
+        return "ultrathink"
+    elif score >= 4:
+        return "high"
+    elif score >= 2:
+        return "medium"
+    else:
+        return "low"
+
+
+def get_output_constraint(format_type: str, word_limit: int) -> str:
+    """
+    Get an output constraint string for a given format type and word limit.
+
+    Args:
+        format_type: Format type ('summary', 'brief', 'concise', 'strict')
+        word_limit: Maximum number of words
+
+    Returns:
+        Formatted constraint string
+    """
+    template = OUTPUT_CONSTRAINT_TEMPLATES.get(
+        format_type, OUTPUT_CONSTRAINT_TEMPLATES["summary"]
+    )
+    return template.format(limit=word_limit)
 
 
 def get_spec_phase_thinking_budget(phase_name: str) -> int | None:

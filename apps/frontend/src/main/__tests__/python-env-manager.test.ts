@@ -27,6 +27,21 @@ vi.mock('../python-detector', () => ({
   getBundledPythonPath: vi.fn().mockReturnValue(null),
 }));
 
+// Mock git-isolation to return environment without pywin32_system32 in PATH
+vi.mock('../utils/git-isolation', () => ({
+  getIsolatedGitEnv: vi.fn(() => {
+    // Return actual environment but with PATH cleaned of pywin32_system32
+    const env = { ...process.env };
+    if (env.PATH) {
+      // Remove any pywin32_system32 paths from the system PATH
+      env.PATH = env.PATH.split(process.platform === 'win32' ? ';' : ':')
+        .filter(p => !p.includes('pywin32_system32'))
+        .join(process.platform === 'win32' ? ';' : ':');
+    }
+    return env;
+  }),
+}));
+
 // Import after mocking
 import { PythonEnvManager } from '../python-env-manager';
 
@@ -93,7 +108,7 @@ describe('PythonEnvManager', () => {
       const sitePackagesPath = 'C:\\test\\site-packages';
 
       // Access private property for testing
-      (manager as any).sitePackagesPath = sitePackagesPath;
+      (manager as unknown as { sitePackagesPath: string }).sitePackagesPath = sitePackagesPath;
 
       const env = manager.getPythonEnv();
 
@@ -106,7 +121,7 @@ describe('PythonEnvManager', () => {
       const sitePackagesPath = 'C:\\test\\site-packages';
 
       // Access private property for testing
-      (manager as any).sitePackagesPath = sitePackagesPath;
+      (manager as unknown as { sitePackagesPath: string }).sitePackagesPath = sitePackagesPath;
 
       const env = manager.getPythonEnv();
 
@@ -125,7 +140,7 @@ describe('PythonEnvManager', () => {
       const sitePackagesPath = '/test/site-packages';
 
       // Access private property for testing
-      (manager as any).sitePackagesPath = sitePackagesPath;
+      (manager as unknown as { sitePackagesPath: string }).sitePackagesPath = sitePackagesPath;
 
       const env = manager.getPythonEnv();
 
@@ -144,7 +159,7 @@ describe('PythonEnvManager', () => {
       const sitePackagesPath = 'C:\\test\\site-packages';
 
       // Access private property for testing
-      (manager as any).sitePackagesPath = sitePackagesPath;
+      (manager as unknown as { sitePackagesPath: string }).sitePackagesPath = sitePackagesPath;
 
       // Save and clear existing PATH, then set lowercase 'Path'
       // This simulates a Windows environment where the system has 'Path' instead of 'PATH'

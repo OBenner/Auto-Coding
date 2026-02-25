@@ -1600,8 +1600,9 @@ ${issue.body || 'No description provided.'}
       try {
         // Check if gh CLI is available
         // Use 'where' on Windows, 'which' on Unix
+        // Note: Uses isWindows() from platform module (import { isWindows } from '../../platform')
         try {
-          const checkCmd = process.platform === 'win32' ? 'where gh' : 'which gh';
+          const checkCmd = isWindows() ? 'where gh' : 'which gh';
           execSync(checkCmd, { encoding: 'utf-8', stdio: 'pipe' });
         } catch {
           return {

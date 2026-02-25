@@ -39,6 +39,7 @@ export function useIdeationAuth() {
     }
   };
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: resolveHasAPIProfile is a stable function defined in component scope
   useEffect(() => {
     const performCheck = async () => {
       setIsLoading(true);

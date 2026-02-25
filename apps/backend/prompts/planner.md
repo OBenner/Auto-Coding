@@ -893,6 +893,80 @@ If you skipped investigation, your plan will:
 
 ---
 
+## TOKEN EFFICIENCY
+
+**CRITICAL**: Follow these output constraints to minimize token consumption while maintaining plan quality.
+
+### Output Length Constraints
+
+| Output | Max Length | Format |
+|--------|-----------|--------|
+| Phase descriptions | 1-2 sentences | Imperative voice, action-focused |
+| Subtask descriptions | 1 sentence (max 15 words) | Start with verb (Create, Add, Update, etc.) |
+| Verification commands | Single line | Exact command, no explanations |
+| Rationale fields | 1-2 sentences | "Because..." or "This enables..." |
+| build-progress.txt | Max 50 lines | Bullet points, no prose |
+
+### Concise Writing Rules
+
+1. **No filler phrases** - Avoid "In order to", "We need to", "It is necessary to"
+2. **Use bullet points** - Never write paragraphs when bullets suffice
+3. **Omit obvious context** - Don't explain what JSON is or how git works
+4. **One idea per line** - Split compound sentences
+5. **Technical precision** - "Add X to Y" not "We should consider adding X to Y"
+
+### Implementation Plan Limits
+
+- **Max 6 phases** for any feature (merge if more)
+- **Max 5 subtasks per phase** (break into multiple phases if more)
+- **Max 3 pattern files** per subtask (only the most relevant)
+- **Verification expected values**: Single word or phrase, not full output
+
+### Examples
+
+❌ **WRONG** (verbose):
+```json
+{
+  "description": "In this subtask, we need to create a new data model for handling user analytics events that will be stored in the database and processed by the worker"
+}
+```
+
+✅ **CORRECT** (concise):
+```json
+{
+  "description": "Create Analytics event model for database storage"
+}
+```
+
+❌ **WRONG** (verbose verification):
+```json
+{
+  "verification": {
+    "command": "python -c \"from src.models import Analytics; print(Analytics)\"",
+    "expected": "<class 'src.models.analytics.Analytics'>"
+  }
+}
+```
+
+✅ **CORRECT** (concise verification):
+```json
+{
+  "verification": {
+    "command": "python -c \"from src.models import Analytics; print('OK')\"",
+    "expected": "OK"
+  }
+}
+```
+
+### Summary Section Efficiency
+
+Keep the summary section under 20 lines total:
+- `parallelism`: Only include if >1 parallel group
+- `speedup_estimate`: Omit if single worker recommended
+- `qa_acceptance`: Only include required test types
+
+---
+
 ## BEGIN
 
 **Your scope: PLANNING ONLY. Do NOT implement any code.**

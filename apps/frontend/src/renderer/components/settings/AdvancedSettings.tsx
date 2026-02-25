@@ -12,6 +12,7 @@ import { Button } from '../ui/button';
 import { Label } from '../ui/label';
 import { Switch } from '../ui/switch';
 import { Progress } from '../ui/progress';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { SettingsSection } from './SettingsSection';
 import type {
   AppSettings,
@@ -20,6 +21,16 @@ import type {
   AppUpdateInfo,
   NotificationSettings
 } from '../../../shared/types';
+
+// AI Engine Provider types
+export type AIEngineProvider = 'claude' | 'litellm' | 'openrouter';
+
+// Available AI engine providers
+const AI_ENGINE_PROVIDERS: { value: AIEngineProvider; labelKey: string; descriptionKey: string }[] = [
+  { value: 'claude', labelKey: 'aiProvider.providers.claude.name', descriptionKey: 'aiProvider.providers.claude.description' },
+  { value: 'litellm', labelKey: 'aiProvider.providers.litellm.name', descriptionKey: 'aiProvider.providers.litellm.description' },
+  { value: 'openrouter', labelKey: 'aiProvider.providers.openrouter.name', descriptionKey: 'aiProvider.providers.openrouter.description' }
+];
 
 /**
  * Simple markdown renderer for release notes
@@ -53,6 +64,7 @@ function ReleaseNotesRenderer({ markdown }: { markdown: string }) {
   return (
     <div
       className="text-sm text-muted-foreground leading-relaxed"
+      // biome-ignore lint/security/noDangerouslySetInnerHtml: HTML is sanitized via marked library
       dangerouslySetInnerHTML={{ __html: html }}
     />
   );
@@ -61,7 +73,7 @@ function ReleaseNotesRenderer({ markdown }: { markdown: string }) {
 interface AdvancedSettingsProps {
   settings: AppSettings;
   onSettingsChange: (settings: AppSettings) => void;
-  section: 'updates' | 'notifications';
+  section: 'updates' | 'notifications' | 'aiProvider';
   version: string;
 }
 
@@ -493,6 +505,84 @@ export function AdvancedSettings({ settings, onSettingsChange, section, version 
               </div>
             </div>
           )}
+        </div>
+      </SettingsSection>
+    );
+  }
+
+  // AI Provider section
+  if (section === 'aiProvider') {
+    // Get current provider value from settings, defaulting to 'claude'
+    const currentProvider = (settings as AppSettings & { aiProvider?: AIEngineProvider }).aiProvider || 'claude';
+
+    return (
+      <SettingsSection
+        title={t('aiProvider.title')}
+        description={t('aiProvider.description')}
+      >
+        <div className="space-y-6">
+          {/* Provider Selection */}
+          <div className="space-y-3">
+            <Label htmlFor="aiProvider" className="text-sm font-medium text-foreground">
+              {t('aiProvider.label')}
+            </Label>
+            <Select
+              value={currentProvider}
+              onValueChange={(value) => {
+                onSettingsChange({
+                  ...settings,
+                  aiProvider: value as AIEngineProvider
+                } as AppSettings);
+              }}
+            >
+              <SelectTrigger id="aiProvider" className="w-full max-w-md">
+                <SelectValue placeholder={t('aiProvider.selectProvider')} />
+              </SelectTrigger>
+              <SelectContent>
+                {AI_ENGINE_PROVIDERS.map((provider) => (
+                  <SelectItem key={provider.value} value={provider.value}>
+                    <div className="flex flex-col">
+                      <span className="font-medium">{t(provider.labelKey)}</span>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Provider descriptions */}
+          <div className="space-y-3">
+            {AI_ENGINE_PROVIDERS.map((provider) => (
+              <div
+                key={provider.value}
+                className={`p-4 rounded-lg border transition-colors ${
+                  currentProvider === provider.value
+                    ? 'border-primary bg-primary/5'
+                    : 'border-border'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <Label className="font-medium text-foreground">{t(provider.labelKey)}</Label>
+                      {currentProvider === provider.value && (
+                        <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded">
+                          {t('aiProvider.status.active')}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm text-muted-foreground">{t(provider.descriptionKey)}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Hint about env override */}
+          <div className="text-xs text-muted-foreground bg-muted/50 p-3 rounded-lg">
+            <p>{t('aiProvider.hints.envOverride')}</p>
+            <p className="mt-1">{t('aiProvider.hints.requiresRestart')}</p>
+          </div>
         </div>
       </SettingsSection>
     );

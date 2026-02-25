@@ -124,6 +124,149 @@ E2E TESTS:
 - [flow-name]: PASS/FAIL
 ```
 
+### 3.4: Validate Generated Tests
+
+**CRITICAL**: If tests were automatically generated, validate their quality before approval.
+
+#### 3.4.1: Check Generated Tests Exist
+
+```bash
+# Check for generated tests in the spec directory
+ls -la .auto-claude/specs/*/generated_tests/ 2>/dev/null || echo "No generated tests found"
+
+# Also check tests/ directory for newly created test files
+git diff {{BASE_BRANCH}}...HEAD --name-only | grep "^tests/.*test_.*\.py$"
+```
+
+#### 3.4.2: Verify Test Syntax and Collection
+
+```bash
+# Verify generated tests are syntactically valid
+pytest --collect-only tests/ -q
+
+# Check for collection errors
+pytest --collect-only tests/ 2>&1 | grep -i error
+```
+
+**Expected**: All tests should be collected successfully with no syntax errors.
+
+#### 3.4.3: Validate Test Conventions
+
+Check that generated tests follow project conventions:
+
+```bash
+# 1. Naming convention (test_*.py)
+git diff {{BASE_BRANCH}}...HEAD --name-only | grep "tests/" | grep -v "test_.*\.py$" && echo "FAIL: Non-standard test file names" || echo "PASS: Naming conventions followed"
+
+# 2. Check for proper imports and fixtures
+grep -r "import pytest" tests/test_*.py | wc -l
+grep -r "@pytest.fixture" tests/test_*.py | wc -l
+
+# 3. Verify tests use conftest.py fixtures (if applicable)
+cat tests/conftest.py 2>/dev/null | grep "def " | sed 's/def \([^(]*\).*/\1/' | while read fixture; do
+  grep -r "$fixture" tests/test_*.py && echo "Fixture '$fixture' is used"
+done
+```
+
+**Document results:**
+```
+TEST CONVENTIONS:
+- Naming: PASS/FAIL
+- pytest imports: [count] files
+- Fixtures used: [list or "None"]
+```
+
+#### 3.4.4: Validate Edge Case Coverage
+
+```bash
+# Check that generated tests include edge cases
+# Look for common edge case patterns:
+
+# 1. Error handling tests (try/except, raises)
+grep -r "pytest.raises\|with raises\|try:" tests/test_*.py | wc -l
+
+# 2. Boundary condition tests (None, empty, zero, negative)
+grep -ri "None\|empty\|zero\|\[\]" tests/test_*.py | wc -l
+
+# 3. Type validation tests
+grep -r "isinstance\|type(" tests/test_*.py | wc -l
+```
+
+**Document results:**
+```
+EDGE CASE COVERAGE:
+- Error handling tests: [count]
+- Boundary condition tests: [count]
+- Type validation tests: [count]
+```
+
+#### 3.4.5: Run Generated Tests and Check Coverage
+
+```bash
+# Run the newly generated tests
+pytest tests/ -v --tb=short
+
+# Check coverage of generated tests on target code
+# Extract target files from build-progress.txt or implementation_plan.json
+pytest tests/ --cov=apps/backend --cov-report=term-missing --cov-report=json
+
+# Parse coverage report
+python -c "
+import json
+try:
+    with open('coverage.json', 'r') as f:
+        cov = json.load(f)
+    total_coverage = cov['totals']['percent_covered']
+    print(f'Total Coverage: {total_coverage:.1f}%')
+    if total_coverage >= 80:
+        print('PASS: Coverage >= 80%')
+    else:
+        print(f'FAIL: Coverage {total_coverage:.1f}% < 80%')
+except FileNotFoundError:
+    print('WARNING: No coverage report found')
+"
+```
+
+**Document results:**
+```
+GENERATED TESTS EXECUTION:
+- Tests run: PASS/FAIL (X/Y tests)
+- Coverage: X% (Target: 80%+)
+- Edge cases covered: PASS/FAIL
+```
+
+#### 3.4.6: Review Test Quality Manually
+
+Read a sample of generated tests and verify:
+
+```bash
+# Show first 3 generated test files
+git diff {{BASE_BRANCH}}...HEAD --name-only | grep "tests/test_.*\.py$" | head -3 | while read file; do
+  echo "=== $file ==="
+  cat "$file"
+  echo ""
+done
+```
+
+**Manual Review Checklist:**
+- [ ] Tests are readable and well-structured
+- [ ] Test names clearly describe what they test
+- [ ] Assertions are meaningful (not just `assert True`)
+- [ ] Mocking is used appropriately for external dependencies
+- [ ] Tests are independent (no shared state between tests)
+- [ ] Setup and teardown are handled correctly
+
+**Document results:**
+```
+GENERATED TESTS QUALITY:
+- Readability: PASS/FAIL
+- Test names: PASS/FAIL
+- Assertions: PASS/FAIL
+- Mocking: PASS/FAIL
+- Independence: PASS/FAIL
+- Setup/teardown: PASS/FAIL
+```
+
 ---
 
 ## PHASE 4: BROWSER VERIFICATION (If Frontend)
@@ -581,6 +724,74 @@ If max iterations reached without approval:
 - Every check you run
 - Every issue you find
 - Every decision you make
+
+---
+
+## TOKEN EFFICIENCY
+
+**Your QA reports consume tokens. Be concise while remaining actionable.**
+
+### Output Length Guidelines
+
+| Content Type | Target Length | Format |
+|--------------|---------------|--------|
+| Issue descriptions | 1-2 sentences | Problem + location |
+| Fix instructions | 1 sentence per fix | Imperative voice |
+| Verification steps | 1 line each | Command or action |
+| Phase summaries | PASS/FAIL + count | Table row |
+| QA report total | Max 300 words | Structured template |
+
+### Concise Reporting Rules
+
+1. **Status first, details second** - Lead with PASS/FAIL, elaborate only if needed
+2. **No test output dumps** - Summarize as "X/Y passing", not full logs
+3. **One issue, one line** - Split compound issues into separate items
+4. **Commands over descriptions** - Show verification command, not prose about what to check
+5. **Skip obvious checks** - Don't document "file exists" for files you just read
+
+### QA Report Format
+
+**Efficient structure:**
+```
+## Summary
+| Category | Status |
+|----------|--------|
+| Tests | ✓ 15/15 |
+| Browser | ✓ |
+
+## Issues (if any)
+1. [File:line] - Problem. Fix: action.
+
+## Verdict
+APPROVED/REJECTED - one sentence reason.
+```
+
+### Avoid Verbose Patterns
+
+❌ **DON'T:**
+```
+After running the test suite, I observed that all 15 unit tests completed
+successfully without any failures. The tests covered the main functionality
+including user authentication, data validation, and error handling.
+```
+
+✅ **DO:**
+```
+Unit tests: ✓ 15/15
+```
+
+❌ **DON'T:**
+```
+I found an issue in the authentication module located at src/auth/login.ts
+on line 45. The problem is that the error message is not being displayed
+to the user when login fails. To fix this, the developer should update
+the catch block to set the error state.
+```
+
+✅ **DO:**
+```
+[src/auth/login.ts:45] - Error not displayed on failed login. Fix: set error state in catch block.
+```
 
 ---
 

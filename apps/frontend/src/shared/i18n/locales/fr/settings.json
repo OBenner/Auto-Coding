@@ -619,6 +619,62 @@
       "description": "Sélectionnez un projet dans la barre latérale pour configurer ses paramètres."
     }
   },
+  "aiProvider": {
+    "title": "Fournisseur d'IA",
+    "description": "Sélectionnez le backend d'IA à utiliser pour les sessions d'agent",
+    "label": "Fournisseur d'IA",
+    "selectProvider": "Sélectionner le fournisseur d'IA",
+    "currentProvider": "Fournisseur actuel",
+    "providers": {
+      "claude": {
+        "name": "Claude Agent SDK",
+        "description": "SDK Agent Claude d'Anthropic (par défaut, recommandé)"
+      },
+      "litellm": {
+        "name": "LiteLLM",
+        "description": "Interface unifiée supportant plus de 100 fournisseurs LLM"
+      },
+      "openrouter": {
+        "name": "OpenRouter",
+        "description": "Routage multi-modèles cloud avec plus de 400 modèles"
+      }
+    },
+    "configuration": {
+      "title": "Configuration du fournisseur",
+      "apiKey": "Clé API",
+      "apiKeyPlaceholder": "Entrez votre clé API",
+      "apiKeyDescription": "Requise pour les fournisseurs LiteLLM et OpenRouter",
+      "model": "Modèle",
+      "modelPlaceholder": "ex: gpt-4, claude-3-opus, anthropic/claude-3-sonnet",
+      "modelDescription": "Identifiant du modèle pour le fournisseur sélectionné",
+      "baseUrl": "URL de base (optionnel)",
+      "baseUrlPlaceholder": "https://api.example.com/v1",
+      "baseUrlDescription": "Point de terminaison API personnalisé (laisser vide pour défaut)"
+    },
+    "validation": {
+      "apiKeyRequired": "La clé API est requise pour ce fournisseur",
+      "modelRequired": "La sélection du modèle est requise"
+    },
+    "toast": {
+      "providerChanged": "Fournisseur d'IA modifié",
+      "providerChangedDescription": "Utilisation de {{provider}}",
+      "configSaved": "Configuration enregistrée",
+      "configSavedDescription": "Les paramètres du fournisseur ont été mis à jour",
+      "configError": "Erreur de configuration",
+      "configErrorDescription": "Échec de l'enregistrement des paramètres du fournisseur : {{error}}"
+    },
+    "hints": {
+      "envOverride": "Ce paramètre peut être remplacé par la variable d'environnement AI_ENGINE_PROVIDER",
+      "requiresRestart": "Les modifications prendront effet pour les nouvelles sessions d'agent",
+      "claudeDefault": "Claude Agent SDK est le fournisseur par défaut et le plus testé"
+    },
+    "status": {
+      "active": "Actif",
+      "configured": "Configuré",
+      "notConfigured": "Non configuré",
+      "requiresApiKey": "Clé API requise"
+    }
+  },
   "mcp": {
     "title": "Aperçu des serveurs MCP",
     "titleWithProject": "Aperçu des serveurs MCP pour {{projectName}}",

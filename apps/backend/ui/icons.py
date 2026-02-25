@@ -43,6 +43,7 @@ class Icons:
     COMMIT = ("◉", "(@)")
     LIGHTNING = ("⚡", "!")
     LINK = ("🔗", "[L]")  # For PR URLs
+    SPARKLES = ("✨", "*")
 
     # Progress
     SUBTASK = ("▣", "#")

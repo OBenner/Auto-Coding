@@ -1,0 +1,31 @@
+{
+  "project_type": "monorepo",
+  "services": {
+    "backend": {
+      "path": "./apps/backend",
+      "tech_stack": ["python", "claude-agent-sdk", "graphiti", "pytest"],
+      "port": null,
+      "dev_command": "python run.py",
+      "test_command": "pytest tests/ -v"
+    },
+    "frontend": {
+      "path": "./apps/frontend",
+      "tech_stack": ["electron", "react", "typescript"],
+      "port": null,
+      "dev_command": "npm run dev",
+      "test_command": "npm test"
+    }
+  },
+  "infrastructure": {
+    "docker": false,
+    "database": "graphiti_ladybugdb",
+    "memory_system": "graphiti"
+  },
+  "conventions": {
+    "linter": "ruff",
+    "formatter": "black",
+    "testing": "pytest",
+    "backend_patterns": "agent-based, async/await, claude-sdk",
+    "frontend_patterns": "react-components, electron-ipc"
+  }
+}

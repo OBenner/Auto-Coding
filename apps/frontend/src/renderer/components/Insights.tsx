@@ -119,7 +119,7 @@ export function Insights({ projectId }: InsightsProps) {
   // Auto-scroll to bottom when messages change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [session?.messages, streamingContent]);
+  }, []);
 
   // Focus textarea on mount
   useEffect(() => {
@@ -129,7 +129,7 @@ export function Insights({ projectId }: InsightsProps) {
   // Reset taskCreated when switching sessions
   useEffect(() => {
     setTaskCreated(new Set());
-  }, [session?.id]);
+  }, []);
 
   const handleSend = () => {
     const message = inputValue.trim();
@@ -560,6 +560,7 @@ function ToolUsageHistory({ tools }: ToolUsageHistoryProps) {
   return (
     <div className="mt-2">
       <button
+        type="button"
         onClick={() => setExpanded(!expanded)}
         className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
       >

@@ -131,6 +131,7 @@ export function FeatureDetailPanel({
             </h3>
             <div className="space-y-2">
               {feature.userStories.map((story, i) => (
+                // biome-ignore lint/suspicious/noArrayIndexKey: String items without unique IDs
                 <div key={i} className="text-sm p-2 bg-muted/50 rounded-md italic">
                   "{story}"
                 </div>
@@ -148,6 +149,7 @@ export function FeatureDetailPanel({
             </h3>
             <ul className="space-y-1">
               {feature.acceptanceCriteria.map((criterion, i) => (
+                // biome-ignore lint/suspicious/noArrayIndexKey: String items without unique IDs
                 <li key={i} className="text-sm flex items-start gap-2">
                   <Circle className="h-3 w-3 mt-1.5 shrink-0" />
                   <span>{criterion}</span>
@@ -216,7 +218,7 @@ export function FeatureDetailPanel({
       {/* Actions */}
       {feature.linkedSpecId ? (
         <div className="shrink-0 p-4 border-t border-border">
-          <Button className="w-full" onClick={() => onGoToTask(feature.linkedSpecId!)}>
+          <Button className="w-full" onClick={() => feature.linkedSpecId && onGoToTask(feature.linkedSpecId)}>
             <ExternalLink className="h-4 w-4 mr-2" />
             Go to Task
           </Button>

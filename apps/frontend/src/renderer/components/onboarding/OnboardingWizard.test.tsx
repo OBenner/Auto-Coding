@@ -54,7 +54,7 @@ vi.mock('react-i18next', () => ({
 // Mock the settings store
 const mockUpdateSettings = vi.fn();
 const mockLoadSettings = vi.fn();
-const mockProfiles: any[] = [];
+const mockProfiles: unknown[] = [];
 
 vi.mock('../../stores/settings-store', () => ({
   useSettingsStore: vi.fn((selector) => {
@@ -275,7 +275,7 @@ describe('OnboardingWizard Integration Tests', () => {
 
       // On welcome step, no progress indicator shown
       expect(screen.queryByText(/Welcome/)).toBeInTheDocument();
-      const progressBeforeNav = document.querySelector('[class*="progress"]');
+      const _progressBeforeNav = document.querySelector('[class*="progress"]');
       // Progress indicator may not be visible on welcome step
 
       // Navigate to auth-choice

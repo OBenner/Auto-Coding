@@ -10,10 +10,12 @@ Memory Integration:
 - Saves QA findings (bugs, patterns, validation outcomes) after session
 """
 
+import logging
 from pathlib import Path
 
 # Memory integration for cross-session learning
 from agents.memory_manager import get_graphiti_context, save_session_memory
+from agents.session import save_token_stats
 from claude_agent_sdk import ClaudeSDKClient
 from debug import debug, debug_detailed, debug_error, debug_section, debug_success
 from prompts_pkg import get_qa_reviewer_prompt
@@ -23,8 +25,11 @@ from task_logger import (
     LogPhase,
     get_task_logger,
 )
+from ui import print_status
 
 from .criteria import get_qa_signoff_status
+
+logger = logging.getLogger(__name__)
 
 # =============================================================================
 # QA REVIEWER SESSION
@@ -316,6 +321,72 @@ This is attempt {previous_error.get("consecutive_errors", 1) + 1}. If you fail t
                         current_tool = None
 
         print("\n" + "-" * 70 + "\n")
+
+        # Extract usage metadata from Claude SDK client
+        usage_metadata = None
+        try:
+            # Try to get usage metadata from the client
+            # The Claude SDK client may expose usage metadata after the session completes
+            if hasattr(client, "usage_metadata"):
+                metadata = client.usage_metadata
+                if (
+                    metadata
+                    and hasattr(metadata, "input_tokens")
+                    and hasattr(metadata, "output_tokens")
+                ):
+                    usage_metadata = {
+                        "input_tokens": metadata.input_tokens,
+                        "output_tokens": metadata.output_tokens,
+                    }
+                    debug_success(
+                        "qa_reviewer",
+                        "Extracted usage metadata",
+                        input_tokens=metadata.input_tokens,
+                        output_tokens=metadata.output_tokens,
+                    )
+            elif hasattr(client, "_usage"):
+                # Alternative: some SDKs store usage in a _usage attribute
+                usage = client._usage
+                if (
+                    isinstance(usage, dict)
+                    and "input_tokens" in usage
+                    and "output_tokens" in usage
+                ):
+                    usage_metadata = {
+                        "input_tokens": usage["input_tokens"],
+                        "output_tokens": usage["output_tokens"],
+                    }
+                    debug_success(
+                        "qa_reviewer",
+                        "Extracted usage metadata from _usage",
+                        input_tokens=usage["input_tokens"],
+                        output_tokens=usage["output_tokens"],
+                    )
+        except Exception as e:
+            logger.debug(f"Could not extract usage metadata from client: {e}")
+
+        # Persist usage metadata to token_stats.json if available
+        if usage_metadata:
+            try:
+                saved = save_token_stats(
+                    spec_dir,
+                    "validation",
+                    usage_metadata["input_tokens"],
+                    usage_metadata["output_tokens"],
+                )
+                if saved:
+                    print_status(
+                        f"Token usage recorded: {usage_metadata['input_tokens']} in, {usage_metadata['output_tokens']} out",
+                        "info",
+                    )
+                    debug_success(
+                        "qa_reviewer",
+                        "Validation phase token stats saved",
+                        input_tokens=usage_metadata["input_tokens"],
+                        output_tokens=usage_metadata["output_tokens"],
+                    )
+            except Exception as e:
+                logger.warning(f"Failed to persist validation phase token stats: {e}")
 
         # Check the QA result from implementation_plan.json
         status = get_qa_signoff_status(spec_dir)

@@ -1,0 +1,11 @@
+{
+  "name": "hello-world-agent",
+  "version": "1.0.0",
+  "author": "Auto Claude Team",
+  "description": "Example agent plugin that demonstrates basic plugin capabilities and lifecycle hooks",
+  "plugin_type": "agent",
+  "required_permissions": [],
+  "dependencies": [],
+  "homepage": "https://github.com/AndyMik90/Auto-Claude/tree/main/examples/plugins/hello-world-agent",
+  "license": "MIT"
+}

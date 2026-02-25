@@ -14,7 +14,7 @@ import {
   getAPIProfileEnv,
   testConnection
 } from './profile-service';
-import type { APIProfile, ProfilesFile, TestConnectionResult } from '../../shared/types/profile';
+import type { ProfilesFile, } from '../../shared/types/profile';
 
 // Mock profile-manager
 vi.mock('../utils/profile-manager', () => ({
@@ -867,7 +867,7 @@ describe('profile-service', () => {
 
     it('should return network error for connection refused', async () => {
       const networkError = new TypeError('Failed to fetch');
-      (networkError as any).code = 'ECONNREFUSED';
+      (networkError as { code?: string }).code = 'ECONNREFUSED';
 
       vi.mocked(global.fetch).mockRejectedValue(networkError);
 
@@ -882,7 +882,7 @@ describe('profile-service', () => {
 
     it('should return network error for ENOTFOUND (DNS failure)', async () => {
       const dnsError = new TypeError('Failed to fetch');
-      (dnsError as any).code = 'ENOTFOUND';
+      (dnsError as { code?: string }).code = 'ENOTFOUND';
 
       vi.mocked(global.fetch).mockRejectedValue(dnsError);
 

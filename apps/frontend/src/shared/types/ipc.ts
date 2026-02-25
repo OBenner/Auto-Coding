@@ -46,6 +46,13 @@ import type {
   ImageAttachment
 } from './task';
 import type {
+  MergeOperationRecord,
+  MergeAnalytics,
+  ConflictPattern,
+  MergeAnalyticsFilter,
+  MergeAnalyticsExportOptions
+} from './merge-analytics';
+import type {
   TerminalCreateOptions,
   TerminalSession,
   TerminalRestoreResult,
@@ -186,6 +193,12 @@ export interface ElectronAPI {
   // Task archive operations
   archiveTasks: (projectId: string, taskIds: string[], version?: string) => Promise<IPCResult<boolean>>;
   unarchiveTasks: (projectId: string, taskIds: string[]) => Promise<IPCResult<boolean>>;
+
+  // Merge analytics operations
+  getMergeHistory: (projectId: string, filter?: MergeAnalyticsFilter) => Promise<IPCResult<MergeOperationRecord[]>>;
+  getMergeSummary: (projectId: string, filter?: MergeAnalyticsFilter) => Promise<IPCResult<MergeAnalytics>>;
+  getConflictPatterns: (projectId: string, limit?: number) => Promise<IPCResult<ConflictPattern[]>>;
+  exportMergeAnalytics: (projectId: string, options: MergeAnalyticsExportOptions) => Promise<IPCResult<{ path: string }>>;
 
   // Event listeners
   onTaskProgress: (callback: (taskId: string, plan: ImplementationPlan) => void) => () => void;
@@ -761,6 +774,7 @@ export interface ElectronAPI {
   // File explorer operations
   listDirectory: (dirPath: string) => Promise<IPCResult<FileNode[]>>;
   readFile: (filePath: string) => Promise<IPCResult<string>>;
+  writeFile: (filePath: string, content: string) => Promise<IPCResult<void>>;
 
   // Git operations
   getGitBranches: (projectPath: string) => Promise<IPCResult<string[]>>;

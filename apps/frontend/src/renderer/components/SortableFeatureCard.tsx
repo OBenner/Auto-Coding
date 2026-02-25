@@ -127,7 +127,9 @@ export function SortableFeatureCard({
                 className="h-7 px-2"
                 onClick={(e) => {
                   e.stopPropagation();
-                  onGoToTask?.(feature.linkedSpecId!);
+                  if (feature.linkedSpecId) {
+                    onGoToTask?.(feature.linkedSpecId);
+                  }
                 }}
               >
                 <ExternalLink className="h-3 w-3 mr-1" />

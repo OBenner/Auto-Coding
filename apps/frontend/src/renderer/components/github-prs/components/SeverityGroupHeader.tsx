@@ -40,6 +40,9 @@ export function SeverityGroupHeader({
     >
       <div className="flex items-center gap-3">
         {/* Group Checkbox */}
+        {/* biome-ignore lint/a11y/noNoninteractiveElementInteractions: Checkbox wrapper for selection */}
+        {/* biome-ignore lint/a11y/noStaticElementInteractions: Checkbox wrapper for selection */}
+        {/* biome-ignore lint/a11y/useKeyWithClickEvents: Keyboard handled via parent button */}
         <div
           onClick={onSelectAll}
           className="cursor-pointer"

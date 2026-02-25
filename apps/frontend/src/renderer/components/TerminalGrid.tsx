@@ -82,7 +82,7 @@ export function TerminalGrid({ projectPath, onNewTaskClick, isActive = false }: 
   // Reset expanded terminal when project changes
   useEffect(() => {
     setExpandedTerminalId(null);
-  }, [projectPath]);
+  }, []);
 
   // Fetch available session dates when project changes
   useEffect(() => {
@@ -343,7 +343,7 @@ export function TerminalGrid({ projectPath, onNewTaskClick, isActive = false }: 
       // Insert the file path into the terminal with a trailing space
       window.electronAPI.sendTerminalInput(terminalId, quotedPath + ' ');
     }
-  }, [reorderTerminals, terminals]);
+  }, [reorderTerminals, terminals, projectPath]);
 
   // Calculate grid layout based on number of terminals
   const gridLayout = useMemo(() => {
@@ -525,6 +525,7 @@ export function TerminalGrid({ projectPath, onNewTaskClick, isActive = false }: 
               <SortableContext items={terminalIds} strategy={rectSortingStrategy}>
                 <Group orientation="vertical" className="h-full">
                   {terminalRows.map((row, rowIndex) => (
+                    // biome-ignore lint/suspicious/noArrayIndexKey: Row indices are stable within the grid layout
                     <React.Fragment key={rowIndex}>
                       <Panel id={`row-${rowIndex}`} defaultSize={100 / terminalRows.length} minSize={15}>
                         <Group orientation="horizontal" className="h-full">

@@ -554,15 +554,18 @@ describe('ProjectTabBar', () => {
     it('should handle archived count edge cases', () => {
       // Zero archived
       expect(0).toBe(0);
-      expect(0 > 0).toBe(false);
+      const zero = 0;
+      expect(zero > 0).toBe(false);
 
       // Some archived
       expect(5).toBeGreaterThan(0);
-      expect(5 > 0).toBe(true);
+      const five = 5;
+      expect(five > 0).toBe(true);
 
       // Large number of archived
       expect(100).toBeGreaterThan(0);
-      expect(100 > 0).toBe(true);
+      const hundred = 100;
+      expect(hundred > 0).toBe(true);
     });
 
     it('should toggle showArchived state correctly', () => {
@@ -688,10 +691,10 @@ describe('ProjectTabBar', () => {
       }
 
       const validControlProps: ControlProps = {
-        onSettingsClick: () => {},
+        onSettingsClick: () => undefined,
         showArchived: false,
         archivedCount: 0,
-        onToggleArchived: () => {}
+        onToggleArchived: () => undefined
       };
 
       expect(validControlProps.onSettingsClick).toBeDefined();
@@ -726,14 +729,14 @@ describe('ProjectTabBar', () => {
 
       // Only settings provided
       const settingsOnlyProps: ControlProps = {
-        onSettingsClick: () => {}
+        onSettingsClick: () => undefined
       };
       expect(settingsOnlyProps.onSettingsClick).toBeDefined();
       expect(settingsOnlyProps.onToggleArchived).toBeUndefined();
 
       // Only archive toggle provided
       const archiveOnlyProps: ControlProps = {
-        onToggleArchived: () => {},
+        onToggleArchived: () => undefined,
         showArchived: true,
         archivedCount: 5
       };

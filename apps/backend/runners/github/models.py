@@ -944,6 +944,80 @@ class AutoFixState:
 
 
 @dataclass
+class InlineComment:
+    """Inline code review comment for a specific line in a file."""
+
+    path: str
+    line: int
+    body: str
+    side: str = "RIGHT"  # RIGHT (new code) or LEFT (old code in diff)
+    start_line: int | None = None  # For multi-line comments
+    start_side: str | None = None  # Side for start_line
+
+    def to_dict(self) -> dict:
+        result = {
+            "path": self.path,
+            "line": self.line,
+            "body": self.body,
+            "side": self.side,
+        }
+        if self.start_line is not None:
+            result["start_line"] = self.start_line
+        if self.start_side is not None:
+            result["start_side"] = self.start_side
+        return result
+
+    @classmethod
+    def from_dict(cls, data: dict) -> InlineComment:
+        return cls(
+            path=data["path"],
+            line=data["line"],
+            body=data["body"],
+            side=data.get("side", "RIGHT"),
+            start_line=data.get("start_line"),
+            start_side=data.get("start_side"),
+        )
+
+
+@dataclass
+class SuggestedChange:
+    """Suggested code change with before/after code snippets."""
+
+    path: str
+    start_line: int
+    end_line: int
+    original_code: str
+    suggested_code: str
+    reasoning: str
+
+    def to_dict(self) -> dict:
+        return {
+            "path": self.path,
+            "start_line": self.start_line,
+            "end_line": self.end_line,
+            "original_code": self.original_code,
+            "suggested_code": self.suggested_code,
+            "reasoning": self.reasoning,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> SuggestedChange:
+        return cls(
+            path=data["path"],
+            start_line=data["start_line"],
+            end_line=data["end_line"],
+            original_code=data["original_code"],
+            suggested_code=data["suggested_code"],
+            reasoning=data["reasoning"],
+        )
+
+    def to_github_suggestion(self) -> str:
+        """Format as GitHub suggestion comment with markdown code block."""
+        suggestion = f"```suggestion\n{self.suggested_code}\n```"
+        return f"{self.reasoning}\n\n{suggestion}"
+
+
+@dataclass
 class GitHubRunnerConfig:
     """Configuration for GitHub automation runners."""
 

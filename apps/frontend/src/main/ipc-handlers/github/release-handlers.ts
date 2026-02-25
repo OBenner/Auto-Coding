@@ -4,7 +4,7 @@
 
 import { ipcMain } from 'electron';
 import { execSync, execFileSync } from 'child_process';
-import { existsSync, readFileSync } from 'fs';
+import { promises as fsPromises } from 'fs';
 import path from 'path';
 import { IPC_CHANNELS } from '../../../shared/constants';
 import type { IPCResult, GitCommit, VersionSuggestion } from '../../../shared/types';
@@ -13,6 +13,18 @@ import { changelogService } from '../../changelog-service';
 import type { ReleaseOptions } from './types';
 import { getToolPath } from '../../cli-tool-manager';
 import { getWhichCommand } from '../../platform';
+
+/**
+ * Check if a file exists using async fs operations
+ */
+async function fileExists(filePath: string): Promise<boolean> {
+  try {
+    await fsPromises.access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Check if gh CLI is installed
@@ -171,13 +183,13 @@ function getCommitsSinceTag(projectPath: string, tag: string | null): GitCommit[
 /**
  * Get current version from package.json
  */
-function getCurrentVersion(projectPath: string): string {
+async function getCurrentVersion(projectPath: string): Promise<string> {
   try {
     const pkgPath = path.join(projectPath, 'package.json');
-    if (!existsSync(pkgPath)) {
+    if (!(await fileExists(pkgPath))) {
       return '0.0.0';
     }
-    const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
+    const pkg = JSON.parse(await fsPromises.readFile(pkgPath, 'utf-8'));
     return pkg.version || '0.0.0';
   } catch {
     return '0.0.0';
@@ -198,7 +210,7 @@ export function registerSuggestVersion(): void {
 
       try {
         // Get current version from package.json
-        const currentVersion = getCurrentVersion(project.path);
+        const currentVersion = await getCurrentVersion(project.path);
 
         // Get latest tag
         const latestTag = getLatestTag(project.path);
@@ -241,7 +253,7 @@ export function registerSuggestVersion(): void {
         };
       } catch (_error) {
         // Fallback to patch bump on error
-        const currentVersion = getCurrentVersion(project.path);
+        const currentVersion = await getCurrentVersion(project.path);
         const [major, minor, patch] = currentVersion.split('.').map(Number);
 
         return {

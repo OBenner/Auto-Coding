@@ -2,7 +2,7 @@ import { ipcMain } from 'electron';
 import { IPC_CHANNELS, AUTO_BUILD_PATHS, getSpecsDir } from '../../../shared/constants';
 import type { IPCResult, Task, TaskMetadata } from '../../../shared/types';
 import path from 'path';
-import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, Dirent } from 'fs';
+import { existsSync, promises as fsPromises, Dirent } from 'fs';
 import { projectStore } from '../../project-store';
 import { titleGenerator } from '../../title-generator';
 import { AgentManager } from '../../agent';
@@ -31,7 +31,8 @@ export function registerTaskCRUDHandlers(agentManager: AgentManager): void {
         console.warn('[IPC] TASK_LIST cache invalidated for forceRefresh');
       }
 
-      const tasks = projectStore.getTasks(projectId);
+      // getTasks is async and must be awaited
+      const tasks = await projectStore.getTasks(projectId);
       console.warn('[IPC] TASK_LIST returning', tasks.length, 'tasks');
       return { success: true, data: tasks };
     }
@@ -84,7 +85,7 @@ export function registerTaskCRUDHandlers(agentManager: AgentManager): void {
       // Find next available spec number
       let specNumber = 1;
       if (existsSync(specsDir)) {
-        const existingDirs = readdirSync(specsDir, { withFileTypes: true })
+        const existingDirs = (await fsPromises.readdir(specsDir, { withFileTypes: true }))
           .filter((d: Dirent) => d.isDirectory())
           .map((d: Dirent) => d.name);
 
@@ -111,7 +112,7 @@ export function registerTaskCRUDHandlers(agentManager: AgentManager): void {
 
       // Create spec directory
       const specDir = path.join(specsDir, specId);
-      mkdirSync(specDir, { recursive: true });
+      await fsPromises.mkdir(specDir, { recursive: true });
 
       // Build metadata with source type
       const taskMetadata: TaskMetadata = {
@@ -122,7 +123,7 @@ export function registerTaskCRUDHandlers(agentManager: AgentManager): void {
       // Process and save attached images
       if (taskMetadata.attachedImages && taskMetadata.attachedImages.length > 0) {
         const attachmentsDir = path.join(specDir, 'attachments');
-        mkdirSync(attachmentsDir, { recursive: true });
+        await fsPromises.mkdir(attachmentsDir, { recursive: true });
 
         const savedImages: typeof taskMetadata.attachedImages = [];
 
@@ -132,7 +133,7 @@ export function registerTaskCRUDHandlers(agentManager: AgentManager): void {
               // Decode base64 and save to file
               const buffer = Buffer.from(image.data, 'base64');
               const imagePath = path.join(attachmentsDir, image.filename);
-              writeFileSync(imagePath, buffer);
+              await fsPromises.writeFile(imagePath, buffer);
 
               // Store relative path instead of base64 data
               savedImages.push({
@@ -165,12 +166,12 @@ export function registerTaskCRUDHandlers(agentManager: AgentManager): void {
       };
 
       const planPath = path.join(specDir, AUTO_BUILD_PATHS.IMPLEMENTATION_PLAN);
-      writeFileSync(planPath, JSON.stringify(implementationPlan, null, 2));
+      await fsPromises.writeFile(planPath, JSON.stringify(implementationPlan, null, 2));
 
       // Save task metadata if provided
       if (taskMetadata) {
         const metadataPath = path.join(specDir, 'task_metadata.json');
-        writeFileSync(metadataPath, JSON.stringify(taskMetadata, null, 2));
+        await fsPromises.writeFile(metadataPath, JSON.stringify(taskMetadata, null, 2));
       }
 
       // Create requirements.json with attached images
@@ -189,7 +190,7 @@ export function registerTaskCRUDHandlers(agentManager: AgentManager): void {
       }
 
       const requirementsPath = path.join(specDir, AUTO_BUILD_PATHS.REQUIREMENTS);
-      writeFileSync(requirementsPath, JSON.stringify(requirements, null, 2));
+      await fsPromises.writeFile(requirementsPath, JSON.stringify(requirements, null, 2));
 
       // Create the task object
       const task: Task = {
@@ -222,7 +223,7 @@ export function registerTaskCRUDHandlers(agentManager: AgentManager): void {
       const { rm } = await import('fs/promises');
 
       // Find task and project
-      const { task, project } = findTaskAndProject(taskId);
+      const { task, project } = await findTaskAndProject(taskId);
 
       if (!task || !project) {
         return { success: false, error: 'Task or project not found' };
@@ -290,7 +291,7 @@ export function registerTaskCRUDHandlers(agentManager: AgentManager): void {
     ): Promise<IPCResult<Task>> => {
       try {
         // Find task and project
-        const { task, project } = findTaskAndProject(taskId);
+        const { task, project } = await findTaskAndProject(taskId);
 
         if (!task || !project) {
           return { success: false, error: 'Task not found' };
@@ -332,7 +333,7 @@ export function registerTaskCRUDHandlers(agentManager: AgentManager): void {
         const planPath = path.join(specDir, AUTO_BUILD_PATHS.IMPLEMENTATION_PLAN);
         if (existsSync(planPath)) {
           try {
-            const planContent = readFileSync(planPath, 'utf-8');
+            const planContent = await fsPromises.readFile(planPath, 'utf-8');
             const plan = JSON.parse(planContent);
 
             if (finalTitle !== undefined) {
@@ -343,7 +344,7 @@ export function registerTaskCRUDHandlers(agentManager: AgentManager): void {
             }
             plan.updated_at = new Date().toISOString();
 
-            writeFileSync(planPath, JSON.stringify(plan, null, 2));
+            await fsPromises.writeFile(planPath, JSON.stringify(plan, null, 2));
           } catch {
             // Plan file might not be valid JSON, continue anyway
           }
@@ -353,7 +354,7 @@ export function registerTaskCRUDHandlers(agentManager: AgentManager): void {
         const specPath = path.join(specDir, AUTO_BUILD_PATHS.SPEC_FILE);
         if (existsSync(specPath)) {
           try {
-            let specContent = readFileSync(specPath, 'utf-8');
+            let specContent = await fsPromises.readFile(specPath, 'utf-8');
 
             // Update title (first # heading)
             if (finalTitle !== undefined) {
@@ -372,7 +373,7 @@ export function registerTaskCRUDHandlers(agentManager: AgentManager): void {
               );
             }
 
-            writeFileSync(specPath, specContent);
+            await fsPromises.writeFile(specPath, specContent);
           } catch {
             // Spec file update failed, continue anyway
           }
@@ -386,7 +387,7 @@ export function registerTaskCRUDHandlers(agentManager: AgentManager): void {
           // Process and save attached images if provided
           if (updates.metadata.attachedImages && updates.metadata.attachedImages.length > 0) {
             const attachmentsDir = path.join(specDir, 'attachments');
-            mkdirSync(attachmentsDir, { recursive: true });
+            await fsPromises.mkdir(attachmentsDir, { recursive: true });
 
             const savedImages: typeof updates.metadata.attachedImages = [];
 
@@ -396,7 +397,7 @@ export function registerTaskCRUDHandlers(agentManager: AgentManager): void {
                 try {
                   const buffer = Buffer.from(image.data, 'base64');
                   const imagePath = path.join(attachmentsDir, image.filename);
-                  writeFileSync(imagePath, buffer);
+                  await fsPromises.writeFile(imagePath, buffer);
 
                   savedImages.push({
                     id: image.id,
@@ -420,7 +421,7 @@ export function registerTaskCRUDHandlers(agentManager: AgentManager): void {
           // Update task_metadata.json
           const metadataPath = path.join(specDir, 'task_metadata.json');
           try {
-            writeFileSync(metadataPath, JSON.stringify(updatedMetadata, null, 2));
+            await fsPromises.writeFile(metadataPath, JSON.stringify(updatedMetadata, null, 2));
           } catch (err) {
             console.error('Failed to update task_metadata.json:', err);
           }
@@ -429,7 +430,7 @@ export function registerTaskCRUDHandlers(agentManager: AgentManager): void {
           const requirementsPath = path.join(specDir, 'requirements.json');
           if (existsSync(requirementsPath)) {
             try {
-              const requirementsContent = readFileSync(requirementsPath, 'utf-8');
+              const requirementsContent = await fsPromises.readFile(requirementsPath, 'utf-8');
               const requirements = JSON.parse(requirementsContent);
 
               if (updates.description !== undefined) {
@@ -439,7 +440,7 @@ export function registerTaskCRUDHandlers(agentManager: AgentManager): void {
                 requirements.workflow_type = updates.metadata.category;
               }
 
-              writeFileSync(requirementsPath, JSON.stringify(requirements, null, 2));
+              await fsPromises.writeFile(requirementsPath, JSON.stringify(requirements, null, 2));
             } catch (err) {
               console.error('Failed to update requirements.json:', err);
             }

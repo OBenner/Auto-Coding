@@ -74,7 +74,7 @@ interface OllamaEmbeddingModel {
  * Recommended Embedding Model Card
  * Pre-curated models suitable for Auto Claude memory system
  */
-interface OllamaRecommendedModel {
+interface _OllamaRecommendedModel {
   name: string;          // Model identifier
   description: string;   // Human-readable description
   size_estimate: string; // Estimated download size (e.g., '621 MB')
@@ -483,7 +483,7 @@ export function registerMemoryHandlers(): void {
           };
         } else {
           // Basic validation for other providers
-          llmResult = config.apiKey && config.apiKey.trim()
+          llmResult = config.apiKey?.trim()
             ? {
                 success: true,
                 message: `${config.llmProvider} API key format appears valid`,
@@ -703,7 +703,7 @@ export function registerMemoryHandlers(): void {
      async (
        event,
        modelName: string,
-       baseUrl?: string
+       _baseUrl?: string
      ): Promise<IPCResult<OllamaPullResult>> => {
       try {
         // Use configured Python path (venv if ready, otherwise bundled/system)

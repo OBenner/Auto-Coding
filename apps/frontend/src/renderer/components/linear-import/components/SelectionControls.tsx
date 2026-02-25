@@ -29,6 +29,7 @@ export function SelectionControls({
     <div className="flex items-center justify-between py-2 border-b border-border shrink-0">
       <div className="flex items-center gap-3">
         <button
+          type="button"
           onClick={isAllSelected ? onDeselectAll : onSelectAll}
           className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
         >
@@ -47,6 +48,7 @@ export function SelectionControls({
       </div>
 
       <button
+        type="button"
         onClick={onRefresh}
         className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
         disabled={isLoadingIssues}

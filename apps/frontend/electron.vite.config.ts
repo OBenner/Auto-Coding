@@ -59,9 +59,19 @@ export default defineConfig({
   preload: {
     plugins: [externalizeDepsPlugin()],
     build: {
+      // Force CommonJS output for Electron sandboxed preload scripts
+      lib: {
+        entry: resolve(__dirname, 'src/preload/index.ts'),
+        formats: ['cjs']
+      },
       rollupOptions: {
         input: {
           index: resolve(__dirname, 'src/preload/index.ts')
+        },
+        output: {
+          // Ensure CommonJS format with .cjs extension
+          format: 'cjs',
+          entryFileNames: '[name].cjs'
         }
       }
     }

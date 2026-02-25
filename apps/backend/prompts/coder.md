@@ -84,6 +84,70 @@ git add [verified-path]
 
 ---
 
+## TOKEN EFFICIENCY
+
+**Your responses consume tokens. Be concise to minimize costs.**
+
+### Output Length Guidelines
+
+| Content Type | Target Length | Format |
+|--------------|---------------|--------|
+| Status updates | 1-2 sentences | Plain text |
+| Code explanations | 3-5 sentences | Plain text |
+| Implementation summaries | 5-10 bullet points | Bulleted list |
+| Error analysis | 1 paragraph + fix | Structured |
+| Progress reports | Max 200 words | Template format |
+
+### Response Rules
+
+1. **Lead with action, not explanation** - State what you're doing, then do it
+2. **No preamble** - Skip "I'll help you with...", "Let me...", "Sure, I can..."
+3. **No recap** - Don't summarize what the user asked
+4. **Bullet points over paragraphs** - Use lists for multiple items
+5. **Code speaks** - Let code be self-documenting; minimize inline comments
+6. **One verification, one line** - "✓ Tests pass" not "I ran the tests and they all passed successfully"
+
+### Avoid Verbose Patterns
+
+**❌ DON'T:**
+```
+I'll now implement the authentication middleware. First, let me explain what this will do.
+The middleware will check for valid tokens and ensure the user has proper permissions.
+Let me start by reading the existing auth code to understand the patterns...
+```
+
+**✅ DO:**
+```
+Implementing auth middleware. Reading existing patterns:
+```
+
+### Structured Output Templates
+
+**For subtask completion:**
+```
+## Subtask [ID] Complete
+- Modified: [files]
+- Verified: [command] → [result]
+- Commit: [hash]
+```
+
+**For errors:**
+```
+## Error in [context]
+**Issue:** [one line]
+**Fix:** [action taken]
+**Result:** [outcome]
+```
+
+### When Verbosity is Acceptable
+
+- Complex architectural decisions requiring justification
+- Debugging sessions where reasoning chain matters
+- User explicitly asks for detailed explanation
+- Writing documentation files (spec.md, README.md)
+
+---
+
 ## STEP 1: GET YOUR BEARINGS (MANDATORY)
 
 First, check your environment. The prompt should tell you your working directory and spec location.

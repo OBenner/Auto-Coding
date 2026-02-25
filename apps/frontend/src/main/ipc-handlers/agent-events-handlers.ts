@@ -115,14 +115,20 @@ export function registerAgenteventsHandlers(
 
   agentManager.on("log", (taskId: string, log: string) => {
     // Include projectId for multi-project filtering (issue #723)
-    const { project } = findTaskAndProject(taskId);
-    safeSendToRenderer(getMainWindow, IPC_CHANNELS.TASK_LOG, taskId, log, project?.id);
+    // Wrap in async IIFE since findTaskAndProject is now async
+    (async () => {
+      const { project } = await findTaskAndProject(taskId);
+      safeSendToRenderer(getMainWindow, IPC_CHANNELS.TASK_LOG, taskId, log, project?.id);
+    })().catch((err) => console.error('[agent-events] Error in log handler:', err));
   });
 
   agentManager.on("error", (taskId: string, error: string) => {
     // Include projectId for multi-project filtering (issue #723)
-    const { project } = findTaskAndProject(taskId);
-    safeSendToRenderer(getMainWindow, IPC_CHANNELS.TASK_ERROR, taskId, error, project?.id);
+    // Wrap in async IIFE since findTaskAndProject is now async
+    (async () => {
+      const { project } = await findTaskAndProject(taskId);
+      safeSendToRenderer(getMainWindow, IPC_CHANNELS.TASK_ERROR, taskId, error, project?.id);
+    })().catch((err) => console.error('[agent-events] Error in error handler:', err));
   });
 
   // Handle SDK rate limit events from agent manager
@@ -164,9 +170,11 @@ export function registerAgenteventsHandlers(
   });
 
   agentManager.on("exit", (taskId: string, code: number | null, processType: ProcessType) => {
-    // Get project info early for multi-project filtering (issue #723)
-    const { project: exitProject } = findTaskAndProject(taskId);
-    const exitProjectId = exitProject?.id;
+    // Wrap in async IIFE since we need to await async operations
+    (async () => {
+      // Get project info early for multi-project filtering (issue #723)
+      const { project: exitProject } = await findTaskAndProject(taskId);
+      const exitProjectId = exitProject?.id;
 
     // Send final plan state to renderer BEFORE unwatching
     // This ensures the renderer has the final subtask data (fixes 0/0 subtask bug)
@@ -181,33 +189,33 @@ export function registerAgenteventsHandlers(
       );
     }
 
-    fileWatcher.unwatch(taskId);
+      fileWatcher.unwatch(taskId);
 
-    if (processType === "spec-creation") {
-      console.warn(`[Task ${taskId}] Spec creation completed with code ${code}`);
-      return;
-    }
-
-    let task: Task | undefined;
-    let project: Project | undefined;
-
-    try {
-      const projects = projectStore.getProjects();
-
-      // IMPORTANT: Invalidate cache for all projects to ensure we get fresh data
-      // This prevents race conditions where cached task data has stale status
-      for (const p of projects) {
-        projectStore.invalidateTasksCache(p.id);
+      if (processType === "spec-creation") {
+        console.warn(`[Task ${taskId}] Spec creation completed with code ${code}`);
+        return;
       }
 
-      for (const p of projects) {
-        const tasks = projectStore.getTasks(p.id);
-        task = tasks.find((t) => t.id === taskId || t.specId === taskId);
-        if (task) {
-          project = p;
-          break;
+      let task: Task | undefined;
+      let project: Project | undefined;
+
+      try {
+        const projects = projectStore.getProjects();
+
+        // IMPORTANT: Invalidate cache for all projects to ensure we get fresh data
+        // This prevents race conditions where cached task data has stale status
+        for (const p of projects) {
+          projectStore.invalidateTasksCache(p.id);
         }
-      }
+
+        for (const p of projects) {
+          const tasks = await projectStore.getTasks(p.id);
+          task = tasks.find((t) => t.id === taskId || t.specId === taskId);
+          if (task) {
+            project = p;
+            break;
+          }
+        }
 
       if (task && project) {
         const taskTitle = task.title || task.specId;
@@ -293,15 +301,18 @@ export function registerAgenteventsHandlers(
           );
         }
       }
-    } catch (error) {
-      console.error(`[Task ${taskId}] Exit handler error:`, error);
-    }
+      } catch (error) {
+        console.error(`[Task ${taskId}] Exit handler error:`, error);
+      }
+    })().catch((err) => console.error('[agent-events] Error in exit handler:', err));
   });
 
   agentManager.on("execution-progress", (taskId: string, progress: ExecutionProgressData) => {
-    // Use shared helper to find task and project (issue #723 - deduplicate lookup)
-    const { task, project } = findTaskAndProject(taskId);
-    const taskProjectId = project?.id;
+    // Wrap in async IIFE since findTaskAndProject is now async
+    (async () => {
+      // Use shared helper to find task and project (issue #723 - deduplicate lookup)
+      const { task, project } = await findTaskAndProject(taskId);
+      const taskProjectId = project?.id;
 
     // Include projectId in execution progress event for multi-project filtering
     safeSendToRenderer(
@@ -366,7 +377,8 @@ export function registerAgenteventsHandlers(
           console.warn("[execution-progress] Could not persist status:", err);
         }
       }
-    }
+      }
+    })().catch((err) => console.error('[agent-events] Error in execution-progress handler:', err));
   });
 
   // ============================================
@@ -374,14 +386,20 @@ export function registerAgenteventsHandlers(
   // ============================================
 
   fileWatcher.on("progress", (taskId: string, plan: ImplementationPlan) => {
-    // Use shared helper to find project (issue #723 - deduplicate lookup)
-    const { project } = findTaskAndProject(taskId);
-    safeSendToRenderer(getMainWindow, IPC_CHANNELS.TASK_PROGRESS, taskId, plan, project?.id);
+    // Wrap in async IIFE since findTaskAndProject is now async
+    (async () => {
+      // Use shared helper to find project (issue #723 - deduplicate lookup)
+      const { project } = await findTaskAndProject(taskId);
+      safeSendToRenderer(getMainWindow, IPC_CHANNELS.TASK_PROGRESS, taskId, plan, project?.id);
+    })().catch((err) => console.error('[agent-events] Error in progress handler:', err));
   });
 
   fileWatcher.on("error", (taskId: string, error: string) => {
-    // Include projectId for multi-project filtering (issue #723)
-    const { project } = findTaskAndProject(taskId);
-    safeSendToRenderer(getMainWindow, IPC_CHANNELS.TASK_ERROR, taskId, error, project?.id);
+    // Wrap in async IIFE since findTaskAndProject is now async
+    (async () => {
+      // Include projectId for multi-project filtering (issue #723)
+      const { project } = await findTaskAndProject(taskId);
+      safeSendToRenderer(getMainWindow, IPC_CHANNELS.TASK_ERROR, taskId, error, project?.id);
+    })().catch((err) => console.error('[agent-events] Error in error handler:', err));
   });
 }

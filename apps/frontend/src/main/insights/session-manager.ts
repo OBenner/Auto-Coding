@@ -9,11 +9,9 @@ import { InsightsPaths } from './paths';
 export class SessionManager {
   private sessions: Map<string, InsightsSession> = new Map();
   private storage: SessionStorage;
-  private paths: InsightsPaths;
 
-  constructor(storage: SessionStorage, paths: InsightsPaths) {
+  constructor(storage: SessionStorage, _paths: InsightsPaths) {
     this.storage = storage;
-    this.paths = paths;
   }
 
   /**
@@ -21,8 +19,9 @@ export class SessionManager {
    */
   loadSession(projectId: string, projectPath: string): InsightsSession | null {
     // Check in-memory cache first
-    if (this.sessions.has(projectId)) {
-      return this.sessions.get(projectId)!;
+    const cachedSession = this.sessions.get(projectId);
+    if (cachedSession) {
+      return cachedSession;
     }
 
     // Migrate old format if needed

@@ -73,7 +73,7 @@ function createSettingsStoreMock(overrides: Partial<ReturnType<typeof useSetting
     deleteProfile: mockDeleteProfile,
     setActiveProfile: mockSetActiveProfile,
     profilesLoading: false,
-    settings: {} as any,
+    settings: {} as unknown,
     isLoading: false,
     error: null,
     setSettings: vi.fn(),

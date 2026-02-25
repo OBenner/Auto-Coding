@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Check,
@@ -133,7 +133,7 @@ export function OllamaModelSelector({
    * @param {AbortSignal} [abortSignal] - Optional abort signal to cancel the request
    * @returns {Promise<void>}
    */
-  const checkInstalledModels = async (abortSignal?: AbortSignal) => {
+  const checkInstalledModels = useCallback(async (abortSignal?: AbortSignal) => {
     setIsLoading(true);
     setError(null);
     setOllamaState('checking');
@@ -217,7 +217,7 @@ export function OllamaModelSelector({
         setIsLoading(false);
       }
     }
-  };
+  }, [baseUrl]);
 
   /**
    * Install Ollama by opening terminal with the official install command.
@@ -259,7 +259,7 @@ export function OllamaModelSelector({
         clearTimeout(installCheckTimeoutRef.current);
       }
     };
-  }, [baseUrl]);
+  }, [checkInstalledModels]);
 
   // Progress is now handled globally by the download store listener initialized in App.tsx
 
@@ -448,6 +448,9 @@ export function OllamaModelSelector({
            const progress = download;
 
            return (
+             // biome-ignore lint/a11y/noNoninteractiveElementInteractions: Clickable card for model selection
+             // biome-ignore lint/a11y/noStaticElementInteractions: Clickable card for model selection
+             // biome-ignore lint/a11y/useKeyWithClickEvents: Model selection card with click handler
              <div
                key={model.name}
                className={cn(

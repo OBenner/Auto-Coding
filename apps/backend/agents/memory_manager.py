@@ -492,3 +492,128 @@ async def save_session_to_graphiti(
         discoveries,
     )
     return result
+
+
+async def save_user_correction(
+    spec_dir: Path,
+    project_dir: Path,
+    what_was_wrong: str,
+    what_was_corrected: str,
+    correction_context: dict | None = None,
+) -> bool:
+    """
+    Store a user correction in Graphiti memory.
+
+    This captures instances where the user had to correct the agent's work,
+    enabling the system to learn from mistakes and avoid repeating them
+    in future sessions.
+
+    Args:
+        spec_dir: Spec directory
+        project_dir: Project root directory
+        what_was_wrong: Description of what the agent did incorrectly
+        what_was_corrected: Description of the user's correction
+        correction_context: Optional additional context dict with:
+            - subtask_id: The subtask being worked on
+            - files_affected: List of files that were corrected
+            - error_type: Category of error (e.g., "wrong_approach", "missing_validation")
+            - any other relevant metadata
+
+    Returns:
+        True if saved successfully, False otherwise
+
+    Example:
+        ```python
+        await save_user_correction(
+            spec_dir=spec_dir,
+            project_dir=project_dir,
+            what_was_wrong="Agent used synchronous file operations in async function",
+            what_was_corrected="Changed to use aiofiles for async file I/O",
+            correction_context={
+                "subtask_id": "subtask-1-2",
+                "files_affected": ["apps/backend/agents/coder.py"],
+                "error_type": "wrong_approach",
+            }
+        )
+        ```
+    """
+    if is_debug_enabled():
+        debug_section("memory", "Saving User Correction")
+        debug(
+            "memory",
+            "User correction initiated",
+            what_was_wrong=what_was_wrong[:100],
+            what_was_corrected=what_was_corrected[:100],
+            spec_dir=str(spec_dir),
+        )
+
+    if not is_graphiti_enabled():
+        if is_debug_enabled():
+            debug(
+                "memory",
+                "Graphiti not enabled, user correction not saved",
+                note="Set GRAPHITI_ENABLED=true to enable user correction tracking",
+            )
+        return False
+
+    memory = None
+    try:
+        # Use centralized helper for GraphitiMemory instantiation (async)
+        memory = await get_graphiti_memory(spec_dir, project_dir)
+        if memory is None:
+            if is_debug_enabled():
+                debug_warning("memory", "GraphitiMemory not available")
+            return False
+
+        if not memory.is_enabled:
+            if is_debug_enabled():
+                debug_warning("memory", "GraphitiMemory disabled")
+            return False
+
+        if is_debug_enabled():
+            debug("memory", "Saving user correction to Graphiti...")
+
+        result = await memory.save_user_correction(
+            what_was_wrong=what_was_wrong,
+            what_was_corrected=what_was_corrected,
+            correction_context=correction_context,
+        )
+
+        if result:
+            logger.info("User correction saved to Graphiti memory")
+            if is_debug_enabled():
+                debug_success(
+                    "memory",
+                    "User correction saved to Graphiti",
+                    storage_type="graphiti",
+                )
+        else:
+            logger.warning("Failed to save user correction to Graphiti")
+            if is_debug_enabled():
+                debug_warning("memory", "User correction save returned False")
+
+        return result
+
+    except Exception as e:
+        logger.warning(f"Failed to save user correction: {e}")
+        if is_debug_enabled():
+            debug_error("memory", "User correction save failed", error=str(e))
+        # Capture exception to Sentry with full context
+        capture_exception(
+            e,
+            operation="save_user_correction",
+            what_was_wrong_summary=what_was_wrong[:100],
+            what_was_corrected_summary=what_was_corrected[:100],
+            spec_dir=str(spec_dir),
+            project_dir=str(project_dir),
+        )
+        return False
+    finally:
+        # Always close the memory connection (swallow exceptions to avoid overriding)
+        if memory is not None:
+            try:
+                await memory.close()
+            except Exception as e:
+                logger.debug(
+                    "Failed to close Graphiti memory connection", exc_info=True
+                )

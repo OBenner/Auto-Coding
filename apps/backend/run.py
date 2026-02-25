@@ -41,9 +41,11 @@ if sys.version_info < (3, 10):  # noqa: UP036
 
 import io
 
+from core.platform import is_windows
+
 # Configure safe encoding on Windows BEFORE any imports that might print
 # This handles both TTY and piped output (e.g., from Electron)
-if sys.platform == "win32":
+if is_windows():
     for _stream_name in ("stdout", "stderr"):
         _stream = getattr(sys, _stream_name)
         # Method 1: Try reconfigure (works for TTY)

@@ -130,6 +130,7 @@ export function FirstSpecStep({ onNext, onBack, onSkip, onOpenTaskCreator }: Fir
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {tips.map((tip, index) => (
               <TipCard
+                // biome-ignore lint/suspicious/noArrayIndexKey: Static list with stable order
                 key={index}
                 icon={tip.icon}
                 title={tip.title}

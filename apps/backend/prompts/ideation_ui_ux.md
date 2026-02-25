@@ -253,6 +253,100 @@ Look for:
 
 ---
 
+## PHASE 4.5: RESEARCH UI/UX BEST PRACTICES (USING WEBSEARCH)
+
+**WebSearch should be used AFTER visual analysis to validate UI/UX improvements and discover proven design patterns.**
+
+After identifying UI/UX issues through visual analysis, use web search to research best practices and proven solutions. This helps validate your approach and discover established patterns.
+
+### Step 1: Search for UI/UX Best Practices
+
+When you identify a UI/UX issue, search for established design patterns:
+
+```
+Tool: WebSearch
+Query: "[UI pattern type] best practices design 2026"
+```
+
+**Example searches:**
+- `"form validation UX best practices 2026"` - For form improvements
+- `"loading states UI patterns 2026"` - For loading indicators
+- `"empty state design best practices 2026"` - For empty states
+- `"error message UX best practices 2026"` - For error handling
+- `"button design accessibility best practices 2026"` - For button UX
+- `"navigation menu UX patterns mobile 2026"` - For navigation
+- `"modal dialog accessibility best practices 2026"` - For modal UX
+- `"search interface UX best practices 2026"` - For search features
+- `"data table design patterns 2026"` - For table UX
+
+**What to verify:**
+1. **Design systems** - What do major design systems recommend?
+2. **Accessibility standards** - What does WCAG require?
+3. **User research** - What do usability studies show?
+4. **Platform conventions** - What are platform-specific patterns?
+5. **Mobile considerations** - How does this work on mobile?
+
+### Step 2: Search for UI Implementation Examples
+
+Find real-world examples to understand the implementation:
+
+```
+Tool: WebSearch
+Query: "[UI pattern] implementation example [framework] 2026"
+```
+
+**Example searches:**
+- `"toast notification implementation React example 2026"` - See notification patterns
+- `"skeleton loading screen React implementation 2026"` - Learn loading states
+- `"accessible form validation React example 2026"` - See validation UX
+- `"keyboard navigation implementation example 2026"` - Learn keyboard support
+- `"focus management modal React example 2026"` - See focus handling
+- `"responsive navigation menu example 2026"` - Learn mobile navigation
+- `"color contrast checker implementation 2026"` - See accessibility tools
+- `"animation performance React example 2026"` - Learn smooth animations
+
+**What to extract:**
+1. **Component structure** - How is the UI organized?
+2. **Interaction patterns** - How do users interact with it?
+3. **Animation/transitions** - What animations improve UX?
+4. **Accessibility implementation** - What ARIA attributes are used?
+5. **Responsive behavior** - How does it adapt to screen sizes?
+
+### Step 3: Search for Common UI/UX Pitfalls
+
+Research problems others encountered with similar UI patterns:
+
+```
+Tool: WebSearch
+Query: "[UI pattern] common mistakes UX issues 2026"
+```
+
+**Example searches:**
+- `"form validation UX mistakes to avoid 2026"` - Avoid validation errors
+- `"loading indicator accessibility issues 2026"` - Handle loading correctly
+- `"modal dialog UX pitfalls 2026"` - Avoid modal mistakes
+- `"button design accessibility mistakes 2026"` - Handle buttons correctly
+- `"color contrast common failures 2026"` - Avoid contrast issues
+- `"mobile navigation UX problems 2026"` - Handle mobile correctly
+- `"animation performance issues 2026"` - Avoid janky animations
+- `"focus trap accessibility issues 2026"` - Handle focus correctly
+
+**What to document:**
+1. **Usability issues** - What frustrates users?
+2. **Accessibility violations** - What breaks screen readers?
+3. **Performance problems** - What causes jank?
+4. **Mobile issues** - What breaks on touch devices?
+5. **Browser compatibility** - What doesn't work everywhere?
+
+**Integration into analysis:**
+- Use search results to validate your UI/UX suggestions
+- Reference design systems (Material, Ant Design, etc.) in rationale
+- Include WCAG guidelines in accessibility improvements
+- Document user research findings to support changes
+- Suggest proven interaction patterns based on research
+
+---
+
 ## PHASE 5: IDENTIFY IMPROVEMENT OPPORTUNITIES
 
 For each category, think deeply:

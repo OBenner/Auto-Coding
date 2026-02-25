@@ -20,7 +20,7 @@ import { Label } from './ui/label';
 import { RadioGroup, RadioGroupItem } from './ui/radio-group';
 import { useTranslation } from 'react-i18next';
 import type { CustomMcpServer } from '../../shared/types';
-import { Terminal, Globe, X, Github, Loader2, ExternalLink } from 'lucide-react';
+import { Terminal, Globe, X, Github, ExternalLink } from 'lucide-react';
 
 interface CustomMcpDialogProps {
   open: boolean;
@@ -442,6 +442,7 @@ export function CustomMcpDialog({
                                 </span>
                               </span>
                               <button
+                                type="button"
                                 onClick={() => removeHeader(key)}
                                 className="text-muted-foreground hover:text-destructive transition-colors"
                               >

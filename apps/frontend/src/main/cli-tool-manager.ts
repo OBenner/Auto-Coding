@@ -49,7 +49,7 @@ import {
   findWindowsExecutableViaWhere,
   findWindowsExecutableViaWhereAsync,
   isSecurePath,
-} from './utils/windows-paths';
+} from './platform/paths';
 
 /**
  * Supported CLI tools managed by this system

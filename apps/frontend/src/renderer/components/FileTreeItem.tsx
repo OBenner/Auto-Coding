@@ -79,7 +79,7 @@ export function FileTreeItem({
   // This handles cases where component unmounts mid-drag or dragend doesn't fire
   useEffect(() => {
     return () => {
-      if (dragImageRef.current && dragImageRef.current.parentNode) {
+      if (dragImageRef.current?.parentNode) {
         dragImageRef.current.parentNode.removeChild(dragImageRef.current);
         dragImageRef.current = null;
       }
@@ -151,7 +151,7 @@ export function FileTreeItem({
     setIsDragging(false);
 
     // Clean up drag image element
-    if (dragImageRef.current && dragImageRef.current.parentNode) {
+    if (dragImageRef.current?.parentNode) {
       dragImageRef.current.parentNode.removeChild(dragImageRef.current);
       dragImageRef.current = null;
     }
@@ -159,12 +159,12 @@ export function FileTreeItem({
 
   return (
     <div
-      role={node.isDirectory ? 'button' : undefined}
-      tabIndex={node.isDirectory ? 0 : undefined}
+      role="treeitem"
+      tabIndex={0}
       draggable
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
-      onKeyDown={node.isDirectory ? handleKeyDown : undefined}
+      onKeyDown={handleKeyDown}
       className={cn(
         'flex items-center gap-1 py-1 px-2 rounded cursor-grab select-none',
         'hover:bg-accent/50 transition-colors',

@@ -21,6 +21,7 @@ import { setUpdateChannel, setUpdateChannelWithDowngradeCheck } from '../app-upd
 import { getSettingsPath, readSettingsFile } from '../settings-utils';
 import { configureTools, getToolPath, getToolInfo, isPathFromWrongPlatform, preWarmToolCache } from '../cli-tool-manager';
 import { parseEnvFile } from './utils';
+import { getCurrentOS, isMacOS, isWindows } from '../platform';
 
 const settingsPath = getSettingsPath();
 
@@ -61,7 +62,7 @@ const detectAutoBuildSourcePath = (): string | null => {
   const debug = process.env.DEBUG === '1' || process.env.DEBUG === 'true';
 
   if (debug) {
-    console.warn('[detectAutoBuildSourcePath] Platform:', process.platform);
+    console.warn('[detectAutoBuildSourcePath] Platform:', getCurrentOS());
     console.warn('[detectAutoBuildSourcePath] Is dev:', is.dev);
     console.warn('[detectAutoBuildSourcePath] __dirname:', __dirname);
     console.warn('[detectAutoBuildSourcePath] app.getAppPath():', app.getAppPath());
@@ -463,19 +464,17 @@ export function registerSettingsHandlers(
               error: `Path is not a directory: ${resolvedPath}`
             };
           }
-        } catch (statError) {
+        } catch (_statError) {
           return {
             success: false,
             error: `Cannot access path: ${resolvedPath}`
           };
         }
 
-        const platform = process.platform;
-
-        if (platform === 'darwin') {
+        if (isMacOS()) {
           // macOS: Use execFileSync with argument array to prevent injection
           execFileSync('open', ['-a', 'Terminal', resolvedPath], { stdio: 'ignore' });
-        } else if (platform === 'win32') {
+        } else if (isWindows()) {
           // Windows: Use cmd.exe directly with argument array
           // /C tells cmd to execute the command and terminate
           // /K keeps the window open after executing cd
@@ -504,6 +503,7 @@ export function registerSettingsHandlers(
               opened = true;
               break;
             } catch {
+              // Try next terminal
             }
           }
 

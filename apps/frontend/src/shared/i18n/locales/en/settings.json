@@ -619,6 +619,58 @@
       "description": "Select a project from the sidebar to configure its settings."
     }
   },
+  "agentModels": {
+    "title": "Agent Model Configuration",
+    "description": "Configure which Claude models and thinking token budgets to use for each agent type",
+    "agents": {
+      "planner": {
+        "label": "Planner Agent",
+        "description": "Creates implementation plans with subtasks"
+      },
+      "coder": {
+        "label": "Coder Agent",
+        "description": "Implements individual subtasks"
+      },
+      "qa_reviewer": {
+        "label": "QA Reviewer Agent",
+        "description": "Validates acceptance criteria"
+      },
+      "qa_fixer": {
+        "label": "QA Fixer Agent",
+        "description": "Fixes QA-reported issues"
+      }
+    },
+    "fields": {
+      "model": "Model",
+      "thinkingTokens": "Extended Thinking Tokens",
+      "thinkingTokensDescription": "Max thinking tokens for extended thinking (0 = disabled, 5000-16000 = enabled)"
+    },
+    "placeholders": {
+      "model": "Select a model...",
+      "thinkingTokens": "e.g., 10000 (or 0 to disable)"
+    },
+    "labels": {
+      "modelSelection": "Model Selection",
+      "thinkingTokenBudget": "Thinking Token Budget",
+      "disabled": "Disabled",
+      "budget": "{{count}} tokens"
+    },
+    "hints": {
+      "thinkingTokens": "Extended thinking allows the model to reason through complex problems. 0 disables it, 5000-16000 enables it with the specified budget.",
+      "modelSelection": "Choose the Claude model to use for this agent. Different models have different capabilities and costs."
+    },
+    "validation": {
+      "modelRequired": "Model is required",
+      "thinkingTokensInvalid": "Thinking tokens must be 0 or between 5000 and 16000",
+      "thinkingTokensRange": "Value must be 0 or between 5000 and 16000"
+    },
+    "toast": {
+      "saveSuccess": "Agent models updated",
+      "saveSuccessDescription": "Agent model configuration has been saved successfully.",
+      "saveFailed": "Failed to save agent models",
+      "saveFailedDescription": "An error occurred while saving agent model configuration."
+    }
+  },
   "mcp": {
     "title": "MCP Server Overview",
     "titleWithProject": "MCP Server Overview for {{projectName}}",

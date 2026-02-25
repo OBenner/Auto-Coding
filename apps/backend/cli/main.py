@@ -41,6 +41,9 @@ from .workspace_commands import (
     handle_create_pr_command,
     handle_discard_command,
     handle_list_worktrees_command,
+    handle_merge_analytics_export_command,
+    handle_merge_analytics_list_command,
+    handle_merge_analytics_summary_command,
     handle_merge_command,
     handle_review_command,
 )
@@ -280,6 +283,50 @@ Environment Variables:
         help="Actually delete files in cleanup (not just preview)",
     )
 
+    # Merge analytics commands
+    parser.add_argument(
+        "--merge-analytics-list",
+        action="store_true",
+        help="Show merge operation history",
+    )
+    parser.add_argument(
+        "--merge-analytics-summary",
+        action="store_true",
+        help="Show aggregated merge analytics and statistics",
+    )
+    parser.add_argument(
+        "--merge-analytics-export",
+        action="store_true",
+        help="Export merge analytics to a file (JSON or CSV)",
+    )
+    parser.add_argument(
+        "--analytics-format",
+        type=str,
+        default="json",
+        choices=["json", "csv"],
+        help="Format for analytics export (default: json)",
+    )
+    parser.add_argument(
+        "--analytics-output",
+        type=str,
+        default=None,
+        metavar="FILE",
+        help="Output file for analytics export",
+    )
+    parser.add_argument(
+        "--analytics-limit",
+        type=int,
+        default=100,
+        help="Limit number of operations in list view (default: 100)",
+    )
+    parser.add_argument(
+        "--analytics-task",
+        type=str,
+        default=None,
+        metavar="TASK_ID",
+        help="Filter analytics by task ID",
+    )
+
     return parser.parse_args()
 
 
@@ -354,6 +401,25 @@ def _run_cli() -> None:
 
     if args.batch_cleanup:
         handle_batch_cleanup_command(str(project_dir), dry_run=not args.no_dry_run)
+        return
+
+    # Handle merge analytics commands
+    if args.merge_analytics_list:
+        handle_merge_analytics_list_command(
+            project_dir, limit=args.analytics_limit, task_id=args.analytics_task
+        )
+        return
+
+    if args.merge_analytics_summary:
+        handle_merge_analytics_summary_command(project_dir)
+        return
+
+    if args.merge_analytics_export:
+        handle_merge_analytics_export_command(
+            project_dir,
+            output_path=args.analytics_output,
+            format=args.analytics_format,
+        )
         return
 
     # Require --spec if not listing

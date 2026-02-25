@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Any
 
 from .ai_resolver import AIResolver, create_claude_resolver
+from .analytics_recorder import MergeAnalyticsRecorder
 from .auto_merger import AutoMerger
 from .conflict_detector import ConflictDetector
 from .conflict_resolver import ConflictResolver
@@ -154,6 +155,7 @@ class MergeOrchestrator:
             storage_dir=self.storage_dir,
             semantic_analyzer=self.analyzer,
         )
+        self.analytics_recorder = MergeAnalyticsRecorder(self.storage_dir)
 
         # AI resolver - lazy init if not provided
         self._ai_resolver = ai_resolver
@@ -365,6 +367,8 @@ class MergeOrchestrator:
         # Save report
         if not self.dry_run:
             self._save_report(report, task_id)
+            # Record analytics
+            self.analytics_recorder.record_merge_operation(task_id, report)
 
         debug_success(
             MODULE,
@@ -487,7 +491,10 @@ class MergeOrchestrator:
         # Save report
         if not self.dry_run:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            self._save_report(report, f"multi_{timestamp}")
+            operation_id = f"multi_{timestamp}"
+            self._save_report(report, operation_id)
+            # Record analytics
+            self.analytics_recorder.record_merge_operation(operation_id, report)
 
         return report
 

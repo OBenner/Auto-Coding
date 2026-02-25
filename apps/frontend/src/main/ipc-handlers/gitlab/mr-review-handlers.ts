@@ -21,7 +21,6 @@ import { getGitLabConfig, gitlabFetch, encodeProjectPath } from './utils';
 import { readSettingsFile } from '../../settings-utils';
 import type { Project, AppSettings } from '../../../shared/types';
 import type {
-  MRReviewFinding,
   MRReviewResult,
   MRReviewProgress,
   NewCommitsCheck,
@@ -195,7 +194,7 @@ async function runMRReview(
     throw new Error(validation.error);
   }
 
-  const backendPath = validation.backendPath!;
+  const backendPath = validation.backendPath as string;
 
   const { sendProgress } = createIPCCommunicators<MRReviewProgress, MRReviewResult>(
     mainWindow,
@@ -263,7 +262,7 @@ async function runMRReview(
       throw new Error(result.error ?? 'Review failed');
     }
 
-    return result.data!;
+    return result.data as MRReviewResult;
   } finally {
     runningReviews.delete(reviewKey);
     debugLog('Unregistered review process', { reviewKey });
@@ -716,7 +715,7 @@ export function registerMRReviewHandlers(
           return { hasNewCommits: false };
         }
 
-        const reviewedCommitSha = review.reviewedCommitSha || (review as any).reviewed_commit_sha;
+        const reviewedCommitSha = review.reviewedCommitSha || (review as { reviewed_commit_sha?: string }).reviewed_commit_sha;
         if (!reviewedCommitSha) {
           debugLog('No reviewedCommitSha in review', { mrIid });
           return { hasNewCommits: false };
@@ -804,7 +803,7 @@ export function registerMRReviewHandlers(
             return;
           }
 
-          const backendPath = validation.backendPath!;
+          const backendPath = validation.backendPath as string;
           const reviewKey = getReviewKey(projectId, mrIid);
 
           if (runningReviews.has(reviewKey)) {
@@ -882,7 +881,7 @@ export function registerMRReviewHandlers(
               message: 'Follow-up review complete!',
             });
 
-            sendComplete(result.data!);
+            sendComplete(result.data as NonNullable<typeof result.data>);
           } finally {
             runningReviews.delete(reviewKey);
             debugLog('Unregistered follow-up review process', { reviewKey });

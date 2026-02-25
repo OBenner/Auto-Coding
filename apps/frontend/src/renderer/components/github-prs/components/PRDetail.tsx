@@ -32,6 +32,9 @@ import { ReviewStatusTree } from './ReviewStatusTree';
 import { PRHeader } from './PRHeader';
 import { ReviewFindings } from './ReviewFindings';
 import { PRLogs } from './PRLogs';
+import { InlineCommentList } from './InlineCommentList';
+import type { InlineComment as InlineCommentType } from './InlineCommentList';
+import { CommentReplyDialog } from './CommentReplyDialog';
 
 import type { PRData, PRReviewResult, PRReviewProgress } from '../hooks/useGitHubPRs';
 import type { NewCommitsCheck, MergeReadiness, PRLogs as PRLogsType, WorkflowsAwaitingApprovalResult } from '../../../../preload/api/modules/github-api';
@@ -128,12 +131,19 @@ export function PRDetail({
   const [isUpdatingBranch, setIsUpdatingBranch] = useState(false);
   const [branchUpdateError, setBranchUpdateError] = useState<string | null>(null);
   const [branchUpdateSuccess, setBranchUpdateSuccess] = useState(false);
-  const [mergeReadinessRefreshKey, setMergeReadinessRefreshKey] = useState(0);
+  const [_mergeReadinessRefreshKey, setMergeReadinessRefreshKey] = useState(0);
 
   // Workflows awaiting approval state (for fork PRs)
   const [workflowsAwaiting, setWorkflowsAwaiting] = useState<WorkflowsAwaitingApprovalResult | null>(null);
   const [isApprovingWorkflow, setIsApprovingWorkflow] = useState<number | null>(null);
   const [workflowsExpanded, setWorkflowsExpanded] = useState(true);
+
+  // Inline comments state
+  const [inlineComments, setInlineComments] = useState<InlineCommentType[]>([]);
+  const [isLoadingComments, setIsLoadingComments] = useState(false);
+  const [commentsExpanded, setCommentsExpanded] = useState(true);
+  const [replyDialogOpen, setReplyDialogOpen] = useState(false);
+  const [selectedComment, setSelectedComment] = useState<InlineCommentType | null>(null);
 
   // Generate stable IDs for accessibility
   const cleanReviewErrorDetailsId = useId();
@@ -151,7 +161,7 @@ export function PRDetail({
     } else {
       setPostedFindingIds(new Set());
     }
-  }, [reviewResult?.postedFindingIds, pr.number]);
+  }, [reviewResult?.postedFindingIds]);
 
   // Auto-select ALL findings when review completes (excluding already posted)
   // All findings should reach the contributor - even LOW suggestions are valuable feedback
@@ -317,7 +327,57 @@ export function PRDetail({
     setBranchUpdateError(null);
     setBranchUpdateSuccess(false);
     setIsUpdatingBranch(false);
-  }, [pr.number]);
+    // Reset inline comments state
+    setInlineComments([]);
+    setIsLoadingComments(false);
+    setReplyDialogOpen(false);
+    setSelectedComment(null);
+  }, []);
+
+  // Fetch inline comments when PR is selected
+  useEffect(() => {
+    const fetchInlineComments = async () => {
+      if (!projectId || !pr.number) return;
+
+      setIsLoadingComments(true);
+      try {
+        // Call IPC handler to fetch inline comments
+        // Note: This IPC handler will be implemented in subtask-3-1
+        const comments = await window.electronAPI.github.getInlineComments?.(projectId, pr.number);
+        if (comments) {
+          setInlineComments(comments);
+        }
+      } catch (error) {
+        console.error('Failed to fetch inline comments:', error);
+        // Silently fail - inline comments are supplementary information
+      } finally {
+        setIsLoadingComments(false);
+      }
+    };
+
+    fetchInlineComments();
+  }, [pr.number, projectId]);
+
+  // Listen for PR updated events (e.g., when suggestions are applied)
+  useEffect(() => {
+    const cleanup = window.electronAPI.github.onPRUpdated?.((data) => {
+      // Only refresh if this is the currently viewed PR
+      if (data.prNumber === pr.number && projectId) {
+        // Refresh inline comments to show updated state
+        window.electronAPI.github.getInlineComments?.(projectId, pr.number)
+          .then((comments) => {
+            if (comments) {
+              setInlineComments(comments);
+            }
+          })
+          .catch((error) => {
+            console.error('Failed to refresh inline comments after PR update:', error);
+          });
+      }
+    });
+
+    return cleanup;
+  }, [pr.number, projectId]);
 
   // Check for workflows awaiting approval (fork PRs) when PR changes or review completes
   useEffect(() => {
@@ -335,7 +395,7 @@ export function PRDetail({
 
     checkWorkflows();
     // Re-check when a review is completed (CI status might have changed)
-  }, [pr.number, reviewResult]);
+  }, [pr.number]);
 
   // Check merge readiness (real-time validation) when PR is selected
   // This runs on every PR selection to catch stale verdicts
@@ -372,7 +432,7 @@ export function PRDetail({
         mergeReadinessAbortRef.current.abort();
       }
     };
-  }, [pr.number, projectId, mergeReadinessRefreshKey]);
+  }, [pr.number, projectId]);
 
   // Handler to approve a workflow
   const handleApproveWorkflow = useCallback(async (runId: number) => {
@@ -816,6 +876,67 @@ ${t('prReview.blockedStatusMessageFooter')}`;
     }
   };
 
+  // Handle opening the reply dialog for a comment
+  const handleReplyToComment = useCallback((comment: InlineCommentType) => {
+    setSelectedComment(comment);
+    setReplyDialogOpen(true);
+  }, []);
+
+  // Handle posting a reply to a comment
+  const handlePostReply = useCallback(async (_commentId: number, body: string) => {
+    if (!selectedComment || !projectId) return;
+
+    try {
+      // Call IPC handler to post reply
+      // Note: This IPC handler will be implemented in subtask-3-2
+      await window.electronAPI.github.replyToComment?.(
+        projectId,
+        pr.number,
+        selectedComment.id,
+        body
+      );
+
+      // Refresh inline comments after successful reply
+      const comments = await window.electronAPI.github.getInlineComments?.(projectId, pr.number);
+      if (comments) {
+        setInlineComments(comments);
+      }
+
+      // Close the dialog
+      setReplyDialogOpen(false);
+      setSelectedComment(null);
+    } catch (error) {
+      console.error('Failed to post reply:', error);
+      throw error; // Re-throw to let the dialog handle the error
+    }
+  }, [selectedComment, projectId, pr.number]);
+
+  // Handle applying a suggested change from a comment
+  const handleApplySuggestion = useCallback(async (comment: InlineCommentType) => {
+    if (!projectId) return;
+
+    try {
+      // Call IPC handler to apply suggestion
+      // Note: This IPC handler will be implemented in subtask-3-3
+      const result = await window.electronAPI.github.applySuggestion?.(
+        projectId,
+        pr.number,
+        comment
+      );
+
+      if (result?.success) {
+        // Refresh inline comments after successful application
+        const comments = await window.electronAPI.github.getInlineComments?.(projectId, pr.number);
+        if (comments) {
+          setInlineComments(comments);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to apply suggestion:', error);
+      // Error will be handled by the IPC handler
+    }
+  }, [projectId, pr.number]);
+
   return (
     <ScrollArea className="flex-1">
       <div className="p-6 max-w-5xl mx-auto space-y-6">
@@ -837,6 +958,7 @@ ${t('prReview.blockedStatusMessageFooter')}`;
                   </p>
                   <ul className="text-sm text-warning/90 space-y-1">
                     {mergeReadiness.blockers.map((blocker, idx) => (
+                      /* biome-ignore lint/suspicious/noArrayIndexKey: Blocker strings without unique IDs */
                       <li key={idx} className="flex items-center gap-2">
                         <span className="h-1.5 w-1.5 rounded-full bg-warning/70" />
                         {blocker}
@@ -903,7 +1025,7 @@ ${t('prReview.blockedStatusMessageFooter')}`;
         />
 
         {/* Action Bar (Legacy Actions that fit under the tree context) */}
-        {reviewResult && reviewResult.success && !isReviewing && (
+        {reviewResult?.success && !isReviewing && (
           <div className="flex flex-wrap items-center gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
              {selectedCount > 0 && (
                 <Button onClick={handlePostReview} variant="secondary" disabled={isPostingFindings} className="flex-1 sm:flex-none">
@@ -1053,6 +1175,7 @@ ${t('prReview.blockedStatusMessageFooter')}`;
                    {t('prReview.failedPostCleanReview')}
                  </div>
                  <button
+                   type="button"
                    onClick={() => setShowCleanReviewErrorDetails(!showCleanReviewErrorDetails)}
                    aria-expanded={showCleanReviewErrorDetails}
                    aria-controls={cleanReviewErrorDetailsId}
@@ -1112,7 +1235,7 @@ ${t('prReview.blockedStatusMessageFooter')}`;
         )}
 
         {/* Review Result / Findings */}
-        {reviewResult && reviewResult.success && (
+        {reviewResult?.success && (
           <CollapsibleCard
             title={reviewResult.isFollowupReview ? t('prReview.followupReviewDetails') : t('prReview.aiAnalysisResults')}
             icon={reviewResult.isFollowupReview ? (
@@ -1316,6 +1439,44 @@ ${t('prReview.blockedStatusMessageFooter')}`;
             />
           </CollapsibleCard>
         )}
+
+        {/* Inline Comments */}
+        <CollapsibleCard
+          title={t('inlineComments.title', { defaultValue: 'Code Review Comments' })}
+          icon={<MessageSquare className="h-4 w-4 text-muted-foreground" />}
+          badge={
+            inlineComments.length > 0 ? (
+              <Badge variant="outline" className="text-xs">
+                {t('inlineComments.commentCount', { count: inlineComments.length })}
+              </Badge>
+            ) : null
+          }
+          open={commentsExpanded}
+          onOpenChange={setCommentsExpanded}
+        >
+          <div className="p-4">
+            {isLoadingComments ? (
+              <div className="flex items-center justify-center py-8 text-muted-foreground">
+                <Loader2 className="h-6 w-6 animate-spin mr-2" />
+                <span className="text-sm">{t('inlineComments.loading', { defaultValue: 'Loading comments...' })}</span>
+              </div>
+            ) : (
+              <InlineCommentList
+                comments={inlineComments}
+                onReply={handleReplyToComment}
+                onApplySuggestion={handleApplySuggestion}
+              />
+            )}
+          </div>
+        </CollapsibleCard>
+
+        {/* Comment Reply Dialog */}
+        <CommentReplyDialog
+          open={replyDialogOpen}
+          comment={selectedComment}
+          onOpenChange={setReplyDialogOpen}
+          onReply={handlePostReply}
+        />
 
         {/* Description */}
         <Card>

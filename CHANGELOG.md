@@ -1,3 +1,26 @@
+## [3.0.0] - 2026-01-27
+
+### Added
+- Support for multiple AI backends beyond Claude, including 75+ LLM providers
+- Integration with OpenCode framework for expanded model compatibility
+- Support for open-source models via Ollama
+- Support for cloud LLM services via OpenRouter and LiteLLM
+- Support for enterprise AI solutions via Azure and Google Cloud
+- Ability to switch between different AI providers based on user preference
+
+### Changed
+- Converted Auto-Claude from a Claude-only architecture to a flexible, pluggable multi-backend system
+- Users can now select their preferred AI provider when setting up the application
+
+### Fixed
+- Enhanced system compatibility with various LLM backends and providers
+
+## [2.7.5] - 2026-01-27
+
+### Added
+- Web-based interface that works in your browser - access Auto Claude from any device without needing to install desktop software
+- Browser version connects seamlessly to your local or remote agent backend for full functionality
+
 ## 2.7.5 - Security & Platform Improvements
 
 ### ✨ New Features

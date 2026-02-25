@@ -205,4 +205,81 @@ def create_qa_tools(spec_dir: Path, project_dir: Path) -> list:
 
     tools.append(update_qa_status)
 
+    # -------------------------------------------------------------------------
+    # Tool: get_qa_status
+    # -------------------------------------------------------------------------
+    @tool(
+        "get_qa_status",
+        "Get the current QA sign-off status from implementation_plan.json. Use this to check if QA has been run and what the results were.",
+        {},
+    )
+    async def get_qa_status(args: dict[str, Any]) -> dict[str, Any]:
+        """Get current QA status from the implementation plan."""
+        plan_file = spec_dir / "implementation_plan.json"
+
+        if not plan_file.exists():
+            return {
+                "content": [
+                    {
+                        "type": "text",
+                        "text": "No implementation plan found. Run the planner first.",
+                    }
+                ]
+            }
+
+        try:
+            with open(plan_file, encoding="utf-8") as f:
+                plan = json.load(f)
+
+            qa_signoff = plan.get("qa_signoff", {})
+
+            if not qa_signoff:
+                return {
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": "QA has not been run yet. Status: pending",
+                        }
+                    ]
+                }
+
+            status = qa_signoff.get("status", "pending")
+            qa_session = qa_signoff.get("qa_session", 0)
+            timestamp = qa_signoff.get("timestamp", "N/A")
+            ready_for_revalidation = qa_signoff.get("ready_for_qa_revalidation", False)
+            issues = qa_signoff.get("issues_found", [])
+            tests_passed = qa_signoff.get("tests_passed", {})
+
+            result = f"""QA Status: {status}
+QA Session: {qa_session}
+Timestamp: {timestamp}
+Ready for QA Revalidation: {ready_for_revalidation}"""
+
+            if issues:
+                result += f"\n\nIssues Found: {len(issues)}"
+                for i, issue in enumerate(issues, 1):
+                    issue_desc = (
+                        issue.get("description", str(issue))
+                        if isinstance(issue, dict)
+                        else str(issue)
+                    )
+                    result += f"\n  {i}. {issue_desc}"
+            else:
+                result += "\n\nIssues Found: None"
+
+            if tests_passed:
+                result += "\n\nTests Passed:"
+                for test_name, passed in tests_passed.items():
+                    status_str = "✓" if passed else "✗"
+                    result += f"\n  {status_str} {test_name}"
+
+            return {"content": [{"type": "text", "text": result}]}
+
+        except Exception as e:
+            return {
+                "content": [{"type": "text", "text": f"Error reading QA status: {e}"}]
+            }
+
+    tools.append(get_qa_status)
+
     return tools

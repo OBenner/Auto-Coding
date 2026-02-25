@@ -12,10 +12,17 @@
  */
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Loader2, ChevronDown, ChevronUp, RotateCcw, FolderTree, GitBranch, Info } from 'lucide-react';
+import { Loader2, ChevronDown, ChevronUp, RotateCcw, FolderTree, GitBranch, Info, Brain } from 'lucide-react';
 import { Button } from './ui/button';
 import { Label } from './ui/label';
 import { Combobox, type ComboboxOption } from './ui/combobox';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from './ui/select';
 import { TaskModalLayout } from './task-form/TaskModalLayout';
 import { TaskFormFields } from './task-form/TaskFormFields';
 import { type FileReferenceData } from './task-form/useImageUpload';
@@ -29,7 +36,8 @@ import type { PhaseModelConfig, PhaseThinkingConfig } from '../../shared/types/s
 import {
   DEFAULT_AGENT_PROFILES,
   DEFAULT_PHASE_MODELS,
-  DEFAULT_PHASE_THINKING
+  DEFAULT_PHASE_THINKING,
+  AVAILABLE_MODELS
 } from '../../shared/constants';
 import { useSettingsStore } from '../stores/settings-store';
 
@@ -51,7 +59,7 @@ export function TaskCreationWizard({
   const { settings } = useSettingsStore();
   const selectedProfile = DEFAULT_AGENT_PROFILES.find(
     p => p.id === settings.selectedAgentProfile
-  ) || DEFAULT_AGENT_PROFILES.find(p => p.id === 'auto')!;
+  ) ?? DEFAULT_AGENT_PROFILES.find(p => p.id === 'auto') ?? DEFAULT_AGENT_PROFILES[0];
 
   // Form state
   const [title, setTitle] = useState('');
@@ -117,6 +125,10 @@ export function TaskCreationWizard({
   // Review setting
   const [requireReviewBeforeCoding, setRequireReviewBeforeCoding] = useState(false);
 
+  // Agent Models configuration (for multi-model orchestration)
+  const [showAgentModels, setShowAgentModels] = useState(false);
+  const [agentModels, setAgentModels] = useState<Record<string, string>>({});
+
   // Draft state
   const [isDraftRestored, setIsDraftRestored] = useState(false);
 
@@ -155,10 +167,14 @@ export function TaskCreationWizard({
         setImages(draft.images);
         setReferencedFiles(draft.referencedFiles ?? []);
         setRequireReviewBeforeCoding(draft.requireReviewBeforeCoding ?? false);
+        setAgentModels(draft.agentModels || {});
         setIsDraftRestored(true);
 
         if (draft.category || draft.priority || draft.complexity || draft.impact) {
           setShowClassification(true);
+        }
+        if (draft.agentModels && Object.keys(draft.agentModels).length > 0) {
+          setShowAgentModels(true);
         }
       } else {
         // No draft - reset to clean state for new task creation
@@ -177,12 +193,14 @@ export function TaskCreationWizard({
         setImages([]);
         setReferencedFiles([]);
         setRequireReviewBeforeCoding(false);
+        setAgentModels({});
         setBaseBranch(PROJECT_DEFAULT_BRANCH);
         setUseWorktree(true);
         setIsDraftRestored(false);
         setShowClassification(false);
         setShowFileExplorer(false);
         setShowGitOptions(false);
+        setShowAgentModels(false);
       }
     }
   }, [open, projectId, settings.selectedAgentProfile, settings.customPhaseModels, settings.customPhaseThinking, selectedProfile.model, selectedProfile.thinkingLevel, selectedProfile.phaseModels, selectedProfile.phaseThinking]);
@@ -252,8 +270,9 @@ export function TaskCreationWizard({
     images,
     referencedFiles,
     requireReviewBeforeCoding,
+    agentModels,
     savedAt: new Date()
-  }), [projectId, title, description, category, priority, complexity, impact, profileId, model, thinkingLevel, phaseModels, phaseThinking, images, referencedFiles, requireReviewBeforeCoding]);
+  }), [projectId, title, description, category, priority, complexity, impact, profileId, model, thinkingLevel, phaseModels, phaseThinking, images, referencedFiles, requireReviewBeforeCoding, agentModels]);
 
   /**
    * Detect @ mention being typed and show autocomplete
@@ -422,6 +441,8 @@ export function TaskCreationWizard({
       if (images.length > 0) metadata.attachedImages = images;
       if (allReferencedFiles.length > 0) metadata.referencedFiles = allReferencedFiles;
       if (requireReviewBeforeCoding) metadata.requireReviewBeforeCoding = true;
+      // Include agent models if configured
+      if (Object.keys(agentModels).length > 0) metadata.agentModels = agentModels;
       // Always include baseBranch - resolve PROJECT_DEFAULT_BRANCH to actual branch name
       // This ensures the backend always knows which branch to use for worktree creation
       if (baseBranch === PROJECT_DEFAULT_BRANCH) {
@@ -463,12 +484,14 @@ export function TaskCreationWizard({
     setImages([]);
     setReferencedFiles([]);
     setRequireReviewBeforeCoding(false);
+    setAgentModels({});
     setBaseBranch(PROJECT_DEFAULT_BRANCH);
     setUseWorktree(true);
     setError(null);
     setShowClassification(false);
     setShowFileExplorer(false);
     setShowGitOptions(false);
+    setShowAgentModels(false);
     setIsDraftRestored(false);
   };
 
@@ -506,10 +529,11 @@ export function TaskCreationWizard({
       }}
     >
       {description.split(/(@[\w\-./\\]+\.\w+)/g).map((part, i) => {
+        const key = `${i}-${part.slice(0, 20)}`;
         if (part.match(/^@[\w\-./\\]+\.\w+$/)) {
           return (
             <span
-              key={i}
+              key={key}
               className="bg-info/20 text-info-foreground rounded px-0.5"
               style={{ color: 'hsl(var(--info))' }}
             >
@@ -517,7 +541,7 @@ export function TaskCreationWizard({
             </span>
           );
         }
-        return <span key={i}>{part}</span>;
+        return <span key={key}>{part}</span>;
       })}
     </div>
   );
@@ -715,6 +739,138 @@ export function TaskCreationWizard({
               <p className="text-xs text-muted-foreground">
                 {t('tasks:wizard.gitOptions.helpText')}
               </p>
+            </div>
+          </div>
+        )}
+
+        {/* Agent Models Toggle - for multi-model orchestration */}
+        <button
+          type="button"
+          onClick={() => setShowAgentModels(!showAgentModels)}
+          className={cn(
+            'flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors',
+            'w-full justify-between py-2 px-3 rounded-md hover:bg-muted/50'
+          )}
+          disabled={isCreating}
+          aria-expanded={showAgentModels}
+          aria-controls="agent-models-section"
+        >
+          <span className="flex items-center gap-2">
+            <Brain className="h-4 w-4" />
+            Agent Models
+            {Object.keys(agentModels).length > 0 && (
+              <span className="text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded">
+                {Object.keys(agentModels).length} configured
+              </span>
+            )}
+          </span>
+          {showAgentModels ? (
+            <ChevronUp className="h-4 w-4" />
+          ) : (
+            <ChevronDown className="h-4 w-4" />
+          )}
+        </button>
+
+        {/* Agent Models Configuration */}
+        {showAgentModels && (
+          <div id="agent-models-section" className="space-y-4 p-4 rounded-lg border border-border bg-muted/30">
+            <p className="text-xs text-muted-foreground mb-3">
+              Configure which model to use for specific agent types. Leave empty to use defaults.
+            </p>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Coder Agent */}
+              <div className="space-y-2">
+                <Label htmlFor="agent-model-coder" className="text-sm font-medium text-foreground">
+                  Coder Agent
+                </Label>
+                <Select
+                  value={agentModels.coder || ''}
+                  onValueChange={(value) => {
+                    if (value) {
+                      setAgentModels({ ...agentModels, coder: value });
+                    } else {
+                      const { coder, ...rest } = agentModels;
+                      setAgentModels(rest);
+                    }
+                  }}
+                  disabled={isCreating}
+                >
+                  <SelectTrigger id="agent-model-coder">
+                    <SelectValue placeholder="Use default" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">Use default</SelectItem>
+                    {AVAILABLE_MODELS.map((model) => (
+                      <SelectItem key={model.value} value={model.value}>
+                        {model.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Planner Agent */}
+              <div className="space-y-2">
+                <Label htmlFor="agent-model-planner" className="text-sm font-medium text-foreground">
+                  Planner Agent
+                </Label>
+                <Select
+                  value={agentModels.planner || ''}
+                  onValueChange={(value) => {
+                    if (value) {
+                      setAgentModels({ ...agentModels, planner: value });
+                    } else {
+                      const { planner, ...rest } = agentModels;
+                      setAgentModels(rest);
+                    }
+                  }}
+                  disabled={isCreating}
+                >
+                  <SelectTrigger id="agent-model-planner">
+                    <SelectValue placeholder="Use default" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">Use default</SelectItem>
+                    {AVAILABLE_MODELS.map((model) => (
+                      <SelectItem key={model.value} value={model.value}>
+                        {model.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* QA Reviewer Agent */}
+              <div className="space-y-2">
+                <Label htmlFor="agent-model-qa-reviewer" className="text-sm font-medium text-foreground">
+                  QA Reviewer Agent
+                </Label>
+                <Select
+                  value={agentModels.qa_reviewer || ''}
+                  onValueChange={(value) => {
+                    if (value) {
+                      setAgentModels({ ...agentModels, qa_reviewer: value });
+                    } else {
+                      const { qa_reviewer, ...rest } = agentModels;
+                      setAgentModels(rest);
+                    }
+                  }}
+                  disabled={isCreating}
+                >
+                  <SelectTrigger id="agent-model-qa-reviewer">
+                    <SelectValue placeholder="Use default" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">Use default</SelectItem>
+                    {AVAILABLE_MODELS.map((model) => (
+                      <SelectItem key={model.value} value={model.value}>
+                        {model.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </div>
         )}

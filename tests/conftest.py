@@ -113,6 +113,8 @@ def pytest_runtest_setup(item):
         'test_spec_pipeline': {'claude_code_sdk', 'claude_code_sdk.types', 'init', 'client', 'review', 'task_logger', 'ui', 'validate_spec'},
         'test_spec_complexity': {'claude_code_sdk', 'claude_code_sdk.types', 'claude_agent_sdk', 'claude_agent_sdk.types'},
         'test_spec_phases': {'claude_code_sdk', 'claude_code_sdk.types', 'claude_agent_sdk', 'graphiti_providers', 'validate_spec', 'client'},
+        'test_qa_tools': {'claude_agent_sdk'},
+        'test_statistics_tool': {'claude_agent_sdk'},
     }
 
     # Get the mocks that the current test module needs to preserve

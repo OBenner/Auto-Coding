@@ -1,0 +1,75 @@
+{
+  "title": "Plugins",
+  "description": "Manage Auto Claude plugins and extensions",
+  "empty": {
+    "title": "No Plugins Installed",
+    "description": "Install plugins to extend Auto Claude with custom agents, integrations, and UI components.",
+    "action": "Install Plugin"
+  },
+  "status": {
+    "loaded": "Loaded",
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "error": "Error"
+  },
+  "types": {
+    "agent": "Agent",
+    "integration": "Integration",
+    "ui": "UI Extension"
+  },
+  "permissions": {
+    "title": "Permissions",
+    "read_files": "Read Files",
+    "write_files": "Write Files",
+    "network_access": "Network Access",
+    "execute_commands": "Execute Commands",
+    "access_secrets": "Access Secrets",
+    "create_mcp_tools": "Create MCP Tools"
+  },
+  "actions": {
+    "enable": "Enable",
+    "disable": "Disable",
+    "uninstall": "Uninstall",
+    "install": "Install Plugin",
+    "viewDocs": "View Documentation"
+  },
+  "info": {
+    "version": "Version",
+    "author": "Author",
+    "license": "License",
+    "loadedAt": "Loaded at",
+    "enabledAt": "Enabled at"
+  },
+  "install": {
+    "title": "Install Plugin",
+    "description": "Install a plugin from a local directory, zip file, or marketplace.",
+    "sourceType": "Installation Source",
+    "fromDirectory": "From Directory",
+    "directoryDescription": "Install from a local plugin directory (for development)",
+    "fromZip": "From Zip File",
+    "zipDescription": "Install from a packaged plugin zip file",
+    "fromMarketplace": "From Marketplace",
+    "marketplaceDescription": "Install from the Auto Claude plugin marketplace",
+    "pluginDirectory": "Plugin Directory",
+    "pluginZipFile": "Plugin Zip File",
+    "noPathSelected": "No path selected",
+    "browse": "Browse",
+    "selectDirectory": "Please select a plugin directory",
+    "selectZip": "Please select a plugin zip file",
+    "enterMarketplaceId": "Please enter a marketplace plugin ID",
+    "zipNotYetSupported": "Zip file installation will be supported in a future update.",
+    "installing": "Installing...",
+    "install": "Install"
+  },
+  "toast": {
+    "enableSuccess": "Plugin enabled successfully",
+    "enableError": "Failed to enable plugin",
+    "disableSuccess": "Plugin disabled successfully",
+    "disableError": "Failed to disable plugin",
+    "uninstallSuccess": "Plugin uninstalled successfully",
+    "uninstallError": "Failed to uninstall plugin",
+    "installSuccess": "Plugin installed successfully",
+    "installError": "Failed to install plugin",
+    "loadError": "Failed to load plugins"
+  }
+}

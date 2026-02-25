@@ -1,5 +1,22 @@
 {
   "refreshTasks": "Actualiser les tâches",
+  "tokenStats": {
+    "title": "Utilisation des jetons",
+    "noStats": "Aucune statistique de jetons disponible",
+    "noStatsHint": "L'utilisation des jetons apparaîtra ici après le début de l'exécution de la tâche",
+    "totalTokens": "Total de jetons",
+    "inputTokens": "Entrée",
+    "outputTokens": "Sortie",
+    "phases": {
+      "planning": "Planification",
+      "coding": "Codage",
+      "validation": "Validation"
+    },
+    "sessionCount": "{{count}} session",
+    "sessionCount_plural": "{{count}} sessions",
+    "tokensUsed": "{{count}} jeton",
+    "tokensUsed_plural": "{{count}} jetons"
+  },
   "status": {
     "backlog": "Backlog",
     "todo": "À faire",
@@ -20,7 +37,9 @@
     "viewPR": "Voir la PR",
     "moveTo": "Déplacer vers",
     "taskActions": "Actions de la tâche",
-    "selectTask": "Sélectionner la tâche : {{title}}"
+    "selectTask": "Sélectionner la tâche : {{title}}",
+    "showMetadata": "Afficher les métadonnées",
+    "hideMetadata": "Masquer les métadonnées"
   },
   "labels": {
     "running": "En cours",
@@ -173,6 +192,37 @@
   "notifications": {
     "backgroundTaskTitle": "La tâche continue en arrière-plan",
     "backgroundTaskDescription": "La tâche est toujours en cours. Vous pouvez rouvrir cette boîte de dialogue pour suivre la progression."
+  },
+  "ariaLabels": {
+    "taskCard": "Carte de tâche : {{title}}",
+    "archiveTask": "Archiver la tâche : {{title}}",
+    "viewTaskPR": "Voir la pull request pour la tâche : {{title}}",
+    "recoverTask": "Récupérer la tâche : {{title}}",
+    "startTask": "Démarrer la tâche : {{title}}",
+    "stopTask": "Arrêter la tâche : {{title}}",
+    "resumeTask": "Reprendre la tâche : {{title}}",
+    "selectTask": "Sélectionner la tâche : {{title}}",
+    "deselectTask": "Désélectionner la tâche : {{title}}",
+    "archiveColumn": "Archiver toutes les tâches dans {{column}}",
+    "collapseColumn": "Réduire la colonne {{column}}",
+    "expandColumn": "Développer la colonne {{column}}",
+    "resizeColumn": "Redimensionner la colonne {{column}}",
+    "lockColumn": "Verrouiller la largeur de la colonne {{column}}",
+    "unlockColumn": "Déverrouiller la largeur de la colonne {{column}}",
+    "archiveAllDone": "Archiver toutes les tâches terminées",
+    "openTaskDetails": "Ouvrir les détails de la tâche",
+    "taskActions": "Actions de la tâche pour {{title}}",
+    "queueSettings": "Paramètres de la file d'attente",
+    "queueAllTasks": "Déplacer toutes les tâches vers la file d'attente",
+    "addTask": "Ajouter une nouvelle tâche",
+    "refreshTasks": "Actualiser les tâches",
+    "createPRs": "Créer des pull requests pour les tâches sélectionnées",
+    "clearSelection": "Effacer la sélection de tâches",
+    "selectAll": "Sélectionner toutes les tâches",
+    "deselectAll": "Désélectionner toutes les tâches",
+    "editTask": "Modifier la tâche : {{title}}",
+    "deleteTask": "Supprimer la tâche : {{title}}",
+    "moveTask": "Déplacer la tâche vers {{status}}"
   },
   "wizard": {
     "createTitle": "Créer une nouvelle tâche",

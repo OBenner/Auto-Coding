@@ -90,7 +90,7 @@ export async function deleteProfile(id: string): Promise<void> {
     throw new Error('Profile not found');
   }
 
-  const profile = file.profiles[profileIndex];
+  const _profile = file.profiles[profileIndex];
 
   // Active Profile Check: Cannot delete active profile (AC3)
   if (file.activeProfileId === id) {
@@ -275,9 +275,83 @@ export async function getAPIProfileEnv(): Promise<Record<string, string>> {
 }
 
 /**
+ * Provider type detection based on base URL
+ */
+type ProviderType = 'anthropic' | 'openai-compatible';
+
+/**
+ * Detect provider type from base URL
+ * OpenRouter, Groq, and other OpenAI-compatible APIs use Bearer auth
+ */
+function detectProviderType(baseUrl: string): ProviderType {
+  const url = baseUrl.toLowerCase();
+
+  // OpenAI-compatible providers (use Bearer token auth)
+  const openaiCompatiblePatterns = [
+    'openrouter.ai',
+    'groq.com',
+    'openai.com',
+    'api.together.xyz',
+    'api.fireworks.ai',
+    'api.mistral.ai',
+    'api.deepseek.com',
+  ];
+
+  for (const pattern of openaiCompatiblePatterns) {
+    if (url.includes(pattern)) {
+      return 'openai-compatible';
+    }
+  }
+
+  // Check for /v1 suffix which typically indicates OpenAI-compatible API
+  if (url.endsWith('/v1') || url.includes('/openai/')) {
+    return 'openai-compatible';
+  }
+
+  // Default to Anthropic format
+  return 'anthropic';
+}
+
+/**
+ * Get the models endpoint path for a provider
+ * Anthropic: /v1/models (append to base)
+ * OpenAI-compatible: /models (base URL already includes /v1)
+ */
+function getModelsEndpoint(baseUrl: string, providerType: ProviderType): string {
+  // Remove trailing slashes
+  const cleanUrl = baseUrl.replace(/\/+$/, '');
+
+  if (providerType === 'openai-compatible') {
+    // OpenAI-compatible: base URL typically includes /v1, so just append /models
+    return `${cleanUrl}/models`;
+  }
+
+  // Anthropic: append /v1/models
+  return `${cleanUrl}/v1/models`;
+}
+
+/**
+ * Get authentication headers for a provider
+ */
+function getAuthHeaders(apiKey: string, providerType: ProviderType): Record<string, string> {
+  if (providerType === 'openai-compatible') {
+    return {
+      'Authorization': `Bearer ${apiKey}`,
+    };
+  }
+
+  // Anthropic format
+  return {
+    'x-api-key': apiKey,
+    'anthropic-version': '2023-06-01',
+  };
+}
+
+/**
  * Test API profile connection
  *
- * Validates credentials by making a minimal API request to the /v1/models endpoint.
+ * Validates credentials by making a minimal API request to the models endpoint.
+ * Supports both Anthropic and OpenAI-compatible providers (OpenRouter, Groq, etc.).
  * Returns detailed error information for different failure types.
  *
  * @param baseUrl - API base URL (will be normalized)
@@ -410,14 +484,16 @@ export async function testConnection(
 
   const combinedSignal = combinedController.signal;
 
+  // Detect provider type and get appropriate endpoint/headers
+  const providerType = detectProviderType(normalizedUrl);
+  const modelsEndpoint = getModelsEndpoint(normalizedUrl, providerType);
+  const authHeaders = getAuthHeaders(apiKey, providerType);
+
   try {
     // Make minimal API request
-    const response = await fetch(`${normalizedUrl}/v1/models`, {
+    const response = await fetch(modelsEndpoint, {
       method: 'GET',
-      headers: {
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01'
-      },
+      headers: authHeaders,
       signal: combinedSignal
     });
 
@@ -489,7 +565,7 @@ export async function testConnection(
 
       // TypeError with ECONNREFUSED/ENOTFOUND → network error
       if (error instanceof TypeError) {
-        const errorCode = (error as any).code;
+        const errorCode = (error as { code?: string }).code;
         if (errorCode === 'ECONNREFUSED' || errorCode === 'ENOTFOUND') {
           return {
             success: false,

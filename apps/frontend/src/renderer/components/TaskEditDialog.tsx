@@ -63,7 +63,7 @@ export function TaskEditDialog({ task, open, onOpenChange, onSaved }: TaskEditDi
   const { settings } = useSettingsStore();
   const selectedProfile = DEFAULT_AGENT_PROFILES.find(
     p => p.id === settings.selectedAgentProfile
-  ) || DEFAULT_AGENT_PROFILES.find(p => p.id === 'auto')!;
+  ) ?? DEFAULT_AGENT_PROFILES.find(p => p.id === 'auto') ?? DEFAULT_AGENT_PROFILES[0];
 
   // Form state
   const [title, setTitle] = useState(task.title);

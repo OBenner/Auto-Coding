@@ -1,8 +1,7 @@
 import { ipcMain, app } from 'electron';
-import { existsSync, readFileSync } from 'fs';
+import { promises as fsPromises } from 'fs';
 import path from 'path';
 import { execFileSync } from 'child_process';
-import { is } from '@electron-toolkit/utils';
 import { IPC_CHANNELS } from '../../shared/constants';
 import type {
   Project,
@@ -28,6 +27,22 @@ import { insightsService } from '../insights-service';
 import { titleGenerator } from '../title-generator';
 import type { BrowserWindow } from 'electron';
 import { getEffectiveSourcePath } from '../updater/path-resolver';
+
+// ============================================
+// Helper Functions
+// ============================================
+
+/**
+ * Check if a file or directory exists (async)
+ */
+async function fileExists(filePath: string): Promise<boolean> {
+  try {
+    await fsPromises.access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 // ============================================
 // Git Helper Functions
@@ -142,7 +157,7 @@ function detectMainBranch(projectPath: string): string | null {
   return branches[0] || null;
 }
 
-const settingsPath = path.join(app.getPath('userData'), 'settings.json');
+const _settingsPath = path.join(app.getPath('userData'), 'settings.json');
 
 /**
  * Configure all Python-dependent services with the managed Python path
@@ -207,7 +222,7 @@ export function registerProjectHandlers(
     async (_, projectPath: string): Promise<IPCResult<Project>> => {
       try {
         // Validate path exists
-        if (!existsSync(projectPath)) {
+        if (!(await fileExists(projectPath))) {
           return { success: false, error: 'Directory does not exist' };
         }
 
@@ -416,7 +431,7 @@ export function registerProjectHandlers(
     IPC_CHANNELS.GIT_GET_BRANCHES,
     async (_, projectPath: string): Promise<IPCResult<string[]>> => {
       try {
-        if (!existsSync(projectPath)) {
+        if (!(await fileExists(projectPath))) {
           return { success: false, error: 'Directory does not exist' };
         }
         const branches = getGitBranches(projectPath);
@@ -435,7 +450,7 @@ export function registerProjectHandlers(
     IPC_CHANNELS.GIT_GET_CURRENT_BRANCH,
     async (_, projectPath: string): Promise<IPCResult<string | null>> => {
       try {
-        if (!existsSync(projectPath)) {
+        if (!(await fileExists(projectPath))) {
           return { success: false, error: 'Directory does not exist' };
         }
         const branch = getCurrentGitBranch(projectPath);
@@ -454,7 +469,7 @@ export function registerProjectHandlers(
     IPC_CHANNELS.GIT_DETECT_MAIN_BRANCH,
     async (_, projectPath: string): Promise<IPCResult<string | null>> => {
       try {
-        if (!existsSync(projectPath)) {
+        if (!(await fileExists(projectPath))) {
           return { success: false, error: 'Directory does not exist' };
         }
         const mainBranch = detectMainBranch(projectPath);
@@ -473,7 +488,7 @@ export function registerProjectHandlers(
     IPC_CHANNELS.GIT_CHECK_STATUS,
     async (_, projectPath: string): Promise<IPCResult<GitStatus>> => {
       try {
-        if (!existsSync(projectPath)) {
+        if (!(await fileExists(projectPath))) {
           return { success: false, error: 'Directory does not exist' };
         }
         const gitStatus = checkGitStatus(projectPath);
@@ -492,7 +507,7 @@ export function registerProjectHandlers(
     IPC_CHANNELS.GIT_INITIALIZE,
     async (_, projectPath: string): Promise<IPCResult<InitializationResult>> => {
       try {
-        if (!existsSync(projectPath)) {
+        if (!(await fileExists(projectPath))) {
           return { success: false, error: 'Directory does not exist' };
         }
         const result = initializeGit(projectPath);

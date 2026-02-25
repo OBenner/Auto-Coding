@@ -153,7 +153,7 @@ export function GraphitiStep({ onNext, onBack, onSkip }: GraphitiStepProps) {
       setIsCheckingInfra(true);
       try {
         const result = await window.electronAPI.getMemoryInfrastructureStatus();
-        setKuzuAvailable(result?.success && result?.data?.memory?.kuzuInstalled ? true : false);
+        setKuzuAvailable(!!(result?.success && result?.data?.memory?.kuzuInstalled ));
       } catch {
         setKuzuAvailable(false);
       } finally {
@@ -782,6 +782,7 @@ export function GraphitiStep({ onNext, onBack, onSkip }: GraphitiStepProps) {
             {success && (
               <div className="text-center text-sm text-muted-foreground">
                 <button
+                  type="button"
                   onClick={handleReconfigure}
                   className="text-primary hover:text-primary/80 underline-offset-4 hover:underline"
                 >
@@ -846,6 +847,7 @@ export function GraphitiStep({ onNext, onBack, onSkip }: GraphitiStepProps) {
                           <li>No Docker required - uses embedded database</li>
                         </ul>
                         <button
+                          type="button"
                           onClick={handleOpenDocs}
                           className="text-sm text-info hover:text-info/80 flex items-center gap-1"
                         >

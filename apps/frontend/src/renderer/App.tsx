@@ -45,6 +45,7 @@ import { GitLabMergeRequests } from './components/gitlab-merge-requests';
 import { Changelog } from './components/Changelog';
 import { Worktrees } from './components/Worktrees';
 import { AgentTools } from './components/AgentTools';
+import { MergeAnalyticsDashboard } from './components/merge-analytics/MergeAnalyticsDashboard';
 import { WelcomeScreen } from './components/WelcomeScreen';
 import { RateLimitModal } from './components/RateLimitModal';
 import { SDKRateLimitModal } from './components/SDKRateLimitModal';
@@ -242,7 +243,7 @@ export function App() {
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps -- projectTabs is intentionally omitted to avoid infinite re-render (computed array creates new reference each render)
-  }, [projects, activeProjectId, selectedProjectId, openProjectIds, openProjectTab, setActiveProject]);
+  }, [projects, activeProjectId, selectedProjectId, openProjectIds, openProjectTab, setActiveProject, projectTabs.length, projectTabs.map]);
 
   // Track if settings have been loaded at least once
   const [settingsHaveLoaded, setSettingsHaveLoaded] = useState(false);
@@ -350,7 +351,7 @@ export function App() {
   useEffect(() => {
     setInitSuccess(false);
     setInitError(null);
-  }, [selectedProjectId]);
+  }, []);
 
   // Check if selected project needs initialization (e.g., .auto-claude folder was deleted)
   useEffect(() => {
@@ -427,7 +428,7 @@ export function App() {
         console.error('[App] Failed to restore sessions:', err);
       });
     }
-  }, [activeProjectId, selectedProjectId, selectedProject?.path, selectedProject?.name]);
+  }, [activeProjectId, selectedProjectId, selectedProject?.path]);
 
   // Apply theme on load
   useEffect(() => {
@@ -569,7 +570,7 @@ export function App() {
       setSelectedTask(updatedTask);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps -- Intentionally omit selectedTask object to prevent infinite re-render loop
-  }, [tasks, selectedTask?.id, selectedTask?.specId]);
+  }, [tasks, selectedTask?.id, selectedTask?.specId, selectedTask]);
 
   const handleTaskClick = (task: Task) => {
     setSelectedTask(task);
@@ -874,16 +875,16 @@ export function App() {
                   />
                 </div>
                 {activeView === 'roadmap' && (activeProjectId || selectedProjectId) && (
-                  <Roadmap projectId={activeProjectId || selectedProjectId!} onGoToTask={handleGoToTask} />
+                  <Roadmap projectId={(activeProjectId || selectedProjectId) as string} onGoToTask={handleGoToTask} />
                 )}
                 {activeView === 'context' && (activeProjectId || selectedProjectId) && (
-                  <Context projectId={activeProjectId || selectedProjectId!} />
+                  <Context projectId={(activeProjectId || selectedProjectId) as string} />
                 )}
                 {activeView === 'ideation' && (activeProjectId || selectedProjectId) && (
-                  <Ideation projectId={activeProjectId || selectedProjectId!} onGoToTask={handleGoToTask} />
+                  <Ideation projectId={(activeProjectId || selectedProjectId) as string} onGoToTask={handleGoToTask} />
                 )}
                 {activeView === 'insights' && (activeProjectId || selectedProjectId) && (
-                  <Insights projectId={activeProjectId || selectedProjectId!} />
+                  <Insights projectId={(activeProjectId || selectedProjectId) as string} />
                 )}
                 {activeView === 'github-issues' && (activeProjectId || selectedProjectId) && (
                   <GitHubIssues
@@ -917,7 +918,7 @@ export function App() {
                 )}
                 {activeView === 'gitlab-merge-requests' && (activeProjectId || selectedProjectId) && (
                   <GitLabMergeRequests
-                    projectId={activeProjectId || selectedProjectId!}
+                    projectId={(activeProjectId || selectedProjectId) as string}
                     onOpenSettings={() => {
                       setSettingsInitialProjectSection('gitlab');
                       setIsSettingsDialogOpen(true);
@@ -928,7 +929,10 @@ export function App() {
                   <Changelog />
                 )}
                 {activeView === 'worktrees' && (activeProjectId || selectedProjectId) && (
-                  <Worktrees projectId={activeProjectId || selectedProjectId!} />
+                  <Worktrees projectId={(activeProjectId || selectedProjectId) as string} />
+                )}
+                {activeView === 'merge-analytics' && (activeProjectId || selectedProjectId) && (
+                  <MergeAnalyticsDashboard projectId={(activeProjectId || selectedProjectId) as string} />
                 )}
                 {activeView === 'agent-tools' && <AgentTools />}
               </>
@@ -957,7 +961,7 @@ export function App() {
         {/* Dialogs */}
         {(activeProjectId || selectedProjectId) && (
           <TaskCreationWizard
-            projectId={activeProjectId || selectedProjectId!}
+            projectId={(activeProjectId || selectedProjectId) as string}
             open={isNewTaskDialogOpen}
             onOpenChange={setIsNewTaskDialogOpen}
           />

@@ -46,15 +46,17 @@ import os
 import sys
 from pathlib import Path
 
+# Add backend to path first so we can import platform abstraction
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+
+from core.platform import is_windows
+
 # Fix Windows console encoding for Unicode output (emojis, special chars)
-if sys.platform == "win32":
+if is_windows():
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     if hasattr(sys.stderr, "reconfigure"):
         sys.stderr.reconfigure(encoding="utf-8", errors="replace")
-
-# Add backend to path
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 # Validate platform-specific dependencies BEFORE any imports that might
 # trigger graphiti_core -> real_ladybug -> pywintypes import chain (ACS-253)

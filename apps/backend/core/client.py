@@ -442,6 +442,85 @@ def load_claude_md(project_dir: Path) -> str | None:
     return None
 
 
+def load_plugin_mcp_servers(project_dir: Path, spec_dir: Path) -> dict[str, Any]:
+    """
+    Load MCP servers from enabled integration plugins.
+
+    Queries the PluginRegistry for enabled integration plugins and creates
+    MCP servers from their tools. This allows third-party plugins to extend
+    Auto Claude with custom integrations.
+
+    Args:
+        project_dir: Root directory of the project
+        spec_dir: Directory containing the current spec
+
+    Returns:
+        Dictionary mapping plugin IDs to MCP server instances
+        Example: {"my-plugin": <MCP server instance>}
+    """
+    try:
+        from plugins.base import PluginType
+        from plugins.registry import PluginRegistry
+        from plugins.sdk.integration import IntegrationContext, IntegrationPlugin
+    except ImportError:
+        logger.debug("Plugin system not available")
+        return {}
+
+    plugin_servers = {}
+
+    try:
+        # Get singleton registry instance
+        registry = PluginRegistry.get_instance()
+
+        # Get all enabled integration plugins
+        integration_plugins = registry.list_plugins(
+            plugin_type=PluginType.INTEGRATION,
+            enabled_only=True,
+        )
+
+        logger.debug(f"Found {len(integration_plugins)} enabled integration plugin(s)")
+
+        # Create MCP server for each enabled plugin
+        for plugin in integration_plugins:
+            if not isinstance(plugin, IntegrationPlugin):
+                logger.warning(
+                    f"Plugin {plugin.name} is not an IntegrationPlugin, skipping"
+                )
+                continue
+
+            # Check if plugin is available (has valid config, connectivity, etc.)
+            if not plugin.is_available():
+                logger.debug(
+                    f"Integration plugin {plugin.name} is not available, skipping"
+                )
+                continue
+
+            # Create integration context
+            context = IntegrationContext(
+                project_dir=project_dir,
+                spec_dir=spec_dir,
+            )
+
+            # Create MCP server from plugin
+            try:
+                mcp_server = plugin.create_mcp_server(context)
+                if mcp_server:
+                    plugin_servers[plugin.name] = mcp_server
+                    logger.info(f"Loaded MCP server from plugin: {plugin.name}")
+                else:
+                    logger.debug(f"Plugin {plugin.name} returned no MCP server")
+            except Exception as e:
+                logger.error(
+                    f"Failed to create MCP server for plugin {plugin.name}: {e}"
+                )
+                continue
+
+    except Exception as e:
+        logger.error(f"Error loading plugin MCP servers: {e}")
+
+    return plugin_servers
+
+
 def create_client(
     project_dir: Path,
     spec_dir: Path,

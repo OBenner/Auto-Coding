@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { AlertCircle, ExternalLink, Clock, RefreshCw, User, ChevronDown, Check, Star, Zap, FileText, ListTodo, Map, Lightbulb, Plus } from 'lucide-react';
+import { AlertCircle, ExternalLink, Clock, RefreshCw, User, ChevronDown, Check, Star, Zap, FileText, ListTodo, Map as MapIcon, Lightbulb, Plus } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -49,7 +49,7 @@ function getSourceIcon(source: SDKRateLimitInfo['source']) {
   switch (source) {
     case 'changelog': return FileText;
     case 'task': return ListTodo;
-    case 'roadmap': return Map;
+    case 'roadmap': return MapIcon;
     case 'ideation': return Lightbulb;
     default: return AlertCircle;
   }
@@ -73,7 +73,19 @@ export function SDKRateLimitModal() {
     swappedTo?: string;
   } | null>(null);
 
+  const loadAutoSwitchSettings = async () => {
+    try {
+      const result = await window.electronAPI.getAutoSwitchSettings();
+      if (result.success && result.data) {
+        setAutoSwitchEnabled(result.data.autoSwitchOnRateLimit);
+      }
+    } catch (err) {
+      debugError('[SDKRateLimitModal] Failed to load auto-switch settings:', err);
+    }
+  };
+
   // Load profiles and auto-switch settings when modal opens
+  // biome-ignore lint/correctness/useExhaustiveDependencies: loadAutoSwitchSettings is stable and doesn't need to trigger re-render
   useEffect(() => {
     if (isSDKModalOpen) {
       loadClaudeProfiles();
@@ -105,17 +117,6 @@ export function SDKRateLimitModal() {
       setNewProfileName('');
     }
   }, [isSDKModalOpen]);
-
-  const loadAutoSwitchSettings = async () => {
-    try {
-      const result = await window.electronAPI.getAutoSwitchSettings();
-      if (result.success && result.data) {
-        setAutoSwitchEnabled(result.data.autoSwitchOnRateLimit);
-      }
-    } catch (err) {
-      debugError('[SDKRateLimitModal] Failed to load auto-switch settings:', err);
-    }
-  };
 
   const handleAutoSwitchToggle = async (enabled: boolean) => {
     setIsLoadingSettings(true);

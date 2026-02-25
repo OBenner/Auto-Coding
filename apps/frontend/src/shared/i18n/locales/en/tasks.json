@@ -21,7 +21,9 @@
     "viewPR": "View PR",
     "moveTo": "Move to",
     "taskActions": "Task actions",
-    "selectTask": "Select task: {{title}}"
+    "selectTask": "Select task: {{title}}",
+    "showMetadata": "Show metadata",
+    "hideMetadata": "Hide metadata"
   },
   "labels": {
     "running": "Running",
@@ -175,6 +177,37 @@
     "backgroundTaskTitle": "Task continues in background",
     "backgroundTaskDescription": "The task is still running. You can reopen this dialog to monitor progress."
   },
+  "ariaLabels": {
+    "taskCard": "Task card: {{title}}",
+    "archiveTask": "Archive task: {{title}}",
+    "viewTaskPR": "View pull request for task: {{title}}",
+    "recoverTask": "Recover task: {{title}}",
+    "startTask": "Start task: {{title}}",
+    "stopTask": "Stop task: {{title}}",
+    "resumeTask": "Resume task: {{title}}",
+    "selectTask": "Select task: {{title}}",
+    "deselectTask": "Deselect task: {{title}}",
+    "archiveColumn": "Archive all tasks in {{column}}",
+    "collapseColumn": "Collapse {{column}} column",
+    "expandColumn": "Expand {{column}} column",
+    "resizeColumn": "Resize {{column}} column",
+    "lockColumn": "Lock {{column}} column width",
+    "unlockColumn": "Unlock {{column}} column width",
+    "archiveAllDone": "Archive all completed tasks",
+    "openTaskDetails": "Open task details",
+    "taskActions": "Task actions for {{title}}",
+    "queueSettings": "Queue settings",
+    "queueAllTasks": "Move all tasks to queue",
+    "addTask": "Add new task",
+    "refreshTasks": "Refresh tasks",
+    "createPRs": "Create pull requests for selected tasks",
+    "clearSelection": "Clear task selection",
+    "selectAll": "Select all tasks",
+    "deselectAll": "Deselect all tasks",
+    "editTask": "Edit task: {{title}}",
+    "deleteTask": "Delete task: {{title}}",
+    "moveTask": "Move task to {{status}}"
+  },
   "wizard": {
     "createTitle": "Create New Task",
     "createDescription": "Describe what you want to build. The AI will analyze your request and create a detailed specification.",
@@ -282,6 +315,23 @@
   },
   "subtasks": {
     "untitled": "Untitled subtask"
+  },
+  "tokenStats": {
+    "title": "Token Usage",
+    "noStats": "No token statistics available",
+    "noStatsHint": "Token usage will appear here after task execution begins",
+    "totalTokens": "Total Tokens",
+    "inputTokens": "Input",
+    "outputTokens": "Output",
+    "phases": {
+      "planning": "Planning",
+      "coding": "Coding",
+      "validation": "Validation"
+    },
+    "sessionCount": "{{count}} session",
+    "sessionCount_plural": "{{count}} sessions",
+    "tokensUsed": "{{count}} token",
+    "tokensUsed_plural": "{{count}} tokens"
   },
   "bulkPR": {
     "selectAllInColumn": "Select all tasks in column",

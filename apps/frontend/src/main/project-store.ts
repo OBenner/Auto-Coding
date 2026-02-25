@@ -1,12 +1,12 @@
 import { app } from 'electron';
-import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, Dirent } from 'fs';
+import { existsSync, Dirent, promises as fsPromises } from 'fs';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import type { Project, ProjectSettings, Task, TaskStatus, TaskMetadata, ImplementationPlan, ReviewReason, PlanSubtask } from '../shared/types';
 import { DEFAULT_PROJECT_SETTINGS, AUTO_BUILD_PATHS, getSpecsDir, JSON_ERROR_PREFIX, JSON_ERROR_TITLE_SUFFIX } from '../shared/constants';
 import { getAutoBuildPath, isInitialized } from './project-initializer';
 import { getTaskWorktreeDir } from './worktree-paths';
-import { isValidTaskId, findAllSpecPaths } from './utils/spec-path-helpers';
+import { findAllSpecPaths } from './utils/spec-path-helpers';
 
 interface TabState {
   openProjectIds: string[];
@@ -33,28 +33,55 @@ export class ProjectStore {
   private data: StoreData;
   private tasksCache: Map<string, TasksCacheEntry> = new Map();
   private readonly CACHE_TTL_MS = 3000; // 3 seconds TTL for task cache
+  /**
+   * Write serialization state - prevents concurrent async writes from
+   * interleaving and potentially losing data.
+   */
+  private writeInProgress = false;
+  private writePending = false;
+  /**
+   * Failure tracking for async writes - helps detect persistent write issues
+   * that might otherwise go unnoticed in fire-and-forget scenarios.
+   */
+  private consecutiveFailures = 0;
+  private static readonly MAX_FAILURES_BEFORE_WARNING = 3;
 
   constructor() {
     // Store in app's userData directory
     const userDataPath = app.getPath('userData');
     const storeDir = path.join(userDataPath, 'store');
-
-    // Ensure directory exists
-    if (!existsSync(storeDir)) {
-      mkdirSync(storeDir, { recursive: true });
-    }
-
     this.storePath = path.join(storeDir, 'projects.json');
-    this.data = this.load();
+
+    // Initialize with empty data - actual loading happens async
+    this.data = { projects: [], settings: {} };
+
+    // Start async initialization in background
+    this.initializeAsync().catch(error => {
+      console.error('[ProjectStore] Failed to initialize store:', error);
+    });
   }
 
   /**
-   * Load store from disk
+   * Async initialization - ensures directory exists and loads data
    */
-  private load(): StoreData {
+  private async initializeAsync(): Promise<void> {
+    const storeDir = path.dirname(this.storePath);
+
+    // Ensure directory exists
+    await fsPromises.mkdir(storeDir, { recursive: true });
+
+    // Load existing data
+    this.data = await this.loadAsync();
+  }
+
+
+  /**
+   * Load store from disk (async version)
+   */
+  private async loadAsync(): Promise<StoreData> {
     if (existsSync(this.storePath)) {
       try {
-        const content = readFileSync(this.storePath, 'utf-8');
+        const content = await fsPromises.readFile(this.storePath, 'utf-8');
         const data = JSON.parse(content);
         // Convert date strings back to Date objects
         data.projects = data.projects.map((p: Project) => ({
@@ -70,11 +97,61 @@ export class ProjectStore {
     return { projects: [], settings: {} };
   }
 
+
   /**
-   * Save store to disk
+   * Helper to check if a file exists asynchronously
    */
-  private save(): void {
-    writeFileSync(this.storePath, JSON.stringify(this.data, null, 2));
+  private async fileExists(filePath: string): Promise<boolean> {
+    try {
+      await fsPromises.access(filePath);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Save store to disk asynchronously (non-blocking)
+   *
+   * Safe to call from Electron main process without blocking the event loop.
+   * Uses write serialization to prevent concurrent writes from losing data.
+   * Tracks consecutive failures and logs warnings for persistent issues.
+   */
+  private async saveAsync(): Promise<void> {
+    // If a write is in progress, mark that another write is needed
+    if (this.writeInProgress) {
+      this.writePending = true;
+      return;
+    }
+
+    this.writeInProgress = true;
+    try {
+      const content = JSON.stringify(this.data, null, 2);
+      await fsPromises.writeFile(this.storePath, content);
+
+      // Reset failure counter on success
+      this.consecutiveFailures = 0;
+    } catch (error) {
+      this.consecutiveFailures++;
+      console.error('[ProjectStore] Error saving store:', error);
+
+      // Warn about persistent failures that might indicate a real problem
+      if (this.consecutiveFailures >= ProjectStore.MAX_FAILURES_BEFORE_WARNING) {
+        console.error(
+          `[ProjectStore] WARNING: ${this.consecutiveFailures} consecutive save failures. ` +
+          'Store data may not be persisting. Check disk space and permissions.'
+        );
+      }
+    } finally {
+      this.writeInProgress = false;
+
+      // If another write was requested while we were writing, do it now
+      if (this.writePending) {
+        this.writePending = false;
+        // Use setImmediate to avoid stack overflow with many rapid calls
+        setImmediate(() => this.saveAsync());
+      }
+    }
   }
 
   /**
@@ -90,7 +167,7 @@ export class ProjectStore {
         console.warn(`[ProjectStore] .auto-claude folder was deleted for project "${existing.name}" - resetting autoBuildPath`);
         existing.autoBuildPath = '';
         existing.updatedAt = new Date();
-        this.save();
+        this.saveAsync();
       }
       return existing;
     }
@@ -112,7 +189,7 @@ export class ProjectStore {
     };
 
     this.data.projects.push(project);
-    this.save();
+    this.saveAsync();
 
     return project;
   }
@@ -125,7 +202,7 @@ export class ProjectStore {
     if (project) {
       project.autoBuildPath = autoBuildPath;
       project.updatedAt = new Date();
-      this.save();
+      this.saveAsync();
     }
     return project;
   }
@@ -137,7 +214,7 @@ export class ProjectStore {
     const index = this.data.projects.findIndex((p) => p.id === projectId);
     if (index !== -1) {
       this.data.projects.splice(index, 1);
-      this.save();
+      this.saveAsync();
       return true;
     }
     return false;
@@ -174,7 +251,7 @@ export class ProjectStore {
         : null,
       tabOrder: tabState.tabOrder.filter(id => validProjectIds.includes(id))
     };
-    this.save();
+    this.saveAsync();
   }
 
   /**
@@ -211,7 +288,7 @@ export class ProjectStore {
     }
 
     if (hasChanges) {
-      this.save();
+      this.saveAsync();
       console.warn(`[ProjectStore] Reset ${resetProjectIds.length} project(s) due to missing .auto-claude folder`);
     }
 
@@ -236,7 +313,7 @@ export class ProjectStore {
     if (project) {
       project.settings = { ...project.settings, ...settings };
       project.updatedAt = new Date();
-      this.save();
+      this.saveAsync();
     }
     return project;
   }
@@ -245,7 +322,7 @@ export class ProjectStore {
    * Get tasks for a project by scanning specs directory
    * Implements caching with 3-second TTL to prevent excessive worktree scanning
    */
-  getTasks(projectId: string): Task[] {
+  async getTasks(projectId: string): Promise<Task[]> {
     // Check cache first
     const cached = this.tasksCache.get(projectId);
     const now = Date.now();
@@ -266,7 +343,7 @@ export class ProjectStore {
     const mainSpecsDir = path.join(project.path, specsBaseDir);
     const mainSpecIds = new Set<string>();
     if (existsSync(mainSpecsDir)) {
-      const mainTasks = this.loadTasksFromSpecsDir(mainSpecsDir, project.path, 'main', projectId, specsBaseDir);
+      const mainTasks = await this.loadTasksFromSpecsDir(mainSpecsDir, project.path, 'main', projectId, specsBaseDir);
       allTasks.push(...mainTasks);
       // Track which specs exist in main project
       mainTasks.forEach(t => mainSpecIds.add(t.specId));
@@ -278,13 +355,13 @@ export class ProjectStore {
     const worktreesDir = getTaskWorktreeDir(project.path);
     if (existsSync(worktreesDir)) {
       try {
-        const worktrees = readdirSync(worktreesDir, { withFileTypes: true });
+        const worktrees = await fsPromises.readdir(worktreesDir, { withFileTypes: true });
         for (const worktree of worktrees) {
           if (!worktree.isDirectory()) continue;
 
           const worktreeSpecsDir = path.join(worktreesDir, worktree.name, specsBaseDir);
           if (existsSync(worktreeSpecsDir)) {
-            const worktreeTasks = this.loadTasksFromSpecsDir(
+            const worktreeTasks = await this.loadTasksFromSpecsDir(
               worktreeSpecsDir,
               path.join(worktreesDir, worktree.name),
               'worktree',
@@ -337,18 +414,18 @@ export class ProjectStore {
   /**
    * Load tasks from a specs directory (helper method for main project and worktrees)
    */
-  private loadTasksFromSpecsDir(
+  private async loadTasksFromSpecsDir(
     specsDir: string,
-    basePath: string,
+    _basePath: string,
     location: 'main' | 'worktree',
     projectId: string,
-    specsBaseDir: string
-  ): Task[] {
+    _specsBaseDir: string
+  ): Promise<Task[]> {
     const tasks: Task[] = [];
     let specDirs: Dirent[] = [];
 
     try {
-      specDirs = readdirSync(specsDir, { withFileTypes: true });
+      specDirs = await fsPromises.readdir(specsDir, { withFileTypes: true });
     } catch (error) {
       console.error('[ProjectStore] Error reading specs directory:', error);
       return [];
@@ -367,9 +444,9 @@ export class ProjectStore {
         let plan: ImplementationPlan | null = null;
         let hasJsonError = false;
         let jsonErrorMessage = '';
-        if (existsSync(planPath)) {
+        if (await this.fileExists(planPath)) {
           try {
-            const content = readFileSync(planPath, 'utf-8');
+            const content = await fsPromises.readFile(planPath, 'utf-8');
             plan = JSON.parse(content);
           } catch (err) {
             // Don't skip - create task with error indicator so user knows it exists
@@ -388,9 +465,9 @@ export class ProjectStore {
         // PRIORITY 2: Fallback to requirements.json
         if (!description) {
           const requirementsPath = path.join(specPath, AUTO_BUILD_PATHS.REQUIREMENTS);
-          if (existsSync(requirementsPath)) {
+          if (await this.fileExists(requirementsPath)) {
             try {
-              const reqContent = readFileSync(requirementsPath, 'utf-8');
+              const reqContent = await fsPromises.readFile(requirementsPath, 'utf-8');
               const requirements = JSON.parse(reqContent);
               if (requirements.task_description) {
                 // Use the full task description for the modal view
@@ -403,9 +480,9 @@ export class ProjectStore {
         }
 
         // PRIORITY 3: Final fallback to spec.md Overview (AI-synthesized content)
-        if (!description && existsSync(specFilePath)) {
+        if (!description && await this.fileExists(specFilePath)) {
           try {
-            const content = readFileSync(specFilePath, 'utf-8');
+            const content = await fsPromises.readFile(specFilePath, 'utf-8');
             // Extract full Overview section until next heading or end of file
             // Use \n#{1,6}\s to match valid markdown headings (# to ######) with required space
             // This avoids truncating at # in code blocks (e.g., Python comments)
@@ -421,9 +498,9 @@ export class ProjectStore {
         // Try to read task metadata
         const metadataPath = path.join(specPath, 'task_metadata.json');
         let metadata: TaskMetadata | undefined;
-        if (existsSync(metadataPath)) {
+        if (await this.fileExists(metadataPath)) {
           try {
-            const content = readFileSync(metadataPath, 'utf-8');
+            const content = await fsPromises.readFile(metadataPath, 'utf-8');
             metadata = JSON.parse(content);
           } catch {
             // Ignore parse errors
@@ -438,7 +515,7 @@ export class ProjectStore {
         // Tasks with JSON errors go to human_review with errors reason
         const { status: finalStatus, reviewReason: finalReviewReason } = hasJsonError
           ? { status: 'human_review' as TaskStatus, reviewReason: 'errors' as ReviewReason }
-          : this.determineTaskStatusAndReason(plan, specPath, metadata);
+          : await this.determineTaskStatusAndReason(plan, specPath, metadata);
 
         // Extract subtasks from plan (handle both 'subtasks' and 'chunks' naming)
         const subtasks = plan?.phases?.flatMap((phase) => {
@@ -461,15 +538,15 @@ export class ProjectStore {
         // For JSON error tasks, use directory name with marker for i18n suffix
         let title = hasJsonError ? `${dir.name}${JSON_ERROR_TITLE_SUFFIX}` : (plan?.feature || plan?.title || dir.name);
         const looksLikeSpecId = /^\d{3}-/.test(title) && !hasJsonError;
-        if (looksLikeSpecId && existsSync(specFilePath)) {
+        if (looksLikeSpecId && await this.fileExists(specFilePath)) {
           try {
-            const specContent = readFileSync(specFilePath, 'utf-8');
+            const specContent = await fsPromises.readFile(specFilePath, 'utf-8');
             // Extract title from first # line, handling patterns like:
             // "# Quick Spec: Title" -> "Title"
             // "# Specification: Title" -> "Title"
             // "# Title" -> "Title"
             const titleMatch = specContent.match(/^#\s+(?:Quick Spec:|Specification:)?\s*(.+)$/m);
-            if (titleMatch && titleMatch[1]) {
+            if (titleMatch?.[1]) {
               title = titleMatch[1].trim();
             }
           } catch {
@@ -520,11 +597,11 @@ export class ProjectStore {
    * - 'qa_rejected': QA found issues that need fixing
    * - 'plan_review': Spec creation complete, awaiting user approval
    */
-  private determineTaskStatusAndReason(
+  private async determineTaskStatusAndReason(
     plan: ImplementationPlan | null,
     specPath: string,
     metadata?: TaskMetadata
-  ): { status: TaskStatus; reviewReason?: ReviewReason } {
+  ): Promise<{ status: TaskStatus; reviewReason?: ReviewReason }> {
     // Handle both 'subtasks' and 'chunks' naming conventions, filter out undefined
     const allSubtasks = plan?.phases?.flatMap((p) => p.subtasks || (p as { chunks?: PlanSubtask[] }).chunks || []).filter(Boolean) || [];
 
@@ -603,9 +680,9 @@ export class ProjectStore {
     // STEP 3: Check QA report file for status info
     // ========================================================================
     const qaReportPath = path.join(specPath, AUTO_BUILD_PATHS.QA_REPORT);
-    if (existsSync(qaReportPath)) {
+    if (await this.fileExists(qaReportPath)) {
       try {
-        const content = readFileSync(qaReportPath, 'utf-8');
+        const content = await fsPromises.readFile(qaReportPath, 'utf-8');
         if (content.includes('REJECTED') || content.includes('FAILED')) {
           return { status: 'human_review', reviewReason: 'qa_rejected' };
         }
@@ -663,7 +740,7 @@ export class ProjectStore {
    * @param taskIds - IDs of tasks to archive
    * @param version - Version they were archived in (optional)
    */
-  archiveTasks(projectId: string, taskIds: string[], version?: string): boolean {
+  async archiveTasks(projectId: string, taskIds: string[], version?: string): Promise<boolean> {
     const project = this.getProject(projectId);
     if (!project) {
       console.error('[ProjectStore] archiveTasks: Project not found:', projectId);
@@ -691,7 +768,8 @@ export class ProjectStore {
 
           // Read existing metadata, handling missing file without TOCTOU race
           try {
-            metadata = JSON.parse(readFileSync(metadataPath, 'utf-8'));
+            const content = await fsPromises.readFile(metadataPath, 'utf-8');
+            metadata = JSON.parse(content);
           } catch (readErr: unknown) {
             // File doesn't exist yet - start with empty metadata
             if ((readErr as NodeJS.ErrnoException).code !== 'ENOENT') {
@@ -705,7 +783,7 @@ export class ProjectStore {
             metadata.archivedInVersion = version;
           }
 
-          writeFileSync(metadataPath, JSON.stringify(metadata, null, 2));
+          await fsPromises.writeFile(metadataPath, JSON.stringify(metadata, null, 2));
         } catch (error) {
           console.error(`[ProjectStore] archiveTasks: Failed to archive task ${taskId} at ${specPath}:`, error);
           hasErrors = true;
@@ -725,7 +803,7 @@ export class ProjectStore {
    * @param projectId - Project ID
    * @param taskIds - IDs of tasks to unarchive
    */
-  unarchiveTasks(projectId: string, taskIds: string[]): boolean {
+  async unarchiveTasks(projectId: string, taskIds: string[]): Promise<boolean> {
     const project = this.getProject(projectId);
     if (!project) {
       console.error('[ProjectStore] unarchiveTasks: Project not found:', projectId);
@@ -752,7 +830,8 @@ export class ProjectStore {
 
           // Read metadata, handling missing file without TOCTOU race
           try {
-            metadata = JSON.parse(readFileSync(metadataPath, 'utf-8'));
+            const content = await fsPromises.readFile(metadataPath, 'utf-8');
+            metadata = JSON.parse(content);
           } catch (readErr: unknown) {
             if ((readErr as NodeJS.ErrnoException).code === 'ENOENT') {
               console.warn(`[ProjectStore] unarchiveTasks: Metadata file not found for task ${taskId} at ${specPath}`);
@@ -763,7 +842,7 @@ export class ProjectStore {
 
           delete metadata.archivedAt;
           delete metadata.archivedInVersion;
-          writeFileSync(metadataPath, JSON.stringify(metadata, null, 2));
+          await fsPromises.writeFile(metadataPath, JSON.stringify(metadata, null, 2));
         } catch (error) {
           console.error(`[ProjectStore] unarchiveTasks: Failed to unarchive task ${taskId} at ${specPath}:`, error);
           hasErrors = true;

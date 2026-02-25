@@ -116,6 +116,29 @@ export interface TaskLogStreamChunk {
   subtask_id?: string;
 }
 
+// Token usage statistics - for tracking token consumption per phase
+export interface PhaseTokenStats {
+  phase: 'planning' | 'coding' | 'validation';
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  sessionCount: number;
+  updatedAt: string;  // ISO timestamp
+}
+
+export interface TaskTokenStats {
+  phases: {
+    planning?: PhaseTokenStats;
+    coding?: PhaseTokenStats;
+    validation?: PhaseTokenStats;
+  };
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  totalTokens: number;
+  createdAt: string;  // ISO timestamp
+  updatedAt: string;  // ISO timestamp
+}
+
 // Image attachment types for task creation
 export interface ImageAttachment {
   id: string;           // Unique identifier (UUID)
@@ -154,6 +177,7 @@ export interface TaskDraft {
   images: ImageAttachment[];
   referencedFiles: ReferencedFile[];
   requireReviewBeforeCoding?: boolean;
+  agentModels?: Record<string, string>;  // Agent-specific model overrides
   savedAt: Date;
 }
 
@@ -238,6 +262,9 @@ export interface TaskMetadata {
   prUrl?: string;  // GitHub PR URL if task has been submitted as a PR
   useWorktree?: boolean;  // If false, use direct mode (no worktree isolation) - default is true for safety
 
+  // Multi-model agent orchestration
+  agentModels?: Record<string, string>;  // Agent-specific model overrides (e.g., { coder: 'haiku', planner: 'sonnet' })
+
   // Archive status
   archivedAt?: string;  // ISO date when task was archived
   archivedInVersion?: string;  // Version in which task was archived (from changelog)
@@ -256,6 +283,7 @@ export interface Task {
   logs: string[];
   metadata?: TaskMetadata;  // Rich metadata from ideation or manual entry
   executionProgress?: ExecutionProgress;  // Real-time execution progress
+  tokenStats?: TaskTokenStats;  // Token usage statistics per phase
   releasedInVersion?: string;  // Version in which this task was released
   stagedInMainProject?: boolean;  // True if changes were staged to main project (worktree merged with --no-commit)
   stagedAt?: string;  // ISO timestamp when changes were staged
