@@ -658,9 +658,9 @@ class TestRunAIComplexityAssessment:
                 "needs_self_critique": False,
             },
         }
-        (spec_dir / "complexity_assessment.json").write_text(json.dumps(assessment_data))
-
         async def mock_agent(prompt_file, additional_context=None):
+            # Simulate the real agent writing the assessment file
+            (spec_dir / "complexity_assessment.json").write_text(json.dumps(assessment_data))
             return (True, "Assessment created")
 
         result = await run_ai_complexity_assessment(

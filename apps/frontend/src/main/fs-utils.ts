@@ -158,7 +158,27 @@ export function atomicWriteFileSync(filePath: string, content: string, encoding:
 
   try {
     fs.writeFileSync(tmpPath, content, encoding);
-    fs.renameSync(tmpPath, filePath);
+
+    // On Windows, file watchers/antivirus can briefly lock files, causing EPERM on rename.
+    // Retry with exponential backoff (100ms, 200ms, 400ms).
+    let lastErr: unknown;
+    for (let attempt = 0; attempt < 4; attempt++) {
+      try {
+        fs.renameSync(tmpPath, filePath);
+        return; // Success
+      } catch (renameErr) {
+        const code = (renameErr as NodeJS.ErrnoException).code;
+        if ((code === 'EPERM' || code === 'EACCES') && attempt < 3) {
+          lastErr = renameErr;
+          // Synchronous sleep via Atomics for retry delay
+          const delay = 100 * 2 ** attempt;
+          Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, delay);
+          continue;
+        }
+        throw renameErr;
+      }
+    }
+    throw lastErr;
   } catch (err) {
     try {
       if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
