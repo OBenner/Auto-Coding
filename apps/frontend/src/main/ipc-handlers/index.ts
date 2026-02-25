@@ -43,6 +43,7 @@ import { registerTemplateHandlers } from './template-handlers';
 import { registerPatternHandlers } from './pattern-handlers';
 import { registerSessionReplayHandlers } from './session-replay-handlers';
 import { registerFeedbackHandlers } from './feedback-handlers';
+import { registerAnnotationHandlers } from './annotation-handlers';
 import { notificationService } from '../notification-service';
 import { setAgentManagerRef } from './utils';
 
@@ -159,6 +160,9 @@ export function setupIpcHandlers(
   // Feedback handlers (adaptive agent learning)
   registerFeedbackHandlers(getMainWindow);
 
+  // Annotation handlers (UX feedback loop)
+  registerAnnotationHandlers(getMainWindow);
+
   // Scheduler handlers (build scheduling and queue management)
   registerSchedulerHandlers(getMainWindow);
 
@@ -198,5 +202,6 @@ export {
   registerPatternHandlers,
   registerSessionReplayHandlers,
   registerFeedbackHandlers,
+  registerAnnotationHandlers,
   registerSchedulerHandlers
 };
