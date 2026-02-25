@@ -42,3 +42,9 @@ tiktoken>=0.5.0
 
 # Error tracking (optional - requires SENTRY_DSN environment variable)
 sentry-sdk>=2.0.0
+
+# Performance Profiling Tools
+# py-spy: Sampling profiler for Python programs (low overhead)
+py-spy>=0.3.14
+# memory-profiler: Memory usage profiling for Python code
+memory-profiler>=0.61.0
