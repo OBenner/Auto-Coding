@@ -114,7 +114,7 @@ class TestResolveModelId:
 
     def test_passes_through_full_model_id(self):
         """Full model IDs are passed through unchanged."""
-        custom_model = "glm-4.7"
+        custom_model = "glm-5"
         result = resolve_model_id(custom_model)
         assert result == custom_model
 
@@ -126,7 +126,7 @@ class TestResolveModelId:
 
     def test_environment_variable_override_sonnet(self):
         """ANTHROPIC_DEFAULT_SONNET_MODEL overrides sonnet shorthand."""
-        custom_model = "glm-4.7"
+        custom_model = "glm-5"
         with patch.dict(os.environ, {"ANTHROPIC_DEFAULT_SONNET_MODEL": custom_model}):
             result = resolve_model_id("sonnet")
             assert result == custom_model
