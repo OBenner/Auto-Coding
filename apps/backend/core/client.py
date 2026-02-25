@@ -16,6 +16,7 @@ import copy
 import json
 import logging
 import os
+import sys
 import threading
 import time
 from pathlib import Path
@@ -27,6 +28,24 @@ from core.platform import (
 )
 
 logger = logging.getLogger(__name__)
+
+# =============================================================================
+# Async Event Loop Optimization
+# =============================================================================
+# uvloop provides significantly faster event loop implementation for asyncio.
+# On Linux/macOS it can improve async performance by 2-4x. Windows uses proactor
+# event loop which is already optimized, so we skip uvloop installation there.
+
+if sys.platform != "win32":
+    try:
+        import uvloop
+
+        uvloop.install()
+        logger.debug("uvloop installed for improved async performance")
+    except ImportError:
+        logger.debug("uvloop not available, using default asyncio event loop")
+    except Exception as e:
+        logger.warning(f"Failed to install uvloop: {e}")
 
 # =============================================================================
 # Windows System Prompt Limits
