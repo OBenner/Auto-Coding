@@ -263,7 +263,6 @@ export function TaskLogs({
     getScrollElement: () => parentRef.current,
     estimateSize,
     overscan: OVERSCAN,
-    measureElement: (element) => element.getBoundingClientRect().height,
   });
 
   // Create toggle handler for phase headers
