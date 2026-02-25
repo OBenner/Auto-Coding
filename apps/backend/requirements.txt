@@ -48,3 +48,8 @@ sentry-sdk>=2.0.0
 py-spy>=0.3.14
 # memory-profiler: Memory usage profiling for Python code
 memory-profiler>=0.61.0
+
+# Async Performance Optimization
+# uvloop: Ultra fast asyncio event loop for Unix/Linux/macOS
+# Drop-in replacement for asyncio's event loop (2-4x faster)
+uvloop>=0.17.0; sys_platform != "win32"
