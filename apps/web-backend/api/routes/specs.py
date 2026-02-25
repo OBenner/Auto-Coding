@@ -283,14 +283,46 @@ async def specs_health():
     Returns:
         Dictionary with status and configuration info
     """
-    project_dir = _get_project_dir()
     specs_dir = _get_specs_dir()
 
     return {
         "status": "ok",
         "endpoint": "specs",
-        "project_dir": str(project_dir),
         "specs_dir_exists": specs_dir.exists(),
+    }
+
+
+@router.get("/{spec_id}/progress", status_code=status.HTTP_200_OK)
+async def get_spec_progress(spec_id: str, auth: dict = Depends(require_auth)):
+    """
+    Get progress statistics for a specific spec.
+
+    Args:
+        spec_id: Spec number (e.g., "001") or full folder name (e.g., "001-feature")
+        auth: Authentication token claims (required)
+
+    Returns:
+        Dictionary with completed, in_progress, pending, failed, total, percentage
+    """
+    spec_folder = _get_spec_dir(spec_id)
+
+    if spec_folder is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Spec {spec_id} not found",
+        )
+
+    counts = _count_subtasks_detailed(spec_folder)
+    total = counts["total"]
+    percentage = (counts["completed"] / total * 100) if total > 0 else 0.0
+
+    return {
+        "completed": counts["completed"],
+        "in_progress": counts["in_progress"],
+        "pending": counts["pending"],
+        "failed": counts["failed"],
+        "total": total,
+        "percentage": percentage,
     }
 
 

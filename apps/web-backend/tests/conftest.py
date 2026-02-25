@@ -11,10 +11,11 @@ from datetime import timedelta
 from typing import AsyncGenerator, Dict
 from httpx import AsyncClient, ASGITransport
 
-# Set test environment variables before importing the app
-os.environ["SECRET_KEY"] = "test-secret-key-for-testing-only"
-os.environ["DEBUG"] = "true"
-os.environ["ACCESS_TOKEN_EXPIRE_MINUTES"] = "60"
+# Set test environment variables before importing the app.
+# Use setdefault so we don't overwrite values already set in the environment.
+os.environ.setdefault("SECRET_KEY", "test-secret-key-for-testing-only")
+os.environ.setdefault("DEBUG", "true")
+os.environ.setdefault("ACCESS_TOKEN_EXPIRE_MINUTES", "60")
 
 from main import app
 from core.security import create_access_token

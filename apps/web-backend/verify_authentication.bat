@@ -47,17 +47,15 @@ echo.
 
 REM Test 3: Get valid token from /api/auth/verify
 echo Test 3: Getting valid token from /api/auth/verify...
-curl -s http://localhost:8000/api/auth/verify > token_response.tmp
-REM Parse JSON to extract token (requires Python)
-python -c "import json; data=json.load(open('token_response.tmp')); print(data['token'])" > token.tmp 2>nul
-set /p TOKEN=<token.tmp
+REM Store response in a variable to avoid writing token to disk
+for /f "delims=" %%i in ('curl -s http://localhost:8000/api/auth/verify') do set TOKEN_RESPONSE=%%i
+REM Parse JSON to extract token (requires Python); token is kept only in memory
+for /f "delims=" %%i in ('python -c "import json,os; data=json.loads(os.environ.get(\"TOKEN_RESPONSE\",\"{}\")); print(data.get(\"token\",\"\"))" 2^>nul') do set TOKEN=%%i
 if "%TOKEN%"=="" (
     echo X Test 3 FAILED: Could not extract token from response
-    type token_response.tmp
     exit /b 1
 )
-echo + Test 3 PASSED: Successfully obtained token
-echo Token (first 20 chars): %TOKEN:~0,20%...
+echo + Test 3 PASSED: Successfully obtained token (value redacted)
 echo.
 
 REM Test 4: Request with valid token should return 200
@@ -105,8 +103,8 @@ if "%HTTP_CODE%"=="200" (
 )
 echo.
 
-REM Cleanup
-del response.tmp http_code.tmp token_response.tmp token.tmp 2>nul
+REM Cleanup temp files
+del response.tmp http_code.tmp 2>nul
 
 echo ==========================================
 echo Authentication Verification Complete

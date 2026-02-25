@@ -287,13 +287,11 @@ async def tasks_health():
     Returns:
         Dictionary with status and configuration info
     """
-    project_dir = _get_project_dir()
     specs_dir = _get_specs_dir()
 
     return {
         "status": "ok",
         "endpoint": "tasks",
-        "project_dir": str(project_dir),
         "specs_dir_exists": specs_dir.exists(),
     }
 

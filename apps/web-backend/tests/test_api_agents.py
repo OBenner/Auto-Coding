@@ -176,7 +176,8 @@ async def test_run_agent_invalid_agent_type(async_client: AsyncClient, auth_head
     }
 
     response = await async_client.post("/api/agents/run", json=request_data, headers=auth_headers)
-    assert response.status_code == 400
+    # FastAPI returns 422 for invalid Literal enum values (Pydantic validation error)
+    assert response.status_code == 422
 
     data = response.json()
     assert "detail" in data
@@ -493,11 +494,11 @@ async def test_run_agent_invalid_model_type(async_client: AsyncClient, auth_head
 
 @pytest.mark.asyncio
 async def test_run_agent_invalid_verbose_type(async_client: AsyncClient, auth_headers: dict):
-    """Test run_agent with invalid verbose type (non-boolean)"""
+    """Test run_agent with invalid verbose type (non-boolean, non-coercible)"""
     request_data = {
         "spec_id": "001",
         "agent_type": "planner",
-        "verbose": "yes"  # Should be boolean
+        "verbose": []  # Empty list cannot be coerced to bool by Pydantic
     }
 
     response = await async_client.post("/api/agents/run", json=request_data, headers=auth_headers)

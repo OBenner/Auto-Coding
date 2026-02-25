@@ -2,7 +2,9 @@
 # Authentication Verification Script for Auto Claude Web Backend
 # This script verifies that API authentication is working correctly
 
-set -e
+# Do NOT use 'set -e' here: curl returning a non-200 HTTP status still exits with code 0,
+# but test failure branches use 'exit 1' explicitly where needed.
+set -u
 
 echo "=========================================="
 echo "Auto Claude Web Backend Authentication Verification"
@@ -50,15 +52,18 @@ echo ""
 # Test 3: Get valid token from /api/auth/verify
 echo "Test 3: Getting valid token from /api/auth/verify..."
 TOKEN_RESPONSE=$(curl -s http://localhost:8000/api/auth/verify)
-TOKEN=$(echo "$TOKEN_RESPONSE" | python3 -c "import sys, json; print(json.load(sys.stdin)['token'])" 2>/dev/null || echo "")
+# Use jq if available, fall back to python3
+if command -v jq > /dev/null 2>&1; then
+    TOKEN=$(echo "$TOKEN_RESPONSE" | jq -r '.token // empty' 2>/dev/null || echo "")
+else
+    TOKEN=$(echo "$TOKEN_RESPONSE" | python3 -c "import sys, json; print(json.load(sys.stdin).get('token',''))" 2>/dev/null || echo "")
+fi
 
 if [ -z "$TOKEN" ]; then
     echo "✗ Test 3 FAILED: Could not extract token from response"
-    echo "Response: $TOKEN_RESPONSE"
     exit 1
 else
-    echo "✓ Test 3 PASSED: Successfully obtained token"
-    echo "Token (first 20 chars): ${TOKEN:0:20}..."
+    echo "✓ Test 3 PASSED: Successfully obtained token (value redacted)"
 fi
 echo ""
 

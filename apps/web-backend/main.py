@@ -10,6 +10,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
+from api.routes import auth, specs, tasks, agents
 
 # Load environment variables
 load_dotenv()
@@ -70,6 +71,13 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# Include API routers
+app.include_router(auth.router)
+app.include_router(specs.router)
+app.include_router(tasks.router)
+app.include_router(agents.router)
 
 
 @app.get("/")

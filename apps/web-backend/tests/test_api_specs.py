@@ -282,7 +282,9 @@ async def test_get_spec_detail_spec_read_error(async_client: AsyncClient, auth_h
     def mock_get_specs_dir():
         return specs_dir
 
-    # Mock read_text to raise an exception
+    # Mock read_text only for spec.md files to simulate a permission error.
+    # monkeypatch automatically restores the original after the test, so this
+    # does not leak into other tests.
     original_read_text = Path.read_text
 
     def mock_read_text(self, *args, **kwargs):
@@ -292,7 +294,7 @@ async def test_get_spec_detail_spec_read_error(async_client: AsyncClient, auth_h
 
     import api.routes.specs as specs_module
     monkeypatch.setattr(specs_module, "_get_specs_dir", mock_get_specs_dir)
-    monkeypatch.setattr(Path, "read_text", mock_read_text)
+    monkeypatch.setattr("pathlib.Path.read_text", mock_read_text)
 
     response = await async_client.get("/api/specs/005", headers=auth_headers)
     assert response.status_code == 200
@@ -312,7 +314,7 @@ async def test_specs_health(async_client: AsyncClient):
     data = response.json()
     assert data["status"] == "ok"
     assert data["endpoint"] == "specs"
-    assert "project_dir" in data
+    assert "project_dir" not in data, "Health endpoint must not expose filesystem paths"
     assert "specs_dir_exists" in data
     assert isinstance(data["specs_dir_exists"], bool)
 

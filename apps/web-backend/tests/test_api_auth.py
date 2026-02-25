@@ -64,7 +64,8 @@ async def test_verify_token_missing_bearer_prefix(async_client: AsyncClient, aut
     """Test that verify_token rejects tokens without Bearer prefix"""
     headers = {"Authorization": auth_token}  # Missing "Bearer " prefix
     response = await async_client.post("/api/auth/verify", headers=headers)
-    assert response.status_code == 403
+    # Security layer returns 401 for all authentication failures
+    assert response.status_code == 401
     data = response.json()
     assert "detail" in data
 
@@ -74,7 +75,8 @@ async def test_verify_token_empty_authorization_header(async_client: AsyncClient
     """Test that verify_token rejects empty Authorization header"""
     headers = {"Authorization": ""}
     response = await async_client.post("/api/auth/verify", headers=headers)
-    assert response.status_code == 403
+    # Security layer returns 401 for all authentication failures
+    assert response.status_code == 401
 
 
 @pytest.mark.asyncio

@@ -311,7 +311,7 @@ async def test_tasks_health(async_client: AsyncClient):
     data = response.json()
     assert data["status"] == "ok"
     assert data["endpoint"] == "tasks"
-    assert "project_dir" in data
+    assert "project_dir" not in data, "Health endpoint must not expose filesystem paths"
     assert "specs_dir_exists" in data
     assert isinstance(data["specs_dir_exists"], bool)
 
