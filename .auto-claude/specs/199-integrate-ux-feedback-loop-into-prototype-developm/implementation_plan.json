@@ -248,7 +248,8 @@
             "command": "cd apps/frontend && npx tsc --noEmit src/renderer/components/annotations/AnnotationForm.tsx",
             "expected": ""
           },
-          "status": "pending"
+          "status": "completed",
+          "notes": "Created AnnotationForm.tsx dialog component following FeedbackDialog.tsx pattern. Features: screenshot preview with dimensions badge, required description textarea with character count validation (min 10 chars), severity selector (low/medium/high/critical) with color-coded dot indicators, form validation with visual error feedback, loading state with Loader2 spinner during submission, cancel support with isSubmitting guard, i18n translation keys (dialogs:annotation.*), proper error handling with user-friendly messages, cn() utility for conditional classes, useEffect hook to reset form when new selection is made. Exported via annotations/index.ts barrel."
         },
         {
           "id": "subtask-5-4",
@@ -266,7 +267,8 @@
             "command": "cd apps/frontend && npx tsc --noEmit src/renderer/components/annotations/AnnotationList.tsx",
             "expected": ""
           },
-          "status": "pending"
+          "status": "completed",
+          "notes": "Created AnnotationList.tsx following ChatHistorySidebar.tsx pattern. Features: display list of annotations grouped by status, status filter dropdown, multi-select mode with SelectAll/Clear links, inline editing of annotation descriptions, screenshot thumbnail preview with dimensions, severity indicator with color-coded badges, delete confirmation dialogs (single and bulk), regenerate spec option for failed annotations, timestamp formatting with relative time (Just now, Xm ago, Xh ago, Xd ago), proper i18n translation keys (annotationList:* namespace), error display for failed annotations, component/route metadata display, spec ID display for completed annotations. Exported via annotations/index.ts barrel."
         },
         {
           "id": "subtask-5-5",
@@ -467,5 +469,5 @@
   "qa_signoff": null,
   "status": "in_progress",
   "planStatus": "in_progress",
-  "updated_at": "2026-02-25T05:35:36.744Z"
+  "updated_at": "2026-02-25T05:51:57.348Z"
 }

@@ -10,3 +10,5 @@ export type {
 export { AnnotationOverlay } from './AnnotationOverlay';
 export { AnnotationForm } from './AnnotationForm';
 export { AnnotationList } from './AnnotationList';
+export { AnnotationToggle } from './AnnotationToggle';
+export type { AnnotationToggleProps } from './AnnotationToggle';

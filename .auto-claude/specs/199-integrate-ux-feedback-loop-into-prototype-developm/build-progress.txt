@@ -195,3 +195,78 @@ Phase 6 (Integration & i18n): 0/4 pending
 Overall: 9/16 subtasks completed (56%)
 
 === END SESSION 16 ===
+
+Session 17 (Coder - subtask-5-3):
+- [COMPLETED] subtask-5-3: Create AnnotationForm component for description and severity input
+  - Created apps/frontend/src/renderer/components/annotations/AnnotationForm.tsx with:
+    - Dialog component following FeedbackDialog.tsx pattern
+    - Screenshot preview with dimensions badge
+    - Required description textarea with character count validation (min 10 chars)
+    - Severity selector (low/medium/high/critical) with color-coded dot indicators
+    - Form validation with visual error feedback
+    - Loading state with Loader2 spinner during submission
+    - Cancel support with isSubmitting guard
+    - i18n translation keys (dialogs:annotation.*)
+    - Proper error handling with user-friendly messages
+    - cn() utility for conditional classes
+    - useEffect hook to reset form when new selection is made
+  - Updated annotations/index.ts barrel export to include AnnotationForm
+  - Committed: feat(annotations): create AnnotationForm component for description and severity input
+  - Verified: npm run typecheck passes
+
+=== SUBTASK PROGRESS ===
+Phase 1 (Setup & Types): 3/3 completed ✅
+Phase 2 (State Management): 1/1 completed ✅
+Phase 3 (Spec Generation Service): 1/1 completed ✅
+Phase 4 (IPC & MCP Integration): 2/2 completed ✅
+Phase 5 (UI Components): 3/5 completed
+- ✅ subtask-5-1: Create annotation component types and initial barrel export
+- ✅ subtask-5-2: Create AnnotationOverlay component for visual selection
+- ✅ subtask-5-3: Create AnnotationForm component for description and severity input
+- ⏳ subtask-5-4: Create AnnotationList component (pending)
+- ⏳ subtask-5-5: Create AnnotationToggle component (pending)
+Phase 6 (Integration & i18n): 0/4 pending
+
+Overall: 10/16 subtasks completed (62%)
+
+=== END SESSION 17 ===
+
+Session 18 (Coder - subtask-5-4):
+- [COMPLETED] subtask-5-4: Create AnnotationList component to display session annotations
+  - Created apps/frontend/src/renderer/components/annotations/AnnotationList.tsx with:
+    - Display list of annotations grouped by status (draft/submitted/processing/completed/failed)
+    - Status filter dropdown with all status options
+    - Multi-select mode with SelectAll/Clear links and bulk delete
+    - Inline editing of annotation descriptions with textarea
+    - Screenshot thumbnail preview showing dimensions
+    - Severity indicator with color-coded badges (blue/yellow/orange/red)
+    - Delete confirmation dialogs (single and bulk with preview)
+    - Regenerate spec option for failed annotations
+    - Timestamp formatting with relative time (Just now, Xm ago, Xh ago, Xd ago)
+    - Proper i18n translation keys using annotationList:* namespace
+    - Error display for failed annotations
+    - Component and route metadata display
+    - Spec ID display for completed annotations
+    - Dropdown menu with Edit/Regenerate/Delete actions
+    - Loading state, empty state, and active annotation highlighting
+    - Keyboard navigation support (Enter/Space to select, Escape to cancel edit)
+  - Updated annotations/index.ts barrel export to include AnnotationList
+  - Committed: feat(annotation): create AnnotationList component to display session annotations
+  - Verified: npm run typecheck passes, npx tsc --noEmit passes with exit code 0
+
+=== SUBTASK PROGRESS ===
+Phase 1 (Setup & Types): 3/3 completed ✅
+Phase 2 (State Management): 1/1 completed ✅
+Phase 3 (Spec Generation Service): 1/1 completed ✅
+Phase 4 (IPC & MCP Integration): 2/2 completed ✅
+Phase 5 (UI Components): 4/5 completed
+- ✅ subtask-5-1: Create annotation component types and initial barrel export
+- ✅ subtask-5-2: Create AnnotationOverlay component for visual selection
+- ✅ subtask-5-3: Create AnnotationForm component for description and severity input
+- ✅ subtask-5-4: Create AnnotationList component to display session annotations
+- ⏳ subtask-5-5: Create AnnotationToggle component (pending)
+Phase 6 (Integration & i18n): 0/4 pending
+
+Overall: 11/16 subtasks completed (69%)
+
+=== END SESSION 18 ===
