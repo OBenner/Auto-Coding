@@ -54,16 +54,11 @@
       "hash": "ab2b74715fd19ce611e9f1b83d9fd99f3153fcfa",
       "subtask_id": "subtask-5-4",
       "timestamp": "2026-02-25T05:51:39.159161+00:00"
-    },
-    {
-      "hash": "e152ebc6ef622a17299e2199a1e83a636dec9f38",
-      "subtask_id": "subtask-5-5",
-      "timestamp": "2026-02-25T05:57:42.323688+00:00"
     }
   ],
-  "last_good_commit": "e152ebc6ef622a17299e2199a1e83a636dec9f38",
+  "last_good_commit": "ab2b74715fd19ce611e9f1b83d9fd99f3153fcfa",
   "metadata": {
     "created_at": "2026-02-24T20:00:23.003969+00:00",
-    "last_updated": "2026-02-25T05:57:42.323702+00:00"
+    "last_updated": "2026-02-25T05:51:39.159172+00:00"
   }
 }

@@ -24,6 +24,7 @@ import { createSessionReplayAPI } from './modules/session-replay-api';
 import { ContextViewerAPI, createContextViewerAPI } from './modules/context-viewer-api';
 import { SchedulerAPI, createSchedulerAPI } from './scheduler-api';
 import { FeedbackAPI, createFeedbackAPI } from './feedback-api';
+import { AnnotationAPI, createAnnotationAPI } from './annotation-api';
 
 export interface ElectronAPI extends
   ProjectAPI,
@@ -44,7 +45,8 @@ export interface ElectronAPI extends
   ScreenshotAPI,
   PluginAPI,
   ContextViewerAPI,
-  FeedbackAPI {
+  FeedbackAPI,
+  AnnotationAPI {
   github: GitHubAPI;
   /** Queue routing API for rate limit recovery */
   queue: QueueAPI;
@@ -73,6 +75,7 @@ export const createElectronAPI = (): ElectronAPI => ({
   ...createPluginAPI(),
   ...createContextViewerAPI(),
   ...createFeedbackAPI(),
+  ...createAnnotationAPI(),
   github: createGitHubAPI(),
   queue: createQueueAPI(),  // Queue routing for rate limit recovery
   pattern: createPatternAPI(),
@@ -103,7 +106,8 @@ export {
   createSessionReplayAPI,
   createContextViewerAPI,
   createSchedulerAPI,
-  createFeedbackAPI
+  createFeedbackAPI,
+  createAnnotationAPI
 };
 
 export type {
@@ -130,5 +134,6 @@ export type {
   SessionReplayAPI,
   ContextViewerAPI,
   SchedulerAPI,
-  FeedbackAPI
+  FeedbackAPI,
+  AnnotationAPI
 };

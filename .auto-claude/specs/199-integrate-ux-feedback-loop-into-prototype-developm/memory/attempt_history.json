@@ -131,23 +131,11 @@
         }
       ],
       "status": "completed"
-    },
-    "subtask-5-5": {
-      "attempts": [
-        {
-          "session": 12,
-          "timestamp": "2026-02-25T05:57:42.322510+00:00",
-          "approach": "Implemented: Create AnnotationToggle toolbar button component",
-          "success": true,
-          "error": null
-        }
-      ],
-      "status": "completed"
     }
   },
   "stuck_subtasks": [],
   "metadata": {
     "created_at": "2026-02-24T20:00:23.003500+00:00",
-    "last_updated": "2026-02-25T05:57:42.322524+00:00"
+    "last_updated": "2026-02-25T07:15:52.278Z"
   }
 }
