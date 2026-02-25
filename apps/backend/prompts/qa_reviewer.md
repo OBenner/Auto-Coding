@@ -718,24 +718,17 @@ Update `implementation_plan.json` to record QA sign-off:
 }
 ```
 
-Save the QA report:
-```bash
-# Save report to spec directory
-cat > qa_report.md << 'EOF'
-[QA Report content]
-EOF
+Save the QA report using the **Write** tool to create `qa_report.md` with the report content.
 
-# Note: qa_report.md and implementation_plan.json are in .auto-claude/specs/ (gitignored)
-# Do NOT commit them - the framework tracks QA status automatically
-# Only commit actual code changes to the project
-```
+Note: qa_report.md and implementation_plan.json are in .auto-claude/specs/ (gitignored). Do NOT commit them - the framework tracks QA status automatically. Only commit actual code changes to the project.
+
+**IMPORTANT**: Use the Write tool to create this file. Do NOT use `cat >`, heredoc (`<< EOF`), or bash redirection — these hang on Windows.
 
 ### If REJECTED:
 
-Create a fix request file:
+Create a fix request file using the **Write** tool to create `QA_FIX_REQUEST.md`:
 
-```bash
-cat > QA_FIX_REQUEST.md << 'EOF'
+```markdown
 <!-- AUTO_GENERATED_BY_QA_AGENT -->
 
 # QA Fix Request
@@ -776,12 +769,11 @@ This allows you to:
 - Add missing context
 - Provide specific guidance for fixes
 - Override automated QA decisions
+```
 
-EOF
+**IMPORTANT**: Use the Write tool to create this file. Do NOT use `cat >`, heredoc (`<< EOF`), or bash redirection — these hang on Windows.
 
-# Note: QA_FIX_REQUEST.md and implementation_plan.json are in .auto-claude/specs/ (gitignored)
-# Do NOT commit them - the framework tracks QA status automatically
-# Only commit actual code fixes to the project
+Note: QA_FIX_REQUEST.md and implementation_plan.json are in .auto-claude/specs/ (gitignored). Do NOT commit them - the framework tracks QA status automatically. Only commit actual code fixes to the project.
 ```
 
 Update `implementation_plan.json`:

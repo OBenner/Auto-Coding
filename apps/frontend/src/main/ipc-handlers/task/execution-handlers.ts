@@ -28,7 +28,26 @@ function atomicWriteFileSync(filePath: string, content: string): void {
   const tempPath = `${filePath}.${process.pid}.tmp`;
   try {
     writeFileSync(tempPath, content, 'utf-8');
-    renameSync(tempPath, filePath);
+
+    // On Windows, file watchers/antivirus can briefly lock files, causing EPERM on rename.
+    // Retry with exponential backoff (100ms, 200ms, 400ms).
+    let lastErr: unknown;
+    for (let attempt = 0; attempt < 4; attempt++) {
+      try {
+        renameSync(tempPath, filePath);
+        return; // Success
+      } catch (renameErr) {
+        const code = (renameErr as NodeJS.ErrnoException).code;
+        if ((code === 'EPERM' || code === 'EACCES') && attempt < 3) {
+          lastErr = renameErr;
+          const delay = 100 * 2 ** attempt;
+          Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, delay);
+          continue;
+        }
+        throw renameErr;
+      }
+    }
+    throw lastErr;
   } catch (error) {
     // Clean up temp file if rename failed
     try {
@@ -1257,13 +1276,34 @@ export function registerTaskExecutionHandlers(
               projectStore.invalidateTasksCache(project.id);
             }
 
-            // Mark task as recovered but do NOT auto-restart
-            // Auto-restarting on startup caused cascading ENOENT (-4058) errors
-            // when Python env wasn't ready yet, leading to OOM crashes
-            console.warn(`[Recovery] Task ${taskId} (${task.specId}) recovered - needs manual restart`);
-            autoRestarted = false;
+            // Start file watcher for the restarted task
+            const watchSpecDir = getSpecDirForWatcher(project.path, specsBaseDir, task.specId);
+            fileWatcher.watch(taskId, watchSpecDir).catch((err) => {
+              console.error(`[Recovery] Failed to watch spec dir for ${taskId}:`, err);
+            });
+
+            // Get base branch from task metadata or project settings
+            const baseBranch = task.metadata?.baseBranch || project.settings?.mainBranch;
+
+            // Actually restart the task execution
+            // startTaskExecution() internally checks Python env readiness
+            agentManager.startTaskExecution(
+              taskId,
+              project.path,
+              task.specId,
+              {
+                parallel: false,
+                workers: 1,
+                baseBranch,
+                useWorktree: task.metadata?.useWorktree
+              }
+            );
+
+            console.warn(`[Recovery] Task ${taskId} (${task.specId}) recovered and auto-restarted`);
+            autoRestarted = true;
           } catch (restartError) {
             console.error('Failed to auto-restart task after recovery:', restartError);
+            newStatus = 'error';  // Don't leave in_progress without a process
             // Recovery succeeded but restart failed - still report success
           }
         }
@@ -1284,7 +1324,9 @@ export function registerTaskExecutionHandlers(
             taskId,
             recovered: true,
             newStatus,
-            message: `Task recovered and moved to ${newStatus} - restart manually when ready`,
+            message: autoRestarted
+              ? `Task recovered and auto-restarted`
+              : `Task recovered and moved to ${newStatus}`,
             autoRestarted
           }
         };

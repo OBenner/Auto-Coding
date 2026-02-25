@@ -263,6 +263,7 @@ export function TaskLogs({
     getScrollElement: () => parentRef.current,
     estimateSize,
     overscan: OVERSCAN,
+    measureElement: (element) => element.getBoundingClientRect().height,
   });
 
   // Create toggle handler for phase headers
@@ -413,12 +414,13 @@ export function TaskLogs({
                   return (
                     <div
                       key={item.key}
+                      data-index={virtualItem.index}
+                      ref={rowVirtualizer.measureElement}
                       style={{
                         position: 'absolute',
                         top: 0,
                         left: 0,
                         width: '100%',
-                        height: `${virtualItem.size}px`,
                         transform: `translateY(${virtualItem.start}px)`,
                       }}
                     >

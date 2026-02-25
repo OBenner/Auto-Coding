@@ -569,6 +569,70 @@ def get_next_subtask(spec_dir: Path) -> dict | None:
         return None
 
 
+def reset_subtask_to_pending(spec_dir: Path, subtask_id: str) -> bool:
+    """
+    Reset a subtask's status back to 'pending' so it can be retried.
+
+    This is needed during recovery: when a subtask fails mid-execution,
+    its status stays 'in_progress' but get_next_subtask() only picks up
+    'pending' subtasks. Without this reset, the recovery loop can't find
+    the subtask to retry.
+
+    Args:
+        spec_dir: Directory containing implementation_plan.json
+        subtask_id: ID of the subtask to reset
+
+    Returns:
+        True if the subtask was found and reset
+    """
+    plan_file = spec_dir / "implementation_plan.json"
+    if not plan_file.exists():
+        return False
+
+    try:
+        with open(plan_file, encoding="utf-8") as f:
+            plan = json.load(f)
+
+        # Find and reset the subtask
+        found = False
+        for phase in plan.get("phases", []):
+            for subtask in phase.get("subtasks", phase.get("chunks", [])):
+                if subtask.get("id") == subtask_id:
+                    old_status = subtask.get("status", "unknown")
+                    subtask["status"] = "pending"
+                    # Clear execution data for clean retry
+                    subtask.pop("actual_output", None)
+                    subtask.pop("started_at", None)
+                    subtask.pop("completed_at", None)
+                    logger.info(f"Reset subtask {subtask_id}: {old_status} -> pending")
+                    found = True
+                    break
+            if found:
+                break
+
+        if not found:
+            return False
+
+        # Atomic write back
+        tmp_file = plan_file.with_suffix(".json.tmp")
+        with open(tmp_file, "w", encoding="utf-8") as f:
+            json.dump(plan, f, indent=2)
+        tmp_file.replace(plan_file)
+
+        return True
+
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError) as e:
+        logger.error(f"Failed to reset subtask {subtask_id}: {e}")
+        # Clean up temp file
+        tmp_file = plan_file.with_suffix(".json.tmp")
+        if tmp_file.exists():
+            try:
+                tmp_file.unlink()
+            except OSError:
+                pass
+        return False
+
+
 def format_duration(seconds: float) -> str:
     """Format a duration in human-readable form."""
     if seconds < 60:

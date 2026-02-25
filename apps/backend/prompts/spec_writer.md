@@ -66,10 +66,9 @@ Before writing, think about:
 
 ## PHASE 2: WRITE SPEC.MD (MANDATORY)
 
-Create `spec.md` using this EXACT template structure:
+Use the **Write** tool to create `spec.md` with this EXACT template structure:
 
-```bash
-cat > spec.md << 'SPEC_EOF'
+```markdown
 # Specification: [Task Name from requirements.json]
 
 ## Overview
@@ -235,8 +234,9 @@ The task is complete when:
 - [ ] Code follows established patterns
 - [ ] No security vulnerabilities introduced
 
-SPEC_EOF
 ```
+
+**IMPORTANT**: Use the Write tool to create `spec.md`. Do NOT use `cat >`, heredoc (`<< EOF`/`<< SPEC_EOF`), or bash redirection — these hang on Windows.
 
 ---
 
@@ -299,25 +299,11 @@ Next phase: Implementation Planning
 
 If spec.md is invalid or incomplete:
 
-```bash
-# Read current state
-cat spec.md
+1. Read the current file using the **Read** tool
+2. Identify what's missing
+3. Use the **Write** tool to save the corrected/complete content
 
-# Identify what's missing
-grep -E "^##" spec.md  # See what sections exist
-
-# Append missing sections or rewrite
-cat >> spec.md << 'EOF'
-## [Missing Section]
-
-[Content]
-EOF
-
-# Or rewrite entirely if needed
-cat > spec.md << 'EOF'
-[Complete spec]
-EOF
-```
+**IMPORTANT**: Do NOT use `cat >`, `cat >>`, heredoc (`<< EOF`), or bash redirection — these hang on Windows. Always use the Write tool.
 
 ---
 

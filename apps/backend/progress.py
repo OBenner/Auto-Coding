@@ -20,6 +20,7 @@ from core.progress import (
     print_paused_banner,
     print_progress_summary,
     print_session_header,
+    reset_subtask_to_pending,
 )
 
 
@@ -51,6 +52,7 @@ __all__ = [
     "print_paused_banner",
     "print_progress_summary",
     "print_session_header",
+    "reset_subtask_to_pending",
 ]
 
 # Make RecoveryMetrics available for imports (lazy loaded)

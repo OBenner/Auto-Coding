@@ -34,6 +34,7 @@ from progress import (
     print_build_complete_banner,
     print_progress_summary,
     print_session_header,
+    reset_subtask_to_pending,
 )
 from prompts_pkg.prompt_generator import (
     format_context_for_prompt,
@@ -1036,7 +1037,7 @@ async def run_autonomous_agent(
                     status,
                     response,
                     usage_metadata,
-                    _,
+                    _decision_tracker,
                 ) = await run_agent_session(
                     client, prompt, spec_dir, verbose, phase=current_log_phase
                 )
@@ -1164,6 +1165,21 @@ async def run_autonomous_agent(
 
                 # Handle different recovery actions
                 if recovery_action.action == "retry":
+                    # CRITICAL: Reset subtask status to 'pending' so get_next_subtask() can find it.
+                    # Without this, the subtask stays 'in_progress' and the retry loop
+                    # exits with "No pending subtasks found - build may be complete!"
+                    if subtask_id:
+                        if reset_subtask_to_pending(spec_dir, subtask_id):
+                            print_status(
+                                f"Reset subtask {subtask_id} to pending for retry",
+                                "info",
+                            )
+                        else:
+                            print_status(
+                                f"Warning: Could not reset subtask {subtask_id} status",
+                                "warning",
+                            )
+
                     # Set up for retry with exponential backoff and optional model fallback
                     pending_recovery_action = recovery_action
 
@@ -1261,6 +1277,9 @@ async def run_autonomous_agent(
 
                 elif recovery_action.action == "rollback":
                     # Rollback will be handled at the start of next iteration
+                    # Reset subtask to pending so it's retried after rollback
+                    if subtask_id:
+                        reset_subtask_to_pending(spec_dir, subtask_id)
                     pending_recovery_action = recovery_action
                     print_status(
                         f"Will rollback to {recovery_action.target[:8]} on next iteration",
@@ -1269,10 +1288,16 @@ async def run_autonomous_agent(
 
                 elif recovery_action.action == "continue":
                     # Context exhausted - will continue in next session
+                    # Reset subtask to pending so it's picked up in the next session
+                    if subtask_id:
+                        reset_subtask_to_pending(spec_dir, subtask_id)
                     print_status(
                         "Context exhausted - will continue in next session", "info"
                     )
-                    # No special handling needed - natural session boundary
+
+                # Sync recovery status changes back to main project (worktree mode)
+                if source_spec_dir:
+                    sync_spec_to_source(spec_dir, source_spec_dir)
 
                 print()
         elif plan_validated and source_spec_dir:

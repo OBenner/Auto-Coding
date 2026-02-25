@@ -66,6 +66,12 @@ class SpecPhaseMixin:
 
         errors = []
         for attempt in range(MAX_RETRIES):
+            # Clean up stale artifacts before retry so Write tool works
+            if attempt > 0:
+                for f in [spec_file, plan_file]:
+                    if f.exists():
+                        f.unlink()
+
             self.ui.print_status(
                 f"Running quick spec agent (attempt {attempt + 1})...", "progress"
             )
@@ -120,6 +126,10 @@ Create:
 
         errors = []
         for attempt in range(MAX_RETRIES):
+            # Clean up invalid spec before retry so Write tool works
+            if attempt > 0 and spec_file.exists():
+                spec_file.unlink()
+
             self.ui.print_status(
                 f"Running spec writer (attempt {attempt + 1})...", "progress"
             )
@@ -174,6 +184,10 @@ Create:
 
         errors = []
         for attempt in range(MAX_RETRIES):
+            # Clean up stale critique before retry so Write tool works
+            if attempt > 0 and critique_file.exists():
+                critique_file.unlink()
+
             self.ui.print_status(
                 f"Running self-critique agent (attempt {attempt + 1})...", "progress"
             )
