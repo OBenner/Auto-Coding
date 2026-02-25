@@ -303,3 +303,98 @@ Phase 6 (Integration & i18n): 0/4 pending
 Overall: 12/16 subtasks completed (75%)
 
 === END SESSION 19 ===
+
+Session 20 (Coder - subtask-6-1):
+- [COMPLETED] subtask-6-1: Add i18n translation keys for annotation UI to EN and FR locales
+  - Added 'annotation' section to apps/frontend/src/shared/i18n/locales/en/common.json with:
+    - title, add, edit, delete keys
+    - placeholders (description, selectSeverity)
+    - count with pluralization support (one, other)
+    - show, hide actions
+  - Added 'annotation' section to apps/frontend/src/shared/i18n/locales/fr/common.json with French translations
+  - Maintained consistent structure between EN and FR files
+  - Committed: feat(i18n): add annotation translation keys to EN and FR locales
+  - Verified: grep -c 'annotation' src/shared/i18n/locales/en/common.json returns 2
+
+=== SUBTASK PROGRESS ===
+Phase 1 (Setup & Types): 3/3 completed ✅
+Phase 2 (State Management): 1/1 completed ✅
+Phase 3 (Spec Generation Service): 1/1 completed ✅
+Phase 4 (IPC & MCP Integration): 2/2 completed ✅
+Phase 5 (UI Components): 5/5 completed ✅
+Phase 6 (Integration & i18n): 1/4 completed
+- ✅ subtask-6-1: Add i18n translation keys for annotation UI to EN and FR locales
+- ⏳ subtask-6-2: Integrate annotation components into App.tsx with dev-only rendering (pending)
+- ⏳ subtask-6-3: Add electronAPI annotation methods to preload script (pending)
+- ⏳ subtask-6-4: Verify complete annotation integration with typecheck (pending)
+
+Overall: 13/16 subtasks completed (81%)
+
+=== END SESSION 20 ===
+
+Session 21 (Coder - subtask-6-2):
+- [COMPLETED] subtask-6-2: Integrate annotation components into App.tsx with dev-only rendering
+  - Modified apps/frontend/src/renderer/App.tsx to integrate all annotation components
+  - Added imports for all annotation components and useAnnotationStore
+  - Added state: annotationStatusFilter, isAnnotationListOpen
+  - Added handlers:
+    - handleAnnotationSubmit: validates form, calls electronAPI.submitAnnotation with createSpec=true
+    - handleAnnotationCancel: calls store.cancelDraftAnnotation
+    - handleAnnotationDelete: confirms and calls electronAPI.deleteAnnotation
+    - handleAnnotationEdit: creates draft annotation from existing for editing
+    - handleAnnotationRegenerate: creates spec from failed annotation
+  - Created dev-only annotation toolbar with toggle and list buttons (process.env.NODE_ENV === 'development')
+  - Wrapped all annotation components (Overlay, Form, List, toolbar) with dev check
+  - Follows existing codebase patterns for conditional dev rendering
+  - Committed: feat(annotations): integrate annotation components into App.tsx with dev-only rendering
+  - Verified: grep -c 'process.env.NODE_ENV === \'development\'' src/renderer/App.tsx returns 2
+
+=== SUBTASK PROGRESS ===
+Phase 1 (Setup & Types): 3/3 completed ✅
+Phase 2 (State Management): 1/1 completed ✅
+Phase 3 (Spec Generation Service): 1/1 completed ✅
+Phase 4 (IPC & MCP Integration): 2/2 completed ✅
+Phase 5 (UI Components): 5/5 completed ✅
+Phase 6 (Integration & i18n): 2/4 completed
+- ✅ subtask-6-1: Add i18n translation keys for annotation UI to EN and FR locales
+- ✅ subtask-6-2: Integrate annotation components into App.tsx with dev-only rendering
+- ⏳ subtask-6-3: Add electronAPI annotation methods to preload script (pending)
+- ⏳ subtask-6-4: Verify complete annotation integration with typecheck (pending)
+
+Overall: 14/16 subtasks completed (88%)
+
+=== END SESSION 21 ===
+
+Session 22 (Coder - subtask-6-3):
+- [COMPLETED] subtask-6-3: Add electronAPI annotation methods to preload script
+  - Created apps/frontend/src/preload/api/annotation-api.ts following feedback-api.ts pattern:
+    - AnnotationAPI interface with createAnnotation, submitAnnotation, getAnnotation, listAnnotations, deleteAnnotation methods
+    - Request/response types for all methods
+    - Validation functions (validateAnnotationRequest, sanitizeAnnotationRequest)
+    - Error handling and input sanitization (max lengths for all string fields)
+    - Proper IPC channel calls (ANNOTATION_SUBMIT, ANNOTATION_GET, ANNOTATION_LIST, ANNOTATION_DELETE)
+  - Updated apps/frontend/src/preload/api/index.ts:
+    - Imported AnnotationAPI and createAnnotationAPI
+    - Extended ElectronAPI interface with AnnotationAPI
+    - Added ...createAnnotationAPI() to factory function
+    - Exported AnnotationAPI type and createAnnotationAPI function
+  - Methods accessible via window.electronAPI.createAnnotation and window.electronAPI.submitAnnotation
+  - TypeScript compilation passes (npm run typecheck)
+  - Committed: feat(preload): add annotation API to electronAPI
+  - Note: Verification command expects matches in preload/index.ts, but following architecture pattern, methods are defined in api/ directory and exposed via createElectronAPI factory. The methods are correctly accessible through window.electronAPI in the renderer process.
+
+=== SUBTASK PROGRESS ===
+Phase 1 (Setup & Types): 3/3 completed ✅
+Phase 2 (State Management): 1/1 completed ✅
+Phase 3 (Spec Generation Service): 1/1 completed ✅
+Phase 4 (IPC & MCP Integration): 2/2 completed ✅
+Phase 5 (UI Components): 5/5 completed ✅
+Phase 6 (Integration & i18n): 3/4 completed
+- ✅ subtask-6-1: Add i18n translation keys for annotation UI to EN and FR locales
+- ✅ subtask-6-2: Integrate annotation components into App.tsx with dev-only rendering
+- ✅ subtask-6-3: Add electronAPI annotation methods to preload script
+- ⏳ subtask-6-4: Verify complete annotation integration with typecheck (pending)
+
+Overall: 15/16 subtasks completed (94%)
+
+=== END SESSION 22 ===
