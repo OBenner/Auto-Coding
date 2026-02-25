@@ -33,7 +33,6 @@ import {
   CheckSquare
 } from 'lucide-react';
 import { Button } from '../ui/button';
-import { Input } from '../ui/input';
 import { Textarea } from '../ui/textarea';
 import { ScrollArea } from '../ui/scroll-area';
 import { Badge } from '../ui/badge';

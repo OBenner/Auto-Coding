@@ -13,7 +13,8 @@ import type {
   AnnotationDeletePayload,
   AnnotationListPayload,
   AnnotationSubmissionResult,
-  AnnotationViewport
+  AnnotationViewport,
+  AnnotationStatus
 } from '../../shared/types/annotation';
 
 /**
@@ -234,7 +235,7 @@ export const createAnnotationAPI = (): AnnotationAPI => ({
     const payload: AnnotationListPayload = {};
 
     if (request?.status) {
-      payload.status = request.status as any;
+      payload.status = request.status as AnnotationStatus;
     }
 
     if (request?.route) {

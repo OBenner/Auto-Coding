@@ -47,7 +47,7 @@ const MIN_DESCRIPTION_LENGTH = 10;
 /**
  * Helper to get severity color class for visual indication
  */
-function getSeverityColorClass(severity: AnnotationSeverity): string {
+function _getSeverityColorClass(severity: AnnotationSeverity): string {
   switch (severity) {
     case 'low':
       return 'text-blue-600 border-blue-600';
@@ -99,6 +99,7 @@ export function AnnotationForm({
   const [error, setError] = useState<string | null>(null);
 
   // Reset form when dialog opens (new selection)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Intentional - track prop changes for form reset
   useEffect(() => {
     setDescription('');
     setSeverity('medium');

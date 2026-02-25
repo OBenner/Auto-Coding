@@ -372,8 +372,8 @@
             "command": "cd apps/frontend && npm run typecheck",
             "expected": ""
           },
-          "status": "pending",
-          "notes": "Barrel export in annotations/index.ts is created and maintained during phase-5 subtasks"
+          "status": "completed",
+          "notes": "TypeCheck verification passed successfully with no errors. Complete annotation integration verified: annotation components (AnnotationOverlay, AnnotationForm, AnnotationList, AnnotationToggle) integrated into App.tsx with dev-only rendering, annotation API methods added to preload script, i18n translations added for EN and FR locales, TypeScript compilation passes, barrel export properly maintained."
         }
       ]
     }
@@ -472,6 +472,6 @@
   "qa_signoff": null,
   "status": "in_progress",
   "planStatus": "in_progress",
-  "updated_at": "2026-02-25T07:16:13.732Z",
-  "recoveryNote": "Task recovered from stuck state at 2026-02-25T07:15:52.254Z"
+  "updated_at": "2026-02-25T08:02:59.208Z",
+  "recoveryNote": "Task recovered from stuck state at 2026-02-25T08:02:51.800Z"
 }

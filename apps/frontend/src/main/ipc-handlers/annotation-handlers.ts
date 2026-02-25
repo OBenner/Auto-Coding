@@ -141,7 +141,7 @@ function createAnnotationFromPayload(
  * @param getMainWindow - Function to get the main BrowserWindow
  */
 export function registerAnnotationHandlers(
-  getMainWindow: () => BrowserWindow | null
+  _getMainWindow: () => BrowserWindow | null
 ): void {
   /**
    * Submit an annotation and optionally create a spec from it
