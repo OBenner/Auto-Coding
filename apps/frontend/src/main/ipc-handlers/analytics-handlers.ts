@@ -92,7 +92,7 @@ async function extractSpecMetrics(specDir: string): Promise<SpecMetrics | null> 
 
     const planStatus: string = plan.status ?? 'pending';
     let status: string;
-    if (planStatus === 'completed' || (totalSubtasks > 0 && completedSubtasks === totalSubtasks)) {
+    if (planStatus === 'completed' || planStatus === 'done' || (totalSubtasks > 0 && completedSubtasks === totalSubtasks)) {
       status = 'completed';
     } else if (completedSubtasks > 0 || hasInProgress) {
       status = 'in_progress';
@@ -368,11 +368,14 @@ export function registerAnalyticsHandlers(): void {
     ): Promise<IPCResult<ProductivitySummary>> => {
       const project = projectStore.getProject(projectId);
       if (!project) {
+        console.error('[Analytics] Project not found for ID:', projectId);
         return { success: false, error: 'Project not found' };
       }
 
       try {
+        console.log('[Analytics] Getting summary for project:', project.path, '| startDate:', startDate, '| endDate:', endDate);
         const summary = await aggregateSummary(project.path, startDate, endDate);
+        console.log('[Analytics] Summary result: total_specs=', summary.total_specs, 'completed=', summary.completed_specs);
         return { success: true, data: summary };
       } catch (error) {
         debugError('[Productivity Analytics] Failed to get summary:', error);
@@ -395,11 +398,14 @@ export function registerAnalyticsHandlers(): void {
     ): Promise<IPCResult<ProductivityTrendPoint[]>> => {
       const project = projectStore.getProject(projectId);
       if (!project) {
+        console.error('[Analytics] Project not found for ID:', projectId);
         return { success: false, error: 'Project not found' };
       }
 
       try {
+        console.log('[Analytics] Getting trends for project:', project.path, '| windowDays:', windowDays, '| granularity:', granularity);
         const trends = await aggregateTrends(project.path, windowDays, granularity);
+        console.log('[Analytics] Trends result: points=', trends.length);
         return { success: true, data: trends };
       } catch (error) {
         debugError('[Productivity Analytics] Failed to get trends:', error);

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Loader2, BarChart3, Calendar } from 'lucide-react';
+import { Loader2, BarChart3, Calendar, AlertTriangle, RefreshCw } from 'lucide-react';
 import { Button } from '../ui/button';
 import { ScrollArea } from '../ui/scroll-area';
 import { toast } from '../../hooks/use-toast';
@@ -22,30 +22,29 @@ interface ProductivityDashboardProps {
 type TimeRange = 'all' | '7d' | '30d' | '90d';
 
 /** Race a promise against a timeout so a hung IPC can never block the UI. */
-function withTimeout<T>(promise: Promise<T>, ms = 10_000): Promise<T> {
+function withTimeout<T>(promise: Promise<T>, ms = 5_000): Promise<T> {
   return Promise.race([
     promise,
     new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error('Request timed out')), ms)
+      setTimeout(() => reject(new Error('IPC request timed out')), ms)
     ),
   ]);
 }
 
 export function ProductivityDashboard({ projectId }: ProductivityDashboardProps) {
-  // State — isLoading starts false so the dashboard renders immediately
   const [summary, setSummary] = useState<ProductivitySummary | null>(null);
   const [trends, setTrends] = useState<ProductivityTrendPoint[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
-  const [timeRange, setTimeRange] = useState<TimeRange>('30d');
+  const [timeRange, setTimeRange] = useState<TimeRange>('all');
   const [hasLoaded, setHasLoaded] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
-  // Track whether component is still mounted to avoid state updates after unmount
   const mountedRef = useRef(true);
   useEffect(() => () => { mountedRef.current = false; }, []);
 
-  // Quality store — useShallow prevents re-renders when unrelated store fields change
+  // Quality store
   const { scores: qualityScores, alerts: qualityAlerts, isLoadingScores: isLoadingQuality } =
     useQualityStore(useShallow((state) => ({
       scores: state.scores,
@@ -53,134 +52,120 @@ export function ProductivityDashboard({ projectId }: ProductivityDashboardProps)
       isLoadingScores: state.isLoadingScores,
     })));
 
-  // Calculate date filter based on time range
   const getDateFilter = useCallback((): Pick<ProductivityAnalyticsFilter, 'start_date' | 'end_date'> => {
     if (timeRange === 'all') {
       return {};
     }
-
     const endDate = new Date();
     const startDate = new Date();
-
     switch (timeRange) {
-      case '7d':
-        startDate.setDate(startDate.getDate() - 7);
-        break;
-      case '30d':
-        startDate.setDate(startDate.getDate() - 30);
-        break;
-      case '90d':
-        startDate.setDate(startDate.getDate() - 90);
-        break;
+      case '7d': startDate.setDate(startDate.getDate() - 7); break;
+      case '30d': startDate.setDate(startDate.getDate() - 30); break;
+      case '90d': startDate.setDate(startDate.getDate() - 90); break;
     }
-
-    return {
-      start_date: startDate.toISOString(),
-      end_date: endDate.toISOString(),
-    };
+    return { start_date: startDate.toISOString(), end_date: endDate.toISOString() };
   }, [timeRange]);
 
-  // Load all analytics data — IPC calls run in parallel with a timeout
   const loadAnalyticsData = useCallback(async (showRefreshToast = false) => {
+    const errors: string[] = [];
     try {
       setIsLoading(true);
+      setLoadError(null);
 
       const dateFilter = getDateFilter();
 
-      // Run IPC calls in parallel, each with a 10s timeout
+      // Check API exists
+      if (!window.electronAPI?.getProductivitySummary) {
+        throw new Error('electronAPI.getProductivitySummary is not available');
+      }
+
+      console.log('[Analytics] Loading data for project:', projectId, 'filter:', dateFilter);
+
       const [summaryResult, trendsResult] = await Promise.all([
         withTimeout(window.electronAPI.getProductivitySummary(projectId, dateFilter))
-          .catch((err) => ({ success: false as const, error: String(err), data: undefined })),
+          .catch((err) => {
+            const msg = `Summary: ${err instanceof Error ? err.message : String(err)}`;
+            errors.push(msg);
+            console.error('[Analytics]', msg);
+            return { success: false as const, error: msg, data: undefined };
+          }),
         withTimeout(window.electronAPI.getProductivityTrends(projectId, dateFilter))
-          .catch((err) => ({ success: false as const, error: String(err), data: undefined })),
+          .catch((err) => {
+            const msg = `Trends: ${err instanceof Error ? err.message : String(err)}`;
+            errors.push(msg);
+            console.error('[Analytics]', msg);
+            return { success: false as const, error: msg, data: undefined };
+          }),
       ]);
 
-      // Bail out if component unmounted during the await
       if (!mountedRef.current) return;
+
+      console.log('[Analytics] Summary:', summaryResult.success, 'total_specs:', summaryResult.data?.total_specs, 'error:', summaryResult.error);
+      console.log('[Analytics] Trends:', trendsResult.success, 'points:', trendsResult.data?.length, 'error:', trendsResult.error);
 
       if (summaryResult.success && summaryResult.data) {
         setSummary(summaryResult.data);
-      } else {
-        console.error('Failed to load productivity summary:', summaryResult.error);
+      } else if (summaryResult.error) {
+        errors.push(summaryResult.error);
       }
 
       if (trendsResult.success && trendsResult.data) {
         setTrends(trendsResult.data);
-      } else {
-        console.error('Failed to load productivity trends:', trendsResult.error);
+      } else if (trendsResult.error) {
+        errors.push(trendsResult.error);
       }
 
-      // Load quality data (stubs — resolves immediately)
       await loadAllQualityData(projectId);
 
       if (!mountedRef.current) return;
 
-      if (showRefreshToast) {
-        toast({
-          title: 'Analytics Refreshed',
-          description: 'Productivity analytics data has been updated.',
-        });
+      if (showRefreshToast && errors.length === 0) {
+        toast({ title: 'Analytics Refreshed', description: 'Productivity analytics data has been updated.' });
       }
     } catch (error) {
-      console.error('Error loading analytics data:', error);
+      const msg = error instanceof Error ? error.message : String(error);
+      errors.push(msg);
+      console.error('[Analytics] Fatal error:', msg);
     } finally {
       if (mountedRef.current) {
         setIsLoading(false);
         setIsRefreshing(false);
         setHasLoaded(true);
+        if (errors.length > 0) {
+          setLoadError(errors.join('; '));
+        }
       }
     }
   }, [projectId, getDateFilter]);
 
-  // Initial load
   useEffect(() => {
     loadAnalyticsData();
   }, [loadAnalyticsData]);
 
-  // Handle refresh
   const handleRefresh = useCallback(() => {
     setIsRefreshing(true);
     loadAnalyticsData(true);
   }, [loadAnalyticsData]);
 
-  // Handle export
   const handleExport = useCallback(async (format: 'json' | 'csv') => {
     try {
       setIsExporting(true);
-
       const dateFilter = getDateFilter();
-      const options: ProductivityAnalyticsExportOptions = {
-        format,
-        filter: dateFilter,
-      };
-
+      const options: ProductivityAnalyticsExportOptions = { format, filter: dateFilter };
       const result = await window.electronAPI.exportProductivityAnalytics(projectId, options);
-
       if (result.success && result.data) {
-        toast({
-          title: 'Export Successful',
-          description: `Analytics exported to ${result.data}`,
-        });
+        toast({ title: 'Export Successful', description: `Analytics exported to ${result.data}` });
       } else {
-        toast({
-          title: 'Export Failed',
-          description: result.error || 'Failed to export analytics',
-          variant: 'destructive',
-        });
+        toast({ title: 'Export Failed', description: result.error || 'Failed to export analytics', variant: 'destructive' });
       }
     } catch (error) {
       console.error('Error exporting analytics:', error);
-      toast({
-        title: 'Export Error',
-        description: 'An error occurred while exporting analytics.',
-        variant: 'destructive',
-      });
+      toast({ title: 'Export Error', description: 'An error occurred while exporting analytics.', variant: 'destructive' });
     } finally {
       setIsExporting(false);
     }
   }, [projectId, getDateFilter]);
 
-  // Handle time range change
   const handleTimeRangeChange = useCallback((range: TimeRange) => {
     setTimeRange(range);
   }, []);
@@ -204,43 +189,19 @@ export function ProductivityDashboard({ projectId }: ProductivityDashboardProps)
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Time Range Filter */}
             <div className="flex items-center gap-1 border border-border rounded-md p-1">
-              <Button
-                variant={timeRange === '7d' ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => handleTimeRangeChange('7d')}
-                className="h-7"
-              >
-                <Calendar className="h-3 w-3 mr-1" />
-                7d
-              </Button>
-              <Button
-                variant={timeRange === '30d' ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => handleTimeRangeChange('30d')}
-                className="h-7"
-              >
-                <Calendar className="h-3 w-3 mr-1" />
-                30d
-              </Button>
-              <Button
-                variant={timeRange === '90d' ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => handleTimeRangeChange('90d')}
-                className="h-7"
-              >
-                <Calendar className="h-3 w-3 mr-1" />
-                90d
-              </Button>
-              <Button
-                variant={timeRange === 'all' ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => handleTimeRangeChange('all')}
-                className="h-7"
-              >
-                All
-              </Button>
+              {(['7d', '30d', '90d', 'all'] as const).map((range) => (
+                <Button
+                  key={range}
+                  variant={timeRange === range ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => handleTimeRangeChange(range)}
+                  className="h-7"
+                >
+                  {range !== 'all' && <Calendar className="h-3 w-3 mr-1" />}
+                  {range === 'all' ? 'All' : range}
+                </Button>
+              ))}
             </div>
 
             <DashboardActions
@@ -257,6 +218,23 @@ export function ProductivityDashboard({ projectId }: ProductivityDashboardProps)
       {/* Main Content */}
       <ScrollArea className="flex-1">
         <div className="p-6 space-y-6">
+
+          {/* Error Banner */}
+          {loadError && (
+            <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 flex items-start gap-3">
+              <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-destructive">Failed to load analytics</p>
+                <p className="text-xs text-muted-foreground mt-1 break-all">{loadError}</p>
+                <p className="text-xs text-muted-foreground mt-1">ProjectID: {projectId}</p>
+              </div>
+              <Button variant="outline" size="sm" onClick={handleRefresh} className="shrink-0">
+                <RefreshCw className="h-3 w-3 mr-1" />
+                Retry
+              </Button>
+            </div>
+          )}
+
           {/* Summary Metrics Card */}
           {summary && (
             <div className="rounded-lg border border-border bg-card p-6">
@@ -286,7 +264,7 @@ export function ProductivityDashboard({ projectId }: ProductivityDashboardProps)
             </div>
           )}
 
-          {/* Trends Chart Placeholder */}
+          {/* Trends */}
           {trends.length > 0 && (
             <div className="rounded-lg border border-border bg-card p-6">
               <h2 className="text-lg font-semibold mb-4">Trends Over Time</h2>
@@ -298,23 +276,13 @@ export function ProductivityDashboard({ projectId }: ProductivityDashboardProps)
 
           {/* Quality Section */}
           <div className="space-y-6">
-            {/* Quality Alerts */}
-            <QualityAlertCard
-              alerts={qualityAlerts}
-              isLoading={isLoadingQuality}
-            />
-
-            {/* Quality Trend Chart */}
-            <QualityTrendChart
-              scores={qualityScores}
-              isLoading={isLoadingQuality}
-            />
+            <QualityAlertCard alerts={qualityAlerts} isLoading={isLoadingQuality} />
+            <QualityTrendChart scores={qualityScores} isLoading={isLoadingQuality} />
           </div>
 
-          {/* Breakdown by Type and Complexity */}
+          {/* Breakdown */}
           {summary && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* By Type */}
               <div className="rounded-lg border border-border bg-card p-6">
                 <h2 className="text-lg font-semibold mb-4">By Type</h2>
                 <div className="space-y-2">
@@ -326,8 +294,6 @@ export function ProductivityDashboard({ projectId }: ProductivityDashboardProps)
                   ))}
                 </div>
               </div>
-
-              {/* By Complexity */}
               <div className="rounded-lg border border-border bg-card p-6">
                 <h2 className="text-lg font-semibold mb-4">By Complexity</h2>
                 <div className="space-y-2">
@@ -342,7 +308,7 @@ export function ProductivityDashboard({ projectId }: ProductivityDashboardProps)
             </div>
           )}
 
-          {/* Spec Details Table Placeholder */}
+          {/* Spec Details Placeholder */}
           {summary && summary.specs.length > 0 && (
             <div className="rounded-lg border border-border bg-card p-6">
               <h2 className="text-lg font-semibold mb-4">Spec Details</h2>
@@ -352,8 +318,8 @@ export function ProductivityDashboard({ projectId }: ProductivityDashboardProps)
             </div>
           )}
 
-          {/* Empty State — shown after first load completes with no data */}
-          {hasLoaded && !isLoading && (!summary || summary.total_specs === 0) && (
+          {/* Empty State */}
+          {hasLoaded && !isLoading && !loadError && (!summary || summary.total_specs === 0) && (
             <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
               <BarChart3 className="h-16 w-16 mb-4 opacity-50" />
               <p className="text-lg font-medium">No productivity data available</p>
