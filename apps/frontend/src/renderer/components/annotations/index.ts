@@ -8,3 +8,4 @@ export type {
 } from './types';
 
 export { AnnotationOverlay } from './AnnotationOverlay';
+export { AnnotationForm } from './AnnotationForm';

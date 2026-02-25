@@ -160,3 +160,38 @@ Phase 6 (Integration & i18n): 0/4 pending
 Overall: 8/16 subtasks completed (50%)
 
 === END SESSION 15 ===
+
+Session 16 (Coder - subtask-5-2):
+- [COMPLETED] subtask-5-2: Create AnnotationOverlay component for visual selection
+  - Created apps/frontend/src/renderer/components/annotations/AnnotationOverlay.tsx with:
+    - Full-screen overlay that only renders when annotation mode is active
+    - Click and drag selection with visual feedback (selection rectangle with dimensions)
+    - Touch support for mobile/tablet devices
+    - Automatic screenshot capture via window.electronAPI.capture()
+    - Escape key to cancel active selection
+    - Minimum selection size validation (20px)
+    - Crosshair cursor when active, hints for user guidance
+    - Creates draft annotation via store on selection complete
+    - Only renders when annotation mode is enabled and no draft annotation exists
+  - Follows RateLimitModal.tsx patterns for code style, i18n usage, error handling
+  - Follows ResizablePanels.tsx patterns for mouse/touch drag event handling
+  - Updated annotations/index.ts barrel export to include AnnotationOverlay
+  - Committed: feat(annotations): create AnnotationOverlay component for visual selection
+  - Verified: npm run typecheck passes
+
+=== SUBTASK PROGRESS ===
+Phase 1 (Setup & Types): 3/3 completed ✅
+Phase 2 (State Management): 1/1 completed ✅
+Phase 3 (Spec Generation Service): 1/1 completed ✅
+Phase 4 (IPC & MCP Integration): 2/2 completed ✅
+Phase 5 (UI Components): 2/5 completed
+- ✅ subtask-5-1: Create annotation component types and initial barrel export
+- ✅ subtask-5-2: Create AnnotationOverlay component for visual selection
+- ⏳ subtask-5-3: Create AnnotationForm component (pending)
+- ⏳ subtask-5-4: Create AnnotationList component (pending)
+- ⏳ subtask-5-5: Create AnnotationToggle component (pending)
+Phase 6 (Integration & i18n): 0/4 pending
+
+Overall: 9/16 subtasks completed (56%)
+
+=== END SESSION 16 ===

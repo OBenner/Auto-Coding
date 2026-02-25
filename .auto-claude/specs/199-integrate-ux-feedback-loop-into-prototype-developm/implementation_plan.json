@@ -229,8 +229,8 @@
             "command": "cd apps/frontend && npx tsc --noEmit src/renderer/components/annotations/AnnotationOverlay.tsx",
             "expected": ""
           },
-          "status": "pending",
-          "notes": "Full-screen overlay with click-drag selection, cursor changes when enabled"
+          "status": "completed",
+          "notes": "Created AnnotationOverlay.tsx with full-screen overlay, click-drag selection, visual feedback (selection rectangle with dimensions), touch support, automatic screenshot capture via window.electronAPI.capture(), Escape key to cancel, minimum selection size validation (20px), crosshair cursor, user hints. Follows RateLimitModal.tsx patterns for code style, i18n usage, and error handling. Follows ResizablePanels.tsx patterns for mouse/touch drag event handling. Exported via annotations/index.ts barrel."
         },
         {
           "id": "subtask-5-3",
@@ -467,5 +467,5 @@
   "qa_signoff": null,
   "status": "in_progress",
   "planStatus": "in_progress",
-  "updated_at": "2026-02-25T05:33:02.631Z"
+  "updated_at": "2026-02-25T05:35:36.744Z"
 }
