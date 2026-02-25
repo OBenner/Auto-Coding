@@ -24,6 +24,7 @@ export * from './template';
 export * from './session-replay';
 export * from './scheduler';
 export * from './decision';
+export * from './annotation';
 
 // IPC types (must be last to use types from other modules)
 export * from './ipc';
