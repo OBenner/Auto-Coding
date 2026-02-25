@@ -11,12 +11,15 @@ from sqlalchemy.orm import Session, declarative_base, sessionmaker
 
 from .config import settings
 
-# Create SQLAlchemy engine
+# Create SQLAlchemy engine with optimized connection pool settings
 engine = create_engine(
     settings.DATABASE_URL,
     pool_pre_ping=True,  # Enable connection health checks
-    pool_size=10,  # Maximum number of connections in the pool
-    max_overflow=20,  # Maximum overflow connections
+    pool_size=settings.DB_POOL_SIZE,  # Maximum number of connections in the pool
+    max_overflow=settings.DB_MAX_OVERFLOW,  # Maximum overflow connections beyond pool_size
+    pool_timeout=settings.DB_POOL_TIMEOUT,  # Seconds to wait before giving up on getting a connection
+    pool_recycle=settings.DB_POOL_RECYCLE,  # Seconds after which a connection is automatically recycled
+    echo=settings.DB_ECHO,  # Log SQL queries (useful for debugging, disable in production)
 )
 
 # Create session factory
