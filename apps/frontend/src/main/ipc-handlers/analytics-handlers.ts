@@ -57,6 +57,11 @@ function countUniqueSessions(plan: Record<string, any>): number {
 }
 
 function estimateTimeSaved(m: SpecMetrics): number {
+  // Only estimate savings for specs with real build times.
+  // When duration_seconds <= 0 (no created_at timestamp), AI time is unknown,
+  // so counting the full manual estimate would inflate the total.
+  if (m.duration_seconds <= 0) return 0;
+
   const perSubtask: Record<string, number> = { simple: 0.5, standard: 1.5, complex: 3.0 };
   const manual = m.completed_subtasks * (perSubtask[m.complexity] ?? 1.5);
   const ai = m.duration_seconds / 3600;
@@ -368,14 +373,11 @@ export function registerAnalyticsHandlers(): void {
     ): Promise<IPCResult<ProductivitySummary>> => {
       const project = projectStore.getProject(projectId);
       if (!project) {
-        console.error('[Analytics] Project not found for ID:', projectId);
         return { success: false, error: 'Project not found' };
       }
 
       try {
-        console.log('[Analytics] Getting summary for project:', project.path, '| startDate:', startDate, '| endDate:', endDate);
         const summary = await aggregateSummary(project.path, startDate, endDate);
-        console.log('[Analytics] Summary result: total_specs=', summary.total_specs, 'completed=', summary.completed_specs);
         return { success: true, data: summary };
       } catch (error) {
         debugError('[Productivity Analytics] Failed to get summary:', error);
@@ -398,14 +400,11 @@ export function registerAnalyticsHandlers(): void {
     ): Promise<IPCResult<ProductivityTrendPoint[]>> => {
       const project = projectStore.getProject(projectId);
       if (!project) {
-        console.error('[Analytics] Project not found for ID:', projectId);
         return { success: false, error: 'Project not found' };
       }
 
       try {
-        console.log('[Analytics] Getting trends for project:', project.path, '| windowDays:', windowDays, '| granularity:', granularity);
         const trends = await aggregateTrends(project.path, windowDays, granularity);
-        console.log('[Analytics] Trends result: points=', trends.length);
         return { success: true, data: trends };
       } catch (error) {
         debugError('[Productivity Analytics] Failed to get trends:', error);

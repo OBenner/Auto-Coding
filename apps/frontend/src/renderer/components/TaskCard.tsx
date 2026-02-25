@@ -35,6 +35,22 @@ import {
 import { startTask, stopTask, checkTaskRunning, recoverStuckTask, isIncompleteHumanReview, archiveTasks } from '../stores/task-store';
 import type { Task, TaskCategory, ReviewReason, TaskStatus } from '../../shared/types';
 
+// Module-level visibility change singleton — one listener for all TaskCard instances
+type VisibilityCallback = () => void;
+const _visibilityCallbacks = new Set<VisibilityCallback>();
+let _visibilityListenerRegistered = false;
+
+function _registerVisibilityCallback(cb: VisibilityCallback): () => void {
+  if (!_visibilityListenerRegistered) {
+    document.addEventListener('visibilitychange', () => {
+      _visibilityCallbacks.forEach((fn) => fn());
+    });
+    _visibilityListenerRegistered = true;
+  }
+  _visibilityCallbacks.add(cb);
+  return () => _visibilityCallbacks.delete(cb);
+}
+
 // Category icon mapping
 const CategoryIcon: Record<TaskCategory, typeof Zap> = {
   feature: Target,
@@ -273,21 +289,21 @@ export const TaskCard = memo(function TaskCard({
     };
   }, [isRunning, performStuckCheck]);
 
-  // Add visibility change handler to re-validate on focus (debounced)
+  // Add visibility change handler to re-validate on focus (debounced).
+  // Uses a module-level singleton so all TaskCard instances share one DOM listener.
   useEffect(() => {
     let debounceTimeout: NodeJS.Timeout | null = null;
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible' && isRunning) {
-        // Debounce visibility checks to avoid rapid re-checks
         if (debounceTimeout) clearTimeout(debounceTimeout);
         debounceTimeout = setTimeout(performStuckCheck, 500);
       }
     };
 
-    document.addEventListener('visibilitychange', handleVisibilityChange);
+    const unregister = _registerVisibilityCallback(handleVisibilityChange);
     return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      unregister();
       if (debounceTimeout) clearTimeout(debounceTimeout);
     };
   }, [isRunning, performStuckCheck]);

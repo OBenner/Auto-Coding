@@ -642,15 +642,21 @@ def load_preferences(
         # Get preference profile from Graphiti memory
         memory = get_graphiti_memory(spec_dir, project_dir)
 
-        # Run async operation in sync context
+        # Run async operation in sync context.
+        # If a loop is already running (e.g. inside Ideation async process),
+        # delegate to a worker thread that owns its own event loop.
         import asyncio
+        import concurrent.futures
 
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
         try:
-            profile_data = loop.run_until_complete(memory.get_preference_profile())
-        finally:
-            loop.close()
+            asyncio.get_running_loop()
+            # Already inside an async context — run in a separate thread
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(asyncio.run, memory.get_preference_profile())
+                profile_data = future.result(timeout=30)
+        except RuntimeError:
+            # No running loop — safe to create one
+            profile_data = asyncio.run(memory.get_preference_profile())
 
         if not profile_data:
             logger.debug("No preference profile found, using defaults")

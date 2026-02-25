@@ -1,8 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Loader2, BarChart3, Calendar, AlertTriangle, RefreshCw } from 'lucide-react';
+import { Loader2, BarChart3, Calendar, AlertTriangle, RefreshCw, Timer, Zap, ListChecks, RotateCcw } from 'lucide-react';
 import { Button } from '../ui/button';
 import { ScrollArea } from '../ui/scroll-area';
 import { toast } from '../../hooks/use-toast';
+import { MetricsSummaryCard } from './MetricsSummaryCard';
+import { TrendsChart } from './TrendsChart';
+import { SpecBreakdownTable } from './SpecBreakdownTable';
 import { QualityTrendChart } from './QualityTrendChart';
 import { QualityAlertCard } from './QualityAlertCard';
 import { DashboardActions } from './DashboardActions';
@@ -31,6 +34,15 @@ function withTimeout<T>(promise: Promise<T>, ms = 5_000): Promise<T> {
   ]);
 }
 
+function formatHoursCompact(hours: number): string {
+  if (hours < 1 / 60) return '0m';
+  if (hours < 1) return `${(hours * 60).toFixed(0)}m`;
+  if (hours < 24) return `${hours.toFixed(1)}h`;
+  const days = Math.floor(hours / 24);
+  const remainingHours = Math.floor(hours % 24);
+  return `${days}d ${remainingHours}h`;
+}
+
 export function ProductivityDashboard({ projectId }: ProductivityDashboardProps) {
   const [summary, setSummary] = useState<ProductivitySummary | null>(null);
   const [trends, setTrends] = useState<ProductivityTrendPoint[]>([]);
@@ -42,7 +54,10 @@ export function ProductivityDashboard({ projectId }: ProductivityDashboardProps)
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const mountedRef = useRef(true);
-  useEffect(() => () => { mountedRef.current = false; }, []);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   // Quality store
   const { scores: qualityScores, alerts: qualityAlerts, isLoadingScores: isLoadingQuality } =
@@ -79,8 +94,6 @@ export function ProductivityDashboard({ projectId }: ProductivityDashboardProps)
         throw new Error('electronAPI.getProductivitySummary is not available');
       }
 
-      console.log('[Analytics] Loading data for project:', projectId, 'filter:', dateFilter);
-
       const [summaryResult, trendsResult] = await Promise.all([
         withTimeout(window.electronAPI.getProductivitySummary(projectId, dateFilter))
           .catch((err) => {
@@ -99,9 +112,6 @@ export function ProductivityDashboard({ projectId }: ProductivityDashboardProps)
       ]);
 
       if (!mountedRef.current) return;
-
-      console.log('[Analytics] Summary:', summaryResult.success, 'total_specs:', summaryResult.data?.total_specs, 'error:', summaryResult.error);
-      console.log('[Analytics] Trends:', trendsResult.success, 'points:', trendsResult.data?.length, 'error:', trendsResult.error);
 
       if (summaryResult.success && summaryResult.data) {
         setSummary(summaryResult.data);
@@ -235,44 +245,63 @@ export function ProductivityDashboard({ projectId }: ProductivityDashboardProps)
             </div>
           )}
 
-          {/* Summary Metrics Card */}
-          {summary && (
-            <div className="rounded-lg border border-border bg-card p-6">
-              <h2 className="text-lg font-semibold mb-4">Summary Metrics</h2>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div>
-                  <p className="text-sm text-muted-foreground">Total Specs</p>
-                  <p className="text-2xl font-bold">{summary.total_specs ?? 0}</p>
+          {/* Summary Metrics */}
+          <MetricsSummaryCard analytics={summary} isLoading={isLoading} />
+
+          {/* Secondary Metrics */}
+          {summary && summary.total_specs > 0 && (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="flex items-start gap-3 p-4 rounded-lg bg-muted/30 border border-border/50">
+                <div className="p-2 rounded-lg bg-accent/10 text-accent">
+                  <Timer className="h-5 w-5" />
                 </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Completed</p>
-                  <p className="text-2xl font-bold text-green-600">{summary.completed_specs ?? 0}</p>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm text-muted-foreground mb-1">Avg Build Time</div>
+                  <div className="text-2xl font-semibold text-foreground">
+                    {summary.total_specs > 0
+                      ? formatHoursCompact(summary.total_build_time_hours / summary.total_specs)
+                      : '-'}
+                  </div>
                 </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Time Saved</p>
-                  <p className="text-2xl font-bold">
-                    {Number(summary.total_time_saved_hours ?? 0).toFixed(1)}h
-                  </p>
+              </div>
+              <div className="flex items-start gap-3 p-4 rounded-lg bg-muted/30 border border-border/50">
+                <div className="p-2 rounded-lg bg-success/10 text-success">
+                  <Zap className="h-5 w-5" />
                 </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Success Rate</p>
-                  <p className="text-2xl font-bold">
-                    {(Number(summary.average_success_rate ?? 0) * 100).toFixed(1)}%
-                  </p>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm text-muted-foreground mb-1">First Attempt Pass</div>
+                  <div className="text-2xl font-semibold text-foreground">
+                    {(summary.first_attempt_success_rate * 100).toFixed(1)}%
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-start gap-3 p-4 rounded-lg bg-muted/30 border border-border/50">
+                <div className="p-2 rounded-lg bg-accent/10 text-accent">
+                  <ListChecks className="h-5 w-5" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm text-muted-foreground mb-1">Avg Subtasks/Spec</div>
+                  <div className="text-2xl font-semibold text-foreground">
+                    {summary.average_subtasks_per_spec.toFixed(1)}
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-start gap-3 p-4 rounded-lg bg-muted/30 border border-border/50">
+                <div className="p-2 rounded-lg bg-warning/10 text-warning">
+                  <RotateCcw className="h-5 w-5" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm text-muted-foreground mb-1">Avg QA Iterations</div>
+                  <div className="text-2xl font-semibold text-foreground">
+                    {summary.average_qa_iterations.toFixed(1)}
+                  </div>
                 </div>
               </div>
             </div>
           )}
 
           {/* Trends */}
-          {trends.length > 0 && (
-            <div className="rounded-lg border border-border bg-card p-6">
-              <h2 className="text-lg font-semibold mb-4">Trends Over Time</h2>
-              <div className="h-64 flex items-center justify-center text-muted-foreground">
-                <p>Trends chart will be displayed here (TrendsChart component)</p>
-              </div>
-            </div>
-          )}
+          <TrendsChart trends={trends} isLoading={isLoading} />
 
           {/* Quality Section */}
           <div className="space-y-6">
@@ -280,43 +309,8 @@ export function ProductivityDashboard({ projectId }: ProductivityDashboardProps)
             <QualityTrendChart scores={qualityScores} isLoading={isLoadingQuality} />
           </div>
 
-          {/* Breakdown */}
-          {summary && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="rounded-lg border border-border bg-card p-6">
-                <h2 className="text-lg font-semibold mb-4">By Type</h2>
-                <div className="space-y-2">
-                  {Object.entries(summary.specs_by_type).map(([type, count]) => (
-                    <div key={type} className="flex justify-between items-center">
-                      <span className="text-sm capitalize">{type}</span>
-                      <span className="text-sm font-semibold">{count}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div className="rounded-lg border border-border bg-card p-6">
-                <h2 className="text-lg font-semibold mb-4">By Complexity</h2>
-                <div className="space-y-2">
-                  {Object.entries(summary.specs_by_complexity).map(([complexity, count]) => (
-                    <div key={complexity} className="flex justify-between items-center">
-                      <span className="text-sm capitalize">{complexity}</span>
-                      <span className="text-sm font-semibold">{count}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Spec Details Placeholder */}
-          {summary && summary.specs.length > 0 && (
-            <div className="rounded-lg border border-border bg-card p-6">
-              <h2 className="text-lg font-semibold mb-4">Spec Details</h2>
-              <div className="flex items-center justify-center h-32 text-muted-foreground">
-                <p>Detailed spec breakdown table will be displayed here (SpecBreakdownTable component)</p>
-              </div>
-            </div>
-          )}
+          {/* Spec Breakdown */}
+          <SpecBreakdownTable specs={summary?.specs ?? []} isLoading={isLoading} />
 
           {/* Empty State */}
           {hasLoaded && !isLoading && !loadError && (!summary || summary.total_specs === 0) && (
