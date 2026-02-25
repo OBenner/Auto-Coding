@@ -125,8 +125,8 @@
             "command": "cd apps/frontend && npx tsc --noEmit src/main/services/annotation-to-spec-service.ts",
             "expected": ""
           },
-          "status": "pending",
-          "notes": "Creates .auto-claude/specs/{id}-annotation-{slug}/ with spec.md, requirements.json, screenshot.png"
+          "status": "completed",
+          "notes": "Created annotation-to-spec-service.ts with AnnotationToSpecService class. Features: slugify() for URL-friendly folder names, generateSpecId() using first 8 chars of annotation UUID, generateSpecMd() for complete spec document with overview/details/screen context/workflow/task scope/requirements, generateRequirementsJson() for annotation metadata, saveScreenshot() from base64 data, validateAnnotation() with checks for ID/description length/screenshot/coordinates, createSpecFromAnnotation() main method that creates spec folder with all files, specExists() helper, deleteSpec() for cleanup. Follows patterns from project-store.ts (async/await, atomicWriteFile, error handling, singleton export)."
         }
       ]
     },
