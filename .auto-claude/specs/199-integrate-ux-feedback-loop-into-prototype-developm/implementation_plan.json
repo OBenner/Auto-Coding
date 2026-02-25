@@ -63,8 +63,8 @@
             "command": "cd apps/frontend && grep -c 'ANNOTATION_' src/shared/constants/ipc.ts",
             "expected": "4"
           },
-          "status": "pending",
-          "notes": "Add ANNOTATION_CREATE, ANNOTATION_LIST, ANNOTATION_DELETE, ANNOTATION_SUBMIT channels"
+          "status": "completed",
+          "notes": "Added ANNOTATION_SUBMIT, ANNOTATION_GET, ANNOTATION_DELETE, and ANNOTATION_LIST IPC channels in the Feedback section"
         }
       ]
     },
@@ -94,7 +94,8 @@
             "command": "cd apps/frontend && npx tsc --noEmit src/renderer/stores/annotation-store.ts",
             "expected": ""
           },
-          "status": "pending"
+          "status": "completed",
+          "notes": "Created annotation-store.ts following kanban-settings-store pattern. Includes isAnnotationMode state, annotations array, and draftAnnotation. Actions: toggleAnnotationMode/setAnnotationMode for mode control, createDraftAnnotation for starting new annotation, submitDraftAnnotation for completing with form data, cancelDraftAnnotation for discarding draft, addAnnotation/updateAnnotation/deleteAnnotation for CRUD operations, clearAnnotations for resetting state, and query methods getAnnotation/getAnnotationsCountByStatus/getAnnotationsCountBySeverity. Includes localStorage persistence for annotation mode, validates coordinates and description length."
         }
       ]
     },
@@ -465,5 +466,5 @@
   "qa_signoff": null,
   "status": "in_progress",
   "planStatus": "in_progress",
-  "updated_at": "2026-02-25T05:10:34.607Z"
+  "updated_at": "2026-02-25T05:19:36.283Z"
 }
