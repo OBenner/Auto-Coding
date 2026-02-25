@@ -128,3 +128,35 @@ Phase 6 (Integration & i18n): 0/4 pending
 Overall: 7/16 subtasks completed (44%)
 
 === END SESSION 14 ===
+
+Session 15 (Coder - subtask-5-1):
+- [COMPLETED] subtask-5-1: Create annotation component types and initial barrel export
+  - Created apps/frontend/src/renderer/components/annotations/types.ts with:
+    - AnnotationCoordinates interface (x, y, width, height)
+    - ViewportSize interface (width, height)
+    - AnnotationSeverity type (low, medium, high, critical)
+    - Annotation interface (complete data structure from spec)
+    - AnnotationOverlayProps interface (onAnnotationSubmit, currentRoute)
+    - AnnotationFormProps interface (coordinates, screenshot, onSubmit, onCancel)
+  - Created apps/frontend/src/renderer/components/annotations/index.ts barrel export
+  - Followed context/index.ts pattern for clean exports
+  - All types include JSDoc comments for documentation
+  - Committed: feat(annotations): create annotation component types and initial barrel export
+  - Verified: test -f apps/frontend/src/renderer/components/annotations/index.ts returns OK
+
+=== SUBTASK PROGRESS ===
+Phase 1 (Setup & Types): 3/3 completed ✅
+Phase 2 (State Management): 1/1 completed ✅
+Phase 3 (Spec Generation Service): 1/1 completed ✅
+Phase 4 (IPC & MCP Integration): 2/2 completed ✅
+Phase 5 (UI Components): 1/5 completed
+- ✅ subtask-5-1: Create annotation component types and initial barrel export
+- ⏳ subtask-5-2: Create AnnotationOverlay component (pending)
+- ⏳ subtask-5-3: Create AnnotationForm component (pending)
+- ⏳ subtask-5-4: Create AnnotationList component (pending)
+- ⏳ subtask-5-5: Create AnnotationToggle component (pending)
+Phase 6 (Integration & i18n): 0/4 pending
+
+Overall: 8/16 subtasks completed (50%)
+
+=== END SESSION 15 ===

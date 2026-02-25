@@ -6,3 +6,5 @@ export type {
   AnnotationSeverity,
   ViewportSize,
 } from './types';
+
+export { AnnotationOverlay } from './AnnotationOverlay';

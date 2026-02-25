@@ -210,8 +210,8 @@
             "command": "test -f apps/frontend/src/renderer/components/annotations/index.ts && echo OK",
             "expected": "OK"
           },
-          "status": "pending",
-          "notes": "Create initial index.ts with types export. Each subsequent component subtask will add its export to this file."
+          "status": "completed",
+          "notes": "Created types.ts with Annotation, AnnotationCoordinates, ViewportSize, AnnotationSeverity, AnnotationOverlayProps, and AnnotationFormProps types. Created index.ts barrel export following context/index.ts pattern. All type definitions include JSDoc comments and follow the spec's annotation data schema."
         },
         {
           "id": "subtask-5-2",
