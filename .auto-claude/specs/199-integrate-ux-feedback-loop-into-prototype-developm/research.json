@@ -1,0 +1,237 @@
+{
+  "integrations_researched": [
+    {
+      "name": "Agentation",
+      "type": "library",
+      "description": "Visual feedback tool for AI coding agents - allows developers to click UI elements, add annotations, and generate structured output with CSS selectors that AI agents can understand",
+      "verified_package": {
+        "name": "agentation",
+        "install_command": "npm install agentation -D",
+        "version": "^2.2.1",
+        "verified": true
+      },
+      "api_patterns": {
+        "imports": [
+          "import { Agentation } from 'agentation'"
+        ],
+        "initialization": "{process.env.NODE_ENV === 'development' && <Agentation />}",
+        "key_functions": [
+          "<Agentation /> - renders annotation toolbar in bottom-right corner",
+          "onAnnotationAdd - callback when annotation added",
+          "onAnnotationDelete - callback when annotation deleted",
+          "onAnnotationUpdate - callback when annotation modified",
+          "onAnnotationsClear - callback when all cleared",
+          "onCopy - callback when markdown copied",
+          "onSubmit - callback for form submission",
+          "copyToClipboard - prop (default: true)",
+          "endpoint - server URL for MCP sync (e.g., 'http://localhost:4747')",
+          "sessionId - join existing session",
+          "onSessionCreated - receives sessionId string"
+        ],
+        "verified_against": "https://agentation.dev/install, https://github.com/benjitaylor/agentation"
+      },
+      "configuration": {
+        "env_vars": [],
+        "config_files": [],
+        "dependencies": ["react@>=18.0.0 (peer dependency)"],
+        "notes": "Zero runtime dependencies beyond React peer dependency"
+      },
+      "infrastructure": {
+        "requires_docker": false,
+        "local_server": true,
+        "default_port": 4747,
+        "notes": "MCP server runs locally via agentation-mcp package"
+      },
+      "gotchas": [
+        "React 19 compatibility unverified - package requires React 18+ but may work with React 19",
+        "Desktop browsers only - mobile not supported",
+        "Client-side only component with DOM access requirement",
+        "License: PolyForm Shield 1.0.0 - may have usage restrictions, needs legal review",
+        "Local-first architecture - annotations sync when server becomes available",
+        "No external data transmission by default - all processing is browser-based until manual sharing"
+      ],
+      "research_sources": [
+        "https://www.npmjs.com/package/agentation",
+        "https://agentation.dev/install",
+        "https://agentation.dev/mcp",
+        "https://github.com/benjitaylor/agentation",
+        "https://habr.com/ru/amp/publications/1000726/"
+      ]
+    },
+    {
+      "name": "agentation-mcp",
+      "type": "library",
+      "description": "MCP server for Agentation that enables real-time bidirectional communication between browser annotations and AI coding agents",
+      "verified_package": {
+        "name": "agentation-mcp",
+        "install_command": "npm install agentation-mcp",
+        "version": "^1.2.0",
+        "verified": true
+      },
+      "api_patterns": {
+        "imports": [],
+        "initialization": "npx agentation-mcp server",
+        "key_functions": [
+          "agentation_list_sessions - discover active annotation sessions",
+          "agentation_get_session - retrieve session with all annotations",
+          "agentation_get_pending - view unacknowledged annotations for a session",
+          "agentation_get_all_pending - see unaddressed feedback across all pages",
+          "agentation_acknowledge - mark feedback as seen",
+          "agentation_resolve - mark feedback as addressed",
+          "agentation_dismiss - reject feedback with reasoning",
+          "agentation_reply - add thread responses to annotations",
+          "agentation_watch_annotations - block until new annotations appear"
+        ],
+        "verified_against": "https://agentation.dev/mcp, https://libraries.io/npm/agentation-mcp"
+      },
+      "configuration": {
+        "env_vars": [],
+        "config_files": [],
+        "dependencies": [],
+        "cli_commands": [
+          "npx agentation-mcp init - interactive setup wizard",
+          "npx agentation-mcp server - launches HTTP and MCP servers",
+          "npx agentation-mcp doctor - validates Node.js and connectivity",
+          "npx add-mcp 'npx -y agentation-mcp server' - auto-configure for Claude Code"
+        ]
+      },
+      "infrastructure": {
+        "requires_docker": false,
+        "local_server": true,
+        "default_port": 4747,
+        "customizable_port": true,
+        "server_flags": ["--port <port>", "--mcp-only", "--http-url <url>"]
+      },
+      "gotchas": [
+        "Architecture: toolbar → HTTP server → MCP server → agent",
+        "Server must be running for real-time sync between browser and agent",
+        "Multiple concurrent sessions supported with session IDs"
+      ],
+      "research_sources": [
+        "https://agentation.dev/mcp",
+        "https://libraries.io/npm/agentation-mcp",
+        "https://www.jsdelivr.com/package/npm/agentation-mcp"
+      ]
+    },
+    {
+      "name": "Model Context Protocol (MCP)",
+      "type": "infrastructure",
+      "description": "Open protocol by Anthropic for seamless integration between LLM applications and external data sources/tools. Already integrated in project via @modelcontextprotocol/sdk",
+      "verified_package": {
+        "name": "@modelcontextprotocol/sdk",
+        "install_command": "npm install @modelcontextprotocol/sdk",
+        "version": "^1.0.4",
+        "verified": true,
+        "already_installed": true
+      },
+      "api_patterns": {
+        "imports": [
+          "import { Server } from '@modelcontextprotocol/sdk/server'",
+          "import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio'"
+        ],
+        "initialization": "See apps/frontend/src/main/mcp-server.ts",
+        "key_functions": [
+          "Server - create MCP server instance",
+          "StdioServerTransport - stdio transport for communication"
+        ],
+        "verified_against": "https://modelcontextprotocol.io/specification/2025-11-25"
+      },
+      "configuration": {
+        "env_vars": [
+          "ELECTRON_MCP_ENABLED - set to 'true' to enable MCP server",
+          "ELECTRON_MCP_LOG_LEVEL - log verbosity (debug|info|warn|error)"
+        ],
+        "config_files": [],
+        "dependencies": [],
+        "notes": "MCP infrastructure already exists in project at apps/frontend/src/main/mcp-manager.ts"
+      },
+      "infrastructure": {
+        "requires_docker": false,
+        "embedded_mode": true,
+        "transport": "stdio (stdin/stdout)"
+      },
+      "gotchas": [
+        "Project already has MCP infrastructure - can extend existing setup",
+        "ElectronMCPServer class in mcp-server.ts provides existing implementation pattern",
+        "MCP donated to Linux Foundation's Agentic AI Foundation in Dec 2025",
+        "Wide adoption: OpenAI, Google DeepMind, Microsoft all support MCP"
+      ],
+      "research_sources": [
+        "https://modelcontextprotocol.io/specification/2025-11-25",
+        "https://www.anthropic.com/news/model-context-protocol",
+        "https://github.com/modelcontextprotocol"
+      ]
+    }
+  ],
+  "project_compatibility": {
+    "react_version": {
+      "project_uses": "React 19.2.3",
+      "agentation_requires": "React 18+",
+      "compatibility": "likely_compatible",
+      "notes": "React 18+ peer dependency should support React 19, but needs testing"
+    },
+    "electron_version": {
+      "project_uses": "Electron 40.6.0",
+      "agentation_support": "desktop_browser_only",
+      "compatibility": "likely_compatible",
+      "notes": "Electron uses Chromium for rendering, should work like desktop browser"
+    },
+    "mcp_infrastructure": {
+      "existing": true,
+      "package": "@modelcontextprotocol/sdk ^1.0.4",
+      "files": [
+        "apps/frontend/src/main/mcp-manager.ts",
+        "apps/frontend/src/main/mcp-server.ts",
+        "apps/frontend/src/main/ipc-handlers/mcp-handlers.ts"
+      ],
+      "notes": "Can extend existing MCP infrastructure instead of adding parallel system"
+    }
+  },
+  "unverified_claims": [
+    {
+      "claim": "Agentation works with React 19",
+      "reason": "Documentation only specifies React 18+ requirement, no explicit React 19 testing documented",
+      "risk_level": "low",
+      "mitigation": "Test with --legacy-peer-deps or verify in development before full integration"
+    },
+    {
+      "claim": "Agentation works in Electron environment",
+      "reason": "Documentation says 'desktop browser only' but doesn't mention Electron specifically",
+      "risk_level": "low",
+      "mitigation": "Electron uses Chromium renderer, should work like standard browser"
+    },
+    {
+      "claim": "PolyForm Shield 1.0.0 license is compatible with AGPL-3.0",
+      "reason": "Auto-Claude frontend uses AGPL-3.0, need to verify license compatibility for dependencies",
+      "risk_level": "medium",
+      "mitigation": "Review PolyForm Shield license terms before production use"
+    }
+  ],
+  "recommendations": [
+    "Install agentation as devDependency since it's only needed during development",
+    "Extend existing MCP infrastructure in mcp-server.ts rather than running separate agentation-mcp server",
+    "Add Agentation component conditionally only in development mode",
+    "Create dedicated 'UX Feedback' workflow in Auto-Claude that: 1) Captures annotations 2) Converts to tasks 3) Routes to appropriate spec creation",
+    "Consider creating MCP bridge tool that connects agentation annotations to spec_runner.py for automatic task creation",
+    "Test React 19 compatibility before full integration - may need --legacy-peer-deps flag",
+    "Review PolyForm Shield license for any usage restrictions"
+  ],
+  "implementation_approach": {
+    "summary": "Integrate Agentation visual feedback tool into the Electron prototype to enable click-to-annotate UX feedback that automatically creates development tasks",
+    "workflow": [
+      "1. User activates annotation mode in running prototype",
+      "2. User clicks problematic UI elements and adds notes",
+      "3. Agentation captures CSS selectors, position, context as structured markdown",
+      "4. System converts annotations to task descriptions via MCP tools",
+      "5. Tasks automatically created in spec system via spec_runner.py integration",
+      "6. Developers implement fixes with precise code location information"
+    ],
+    "key_benefits": [
+      "Eliminates vague UI issue descriptions ('the blue button is wrong')",
+      "Provides exact CSS selectors for precise code location",
+      "Creates machine-readable feedback AI agents can act on immediately",
+      "Closes feedback loop between prototype testing and task creation"
+    ]
+  },
+  "created_at": "2026-02-24T12:00:00Z"
+}

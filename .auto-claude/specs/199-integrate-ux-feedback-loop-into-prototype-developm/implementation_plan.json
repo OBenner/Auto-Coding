@@ -1,0 +1,468 @@
+{
+  "feature": "UX Feedback Loop - Visual Annotation System",
+  "workflow_type": "feature",
+  "workflow_rationale": "New functionality - visual annotation layer with task creation pipeline, requires new components, stores, and MCP integration",
+  "phases": [
+    {
+      "id": "phase-1-setup",
+      "name": "Setup & Types",
+      "type": "setup",
+      "description": "Install agentation package and create TypeScript type definitions",
+      "depends_on": [],
+      "parallel_safe": false,
+      "subtasks": [
+        {
+          "id": "subtask-1-1",
+          "description": "Install agentation package as devDependency",
+          "service": "frontend",
+          "files_to_modify": [
+            "apps/frontend/package.json"
+          ],
+          "files_to_create": [],
+          "patterns_from": [],
+          "verification": {
+            "type": "command",
+            "command": "cd apps/frontend && npm ls agentation",
+            "expected": "agentation@"
+          },
+          "status": "completed",
+          "notes": "Installed agentation@2.2.1 successfully without peer dependency conflicts"
+        },
+        {
+          "id": "subtask-1-2",
+          "description": "Create annotation TypeScript type definitions",
+          "service": "frontend",
+          "files_to_modify": [],
+          "files_to_create": [
+            "apps/frontend/src/shared/types/annotation.ts"
+          ],
+          "patterns_from": [
+            "apps/frontend/src/shared/types/task.ts"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "cd apps/frontend && npx tsc --noEmit src/shared/types/annotation.ts",
+            "expected": ""
+          },
+          "status": "pending"
+        },
+        {
+          "id": "subtask-1-3",
+          "description": "Add annotation IPC channel constants",
+          "service": "frontend",
+          "files_to_modify": [
+            "apps/frontend/src/shared/constants/ipc.ts"
+          ],
+          "files_to_create": [],
+          "patterns_from": [
+            "apps/frontend/src/shared/constants/ipc.ts"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "cd apps/frontend && grep -c 'ANNOTATION_' src/shared/constants/ipc.ts",
+            "expected": "4"
+          },
+          "status": "pending",
+          "notes": "Add ANNOTATION_CREATE, ANNOTATION_LIST, ANNOTATION_DELETE, ANNOTATION_SUBMIT channels"
+        }
+      ]
+    },
+    {
+      "id": "phase-2-store",
+      "name": "State Management",
+      "type": "implementation",
+      "description": "Create Zustand annotation store for managing annotation state",
+      "depends_on": [
+        "phase-1-setup"
+      ],
+      "parallel_safe": false,
+      "subtasks": [
+        {
+          "id": "subtask-2-1",
+          "description": "Create Zustand annotation store with toggle, add, and clear actions",
+          "service": "frontend",
+          "files_to_modify": [],
+          "files_to_create": [
+            "apps/frontend/src/renderer/stores/annotation-store.ts"
+          ],
+          "patterns_from": [
+            "apps/frontend/src/renderer/stores/kanban-settings-store.ts"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "cd apps/frontend && npx tsc --noEmit src/renderer/stores/annotation-store.ts",
+            "expected": ""
+          },
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": "phase-3-spec-service",
+      "name": "Spec Generation Service",
+      "type": "implementation",
+      "description": "Create service to transform annotations into spec folder structure",
+      "depends_on": [
+        "phase-1-setup"
+      ],
+      "parallel_safe": true,
+      "subtasks": [
+        {
+          "id": "subtask-3-1",
+          "description": "Create annotation-to-spec service with folder creation and file generation",
+          "service": "frontend",
+          "files_to_modify": [],
+          "files_to_create": [
+            "apps/frontend/src/main/services/annotation-to-spec-service.ts"
+          ],
+          "patterns_from": [
+            "apps/frontend/src/main/project-store.ts"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "cd apps/frontend && npx tsc --noEmit src/main/services/annotation-to-spec-service.ts",
+            "expected": ""
+          },
+          "status": "pending",
+          "notes": "Creates .auto-claude/specs/{id}-annotation-{slug}/ with spec.md, requirements.json, screenshot.png"
+        }
+      ]
+    },
+    {
+      "id": "phase-4-ipc-mcp",
+      "name": "IPC & MCP Integration",
+      "type": "implementation",
+      "description": "Add IPC handlers and MCP tools for annotation operations",
+      "depends_on": [
+        "phase-2-store",
+        "phase-3-spec-service"
+      ],
+      "parallel_safe": false,
+      "subtasks": [
+        {
+          "id": "subtask-4-1",
+          "description": "Create annotation IPC handlers for create, list, and delete operations",
+          "service": "frontend",
+          "files_to_modify": [
+            "apps/frontend/src/main/ipc-handlers/index.ts"
+          ],
+          "files_to_create": [
+            "apps/frontend/src/main/ipc-handlers/annotation-handlers.ts"
+          ],
+          "patterns_from": [
+            "apps/frontend/src/main/ipc-handlers/mcp-handlers.ts"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "cd apps/frontend && npx tsc --noEmit src/main/ipc-handlers/annotation-handlers.ts",
+            "expected": ""
+          },
+          "status": "pending"
+        },
+        {
+          "id": "subtask-4-2",
+          "description": "Add create_annotation_task MCP tool to existing MCP server",
+          "service": "frontend",
+          "files_to_modify": [
+            "apps/frontend/src/main/mcp-server.ts"
+          ],
+          "files_to_create": [],
+          "patterns_from": [
+            "apps/frontend/src/main/mcp-server.ts"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "cd apps/frontend && grep -c 'create_annotation_task' src/main/mcp-server.ts",
+            "expected": "1"
+          },
+          "status": "pending",
+          "notes": "Follow existing tool registration pattern with Zod schema validation"
+        }
+      ]
+    },
+    {
+      "id": "phase-5-ui",
+      "name": "UI Components",
+      "type": "implementation",
+      "description": "Create React components for annotation overlay, form, list, and toggle",
+      "depends_on": [
+        "phase-2-store"
+      ],
+      "parallel_safe": true,
+      "subtasks": [
+        {
+          "id": "subtask-5-1",
+          "description": "Create annotation component types and initial barrel export",
+          "service": "frontend",
+          "files_to_modify": [],
+          "files_to_create": [
+            "apps/frontend/src/renderer/components/annotations/types.ts",
+            "apps/frontend/src/renderer/components/annotations/index.ts"
+          ],
+          "patterns_from": [
+            "apps/frontend/src/renderer/components/context/index.ts"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "test -f apps/frontend/src/renderer/components/annotations/index.ts && echo OK",
+            "expected": "OK"
+          },
+          "status": "pending",
+          "notes": "Create initial index.ts with types export. Each subsequent component subtask will add its export to this file."
+        },
+        {
+          "id": "subtask-5-2",
+          "description": "Create AnnotationOverlay component for visual selection",
+          "service": "frontend",
+          "files_to_modify": [],
+          "files_to_create": [
+            "apps/frontend/src/renderer/components/annotations/AnnotationOverlay.tsx"
+          ],
+          "patterns_from": [
+            "apps/frontend/src/renderer/components/RateLimitModal.tsx"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "cd apps/frontend && npx tsc --noEmit src/renderer/components/annotations/AnnotationOverlay.tsx",
+            "expected": ""
+          },
+          "status": "pending",
+          "notes": "Full-screen overlay with click-drag selection, cursor changes when enabled"
+        },
+        {
+          "id": "subtask-5-3",
+          "description": "Create AnnotationForm component for description and severity input",
+          "service": "frontend",
+          "files_to_modify": [],
+          "files_to_create": [
+            "apps/frontend/src/renderer/components/annotations/AnnotationForm.tsx"
+          ],
+          "patterns_from": [
+            "apps/frontend/src/renderer/components/FeedbackDialog.tsx"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "cd apps/frontend && npx tsc --noEmit src/renderer/components/annotations/AnnotationForm.tsx",
+            "expected": ""
+          },
+          "status": "pending"
+        },
+        {
+          "id": "subtask-5-4",
+          "description": "Create AnnotationList component to display session annotations",
+          "service": "frontend",
+          "files_to_modify": [],
+          "files_to_create": [
+            "apps/frontend/src/renderer/components/annotations/AnnotationList.tsx"
+          ],
+          "patterns_from": [
+            "apps/frontend/src/renderer/components/ChatHistorySidebar.tsx"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "cd apps/frontend && npx tsc --noEmit src/renderer/components/annotations/AnnotationList.tsx",
+            "expected": ""
+          },
+          "status": "pending"
+        },
+        {
+          "id": "subtask-5-5",
+          "description": "Create AnnotationToggle toolbar button component",
+          "service": "frontend",
+          "files_to_modify": [],
+          "files_to_create": [
+            "apps/frontend/src/renderer/components/annotations/AnnotationToggle.tsx"
+          ],
+          "patterns_from": [
+            "apps/frontend/src/renderer/components/ui/button.tsx"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "cd apps/frontend && npx tsc --noEmit src/renderer/components/annotations/AnnotationToggle.tsx",
+            "expected": ""
+          },
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": "phase-6-integration",
+      "name": "Integration & i18n",
+      "type": "integration",
+      "description": "Integrate annotation components into App.tsx and add i18n translations",
+      "depends_on": [
+        "phase-4-ipc-mcp",
+        "phase-5-ui"
+      ],
+      "parallel_safe": false,
+      "subtasks": [
+        {
+          "id": "subtask-6-1",
+          "description": "Add i18n translation keys for annotation UI to EN and FR locales",
+          "service": "frontend",
+          "files_to_modify": [
+            "apps/frontend/src/shared/i18n/locales/en/common.json",
+            "apps/frontend/src/shared/i18n/locales/fr/common.json"
+          ],
+          "files_to_create": [],
+          "patterns_from": [
+            "apps/frontend/src/shared/i18n/locales/en/common.json"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "cd apps/frontend && grep -c 'annotation' src/shared/i18n/locales/en/common.json",
+            "expected": "1"
+          },
+          "status": "pending"
+        },
+        {
+          "id": "subtask-6-2",
+          "description": "Integrate annotation components into App.tsx with dev-only rendering",
+          "service": "frontend",
+          "files_to_modify": [
+            "apps/frontend/src/renderer/App.tsx"
+          ],
+          "files_to_create": [],
+          "patterns_from": [
+            "apps/frontend/src/renderer/App.tsx"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "cd apps/frontend && grep -c 'import.meta.env.DEV' src/renderer/App.tsx | head -1",
+            "expected": "1"
+          },
+          "status": "pending",
+          "notes": "Wrap annotation components in import.meta.env.DEV conditional"
+        },
+        {
+          "id": "subtask-6-3",
+          "description": "Add electronAPI annotation methods to preload script",
+          "service": "frontend",
+          "files_to_modify": [
+            "apps/frontend/src/preload/index.ts"
+          ],
+          "files_to_create": [],
+          "patterns_from": [
+            "apps/frontend/src/preload/index.ts"
+          ],
+          "verification": {
+            "type": "command",
+            "command": "cd apps/frontend && grep -c 'createAnnotation\\|submitAnnotation' src/preload/index.ts",
+            "expected": "2"
+          },
+          "status": "pending"
+        },
+        {
+          "id": "subtask-6-4",
+          "description": "Verify complete annotation integration with typecheck",
+          "service": "frontend",
+          "files_to_modify": [],
+          "files_to_create": [],
+          "patterns_from": [],
+          "verification": {
+            "type": "command",
+            "command": "cd apps/frontend && npm run typecheck",
+            "expected": ""
+          },
+          "status": "pending",
+          "notes": "Barrel export in annotations/index.ts is created and maintained during phase-5 subtasks"
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "total_phases": 6,
+    "total_subtasks": 16,
+    "services_involved": [
+      "frontend"
+    ],
+    "parallelism": {
+      "max_parallel_phases": 2,
+      "parallel_groups": [
+        {
+          "phases": [
+            "phase-3-spec-service",
+            "phase-2-store"
+          ],
+          "reason": "Both depend only on phase-1-setup, different file sets"
+        }
+      ],
+      "recommended_workers": 1
+    },
+    "startup_command": "cd apps/frontend && npm run dev"
+  },
+  "verification_strategy": {
+    "risk_level": "medium",
+    "skip_validation": false,
+    "test_creation_phase": "post_implementation",
+    "test_types_required": [
+      "unit"
+    ],
+    "security_scanning_required": false,
+    "staging_deployment_required": false,
+    "acceptance_criteria": [
+      "All TypeScript type checks pass",
+      "Annotation toggle visible only in dev mode",
+      "Annotations create valid spec folders",
+      "No console errors in dev or production",
+      "i18n translations added for EN and FR"
+    ],
+    "verification_steps": [
+      {
+        "name": "TypeCheck",
+        "command": "cd apps/frontend && npm run typecheck",
+        "expected_outcome": "No TypeScript errors",
+        "type": "test",
+        "required": true,
+        "blocking": true
+      },
+      {
+        "name": "Unit Tests",
+        "command": "cd apps/frontend && npm test",
+        "expected_outcome": "All tests pass",
+        "type": "test",
+        "required": true,
+        "blocking": true
+      },
+      {
+        "name": "Lint",
+        "command": "cd apps/frontend && npm run lint",
+        "expected_outcome": "No lint errors",
+        "type": "test",
+        "required": true,
+        "blocking": false
+      }
+    ],
+    "reasoning": "Medium risk - new feature with MCP and IPC integration"
+  },
+  "qa_acceptance": {
+    "unit_tests": {
+      "required": true,
+      "commands": [
+        "cd apps/frontend && npm test"
+      ]
+    },
+    "browser_verification": {
+      "required": true,
+      "pages": [
+        {
+          "url": "http://localhost:5173/",
+          "checks": [
+            "annotation-toggle-visible-in-dev",
+            "no-console-errors"
+          ]
+        }
+      ]
+    },
+    "filesystem_verification": {
+      "required": true,
+      "checks": [
+        "spec-folder-created-on-annotation-submit"
+      ]
+    }
+  },
+  "qa_signoff": null,
+  "status": "in_progress",
+  "planStatus": "in_progress",
+  "updated_at": "2026-02-25T05:06:40.589Z"
+}
