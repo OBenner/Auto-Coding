@@ -343,6 +343,11 @@ impl ConfigBuilder {
         self
     }
 
+    pub fn timeout(mut self, timeout: u64) -> Self {
+        self.timeout = Some(timeout);
+        self
+    }
+
     pub fn build(self) -> Result<Config, &'static str> {
         Ok(Config {
             host: self.host.ok_or("host is required")?,

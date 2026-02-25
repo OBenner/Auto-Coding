@@ -61,7 +61,7 @@ LANGUAGE_SECURITY_RULES: dict[str, dict[str, list[str]]] = {
     "go": {
         "dangerous_functions": [
             "exec.Command",  # Command injection risk
-            "os.Exec",  # Command injection risk
+            "syscall.Exec",  # Command injection risk
             "template.HTML",  # XSS risk if not sanitized
             "sql.Query",  # SQL injection risk without parameterization
             "ioutil.ReadFile",  # Path traversal risk

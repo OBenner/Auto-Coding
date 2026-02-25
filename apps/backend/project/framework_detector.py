@@ -33,6 +33,7 @@ class FrameworkDetector:
         Returns:
             List of detected frameworks
         """
+        self.frameworks = []
         self.detect_nodejs_frameworks()
         self.detect_python_frameworks()
         self.detect_ruby_frameworks()

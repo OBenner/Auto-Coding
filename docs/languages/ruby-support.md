@@ -1248,4 +1248,4 @@ Auto Code will:
 
 ---
 
-**Need help?** Check the [Troubleshooting Guide](../../guides/TROUBLESHOOTING.md) or open an issue on GitHub.
+**Need help?** Check the [Troubleshooting Guide](../guides/TROUBLESHOOTING.md) or open an issue on GitHub.

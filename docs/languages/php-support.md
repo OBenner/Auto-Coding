@@ -158,19 +158,19 @@ composer dump-autoload
 
 ## Supported Frameworks
 
-Auto Code automatically detects and provides idiomatic patterns for these PHP frameworks:
+Auto Code detects PHP frameworks and provides idiomatic patterns. Frameworks marked **Auto-detected** are identified automatically; others are recognized when specified.
 
-| Framework | Detection | Use Case |
-|-----------|-----------|----------|
-| **Laravel** | `composer.json` contains `laravel/framework` | Full-stack web application framework |
-| **Symfony** | `composer.json` contains `symfony/symfony` | Enterprise web framework |
-| **CodeIgniter** | `composer.json` contains `codeigniter4/framework` | Lightweight MVC framework |
-| **Slim** | `composer.json` contains `slim/slim` | Micro-framework for APIs |
-| **Lumen** | `composer.json` contains `laravel/lumen-framework` | Laravel micro-framework |
-| **Yii** | `composer.json` contains `yiisoft/yii2` | High-performance framework |
-| **CakePHP** | `composer.json` contains `cakephp/cakephp` | Rapid development framework |
-| **Phalcon** | `composer.json` contains `phalcon/cphalcon` | High-performance C-extension framework |
-| **Laminas** | `composer.json` contains `laminas/laminas-mvc` | Enterprise components (formerly Zend) |
+| Framework | Detection | Auto-detected | Use Case |
+|-----------|-----------|:---:|----------|
+| **Laravel** | `composer.json` contains `laravel/framework` | ✅ | Full-stack web application framework |
+| **Symfony** | `composer.json` contains `symfony/symfony` | ✅ | Enterprise web framework |
+| **CodeIgniter** | `composer.json` contains `codeigniter4/framework` | ✅ | Lightweight MVC framework |
+| **Slim** | `composer.json` contains `slim/slim` | — | Micro-framework for APIs |
+| **Lumen** | `composer.json` contains `laravel/lumen-framework` | — | Laravel micro-framework |
+| **Yii** | `composer.json` contains `yiisoft/yii2` | — | High-performance framework |
+| **CakePHP** | `composer.json` contains `cakephp/cakephp` | — | Rapid development framework |
+| **Phalcon** | `composer.json` contains `phalcon/cphalcon` | — | High-performance C-extension framework |
+| **Laminas** | `composer.json` contains `laminas/laminas-mvc` | — | Enterprise components (formerly Zend) |
 
 ---
 
@@ -1425,7 +1425,7 @@ $app->get('/users/{id}', function (Request $request, Response $response, array $
     if (!$user) {
         return $response->withStatus(404)
             ->withHeader('Content-Type', 'application/json')
-            ->write(json_encode(['error' => 'User not found']));
+            ->getBody()->write(json_encode(['error' => 'User not found']));
     }
 
     $response->getBody()->write(json_encode($user));

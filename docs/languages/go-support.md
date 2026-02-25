@@ -46,8 +46,8 @@ brew install go
 **Linux:**
 ```bash
 # Download and install
-wget https://go.dev/dl/go1.21.0.linux-amd64.tar.gz
-sudo tar -C /usr/local -xzf go1.21.0.linux-amd64.tar.gz
+wget https://go.dev/dl/go1.24.0.linux-amd64.tar.gz
+sudo tar -C /usr/local -xzf go1.24.0.linux-amd64.tar.gz
 
 # Add to PATH
 export PATH=$PATH:/usr/local/go/bin
@@ -373,7 +373,9 @@ func loggingMiddleware(next http.Handler) http.Handler {
 // Usage
 mux := http.NewServeMux()
 mux.HandleFunc("/", handler)
-http.ListenAndServe(":8080", loggingMiddleware(mux))
+if err := http.ListenAndServe(":8080", loggingMiddleware(mux)); err != nil {
+    log.Fatalf("server error: %v", err)
+}
 ```
 
 **JSON response helper:**
@@ -454,8 +456,8 @@ my-project/
 package mypackage
 
 import (
-    "fmt"
     "context"
+    "fmt"
 
     "github.com/external/package"
 )
@@ -497,15 +499,14 @@ func TestAdd(t *testing.T) {
 ```go
 func TestAdd(t *testing.T) {
     tests := []struct {
-        name    string
-        a       int
-        b       int
-        want    int
-        wantErr bool
+        name string
+        a    int
+        b    int
+        want int
     }{
-        {"positive numbers", 2, 3, 5, false},
-        {"negative numbers", -2, -3, -5, false},
-        {"zero", 0, 0, 0, false},
+        {"positive numbers", 2, 3, 5},
+        {"negative numbers", -2, -3, -5},
+        {"zero", 0, 0, 0},
     }
 
     for _, tt := range tests {
@@ -631,7 +632,7 @@ go install golang.org/x/vuln/cmd/govulncheck@latest
 **Dangerous functions to avoid:**
 
 - `exec.Command` - Command injection risk
-- `os.Exec` - Command injection risk
+- `syscall.Exec` - Command injection risk
 - `template.HTML` - XSS risk if not sanitized
 - `sql.Query` - SQL injection risk without parameterization
 - `http.Get` - SSRF risk without URL validation
@@ -673,8 +674,12 @@ go install golang.org/x/vuln/cmd/govulncheck@latest
 4. **Validate and sanitize user input:**
    ```go
    func sanitizeInput(input string) string {
-       // Remove dangerous characters
-       return strings.TrimSpace(input)
+       // Trim whitespace and reject inputs with dangerous characters
+       input = strings.TrimSpace(input)
+       if strings.ContainsAny(input, "<>\"';&|`") {
+           return ""
+       }
+       return input
    }
    ```
 
@@ -704,7 +709,7 @@ go install golang.org/x/vuln/cmd/govulncheck@latest
 
    // ✅ CORRECT - Cryptographically secure
    b := make([]byte, 32)
-   _, err := crypto/rand.Read(b)
+   _, err := rand.Read(b) // import "crypto/rand"
    ```
 
 3. **Don't ignore errors:**
@@ -876,10 +881,10 @@ Auto Code will:
 
 - [Go Official Documentation](https://go.dev/doc/)
 - [Effective Go](https://go.dev/doc/effective_go)
-- [Go Code Review Comments](https://github.com/golang/go/wiki/CodeReviewComments)
+- [Go Code Review Comments](https://go.dev/wiki/CodeReviewComments)
 - [Go Security Best Practices](https://github.com/OWASP/Go-SCP)
 - [gosec Security Scanner](https://github.com/securego/gosec)
 
 ---
 
-**Need help?** Check the [Troubleshooting Guide](../guides/TROUBLESHOOTING.md) or open an issue on GitHub.
+**Need help?** Check the [Troubleshooting Guide](../../guides/TROUBLESHOOTING.md) or open an issue on GitHub.

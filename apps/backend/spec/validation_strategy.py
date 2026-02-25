@@ -959,6 +959,54 @@ class ValidationStrategyBuilder:
                 )
             )
 
+        if project_type in ["go", "go_api", "go_cli"]:
+            security_steps.append(
+                ValidationStep(
+                    name="gosec Security Scan",
+                    command="gosec ./...",
+                    expected_outcome="No high severity issues",
+                    step_type="security",
+                    required=True,
+                    blocking=True,
+                )
+            )
+
+        if project_type in ["rust", "rust_cli", "rust_lib"]:
+            security_steps.append(
+                ValidationStep(
+                    name="cargo audit",
+                    command="cargo audit",
+                    expected_outcome="No vulnerable dependencies",
+                    step_type="security",
+                    required=True,
+                    blocking=True,
+                )
+            )
+
+        if project_type in ["ruby", "rails", "sinatra"]:
+            security_steps.append(
+                ValidationStep(
+                    name="Brakeman Security Scan",
+                    command="bundle exec brakeman -q",
+                    expected_outcome="No high severity issues",
+                    step_type="security",
+                    required=True,
+                    blocking=True,
+                )
+            )
+
+        if project_type in ["php", "laravel", "symfony"]:
+            security_steps.append(
+                ValidationStep(
+                    name="PHPStan Security Analysis",
+                    command="./vendor/bin/phpstan analyse",
+                    expected_outcome="No errors found",
+                    step_type="security",
+                    required=True,
+                    blocking=True,
+                )
+            )
+
         strategy.steps.extend(security_steps)
         strategy.security_scan_required = True
 

@@ -86,7 +86,7 @@ cargo build --release
 ```
 
 **Project structure:**
-```
+```text
 my-rust-project/
 ├── Cargo.toml          # Project manifest
 ├── Cargo.lock          # Dependency lock file
@@ -95,7 +95,7 @@ my-rust-project/
 ```
 
 **Library structure:**
-```
+```text
 my-rust-lib/
 ├── Cargo.toml
 └── src/
@@ -141,20 +141,21 @@ cargo outdated
 
 ## Supported Frameworks
 
-Auto Code automatically detects and provides idiomatic patterns for these Rust frameworks:
+Auto Code detects Rust crates and provides idiomatic patterns. Crates marked **Auto-detected** are identified automatically; others are recognized when specified.
 
-| Framework | Detection | Use Case |
-|-----------|-----------|----------|
-| **Actix-web** | `Cargo.toml` contains `actix-web` | High-performance async web framework |
-| **Rocket** | `Cargo.toml` contains `rocket` | Type-safe web framework |
-| **Axum** | `Cargo.toml` contains `axum` | Ergonomic web framework built on Tokio |
-| **Tokio** | `Cargo.toml` contains `tokio` | Async runtime for Rust |
-| **async-std** | `Cargo.toml` contains `async-std` | Alternative async runtime |
-| **Warp** | `Cargo.toml` contains `warp` | Composable web server framework |
-| **Tide** | `Cargo.toml` contains `tide` | Minimal and pragmatic web framework |
-| **Diesel** | `Cargo.toml` contains `diesel` | Safe, extensible ORM and query builder |
-| **SQLx** | `Cargo.toml` contains `sqlx` | Async SQL toolkit |
-| **Serde** | `Cargo.toml` contains `serde` | Serialization/deserialization framework |
+| Framework / Crate | Detection | Auto-detected | Use Case |
+|-------------------|-----------|:---:|----------|
+| **Actix-web** | `Cargo.toml` contains `actix-web` | ✅ | High-performance async web framework |
+| **Rocket** | `Cargo.toml` contains `rocket` | ✅ | Type-safe web framework |
+| **Axum** | `Cargo.toml` contains `axum` | ✅ | Ergonomic web framework built on Tokio |
+| **Warp** | `Cargo.toml` contains `warp` | ✅ | Composable web server framework |
+| **Tide** | `Cargo.toml` contains `tide` | ✅ | Minimal and pragmatic web framework |
+| **Poem** | `Cargo.toml` contains `poem` | ✅ | Full-featured web framework |
+| **Tokio** | `Cargo.toml` contains `tokio` | — | Async runtime for Rust |
+| **async-std** | `Cargo.toml` contains `async-std` | — | Alternative async runtime |
+| **Diesel** | `Cargo.toml` contains `diesel` | — | Safe, extensible ORM and query builder |
+| **SQLx** | `Cargo.toml` contains `sqlx` | — | Async SQL toolkit |
+| **Serde** | `Cargo.toml` contains `serde` | — | Serialization/deserialization framework |
 
 ---
 

@@ -150,7 +150,7 @@ def get_security_scanners(language: str) -> set[str]:
         >>> print(scanners)
         {'gosec', 'staticcheck', 'govulncheck'}
     """
-    return LANGUAGE_SECURITY_SCANNERS.get(language.lower(), set())
+    return set(LANGUAGE_SECURITY_SCANNERS.get(language.lower(), set()))
 
 
 def get_security_rules(language: str) -> dict[str, list[str]]:
@@ -172,7 +172,8 @@ def get_security_rules(language: str) -> dict[str, list[str]]:
         >>> print(rules["dangerous_functions"])
         ['eval', 'exec', 'system', ...]
     """
-    return LANGUAGE_SECURITY_RULES.get(language.lower(), {})
+    rules = LANGUAGE_SECURITY_RULES.get(language.lower(), {})
+    return {k: list(v) for k, v in rules.items()}
 
 
 def get_all_security_scanners(profile: SecurityProfile) -> set[str]:

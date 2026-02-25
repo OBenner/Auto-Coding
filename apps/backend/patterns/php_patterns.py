@@ -345,7 +345,7 @@ $evens = array_filter($numbers, fn($n) => $n % 2 === 0);
 $sum = array_reduce($numbers, fn($carry, $n) => $carry + $n, 0);
 
 // Find
-$found = array_filter($users, fn($u) => $u->id === 1)[0] ?? null;""",
+$found = array_values(array_filter($users, fn($u) => $u->id === 1))[0] ?? null;""",
     "spread_operator": """$defaults = ['host' => 'localhost', 'port' => 8080];
 $custom = ['port' => 3000];
 
@@ -614,6 +614,8 @@ $user = User::create([
 SYMFONY_PATTERNS = {
     "controller": """namespace App\\Controller;
 
+use App\\Repository\\UserRepository;
+use Doctrine\\ORM\\EntityManagerInterface;
 use Symfony\\Bundle\\FrameworkBundle\\Controller\\AbstractController;
 use Symfony\\Component\\HttpFoundation\\JsonResponse;
 use Symfony\\Component\\HttpFoundation\\Request;
@@ -621,12 +623,14 @@ use Symfony\\Component\\Routing\\Annotation\\Route;
 
 class UserController extends AbstractController
 {
+    public function __construct(
+        private readonly EntityManagerInterface $em,
+    ) {}
+
     #[Route('/api/users', methods: ['GET'])]
     public function index(): JsonResponse
     {
-        $users = $this->getDoctrine()
-            ->getRepository(User::class)
-            ->findAll();
+        $users = $this->em->getRepository(User::class)->findAll();
 
         return $this->json($users);
     }

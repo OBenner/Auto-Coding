@@ -461,10 +461,10 @@ text = <<~TEXT
 TEXT
 
 # With interpolation
-sql = <<~SQL
-  SELECT * FROM users
-  WHERE name = '#{name}'
-SQL""",
+message = <<~MSG
+  Hello #{name},
+  Welcome to the platform!
+MSG""",
     "string_methods": """# Case
 str.upcase
 str.downcase
