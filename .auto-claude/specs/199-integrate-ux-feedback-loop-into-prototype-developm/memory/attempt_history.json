@@ -47,11 +47,47 @@
         }
       ],
       "status": "completed"
+    },
+    "subtask-3-1": {
+      "attempts": [
+        {
+          "session": 5,
+          "timestamp": "2026-02-25T05:23:50.855624+00:00",
+          "approach": "Implemented: Create annotation-to-spec service with folder creation and file generation",
+          "success": true,
+          "error": null
+        }
+      ],
+      "status": "completed"
+    },
+    "subtask-4-1": {
+      "attempts": [
+        {
+          "session": 6,
+          "timestamp": "2026-02-25T05:29:07.119113+00:00",
+          "approach": "Implemented: Create annotation IPC handlers for create, list, and delete operations",
+          "success": true,
+          "error": null
+        }
+      ],
+      "status": "completed"
+    },
+    "subtask-4-2": {
+      "attempts": [
+        {
+          "session": 7,
+          "timestamp": "2026-02-25T05:32:25.587198+00:00",
+          "approach": "Implemented: Add create_annotation_task MCP tool to existing MCP server",
+          "success": true,
+          "error": null
+        }
+      ],
+      "status": "completed"
     }
   },
   "stuck_subtasks": [],
   "metadata": {
     "created_at": "2026-02-24T20:00:23.003500+00:00",
-    "last_updated": "2026-02-25T05:19:10.344279+00:00"
+    "last_updated": "2026-02-25T05:32:25.587213+00:00"
   }
 }
