@@ -159,7 +159,8 @@
             "command": "cd apps/frontend && npx tsc --noEmit src/main/ipc-handlers/annotation-handlers.ts",
             "expected": ""
           },
-          "status": "pending"
+          "status": "completed",
+          "notes": "Created annotation-handlers.ts with handlers for ANNOTATION_SUBMIT (create with optional spec generation), ANNOTATION_GET (get by ID), ANNOTATION_LIST (list with filtering), and ANNOTATION_DELETE (delete with optional spec cleanup). Storage uses JSON file in userData. Integrated with AnnotationToSpecService for spec generation. Added validation for annotation payloads. Registered in index.ts with import and setup call."
         },
         {
           "id": "subtask-4-2",
@@ -177,8 +178,8 @@
             "command": "cd apps/frontend && grep -c 'create_annotation_task' src/main/mcp-server.ts",
             "expected": "1"
           },
-          "status": "pending",
-          "notes": "Follow existing tool registration pattern with Zod schema validation"
+          "status": "completed",
+          "notes": "Added create_annotation_task MCP tool with Zod schema validation (element_selector, annotation_type, message, priority, context). Implemented handler with rate limiting, unique task ID generation, and IPC notification to renderer. Updated tool count from 5 to 6. Follows existing patterns with proper error handling."
         }
       ]
     },
@@ -466,5 +467,5 @@
   "qa_signoff": null,
   "status": "in_progress",
   "planStatus": "in_progress",
-  "updated_at": "2026-02-25T05:19:36.283Z"
+  "updated_at": "2026-02-25T05:29:44.638Z"
 }
