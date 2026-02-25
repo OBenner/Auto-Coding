@@ -93,6 +93,17 @@ interface CommandResult {
   error?: string;
 }
 
+/** Annotation task data */
+interface AnnotationTask {
+  id: string;
+  element_selector: string;
+  annotation_type: string;
+  message: string;
+  priority: string;
+  context?: string;
+  timestamp: number;
+}
+
 // ============================================================================
 // Zod Schemas (Input Validation)
 // ============================================================================
@@ -148,6 +159,22 @@ const readLogsSchema = z.object({
   level: z.enum(['debug', 'log', 'info', 'warn', 'error']).optional(),
   limit: z.number().int().min(1).max(1000).optional(),
   since: z.number().optional()
+});
+
+/**
+ * Schema for create_annotation_task tool
+ * - element_selector: CSS selector for element to annotate
+ * - annotation_type: Type of annotation (comment, suggestion, issue, question)
+ * - message: Annotation message content
+ * - priority: Optional priority level (low, medium, high)
+ * - context: Optional additional context
+ */
+const createAnnotationTaskSchema = z.object({
+  element_selector: z.string().max(1000),
+  annotation_type: z.enum(['comment', 'suggestion', 'issue', 'question']),
+  message: z.string().min(1).max(5000),
+  priority: z.enum(['low', 'medium', 'high']).optional(),
+  context: z.string().max(2000).optional()
 });
 
 // ============================================================================
@@ -515,7 +542,15 @@ export class ElectronMCPServer {
       async (params: z.infer<typeof readLogsSchema>) => this.readLogs(params)
     );
 
-    // Tool 5: health_check
+    // Tool 5: create_annotation_task
+    this.server.tool(
+      'create_annotation_task',
+      'Create an annotation task for UX feedback on UI elements',
+      createAnnotationTaskSchema.shape,
+      async (params: z.infer<typeof createAnnotationTaskSchema>) => this.createAnnotationTask(params)
+    );
+
+    // Tool 6: health_check
     this.server.tool(
       'health_check',
       'Get MCP server health metrics',
@@ -523,7 +558,7 @@ export class ElectronMCPServer {
       async () => this.healthCheck()
     );
 
-    console.log('[MCP] Registered 5 tools: get_window_info, take_screenshot, send_command, read_logs, health_check');
+    console.log('[MCP] Registered 6 tools: get_window_info, take_screenshot, send_command, read_logs, create_annotation_task, health_check');
   }
 
   /**
@@ -700,6 +735,54 @@ export class ElectronMCPServer {
         }, null, 2)
       }]
     };
+  }
+
+  /**
+   * Tool: create_annotation_task
+   * Creates an annotation task for UX feedback on UI elements
+   */
+  private async createAnnotationTask(params: z.infer<typeof createAnnotationTaskSchema>): Promise<CallToolResult> {
+    try {
+      // Validate input
+      const validated = createAnnotationTaskSchema.parse(params);
+
+      // Rate limit check
+      if (!this.rateLimiter.canExecute('create_annotation_task', 20, 1000)) {
+        throw new Error('Rate limit exceeded for create_annotation_task');
+      }
+
+      // Generate unique task ID
+      const taskId = `annotation-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+
+      // Create annotation task
+      const task: AnnotationTask = {
+        id: taskId,
+        element_selector: validated.element_selector,
+        annotation_type: validated.annotation_type,
+        message: validated.message,
+        priority: validated.priority ?? 'medium',
+        context: validated.context,
+        timestamp: Date.now()
+      };
+
+      // Send annotation task to renderer via IPC
+      const win = BrowserWindow.getFocusedWindow();
+      if (win) {
+        win.webContents.send('annotation-task-created', task);
+      }
+
+      return {
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            success: true,
+            task: task
+          }, null, 2)
+        }]
+      };
+    } catch (error) {
+      return toolErrorResult(error, { success: false });
+    }
   }
 }
 
