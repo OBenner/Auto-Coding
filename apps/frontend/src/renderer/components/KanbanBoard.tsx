@@ -35,6 +35,7 @@ import { cn, shallowEqual } from '../lib/utils';
 import { persistTaskStatus, forceCompleteTask, archiveTasks, useTaskStore } from '../stores/task-store';
 import { updateProjectSettings, useProjectStore } from '../stores/project-store';
 import { useKanbanSettingsStore, COLLAPSED_COLUMN_WIDTH, DEFAULT_COLUMN_WIDTH, MIN_COLUMN_WIDTH, MAX_COLUMN_WIDTH } from '../stores/kanban-settings-store';
+import { useShallow } from 'zustand/react/shallow';
 import { useToast } from '../hooks/use-toast';
 import { WorktreeCleanupDialog } from './WorktreeCleanupDialog';
 import { BulkPRDialog } from './BulkPRDialog';
@@ -669,10 +670,10 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
   const { showArchived, toggleShowArchived } = useViewState();
 
   // Project store for queue settings
-  const projects = useProjectStore((state) => state.projects);
+  const projects = useProjectStore(useShallow((state) => state.projects));
 
   // Kanban settings store for column preferences (collapse state, width, lock state)
-  const columnPreferences = useKanbanSettingsStore((state) => state.columnPreferences);
+  const columnPreferences = useKanbanSettingsStore(useShallow((state) => state.columnPreferences));
   const loadKanbanPreferences = useKanbanSettingsStore((state) => state.loadPreferences);
   const saveKanbanPreferences = useKanbanSettingsStore((state) => state.savePreferences);
   const toggleColumnCollapsed = useKanbanSettingsStore((state) => state.toggleColumnCollapsed);
@@ -762,7 +763,7 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
   );
 
   // Get task order from store for custom ordering
-  const taskOrder = useTaskStore((state) => state.taskOrder);
+  const taskOrder = useTaskStore(useShallow((state) => state.taskOrder));
 
   const tasksByStatus = useMemo(() => {
     // Note: pr_created tasks are shown in the 'done' column since they're essentially complete
