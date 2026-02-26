@@ -57,7 +57,9 @@ class MergeAnalyticsEntry:
 
     # Additional context
     merge_intent: str = ""  # Why this merge was performed
-    resolution_explanations: dict[str, str] = field(default_factory=dict)  # File path -> explanation
+    resolution_explanations: dict[str, str] = field(
+        default_factory=dict
+    )  # File path -> explanation
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
@@ -268,7 +270,9 @@ class ConflictPattern:
     auto_resolved_count: int = 0
     ai_resolved_count: int = 0
     manual_required_count: int = 0
-    resolution_accuracy: float = 0.0  # Accuracy rate (0.0 to 1.0) for resolved conflicts
+    resolution_accuracy: float = (
+        0.0  # Accuracy rate (0.0 to 1.0) for resolved conflicts
+    )
 
     # Additional context
     description: str = ""

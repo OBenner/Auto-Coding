@@ -17,7 +17,6 @@ import logging
 from collections import defaultdict
 
 from .compatibility_rules import CompatibilityRule
-from .rename_detector import detect_rename, extract_renamed_identifiers
 from .types import (
     ChangeType,
     ConflictRegion,
@@ -367,7 +366,7 @@ def _detect_rename_conflicts(
                             )
                             debug_verbose(
                                 MODULE,
-                                f"Rename conflict detected",
+                                "Rename conflict detected",
                                 file=file_path,
                                 rename_task=rename_task,
                                 other_task=other_task,

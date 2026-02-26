@@ -687,8 +687,7 @@ class ResolutionPreview:
             suggested=data["suggested"],
             explanation=data.get("explanation", ""),
             conflicts_addressed=[
-                ConflictRegion.from_dict(c)
-                for c in data.get("conflicts_addressed", [])
+                ConflictRegion.from_dict(c) for c in data.get("conflicts_addressed", [])
             ],
         )
 

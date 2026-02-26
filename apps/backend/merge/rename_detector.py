@@ -65,7 +65,7 @@ def _compare_ast_nodes(
         return False
 
     # Check node types match
-    if type(node1) != type(node2):
+    if type(node1) is not type(node2):
         return False
 
     # For Name nodes, check based on check_names flag
@@ -134,7 +134,9 @@ def _get_ast_fields(node: ast.AST) -> list[str]:
     return [f for f in all_fields if f not in skip_fields]
 
 
-def extract_renamed_identifiers(code_before: str, code_after: str) -> dict[str, str] | None:
+def extract_renamed_identifiers(
+    code_before: str, code_after: str
+) -> dict[str, str] | None:
     """
     Extract renamed identifier mappings between two code snippets.
 
@@ -336,7 +338,7 @@ def _count_matching_nodes(node1: ast.AST | Any, node2: ast.AST | Any) -> int:
     if not isinstance(node1, ast.AST) or not isinstance(node2, ast.AST):
         return 0
 
-    if type(node1) != type(node2):
+    if type(node1) is not type(node2):
         return 0
 
     # For Name nodes, any names match

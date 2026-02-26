@@ -74,9 +74,7 @@ class PreviewStore:
             with open(self.preview_file, "w", encoding="utf-8") as f:
                 json.dump(existing, f, indent=2)
 
-            logger.info(
-                f"Saved {len(previews)} resolution previews for merge '{key}'"
-            )
+            logger.info(f"Saved {len(previews)} resolution previews for merge '{key}'")
 
         except Exception as e:
             logger.error(f"Failed to save previews: {e}")

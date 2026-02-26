@@ -181,12 +181,14 @@ class AIResolver:
 
                 # Extract rename information
                 if change.change_type.value in ("rename_function", "rename_variable"):
-                    renames.append({
-                        "type": change.change_type.value,
-                        "old_name": change.metadata.get("old_name", ""),
-                        "new_name": change.metadata.get("new_name", ""),
-                        "task": task_id,
-                    })
+                    renames.append(
+                        {
+                            "type": change.change_type.value,
+                            "old_name": change.metadata.get("old_name", ""),
+                            "new_name": change.metadata.get("new_name", ""),
+                            "task": task_id,
+                        }
+                    )
 
         if scopes:
             semantic_context["scopes"] = scopes
@@ -259,7 +261,10 @@ class AIResolver:
 
             # Parse response
             merged_code = extract_code_block(response, context.language)
-            explanation_text = extract_explanation(response) or f"AI resolved conflict at {conflict.location}"
+            explanation_text = (
+                extract_explanation(response)
+                or f"AI resolved conflict at {conflict.location}"
+            )
 
             if merged_code:
                 # Create preview if in preview mode

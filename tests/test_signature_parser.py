@@ -7,7 +7,6 @@ Tests the function signature parsing functionality for semantic analysis.
 import pytest
 
 from merge.signature_parser import (
-    FunctionSignature,
     _extract_parameter_names,
     _split_parameters,
     get_signature_fingerprint,

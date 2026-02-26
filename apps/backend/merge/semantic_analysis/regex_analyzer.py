@@ -7,11 +7,7 @@ from __future__ import annotations
 import difflib
 import re
 
-from ..rename_detector import (
-    detect_rename,
-    extract_renamed_identifiers,
-    is_function_rename,
-)
+from ..rename_detector import is_function_rename
 from ..scope_analyzer import infer_scope
 from ..signature_parser import parse_function_signature
 from ..types import ChangeType, FileAnalysis, SemanticChange
@@ -199,7 +195,11 @@ def analyze_with_regex(
                     added_def = func_defs_after.get(added_func, "")
 
                     # Check if this is a rename (same structure, different name)
-                    if removed_def and added_def and is_function_rename(removed_def, added_def):
+                    if (
+                        removed_def
+                        and added_def
+                        and is_function_rename(removed_def, added_def)
+                    ):
                         # This is a rename, not remove+add
                         location = f"function:{added_func}"
                         scope = infer_scope(added_func, location)
@@ -404,7 +404,10 @@ def extract_function_signatures(code: str, ext: str) -> dict[str, str]:
                 func_name = match.group(1)
                 # Extract only the signature portion (up to and including colon)
                 # This ensures we get "def foo(x):" not "def foo(x): pass"
-                sig_match = re.match(r"^(async\s+)?def\s+\w+\s*\(.*?\)\s*(?:->\s*[^:]+)?\s*:", line_stripped)
+                sig_match = re.match(
+                    r"^(async\s+)?def\s+\w+\s*\(.*?\)\s*(?:->\s*[^:]+)?\s*:",
+                    line_stripped,
+                )
                 if sig_match:
                     signatures[func_name] = sig_match.group(0)
 

@@ -3,7 +3,6 @@
 
 import sys
 import tempfile
-import os
 from pathlib import Path
 
 # Add apps/backend to path

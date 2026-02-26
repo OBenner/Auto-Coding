@@ -15,12 +15,12 @@ from __future__ import annotations
 
 import json
 import logging
+import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from .models import MergeReport, MergeStats
 from .types import MergeDecision, MergeResult
 
 logger = logging.getLogger(__name__)
@@ -269,7 +269,7 @@ def compare_semantic_vs_textual(
     """
     # Generate unique benchmark ID
     benchmark_id = (
-        f"bench_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{hash(file_path) % 10000}"
+        f"bench_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}"
     )
 
     # Calculate accuracy improvement
