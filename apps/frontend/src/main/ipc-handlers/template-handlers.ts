@@ -592,6 +592,22 @@ print(json.dumps(suggestions))
     return path.join(userDataPath, 'custom-templates.json');
   }
 
+  // Serializes concurrent writes to custom-templates.json
+  let templateWriteLock: Promise<void> = Promise.resolve();
+
+  async function withTemplateLock<T>(fn: () => Promise<T>): Promise<T> {
+    let resolve!: () => void;
+    const next = new Promise<void>(r => { resolve = r; });
+    const current = templateWriteLock;
+    templateWriteLock = next;
+    await current;
+    try {
+      return await fn();
+    } finally {
+      resolve();
+    }
+  }
+
   /**
    * Load custom templates from storage
    */
@@ -626,7 +642,18 @@ print(json.dumps(suggestions))
         };
       });
     } catch (error) {
-      debugError('[loadCustomTemplates] Failed to read/parse templates file:', error);
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        return [];
+      }
+      // Parse error or other read error - backup the corrupted file
+      const backupPath = `${templatesPath}.corrupt.${Date.now()}`;
+      debugError('[loadCustomTemplates] Failed to read/parse templates file, creating backup:', error);
+      try {
+        await fsPromises.copyFile(templatesPath, backupPath);
+        debugError('[loadCustomTemplates] Corrupted file backed up to:', backupPath);
+      } catch {
+        // Ignore backup errors
+      }
       return [];
     }
   }
@@ -737,34 +764,36 @@ print(json.dumps(suggestions))
           };
         }
 
-        const templates = await loadCustomTemplates();
+        return await withTemplateLock(async () => {
+          const templates = await loadCustomTemplates();
 
-        // Check for duplicate names
-        const duplicate = templates.find(t => t.name.normalize('NFC').trim().toLowerCase() === template.name.normalize('NFC').trim().toLowerCase());
-        if (duplicate) {
-          return {
-            success: false,
-            error: `A template with the name "${template.name}" already exists`,
-            data: {
-              ...(template as any),
-              validationErrors: [`Duplicate template name: ${template.name}`]
-            }
+          // Check for duplicate names
+          const duplicate = templates.find(t => t.name.normalize('NFC').trim().toLowerCase() === template.name.normalize('NFC').trim().toLowerCase());
+          if (duplicate) {
+            return {
+              success: false,
+              error: `A template with the name "${template.name}" already exists`,
+              data: {
+                ...(template as any),
+                validationErrors: [`Duplicate template name: ${template.name}`]
+              }
+            };
+          }
+
+          const now = new Date();
+          const newTemplate: import('../../shared/types/template').CustomTemplate = {
+            ...template,
+            id: generateTemplateId(),
+            createdAt: now,
+            updatedAt: now
           };
-        }
 
-        const now = new Date();
-        const newTemplate: import('../../shared/types/template').CustomTemplate = {
-          ...template,
-          id: generateTemplateId(),
-          createdAt: now,
-          updatedAt: now
-        };
+          templates.push(newTemplate);
+          await saveCustomTemplatesToFile(templates);
 
-        templates.push(newTemplate);
-        await saveCustomTemplatesToFile(templates);
-
-        debugLog('[TEMPLATE_CUSTOM_SAVE] Template saved:', newTemplate.id);
-        return { success: true, data: newTemplate };
+          debugLog('[TEMPLATE_CUSTOM_SAVE] Template saved:', newTemplate.id);
+          return { success: true, data: newTemplate };
+        });
       } catch (error) {
         debugError('[TEMPLATE_CUSTOM_SAVE] Error:', error);
         return {
@@ -802,47 +831,49 @@ print(json.dumps(suggestions))
           };
         }
 
-        const templates = await loadCustomTemplates();
+        return await withTemplateLock(async () => {
+          const templates = await loadCustomTemplates();
 
-        // Find the template index
-        const index = templates.findIndex(t => t.id === template.id);
+          // Find the template index
+          const index = templates.findIndex(t => t.id === template.id);
 
-        if (index === -1) {
-          return {
-            success: false,
-            error: `Template not found: ${template.id}`,
-            data: {
-              ...template,
-              validationErrors: ['Template ID not found']
-            }
+          if (index === -1) {
+            return {
+              success: false,
+              error: `Template not found: ${template.id}`,
+              data: {
+                ...template,
+                validationErrors: ['Template ID not found']
+              }
+            };
+          }
+
+          // Check for duplicate names (exclude current template)
+          const duplicate = templates.find(
+            t => t.id !== template.id && t.name.normalize('NFC').trim().toLowerCase() === template.name.normalize('NFC').trim().toLowerCase()
+          );
+          if (duplicate) {
+            return {
+              success: false,
+              error: `A template with the name "${template.name}" already exists`,
+              data: {
+                ...template,
+                validationErrors: [`Duplicate template name: ${template.name}`]
+              }
+            };
+          }
+
+          // Update the template
+          templates[index] = {
+            ...template,
+            updatedAt: new Date()
           };
-        }
 
-        // Check for duplicate names (exclude current template)
-        const duplicate = templates.find(
-          t => t.id !== template.id && t.name.normalize('NFC').trim().toLowerCase() === template.name.normalize('NFC').trim().toLowerCase()
-        );
-        if (duplicate) {
-          return {
-            success: false,
-            error: `A template with the name "${template.name}" already exists`,
-            data: {
-              ...template,
-              validationErrors: [`Duplicate template name: ${template.name}`]
-            }
-          };
-        }
+          await saveCustomTemplatesToFile(templates);
 
-        // Update the template
-        templates[index] = {
-          ...template,
-          updatedAt: new Date()
-        };
-
-        await saveCustomTemplatesToFile(templates);
-
-        debugLog('[TEMPLATE_CUSTOM_UPDATE] Template updated:', template.id);
-        return { success: true, data: templates[index] };
+          debugLog('[TEMPLATE_CUSTOM_UPDATE] Template updated:', template.id);
+          return { success: true, data: templates[index] };
+        });
       } catch (error) {
         debugError('[TEMPLATE_CUSTOM_UPDATE] Error:', error);
         return {
@@ -862,22 +893,24 @@ print(json.dumps(suggestions))
       try {
         debugLog('[TEMPLATE_CUSTOM_DELETE] Deleting template:', templateId);
 
-        const templates = await loadCustomTemplates();
+        return await withTemplateLock(async () => {
+          const templates = await loadCustomTemplates();
 
-        // Filter out the template
-        const filteredTemplates = templates.filter(t => t.id !== templateId);
+          // Filter out the template
+          const filteredTemplates = templates.filter(t => t.id !== templateId);
 
-        if (filteredTemplates.length === templates.length) {
-          return {
-            success: false,
-            error: `Template not found: ${templateId}`
-          };
-        }
+          if (filteredTemplates.length === templates.length) {
+            return {
+              success: false,
+              error: `Template not found: ${templateId}`
+            };
+          }
 
-        await saveCustomTemplatesToFile(filteredTemplates);
+          await saveCustomTemplatesToFile(filteredTemplates);
 
-        debugLog('[TEMPLATE_CUSTOM_DELETE] Template deleted:', templateId);
-        return { success: true, data: undefined };
+          debugLog('[TEMPLATE_CUSTOM_DELETE] Template deleted:', templateId);
+          return { success: true, data: undefined };
+        });
       } catch (error) {
         debugError('[TEMPLATE_CUSTOM_DELETE] Error:', error);
         return {
@@ -960,35 +993,37 @@ print(json.dumps(suggestions))
           };
         }
 
-        const templates = await loadCustomTemplates();
+        return await withTemplateLock(async () => {
+          const templates = await loadCustomTemplates();
 
-        // Check for duplicate names
-        const duplicate = templates.find(t => t.name.normalize('NFC').trim().toLowerCase() === template.name.normalize('NFC').trim().toLowerCase());
-        if (duplicate) {
-          return {
-            success: false,
-            error: `A template with the name "${template.name}" already exists`,
-            data: {
-              ...template,
-              validationErrors: [`Duplicate template name: ${template.name}`]
-            }
+          // Check for duplicate names
+          const duplicate = templates.find(t => t.name.normalize('NFC').trim().toLowerCase() === template.name.normalize('NFC').trim().toLowerCase());
+          if (duplicate) {
+            return {
+              success: false,
+              error: `A template with the name "${template.name}" already exists`,
+              data: {
+                ...template,
+                validationErrors: [`Duplicate template name: ${template.name}`]
+              }
+            };
+          }
+
+          // Generate new ID and dates
+          const now = new Date();
+          const newTemplate: import('../../shared/types/template').CustomTemplate = {
+            ...template,
+            id: generateTemplateId(),
+            createdAt: now,
+            updatedAt: now
           };
-        }
 
-        // Generate new ID and dates
-        const now = new Date();
-        const newTemplate: import('../../shared/types/template').CustomTemplate = {
-          ...template,
-          id: generateTemplateId(),
-          createdAt: now,
-          updatedAt: now
-        };
+          templates.push(newTemplate);
+          await saveCustomTemplatesToFile(templates);
 
-        templates.push(newTemplate);
-        await saveCustomTemplatesToFile(templates);
-
-        debugLog('[TEMPLATE_CUSTOM_IMPORT] Template imported:', newTemplate.id);
-        return { success: true, data: newTemplate };
+          debugLog('[TEMPLATE_CUSTOM_IMPORT] Template imported:', newTemplate.id);
+          return { success: true, data: newTemplate };
+        });
       } catch (error) {
         debugError('[TEMPLATE_CUSTOM_IMPORT] Error:', error);
         return {

@@ -179,7 +179,10 @@ export function ToolSelector({
   useEffect(() => {
     if (value) {
       setSelectedTools(value.baseTools);
-      setSelectedMcpServers(value.mcpServers);
+      const servers = value.mcpServers ?? [];
+      setSelectedMcpServers(
+        servers.includes('auto-claude') ? servers : ['auto-claude', ...servers]
+      );
     }
   }, [value]);
 

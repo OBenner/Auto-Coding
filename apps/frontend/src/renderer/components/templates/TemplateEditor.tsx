@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Save, X, TestTube, Badge as BadgeIcon, Download, Upload } from 'lucide-react';
 import { cn } from '../../lib/utils';
@@ -88,6 +88,8 @@ export function TemplateEditor({
   const [isExporting, setIsExporting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const importInputRef = useRef<HTMLInputElement | null>(null);
 
   const handleChange = (field: keyof AgentTemplateData, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -156,18 +158,18 @@ export function TemplateEditor({
 
   const handleExport = async () => {
     setIsExporting(true);
-    setImportError(null);
+    setExportError(null);
     try {
       await onExport?.();
     } catch (err) {
-      setImportError(err instanceof Error ? err.message : t('editor.validation.exportFailed'));
+      setExportError(err instanceof Error ? err.message : t('editor.validation.exportFailed'));
     } finally {
       setIsExporting(false);
     }
   };
 
   const handleImportClick = () => {
-    document.getElementById('template-import-input')?.click();
+    importInputRef.current?.click();
   };
 
   const handleImportFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -275,7 +277,7 @@ export function TemplateEditor({
                   className="text-xs gap-1 bg-info/10 text-info border-info/30"
                 >
                   <BadgeIcon className="h-3 w-3" />
-                  Update Available
+                  {t('editor.updateAvailable')}
                 </Badge>
               )}
             </div>
@@ -397,6 +399,7 @@ export function TemplateEditor({
               <>
                 <input
                   id="template-import-input"
+                  ref={importInputRef}
                   type="file"
                   accept=".json"
                   className="hidden"
@@ -434,6 +437,13 @@ export function TemplateEditor({
         {importError && (
           <div className="rounded-lg bg-destructive/10 border border-destructive/30 p-3">
             <p className="text-sm text-destructive">{importError}</p>
+          </div>
+        )}
+
+        {/* Export Error */}
+        {exportError && (
+          <div className="rounded-lg bg-destructive/10 border border-destructive/30 p-3">
+            <p className="text-sm text-destructive">{exportError}</p>
           </div>
         )}
 

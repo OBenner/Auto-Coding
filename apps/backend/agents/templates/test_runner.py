@@ -111,6 +111,44 @@ class TemplateTestResult:
 
 
 # =============================================================================
+# Helper Functions
+# =============================================================================
+
+
+def _extract_usage_metadata(client: Any) -> dict[str, int] | None:
+    """Extract usage metadata from client via public API or private fallback.
+
+    Note: the _usage fallback accesses a private attribute and may break
+    on SDK upgrades. It is isolated here so future changes are easy to track.
+    """
+    # Prefer public API
+    metadata = getattr(client, "usage_metadata", None)
+    if (
+        metadata
+        and hasattr(metadata, "input_tokens")
+        and hasattr(metadata, "output_tokens")
+    ):
+        return {
+            "input_tokens": metadata.input_tokens,
+            "output_tokens": metadata.output_tokens,
+            "total_tokens": metadata.input_tokens + metadata.output_tokens,
+        }
+    # Fallback: private _usage dict (fragile, may change with SDK upgrades)
+    usage = getattr(client, "_usage", None)
+    if isinstance(usage, dict) and "input_tokens" in usage and "output_tokens" in usage:
+        debug(
+            "test_runner",
+            "Using internal _usage fallback for token metadata (may break on SDK upgrade)",
+        )
+        return {
+            "input_tokens": usage["input_tokens"],
+            "output_tokens": usage["output_tokens"],
+            "total_tokens": usage["input_tokens"] + usage["output_tokens"],
+        }
+    return None
+
+
+# =============================================================================
 # Test Runner Functions
 # =============================================================================
 
@@ -314,50 +352,18 @@ async def run_template_test(
 
     usage_metadata = None
     try:
-        # Try to get usage metadata from client
-        if hasattr(client, "usage_metadata"):
-            metadata = client.usage_metadata
-            if (
-                metadata
-                and hasattr(metadata, "input_tokens")
-                and hasattr(metadata, "output_tokens")
-            ):
-                usage_metadata = {
-                    "input_tokens": metadata.input_tokens,
-                    "output_tokens": metadata.output_tokens,
-                    "total_tokens": metadata.input_tokens + metadata.output_tokens,
-                }
-                debug_success(
-                    "test_runner",
-                    "Usage metadata extracted",
-                    input_tokens=metadata.input_tokens,
-                    output_tokens=metadata.output_tokens,
-                )
-                print_key_value(
-                    "Token usage",
-                    f"{usage_metadata['input_tokens']} in, {usage_metadata['output_tokens']} out",
-                )
-        else:
-            try:
-                usage = getattr(client, "_usage", None)
-                if (
-                    isinstance(usage, dict)
-                    and "input_tokens" in usage
-                    and "output_tokens" in usage
-                ):
-                    usage_metadata = {
-                        "input_tokens": usage["input_tokens"],
-                        "output_tokens": usage["output_tokens"],
-                        "total_tokens": usage["input_tokens"] + usage["output_tokens"],
-                    }
-                    debug_success(
-                        "test_runner",
-                        "Usage metadata extracted from _usage",
-                        input_tokens=usage["input_tokens"],
-                        output_tokens=usage["output_tokens"],
-                    )
-            except Exception:
-                pass
+        usage_metadata = _extract_usage_metadata(client)
+        if usage_metadata:
+            debug_success(
+                "test_runner",
+                "Usage metadata extracted",
+                input_tokens=usage_metadata["input_tokens"],
+                output_tokens=usage_metadata["output_tokens"],
+            )
+            print_key_value(
+                "Token usage",
+                f"{usage_metadata['input_tokens']} in, {usage_metadata['output_tokens']} out",
+            )
     except Exception as e:
         debug(
             "test_runner",

@@ -26,6 +26,7 @@
       "invalidNameFormat": "Le nom doit être en minuscules alphanumériques avec des tirets uniquement",
       "exportFailed": "L'exportation a échoué"
     },
+    "updateAvailable": "Mise à jour disponible",
     "actions": {
       "save": "Enregistrer le modèle",
       "cancel": "Annuler",
@@ -40,7 +41,9 @@
   },
   "selector": {
     "noneOption": "Aucun",
-    "useDefaultAgentHint": "(Utiliser l'agent par défaut)"
+    "useDefaultAgentHint": "(Utiliser l'agent par défaut)",
+    "category": "Catégorie :",
+    "toolsConfigured": "Outils configurés"
   },
   "toolSelector": {
     "title": "Configuration des outils",
@@ -131,7 +134,8 @@
     "runTest": "Exécuter le test",
     "running": "Test en cours...",
     "testFailed": "Le test du modèle a échoué. Vérifiez la configuration du modèle et réessayez.",
-    "testSuccess": "Test réussi ! Le modèle a généré le contenu suivant :"
+    "testSuccess": "Test réussi ! Le modèle a généré le contenu suivant :",
+    "apiNotAvailable": "API non disponible"
   },
   "marketplace": {
     "title": "Marketplace des modèles",

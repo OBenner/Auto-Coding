@@ -337,7 +337,7 @@ export function TemplateMarketplace({ onTemplateImport }: TemplateMarketplacePro
                       {/* Tags */}
                       {template.tags?.length > 0 && (
                         <div className="flex flex-wrap gap-1.5">
-                          {template.tags.slice(0, 3).map((tag) => (
+                          {template.tags?.slice(0, 3).map((tag) => (
                             <Badge
                               key={tag}
                               variant="outline"

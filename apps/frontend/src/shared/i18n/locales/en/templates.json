@@ -26,6 +26,7 @@
       "invalidNameFormat": "Name must be lowercase alphanumeric with hyphens only",
       "exportFailed": "Export failed"
     },
+    "updateAvailable": "Update Available",
     "actions": {
       "save": "Save Template",
       "cancel": "Cancel",
@@ -40,7 +41,9 @@
   },
   "selector": {
     "noneOption": "None",
-    "useDefaultAgentHint": "(Use default agent)"
+    "useDefaultAgentHint": "(Use default agent)",
+    "category": "Category:",
+    "toolsConfigured": "Tools configured"
   },
   "wizard": {
     "title": "Template Parameters",
@@ -131,7 +134,8 @@
     "runTest": "Run Test",
     "running": "Running test...",
     "testFailed": "Template test failed. Please check the template configuration and try again.",
-    "testSuccess": "Test completed successfully! The template generated the following:"
+    "testSuccess": "Test completed successfully! The template generated the following:",
+    "apiNotAvailable": "API not available"
   },
   "marketplace": {
     "title": "Template Marketplace",

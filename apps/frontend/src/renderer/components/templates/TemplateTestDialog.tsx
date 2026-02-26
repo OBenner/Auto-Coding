@@ -81,7 +81,7 @@ export function TemplateTestDialog({
   const handleRunTest = async () => {
     // Guard API availability
     if (!window?.electronAPI?.testCustomTemplate) {
-      setError('API not available');
+      setError(t('templates:testDialog.apiNotAvailable'));
       return;
     }
 
@@ -196,8 +196,8 @@ export function TemplateTestDialog({
               <div className="rounded-lg bg-muted/50 border border-border p-4">
                 <h4 className="text-sm font-semibold text-foreground mb-3">{t('templates:preview.sections.acceptanceCriteria')}</h4>
                 <ul className="space-y-1 text-sm">
-                  {testResult.acceptance_criteria?.map((criterion) => (
-                    <li key={criterion} className="text-muted-foreground flex items-start gap-2">
+                  {testResult.acceptance_criteria?.map((criterion, index) => (
+                    <li key={`${index}-${criterion}`} className="text-muted-foreground flex items-start gap-2">
                       <span className="text-primary mt-0.5">•</span>
                       <span>{criterion}</span>
                     </li>

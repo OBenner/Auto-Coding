@@ -77,6 +77,11 @@ def save_template(template: AgentTemplate, project_dir: Path) -> None:
             json.dump(template.to_dict(), f, indent=2, ensure_ascii=False)
         os.replace(str(tmp_file), str(template_file))
     except OSError as e:
+        try:
+            if tmp_file.exists():
+                tmp_file.unlink()
+        except OSError:
+            pass
         raise OSError(f"Failed to save template '{template.name}': {e}") from e
 
 

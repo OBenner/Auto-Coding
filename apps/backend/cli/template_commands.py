@@ -344,17 +344,8 @@ def show_template_info_command(project_dir: Path, template_name: str) -> None:
     print()
 
 
-def _ensure_backend_in_path() -> None:
-    """Add the backend directory to sys.path if not already present."""
-    _parent_dir = str(Path(__file__).parent.parent)
-    if _parent_dir not in sys.path:
-        sys.path.insert(0, _parent_dir)
-
-
 def main():
     """Main entry point for template CLI commands."""
-    _ensure_backend_in_path()
-
     parser = argparse.ArgumentParser(
         description="Manage custom agent templates",
         formatter_class=argparse.RawDescriptionHelpFormatter,

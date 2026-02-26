@@ -140,16 +140,18 @@ class AgentTemplateRegistry:
         Raises:
             ValueError: If template validation fails or template doesn't exist
         """
+        # Check existence under lock first
         with self._lock:
             if template.name not in self._templates:
                 raise ValueError(f"Template '{template.name}' not found in registry")
-
-            # Validate template before updating
-            errors = template.validate()
-            if errors:
-                raise ValueError(f"Template validation failed: {', '.join(errors)}")
-
-            # Update timestamp
+        # Validate outside lock (can be slow)
+        errors = template.validate()
+        if errors:
+            raise ValueError(f"Template validation failed: {', '.join(errors)}")
+        # Re-acquire lock for final update
+        with self._lock:
+            if template.name not in self._templates:
+                raise ValueError(f"Template '{template.name}' not found in registry")
             template.update_timestamp()
             self._templates[template.name] = template
 

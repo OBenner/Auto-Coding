@@ -211,7 +211,7 @@ def validate_template(
     errors.extend(param_errors)
 
     # Additional safety checks
-    safety_errors = validate_safety_constraints(template)
+    safety_errors = validate_safety_constraints(template, strict=strict)
     errors.extend(safety_errors)
 
     is_valid = len(errors) == 0
@@ -246,8 +246,7 @@ def validate_prompt_safety(prompt: str) -> list[str]:
         match = re.search(pattern, prompt, re.MULTILINE)
         if match:
             errors.append(
-                f"Potentially dangerous pattern detected in prompt: {pattern[:50]}... "
-                f"(matched: {match.group(0)})"
+                f"Potentially dangerous pattern detected in prompt: {pattern[:50]}..."
             )
 
     # Check prompt length (prevent DoS via huge prompts)
@@ -387,7 +386,9 @@ def validate_parameters(parameters: dict[str, Any]) -> list[str]:
     return errors
 
 
-def validate_safety_constraints(template: AgentTemplate) -> list[str]:
+def validate_safety_constraints(
+    template: AgentTemplate, strict: bool = True
+) -> list[str]:
     """
     Validate additional safety constraints on templates.
 
@@ -398,6 +399,7 @@ def validate_safety_constraints(template: AgentTemplate) -> list[str]:
 
     Args:
         template: AgentTemplate instance to validate
+        strict: If True, single-tool warning is treated as an error. If False, it is omitted.
 
     Returns:
         List of error messages (empty if valid)
@@ -422,10 +424,12 @@ def validate_safety_constraints(template: AgentTemplate) -> list[str]:
 
     # Warn if template has minimal tools (might not be useful)
     if 0 < len(tools) < 2:
-        errors.append(
+        msg = (
             f"Warning: Template only has {len(tools)} tool(s). "
             "Consider adding more tools for better functionality."
         )
+        if strict:
+            errors.append(msg)
 
     return errors
 
@@ -585,15 +589,33 @@ def validate_import_statements(prompt: str) -> list[str]:
 
 def _is_private_host(hostname: str) -> bool:
     """Check if a hostname resolves to a private/local address."""
+    import socket
+
     if not hostname:
         return False
-    if hostname in {"localhost", ""}:
+    if hostname in {"localhost", "127.0.0.1", "::1", ""}:
         return True
+    # Try literal IP first
     try:
         addr = ipaddress.ip_address(hostname)
         return addr.is_private or addr.is_loopback or addr.is_reserved
     except ValueError:
+        pass
+    # Resolve hostname via DNS; treat unresolvable as untrusted (private)
+    try:
+        results = socket.getaddrinfo(hostname, None)
+        for result in results:
+            addr_str = result[4][0]
+            try:
+                addr = ipaddress.ip_address(addr_str)
+                if addr.is_private or addr.is_loopback or addr.is_reserved:
+                    return True
+            except ValueError:
+                continue
         return False
+    except OSError:
+        # DNS resolution failed - treat as private/untrusted
+        return True
 
 
 def validate_urls(data: dict[str, Any]) -> list[str]:
@@ -640,6 +662,11 @@ def validate_urls(data: dict[str, Any]) -> list[str]:
         # Check for SSRF risks (localhost, internal IPs) using proper URL parsing
         try:
             parsed = urlparse(url)
+            if parsed.scheme not in {"http", "https"}:
+                errors.append(
+                    f"Unsafe URL scheme in '{field}': {url}. Only http/https are allowed."
+                )
+                continue
             hostname = parsed.hostname or ""
             if _is_private_host(hostname):
                 errors.append(
