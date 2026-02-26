@@ -4,27 +4,23 @@ Database configuration and connection manager for Auto Code Web Backend
 Provides SQLAlchemy engine, session management, and database dependency injection.
 """
 
+from collections.abc import Generator
+
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, Session, declarative_base
-from typing import Generator
+from sqlalchemy.orm import Session, declarative_base, sessionmaker
 
 from .config import settings
-
 
 # Create SQLAlchemy engine
 engine = create_engine(
     settings.DATABASE_URL,
     pool_pre_ping=True,  # Enable connection health checks
-    pool_size=10,        # Maximum number of connections in the pool
-    max_overflow=20      # Maximum overflow connections
+    pool_size=10,  # Maximum number of connections in the pool
+    max_overflow=20,  # Maximum overflow connections
 )
 
 # Create session factory
-SessionLocal = sessionmaker(
-    autocommit=False,
-    autoflush=False,
-    bind=engine
-)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 # Base class for ORM models
 Base = declarative_base()

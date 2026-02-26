@@ -10,6 +10,11 @@ import json
 import sys
 from pathlib import Path
 
+# Ensure parent directory is in path for imports (before other imports)
+_PARENT_DIR = Path(__file__).parent.parent
+if str(_PARENT_DIR) not in sys.path:
+    sys.path.insert(0, str(_PARENT_DIR))
+
 from agents.templates.models import AgentTemplate
 from agents.templates.storage import load_template, load_templates
 from agents.templates.validator import validate_template

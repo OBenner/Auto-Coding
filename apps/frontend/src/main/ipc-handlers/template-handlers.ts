@@ -28,7 +28,7 @@ function getBackendDir(): string {
 /**
  * Helper to get Python executable path and environment
  */
-async function getPythonEnv(projectPath: string): Promise<{ pythonPath: string; env: Record<string, string> }> {
+async function getPythonEnv(_projectPath: string): Promise<{ pythonPath: string; env: Record<string, string> }> {
   const env = await getRunnerEnv();
 
   // Get Python path - check if there's a configured venv Python
@@ -1002,7 +1002,7 @@ print(json.dumps(suggestions))
     async (
       _,
       templateId: string,
-      testInput: string
+      _testInput: string
     ): Promise<IPCResult<GeneratedSpec>> => {
       try {
         debugLog('[TEMPLATE_CUSTOM_TEST] Testing template:', templateId);

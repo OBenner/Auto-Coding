@@ -31,6 +31,19 @@ from core.platform import (
 logger = logging.getLogger(__name__)
 
 # =============================================================================
+# Windows System Prompt Limits
+# =============================================================================
+# Windows CreateProcessW has a 32,768 character limit for the entire command line.
+# When CLAUDE.md is very large and passed as --system-prompt, the command can exceed
+# this limit, causing ERROR_FILE_NOT_FOUND. We cap CLAUDE.md content to stay safe.
+# 20,000 chars leaves ~12KB headroom for CLI overhead (model, tools, MCP config, etc.)
+WINDOWS_MAX_SYSTEM_PROMPT_CHARS = 20000
+WINDOWS_TRUNCATION_MESSAGE = (
+    "\n\n[... CLAUDE.md truncated due to Windows command-line length limit ...]"
+)
+CLAUDE_MD_HEADER = "\n\n# Project Instructions (from CLAUDE.md)\n\n"
+
+# =============================================================================
 # Project Index Cache
 # =============================================================================
 # Caches project index and capabilities to avoid reloading on every create_client() call.
@@ -412,15 +425,85 @@ def is_electron_mcp_enabled() -> bool:
     Check if Electron MCP server integration is enabled.
 
     Requires ELECTRON_MCP_ENABLED to be set to 'true'.
-    When enabled, QA agents can use Puppeteer MCP tools to connect to Electron apps
-    via Chrome DevTools Protocol on the configured debug port.
+    When enabled, QA agents can use MCP tools to connect to Electron apps.
     """
     return os.environ.get("ELECTRON_MCP_ENABLED", "").lower() == "true"
 
 
+_VALID_ELECTRON_MCP_MODES: tuple[str, ...] = ("cdp", "embedded")
+_VALID_ELECTRON_MCP_LOG_LEVELS: tuple[str, ...] = ("debug", "info", "warn", "error")
+
+
+def get_electron_mcp_mode() -> str:
+    """
+    Get the Electron MCP server mode.
+
+    Returns:
+        "embedded" - MCP server runs inside Electron process (stdio transport)
+        "cdp" - External CDP-based server (electron-mcp-server package)
+
+    Default: "cdp" for backward compatibility
+    """
+    mode = os.environ.get("ELECTRON_MCP_MODE", "cdp").lower()
+
+    if mode not in _VALID_ELECTRON_MCP_MODES:
+        logger.warning(
+            "Invalid ELECTRON_MCP_MODE '%s'. Valid values: %s. Using default: cdp",
+            mode,
+            ", ".join(_VALID_ELECTRON_MCP_MODES),
+        )
+        return "cdp"
+
+    return mode
+
+
 def get_electron_debug_port() -> int:
-    """Get the Electron remote debugging port (default: 9222)."""
-    return int(os.environ.get("ELECTRON_DEBUG_PORT", "9222"))
+    """
+    Get the Electron remote debugging port (default: 9222).
+
+    Returns:
+        Port number for Chrome DevTools Protocol
+
+    Raises:
+        ValueError: If port is not a valid number or out of range
+    """
+    port_str = os.environ.get("ELECTRON_DEBUG_PORT", "9222")
+
+    try:
+        port = int(port_str)
+    except ValueError:
+        raise ValueError(
+            f"Invalid ELECTRON_DEBUG_PORT: '{port_str}'. Must be a number."
+        )
+
+    if not (1024 <= port <= 65535):
+        raise ValueError(
+            f"Invalid ELECTRON_DEBUG_PORT: {port}. Must be between 1024 and 65535."
+        )
+
+    return port
+
+
+def get_electron_mcp_log_level() -> str:
+    """
+    Get the Electron MCP server log level.
+
+    Returns:
+        Log level: "debug", "info", "warn", or "error"
+
+    Default: "info"
+    """
+    level = os.environ.get("ELECTRON_MCP_LOG_LEVEL", "info").lower()
+
+    if level not in _VALID_ELECTRON_MCP_LOG_LEVELS:
+        logger.warning(
+            "Invalid ELECTRON_MCP_LOG_LEVEL '%s'. Valid values: %s. Using default: info",
+            level,
+            ", ".join(_VALID_ELECTRON_MCP_LOG_LEVELS),
+        )
+        return "info"
+
+    return level
 
 
 def should_use_claude_md() -> bool:
@@ -563,15 +646,21 @@ def load_preferences(
         # Get preference profile from Graphiti memory
         memory = get_graphiti_memory(spec_dir, project_dir)
 
-        # Run async operation in sync context
+        # Run async operation in sync context.
+        # If a loop is already running (e.g. inside Ideation async process),
+        # delegate to a worker thread that owns its own event loop.
         import asyncio
+        import concurrent.futures
 
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
         try:
-            profile_data = loop.run_until_complete(memory.get_preference_profile())
-        finally:
-            loop.close()
+            asyncio.get_running_loop()
+            # Already inside an async context — run in a separate thread
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(asyncio.run, memory.get_preference_profile())
+                profile_data = future.result(timeout=30)
+        except RuntimeError:
+            # No running loop — safe to create one
+            profile_data = asyncio.run(memory.get_preference_profile())
 
         if not profile_data:
             logger.debug("No preference profile found, using defaults")
@@ -887,9 +976,9 @@ def create_client(
     if "context7" in required_servers:
         mcp_servers_list.append("context7 (documentation)")
     if "electron" in required_servers:
-        mcp_servers_list.append(
-            f"electron (desktop automation, port {get_electron_debug_port()})"
-        )
+        electron_mode = get_electron_mcp_mode()
+        mode_label = "embedded" if electron_mode == "embedded" else "CDP"
+        mcp_servers_list.append(f"electron (desktop automation, {mode_label} mode)")
     if "puppeteer" in required_servers:
         mcp_servers_list.append("puppeteer (browser automation)")
     if "linear" in required_servers:
@@ -925,11 +1014,29 @@ def create_client(
 
     if "electron" in required_servers:
         # Electron MCP for desktop apps
-        # Electron app must be started with --remote-debugging-port=<port>
-        mcp_servers["electron"] = {
-            "command": "npm",
-            "args": ["exec", "electron-mcp-server"],
-        }
+        # Two modes supported:
+        # 1. CDP mode (default): Uses external electron-mcp-server package
+        # 2. Embedded mode: Spawns Electron app with MCP server inside
+        electron_mode = get_electron_mcp_mode()
+
+        if electron_mode == "embedded":
+            # Embedded mode: MCP server runs inside Electron process
+            # Electron app starts with MCP server enabled, communicates via stdio
+            mcp_servers["electron"] = {
+                "command": "npm",
+                "args": ["start"],
+                "env": {
+                    "ELECTRON_MCP_ENABLED": "true",
+                    "ELECTRON_MCP_LOG_LEVEL": get_electron_mcp_log_level(),
+                },
+            }
+        else:
+            # CDP mode: External electron-mcp-server package
+            # Electron app must be started with --remote-debugging-port=<port>
+            mcp_servers["electron"] = {
+                "command": "npm",
+                "args": ["exec", "electron-mcp-server"],
+            }
 
     if "puppeteer" in required_servers:
         # Puppeteer for web frontends (not Electron)
@@ -1010,8 +1117,45 @@ def create_client(
     if should_use_claude_md():
         claude_md_content = load_claude_md(project_dir)
         if claude_md_content:
-            base_prompt = f"{base_prompt}\n\n# Project Instructions (from CLAUDE.md)\n\n{claude_md_content}"
-            print("   - CLAUDE.md: included in system prompt")
+            # On Windows, the SDK passes system_prompt as a --system-prompt CLI argument.
+            # Windows CreateProcessW has a 32,768 character limit for the entire command line.
+            # When CLAUDE.md is very large, the command can exceed this limit, causing Windows
+            # to return ERROR_FILE_NOT_FOUND which the SDK misreports as "Claude Code not found".
+            # Cap CLAUDE.md content to keep total command line under the limit. (#1661)
+            was_truncated = False
+            if is_windows():
+                max_claude_md_chars = (
+                    WINDOWS_MAX_SYSTEM_PROMPT_CHARS
+                    - len(base_prompt)
+                    - len(WINDOWS_TRUNCATION_MESSAGE)
+                    - len(CLAUDE_MD_HEADER)
+                )
+                if max_claude_md_chars <= 0:
+                    # Base prompt alone already exceeds the limit; replace
+                    # CLAUDE.md entirely with the truncation notice.
+                    claude_md_content = WINDOWS_TRUNCATION_MESSAGE
+                    was_truncated = True
+                    logger.warning(
+                        "CLAUDE.md omitted: base prompt (%d chars) exceeds "
+                        "Windows command-line budget (%d chars)",
+                        len(base_prompt),
+                        WINDOWS_MAX_SYSTEM_PROMPT_CHARS,
+                    )
+                    print(
+                        "   - CLAUDE.md: omitted (base prompt exceeds Windows command-line limit)"
+                    )
+                elif len(claude_md_content) > max_claude_md_chars:
+                    claude_md_content = (
+                        claude_md_content[:max_claude_md_chars]
+                        + WINDOWS_TRUNCATION_MESSAGE
+                    )
+                    print(
+                        "   - CLAUDE.md: truncated (exceeded Windows command-line limit)"
+                    )
+                    was_truncated = True
+            base_prompt = f"{base_prompt}{CLAUDE_MD_HEADER}{claude_md_content}"
+            if not was_truncated:
+                print("   - CLAUDE.md: included in system prompt")
         else:
             print("   - CLAUDE.md: not found in project root")
     else:

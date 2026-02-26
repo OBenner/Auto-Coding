@@ -30,6 +30,9 @@ export interface RecentAction {
   projectId?: string;
 }
 
+// GPU acceleration mode for terminal WebGL rendering
+export type GpuAcceleration = 'auto' | 'on' | 'off';
+
 // Color theme types for multi-theme support
 export type ColorTheme = 'default' | 'dusk' | 'lime' | 'ocean' | 'retro' | 'neo' | 'forest';
 
@@ -343,6 +346,14 @@ export interface AppSettings {
   keyboardShortcuts?: Record<KeyboardShortcutAction, KeyCombination>;
   // Recent actions for quick actions menu (persisted between sessions)
   recentActions?: RecentAction[];
+  /**
+   * Whether feedback collection is enabled.
+   * Defaults to `true` (opt-out model: feedback is collected unless the user disables it).
+   * When `undefined`, callers should treat it as `true`.
+   */
+  feedbackEnabled?: boolean;
+  /** GPU acceleration mode for terminal WebGL rendering */
+  gpuAcceleration?: GpuAcceleration;
 }
 
 // Auto-Code Source Environment Configuration (for auto-claude repo .env)

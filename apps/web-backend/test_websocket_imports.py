@@ -6,29 +6,27 @@ Verifies that the WebSocket endpoint and agent event models are correctly implem
 Note: This only tests imports, not runtime behavior.
 """
 
-import sys
 import ast
 import os
+import sys
+
 
 def check_syntax(filepath):
     """Check if a Python file has valid syntax"""
     try:
-        with open(filepath, 'r', encoding='utf-8') as f:
+        with open(filepath, encoding="utf-8") as f:
             code = f.read()
         ast.parse(code)
         return True, None
     except SyntaxError as e:
         return False, str(e)
 
+
 def main():
     print("Testing WebSocket Implementation...")
     print("=" * 60)
 
-    files_to_check = [
-        "api/models/agent_event.py",
-        "api/websocket.py",
-        "main.py"
-    ]
+    files_to_check = ["api/models/agent_event.py", "api/websocket.py", "main.py"]
 
     all_passed = True
 
@@ -49,7 +47,9 @@ def main():
 
     if all_passed:
         print("✓ All WebSocket files have valid syntax")
-        print("\nWebSocket endpoint will be available at: ws://localhost:8000/ws/agent-events")
+        print(
+            "\nWebSocket endpoint will be available at: ws://localhost:8000/ws/agent-events"
+        )
         print("\nTo fully test, install dependencies:")
         print("  cd apps/web-backend")
         print("  pip install -r requirements.txt")
@@ -61,6 +61,7 @@ def main():
     else:
         print("✗ Some files have syntax errors")
         return 1
+
 
 if __name__ == "__main__":
     sys.exit(main())

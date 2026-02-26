@@ -1,5 +1,5 @@
 import { app } from 'electron';
-import { existsSync, Dirent, promises as fsPromises } from 'fs';
+import { Dirent, promises as fsPromises } from 'fs';
 import path from 'path';
 import { atomicWriteFile } from './fs-utils';
 import { v4 as uuidv4 } from 'uuid';

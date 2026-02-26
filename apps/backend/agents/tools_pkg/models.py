@@ -100,8 +100,11 @@ PUPPETEER_TOOLS = [
 ]
 
 # Electron MCP tools for desktop app automation (when ELECTRON_MCP_ENABLED is set)
-# Uses electron-mcp-server to connect to Electron apps via Chrome DevTools Protocol.
-# Electron app must be started with --remote-debugging-port=9222 (or ELECTRON_DEBUG_PORT).
+# Two modes supported:
+#   1. CDP mode (default): Uses electron-mcp-server package via Chrome DevTools Protocol
+#      Requires Electron app with --remote-debugging-port=9222 (or ELECTRON_DEBUG_PORT)
+#   2. Embedded mode: MCP server runs inside Electron process with stdio transport
+#      Backend spawns Electron app directly with ELECTRON_MCP_ENABLED=true
 # These tools are only available to QA agents (qa_reviewer, qa_fixer), not Coder/Planner.
 # NOTE: Screenshots must be compressed to stay under Claude SDK's 1MB JSON message buffer limit.
 ELECTRON_TOOLS = [
@@ -121,8 +124,11 @@ def is_electron_mcp_enabled() -> bool:
     Check if Electron MCP server integration is enabled.
 
     Requires ELECTRON_MCP_ENABLED to be set to 'true'.
-    When enabled, QA agents can use Electron MCP tools to connect to Electron apps
-    via Chrome DevTools Protocol on the configured debug port.
+    When enabled, QA agents can use Electron MCP tools to connect to Electron apps.
+
+    Two modes supported (controlled by ELECTRON_MCP_MODE):
+    - CDP mode (default): Connects via Chrome DevTools Protocol
+    - Embedded mode: MCP server runs inside Electron process
     """
     return os.environ.get("ELECTRON_MCP_ENABLED", "").lower() == "true"
 
@@ -242,6 +248,30 @@ AGENT_CONFIGS = {
         "thinking_default": "medium",
     },
     # ═══════════════════════════════════════════════════════════════════════
+    # TEST GENERATION AGENT TYPES (QA-phase agents, not standalone phases)
+    # These share the QA model/thinking config via get_phase_model(spec, "qa")
+    # ═══════════════════════════════════════════════════════════════════════
+    "test_generator": {
+        "tools": BASE_READ_TOOLS + BASE_WRITE_TOOLS + WEB_TOOLS,
+        "mcp_servers": ["context7", "graphiti", "auto-claude"],
+        "mcp_servers_optional": [],
+        "auto_claude_tools": [
+            TOOL_GET_BUILD_PROGRESS,
+            TOOL_GET_SESSION_CONTEXT,
+        ],
+        "thinking_default": "high",
+    },
+    "e2e_generator": {
+        "tools": BASE_READ_TOOLS + BASE_WRITE_TOOLS + WEB_TOOLS,
+        "mcp_servers": ["context7", "graphiti", "auto-claude", "browser"],
+        "mcp_servers_optional": [],
+        "auto_claude_tools": [
+            TOOL_GET_BUILD_PROGRESS,
+            TOOL_GET_SESSION_CONTEXT,
+        ],
+        "thinking_default": "high",
+    },
+    # ═══════════════════════════════════════════════════════════════════════
     # UTILITY PHASES (Minimal, no MCP)
     # ═══════════════════════════════════════════════════════════════════════
     "insights": {
@@ -288,6 +318,14 @@ AGENT_CONFIGS = {
         "mcp_servers": ["context7"],
         "auto_claude_tools": [],
         "thinking_default": "high",
+    },
+    "pr_followup_extraction": {
+        # Lightweight extraction call for recovering data when structured output fails
+        # Pure structured output extraction, no tools needed
+        "tools": [],
+        "mcp_servers": [],
+        "auto_claude_tools": [],
+        "thinking_default": "low",
     },
     # ═══════════════════════════════════════════════════════════════════════
     # ANALYSIS PHASES

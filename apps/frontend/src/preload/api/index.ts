@@ -17,6 +17,8 @@ import { ProfileAPI, createProfileAPI } from './profile-api';
 import { ScreenshotAPI, createScreenshotAPI } from './screenshot-api';
 import { QueueAPI, createQueueAPI } from './queue-api';
 import { PluginAPI, createPluginAPI } from './plugin-api';
+import type { PatternAPI } from './modules/pattern-api';
+import { createPatternAPI } from './modules/pattern-api';
 import type { SessionReplayAPI } from './modules/session-replay-api';
 import { createSessionReplayAPI } from './modules/session-replay-api';
 import { ContextViewerAPI, createContextViewerAPI } from './modules/context-viewer-api';
@@ -46,6 +48,8 @@ export interface ElectronAPI extends
   github: GitHubAPI;
   /** Queue routing API for rate limit recovery */
   queue: QueueAPI;
+  /** Pattern learning API for codebase patterns */
+  pattern: PatternAPI;
   /** Session replay API for learning and review */
   sessionReplay: SessionReplayAPI;
   /** Scheduler API for build scheduling and queue management */
@@ -58,8 +62,8 @@ export const createElectronAPI = (): ElectronAPI => ({
   ...createTaskAPI(),
   ...createSettingsAPI(),
   ...createFileAPI(),
-  ...createAgentAPI(),  // Includes: Roadmap, Ideation, Insights, Changelog, Linear, GitHub, GitLab, Shell, SessionContext
   ...createTemplateAPI(),
+  ...createAgentAPI(),  // Includes: Roadmap, Ideation, Insights, Changelog, Linear, GitHub, GitLab, Shell, SessionContext
   ...createAppUpdateAPI(),
   ...createDebugAPI(),
   ...createClaudeCodeAPI(),
@@ -71,6 +75,7 @@ export const createElectronAPI = (): ElectronAPI => ({
   ...createFeedbackAPI(),
   github: createGitHubAPI(),
   queue: createQueueAPI(),  // Queue routing for rate limit recovery
+  pattern: createPatternAPI(),
   sessionReplay: createSessionReplayAPI(),
   scheduler: createSchedulerAPI()
 });
@@ -94,6 +99,7 @@ export {
   createScreenshotAPI,
   createQueueAPI,
   createPluginAPI,
+  createPatternAPI,
   createSessionReplayAPI,
   createContextViewerAPI,
   createSchedulerAPI,
@@ -120,6 +126,7 @@ export type {
   ScreenshotAPI,
   QueueAPI,
   PluginAPI,
+  PatternAPI,
   SessionReplayAPI,
   ContextViewerAPI,
   SchedulerAPI,

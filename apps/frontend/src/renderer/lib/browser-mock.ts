@@ -62,6 +62,10 @@ const browserMockAPI: ElectronAPI = {
     success: true
   }),
 
+  saveCompetitorAnalysis: async () => ({
+    success: true
+  }),
+
   generateRoadmap: (_projectId: string, _enableCompetitorAnalysis?: boolean, _refreshCompetitorAnalysis?: boolean) => {
     console.warn('[Browser Mock] generateRoadmap called');
   },
@@ -420,6 +424,16 @@ const browserMockAPI: ElectronAPI = {
     onQueueProfileSwapped: () => () => {},
     onQueueSessionCaptured: () => () => {},
     onQueueBlockedNoProfiles: () => () => {}
+  },
+
+  // Pattern learning API (codebase patterns)
+  pattern: {
+    listPatterns: async () => ({ success: true, data: [] }),
+    getPatternCategories: async () => ({ success: true, data: ['naming-conventions' as const, 'error-handling' as const, 'code-organization' as const] }),
+    getPatternDetails: async () => ({ success: true, data: { index: 1, id: '1', text: 'Mock pattern', category: 'naming-conventions', confidence: 'high' as const, reasoning: 'Mock reasoning' } }),
+    approvePattern: async () => ({ success: true, data: undefined }),
+    overridePattern: async () => ({ success: true, data: undefined }),
+    deletePattern: async () => ({ success: true, data: undefined })
   },
 
   // Session Replay API

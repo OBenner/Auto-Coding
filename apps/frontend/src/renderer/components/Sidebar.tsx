@@ -27,7 +27,8 @@ import {
   BarChart3,
   Play,
   Calendar,
-  Activity
+  Activity,
+  MessageSquare
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { ScrollArea } from './ui/scroll-area';
@@ -63,7 +64,7 @@ import { SessionContextIndicator } from './SessionContextIndicator';
 import { NavIndicator } from './NavIndicator';
 import type { Project, AutoBuildVersionInfo, GitStatus, ProjectEnvConfig } from '../../shared/types';
 
-export type SidebarView = 'kanban' | 'terminals' | 'roadmap' | 'context' | 'ideation' | 'github-issues' | 'gitlab-issues' | 'github-prs' | 'gitlab-merge-requests' | 'changelog' | 'insights' | 'worktrees' | 'agent-tools' | 'plugins' | 'analytics' | 'merge-analytics' | 'sessions' | 'scheduler';
+export type SidebarView = 'kanban' | 'terminals' | 'roadmap' | 'context' | 'ideation' | 'github-issues' | 'gitlab-issues' | 'github-prs' | 'gitlab-merge-requests' | 'changelog' | 'insights' | 'worktrees' | 'agent-tools' | 'plugins' | 'analytics' | 'merge-analytics' | 'sessions' | 'scheduler' | 'feedback';
 
 interface SidebarProps {
   onSettingsClick: () => void;
@@ -94,7 +95,8 @@ const baseNavItems: NavItem[] = [
   { id: 'worktrees', labelKey: 'navigation:items.worktrees', icon: GitBranch, shortcut: 'W' },
   { id: 'analytics', labelKey: 'navigation:items.analytics', icon: Activity, shortcut: 'T' },
   { id: 'merge-analytics', labelKey: 'navigation:items.mergeAnalytics', icon: BarChart3, shortcut: 'Y' },
-  { id: 'sessions', labelKey: 'navigation:items.sessions', icon: Play }
+  { id: 'sessions', labelKey: 'navigation:items.sessions', icon: Play },
+  { id: 'feedback', labelKey: 'navigation:items.feedback', icon: MessageSquare, shortcut: 'F' }
 ];
 
 // GitHub nav items shown when GitHub is enabled
@@ -467,26 +469,29 @@ export function Sidebar({
         <ScrollArea className="flex-1">
           <div className={cn("py-4 transition-all duration-300", isCollapsed ? "px-2" : "px-3")}>
             {/* Project Section */}
-            <div className="relative">
+            <div>
               {!isCollapsed && (
                 <h3 className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   {t('sections.project')}
                 </h3>
               )}
-              {/* Animated indicator for active nav item */}
-              {selectedProjectId && (
-                <NavIndicator
-                  activeView={activeView}
-                  containerRef={navContainerRef}
-                  itemRefs={navItemRefs}
-                  position={indicatorPosition}
-                />
-              )}
-              <nav ref={navContainerRef} className="space-y-1">
-                <AnimatePresence mode="popLayout">
-                  {visibleNavItems.map((item) => renderNavItem(item))}
-                </AnimatePresence>
-              </nav>
+              {/* relative wrapper starts here so NavIndicator top:0 aligns with nav top */}
+              <div className="relative">
+                {/* Animated indicator for active nav item */}
+                {selectedProjectId && (
+                  <NavIndicator
+                    activeView={activeView}
+                    containerRef={navContainerRef}
+                    itemRefs={navItemRefs}
+                    position={indicatorPosition}
+                  />
+                )}
+                <nav ref={navContainerRef} className="space-y-1">
+                  <AnimatePresence mode="popLayout">
+                    {visibleNavItems.map((item) => renderNavItem(item))}
+                  </AnimatePresence>
+                </nav>
+              </div>
             </div>
           </div>
         </ScrollArea>

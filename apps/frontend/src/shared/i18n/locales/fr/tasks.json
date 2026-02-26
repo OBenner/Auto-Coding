@@ -37,7 +37,8 @@
     "incomplete": "Incomplet",
     "recovering": "Récupération...",
     "needsRecovery": "Récupération requise",
-    "needsResume": "Reprise requise"
+    "needsResume": "Reprise requise",
+    "moreInfo": "Plus"
   },
   "reviewReason": {
     "completed": "Terminé",
@@ -214,7 +215,8 @@
   },
   "metadata": {
     "severity": "sévérité",
-    "pullRequest": "Pull Request"
+    "pullRequest": "Pull Request",
+    "additionalInfo": "Informations supplémentaires"
   },
   "images": {
     "removeImageAriaLabel": "Supprimer l'image {{filename}}",
@@ -417,6 +419,7 @@
     "complete": "Fusion terminée",
     "autoResolved": "{{count}} fichier(s) résolu(s) automatiquement"
   },
+  "markDoneFailed": "Impossible de marquer comme terminé",
   "prPolling": {
     "autoRefreshing": "Actualisation automatique"
   }

@@ -57,6 +57,19 @@ _POTENTIALLY_MOCKED_MODULES = [
     'claude_code_sdk.types',
     'claude_agent_sdk',
     'claude_agent_sdk.types',
+    'agents',
+    'agents.code_reviewer',
+    'agents.memory_manager',
+    'agents.session',
+    'agents.coder',
+    'agents.planner',
+    'agents.e2e_generator',
+    'agents.test_generator',
+    'agents.documentation_generator',
+    'agents.utils',
+    'agents.base',
+    'core.client',
+    'core.model_fallback',
     'ui',
     'progress',
     'task_logger',
@@ -66,6 +79,25 @@ _POTENTIALLY_MOCKED_MODULES = [
     'review',
     'validate_spec',
     'graphiti_providers',
+    # Additional modules mocked by test_qa_fixer / test_qa_reviewer
+    'core.error_utils',
+    'debug',
+    'prompts_pkg',
+    'prompts_pkg.project_context',
+    'phase_config',
+    'phase_event',
+    'security.tool_input_validator',
+    'security.constants',
+    'services.recovery',
+    'analysis.coverage_analyzer',
+    'analysis.code_analyzer',
+    'analysis.coverage_reporter',
+    'analysis.failure_analyzer',
+    'analysis.ts_analyzer',
+    'spec.coverage_config',
+    'integrations',
+    'integrations.graphiti',
+    'integrations.graphiti.memory',
 ]
 
 # Store original module references at import time (before any mocking)
@@ -101,18 +133,34 @@ def pytest_runtest_setup(item):
 
     # Map of which test modules mock which specific modules
     # Each test module should only preserve the mocks it installed
+    _qa_report_mocks = {'claude_agent_sdk', 'ui', 'progress', 'task_logger', 'linear_updater', 'client'}
+    _qa_common_mocks = {
+        'claude_agent_sdk', 'claude_agent_sdk.types', 'ui', 'progress', 'task_logger',
+        'linear_updater', 'client', 'core.error_utils', 'core.client', 'core.model_fallback',
+        'agents', 'agents.memory_manager', 'agents.session', 'agents.e2e_generator',
+        'agents.test_generator', 'agents.coder', 'agents.planner', 'agents.code_reviewer',
+        'agents.documentation_generator', 'agents.utils', 'agents.base',
+        'debug', 'phase_config', 'phase_event',
+        'security.tool_input_validator', 'security.constants', 'services.recovery',
+        'analysis.coverage_analyzer', 'analysis.code_analyzer', 'analysis.coverage_reporter',
+        'analysis.failure_analyzer', 'analysis.ts_analyzer',
+        'spec.coverage_config',
+        'integrations', 'integrations.graphiti', 'integrations.graphiti.memory',
+    }
     module_mocks = {
-        'test_qa_criteria': {'claude_agent_sdk', 'ui', 'progress', 'task_logger', 'linear_updater', 'client'},
-        'test_qa_report': {'claude_agent_sdk', 'ui', 'progress', 'task_logger', 'linear_updater', 'client'},
-        'test_qa_report_iteration': {'claude_agent_sdk', 'ui', 'progress', 'task_logger', 'linear_updater', 'client'},
-        'test_qa_report_recurring': {'claude_agent_sdk', 'ui', 'progress', 'task_logger', 'linear_updater', 'client'},
-        'test_qa_report_project_detection': {'claude_agent_sdk', 'ui', 'progress', 'task_logger', 'linear_updater', 'client'},
-        'test_qa_report_manual_plan': {'claude_agent_sdk', 'ui', 'progress', 'task_logger', 'linear_updater', 'client'},
-        'test_qa_report_config': {'claude_agent_sdk', 'ui', 'progress', 'task_logger', 'linear_updater', 'client'},
+        'test_qa_criteria': _qa_report_mocks,
+        'test_qa_report': _qa_report_mocks,
+        'test_qa_report_iteration': _qa_report_mocks,
+        'test_qa_report_recurring': _qa_report_mocks,
+        'test_qa_report_project_detection': _qa_report_mocks,
+        'test_qa_report_manual_plan': _qa_report_mocks,
+        'test_qa_report_config': _qa_report_mocks,
         'test_qa_loop': {'claude_code_sdk', 'claude_code_sdk.types', 'claude_agent_sdk', 'claude_agent_sdk.types'},
         'test_spec_pipeline': {'claude_code_sdk', 'claude_code_sdk.types', 'init', 'client', 'review', 'task_logger', 'ui', 'validate_spec'},
         'test_spec_complexity': {'claude_code_sdk', 'claude_code_sdk.types', 'claude_agent_sdk', 'claude_agent_sdk.types'},
         'test_spec_phases': {'claude_code_sdk', 'claude_code_sdk.types', 'claude_agent_sdk', 'graphiti_providers', 'validate_spec', 'client'},
+        'test_qa_fixer': _qa_common_mocks | {'prompts_pkg'},
+        'test_qa_reviewer': _qa_common_mocks | {'prompts_pkg', 'prompts_pkg.project_context'},
     }
 
     # Get the mocks that the current test module needs to preserve
@@ -132,6 +180,13 @@ def pytest_runtest_setup(item):
                     sys.modules[name] = _original_module_state[name]
                 else:
                     del sys.modules[name]
+                # Also clean parent package attribute for dotted names
+                # (e.g. agents.code_reviewer leaves a MagicMock on agents.code_reviewer attr)
+                if '.' in name:
+                    parent, attr = name.rsplit('.', 1)
+                    parent_mod = sys.modules.get(parent)
+                    if parent_mod and hasattr(parent_mod, attr) and isinstance(getattr(parent_mod, attr), MagicMock):
+                        delattr(parent_mod, attr)
                 cleaned_up = True
 
     # If we cleaned up mocks, we need to reload modules that might have cached
