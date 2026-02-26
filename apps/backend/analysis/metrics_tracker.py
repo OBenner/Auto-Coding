@@ -25,6 +25,20 @@ from typing import Any
 TREND_WINDOW_SIZE = 10  # Number of recent iterations to analyze for trends
 MIN_SAMPLES_FOR_TREND = 3  # Minimum iterations needed to calculate trends
 
+_EMPTY_FAILURE_METRICS: dict[str, Any] = {
+    "total_failures": 0,
+    "failure_types": {},
+    "failure_categories": {},
+    "root_causes_identified": 0,
+    "root_cause_rate": 0.0,
+    "recurring_failures": 0,
+    "recurrence_rate": 0.0,
+    "top_failure_files": [],
+    "top_failure_categories": [],
+    "pattern_detection_rate": 0.0,
+    "avg_occurrences_per_failure": 0.0,
+}
+
 
 # =============================================================================
 # DATA LOADING
@@ -207,19 +221,7 @@ def get_failure_metrics(spec_dir: Path) -> dict[str, Any]:
     metrics = _load_learning_metrics(spec_dir) or {}
 
     if not history:
-        return {
-            "total_failures": 0,
-            "failure_types": {},
-            "failure_categories": {},
-            "root_causes_identified": 0,
-            "root_cause_rate": 0.0,
-            "recurring_failures": 0,
-            "recurrence_rate": 0.0,
-            "top_failure_files": [],
-            "top_failure_categories": [],
-            "pattern_detection_rate": 0.0,
-            "avg_occurrences_per_failure": 0.0,
-        }
+        return dict(_EMPTY_FAILURE_METRICS)
 
     # Collect all issues across all iterations
     all_issues: list[dict[str, Any]] = []
@@ -228,19 +230,7 @@ def get_failure_metrics(spec_dir: Path) -> dict[str, Any]:
 
     total_failures = len(all_issues)
     if total_failures == 0:
-        return {
-            "total_failures": 0,
-            "failure_types": {},
-            "failure_categories": {},
-            "root_causes_identified": 0,
-            "root_cause_rate": 0.0,
-            "recurring_failures": 0,
-            "recurrence_rate": 0.0,
-            "top_failure_files": [],
-            "top_failure_categories": [],
-            "pattern_detection_rate": 0.0,
-            "avg_occurrences_per_failure": 0.0,
-        }
+        return dict(_EMPTY_FAILURE_METRICS)
 
     # Count failure types
     failure_types: Counter[str] = Counter()

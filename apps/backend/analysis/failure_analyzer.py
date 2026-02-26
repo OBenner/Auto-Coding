@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
@@ -54,20 +55,6 @@ LOGIC_ERROR_PATTERNS = [
     "referenceerror",
     "undefined is not",
 ]
-TEST_ERROR_PATTERNS = [
-    "test failed",
-    "assertion",
-    "expected",
-    "actual",
-    "test error",
-    "mock error",
-    "stub error",
-    "beforeeach failed",
-    "aftereach failed",
-    "test setup failed",
-    "test teardown failed",
-    "coverage threshold",
-]
 BUILD_ERROR_PATTERNS = [
     "compilation error",
     "compile error",
@@ -82,6 +69,22 @@ BUILD_ERROR_PATTERNS = [
     "eslint",
     "pylint",
     "linting error",
+]
+TEST_ERROR_PATTERNS = [
+    "test failed",
+    "assertionerror",
+    "assert failed",
+    "assertion failed",
+    "expected .* but got",
+    "expected .* to ",
+    "test error",
+    "mock error",
+    "stub error",
+    "beforeeach failed",
+    "aftereach failed",
+    "test setup failed",
+    "test teardown failed",
+    "coverage threshold",
 ]
 TIMEOUT_PATTERNS = ["timeout", "timed out", "deadline"]
 
@@ -329,17 +332,6 @@ def _analyze_failure_heuristics(failure_data: dict[str, Any]) -> dict[str, Any]:
             "Review function signatures and return values",
         ]
 
-    elif any(pattern in error_text for pattern in TEST_ERROR_PATTERNS):
-        root_cause["category"] = "test_failure"
-        root_cause["description"] = "Test assertion or setup failed"
-        root_cause["confidence"] = 0.9
-        root_cause["recommendations"] = [
-            "Review test expectations vs actual behavior",
-            "Check if implementation matches test requirements",
-            "Verify test setup and mocks are correct",
-            "Check test lifecycle hooks (setup/teardown)",
-        ]
-
     elif any(pattern in error_text for pattern in BUILD_ERROR_PATTERNS):
         root_cause["category"] = "build_error"
         root_cause["description"] = "Build or compilation error"
@@ -349,6 +341,17 @@ def _analyze_failure_heuristics(failure_data: dict[str, Any]) -> dict[str, Any]:
             "Review linting errors and code style issues",
             "Verify build configuration is correct",
             "Check for missing or incorrect imports",
+        ]
+
+    elif any(re.search(pattern, error_text) for pattern in TEST_ERROR_PATTERNS):
+        root_cause["category"] = "test_failure"
+        root_cause["description"] = "Test assertion or setup failed"
+        root_cause["confidence"] = 0.9
+        root_cause["recommendations"] = [
+            "Review test expectations vs actual behavior",
+            "Check if implementation matches test requirements",
+            "Verify test setup and mocks are correct",
+            "Check test lifecycle hooks (setup/teardown)",
         ]
 
     elif any(pattern in error_text for pattern in TIMEOUT_PATTERNS):

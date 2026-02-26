@@ -18,6 +18,8 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -32,6 +34,70 @@ from integrations.graphiti.queries_pkg.schema import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# Shared Helpers
+# =============================================================================
+
+
+@asynccontextmanager
+async def _graphiti_session(
+    spec_dir: Path,
+    project_dir: Path,
+    group_id_mode: str = GroupIdMode.PROJECT,
+) -> AsyncGenerator[Any, None]:
+    """Acquire, initialise and close a Graphiti memory instance.
+
+    Yields the memory object (never ``None``).  Raises ``RuntimeError``
+    when memory is unavailable so callers can simply ``async with``.
+    """
+    memory = get_graphiti_memory(spec_dir, project_dir, group_id_mode)
+    if memory is None or not memory.is_enabled:
+        raise RuntimeError("Graphiti memory not available")
+    try:
+        if not memory.is_initialized:
+            await memory.initialize()
+        yield memory
+    finally:
+        try:
+            await memory.close()
+        except Exception:
+            pass
+
+
+async def _add_episode(
+    memory: Any,
+    *,
+    name: str,
+    body: str,
+    source_description: str,
+) -> None:
+    """Store an episode via the memory client and bump the counter.
+
+    Raises ``RuntimeError`` when no client is available.
+    """
+    from graphiti_core.nodes import EpisodeType
+
+    client = memory.client
+    if client is None:
+        raise RuntimeError("No client available on memory instance")
+
+    await client.graphiti.add_episode(
+        name=name,
+        episode_body=body,
+        source=EpisodeType.text,
+        source_description=source_description,
+        reference_time=datetime.now(UTC),
+        group_id=memory.group_id,
+    )
+
+    if memory.state:
+        memory.state.episode_count += 1
+        try:
+            memory.state.save(memory.spec_dir)
+        except Exception:
+            logger.debug("Failed to persist episode count")
 
 
 async def store_failure_analysis(
@@ -76,39 +142,26 @@ async def store_failure_analysis(
         ...     failure_context={"errors": ["SyntaxError: invalid syntax"]}
         ... )
     """
-    # Check if Graphiti is enabled
     if not is_graphiti_enabled():
         logger.debug("Graphiti not enabled, skipping failure storage")
         return False
 
-    memory = None
     try:
-        # Get Graphiti memory instance
-        memory = get_graphiti_memory(spec_dir, project_dir, group_id_mode)
-
-        if memory is None or not memory.is_enabled:
-            logger.debug("Graphiti memory not available, skipping failure storage")
-            return False
-
-        # Initialize if needed
-        if not memory.is_initialized:
-            await memory.initialize()
-
-        # Store the root cause analysis
-        success = await _store_root_cause_episode(
-            memory, failure_type, root_cause, failure_context
-        )
-
-        if success:
-            logger.info(
-                f"Stored {failure_type} failure analysis in Graphiti "
-                f"(category: {root_cause.get('category', 'unknown')})"
+        async with _graphiti_session(spec_dir, project_dir, group_id_mode) as memory:
+            success = await _store_root_cause_episode(
+                memory, failure_type, root_cause, failure_context
             )
-        else:
-            logger.warning(f"Failed to store {failure_type} failure analysis")
-
-        return success
-
+            if success:
+                logger.info(
+                    f"Stored {failure_type} failure analysis in Graphiti "
+                    f"(category: {root_cause.get('category', 'unknown')})"
+                )
+            else:
+                logger.warning(f"Failed to store {failure_type} failure analysis")
+            return success
+    except RuntimeError as e:
+        logger.debug(f"Skipping failure storage: {e}")
+        return False
     except Exception as e:
         logger.warning(f"Error storing failure analysis: {e}")
         capture_exception(
@@ -118,12 +171,6 @@ async def store_failure_analysis(
             category=root_cause.get("category", "unknown"),
         )
         return False
-    finally:
-        if memory is not None:
-            try:
-                await memory.close()
-            except Exception:
-                pass
 
 
 async def store_qa_result(
@@ -156,26 +203,18 @@ async def store_qa_result(
         logger.debug("Graphiti not enabled, skipping QA result storage")
         return False
 
-    memory = None
     try:
-        memory = get_graphiti_memory(spec_dir, project_dir, group_id_mode)
-
-        if memory is None or not memory.is_enabled:
-            return False
-
-        if not memory.is_initialized:
-            await memory.initialize()
-
-        success = await _store_qa_result_episode(
-            memory, qa_iteration, passed, issues, fixes_applied
-        )
-
-        if success:
-            status = "passed" if passed else "failed"
-            logger.info(f"Stored QA iteration {qa_iteration} result ({status})")
-
-        return success
-
+        async with _graphiti_session(spec_dir, project_dir, group_id_mode) as memory:
+            success = await _store_qa_result_episode(
+                memory, qa_iteration, passed, issues, fixes_applied
+            )
+            if success:
+                status = "passed" if passed else "failed"
+                logger.info(f"Stored QA iteration {qa_iteration} result ({status})")
+            return success
+    except RuntimeError as e:
+        logger.debug(f"Skipping QA result storage: {e}")
+        return False
     except Exception as e:
         logger.warning(f"Error storing QA result: {e}")
         capture_exception(
@@ -185,12 +224,6 @@ async def store_qa_result(
             passed=passed,
         )
         return False
-    finally:
-        if memory is not None:
-            try:
-                await memory.close()
-            except Exception:
-                pass
 
 
 # =============================================================================
@@ -199,33 +232,20 @@ async def store_qa_result(
 
 
 async def _store_root_cause_episode(
-    memory,
+    memory: Any,
     failure_type: str,
     root_cause: dict[str, Any],
     failure_context: dict[str, Any] | None,
 ) -> bool:
-    """
-    Store a root cause analysis as a Graphiti episode.
-
-    Args:
-        memory: GraphitiMemory instance
-        failure_type: Type of failure
-        root_cause: Root cause analysis dict
-        failure_context: Optional failure context
-
-    Returns:
-        True if saved successfully
-    """
+    """Store a root cause analysis as a Graphiti episode."""
     try:
-        from graphiti_core.nodes import EpisodeType
-
-        # Prepare episode content
-        episode_content = {
+        category = root_cause.get("category", "unknown")
+        episode_content: dict[str, Any] = {
             "type": EPISODE_TYPE_ROOT_CAUSE,
-            "spec_id": memory.spec_context_id,
+            "spec_id": getattr(memory, "spec_context_id", None),
             "timestamp": datetime.now(UTC).isoformat(),
             "failure_type": failure_type,
-            "category": root_cause.get("category", "unknown"),
+            "category": category,
             "description": root_cause.get("description", ""),
             "affected_files": root_cause.get("affected_files", []),
             "confidence": root_cause.get("confidence", 0.0),
@@ -233,7 +253,6 @@ async def _store_root_cause_episode(
             "is_recurring": root_cause.get("is_recurring", False),
         }
 
-        # Add failure context if provided
         if failure_context:
             episode_content["context"] = {
                 "errors": failure_context.get("errors", []),
@@ -241,25 +260,12 @@ async def _store_root_cause_episode(
                 "subtask_id": failure_context.get("subtask_id"),
             }
 
-        # Store episode using the client
-        client = memory.client
-        if client is None:
-            logger.warning("No client available on memory instance")
-            return False
-        await client.graphiti.add_episode(
+        await _add_episode(
+            memory,
             name=f"root_cause_{failure_type}_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}",
-            episode_body=json.dumps(episode_content),
-            source=EpisodeType.text,
-            source_description=f"Root cause analysis: {failure_type} ({root_cause.get('category', 'unknown')})",
-            reference_time=datetime.now(UTC),
-            group_id=memory.group_id,
+            body=json.dumps(episode_content),
+            source_description=f"Root cause analysis: {failure_type} ({category})",
         )
-
-        # Update episode count
-        if memory.state:
-            memory.state.episode_count += 1
-            memory.state.save(memory.spec_dir)
-
         return True
 
     except Exception as e:
@@ -274,32 +280,18 @@ async def _store_root_cause_episode(
 
 
 async def _store_qa_result_episode(
-    memory,
+    memory: Any,
     qa_iteration: int,
     passed: bool,
     issues: list[dict[str, Any]],
     fixes_applied: list[str] | None,
 ) -> bool:
-    """
-    Store a QA result as a Graphiti episode.
-
-    Args:
-        memory: GraphitiMemory instance
-        qa_iteration: QA iteration number
-        passed: Whether QA passed
-        issues: List of issues found
-        fixes_applied: List of fixes applied
-
-    Returns:
-        True if saved successfully
-    """
+    """Store a QA result as a Graphiti episode."""
     try:
-        from graphiti_core.nodes import EpisodeType
-
-        # Prepare episode content
+        spec_id = getattr(memory, "spec_context_id", None)
         episode_content = {
             "type": EPISODE_TYPE_QA_RESULT,
-            "spec_id": memory.spec_context_id,
+            "spec_id": spec_id,
             "timestamp": datetime.now(UTC).isoformat(),
             "qa_iteration": qa_iteration,
             "passed": passed,
@@ -311,32 +303,18 @@ async def _store_qa_result_episode(
                     "file": issue.get("file"),
                     "line": issue.get("line"),
                 }
-                for issue in issues[
-                    :10
-                ]  # Limit to first 10 issues to avoid huge episodes
+                for issue in issues[:10]
             ],
             "fixes_applied": fixes_applied or [],
         }
 
-        # Store episode
-        client = memory.client
-        if client is None:
-            logger.warning("No client available on memory instance")
-            return False
-        await client.graphiti.add_episode(
-            name=f"qa_result_{memory.spec_context_id}_iter{qa_iteration:02d}",
-            episode_body=json.dumps(episode_content),
-            source=EpisodeType.text,
-            source_description=f"QA iteration {qa_iteration} {'passed' if passed else 'failed'} with {len(issues)} issues",
-            reference_time=datetime.now(UTC),
-            group_id=memory.group_id,
+        status_str = "passed" if passed else "failed"
+        await _add_episode(
+            memory,
+            name=f"qa_result_{spec_id}_iter{qa_iteration:02d}",
+            body=json.dumps(episode_content),
+            source_description=f"QA iteration {qa_iteration} {status_str} with {len(issues)} issues",
         )
-
-        # Update episode count
-        if memory.state:
-            memory.state.episode_count += 1
-            memory.state.save(memory.spec_dir)
-
         return True
 
     except Exception as e:

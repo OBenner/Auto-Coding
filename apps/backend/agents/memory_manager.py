@@ -403,7 +403,11 @@ async def get_failure_patterns(
                 or getattr(result, "fact", None)
                 or (result.get("content") if isinstance(result, dict) else None)
             )
-            score = getattr(result, "score", 0.0)
+            score = getattr(result, "score", None)
+            if score is None and isinstance(result, dict):
+                score = result.get("score", 0.0)
+            if score is None:
+                score = 0.0
 
             if score < min_score:
                 continue

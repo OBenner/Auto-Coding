@@ -5,8 +5,6 @@ import {
   Bug,
   FileWarning,
   TrendingDown,
-  TrendingUp,
-  Minus,
   ShieldAlert
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
@@ -18,46 +16,12 @@ interface FailurePatternsCardProps {
   isLoading?: boolean;
 }
 
-interface StatCardProps {
-  icon: React.ComponentType<{ className?: string }>;
-  label: string;
-  value: string | number;
-  trend?: 'up' | 'down' | 'neutral';
-  trendValue?: string;
-  variant?: 'default' | 'success' | 'warning' | 'error';
-}
-
-function StatCard({ icon: Icon, label, value, trend, trendValue, variant = 'default' }: StatCardProps) {
-  const variantStyles = {
-    default: 'bg-accent/10 text-accent',
-    success: 'bg-success/10 text-success',
-    warning: 'bg-warning/10 text-warning',
-    error: 'bg-destructive/10 text-destructive'
-  };
-
-  const TrendIcon = trend === 'up' ? TrendingUp : trend === 'down' ? TrendingDown : Minus;
-  const trendColor = trend === 'up' ? 'text-success' : trend === 'down' ? 'text-destructive' : 'text-muted-foreground';
-
-  return (
-    <div className="flex items-start gap-3 p-4 rounded-lg bg-muted/30 border border-border/50">
-      <div className={`p-2 rounded-lg ${variantStyles[variant]}`}>
-        <Icon className="h-5 w-5" />
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="text-sm text-muted-foreground mb-1">{label}</div>
-        <div className="flex items-baseline gap-2">
-          <div className="text-2xl font-semibold text-foreground">{value}</div>
-          {trend && trendValue && (
-            <div className={`flex items-center gap-1 text-xs ${trendColor}`}>
-              <TrendIcon className="h-3 w-3" />
-              <span>{trendValue}</span>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
+const VARIANT_STYLES: Record<string, string> = {
+  default: 'bg-accent/10 text-accent',
+  success: 'bg-success/10 text-success',
+  warning: 'bg-warning/10 text-warning',
+  error: 'bg-destructive/10 text-destructive',
+};
 
 interface CategoryItemProps {
   category: string;
@@ -84,31 +48,36 @@ function CategoryItem({ category, count, total }: CategoryItemProps) {
   );
 }
 
-function formatPercentage(rate: number | undefined): string {
+function formatPct(rate: number | undefined): string {
   return `${((rate ?? 0) * 100).toFixed(1)}%`;
 }
 
 export function FailurePatternsCard({ failureMetrics, isLoading = false }: FailurePatternsCardProps) {
   const { t } = useTranslation(['common']);
 
-  const stats = useMemo(() => {
-    if (!failureMetrics) {
-      return {
-        totalFailures: 0,
-        rootCauseRate: 0,
-        patternDetectionRate: 0,
-        recurrenceRate: 0,
-        topCategories: []
-      };
-    }
+  const topCategories = useMemo(
+    () => failureMetrics?.top_failure_categories ?? [],
+    [failureMetrics],
+  );
 
-    return {
-      totalFailures: failureMetrics.total_failures,
-      rootCauseRate: failureMetrics.root_cause_rate ?? 0,
-      patternDetectionRate: failureMetrics.pattern_detection_rate ?? 0,
-      recurrenceRate: failureMetrics.recurrence_rate ?? 0,
-      topCategories: failureMetrics.top_failure_categories ?? []
-    };
+  const statCards = useMemo(() => {
+    if (!failureMetrics) return [];
+    const f = failureMetrics;
+    const rootRate = f.root_cause_rate ?? 0;
+    const patternRate = f.pattern_detection_rate ?? 0;
+    const recurRate = f.recurrence_rate ?? 0;
+
+    const rateVariant = (v: number, high: number, mid: number) =>
+      v >= high ? 'success' : v >= mid ? 'warning' : 'error';
+    const inverseVariant = (v: number, low: number, mid: number) =>
+      v <= low ? 'success' : v <= mid ? 'warning' : 'error';
+
+    return [
+      { key: 'total', icon: AlertTriangle, labelKey: 'common:failurePatterns.totalFailures', value: f.total_failures, variant: f.total_failures > 10 ? 'error' : f.total_failures > 5 ? 'warning' : 'default' },
+      { key: 'rootCause', icon: Bug, labelKey: 'common:failurePatterns.rootCauseRate', value: formatPct(rootRate), variant: rateVariant(rootRate, 0.8, 0.5) },
+      { key: 'pattern', icon: FileWarning, labelKey: 'common:failurePatterns.patternDetection', value: formatPct(patternRate), variant: rateVariant(patternRate, 0.8, 0.5) },
+      { key: 'recurrence', icon: TrendingDown, labelKey: 'common:failurePatterns.recurrenceRate', value: formatPct(recurRate), variant: inverseVariant(recurRate, 0.2, 0.5) },
+    ];
   }, [failureMetrics]);
 
   const hasData = failureMetrics && failureMetrics.total_failures > 0;
@@ -123,7 +92,7 @@ export function FailurePatternsCard({ failureMetrics, isLoading = false }: Failu
           </CardTitle>
           {hasData && (
             <Badge variant="outline" className="text-xs">
-              {t('common:failurePatterns.failureCount', { count: stats.totalFailures })}
+              {t('common:failurePatterns.failureCount', { count: failureMetrics.total_failures })}
             </Badge>
           )}
         </div>
@@ -146,46 +115,33 @@ export function FailurePatternsCard({ failureMetrics, isLoading = false }: Failu
           <div className="space-y-6">
             {/* Metrics Summary */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <StatCard
-                icon={AlertTriangle}
-                label={t('common:failurePatterns.totalFailures')}
-                value={stats.totalFailures}
-                variant={stats.totalFailures > 10 ? 'error' : stats.totalFailures > 5 ? 'warning' : 'default'}
-              />
-              <StatCard
-                icon={Bug}
-                label={t('common:failurePatterns.rootCauseRate')}
-                value={formatPercentage(stats.rootCauseRate)}
-                variant={stats.rootCauseRate >= 0.8 ? 'success' : stats.rootCauseRate >= 0.5 ? 'warning' : 'error'}
-              />
-              <StatCard
-                icon={FileWarning}
-                label={t('common:failurePatterns.patternDetection')}
-                value={formatPercentage(stats.patternDetectionRate)}
-                variant={stats.patternDetectionRate >= 0.8 ? 'success' : stats.patternDetectionRate >= 0.5 ? 'warning' : 'error'}
-              />
-              <StatCard
-                icon={TrendingDown}
-                label={t('common:failurePatterns.recurrenceRate')}
-                value={formatPercentage(stats.recurrenceRate)}
-                variant={stats.recurrenceRate <= 0.2 ? 'success' : stats.recurrenceRate <= 0.5 ? 'warning' : 'error'}
-              />
+              {statCards.map(({ key, icon: Icon, labelKey, value, variant }) => (
+                <div key={key} className="flex items-start gap-3 p-4 rounded-lg bg-muted/30 border border-border/50">
+                  <div className={`p-2 rounded-lg ${VARIANT_STYLES[variant]}`}>
+                    <Icon className="h-5 w-5" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm text-muted-foreground mb-1">{t(labelKey)}</div>
+                    <div className="text-2xl font-semibold text-foreground">{value}</div>
+                  </div>
+                </div>
+              ))}
             </div>
 
             {/* Top Failure Categories */}
-            {stats.topCategories.length > 0 && (
+            {topCategories.length > 0 && (
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
                   <Bug className="h-4 w-4 text-muted-foreground" />
                   <h3 className="text-sm font-semibold text-foreground">{t('common:failurePatterns.commonCategories')}</h3>
                 </div>
                 <div className="space-y-2">
-                  {stats.topCategories.map((item) => (
+                  {topCategories.map((item) => (
                     <CategoryItem
                       key={item.category}
                       category={item.category}
                       count={item.count}
-                      total={stats.totalFailures}
+                      total={failureMetrics.total_failures}
                     />
                   ))}
                 </div>

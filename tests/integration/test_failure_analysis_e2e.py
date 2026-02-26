@@ -369,7 +369,7 @@ async def _helper_dashboard_metrics(test_spec_dir, test_project_dir):
 
 async def _helper_success_rate_improves(test_spec_dir, test_project_dir):
     """Helper: verify success rate improves after learning."""
-    from analysis.metrics_tracker import get_failure_metrics
+    from analysis.metrics_tracker import get_failure_metrics, get_success_rate
 
     # First iteration: multiple failures (3 issues)
     _setup_qa_history(test_spec_dir, [
@@ -420,10 +420,12 @@ async def _helper_success_rate_improves(test_spec_dir, test_project_dir):
     ])
 
     metrics_after = get_failure_metrics(test_spec_dir)
-    # Only count rejected iterations for failure rate (exclude approved)
-    rejected_iterations = 2
+    success_after = get_success_rate(test_spec_dir)
+    # Compute rejected iterations from actual metrics
+    rejected_iterations = success_after["rejected_iterations"]
     issues_after = metrics_after["total_failures"]
-    failure_rate_after = issues_after / rejected_iterations if rejected_iterations > 0 else 0.0
+    assert rejected_iterations > 0, "Need rejected iterations to track improvement"
+    failure_rate_after = issues_after / rejected_iterations
 
     # Failure rate per rejected iteration should decrease:
     # Before: 3 issues / 1 rejected iteration = 3.0
@@ -432,9 +434,7 @@ async def _helper_success_rate_improves(test_spec_dir, test_project_dir):
         f"Failure rate should decrease: before={failure_rate_before:.2f}, after={failure_rate_after:.2f}"
     )
 
-    # Verify there are approved iterations
     assert "root_cause_rate" in metrics_after
-    assert rejected_iterations >= 1, "Need rejected iterations to track improvement"
 
     print(f"  [ok] Success rate improved: failure rate {failure_rate_before:.2f} -> {failure_rate_after:.2f}")
 
@@ -455,16 +455,17 @@ async def test_1_trigger_qa_rejection(test_spec_dir, test_project_dir):
 
 
 # =============================================================================
-# Test 2: Verify Failure Analyzed with LLM
+# Test 2: Verify Failure Analyzed with Heuristics (non-LLM)
 # =============================================================================
 
 
 @pytest.mark.asyncio
-async def test_2_failure_analyzed_with_llm(test_spec_dir, test_project_dir):
+async def test_2_failure_analyzed_non_llm(test_spec_dir, test_project_dir):
     """
-    Test that failures are analyzed with LLM to extract root causes.
+    Test that failures are analyzed with heuristics (non-LLM) to extract root causes.
 
-    This verifies extract_root_cause() correctly processes failure data.
+    This verifies extract_root_cause(use_llm=False) correctly processes failure data
+    using pattern matching without calling any LLM.
     """
     await _helper_failure_analyzed(test_spec_dir, test_project_dir)
 

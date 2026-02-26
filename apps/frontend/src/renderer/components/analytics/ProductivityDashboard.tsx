@@ -48,8 +48,7 @@ function formatHoursCompact(hours: number): string {
 export function ProductivityDashboard({ projectId }: ProductivityDashboardProps) {
   const [summary, setSummary] = useState<ProductivitySummary | null>(null);
   const [trends, setTrends] = useState<ProductivityTrendPoint[]>([]);
-  // TODO: Load from backend API when available
-  const failureMetrics: FailureMetrics | null = null;
+  const [failureMetrics, setFailureMetrics] = useState<FailureMetrics | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
@@ -98,21 +97,21 @@ export function ProductivityDashboard({ projectId }: ProductivityDashboardProps)
         throw new Error('electronAPI.getProductivitySummary is not available');
       }
 
-      const [summaryResult, trendsResult] = await Promise.all([
+      const ipcCatch = (label: string) => (err: unknown) => {
+        const msg = `${label}: ${err instanceof Error ? err.message : String(err)}`;
+        errors.push(msg);
+        console.error('[Analytics]', msg);
+        return { success: false as const, error: msg, data: undefined };
+      };
+
+      const [summaryResult, trendsResult, failureResult] = await Promise.all([
         withTimeout(window.electronAPI.getProductivitySummary(projectId, dateFilter))
-          .catch((err) => {
-            const msg = `Summary: ${err instanceof Error ? err.message : String(err)}`;
-            errors.push(msg);
-            console.error('[Analytics]', msg);
-            return { success: false as const, error: msg, data: undefined };
-          }),
+          .catch(ipcCatch('Summary')),
         withTimeout(window.electronAPI.getProductivityTrends(projectId, dateFilter))
-          .catch((err) => {
-            const msg = `Trends: ${err instanceof Error ? err.message : String(err)}`;
-            errors.push(msg);
-            console.error('[Analytics]', msg);
-            return { success: false as const, error: msg, data: undefined };
-          }),
+          .catch(ipcCatch('Trends')),
+        window.electronAPI.getFailureMetrics
+          ? withTimeout(window.electronAPI.getFailureMetrics(projectId)).catch(ipcCatch('Failure Metrics'))
+          : Promise.resolve({ success: false as const, error: undefined, data: undefined }),
       ]);
 
       if (!mountedRef.current) return;
@@ -127,6 +126,10 @@ export function ProductivityDashboard({ projectId }: ProductivityDashboardProps)
         setTrends(trendsResult.data);
       } else if (trendsResult.error) {
         errors.push(trendsResult.error);
+      }
+
+      if (failureResult.success && failureResult.data) {
+        setFailureMetrics(failureResult.data);
       }
 
       await loadAllQualityData(projectId);
