@@ -7,6 +7,7 @@ Handles session memory storage using dual-layer approach:
 - FALLBACK: File-based memory - zero dependencies, always available
 """
 
+import json
 import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -192,7 +193,7 @@ async def get_pattern_suggestions(
     memory = None
     try:
         # Get GraphitiMemory instance
-        memory = get_graphiti_memory(spec_dir, project_dir)
+        memory = await get_graphiti_memory(spec_dir, project_dir)
         if memory is None:
             if is_debug_enabled():
                 debug_warning(
@@ -306,6 +307,256 @@ async def get_pattern_suggestions(
                 pass
 
 
+async def get_failure_patterns(
+    spec_dir: Path,
+    project_dir: Path,
+    query: str,
+    failure_types: list[str] | None = None,
+    num_results: int = 5,
+    min_score: float = 0.5,
+) -> str | None:
+    """
+    Retrieve failure patterns from Graphiti for the current task.
+
+    This searches the knowledge graph for relevant root cause analyses
+    from past failures, returning categorized patterns with recommendations.
+
+    Args:
+        spec_dir: Spec directory
+        project_dir: Project root directory
+        query: Task description or error message to search for
+        failure_types: Optional list of failure types to filter by
+                       ("qa_rejection", "build_error", "test_failure")
+        num_results: Maximum number of patterns to return (default: 5)
+        min_score: Minimum relevance score 0.0-1.0 (default: 0.5)
+
+    Returns:
+        Formatted failure pattern suggestions string or None if unavailable
+    """
+    if is_debug_enabled():
+        debug(
+            "memory",
+            "Retrieving failure patterns",
+            query=query[:100],
+            failure_types=failure_types,
+            num_results=num_results,
+        )
+
+    if not is_graphiti_enabled():
+        if is_debug_enabled():
+            debug("memory", "Graphiti not enabled, skipping failure pattern retrieval")
+        return None
+
+    memory = None
+    try:
+        # Get GraphitiMemory instance
+        memory = await get_graphiti_memory(spec_dir, project_dir)
+        if memory is None:
+            if is_debug_enabled():
+                debug_warning(
+                    "memory", "GraphitiMemory not available for failure patterns"
+                )
+            return None
+
+        # Import schema constants
+        from integrations.graphiti.queries_pkg.schema import EPISODE_TYPE_ROOT_CAUSE
+
+        if is_debug_enabled():
+            debug_detailed(
+                "memory",
+                "Searching for failure patterns",
+                query=query[:200],
+                group_id=memory.group_id,
+                failure_types=failure_types,
+            )
+
+        # Search for root cause episodes
+        search_query = f"root cause failure {query}"
+        client = memory.client
+        if client is None:
+            if is_debug_enabled():
+                debug_warning("memory", "No client available on memory instance")
+            return None
+        results = await client.graphiti.search(
+            query=search_query,
+            group_ids=[memory.group_id],
+            num_results=num_results * 2,  # Get extra results for filtering
+        )
+
+        if is_debug_enabled():
+            debug(
+                "memory",
+                "Failure pattern search complete",
+                raw_results=len(results) if results else 0,
+            )
+
+        if not results:
+            if is_debug_enabled():
+                debug("memory", "No failure patterns found")
+            return None
+
+        # Parse and filter results
+        failure_patterns = []
+        for result in results:
+            content = (
+                getattr(result, "content", None)
+                or getattr(result, "fact", None)
+                or (result.get("content") if isinstance(result, dict) else None)
+            )
+            score = getattr(result, "score", None)
+            if score is None and isinstance(result, dict):
+                score = result.get("score", 0.0)
+            if score is None:
+                score = 0.0
+
+            if score < min_score:
+                continue
+
+            if content:
+                try:
+                    data = json.loads(content) if isinstance(content, str) else content
+
+                    # Ensure data is a dict
+                    if not isinstance(data, dict):
+                        continue
+
+                    # Verify it's a root cause episode
+                    if data.get("type") != EPISODE_TYPE_ROOT_CAUSE:
+                        continue
+
+                    # Filter by failure type if specified
+                    if failure_types and data.get("failure_type") not in failure_types:
+                        continue
+
+                    # Extract failure pattern data
+                    pattern = {
+                        "failure_type": data.get("failure_type", "unknown"),
+                        "category": data.get("category", "unknown"),
+                        "description": data.get("description", ""),
+                        "affected_files": data.get("affected_files", []),
+                        "confidence": data.get("confidence", 0.0),
+                        "recommendations": data.get("recommendations", []),
+                        "is_recurring": data.get("is_recurring", False),
+                        "score": score,
+                        "spec_id": data.get("spec_id", ""),
+                    }
+
+                    failure_patterns.append(pattern)
+
+                    if len(failure_patterns) >= num_results:
+                        break
+
+                except (json.JSONDecodeError, AttributeError, KeyError) as e:
+                    if is_debug_enabled():
+                        debug_warning(
+                            "memory",
+                            "Failed to parse failure pattern result",
+                            error=str(e),
+                        )
+                    continue
+
+        if is_debug_enabled():
+            debug(
+                "memory",
+                "Failure pattern parsing complete",
+                patterns_found=len(failure_patterns),
+            )
+
+        if not failure_patterns:
+            if is_debug_enabled():
+                debug("memory", "No relevant failure patterns after filtering")
+            return None
+
+        # Format the failure patterns
+        sections = ["## Failure Pattern Analysis\n"]
+        sections.append("_Similar failures from past builds (learn from history):_\n")
+
+        # Group patterns by failure type and category
+        by_type: dict[str, list[dict]] = {}
+        for pattern in failure_patterns:
+            failure_type = pattern.get("failure_type", "unknown")
+            if failure_type not in by_type:
+                by_type[failure_type] = []
+            by_type[failure_type].append(pattern)
+
+        # Format each failure type
+        for failure_type, type_patterns in by_type.items():
+            sections.append(f"### {failure_type.replace('_', ' ').title()}\n")
+
+            # Group by category within type
+            by_category: dict[str, list[dict]] = {}
+            for p in type_patterns:
+                category = p.get("category", "uncategorized")
+                if category not in by_category:
+                    by_category[category] = []
+                by_category[category].append(p)
+
+            for category, category_patterns in by_category.items():
+                sections.append(f"#### {category.replace('_', ' ').title()}\n")
+                for p in category_patterns:
+                    description = p.get("description", "")
+                    confidence = p.get("confidence", 0.0)
+                    score = p.get("score", 0.0)
+                    recommendations = p.get("recommendations", [])
+                    is_recurring = p.get("is_recurring", False)
+                    affected_files = p.get("affected_files", [])
+                    spec_id = p.get("spec_id", "")
+
+                    sections.append(f"- **Root Cause**: {description}\n")
+
+                    if affected_files:
+                        files_str = ", ".join(affected_files[:3])
+                        if len(affected_files) > 3:
+                            files_str += f" (+{len(affected_files) - 3} more)"
+                        sections.append(f"  _Affected Files_: {files_str}\n")
+
+                    if recommendations:
+                        sections.append("  _Recommendations_:\n")
+                        for rec in recommendations[:3]:  # Limit to top 3
+                            sections.append(f"    • {rec}\n")
+
+                    sections.append(
+                        f"  _Confidence_: {confidence:.2f} | _Relevance_: {score:.2f}"
+                    )
+                    if is_recurring:
+                        sections.append(" | ⚠️ _RECURRING ISSUE_")
+                    if spec_id:
+                        sections.append(f" | _From_: {spec_id}")
+                    sections.append("\n")
+
+        formatted = "".join(sections)
+
+        if is_debug_enabled():
+            debug_success(
+                "memory",
+                "Failure patterns formatted",
+                types=len(by_type),
+                total_patterns=len(failure_patterns),
+            )
+
+        return formatted
+
+    except Exception as e:
+        if is_debug_enabled():
+            debug_error("memory", "Failed to get failure patterns", error=str(e))
+        logger.warning(f"Failed to get failure patterns: {e}")
+        capture_exception(
+            e,
+            query_summary=query[:100] if query else "",
+            spec_dir=str(spec_dir),
+            project_dir=str(project_dir),
+            operation="get_failure_patterns",
+        )
+        return None
+    finally:
+        # Close memory connection if we opened it
+        if memory is not None:
+            try:
+                await memory.close()
+            except Exception:
+                pass
+
+
 async def get_graphiti_context(
     spec_dir: Path,
     project_dir: Path,
@@ -341,7 +592,7 @@ async def get_graphiti_context(
     memory = None
     try:
         # Use centralized helper for GraphitiMemory instantiation (async)
-        memory = get_graphiti_memory(spec_dir, project_dir)
+        memory = await get_graphiti_memory(spec_dir, project_dir)
         if memory is None:
             if is_debug_enabled():
                 debug_warning(
@@ -561,14 +812,15 @@ async def save_session_memory(
         memory = None
         try:
             # Use centralized helper for GraphitiMemory instantiation (async)
-            memory = get_graphiti_memory(spec_dir, project_dir)
-            if memory is None and is_debug_enabled():
-                debug_warning("memory", "GraphitiMemory not available")
-                debug(
-                    "memory",
-                    "get_graphiti_memory() returned None - this usually means Graphiti is disabled or provider config is invalid",
-                )
-            # Continue to file-based fallback
+            memory = await get_graphiti_memory(spec_dir, project_dir)
+            if memory is None:
+                if is_debug_enabled():
+                    debug_warning("memory", "GraphitiMemory not available")
+                    debug(
+                        "memory",
+                        "get_graphiti_memory() returned None - this usually means Graphiti is disabled or provider config is invalid",
+                    )
+                # Continue to file-based fallback
             if memory is not None and memory.is_enabled:
                 if is_debug_enabled():
                     debug("memory", "Saving to Graphiti...")
@@ -1098,7 +1350,7 @@ async def save_user_correction(
 
     memory = None
     try:
-        memory = get_graphiti_memory(spec_dir, project_dir)
+        memory = await get_graphiti_memory(spec_dir, project_dir)
         if memory is None:
             if is_debug_enabled():
                 debug_warning(

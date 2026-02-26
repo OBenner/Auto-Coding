@@ -478,6 +478,7 @@ export const IPC_CHANNELS = {
   // Productivity Analytics operations
   PRODUCTIVITY_ANALYTICS_GET_SUMMARY: 'productivityAnalytics:getSummary',
   PRODUCTIVITY_ANALYTICS_GET_TRENDS: 'productivityAnalytics:getTrends',
+  PRODUCTIVITY_ANALYTICS_GET_FAILURE_METRICS: 'productivityAnalytics:getFailureMetrics',
   PRODUCTIVITY_ANALYTICS_EXPORT: 'productivityAnalytics:export',
 
   // Memory Infrastructure status (LadybugDB - no Docker required)

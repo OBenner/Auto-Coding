@@ -14,7 +14,11 @@ import time
 from pathlib import Path
 
 # Memory integration for cross-session learning
-from agents.memory_manager import get_graphiti_context, save_session_memory
+from agents.memory_manager import (
+    get_failure_patterns,
+    get_graphiti_context,
+    save_session_memory,
+)
 from claude_agent_sdk import ClaudeSDKClient
 from core.client import create_client
 from core.model_fallback import MODEL_FALLBACK_CHAIN
@@ -161,6 +165,22 @@ async def run_qa_fixer_session(
         print("✓ Memory context loaded for QA fixer")
         debug_success("qa_fixer", "Graphiti memory context loaded for fixer")
 
+    # Retrieve failure patterns from past QA rejections and errors
+    # This provides root cause analyses from similar failures
+    fix_request_content = fix_request_file.read_text(encoding="utf-8")
+    failure_patterns = await get_failure_patterns(
+        spec_dir,
+        project_dir,
+        query=fix_request_content[:500],  # Use first 500 chars of fix request as query
+        failure_types=["qa_rejection", "build_error", "test_failure"],
+        num_results=5,
+        min_score=0.5,
+    )
+    if failure_patterns:
+        prompt += "\n\n" + failure_patterns
+        print("✓ Failure patterns loaded for QA fixer")
+        debug_success("qa_fixer", "Failure patterns loaded for fixer")
+
     # Add session context - use full path so agent can find files
     prompt += f"\n\n---\n\n**Fix Session**: {fix_session}\n"
     prompt += f"**Spec Directory**: {spec_dir}\n"
@@ -172,7 +192,7 @@ async def run_qa_fixer_session(
     base_prompt = prompt
 
     # Check for circular fixes (same fix attempted multiple times)
-    fix_request_content = fix_request_file.read_text(encoding="utf-8")
+    # Note: fix_request_content already loaded above for failure pattern analysis
     if recovery_manager.is_circular_fix(fixer_subtask_id, fix_request_content):
         attempt_count = recovery_manager.get_attempt_count(fixer_subtask_id)
         debug_error(
