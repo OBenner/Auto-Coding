@@ -6,6 +6,7 @@ import { toast } from '../../hooks/use-toast';
 import { MetricsSummaryCard } from './MetricsSummaryCard';
 import { TrendsChart } from './TrendsChart';
 import { SpecBreakdownTable } from './SpecBreakdownTable';
+import { FailureAnalysisDashboard } from './FailureAnalysisDashboard';
 import { QualityTrendChart } from './QualityTrendChart';
 import { QualityAlertCard } from './QualityAlertCard';
 import { DashboardActions } from './DashboardActions';
@@ -15,7 +16,8 @@ import type {
   ProductivitySummary,
   ProductivityTrendPoint,
   ProductivityAnalyticsExportOptions,
-  ProductivityAnalyticsFilter
+  ProductivityAnalyticsFilter,
+  FailureMetrics
 } from '../../../shared/types/productivity-analytics';
 
 interface ProductivityDashboardProps {
@@ -46,6 +48,7 @@ function formatHoursCompact(hours: number): string {
 export function ProductivityDashboard({ projectId }: ProductivityDashboardProps) {
   const [summary, setSummary] = useState<ProductivitySummary | null>(null);
   const [trends, setTrends] = useState<ProductivityTrendPoint[]>([]);
+  const [failureMetrics, setFailureMetrics] = useState<FailureMetrics | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
@@ -94,21 +97,21 @@ export function ProductivityDashboard({ projectId }: ProductivityDashboardProps)
         throw new Error('electronAPI.getProductivitySummary is not available');
       }
 
-      const [summaryResult, trendsResult] = await Promise.all([
+      const ipcCatch = (label: string) => (err: unknown) => {
+        const msg = `${label}: ${err instanceof Error ? err.message : String(err)}`;
+        errors.push(msg);
+        console.error('[Analytics]', msg);
+        return { success: false as const, error: msg, data: undefined };
+      };
+
+      const [summaryResult, trendsResult, failureResult] = await Promise.all([
         withTimeout(window.electronAPI.getProductivitySummary(projectId, dateFilter))
-          .catch((err) => {
-            const msg = `Summary: ${err instanceof Error ? err.message : String(err)}`;
-            errors.push(msg);
-            console.error('[Analytics]', msg);
-            return { success: false as const, error: msg, data: undefined };
-          }),
+          .catch(ipcCatch('Summary')),
         withTimeout(window.electronAPI.getProductivityTrends(projectId, dateFilter))
-          .catch((err) => {
-            const msg = `Trends: ${err instanceof Error ? err.message : String(err)}`;
-            errors.push(msg);
-            console.error('[Analytics]', msg);
-            return { success: false as const, error: msg, data: undefined };
-          }),
+          .catch(ipcCatch('Trends')),
+        window.electronAPI.getFailureMetrics
+          ? withTimeout(window.electronAPI.getFailureMetrics(projectId)).catch(ipcCatch('Failure Metrics'))
+          : Promise.resolve({ success: false as const, error: undefined, data: undefined }),
       ]);
 
       if (!mountedRef.current) return;
@@ -123,6 +126,10 @@ export function ProductivityDashboard({ projectId }: ProductivityDashboardProps)
         setTrends(trendsResult.data);
       } else if (trendsResult.error) {
         errors.push(trendsResult.error);
+      }
+
+      if (failureResult.success && failureResult.data) {
+        setFailureMetrics(failureResult.data);
       }
 
       await loadAllQualityData(projectId);
@@ -308,6 +315,12 @@ export function ProductivityDashboard({ projectId }: ProductivityDashboardProps)
             <QualityAlertCard alerts={qualityAlerts} isLoading={isLoadingQuality} />
             <QualityTrendChart scores={qualityScores} isLoading={isLoadingQuality} />
           </div>
+
+          {/* Failure Analysis Dashboard */}
+          <FailureAnalysisDashboard
+            failureMetrics={failureMetrics}
+            isLoading={isLoading}
+          />
 
           {/* Spec Breakdown */}
           <SpecBreakdownTable specs={summary?.specs ?? []} isLoading={isLoading} />

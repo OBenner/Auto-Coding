@@ -5,6 +5,7 @@ import type {
   ProductivitySummary,
   ProductivityTrendPoint,
   ProductivityAnalyticsExportOptions,
+  FailureMetrics,
 } from '../../shared/types';
 import { promises as fsPromises } from 'fs';
 import path from 'path';
@@ -355,6 +356,97 @@ async function executePythonAnalytics(
 }
 
 // =============================================================================
+// Failure metrics aggregation — mirrors backend metrics_tracker.get_failure_metrics
+// =============================================================================
+
+async function aggregateFailureMetrics(projectPath: string): Promise<FailureMetrics> {
+  const specsDir = path.join(projectPath, '.auto-claude', 'specs');
+  const empty: FailureMetrics = { total_failures: 0 };
+
+  let entries: string[];
+  try {
+    entries = await fsPromises.readdir(specsDir);
+  } catch {
+    return empty;
+  }
+
+  let totalFailures = 0;
+  let rootCausesIdentified = 0;
+  let recurringFailures = 0;
+  let issuesWithPatterns = 0;
+  let totalOccurrences = 0;
+  const failureTypes: Record<string, number> = {};
+  const failureCategories: Record<string, number> = {};
+  const fileCounts: Record<string, number> = {};
+
+  for (const entry of entries) {
+    const planFile = path.join(specsDir, entry, 'implementation_plan.json');
+    let plan: Record<string, any>;
+    try {
+      const raw = await fsPromises.readFile(planFile, 'utf-8');
+      plan = JSON.parse(raw);
+    } catch {
+      continue;
+    }
+
+    const history: any[] = plan.qa_iteration_history ?? [];
+    const learningMetrics: Record<string, any> = plan.learning_metrics ?? {};
+
+    for (const record of history) {
+      const issues: any[] = record.issues ?? [];
+      if (issues.length === 0) continue;
+
+      const failureType: string = record.failure_type ?? 'unknown';
+      failureTypes[failureType] = (failureTypes[failureType] ?? 0) + issues.length;
+
+      for (const issue of issues) {
+        totalFailures++;
+        const category: string = issue.category ?? 'unknown';
+        failureCategories[category] = (failureCategories[category] ?? 0) + 1;
+
+        const file: string | undefined = issue.file;
+        if (file) {
+          fileCounts[file] = (fileCounts[file] ?? 0) + 1;
+        }
+
+        const occ = issue.occurrence_count ?? 1;
+        totalOccurrences += occ;
+        if (occ > 1) recurringFailures++;
+        if (issue.root_cause || issue.suggested_fix) issuesWithPatterns++;
+      }
+    }
+
+    rootCausesIdentified += learningMetrics.root_causes_identified ?? 0;
+  }
+
+  if (totalFailures === 0) return empty;
+
+  const topFiles = Object.entries(fileCounts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([file, count]) => ({ file, count }));
+
+  const topCategories = Object.entries(failureCategories)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([category, count]) => ({ category, count }));
+
+  return {
+    total_failures: totalFailures,
+    failure_types: failureTypes,
+    failure_categories: failureCategories,
+    root_causes_identified: rootCausesIdentified,
+    root_cause_rate: rootCausesIdentified / totalFailures,
+    recurring_failures: recurringFailures,
+    recurrence_rate: recurringFailures / totalFailures,
+    top_failure_files: topFiles,
+    top_failure_categories: topCategories,
+    pattern_detection_rate: issuesWithPatterns / totalFailures,
+    avg_occurrences_per_failure: totalOccurrences / totalFailures,
+  };
+}
+
+// =============================================================================
 // IPC Handlers
 // =============================================================================
 
@@ -410,6 +502,31 @@ export function registerAnalyticsHandlers(): void {
         debugError('[Productivity Analytics] Failed to get trends:', error);
         const errorMessage = error instanceof Error ? error.message : String(error);
         return { success: false, error: `Failed to get productivity trends: ${errorMessage}` };
+      }
+    }
+  );
+
+  /**
+   * Get failure metrics — reads spec JSON files directly
+   */
+  ipcMain.handle(
+    IPC_CHANNELS.PRODUCTIVITY_ANALYTICS_GET_FAILURE_METRICS,
+    async (
+      _,
+      projectId: string
+    ): Promise<IPCResult<FailureMetrics>> => {
+      const project = projectStore.getProject(projectId);
+      if (!project) {
+        return { success: false, error: 'Project not found' };
+      }
+
+      try {
+        const metrics = await aggregateFailureMetrics(project.path);
+        return { success: true, data: metrics };
+      } catch (error) {
+        debugError('[Productivity Analytics] Failed to get failure metrics:', error);
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        return { success: false, error: `Failed to get failure metrics: ${errorMessage}` };
       }
     }
   );
