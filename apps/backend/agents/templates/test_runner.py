@@ -230,34 +230,35 @@ async def run_template_test(
     print("  [3/4] Running test session...")
 
     try:
-        # Send test query
-        debug("test_runner", "Sending test query to agent...")
-        await client.query(test_prompt)
-        debug_success("test_runner", "Test query sent")
+        async with client:
+            # Send test query
+            debug("test_runner", "Sending test query to agent...")
+            await client.query(test_prompt)
+            debug_success("test_runner", "Test query sent")
 
-        # Collect response
-        response_text = ""
-        message_count = 0
-        debug("test_runner", "Collecting agent response...")
+            # Collect response
+            response_text = ""
+            message_count = 0
+            debug("test_runner", "Collecting agent response...")
 
-        async for msg in client.receive_response():
-            msg_type = type(msg).__name__
-            message_count += 1
-            debug_detailed(
-                "test_runner",
-                f"Received message #{message_count}",
-                msg_type=msg_type,
-            )
+            async for msg in client.receive_response():
+                msg_type = type(msg).__name__
+                message_count += 1
+                debug_detailed(
+                    "test_runner",
+                    f"Received message #{message_count}",
+                    msg_type=msg_type,
+                )
 
-            # Extract text from AssistantMessage
-            if msg_type == "AssistantMessage" and hasattr(msg, "content"):
-                for block in msg.content:
-                    block_type = type(block).__name__
-                    if block_type == "TextBlock" and hasattr(block, "text"):
-                        response_text += block.text
-                        # Print response preview (first 500 chars)
-                        if len(response_text) <= 500:
-                            print(block.text, end="", flush=True)
+                # Extract text from AssistantMessage
+                if msg_type == "AssistantMessage" and hasattr(msg, "content"):
+                    for block in msg.content:
+                        block_type = type(block).__name__
+                        if block_type == "TextBlock" and hasattr(block, "text"):
+                            response_text += block.text
+                            # Print response preview (first 500 chars)
+                            if len(response_text) <= 500:
+                                print(block.text, end="", flush=True)
 
         print()  # New line after response
 

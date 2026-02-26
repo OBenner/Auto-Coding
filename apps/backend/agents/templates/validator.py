@@ -569,10 +569,9 @@ def validate_import_statements(prompt: str) -> list[str]:
         # Use word boundaries to avoid false positives
         module_pattern = r"\b" + re.escape(module) + r"\b"
         if re.search(module_pattern, prompt):
-            # Only warn if it looks like actual usage, not just documentation
+            # Only warn if it looks like actual usage (module.attribute), not just documentation
             context_patterns = [
-                rf"{re.escape(module)}\.\w+",  # module.function or module.constant
-                rf"\b{re.escape(module)}\.[A-Za-z_][A-Za-z0-9_]*\b",  # something.module
+                rf"\b{re.escape(module)}\.[A-Za-z_][A-Za-z0-9_]*\b",  # module.attribute
             ]
             if any(re.search(p, prompt) for p in context_patterns):
                 errors.append(

@@ -102,9 +102,15 @@ def load_template(name: str, project_dir: Path) -> AgentTemplate | None:
     try:
         with open(template_file, encoding="utf-8") as f:
             data = json.load(f)
+        try:
             return AgentTemplate.from_dict(data)
+        except Exception as e:
+            logger.warning("Failed to deserialize template '%s': %s", name, e)
+            return None
     except (json.JSONDecodeError, OSError) as e:
-        logger.warning("Failed to load template '%s': %s", name, e)
+        logger.warning(
+            "Failed to load template '%s' from '%s': %s", name, template_file, e
+        )
         return None
 
 
@@ -235,8 +241,15 @@ def export_template(template: AgentTemplate, export_path: Path) -> None:
     # Create parent directories if they don't exist
     export_path.parent.mkdir(parents=True, exist_ok=True)
 
+    tmp_path = export_path.with_suffix(".json.tmp")
     try:
-        with open(export_path, "w", encoding="utf-8") as f:
+        with open(tmp_path, "w", encoding="utf-8") as f:
             json.dump(template.to_dict(), f, indent=2, ensure_ascii=False)
+        os.replace(str(tmp_path), str(export_path))
     except OSError as e:
+        try:
+            if tmp_path.exists():
+                tmp_path.unlink()
+        except OSError:
+            pass
         raise OSError(f"Failed to export template to '{export_path}': {e}") from e

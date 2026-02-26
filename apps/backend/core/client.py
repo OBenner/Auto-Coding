@@ -1108,10 +1108,11 @@ def create_client(
             f"# Custom Agent Instructions (from template: {custom_template.name})\n\n"
             f"{custom_template.custom_prompt}"
         )
-        print(
-            f"   - Custom template: {custom_template.name} ({custom_template.category})"
+        logger.info(
+            "Custom template enabled: name=%s category=%s",
+            custom_template.name,
+            custom_template.category,
         )
-        print(f"   - Template description: {custom_template.description}")
 
     # Include CLAUDE.md if enabled and present
     if should_use_claude_md():

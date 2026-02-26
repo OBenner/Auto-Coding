@@ -23,10 +23,12 @@ class AgentTemplateRegistry:
     _lock: threading.Lock = threading.Lock()
 
     def __new__(cls):
-        """Ensure singleton instance."""
+        """Ensure singleton instance (thread-safe double-check locking)."""
         if cls._instance is None:
-            cls._instance = super().__new__(cls)
-            cls._templates = {}
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = super().__new__(cls)
+                    cls._templates = {}
         return cls._instance
 
     def register(self, template: AgentTemplate) -> None:
@@ -57,7 +59,8 @@ class AgentTemplateRegistry:
         Returns:
             AgentTemplate instance or None if not found
         """
-        return self._templates.get(name)
+        with self._lock:
+            return self._templates.get(name)
 
     def list_all(self) -> list[AgentTemplate]:
         """
@@ -66,7 +69,8 @@ class AgentTemplateRegistry:
         Returns:
             List of all templates
         """
-        return list(self._templates.values())
+        with self._lock:
+            return list(self._templates.values())
 
     def list_by_category(self, category: str) -> list[AgentTemplate]:
         """
@@ -78,7 +82,8 @@ class AgentTemplateRegistry:
         Returns:
             List of templates in the category
         """
-        return [t for t in self._templates.values() if t.category == category]
+        with self._lock:
+            return [t for t in self._templates.values() if t.category == category]
 
     def get_categories(self) -> list[str]:
         """
@@ -87,7 +92,8 @@ class AgentTemplateRegistry:
         Returns:
             List of category names
         """
-        return list(set(t.category for t in self._templates.values()))
+        with self._lock:
+            return list({t.category for t in self._templates.values()})
 
     def list_by_tag(self, tag: str) -> list[AgentTemplate]:
         """
@@ -99,7 +105,8 @@ class AgentTemplateRegistry:
         Returns:
             List of templates with the specified tag
         """
-        return [t for t in self._templates.values() if tag in t.tags]
+        with self._lock:
+            return [t for t in self._templates.values() if tag in t.tags]
 
     def search(self, query: str) -> list[AgentTemplate]:
         """
@@ -112,15 +119,16 @@ class AgentTemplateRegistry:
             List of matching templates
         """
         query_lower = query.lower()
-        results = []
-        for template in self._templates.values():
-            if (
-                query_lower in template.name.lower()
-                or query_lower in template.description.lower()
-                or any(query_lower in tag.lower() for tag in template.tags)
-            ):
-                results.append(template)
-        return results
+        with self._lock:
+            return [
+                template
+                for template in self._templates.values()
+                if (
+                    query_lower in template.name.lower()
+                    or query_lower in template.description.lower()
+                    or any(query_lower in tag.lower() for tag in template.tags)
+                )
+            ]
 
     def update(self, template: AgentTemplate) -> None:
         """
@@ -171,7 +179,8 @@ class AgentTemplateRegistry:
         Returns:
             True if template exists, False otherwise
         """
-        return name in self._templates
+        with self._lock:
+            return name in self._templates
 
     def clear(self) -> None:
         """Clear all registered templates (mainly for testing)."""

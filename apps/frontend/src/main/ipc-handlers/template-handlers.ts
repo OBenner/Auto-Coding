@@ -607,10 +607,15 @@ print(json.dumps(suggestions))
 
     try {
       const content = await fsPromises.readFile(templatesPath, 'utf-8');
-      const templates = JSON.parse(content);
+      const raw = JSON.parse(content);
+
+      if (!Array.isArray(raw)) {
+        debugError('[loadCustomTemplates] Templates file is not an array, resetting');
+        return [];
+      }
 
       // Convert date strings back to Date objects with validation
-      return templates.map((t: import('../../shared/types/template').CustomTemplate) => {
+      return raw.map((t: import('../../shared/types/template').CustomTemplate) => {
         const createdAt = t.createdAt ? new Date(t.createdAt) : undefined;
         const updatedAt = t.updatedAt ? new Date(t.updatedAt) : undefined;
 
