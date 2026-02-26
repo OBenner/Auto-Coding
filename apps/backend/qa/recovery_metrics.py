@@ -248,6 +248,85 @@ class RecoveryMetrics:
         total = self._metrics["total_attempts"]
         return round((circular / total) * 100, 2)
 
+    def get_strategy_statistics(self) -> dict[str, dict[str, Any]]:
+        """
+        Calculate statistics for each retry strategy used.
+
+        Returns:
+            Dict mapping strategy name to stats:
+            {
+                "direct_retry": {
+                    "total_uses": 10,
+                    "successes": 7,
+                    "failures": 3,
+                    "success_rate_percent": 70.0
+                },
+                ...
+            }
+        """
+        strategy_stats: dict[str, dict[str, int]] = {}
+
+        for record in self._metrics["recovery_history"]:
+            strategy = record.get("strategy")
+            if not strategy:
+                continue
+
+            # Initialize strategy stats if not seen before
+            if strategy not in strategy_stats:
+                strategy_stats[strategy] = {
+                    "total_uses": 0,
+                    "successes": 0,
+                    "failures": 0,
+                }
+
+            strategy_stats[strategy]["total_uses"] += 1
+
+            outcome = record.get("outcome")
+            if outcome == "success":
+                strategy_stats[strategy]["successes"] += 1
+            elif outcome in ("failed", "circular"):
+                strategy_stats[strategy]["failures"] += 1
+
+        # Calculate success rates
+        result: dict[str, dict[str, Any]] = {}
+        for strategy, stats in strategy_stats.items():
+            total = stats["total_uses"]
+            success_rate = (
+                round((stats["successes"] / total) * 100, 2) if total > 0 else 0.0
+            )
+
+            result[strategy] = {
+                "total_uses": stats["total_uses"],
+                "successes": stats["successes"],
+                "failures": stats["failures"],
+                "success_rate_percent": success_rate,
+            }
+
+        return result
+
+    def get_most_successful_strategy(self) -> tuple[str, float] | None:
+        """
+        Get the strategy with the highest success rate.
+
+        Returns:
+            Tuple of (strategy_name, success_rate_percent) or None if no strategies used
+        """
+        strategy_stats = self.get_strategy_statistics()
+
+        if not strategy_stats:
+            return None
+
+        # Find strategy with highest success rate (min 2 uses to avoid statistical noise)
+        best_strategy = None
+        best_rate = 0.0
+
+        for strategy, stats in strategy_stats.items():
+            if stats["total_uses"] >= 2 and stats["success_rate_percent"] > best_rate:
+                best_strategy = strategy
+                best_rate = stats["success_rate_percent"]
+
+        return (best_strategy, best_rate) if best_strategy else None
+
     # -------------------------------------------------------------------------
     # SUMMARY METHODS
     # -------------------------------------------------------------------------
@@ -259,7 +338,7 @@ class RecoveryMetrics:
         Returns:
             Dict with all metrics and calculated statistics
         """
-        return {
+        summary = {
             "total_attempts": self._metrics["total_attempts"],
             "successful_recoveries": self._metrics["successful_recoveries"],
             "failed_recoveries": self._metrics["failed_recoveries"],
@@ -270,6 +349,21 @@ class RecoveryMetrics:
             "average_duration_seconds": self.get_average_duration(),
             "last_updated": self._metrics.get("last_updated"),
         }
+
+        # Add strategy statistics if available
+        strategy_stats = self.get_strategy_statistics()
+        if strategy_stats:
+            summary["strategy_statistics"] = strategy_stats
+
+            # Add most successful strategy
+            best_strategy = self.get_most_successful_strategy()
+            if best_strategy:
+                summary["most_successful_strategy"] = {
+                    "name": best_strategy[0],
+                    "success_rate_percent": best_strategy[1],
+                }
+
+        return summary
 
     def get_recent_history(self, limit: int = 5) -> list[dict[str, Any]]:
         """
@@ -309,6 +403,29 @@ class RecoveryMetrics:
             lines.append(
                 f"Avg Duration: {summary['average_duration_seconds']:.1f} seconds"
             )
+
+        # Add strategy statistics if available
+        if "strategy_statistics" in summary:
+            lines.append("")
+            lines.append("Strategy Performance:")
+
+            strategy_stats = summary["strategy_statistics"]
+            for strategy, stats in sorted(
+                strategy_stats.items(), key=lambda x: x[1]["total_uses"], reverse=True
+            ):
+                lines.append(
+                    f"  {strategy}: {stats['total_uses']} uses, "
+                    f"{stats['success_rate_percent']:.1f}% success rate"
+                )
+
+            # Add most successful strategy
+            if "most_successful_strategy" in summary:
+                best = summary["most_successful_strategy"]
+                lines.append("")
+                lines.append(
+                    f"🏆 Most Successful Strategy: {best['name']} "
+                    f"({best['success_rate_percent']:.1f}% success)"
+                )
 
         return "\n".join(lines)
 

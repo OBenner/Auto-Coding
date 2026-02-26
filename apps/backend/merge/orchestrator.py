@@ -19,9 +19,14 @@ with maximum automation and minimum AI token usage.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+
+# Callback type for merge progress reporting
+# Called with: {"phase": str, "current": int, "total": int, "file": str}
+ProgressCallback = Callable[[dict[str, Any]], None]
 
 from .ai_resolver import AIResolver, create_claude_resolver
 from .analytics_recorder import MergeAnalyticsRecorder
@@ -253,11 +258,56 @@ class MergeOrchestrator:
             )
             return content, True
 
+    @staticmethod
+    def _emit_progress(
+        callback: ProgressCallback | None,
+        phase: str,
+        current: int,
+        total: int,
+        file: str = "",
+    ) -> None:
+        """Safely invoke a progress callback, ignoring exceptions."""
+        if callback is None:
+            return
+        try:
+            callback({"phase": phase, "current": current, "total": total, "file": file})
+        except Exception:
+            logger.debug("progress_callback raised; ignoring")
+
+    def _resolve_worktree(self, task_id: str) -> Path | None:
+        """Auto-detect the worktree path for a task, returning None on failure."""
+        debug_detailed(MODULE, "Auto-detecting worktree path...")
+        worktree_path = find_worktree(self.project_dir, task_id)
+        if worktree_path:
+            debug_detailed(MODULE, f"Found worktree: {worktree_path}")
+        else:
+            debug_error(MODULE, f"Could not find worktree for task {task_id}")
+        return worktree_path
+
+    def _merge_single_file(self, file_path, snapshot, target_branch, worktree_path):
+        """Merge a single file and resolve DIRECT_COPY if needed."""
+        result = self._merge_file(
+            file_path=file_path,
+            task_snapshots=[snapshot],
+            target_branch=target_branch,
+        )
+        if result.decision == MergeDecision.DIRECT_COPY:
+            content, success = self._read_worktree_file_for_direct_copy(
+                file_path, worktree_path
+            )
+            if success:
+                result.merged_content = content
+            else:
+                result.decision = MergeDecision.FAILED
+                result.error = "Worktree file not found for DIRECT_COPY"
+        return result
+
     def merge_task(
         self,
         task_id: str,
         worktree_path: Path | None = None,
         target_branch: str = "main",
+        progress_callback: ProgressCallback | None = None,
     ) -> MergeReport:
         """
         Merge a single task's changes into the target branch.
@@ -266,6 +316,7 @@ class MergeOrchestrator:
             task_id: The task identifier
             worktree_path: Path to the task's worktree (auto-detected if not provided)
             target_branch: Branch to merge into
+            progress_callback: Optional callback for progress events
 
         Returns:
             MergeReport with results
@@ -285,14 +336,11 @@ class MergeOrchestrator:
         try:
             # Find worktree if not provided
             if worktree_path is None:
-                debug_detailed(MODULE, "Auto-detecting worktree path...")
-                worktree_path = find_worktree(self.project_dir, task_id)
+                worktree_path = self._resolve_worktree(task_id)
                 if not worktree_path:
-                    debug_error(MODULE, f"Could not find worktree for task {task_id}")
                     report.success = False
                     report.error = f"Could not find worktree for task {task_id}"
                     return report
-                debug_detailed(MODULE, f"Found worktree: {worktree_path}")
 
             # Ensure evolution data is up to date
             debug(MODULE, "Refreshing evolution data from git...")
@@ -313,31 +361,22 @@ class MergeOrchestrator:
                 report.completed_at = datetime.now()
                 return report
 
+            total_files = len(modifications)
+            self._emit_progress(progress_callback, "analyzing", 0, total_files)
+
             # Process each modified file
-            for file_path, snapshot in modifications:
+            for file_idx, (file_path, snapshot) in enumerate(modifications):
+                self._emit_progress(
+                    progress_callback, "merging", file_idx + 1, total_files, file_path
+                )
                 debug_detailed(
                     MODULE,
                     f"Processing file: {file_path}",
                     changes=len(snapshot.semantic_changes),
                 )
-                result = self._merge_file(
-                    file_path=file_path,
-                    task_snapshots=[snapshot],
-                    target_branch=target_branch,
+                result = self._merge_single_file(
+                    file_path, snapshot, target_branch, worktree_path
                 )
-
-                # Handle DIRECT_COPY: read file directly from worktree
-                # This happens when file has modifications but semantic analysis
-                # couldn't parse the changes (body modifications, unsupported languages)
-                if result.decision == MergeDecision.DIRECT_COPY:
-                    content, success = self._read_worktree_file_for_direct_copy(
-                        file_path, worktree_path
-                    )
-                    if success:
-                        result.merged_content = content
-                    else:
-                        result.decision = MergeDecision.FAILED
-                        result.error = "Worktree file not found for DIRECT_COPY"
 
                 report.file_results[file_path] = result
                 self._update_stats(report.stats, result)
@@ -382,6 +421,7 @@ class MergeOrchestrator:
         self,
         requests: list[TaskMergeRequest],
         target_branch: str = "main",
+        progress_callback: ProgressCallback | None = None,
     ) -> MergeReport:
         """
         Merge multiple tasks' changes.
@@ -392,6 +432,7 @@ class MergeOrchestrator:
         Args:
             requests: List of merge requests (one per task)
             target_branch: Branch to merge into
+            progress_callback: Optional callback for progress events
 
         Returns:
             MergeReport with combined results
@@ -420,7 +461,17 @@ class MergeOrchestrator:
             file_tasks = self.evolution_tracker.get_files_modified_by_tasks(task_ids)
 
             # Process each file
-            for file_path, modifying_tasks in file_tasks.items():
+            total_files = len(file_tasks)
+            for file_idx, (file_path, modifying_tasks) in enumerate(file_tasks.items()):
+                if progress_callback:
+                    progress_callback(
+                        {
+                            "phase": "merging",
+                            "current": file_idx + 1,
+                            "total": total_files,
+                            "file": file_path,
+                        }
+                    )
                 # Get snapshots from all tasks that modified this file
                 evolution = self.evolution_tracker.get_file_evolution(file_path)
                 if not evolution:

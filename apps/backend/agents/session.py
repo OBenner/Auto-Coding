@@ -8,11 +8,15 @@ memory updates, recovery tracking, and Linear integration.
 
 import json
 import logging
+import os
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from claude_agent_sdk import ClaudeSDKClient
+from core.circuit_breaker import CircuitBreaker
+from core.error_classifier import ErrorClassifier
+from core.memory_monitor import MemoryMonitor, MemoryPressure, SessionBounds
 from core.token_stats import PhaseTokenStats, PhaseType, TaskTokenStats
 from debug import (
     debug,
@@ -45,7 +49,19 @@ from ui import (
     print_status,
 )
 
+from .decision_extractor import (
+    DecisionExtractor,
+    extract_decisions_from_history,
+    log_extracted_decision,
+)
+from .decision_tracker import DecisionTracker
 from .memory_manager import save_session_memory
+from .process_isolator import (
+    AgentIsolationResult,
+    AgentProcessError,
+    AgentProcessIsolator,
+    ResourceLimits,
+)
 from .utils import (
     find_subtask_in_plan,
     get_commit_count,
@@ -55,6 +71,13 @@ from .utils import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Module-level resilience singletons (shared across sessions)
+_memory_monitor = MemoryMonitor()
+_GC_MESSAGE_INTERVAL = 50  # Run GC check every N messages
+_api_circuit_breaker = CircuitBreaker(
+    name="sdk_api", failure_threshold=3, recovery_timeout=60.0
+)
 
 
 # ============================================================================
@@ -495,6 +518,14 @@ async def post_session_processing(
             approach=f"Implemented: {subtask.get('description', 'subtask')[:100]}",
         )
 
+        # Get recovery hints for context (if this was a retry)
+        attempt_count = recovery_manager.get_attempt_count(subtask_id)
+        recovery_hints = (
+            recovery_manager.get_recovery_hints(subtask_id)
+            if attempt_count > 1
+            else None
+        )
+
         # Record good commit for rollback safety
         if commit_after and commit_after != commit_before:
             recovery_manager.record_good_commit(commit_after, subtask_id)
@@ -573,6 +604,15 @@ async def post_session_processing(
             error="Subtask not marked as completed",
         )
 
+        # Get recovery hints to help next attempt
+        attempt_count = recovery_manager.get_attempt_count(subtask_id)
+        recovery_hints = recovery_manager.get_recovery_hints(subtask_id)
+        if recovery_hints:
+            print_status(
+                f"Recovery hints available for next attempt ({attempt_count} attempts so far)",
+                "info",
+            )
+
         # Still record commit if one was made (partial progress)
         if commit_after and commit_after != commit_before:
             recovery_manager.record_good_commit(commit_after, subtask_id)
@@ -635,6 +675,12 @@ async def post_session_processing(
             approach="Session ended without progress",
             error=f"Subtask status is {subtask_status}",
         )
+
+        # Get recovery hints to help diagnose and retry
+        attempt_count = recovery_manager.get_attempt_count(subtask_id)
+        recovery_hints = recovery_manager.get_recovery_hints(subtask_id)
+        if recovery_hints and attempt_count > 0:
+            print_status(f"Recovery hints available ({attempt_count} attempts)", "info")
 
         # Record Linear session result (if enabled)
         if linear_enabled:
@@ -807,7 +853,7 @@ async def run_agent_session(
     phase: LogPhase = LogPhase.CODING,
     conversation_history: ConversationHistory | None = None,
     subtask_id: str | None = None,
-) -> tuple[str, str, dict[str, int] | None]:
+) -> tuple[str, str, dict[str, int] | None, "DecisionTracker"]:
     """
     Run a single agent session using Claude Agent SDK.
 
@@ -823,10 +869,11 @@ async def run_agent_session(
         subtask_id: Optional subtask ID for session tracking
 
     Returns:
-        (status, response_text, usage_metadata) where:
+        (status, response_text, usage_metadata, decision_tracker) where:
         - status: "continue", "complete", or "error"
         - response_text: The agent's response
         - usage_metadata: Dict with "input_tokens" and "output_tokens" keys (or None if unavailable)
+        - decision_tracker: DecisionTracker instance for tracking AI decisions
     """
     debug_section("session", f"Agent Session - {phase.value}")
     debug(
@@ -841,6 +888,19 @@ async def run_agent_session(
 
     # Get task logger for this spec
     task_logger = get_task_logger(spec_dir)
+
+    # Initialize decision tracker for this session
+    decision_tracker = DecisionTracker(
+        spec_dir=spec_dir,
+        task_logger=task_logger,
+        current_phase=phase,
+    )
+    if subtask_id:
+        decision_tracker.set_subtask(subtask_id)
+
+    # Initialize heuristic decision extractor for this session
+    decision_extractor = DecisionExtractor()
+
     current_tool = None
     message_count = 0
     tool_count = 0
@@ -866,6 +926,29 @@ async def run_agent_session(
         "session", "Created conversation round", round_number=current_round.round_number
     )
 
+    # Session-scoped error classifier (avoids cross-session state leaking)
+    error_classifier = ErrorClassifier()
+
+    # Check memory pressure before starting
+    pressure = _memory_monitor.check_pressure()
+    if pressure == MemoryPressure.CRITICAL:
+        msg = "Cannot start session: memory pressure is CRITICAL"
+        debug_error("session", msg, usage_mb=_memory_monitor.get_usage_mb())
+        if task_logger:
+            task_logger.log_error(msg, phase)
+        return "error", msg, None, decision_tracker
+
+    # Check circuit breaker
+    if not _api_circuit_breaker.can_execute():
+        msg = (
+            f"API circuit breaker is OPEN ({_api_circuit_breaker.name}). "
+            "Too many consecutive failures — waiting for recovery."
+        )
+        debug_error("session", msg)
+        if task_logger:
+            task_logger.log_error(msg, phase)
+        return "error", msg, None, decision_tracker
+
     try:
         # Send the query
         debug("session", "Sending query to Claude SDK...")
@@ -874,6 +957,7 @@ async def run_agent_session(
 
         # Collect response text and show tool use
         response_text = ""
+        last_msg_type = None
         debug("session", "Starting to receive response stream...")
         async for msg in client.receive_response():
             msg_type = type(msg).__name__
@@ -883,6 +967,30 @@ async def run_agent_session(
                 f"Received message #{message_count}",
                 msg_type=msg_type,
             )
+
+            # Session bounds safety check
+            if SessionBounds.check(current_round.round_number, message_count):
+                reason = SessionBounds.reason(current_round.round_number, message_count)
+                debug_error("session", reason)
+                if task_logger:
+                    task_logger.log_error(reason, phase)
+                _memory_monitor.maybe_gc()
+                return "error", reason, None, decision_tracker
+
+            # Periodic GC under memory pressure
+            if message_count % _GC_MESSAGE_INTERVAL == 0:
+                _memory_monitor.maybe_gc()
+
+            # Decision extraction: detect round boundary (UserMessage → AssistantMessage)
+            if msg_type == "AssistantMessage" and last_msg_type == "UserMessage":
+                try:
+                    extracted = decision_extractor.end_round()
+                    if extracted:
+                        log_extracted_decision(decision_tracker, extracted)
+                except Exception:
+                    pass  # Decision extraction failures are non-fatal
+
+            last_msg_type = msg_type
 
             # Handle AssistantMessage (text and tool use)
             if msg_type == "AssistantMessage" and hasattr(msg, "content"):
@@ -894,6 +1002,8 @@ async def run_agent_session(
                         print(block.text, end="", flush=True)
                         # Track text in conversation history
                         current_round.add_text(block.text)
+                        # Feed to decision extractor
+                        decision_extractor.on_text_block(block.text)
                         # Log text to task logger (persist without double-printing)
                         if task_logger and block.text.strip():
                             task_logger.log(
@@ -937,6 +1047,8 @@ async def run_agent_session(
                         # Track tool call in conversation history
                         if inp:
                             current_round.add_tool_call(tool_name, inp)
+                            # Feed to decision extractor
+                            decision_extractor.on_tool_call(tool_name, inp)
 
                         # Log tool start (handles printing too)
                         if task_logger:
@@ -983,6 +1095,11 @@ async def run_agent_session(
                                     detail=str(result_content),
                                     phase=phase,
                                 )
+                            # Feed error to decision extractor
+                            if current_tool:
+                                decision_extractor.on_tool_error(
+                                    current_tool, str(result_content)[:500]
+                                )
                         elif is_error:
                             # Show errors (truncated)
                             error_str = str(result_content)[:500]
@@ -1000,6 +1117,11 @@ async def run_agent_session(
                                     result=error_str[:100],
                                     detail=str(result_content),
                                     phase=phase,
+                                )
+                            # Feed error to decision extractor
+                            if current_tool:
+                                decision_extractor.on_tool_error(
+                                    current_tool, error_str
                                 )
                         else:
                             # Tool succeeded
@@ -1040,6 +1162,34 @@ async def run_agent_session(
                         current_tool = None
 
         print("\n" + "-" * 70 + "\n")
+
+        # Extract decisions from the final round
+        try:
+            extracted = decision_extractor.end_round()
+            if extracted:
+                log_extracted_decision(decision_tracker, extracted)
+        except Exception:
+            pass  # Decision extraction failures are non-fatal
+
+        # Record successful API interaction
+        _api_circuit_breaker.record_success()
+
+        # Check response for error signals (auth failures, stuck loops, etc.)
+        classified = error_classifier.classify_response(response_text)
+        if classified and classified.is_fatal:
+            error_msg = classified.message
+            debug_error(
+                "session",
+                f"Fatal error detected in response: [{classified.category.value}] {error_msg}",
+            )
+            print(f"\n[{classified.category.value.upper()}] {error_msg}")
+            if classified.action_hint:
+                print(f"  Action: {classified.action_hint}")
+            if task_logger:
+                task_logger.log_error(
+                    f"[{classified.category.value.upper()}] {error_msg}", phase
+                )
+            return "error", error_msg, None, decision_tracker
 
         # Extract usage metadata from Claude SDK client
         usage_metadata = None
@@ -1127,7 +1277,7 @@ async def run_agent_session(
                 tool_count=tool_count,
                 response_length=len(response_text),
             )
-            return "complete", response_text, usage_metadata
+            return "complete", response_text, usage_metadata, decision_tracker
 
         debug_success(
             "session",
@@ -1136,22 +1286,453 @@ async def run_agent_session(
             tool_count=tool_count,
             response_length=len(response_text),
         )
-        return "continue", response_text, usage_metadata
+        return "continue", response_text, usage_metadata, decision_tracker
 
     except Exception as e:
+        # Classify the exception for structured error reporting
+        classified = error_classifier.classify_exception(e)
+        _api_circuit_breaker.record_failure(e)
+
         debug_error(
             "session",
-            f"Session error: {e}",
+            f"Session error [{classified.category.value}]: {e}",
             exception_type=type(e).__name__,
+            is_fatal=classified.is_fatal,
+            is_retryable=classified.is_retryable,
             message_count=message_count,
             tool_count=tool_count,
         )
-        print(f"Error during agent session: {e}")
+
+        # Print structured error message matching frontend AUTH_FAILURE_PATTERNS
+        error_msg = classified.message
+        print(f"\n[{classified.category.value.upper()}] {error_msg}")
+        if classified.action_hint:
+            print(f"  Action: {classified.action_hint}")
+
         if task_logger:
-            task_logger.log_error(f"Session error: {e}", phase)
+            task_logger.log_error(
+                f"[{classified.category.value.upper()}] {error_msg}", phase
+            )
+
         # Save conversation history even on error for debugging
         try:
             conversation_history.save()
         except Exception as save_err:
             logger.debug(f"Failed to save conversation history after error: {save_err}")
-        return "error", str(e), None
+        return "error", error_msg, None, decision_tracker
+
+
+def _assess_and_record_failure(
+    recovery_manager: RecoveryManager,
+    subtask_id: str,
+    attempt: int,
+    agent_type: str,
+    error_msg: str,
+):
+    """Classify failure, record attempt, and determine recovery action."""
+    failure_type = recovery_manager.classify_failure(
+        error=error_msg, subtask_id=subtask_id
+    )
+    recovery_action = recovery_manager.determine_recovery_action(
+        failure_type=failure_type, subtask_id=subtask_id
+    )
+    recovery_manager.record_attempt(
+        subtask_id=subtask_id,
+        session=attempt,
+        success=False,
+        approach=f"Isolated subprocess execution - {agent_type}",
+        error=error_msg[:500],
+    )
+    return failure_type, recovery_action
+
+
+async def run_agent_session_isolated(
+    project_dir: Path,
+    spec_dir: Path,
+    agent_type: str,
+    model: str,
+    starting_message: str,
+    system_prompt: str | None = None,
+    max_thinking_tokens: int | None = None,
+    session_name: str = "agent-session",
+    limits: ResourceLimits | None = None,
+    subtask_id: str | None = None,
+    max_retries: int = 3,
+) -> tuple[str, str, dict[str, int] | None]:
+    """
+    Run an agent session in an isolated subprocess with resource limits.
+
+    This provides crash-resistant execution by running the agent in a separate
+    process with controlled resource usage. If the agent crashes, the main
+    process remains unaffected and the agent is automatically restarted with
+    state restoration.
+
+    Args:
+        project_dir: Root directory of the project
+        spec_dir: Spec directory path
+        agent_type: Type of agent to run (coder, planner, qa_reviewer, qa_fixer)
+        model: Claude model to use
+        starting_message: The prompt to send to the agent
+        system_prompt: Optional custom system prompt
+        max_thinking_tokens: Optional thinking token limit
+        session_name: Name for the agent session
+        limits: Optional resource limits (defaults to ResourceLimits())
+        subtask_id: Optional subtask ID for recovery tracking
+        max_retries: Maximum number of retry attempts on failure (default: 3)
+
+    Returns:
+        (status, response_text, usage_metadata) where:
+        - status: "continue", "complete", or "error"
+        - response_text: The agent's response or error message
+        - usage_metadata: Dict with "input_tokens" and "output_tokens" keys (or None)
+
+    Raises:
+        AgentProcessError: If subprocess execution fails critically
+    """
+    debug_section(
+        "session", f"Isolated Agent Session - {agent_type} (process isolation)"
+    )
+    debug(
+        "session",
+        "Starting isolated agent session",
+        project_dir=str(project_dir),
+        spec_dir=str(spec_dir),
+        agent_type=agent_type,
+        model=model,
+        session_name=session_name,
+        subtask_id=subtask_id,
+    )
+
+    # Pre-checks: fail fast if system is unhealthy (matches run_agent_session)
+    pressure = _memory_monitor.check_pressure()
+    if pressure == MemoryPressure.CRITICAL:
+        msg = "Cannot start isolated session: memory pressure is CRITICAL"
+        debug_error("session", msg, usage_mb=_memory_monitor.get_usage_mb())
+        return "error", msg, None
+
+    if not _api_circuit_breaker.can_execute():
+        msg = (
+            f"API circuit breaker is OPEN ({_api_circuit_breaker.name}). "
+            "Too many consecutive failures — waiting for recovery."
+        )
+        debug_error("session", msg)
+        return "error", msg, None
+
+    # Initialize recovery manager for automatic crash recovery
+    recovery_manager = RecoveryManager(spec_dir=spec_dir, project_dir=project_dir)
+
+    # Initialize process isolator with resource limits
+    isolator = AgentProcessIsolator(project_dir=project_dir, limits=limits)
+
+    # Build command-line arguments for subprocess
+    agent_script = Path(__file__).parent / "agent_subprocess.py"
+
+    if not agent_script.exists():
+        error_msg = f"Agent subprocess script not found: {agent_script}"
+        debug_error("session", error_msg)
+        return "error", error_msg, None
+
+    # Track retry attempts and conversation history for state restoration
+    attempt = 0
+    conversation_history: ConversationHistory | None = None
+    last_error = None
+
+    while attempt <= max_retries:
+        attempt += 1
+        attempt_suffix = f" (attempt {attempt}/{max_retries})" if attempt > 1 else ""
+
+        # Prepare message with resume context if retrying
+        if attempt > 1 and conversation_history:
+            # Resume with previous conversation history for state restoration
+            starting_message, _ = await resume_session(
+                spec_dir=spec_dir,
+                subtask_id=subtask_id or session_name,
+                new_message=(
+                    f"\n\n## Recovery Attempt {attempt}/{max_retries}\n\n"
+                    f"Previous attempt failed with error: {last_error}\n\n"
+                    f"Please continue from where you left off. Your previous work has been saved.\n\n"
+                    f"{starting_message}"
+                ),
+            )
+            debug_success(
+                "session",
+                f"Restored conversation history for retry {attempt}",
+                previous_rounds=len(conversation_history.rounds),
+            )
+
+        # Write message to temp file to avoid OS command-line length limits
+        import tempfile
+
+        msg_fd, msg_path = tempfile.mkstemp(suffix=".txt", dir=spec_dir)
+        message_file = Path(msg_path)
+        try:
+            os.write(msg_fd, starting_message.encode("utf-8"))
+        finally:
+            os.close(msg_fd)
+
+        args = [
+            "--project-dir",
+            str(project_dir),
+            "--spec-dir",
+            str(spec_dir),
+            "--agent-type",
+            agent_type,
+            "--model",
+            model,
+            "--message-file",
+            str(message_file),
+            "--session-name",
+            f"{session_name}_attempt{attempt}",
+        ]
+
+        if system_prompt:
+            args.extend(["--system-prompt", system_prompt])
+
+        if max_thinking_tokens:
+            args.extend(["--max-thinking-tokens", str(max_thinking_tokens)])
+
+        debug_detailed(
+            "session",
+            f"Executing agent in isolated subprocess{attempt_suffix}",
+            script=agent_script.name,
+            args=args,
+        )
+
+        # Execute agent in isolated subprocess
+        print(
+            f"Running {agent_type} agent in isolated subprocess (resource-limited)"
+            f"{attempt_suffix}...\n"
+        )
+
+        try:
+            result: AgentIsolationResult = isolator.execute_agent(
+                agent_script=str(agent_script),
+                agent_args=args,
+                working_dir=project_dir,
+            )
+
+            debug(
+                "session",
+                f"Subprocess execution completed (attempt {attempt})",
+                success=result.success,
+                return_code=result.return_code,
+                execution_time=result.execution_time,
+                violated_limits=result.violated_limits,
+            )
+
+            # Load conversation history after this attempt (for potential retry)
+            if subtask_id:
+                attempt_history = ConversationHistory.load_latest(spec_dir, subtask_id)
+                if attempt_history:
+                    conversation_history = attempt_history
+                    debug_success(
+                        "session",
+                        f"Loaded conversation history after attempt {attempt}",
+                        rounds=len(conversation_history.rounds),
+                    )
+
+            # Handle execution results
+            if not result.success:
+                error_details = []
+
+                if result.crashed:
+                    error_details.append(
+                        f"Agent process crashed (exit code: {result.return_code})"
+                    )
+
+                if result.violated_limits:
+                    limits_str = ", ".join(result.violated_limits)
+                    error_details.append(f"Resource limits exceeded: {limits_str}")
+
+                if result.error:
+                    error_details.append(f"Error: {result.error}")
+
+                if result.stderr:
+                    error_details.append(f"stderr: {result.stderr[:500]}")
+
+                error_msg = "\n".join(error_details)
+                last_error = error_msg
+                debug_error(
+                    "session",
+                    f"Isolated agent session failed (attempt {attempt})",
+                    error=error_msg,
+                )
+                print(
+                    f"\n[ERROR] Agent subprocess failed (attempt {attempt}/{max_retries}):\n{error_msg}\n"
+                )
+
+                # Determine recovery action using RecoveryManager
+                if subtask_id and attempt < max_retries:
+                    failure_type, recovery_action = _assess_and_record_failure(
+                        recovery_manager, subtask_id, attempt, agent_type, error_msg
+                    )
+
+                    debug(
+                        "session",
+                        f"Recovery assessment (attempt {attempt})",
+                        failure_type=failure_type.value,
+                        recovery_action=recovery_action.action,
+                        recovery_reason=recovery_action.reason,
+                    )
+
+                    # Determine if we should retry
+                    if recovery_action.action in ("retry", "continue"):
+                        print_status(
+                            f"Crash recovery: retrying ({recovery_action.reason})",
+                            "warning",
+                        )
+                        # Continue to next iteration of retry loop
+                        continue
+                    elif recovery_action.action == "rollback":
+                        print_status(
+                            f"Crash recovery: rolling back ({recovery_action.reason})",
+                            "warning",
+                        )
+                        # Perform rollback and retry
+                        if recovery_manager.rollback_to_commit(recovery_action.target):
+                            continue
+                        else:
+                            print_status("Rollback failed, aborting retries", "error")
+                            return "error", f"Rollback failed: {error_msg}", None
+                    else:
+                        # Skip or escalate - don't retry
+                        if recovery_action.action == "escalate":
+                            recovery_manager.mark_subtask_stuck(
+                                subtask_id=subtask_id, reason=recovery_action.reason
+                            )
+                            print_status(
+                                f"Crash recovery: escalating to human ({recovery_action.reason})",
+                                "error",
+                            )
+                        return "error", error_msg, None
+
+                # No more retries or no subtask_id - return error
+                return "error", error_msg, None
+
+            # Success! Parse agent output from JSON
+            if result.agent_output:
+                debug_success(
+                    "session",
+                    f"Agent subprocess completed successfully (attempt {attempt})",
+                    execution_time=result.execution_time,
+                )
+
+                agent_success = result.agent_output.get("success", False)
+                agent_output_data = result.agent_output.get("output", {})
+                agent_error = result.agent_output.get("error")
+
+                if not agent_success:
+                    error_msg = agent_error or "Agent session failed (no error message)"
+                    last_error = error_msg
+                    debug_error(
+                        "session",
+                        f"Agent reported failure (attempt {attempt})",
+                        error=error_msg,
+                    )
+                    print(
+                        f"\n[ERROR] Agent session failed (attempt {attempt}): {error_msg}\n"
+                    )
+
+                    # Record failed attempt and check for retry
+                    if subtask_id and attempt < max_retries:
+                        _, recovery_action = _assess_and_record_failure(
+                            recovery_manager, subtask_id, attempt, agent_type, error_msg
+                        )
+
+                        if recovery_action.action in ("retry", "continue"):
+                            print_status(
+                                f"Agent failed, retrying ({recovery_action.reason})",
+                                "warning",
+                            )
+                            continue
+
+                    return "error", error_msg, None
+
+                # Extract response from agent output
+                response_text = ""
+                if isinstance(agent_output_data, dict):
+                    response_text = agent_output_data.get("response", "")
+                elif isinstance(agent_output_data, str):
+                    response_text = agent_output_data
+                else:
+                    response_text = str(agent_output_data)
+
+                # Note: Usage metadata not currently available from subprocess
+                # This would require extending agent_subprocess.py to capture and return it
+                usage_metadata = None
+
+                # Record successful attempt if subtask_id provided
+                if subtask_id:
+                    recovery_manager.record_attempt(
+                        subtask_id=subtask_id,
+                        session=attempt,
+                        success=True,
+                        approach=f"Isolated subprocess execution - {agent_type}",
+                    )
+                    if attempt > 1:
+                        print_status(
+                            f"Agent subprocess recovered after {attempt} attempts",
+                            "success",
+                        )
+
+                print(
+                    f"\n✓ Agent subprocess completed successfully "
+                    f"(execution time: {result.execution_time:.1f}s)\n"
+                )
+
+                # Extract decisions from conversation history (post-hoc)
+                if conversation_history:
+                    try:
+                        _phase = (
+                            LogPhase.PLANNING
+                            if agent_type == "planner"
+                            else LogPhase.CODING
+                        )
+                        _task_logger = get_task_logger(spec_dir)
+                        _tracker = DecisionTracker(
+                            spec_dir=spec_dir,
+                            task_logger=_task_logger,
+                            current_phase=_phase,
+                        )
+                        if subtask_id:
+                            _tracker.set_subtask(subtask_id)
+                        for _decision in extract_decisions_from_history(
+                            conversation_history
+                        ):
+                            log_extracted_decision(_tracker, _decision)
+                    except Exception:
+                        pass  # Decision extraction failures are non-fatal
+
+                # For subprocess execution, we consider it "complete" since it ran to completion
+                return "complete", response_text, usage_metadata
+
+            else:
+                # No JSON output but success - treat stdout as response
+                debug_warning(
+                    "session",
+                    "Agent subprocess succeeded but produced no JSON output",
+                    stdout_length=len(result.stdout),
+                )
+                return "complete", result.stdout, None
+
+        except AgentProcessError as e:
+            error_msg = f"Process isolation error: {e}"
+            debug_error("session", error_msg, exception_type=type(e).__name__)
+            print(f"\n[ERROR] {error_msg}\n")
+            return "error", error_msg, None
+
+        except Exception as e:
+            error_msg = f"Unexpected error in isolated session: {e}"
+            debug_error(
+                "session",
+                error_msg,
+                exception_type=type(e).__name__,
+                traceback=str(e),
+            )
+            print(f"\n[ERROR] {error_msg}\n")
+            return "error", error_msg, None
+
+        finally:
+            # Clean up temp message file
+            if message_file.exists():
+                message_file.unlink(missing_ok=True)

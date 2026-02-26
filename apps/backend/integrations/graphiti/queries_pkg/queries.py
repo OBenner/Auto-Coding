@@ -553,12 +553,23 @@ class GraphitiQueries:
             True if saved successfully
         """
         try:
-            from graphiti_core.nodes import EpisodeType
+            try:
+                from graphiti_core.nodes import EpisodeType
+            except ImportError as e:
+                logger.warning("graphiti_core.nodes not available: %s", e)
+                capture_exception(
+                    e,
+                    operation="save_preference_profile_import_error",
+                    group_id=self.group_id,
+                    spec_id=self.spec_context_id,
+                )
+                return False
 
+            now = datetime.now(UTC)
             episode_content = {
                 "type": EPISODE_TYPE_PREFERENCE_PROFILE,
                 "spec_id": self.spec_context_id,
-                "timestamp": datetime.now(UTC).isoformat(),
+                "timestamp": now.isoformat(),
                 "profile": profile_data,
             }
 
@@ -567,17 +578,17 @@ class GraphitiQueries:
                 episode_body=json.dumps(episode_content),
                 source=EpisodeType.text,
                 source_description=f"User preference profile for {self.group_id}",
-                reference_time=datetime.now(UTC),
+                reference_time=now,
                 group_id=self.group_id,
             )
 
             logger.info(
-                f"Saved preference profile to Graphiti (group: {self.group_id})"
+                "Saved preference profile to Graphiti (group: %s)", self.group_id
             )
             return True
 
         except Exception as e:
-            logger.warning(f"Failed to save preference profile: {e}")
+            logger.warning("Failed to save preference profile: %s", e)
             capture_exception(
                 e,
                 operation="save_preference_profile",

@@ -474,8 +474,9 @@ class TestCreateStatisticsTools:
             pytest.skip("SDK not available")
 
         tools = create_statistics_tools(tmp_path, tmp_path)
-        assert len(tools) == 1
+        assert len(tools) == 2
         assert callable(tools[0])
+        assert callable(tools[1])
 
 
 class TestGetSpecStatistics:

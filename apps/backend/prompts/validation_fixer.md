@@ -162,15 +162,10 @@ with open('[file]', 'w') as f:
 ```
 
 **For Markdown files:**
-```bash
-# Add missing section
-cat >> spec.md << 'EOF'
+1. Read the current file using the **Read** tool
+2. Use the **Write** tool to save the updated content with the missing section appended
 
-## Missing Section
-
-[Content for the missing section]
-EOF
-```
+**IMPORTANT**: Do NOT use `cat >`, `cat >>`, heredoc (`<< EOF`), or bash redirection — these hang on Windows. Always use the Write tool.
 
 ---
 
