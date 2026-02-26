@@ -34,16 +34,12 @@ export function useSettings() {
     setSettings(currentSettings);
   }, [currentSettings]);
 
-  // Load settings on mount and capture original theme
+  // Load settings on mount only (not on every theme change).
+  // Reloading from disk on theme changes would overwrite unsaved preview values.
   useEffect(() => {
     loadSettingsFromStore();
-    // Update the original theme ref when settings load
-    originalThemeRef.current = {
-      theme: currentSettings.theme,
-      colorTheme: currentSettings.colorTheme,
-      uiScale: currentSettings.uiScale ?? UI_SCALE_DEFAULT
-    };
-  }, [currentSettings.colorTheme, currentSettings.theme, currentSettings.uiScale]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const saveSettings = async () => {
     setIsSaving(true);

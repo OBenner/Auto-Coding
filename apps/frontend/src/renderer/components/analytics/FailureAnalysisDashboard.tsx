@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ShieldAlert, TrendingDown, TrendingUp, Minus, AlertTriangle } from 'lucide-react';
 import type { FailureMetrics } from '../../../shared/types/productivity-analytics';
 
@@ -16,7 +17,7 @@ interface FailureTrendPoint {
 
 interface ChartMetric {
   key: keyof FailureTrendPoint;
-  label: string;
+  labelKey: string;
   color: string;
   formatValue: (value: number) => string;
 }
@@ -24,25 +25,27 @@ interface ChartMetric {
 const CHART_METRICS: ChartMetric[] = [
   {
     key: 'failure_count',
-    label: 'Failures',
+    labelKey: 'common:failureAnalysis.metrics.failures',
     color: 'rgb(239, 68, 68)', // red-500
     formatValue: (value: number) => value.toFixed(0),
   },
   {
     key: 'root_cause_rate',
-    label: 'Root Cause Rate (%)',
+    labelKey: 'common:failureAnalysis.metrics.rootCauseRatePercent',
     color: 'rgb(34, 197, 94)', // green-500
     formatValue: (value: number) => (value * 100).toFixed(1),
   },
   {
     key: 'recurrence_rate',
-    label: 'Recurrence Rate (%)',
+    labelKey: 'common:failureAnalysis.metrics.recurrenceRatePercent',
     color: 'rgb(249, 115, 22)', // orange-500
     formatValue: (value: number) => (value * 100).toFixed(1),
   },
 ];
 
 export function FailureAnalysisDashboard({ failureMetrics, isLoading = false }: FailureAnalysisDashboardProps) {
+  const { t } = useTranslation(['common']);
+
   // Mock trend data - in production this would come from backend
   const trends = useMemo<FailureTrendPoint[]>(() => {
     if (!failureMetrics || failureMetrics.total_failures === 0) {
@@ -62,8 +65,8 @@ export function FailureAnalysisDashboard({ failureMetrics, isLoading = false }: 
       points.push({
         date: date.toISOString(),
         failure_count: Math.max(1, Math.floor(failureMetrics.total_failures * (1 - progressFactor * 0.3))),
-        root_cause_rate: Math.min(1, failureMetrics.root_cause_rate * (0.7 + progressFactor * 0.3)),
-        recurrence_rate: Math.max(0, failureMetrics.recurrence_rate * (1 - progressFactor * 0.4)),
+        root_cause_rate: Math.min(1, (failureMetrics.root_cause_rate ?? 0) * (0.7 + progressFactor * 0.3)),
+        recurrence_rate: Math.max(0, (failureMetrics.recurrence_rate ?? 0) * (1 - progressFactor * 0.4)),
       });
     }
 
@@ -81,6 +84,7 @@ export function FailureAnalysisDashboard({ failureMetrics, isLoading = false }: 
     const chartHeight = height - padding.top - padding.bottom;
 
     // Process data for each metric
+    const denom = trends.length > 1 ? trends.length - 1 : 1;
     const processedMetrics = CHART_METRICS.map((metric) => {
       const values = trends.map((point) => point[metric.key] as number);
 
@@ -90,7 +94,7 @@ export function FailureAnalysisDashboard({ failureMetrics, isLoading = false }: 
 
       // Generate SVG path
       const points = trends.map((point, index) => {
-        const x = padding.left + (index / (trends.length - 1 || 1)) * chartWidth;
+        const x = padding.left + (index / denom) * chartWidth;
         const value = point[metric.key] as number;
         const y = padding.top + chartHeight - ((value - minValue) / range) * chartHeight;
         return { x, y, value };
@@ -119,7 +123,7 @@ export function FailureAnalysisDashboard({ failureMetrics, isLoading = false }: 
     // Format dates for x-axis
     const dateLabels = trends.map((point) => {
       const date = new Date(point.date);
-      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
     });
 
     return {
@@ -128,6 +132,7 @@ export function FailureAnalysisDashboard({ failureMetrics, isLoading = false }: 
       padding,
       chartWidth,
       chartHeight,
+      denom,
       metrics: processedMetrics,
       dateLabels,
     };
@@ -162,12 +167,12 @@ export function FailureAnalysisDashboard({ failureMetrics, isLoading = false }: 
       <div className="rounded-lg border border-border bg-card p-6">
         <div className="flex items-center gap-2 mb-4">
           <ShieldAlert className="h-5 w-5 text-destructive" />
-          <h2 className="text-lg font-semibold text-foreground">Failure Analysis Trends</h2>
+          <h2 className="text-lg font-semibold text-foreground">{t('common:failureAnalysis.title')}</h2>
         </div>
         <div className="h-80 flex items-center justify-center">
           <div className="flex flex-col items-center gap-2">
             <div className="h-8 w-8 animate-spin rounded-full border-4 border-border border-t-accent" />
-            <p className="text-sm text-muted-foreground">Loading failure analysis...</p>
+            <p className="text-sm text-muted-foreground">{t('common:failureAnalysis.loading')}</p>
           </div>
         </div>
       </div>
@@ -179,13 +184,13 @@ export function FailureAnalysisDashboard({ failureMetrics, isLoading = false }: 
       <div className="rounded-lg border border-border bg-card p-6">
         <div className="flex items-center gap-2 mb-4">
           <ShieldAlert className="h-5 w-5 text-destructive" />
-          <h2 className="text-lg font-semibold text-foreground">Failure Analysis Trends</h2>
+          <h2 className="text-lg font-semibold text-foreground">{t('common:failureAnalysis.title')}</h2>
         </div>
         <div className="h-80 flex items-center justify-center">
           <div className="flex flex-col items-center gap-2 text-muted-foreground">
             <AlertTriangle className="h-12 w-12 opacity-50" />
-            <p className="text-sm">No failure trend data available</p>
-            <p className="text-xs">Complete more QA iterations to see failure trends</p>
+            <p className="text-sm">{t('common:failureAnalysis.noData')}</p>
+            <p className="text-xs">{t('common:failureAnalysis.noDataHint')}</p>
           </div>
         </div>
       </div>
@@ -203,7 +208,7 @@ export function FailureAnalysisDashboard({ failureMetrics, isLoading = false }: 
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-2">
           <ShieldAlert className="h-5 w-5 text-destructive" />
-          <h2 className="text-lg font-semibold text-foreground">Failure Analysis Trends</h2>
+          <h2 className="text-lg font-semibold text-foreground">{t('common:failureAnalysis.title')}</h2>
         </div>
 
         {/* Legend */}
@@ -214,7 +219,7 @@ export function FailureAnalysisDashboard({ failureMetrics, isLoading = false }: 
                 className="h-3 w-3 rounded-full"
                 style={{ backgroundColor: metric.color }}
               />
-              <span className="text-xs text-muted-foreground">{metric.label}</span>
+              <span className="text-xs text-muted-foreground">{t(metric.labelKey)}</span>
             </div>
           ))}
         </div>
@@ -224,7 +229,7 @@ export function FailureAnalysisDashboard({ failureMetrics, isLoading = false }: 
       <div className="grid grid-cols-3 gap-4 mb-6">
         <div className="p-4 rounded-lg bg-muted/30 border border-border/50">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-muted-foreground">Total Failures</span>
+            <span className="text-sm text-muted-foreground">{t('common:failureAnalysis.totalFailures')}</span>
             {getTrendIcon(
               trendIndicators.failureTrend,
               `h-4 w-4 ${
@@ -241,7 +246,7 @@ export function FailureAnalysisDashboard({ failureMetrics, isLoading = false }: 
 
         <div className="p-4 rounded-lg bg-muted/30 border border-border/50">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-muted-foreground">Root Cause Rate</span>
+            <span className="text-sm text-muted-foreground">{t('common:failureAnalysis.rootCauseRate')}</span>
             {getTrendIcon(
               trendIndicators.rootCauseTrend,
               `h-4 w-4 ${
@@ -252,13 +257,13 @@ export function FailureAnalysisDashboard({ failureMetrics, isLoading = false }: 
             )}
           </div>
           <div className="text-2xl font-semibold text-foreground">
-            {(failureMetrics.root_cause_rate * 100).toFixed(1)}%
+            {((failureMetrics.root_cause_rate ?? 0) * 100).toFixed(1)}%
           </div>
         </div>
 
         <div className="p-4 rounded-lg bg-muted/30 border border-border/50">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-muted-foreground">Recurrence Rate</span>
+            <span className="text-sm text-muted-foreground">{t('common:failureAnalysis.recurrenceRate')}</span>
             {getTrendIcon(
               trendIndicators.recurrenceTrend,
               `h-4 w-4 ${
@@ -269,7 +274,7 @@ export function FailureAnalysisDashboard({ failureMetrics, isLoading = false }: 
             )}
           </div>
           <div className="text-2xl font-semibold text-foreground">
-            {(failureMetrics.recurrence_rate * 100).toFixed(1)}%
+            {((failureMetrics.recurrence_rate ?? 0) * 100).toFixed(1)}%
           </div>
         </div>
       </div>
@@ -281,9 +286,9 @@ export function FailureAnalysisDashboard({ failureMetrics, isLoading = false }: 
           className="w-full h-auto"
           style={{ minHeight: '300px' }}
           role="img"
-          aria-label="Failure analysis trends chart showing failures, root cause rate, and recurrence rate over time"
+          aria-label={t('common:failureAnalysis.chartAriaLabel')}
         >
-          <title>Failure Analysis Trends Chart</title>
+          <title>{t('common:failureAnalysis.chartTitle')}</title>
           {/* Grid lines */}
           {[0, 0.25, 0.5, 0.75, 1].map((fraction) => {
             const y = chartData.padding.top + chartData.chartHeight * (1 - fraction);
@@ -326,11 +331,10 @@ export function FailureAnalysisDashboard({ failureMetrics, isLoading = false }: 
 
           {/* Date labels */}
           {chartData.dateLabels.map((label, index) => {
-            const denom = chartData.dateLabels.length > 1 ? chartData.dateLabels.length - 1 : 1;
-            const x = chartData.padding.left + (index / denom) * chartData.chartWidth;
+            const x = chartData.padding.left + (index / chartData.denom) * chartData.chartWidth;
             return (
               <text
-                key={`date-label-${trends[index]?.date ?? label}`}
+                key={trends[index]?.date ?? `date-${index}`}
                 x={x}
                 y={chartData.height - chartData.padding.bottom + 20}
                 textAnchor="middle"
@@ -383,7 +387,7 @@ export function FailureAnalysisDashboard({ failureMetrics, isLoading = false }: 
       {/* Chart Footer */}
       <div className="mt-4 pt-4 border-t border-border">
         <p className="text-xs text-muted-foreground text-center">
-          Failure trends over the last 7 days - Lower recurrence rate indicates improved learning
+          {t('common:failureAnalysis.chartFooter')}
         </p>
       </div>
     </div>

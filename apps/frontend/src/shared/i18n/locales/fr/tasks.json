@@ -419,6 +419,7 @@
     "complete": "Fusion terminée",
     "autoResolved": "{{count}} fichier(s) résolu(s) automatiquement"
   },
+  "markDoneFailed": "Impossible de marquer comme terminé",
   "prPolling": {
     "autoRefreshing": "Actualisation automatique"
   }

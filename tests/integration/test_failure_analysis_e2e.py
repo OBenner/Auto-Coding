@@ -12,6 +12,7 @@ Tests the complete failure analysis pipeline:
 """
 
 import json
+import sys
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -103,9 +104,13 @@ def _make_mock_graphiti_memory():
     mock_memory_instance.group_id = "test-group"
     mock_memory_instance.spec_context_id = "test-spec"
     mock_memory_instance.state = MagicMock()
-    mock_memory_instance._client = MagicMock()
-    mock_memory_instance._client.graphiti = MagicMock()
-    mock_memory_instance._client.graphiti.add_episode = AsyncMock()
+    mock_client = MagicMock()
+    mock_client.graphiti = MagicMock()
+    mock_client.graphiti.add_episode = AsyncMock()
+    mock_client.graphiti.search = AsyncMock(return_value=[])
+    # Expose as both public property and private attribute
+    mock_memory_instance.client = mock_client
+    mock_memory_instance._client = mock_client
     mock_memory_instance.close = AsyncMock()
     return mock_memory_instance
 
@@ -242,8 +247,16 @@ async def _helper_failure_stored(test_spec_dir, test_project_dir):
 
     # Test with Graphiti mocked as enabled
     mock_memory_instance = _make_mock_graphiti_memory()
+
+    # Mock the graphiti_core.nodes module that gets imported inside _store_root_cause_episode
+    mock_episode_type = MagicMock()
+    mock_episode_type.text = "text"
+    mock_graphiti_nodes = MagicMock()
+    mock_graphiti_nodes.EpisodeType = mock_episode_type
+
     with patch("analysis.failure_storage.is_graphiti_enabled", return_value=True), \
-         patch("analysis.failure_storage.get_graphiti_memory") as mock_memory:
+         patch("analysis.failure_storage.get_graphiti_memory") as mock_memory, \
+         patch.dict(sys.modules, {"graphiti_core": MagicMock(), "graphiti_core.nodes": mock_graphiti_nodes}):
 
         mock_memory.return_value = mock_memory_instance
 
@@ -257,7 +270,7 @@ async def _helper_failure_stored(test_spec_dir, test_project_dir):
         )
 
         assert result is True
-        assert mock_memory_instance._client.graphiti.add_episode.called
+        assert mock_memory_instance.client.graphiti.add_episode.called
 
     print("  [ok] Failure storage working correctly")
 
@@ -407,22 +420,21 @@ async def _helper_success_rate_improves(test_spec_dir, test_project_dir):
     ])
 
     metrics_after = get_failure_metrics(test_spec_dir)
-    total_iterations = 3
     # Only count rejected iterations for failure rate (exclude approved)
     rejected_iterations = 2
     issues_after = metrics_after["total_failures"]
-    failure_rate_after = issues_after / total_iterations if total_iterations > 0 else 0.0
+    failure_rate_after = issues_after / rejected_iterations if rejected_iterations > 0 else 0.0
 
-    # Failure rate per iteration should decrease:
-    # Before: 3 issues / 1 iteration = 3.0
-    # After:  4 issues / 3 iterations = 1.33...
+    # Failure rate per rejected iteration should decrease:
+    # Before: 3 issues / 1 rejected iteration = 3.0
+    # After:  4 issues / 2 rejected iterations = 2.0
     assert failure_rate_after < failure_rate_before, (
         f"Failure rate should decrease: before={failure_rate_before:.2f}, after={failure_rate_after:.2f}"
     )
 
     # Verify there are approved iterations
     assert "root_cause_rate" in metrics_after
-    assert total_iterations >= 2, "Need multiple iterations to track improvement"
+    assert rejected_iterations >= 1, "Need rejected iterations to track improvement"
 
     print(f"  [ok] Success rate improved: failure rate {failure_rate_before:.2f} -> {failure_rate_after:.2f}")
 

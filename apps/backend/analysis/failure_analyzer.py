@@ -43,8 +43,17 @@ MAX_DIFF_CHARS = 15000
 
 # Named pattern constants for heuristic root cause categorization
 SYNTAX_ERROR_PATTERNS = ["syntaxerror", "unexpected token", "invalid syntax"]
-MISSING_DEPENDENCY_PATTERNS = ["modulenotfounderror", "importerror", "cannot find module"]
-LOGIC_ERROR_PATTERNS = ["typeerror", "attributeerror", "referenceerror", "undefined is not"]
+MISSING_DEPENDENCY_PATTERNS = [
+    "modulenotfounderror",
+    "importerror",
+    "cannot find module",
+]
+LOGIC_ERROR_PATTERNS = [
+    "typeerror",
+    "attributeerror",
+    "referenceerror",
+    "undefined is not",
+]
 TEST_ERROR_PATTERNS = [
     "test failed",
     "assertion",

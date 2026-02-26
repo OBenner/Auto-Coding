@@ -372,7 +372,7 @@ async def get_failure_patterns(
 
         # Search for root cause episodes
         search_query = f"root cause failure {query}"
-        client = getattr(memory, "client", None) or getattr(memory, "_client", None)
+        client = memory.client
         if client is None:
             if is_debug_enabled():
                 debug_warning("memory", "No client available on memory instance")

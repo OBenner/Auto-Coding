@@ -195,7 +195,7 @@ async function executeFeedbackRecorder(
               error: result.error || 'Failed to record feedback'
             });
           }
-        } catch (e) {
+        } catch (_e) {
           console.error('[Feedback] Invalid JSON response:', stdout);
           resolve({
             success: false,
@@ -230,7 +230,7 @@ async function executeFeedbackRecorder(
  * @param {() => BrowserWindow | null} getMainWindow - Function to get the main window
  */
 export function registerFeedbackHandlers(
-  getMainWindow: () => BrowserWindow | null
+  _getMainWindow: () => BrowserWindow | null
 ): void {
   // Submit feedback for adaptive agent learning
   ipcMain.handle(

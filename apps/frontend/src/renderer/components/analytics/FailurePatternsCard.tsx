@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   AlertTriangle,
   Bug,
@@ -83,11 +84,13 @@ function CategoryItem({ category, count, total }: CategoryItemProps) {
   );
 }
 
-function formatPercentage(rate: number): string {
-  return `${(rate * 100).toFixed(1)}%`;
+function formatPercentage(rate: number | undefined): string {
+  return `${((rate ?? 0) * 100).toFixed(1)}%`;
 }
 
 export function FailurePatternsCard({ failureMetrics, isLoading = false }: FailurePatternsCardProps) {
+  const { t } = useTranslation(['common']);
+
   const stats = useMemo(() => {
     if (!failureMetrics) {
       return {
@@ -101,10 +104,10 @@ export function FailurePatternsCard({ failureMetrics, isLoading = false }: Failu
 
     return {
       totalFailures: failureMetrics.total_failures,
-      rootCauseRate: failureMetrics.root_cause_rate,
-      patternDetectionRate: failureMetrics.pattern_detection_rate,
-      recurrenceRate: failureMetrics.recurrence_rate,
-      topCategories: failureMetrics.top_failure_categories
+      rootCauseRate: failureMetrics.root_cause_rate ?? 0,
+      patternDetectionRate: failureMetrics.pattern_detection_rate ?? 0,
+      recurrenceRate: failureMetrics.recurrence_rate ?? 0,
+      topCategories: failureMetrics.top_failure_categories ?? []
     };
   }, [failureMetrics]);
 
@@ -116,11 +119,11 @@ export function FailurePatternsCard({ failureMetrics, isLoading = false }: Failu
         <div className="flex items-center justify-between">
           <CardTitle className="text-lg font-semibold flex items-center gap-2">
             <ShieldAlert className="h-5 w-5 text-destructive" />
-            Failure Patterns
+            {t('common:failurePatterns.title')}
           </CardTitle>
           {hasData && (
             <Badge variant="outline" className="text-xs">
-              {stats.totalFailures} {stats.totalFailures === 1 ? 'failure' : 'failures'}
+              {t('common:failurePatterns.failureCount', { count: stats.totalFailures })}
             </Badge>
           )}
         </div>
@@ -129,14 +132,14 @@ export function FailurePatternsCard({ failureMetrics, isLoading = false }: Failu
         {isLoading ? (
           <div className="flex items-center justify-center py-8 text-muted-foreground">
             <AlertTriangle className="h-5 w-5 animate-pulse mr-2" />
-            Loading failure analysis...
+            {t('common:failurePatterns.loading')}
           </div>
         ) : !hasData ? (
           <div className="flex flex-col items-center justify-center py-8 text-center">
             <ShieldAlert className="h-12 w-12 text-muted-foreground/50 mb-3" />
-            <p className="text-sm text-muted-foreground">No failure data recorded yet</p>
+            <p className="text-sm text-muted-foreground">{t('common:failurePatterns.noData')}</p>
             <p className="text-xs text-muted-foreground/70 mt-1">
-              Failure analysis will appear here after QA iterations
+              {t('common:failurePatterns.noDataHint')}
             </p>
           </div>
         ) : (
@@ -145,25 +148,25 @@ export function FailurePatternsCard({ failureMetrics, isLoading = false }: Failu
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <StatCard
                 icon={AlertTriangle}
-                label="Total Failures"
+                label={t('common:failurePatterns.totalFailures')}
                 value={stats.totalFailures}
                 variant={stats.totalFailures > 10 ? 'error' : stats.totalFailures > 5 ? 'warning' : 'default'}
               />
               <StatCard
                 icon={Bug}
-                label="Root Cause Rate"
+                label={t('common:failurePatterns.rootCauseRate')}
                 value={formatPercentage(stats.rootCauseRate)}
                 variant={stats.rootCauseRate >= 0.8 ? 'success' : stats.rootCauseRate >= 0.5 ? 'warning' : 'error'}
               />
               <StatCard
                 icon={FileWarning}
-                label="Pattern Detection"
+                label={t('common:failurePatterns.patternDetection')}
                 value={formatPercentage(stats.patternDetectionRate)}
                 variant={stats.patternDetectionRate >= 0.8 ? 'success' : stats.patternDetectionRate >= 0.5 ? 'warning' : 'error'}
               />
               <StatCard
                 icon={TrendingDown}
-                label="Recurrence Rate"
+                label={t('common:failurePatterns.recurrenceRate')}
                 value={formatPercentage(stats.recurrenceRate)}
                 variant={stats.recurrenceRate <= 0.2 ? 'success' : stats.recurrenceRate <= 0.5 ? 'warning' : 'error'}
               />
@@ -174,7 +177,7 @@ export function FailurePatternsCard({ failureMetrics, isLoading = false }: Failu
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
                   <Bug className="h-4 w-4 text-muted-foreground" />
-                  <h3 className="text-sm font-semibold text-foreground">Common Failure Categories</h3>
+                  <h3 className="text-sm font-semibold text-foreground">{t('common:failurePatterns.commonCategories')}</h3>
                 </div>
                 <div className="space-y-2">
                   {stats.topCategories.map((item) => (

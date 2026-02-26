@@ -117,17 +117,17 @@ export interface FailureCategoryCount {
 
 export interface FailureMetrics {
   total_failures: number;
-  failure_types: Record<string, number>;  // Count by type (qa_rejection, build_error, etc.)
-  failure_categories: Record<string, number>;  // Count by category
-  root_causes_identified: number;
+  failure_types?: Record<string, number>;  // Count by type (qa_rejection, build_error, etc.)
+  failure_categories?: Record<string, number>;  // Count by category
+  root_causes_identified?: number;
   /** Ratio of failures with identified root causes. Range: 0.0 - 1.0 */
-  root_cause_rate: number;
-  recurring_failures: number;
+  root_cause_rate?: number;
+  recurring_failures?: number;
   /** Ratio of failures that are recurring. Range: 0.0 - 1.0 */
-  recurrence_rate: number;
-  top_failure_files: FailureFileCount[];  // Top 5 files with most issues
-  top_failure_categories: FailureCategoryCount[];  // Top 5 categories
+  recurrence_rate?: number;
+  top_failure_files?: FailureFileCount[];  // Top 5 files with most issues
+  top_failure_categories?: FailureCategoryCount[];  // Top 5 categories
   /** Ratio of issues with detected patterns vs total issues. Range: 0.0 - 1.0 */
-  pattern_detection_rate: number;
-  avg_occurrences_per_failure: number;
+  pattern_detection_rate?: number;
+  avg_occurrences_per_failure?: number;
 }

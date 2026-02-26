@@ -242,7 +242,7 @@ async def _store_root_cause_episode(
             }
 
         # Store episode using the client
-        client = getattr(memory, "client", None) or getattr(memory, "_client", None)
+        client = memory.client
         if client is None:
             logger.warning("No client available on memory instance")
             return False
@@ -311,13 +311,15 @@ async def _store_qa_result_episode(
                     "file": issue.get("file"),
                     "line": issue.get("line"),
                 }
-                for issue in issues[:10]  # Limit to first 10 issues to avoid huge episodes
+                for issue in issues[
+                    :10
+                ]  # Limit to first 10 issues to avoid huge episodes
             ],
             "fixes_applied": fixes_applied or [],
         }
 
         # Store episode
-        client = getattr(memory, "client", None) or getattr(memory, "_client", None)
+        client = memory.client
         if client is None:
             logger.warning("No client available on memory instance")
             return False

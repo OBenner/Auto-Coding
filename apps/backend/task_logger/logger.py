@@ -356,6 +356,7 @@ class TaskLogger:
         subphase: str | None = None,
         collapsed: bool = True,
         print_to_console: bool = True,
+        decision_data: dict | None = None,
     ) -> None:
         """
         Log a message with expandable detail content.
@@ -363,11 +364,12 @@ class TaskLogger:
         Args:
             content: Brief summary shown by default
             detail: Full content shown when expanded (e.g., file contents, command output)
-            entry_type: Type of entry (text, error, success, info)
+            entry_type: Type of entry (text, error, success, info, decision)
             phase: Optional phase override
             subphase: Optional subphase grouping (e.g., "PROJECT DISCOVERY")
             collapsed: Whether detail should be collapsed by default (default True)
             print_to_console: Whether to print summary to stdout (default True)
+            decision_data: Optional DecisionPoint data dict for decision entries
         """
         phase_key = (phase or self.current_phase or LogPhase.CODING).value
 
@@ -381,22 +383,23 @@ class TaskLogger:
             detail=detail,
             subphase=subphase,
             collapsed=collapsed,
+            decision_data=decision_data,
         )
         self._add_entry(entry)
 
         # Emit streaming marker with detail indicator
-        self._emit(
-            "TEXT",
-            {
-                "content": content,
-                "phase": phase_key,
-                "type": entry_type.value,
-                "subtask_id": self.current_subtask,
-                "timestamp": self._timestamp(),
-                "has_detail": True,
-                "subphase": subphase,
-            },
-        )
+        emit_data: dict = {
+            "content": content,
+            "phase": phase_key,
+            "type": entry_type.value,
+            "subtask_id": self.current_subtask,
+            "timestamp": self._timestamp(),
+            "has_detail": True,
+            "subphase": subphase,
+        }
+        if decision_data:
+            emit_data["decision_data"] = decision_data
+        self._emit("TEXT", emit_data)
 
         # Debug log (when DEBUG=true) - include detail for verbose mode
         self._debug_log(

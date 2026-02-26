@@ -278,7 +278,7 @@ export class UsageMonitor extends EventEmitter {
     // Check immediately, then schedule next check with dynamic interval
     const scheduleNext = () => {
       const backoffMultiplier = Math.min(
-        Math.pow(2, this.consecutiveGlobalFailures),
+        2 ** this.consecutiveGlobalFailures,
         UsageMonitor.MAX_BACKOFF_MULTIPLIER
       );
       const nextInterval = baseInterval * backoffMultiplier;

@@ -652,6 +652,34 @@ The project root is: `{project_dir}`
     return spec_context + base_prompt
 
 
+def get_code_review_prompt(spec_dir: Path, project_dir: Path) -> str:
+    """
+    Load the code review agent prompt with spec paths injected.
+
+    Args:
+        spec_dir: Directory containing the spec files
+        project_dir: Root directory of the project
+
+    Returns:
+        The code review agent prompt content with paths injected
+    """
+    base_prompt = _load_prompt_file("code_review_agent.md")
+
+    spec_context = f"""## SPEC LOCATION
+
+Your spec and progress files are located at:
+- Spec: `{spec_dir}/spec.md`
+- Implementation plan: `{spec_dir}/implementation_plan.json`
+- Code review output: `{spec_dir}/code_review_report.md`
+
+The project root is: `{project_dir}`
+
+---
+
+"""
+    return spec_context + base_prompt
+
+
 def load_custom_template_prompt(template_name: str, project_dir: Path) -> str:
     """
     Load a custom agent template prompt by name.
