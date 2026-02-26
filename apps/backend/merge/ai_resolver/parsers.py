@@ -112,11 +112,18 @@ def extract_explanation(response: str) -> str | None:
     Returns:
         Extracted explanation text, or None if not found
     """
-    # Look for "EXPLANATION: " prefix
-    pattern = r"EXPLANATION:\s*(.*?)(?:```|$)"
-    match = re.search(pattern, response, re.DOTALL)
+    # Look for "EXPLANATION:" or "Explanation:" prefix, with optional markdown bold markers.
+    # Use a non-backtracking pattern to avoid ReDoS on untrusted input:
+    # match everything up to the next code fence or end-of-string, non-greedy but bounded.
+    if len(response) > 100_000:
+        response = response[:100_000]
+    pattern = r"\*{0,2}\s*Explanation\s*\*{0,2}\s*[:\-]?\s*(.*?)(?:```|$)"
+    match = re.search(pattern, response, re.DOTALL | re.IGNORECASE)
 
     if match:
-        return match.group(1).strip()
+        # Strip markdown formatting from the extracted text
+        explanation = match.group(1).strip()
+        explanation = re.sub(r"\*{1,2}([^*]+)\*{1,2}", r"\1", explanation)
+        return explanation
 
     return None

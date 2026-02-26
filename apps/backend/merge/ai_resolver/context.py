@@ -53,7 +53,10 @@ class ConflictContext:
             lines.append("--- SEMANTIC CONTEXT ---")
             for key, value in self.semantic_context.items():
                 if isinstance(value, (list, dict)):
-                    lines.append(f"{key}: {json.dumps(value, indent=2)}")
+                    serialized = json.dumps(value, indent=2, default=str)
+                    if len(serialized) > 1000:
+                        serialized = serialized[:1000] + "\n... (truncated)"
+                    lines.append(f"{key}: {serialized}")
                 else:
                     lines.append(f"{key}: {value}")
             lines.append("--- END SEMANTIC CONTEXT ---")

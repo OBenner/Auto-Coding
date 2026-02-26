@@ -15,12 +15,7 @@ The test compares semantic merge results against simulated text-only baseline
 to measure the accuracy improvement metric.
 """
 
-import sys
 from datetime import datetime
-from pathlib import Path
-
-# Add apps/backend to path
-sys.path.insert(0, str(Path(__file__).parent.parent / "apps" / "backend"))
 
 from merge.benchmark import (
     BenchmarkResult,
@@ -38,7 +33,7 @@ from merge.types import (
 )
 
 
-def test_semantic_accuracy_improvement():
+def test_semantic_accuracy_improvement(tmp_path):
     """
     End-to-end test for 40% accuracy improvement goal.
 
@@ -47,8 +42,8 @@ def test_semantic_accuracy_improvement():
     print("Testing Semantic Merge Accuracy Improvement")
     print("=" * 60)
 
-    # Setup test storage
-    test_dir = Path(".auto-claude")
+    # Setup test storage using pytest tmp_path for hermetic isolation
+    test_dir = tmp_path / ".auto-claude"
     store = BenchmarkStore(test_dir)
 
     # Clear previous test results for clean benchmark
@@ -286,7 +281,9 @@ def test_semantic_accuracy_improvement():
     print(f"Semantic: {result_5.semantic_conflicts_resolved} conflicts resolved")
     print(f"Text-only: {result_5.textual_conflicts_detected} conflicts detected")
     print(f"Accuracy improvement: {result_5.improvement_percentage:.1f}%")
-    assert result_5.semantic_decision == MergeDecision.AUTO_MERGED, "Should auto-merge imports"
+    assert result_5.semantic_decision == MergeDecision.AUTO_MERGED, (
+        "Should auto-merge imports"
+    )
     print("✓ Import merging test passed\n")
 
     # Aggregate Results and Verify 40% Improvement Target
@@ -322,26 +319,28 @@ def test_semantic_accuracy_improvement():
 
     # Verify 40% improvement target
     print("Target Validation:")
-    print(f"  Target: 40% improvement")
+    print("  Target: 40% improvement")
     print(f"  Achieved: {summary.improvement_percentage:.1f}%")
     print(f"  Meets target: {summary.meets_40_percent_target}")
     print()
 
     # Assert 40% improvement
-    assert (
-        summary.average_accuracy_improvement >= 0.4
-    ), f"Failed to meet 40% improvement target. Achieved: {summary.improvement_percentage:.1f}%"
+    assert summary.average_accuracy_improvement >= 0.4, (
+        f"Failed to meet 40% improvement target. Achieved: {summary.improvement_percentage:.1f}%"
+    )
 
-    assert summary.meets_40_percent_target, "meets_40_percent_target flag should be True"
+    assert summary.meets_40_percent_target, (
+        "meets_40_percent_target flag should be True"
+    )
 
     # Verify semantic merge is consistently better
-    assert (
-        summary.semantic_success_rate > summary.textual_success_rate
-    ), "Semantic merge should have higher success rate than text-only"
+    assert summary.semantic_success_rate > summary.textual_success_rate, (
+        "Semantic merge should have higher success rate than text-only"
+    )
 
-    assert (
-        summary.total_conflicts_avoided > 0
-    ), "Should have avoided conflicts compared to text-only"
+    assert summary.total_conflicts_avoided > 0, (
+        "Should have avoided conflicts compared to text-only"
+    )
 
     print("✓ 40% accuracy improvement target ACHIEVED")
     print()
@@ -430,12 +429,12 @@ def test_accuracy_calculation():
     print("✓ Accuracy calculation tests passed\n")
 
 
-def test_benchmark_storage():
+def test_benchmark_storage(tmp_path):
     """Test benchmark result storage and retrieval."""
     print("\nTesting benchmark storage...")
     print("-" * 60)
 
-    test_dir = Path(".auto-claude") / "test_benchmark"
+    test_dir = tmp_path / ".auto-claude" / "test_benchmark"
     store = BenchmarkStore(test_dir)
 
     # Clear previous data

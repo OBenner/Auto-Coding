@@ -63,6 +63,8 @@ def parse_function_signature(signature: str) -> FunctionSignature:
 
     # Match the function signature pattern
     # Supports: async def, regular def, with type hints, with return types
+    # The trailing colon is required for syntactically valid Python signatures;
+    # we also accept signatures without a colon (e.g., extracted from diffs).
     pattern = r"""
         ^\s*
         (async\s+)?  # Optional async keyword
@@ -75,11 +77,24 @@ def parse_function_signature(signature: str) -> FunctionSignature:
         \s*          # Optional whitespace
         (?:->\s*([^:(]+))?  # Optional return type (capture group 4)
         \s*          # Optional whitespace
-        :?            # Optional colon (some signatures might not include it)
+        :             # Trailing colon (required for valid Python signatures)
         \s*$         # End of string
     """
 
     match = re.match(pattern, signature, re.VERBOSE)
+
+    # Fall back to accepting signatures without a trailing colon (e.g., from diffs)
+    if not match:
+        pattern_no_colon = r"""
+            ^\s*
+            (async\s+)?
+            def\s+
+            ([a-zA-Z_][a-zA-Z0-9_]*)
+            \s*\(([^)]*)\)
+            \s*(?:->\s*([^:(]+))?
+            \s*$
+        """
+        match = re.match(pattern_no_colon, signature, re.VERBOSE)
 
     if not match:
         raise ValueError(
@@ -183,8 +198,9 @@ def get_signature_fingerprint(signature: str) -> str:
     """
     Generate a unique fingerprint for a function signature.
 
-    The fingerprint is based on function name and parameter structure,
-    ignoring parameter names but keeping their count and order.
+    The fingerprint encodes function name, parameter count, and whether
+    the signature uses *args or **kwargs to avoid false matches between
+    signatures that differ only in variadic parameters.
 
     Args:
         signature: Function signature string
@@ -194,13 +210,28 @@ def get_signature_fingerprint(signature: str) -> str:
 
     Examples:
         >>> get_signature_fingerprint('def foo(x, y):')
-        'foo:2'
-        >>> get_signature_fingerprint('def bar(a: int, b: str):')
-        'bar:2'
+        'foo:2:v0:kw0'
+        >>> get_signature_fingerprint('def bar(*args, **kwargs):')
+        'bar:2:v1:kw1'
     """
     sig = parse_function_signature(signature)
     param_count = len(sig.params)
-    return f"{sig.name}:{param_count}"
+
+    # Detect *args / **kwargs from the raw signature to encode in fingerprint
+    raw_params = _split_parameters(
+        re.search(r"\(([^)]*)\)", signature, re.DOTALL).group(1)
+        if re.search(r"\(([^)]*)\)", signature, re.DOTALL)
+        else ""
+    )
+    has_vararg = int(
+        any(
+            p.strip().startswith("*") and not p.strip().startswith("**")
+            for p in raw_params
+        )
+    )
+    has_kwarg = int(any(p.strip().startswith("**") for p in raw_params))
+
+    return f"{sig.name}:{param_count}:v{has_vararg}:kw{has_kwarg}"
 
 
 def signatures_match(sig1: str, sig2: str) -> bool:

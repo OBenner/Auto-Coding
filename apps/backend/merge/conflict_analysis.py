@@ -354,7 +354,8 @@ def _detect_rename_conflicts(
                                     tasks_involved=[rename_task, other_task],
                                     change_types=[
                                         ChangeType.RENAME_FUNCTION
-                                        if "function" in change.location
+                                        if change.change_type
+                                        == ChangeType.RENAME_FUNCTION
                                         else ChangeType.RENAME_VARIABLE,
                                         change.change_type,
                                     ],
@@ -390,23 +391,29 @@ def _references_entity(change: SemanticChange, entity_name: str) -> bool:
         True if the change references the entity
     """
     # Check if target matches
-    if change.target == entity_name:
+    target = getattr(change, "target", None)
+    if not isinstance(target, str):
+        return False
+
+    if target == entity_name:
         return True
 
     # Check if target contains entity_name (e.g., "calling foo")
-    if entity_name in change.target.lower():
+    if entity_name in target.lower():
         return True
 
     # Check content_before/content_after for references
-    if change.content_before and entity_name in change.content_before:
+    content_before = getattr(change, "content_before", None)
+    if isinstance(content_before, str) and entity_name in content_before:
         return True
 
-    if change.content_after and entity_name in change.content_after:
+    content_after = getattr(change, "content_after", None)
+    if isinstance(content_after, str) and entity_name in content_after:
         return True
 
     # For MODIFY_FUNCTION, check if it's modifying the entity
     if change.change_type == ChangeType.MODIFY_FUNCTION:
-        if change.target == entity_name:
+        if target == entity_name:
             return True
 
     return False

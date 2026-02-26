@@ -8,12 +8,16 @@ from pathlib import Path
 # Add apps/backend to path
 sys.path.insert(0, str(Path(__file__).parent / "apps" / "backend"))
 
-from merge.types import (
-    ResolutionPreview, MergeResult, MergeDecision, ConflictRegion,
-    ChangeType, ConflictSeverity
-)
-from merge.preview_store import PreviewStore
 from merge.ai_resolver.parsers import extract_explanation
+from merge.preview_store import PreviewStore
+from merge.types import (
+    ChangeType,
+    ConflictRegion,
+    ConflictSeverity,
+    MergeDecision,
+    MergeResult,
+    ResolutionPreview,
+)
 
 
 def test_resolution_preview():
@@ -22,33 +26,33 @@ def test_resolution_preview():
 
     # Create a test conflict region
     conflict = ConflictRegion(
-        file_path='test.py',
-        location='function:foo',
-        tasks_involved=['task1', 'task2'],
+        file_path="test.py",
+        location="function:foo",
+        tasks_involved=["task1", "task2"],
         change_types=[ChangeType.MODIFY_FUNCTION, ChangeType.MODIFY_FUNCTION],
         severity=ConflictSeverity.MEDIUM,
         can_auto_merge=False,
-        reason='Both tasks modified the same function'
+        reason="Both tasks modified the same function",
     )
 
     rp = ResolutionPreview(
-        file_path='test.py',
-        original='x = 1',
-        suggested='y = 1',
-        explanation='Renamed variable x to y',
-        conflicts_addressed=[conflict]
+        file_path="test.py",
+        original="x = 1",
+        suggested="y = 1",
+        explanation="Renamed variable x to y",
+        conflicts_addressed=[conflict],
     )
 
-    assert rp.file_path == 'test.py'
-    assert rp.original == 'x = 1'
-    assert rp.suggested == 'y = 1'
-    assert rp.explanation == 'Renamed variable x to y'
+    assert rp.file_path == "test.py"
+    assert rp.original == "x = 1"
+    assert rp.suggested == "y = 1"
+    assert rp.explanation == "Renamed variable x to y"
     assert len(rp.conflicts_addressed) == 1
-    assert rp.conflicts_addressed[0].file_path == 'test.py'
+    assert rp.conflicts_addressed[0].file_path == "test.py"
 
     # Test serialization
     data = rp.to_dict()
-    assert data['file_path'] == 'test.py'
+    assert data["file_path"] == "test.py"
 
     # Test deserialization
     rp2 = ResolutionPreview.from_dict(data)
@@ -67,40 +71,40 @@ def test_preview_store():
 
         # Create test conflict regions
         conflict1 = ConflictRegion(
-            file_path='file1.py',
-            location='function:bar',
-            tasks_involved=['task1'],
+            file_path="file1.py",
+            location="function:bar",
+            tasks_involved=["task1"],
             change_types=[ChangeType.MODIFY_FUNCTION],
             severity=ConflictSeverity.LOW,
             can_auto_merge=True,
-            reason='Minor change in function'
+            reason="Minor change in function",
         )
         conflict2 = ConflictRegion(
-            file_path='file2.py',
-            location='function:baz',
-            tasks_involved=['task2'],
+            file_path="file2.py",
+            location="function:baz",
+            tasks_involved=["task2"],
             change_types=[ChangeType.MODIFY_FUNCTION],
             severity=ConflictSeverity.LOW,
             can_auto_merge=True,
-            reason='Minor change in function'
+            reason="Minor change in function",
         )
 
         # Create test previews
         previews = [
             ResolutionPreview(
-                file_path='file1.py',
-                original='old code 1',
-                suggested='new code 1',
-                explanation='explanation 1',
-                conflicts_addressed=[conflict1]
+                file_path="file1.py",
+                original="old code 1",
+                suggested="new code 1",
+                explanation="explanation 1",
+                conflicts_addressed=[conflict1],
             ),
             ResolutionPreview(
-                file_path='file2.py',
-                original='old code 2',
-                suggested='new code 2',
-                explanation='explanation 2',
-                conflicts_addressed=[conflict2]
-            )
+                file_path="file2.py",
+                original="old code 2",
+                suggested="new code 2",
+                explanation="explanation 2",
+                conflicts_addressed=[conflict2],
+            ),
         ]
 
         # Save previews (previews first, then merge_id)
@@ -109,8 +113,8 @@ def test_preview_store():
         # Load previews
         loaded = store.load_previews(merge_id)
         assert len(loaded) == 2
-        assert loaded[0].file_path == 'file1.py'
-        assert loaded[1].file_path == 'file2.py'
+        assert loaded[0].file_path == "file1.py"
+        assert loaded[1].file_path == "file2.py"
 
         # Clear previews
         store.clear_previews(merge_id)
@@ -133,8 +137,8 @@ def foo():
 ```"""
 
     explanation1 = extract_explanation(response1)
-    assert 'resolves the conflict' in explanation1
-    assert '```' not in explanation1
+    assert "resolves the conflict" in explanation1
+    assert "```" not in explanation1
 
     # Test without EXPLANATION
     response2 = """Here's the merged code:
@@ -157,17 +161,17 @@ def test_merge_result_explanation():
 
     mr = MergeResult(
         decision=MergeDecision.AI_MERGED,
-        file_path='test.py',
-        resolution_explanation='AI merged both changes successfully'
+        file_path="test.py",
+        resolution_explanation="AI merged both changes successfully",
     )
 
-    assert hasattr(mr, 'resolution_explanation')
-    assert mr.resolution_explanation == 'AI merged both changes successfully'
+    assert hasattr(mr, "resolution_explanation")
+    assert mr.resolution_explanation == "AI merged both changes successfully"
 
     # Test serialization includes explanation
     data = mr.to_dict()
-    assert 'resolution_explanation' in data
-    assert data['resolution_explanation'] == 'AI merged both changes successfully'
+    assert "resolution_explanation" in data
+    assert data["resolution_explanation"] == "AI merged both changes successfully"
 
     print("✓ MergeResult explanation tracking works correctly")
 
@@ -197,9 +201,10 @@ def main():
     except Exception as e:
         print(f"\n❌ VERIFICATION FAILED: {e}")
         import traceback
+
         traceback.print_exc()
         return 1
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     sys.exit(main())

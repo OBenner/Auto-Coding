@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import logging
+import statistics
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -241,7 +242,9 @@ def calculate_accuracy_improvement(
         return 0.0
 
     # Semantic approach: how many conflicts still need manual review
-    semantic_remaining = len(semantic_result.conflicts_remaining)
+    semantic_remaining = len(
+        getattr(semantic_result, "conflicts_remaining", None) or []
+    )
 
     # Calculate improvement: (baseline - semantic) / baseline
     conflicts_avoided = textual_conflicts - semantic_remaining
@@ -277,17 +280,17 @@ def compare_semantic_vs_textual(
         semantic_result, textual_conflicts
     )
 
-    # Determine conflicts avoided
-    semantic_remaining = len(semantic_result.conflicts_remaining)
+    # Determine conflicts avoided - use safe getattr with empty-list default
+    conflicts_remaining = getattr(semantic_result, "conflicts_remaining", None) or []
+    conflicts_resolved = getattr(semantic_result, "conflicts_resolved", None) or []
+    semantic_remaining = len(conflicts_remaining)
     conflicts_avoided = max(0, textual_conflicts - semantic_remaining)
 
     # Calculate resolution quality score (0.0 to 1.0)
     # Based on how well semantic merge resolved conflicts
-    total_conflicts = len(semantic_result.conflicts_resolved) + len(
-        semantic_result.conflicts_remaining
-    )
+    total_conflicts = len(conflicts_resolved) + len(conflicts_remaining)
     if total_conflicts > 0:
-        quality_score = len(semantic_result.conflicts_resolved) / total_conflicts
+        quality_score = len(conflicts_resolved) / total_conflicts
     else:
         quality_score = 1.0  # No conflicts = perfect
 
@@ -303,9 +306,9 @@ def compare_semantic_vs_textual(
         file_path=file_path,
         timestamp=datetime.now(),
         semantic_decision=semantic_result.decision,
-        semantic_conflicts_resolved=len(semantic_result.conflicts_resolved),
-        semantic_conflicts_remaining=len(semantic_result.conflicts_remaining),
-        semantic_ai_calls=semantic_result.ai_calls_made,
+        semantic_conflicts_resolved=len(conflicts_resolved),
+        semantic_conflicts_remaining=len(conflicts_remaining),
+        semantic_ai_calls=getattr(semantic_result, "ai_calls_made", 0),
         semantic_success=semantic_success,
         textual_conflicts_detected=textual_conflicts,
         textual_conflicts_remaining=textual_conflicts,
@@ -314,7 +317,7 @@ def compare_semantic_vs_textual(
         conflicts_avoided=conflicts_avoided,
         resolution_quality_score=quality_score,
         merge_strategy_used="semantic",
-        notes=semantic_result.explanation,
+        notes=getattr(semantic_result, "explanation", None),
     )
 
 
@@ -355,8 +358,7 @@ def aggregate_benchmark_results(
     # Calculate accuracy improvements
     improvements = [r.accuracy_improvement for r in results]
     average_improvement = sum(improvements) / len(improvements)
-    sorted_improvements = sorted(improvements)
-    median_improvement = sorted_improvements[len(sorted_improvements) // 2]
+    median_improvement = statistics.median(improvements)
     min_improvement = min(improvements)
     max_improvement = max(improvements)
 

@@ -5,12 +5,15 @@ Regex-based semantic analysis for code changes.
 from __future__ import annotations
 
 import difflib
+import logging
 import re
 
 from ..rename_detector import is_function_rename
 from ..scope_analyzer import infer_scope
 from ..signature_parser import parse_function_signature
 from ..types import ChangeType, FileAnalysis, SemanticChange
+
+logger = logging.getLogger(__name__)
 
 
 def extract_function_definitions(code: str, ext: str) -> dict[str, str]:
@@ -308,7 +311,12 @@ def analyze_with_regex(
                         )
                 except ValueError:
                     # If signature parsing fails, skip detailed analysis
-                    pass
+                    logger.debug(
+                        "Signature parsing failed for function '%s': before=%r after=%r",
+                        func_name,
+                        sig_before,
+                        sig_after,
+                    )
 
     # Build analysis
     analysis = FileAnalysis(file_path=file_path, changes=changes)

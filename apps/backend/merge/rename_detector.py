@@ -12,6 +12,7 @@ similarity analysis.
 from __future__ import annotations
 
 import ast
+import itertools
 from typing import Any
 
 
@@ -128,8 +129,15 @@ def _get_ast_fields(node: ast.AST) -> list[str]:
     # Get all fields
     all_fields = node._fields if hasattr(node, "_fields") else []
 
-    # Skip fields that are typically metadata
-    skip_fields = {"ctx", "type_comment", "end_lineno", "end_col_offset"}
+    # Skip fields that are typically metadata or positional info
+    skip_fields = {
+        "ctx",
+        "type_comment",
+        "lineno",
+        "col_offset",
+        "end_lineno",
+        "end_col_offset",
+    }
 
     return [f for f in all_fields if f not in skip_fields]
 
@@ -357,8 +365,10 @@ def _count_matching_nodes(node1: ast.AST | Any, node2: ast.AST | Any) -> int:
         value2 = getattr(node2, field, None)
 
         if isinstance(value1, list) and isinstance(value2, list):
-            for v1, v2 in zip(value1, value2):
-                count += _count_matching_nodes(v1, v2)
+            # Use zip_longest to avoid silently truncating unequal lists
+            for v1, v2 in itertools.zip_longest(value1, value2):
+                if v1 is not None and v2 is not None:
+                    count += _count_matching_nodes(v1, v2)
         elif isinstance(value1, ast.AST) and isinstance(value2, ast.AST):
             count += _count_matching_nodes(value1, value2)
 

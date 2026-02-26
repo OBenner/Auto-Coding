@@ -157,7 +157,9 @@ class TestFullMergePipeline:
         utils_file.write_text(PYTHON_BASELINE)
 
         # Commit baseline to git
-        subprocess.run(["git", "add", "."], cwd=temp_project, check=True, capture_output=True)
+        subprocess.run(
+            ["git", "add", "."], cwd=temp_project, check=True, capture_output=True
+        )
         subprocess.run(
             ["git", "commit", "-m", "Add baseline"],
             cwd=temp_project,
@@ -178,7 +180,9 @@ class TestFullMergePipeline:
             capture_output=True,
         )
         utils_file.write_text(PYTHON_TASK1_RENAME)
-        subprocess.run(["git", "add", "."], cwd=temp_project, check=True, capture_output=True)
+        subprocess.run(
+            ["git", "add", "."], cwd=temp_project, check=True, capture_output=True
+        )
         subprocess.run(
             ["git", "commit", "-m", "Rename result to total"],
             cwd=temp_project,
@@ -202,7 +206,9 @@ class TestFullMergePipeline:
         utils_file.write_text(PYTHON_BASELINE)
 
         # Commit baseline
-        subprocess.run(["git", "add", "."], cwd=temp_project, check=True, capture_output=True)
+        subprocess.run(
+            ["git", "add", "."], cwd=temp_project, check=True, capture_output=True
+        )
         subprocess.run(
             ["git", "commit", "-m", "Add baseline"],
             cwd=temp_project,
@@ -246,7 +252,9 @@ class TestFullMergePipeline:
         utils_file.write_text(PYTHON_BASELINE)
 
         # Commit baseline
-        subprocess.run(["git", "add", "."], cwd=temp_project, check=True, capture_output=True)
+        subprocess.run(
+            ["git", "add", "."], cwd=temp_project, check=True, capture_output=True
+        )
         subprocess.run(
             ["git", "commit", "-m", "Add baseline"],
             cwd=temp_project,
@@ -283,7 +291,9 @@ class TestFullMergePipeline:
         processor_file.write_text(PYTHON_COMPLEX_BASELINE)
 
         # Commit baseline
-        subprocess.run(["git", "add", "."], cwd=temp_project, check=True, capture_output=True)
+        subprocess.run(
+            ["git", "add", "."], cwd=temp_project, check=True, capture_output=True
+        )
         subprocess.run(
             ["git", "commit", "-m", "Add baseline"],
             cwd=temp_project,
@@ -296,7 +306,10 @@ class TestFullMergePipeline:
             "task-001", [processor_file], intent="Add stats tracking"
         )
         orchestrator.evolution_tracker.record_modification(
-            "task-001", "src/processor.py", PYTHON_COMPLEX_BASELINE, PYTHON_COMPLEX_TASK1
+            "task-001",
+            "src/processor.py",
+            PYTHON_COMPLEX_BASELINE,
+            PYTHON_COMPLEX_TASK1,
         )
 
         # Task 2: Add parameter to method
@@ -304,7 +317,10 @@ class TestFullMergePipeline:
             "task-002", [processor_file], intent="Make multiplier configurable"
         )
         orchestrator.evolution_tracker.record_modification(
-            "task-002", "src/processor.py", PYTHON_COMPLEX_BASELINE, PYTHON_COMPLEX_TASK2
+            "task-002",
+            "src/processor.py",
+            PYTHON_COMPLEX_BASELINE,
+            PYTHON_COMPLEX_TASK2,
         )
 
         # Execute merge
@@ -320,8 +336,8 @@ class TestFullMergePipeline:
         assert report.stats.files_processed >= 1
 
         # Both changes should be incorporated
-        # (class attribute + method parameter)
-        assert report.success or report.stats.files_need_review >= 0
+        # (class attribute + method parameter) - either fully merged or flagged for review
+        assert report.success or report.stats.files_need_review > 0
 
 
 class TestSemanticConflictDetection:
@@ -335,7 +351,9 @@ class TestSemanticConflictDetection:
         utils_file.write_text(PYTHON_BASELINE)
 
         # Commit baseline
-        subprocess.run(["git", "add", "."], cwd=temp_project, check=True, capture_output=True)
+        subprocess.run(
+            ["git", "add", "."], cwd=temp_project, check=True, capture_output=True
+        )
         subprocess.run(
             ["git", "commit", "-m", "Add baseline"],
             cwd=temp_project,
@@ -361,7 +379,10 @@ class TestSemanticConflictDetection:
             "src/utils.py", PYTHON_BASELINE, PYTHON_TASK1_RENAME, task_id="task-001"
         )
         analysis2 = orchestrator.analyzer.analyze_diff(
-            "src/utils.py", PYTHON_BASELINE, python_task2_conflicting_rename, task_id="task-002"
+            "src/utils.py",
+            PYTHON_BASELINE,
+            python_task2_conflicting_rename,
+            task_id="task-002",
         )
 
         # Detect conflicts using proper API
@@ -408,7 +429,9 @@ def foo():
         utils_file.write_text(baseline_scopes)
 
         # Commit baseline
-        subprocess.run(["git", "add", "."], cwd=temp_project, check=True, capture_output=True)
+        subprocess.run(
+            ["git", "add", "."], cwd=temp_project, check=True, capture_output=True
+        )
         subprocess.run(
             ["git", "commit", "-m", "Add baseline"],
             cwd=temp_project,
@@ -456,7 +479,9 @@ class TestMergeReporting:
         utils_file.write_text(PYTHON_BASELINE)
 
         # Commit baseline
-        subprocess.run(["git", "add", "."], cwd=temp_project, check=True, capture_output=True)
+        subprocess.run(
+            ["git", "add", "."], cwd=temp_project, check=True, capture_output=True
+        )
         subprocess.run(
             ["git", "commit", "-m", "Add baseline"],
             cwd=temp_project,
@@ -493,7 +518,9 @@ class TestMergeReporting:
         utils_file.write_text(PYTHON_BASELINE)
 
         # Commit baseline
-        subprocess.run(["git", "add", "."], cwd=temp_project, check=True, capture_output=True)
+        subprocess.run(
+            ["git", "add", "."], cwd=temp_project, check=True, capture_output=True
+        )
         subprocess.run(
             ["git", "commit", "-m", "Add baseline"],
             cwd=temp_project,
@@ -525,7 +552,9 @@ class TestEndToEndScenarios:
         utils_file.write_text(PYTHON_BASELINE)
 
         # Commit baseline
-        subprocess.run(["git", "add", "."], cwd=temp_project, check=True, capture_output=True)
+        subprocess.run(
+            ["git", "add", "."], cwd=temp_project, check=True, capture_output=True
+        )
         subprocess.run(
             ["git", "commit", "-m", "Add baseline"],
             cwd=temp_project,
@@ -572,7 +601,9 @@ class TestEndToEndScenarios:
         utils_file.write_text(PYTHON_BASELINE)
 
         # Commit baseline
-        subprocess.run(["git", "add", "."], cwd=temp_project, check=True, capture_output=True)
+        subprocess.run(
+            ["git", "add", "."], cwd=temp_project, check=True, capture_output=True
+        )
         subprocess.run(
             ["git", "commit", "-m", "Add baseline"],
             cwd=temp_project,

@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import json
 import logging
+import os
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -70,9 +72,17 @@ class PreviewStore:
             # Update previews for this merge operation
             existing[key] = [p.to_dict() for p in previews]
 
-            # Save to disk
-            with open(self.preview_file, "w", encoding="utf-8") as f:
-                json.dump(existing, f, indent=2)
+            # Atomic write: write to a temp file then rename to avoid partial writes
+            tmp_fd, tmp_path = tempfile.mkstemp(
+                dir=self.preview_dir, prefix=".previews_", suffix=".tmp"
+            )
+            try:
+                with os.fdopen(tmp_fd, "w", encoding="utf-8") as f:
+                    json.dump(existing, f, indent=2)
+                Path(tmp_path).replace(self.preview_file)
+            except Exception:
+                Path(tmp_path).unlink(missing_ok=True)
+                raise
 
             logger.info(f"Saved {len(previews)} resolution previews for merge '{key}'")
 
@@ -151,8 +161,16 @@ class PreviewStore:
                 if merge_id in all_previews:
                     del all_previews[merge_id]
 
-                    with open(self.preview_file, "w", encoding="utf-8") as f:
-                        json.dump(all_previews, f, indent=2)
+                    tmp_fd, tmp_path = tempfile.mkstemp(
+                        dir=self.preview_dir, prefix=".previews_", suffix=".tmp"
+                    )
+                    try:
+                        with os.fdopen(tmp_fd, "w", encoding="utf-8") as f:
+                            json.dump(all_previews, f, indent=2)
+                        Path(tmp_path).replace(self.preview_file)
+                    except Exception:
+                        Path(tmp_path).unlink(missing_ok=True)
+                        raise
 
                     logger.info(f"Cleared resolution previews for merge '{merge_id}'")
 
@@ -191,6 +209,15 @@ class PreviewStore:
             if isinstance(data, list):
                 logger.info("Converting legacy preview format to new format")
                 return {"default": data}
+
+            # Validate structure: must be a dict with list values
+            if not isinstance(data, dict):
+                logger.warning("Unexpected preview file structure; resetting to empty")
+                return {}
+            for k, v in list(data.items()):
+                if not isinstance(v, list):
+                    logger.warning("Dropping malformed preview entry '%s'", k)
+                    del data[k]
 
             return data
 
