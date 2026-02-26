@@ -331,14 +331,14 @@ export function TemplateEditor({
                     className="gap-1 bg-info/10 text-info border-info/30"
                   >
                     <BadgeIcon className="h-3 w-3" />
-                    Update
+                    {t('editor.update')}
                   </Badge>
                 ) : (
                   <Badge
                     variant="outline"
                     className="bg-success/10 text-success border-success/30"
                   >
-                    Up to Date
+                    {t('editor.upToDate')}
                   </Badge>
                 )}
               </div>
@@ -388,7 +388,7 @@ export function TemplateEditor({
             <p className="text-xs text-destructive">{errors.custom_prompt}</p>
           )}
           <p className="text-xs text-muted-foreground">
-            This prompt will override the default agent system prompt. Use clear instructions to define the agent's behavior and capabilities.
+            {t('editor.hints.customPrompt')}
           </p>
         </div>
 

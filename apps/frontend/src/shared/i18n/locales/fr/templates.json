@@ -27,6 +27,14 @@
       "exportFailed": "L'exportation a échoué"
     },
     "updateAvailable": "Mise à jour disponible",
+    "update": "Mettre à jour",
+    "upToDate": "À jour",
+    "currentVersion": "Version actuelle",
+    "newVersionAvailable": "Nouvelle version {{version}} disponible",
+    "hints": {
+      "versionFormat": "Versionnage sémantique (ex : 1.0.0)",
+      "customPrompt": "Cette invite remplacera l'invite système par défaut de l'agent. Utilisez des instructions claires pour définir le comportement et les capacités de l'agent."
+    },
     "actions": {
       "save": "Enregistrer le modèle",
       "cancel": "Annuler",

@@ -27,6 +27,14 @@
       "exportFailed": "Export failed"
     },
     "updateAvailable": "Update Available",
+    "update": "Update",
+    "upToDate": "Up to Date",
+    "currentVersion": "Current Version",
+    "newVersionAvailable": "New version {{version}} available",
+    "hints": {
+      "versionFormat": "Semantic versioning (e.g., 1.0.0)",
+      "customPrompt": "This prompt will override the default agent system prompt. Use clear instructions to define the agent's behavior and capabilities."
+    },
     "actions": {
       "save": "Save Template",
       "cancel": "Cancel",
