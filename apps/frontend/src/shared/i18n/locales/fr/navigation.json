@@ -10,14 +10,20 @@
     "roadmap": "Feuille de route",
     "ideation": "Idéation",
     "changelog": "Journal des modifications",
+    "scheduler": "Planificateur",
     "context": "Contexte",
+    "sessionContext": "Contexte de session",
     "githubIssues": "Issues GitHub",
     "githubPRs": "PRs GitHub",
     "gitlabIssues": "Issues GitLab",
     "gitlabMRs": "MRs GitLab",
     "plugins": "Plugins",
     "worktrees": "Worktrees",
-    "agentTools": "Aperçu MCP"
+    "agentTools": "Aperçu MCP",
+    "analytics": "Analytique",
+    "mergeAnalytics": "Analyse des fusions",
+    "sessions": "Relecture de session",
+    "feedback": "Retour d'information"
   },
   "actions": {
     "settings": "Paramètres",
@@ -31,7 +37,7 @@
     "help": "Aide & Feedback"
   },
   "messages": {
-    "initializeToCreateTasks": "Initialisez Auto Claude pour créer des tâches"
+    "initializeToCreateTasks": "Initialisez Auto-Coding pour créer des tâches"
   },
   "updateBanner": {
     "title": "Mise à jour disponible",

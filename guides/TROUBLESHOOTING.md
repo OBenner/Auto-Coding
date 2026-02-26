@@ -1,6 +1,6 @@
-# Auto Claude Troubleshooting Guide
+# Auto Code Troubleshooting Guide
 
-This guide provides solutions to common issues encountered when using Auto Claude. For general usage, see [CLI-USAGE.md](CLI-USAGE.md).
+This guide provides solutions to common issues encountered when using Auto Code. For general usage, see [CLI-USAGE.md](CLI-USAGE.md).
 
 ## Quick Links
 
@@ -54,7 +54,7 @@ Error: Authentication token is in encrypted format and cannot be used.
 The token decryption process failed or was not attempted.
 ```
 
-**Cause:** Auto Claude found an encrypted token (`enc:...`) but couldn't decrypt it from the system keychain.
+**Cause:** Auto Code found an encrypted token (`enc:...`) but couldn't decrypt it from the system keychain.
 
 **Solution:**
 
@@ -104,10 +104,10 @@ claude setup-token --print
 **Symptoms:**
 ```
 Warning: ANTHROPIC_API_KEY detected but not used
-Auto Claude requires Claude Code OAuth tokens
+Auto Code requires Claude Code OAuth tokens
 ```
 
-**Cause:** Auto Claude intentionally does NOT support direct API keys to prevent silent billing to your API credits.
+**Cause:** Auto Code intentionally does NOT support direct API keys to prevent silent billing to your API credits.
 
 **Solution:**
 
@@ -200,7 +200,7 @@ CONFLICT (content): Merge conflict in src/file.js
 
 **Solution:**
 
-Auto Claude creates a clean worktree, but conflicts can occur if your main branch changed during the build.
+Auto Code creates a clean worktree, but conflicts can occur if your main branch changed during the build.
 
 ```bash
 # Check conflict status
@@ -228,7 +228,7 @@ Warning: You are in 'detached HEAD' state
 
 **Solution:**
 
-This shouldn't happen with Auto Claude worktrees. If it does:
+This shouldn't happen with Auto Code worktrees. If it does:
 
 ```bash
 cd .auto-claude/worktrees/tasks/001-feature
@@ -521,7 +521,7 @@ Reset the Graphiti database:
 # Backup old database (optional)
 mv ~/.auto-claude/memories ~/.auto-claude/memories.backup
 
-# Let Auto Claude recreate it
+# Let Auto Code recreate it
 cd apps/backend
 python run.py --spec 001
 ```
@@ -540,14 +540,14 @@ Error: claude command not found
 
 **Solution:**
 
-Auto Claude needs Git Bash for Unix-like commands on Windows.
+Auto Code needs Git Bash for Unix-like commands on Windows.
 
 **Option 1:** Install Git for Windows (includes Git Bash):
 ```bash
 winget install Git.Git
 ```
 
-**Option 2:** Tell Auto Claude where Git Bash is:
+**Option 2:** Tell Auto Code where Git Bash is:
 ```bash
 # In apps/backend/.env
 CLAUDE_CODE_GIT_BASH_PATH=C:\Program Files\Git\bin\bash.exe
@@ -738,7 +738,7 @@ Warning: Cannot push to remote
 
 **Solution:**
 
-This is a warning, not an error. Auto Claude can still work locally.
+This is a warning, not an error. Auto Code can still work locally.
 
 **To add a remote:**
 ```bash
@@ -821,9 +821,9 @@ cd apps/backend
 python run.py --spec 001
 ```
 
-### Can I use Auto Claude without Claude Code CLI?
+### Can I use Auto Code without Claude Code CLI?
 
-No. Auto Claude is built on the Claude Agent SDK, which requires Claude Code OAuth authentication. However, for enterprise setups, you can use a proxy:
+No. Auto Code is built on the Claude Agent SDK, which requires Claude Code OAuth authentication. However, for enterprise setups, you can use a proxy:
 
 ```bash
 # In apps/backend/.env
@@ -833,7 +833,7 @@ ANTHROPIC_BASE_URL=http://your-proxy-url
 
 ### How do I check my credit usage?
 
-Auto Claude uses Claude Code credits. Check usage in:
+Auto Code uses Claude Code credits. Check usage in:
 - Claude Code CLI: `claude usage`
 - Claude.ai Dashboard: https://claude.ai/settings/billing
 
@@ -866,7 +866,7 @@ python run.py --spec 001
 
 ### How do I report a bug?
 
-1. **Check existing issues:** https://github.com/AndyMik90/Auto-Claude/issues
+1. **Check existing issues:** https://github.com/OBenner/Auto-Coding/issues
 2. **Collect debug info:**
    ```bash
    cd apps/backend
@@ -884,9 +884,9 @@ python run.py --spec 001
 
 ### Where can I get help?
 
-- **GitHub Issues:** https://github.com/AndyMik90/Auto-Claude/issues
-- **Discord:** [Auto Claude Community](https://discord.gg/auto-claude) *(check README for current invite)*
-- **Documentation:** https://github.com/AndyMik90/Auto-Claude/tree/main/guides
+- **GitHub Issues:** https://github.com/OBenner/Auto-Coding/issues
+- **Discord:** [Auto Code Community](https://discord.gg/auto-claude) *(check README for current invite)*
+- **Documentation:** https://github.com/OBenner/Auto-Coding/tree/main/guides
 
 ---
 
@@ -896,7 +896,7 @@ python run.py --spec 001
 - **[Spec Creation Pipeline](SPEC-CREATION-PIPELINE.md)** - Deep dive into spec creation
 - **[Windows Development Guide](windows-development.md)** - Windows-specific development tips
 - **[Linux Guide](linux.md)** - Linux installation and build instructions
-- **[Contributing](../CONTRIBUTING.md)** - How to contribute to Auto Claude
+- **[Contributing](../CONTRIBUTING.md)** - How to contribute to Auto Code
 
 ---
 

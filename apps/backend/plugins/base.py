@@ -2,7 +2,7 @@
 Plugin Base Module
 ==================
 
-Base classes and types for the Auto Claude plugin system.
+Base classes and types for the Auto Code plugin system.
 
 This module defines the core plugin interface that all plugins must implement,
 as well as metadata schemas for plugin discovery and registration.
@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 
 class PluginType(str, Enum):
-    """Types of plugins supported by Auto Claude."""
+    """Types of plugins supported by Auto Code."""
 
     AGENT = "agent"  # Custom agent plugins with tools/behaviors
     INTEGRATION = "integration"  # External service integrations (MCP tools)

@@ -10,14 +10,20 @@
     "roadmap": "Roadmap",
     "ideation": "Ideation",
     "changelog": "Changelog",
+    "scheduler": "Scheduler",
     "context": "Context",
+    "sessionContext": "Session Context",
     "githubIssues": "GitHub Issues",
     "githubPRs": "GitHub PRs",
     "gitlabIssues": "GitLab Issues",
     "gitlabMRs": "GitLab MRs",
     "plugins": "Plugins",
     "worktrees": "Worktrees",
-    "agentTools": "MCP Overview"
+    "agentTools": "MCP Overview",
+    "analytics": "Analytics",
+    "mergeAnalytics": "Merge Analytics",
+    "sessions": "Session Replay",
+    "feedback": "Feedback"
   },
   "actions": {
     "settings": "Settings",
@@ -31,7 +37,7 @@
     "help": "Help & Feedback"
   },
   "messages": {
-    "initializeToCreateTasks": "Initialize Auto Claude to create tasks"
+    "initializeToCreateTasks": "Initialize Auto-Coding to create tasks"
   },
   "updateBanner": {
     "title": "Update Available",

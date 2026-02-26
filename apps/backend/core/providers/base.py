@@ -83,7 +83,7 @@ class AIEngineProvider(ABC):
     """Abstract base class for AI engine providers.
 
     All AI engine providers must implement this interface to work
-    with the Auto-Claude agent system. This abstraction enables:
+    with the Auto-Code agent system. This abstraction enables:
 
     - Swapping between Claude, LiteLLM, OpenRouter, etc.
     - Consistent session management across providers
@@ -180,13 +180,15 @@ class AIEngineProvider(ABC):
         """
         return self.validate_config()
 
-    def close(self) -> None:
+    # Abstract base class: optional cleanup hook with default no-op.
+    # Not marked @abstractmethod since cleanup is optional.
+    def close(self) -> None:  # noqa: B027
         """Clean up provider resources.
 
         Called when provider is no longer needed.
         Default implementation does nothing.
+        Subclasses should override if they need cleanup.
         """
-        return  # no-op default; subclasses may override
 
     def __repr__(self) -> str:
         """Return string representation of provider."""

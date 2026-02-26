@@ -2,7 +2,7 @@
 Plugin System Module
 ====================
 
-Auto Claude plugin system for extensibility.
+Auto Code plugin system for extensibility.
 
 This module provides the core plugin infrastructure:
 - PluginBase: Abstract base class for all plugins

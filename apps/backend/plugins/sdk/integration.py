@@ -7,7 +7,7 @@ SDK for creating custom integration plugins.
 Integration plugins can:
 - Connect to external services (issue trackers, monitoring, etc.)
 - Create MCP tools for agent use
-- Sync data between Auto Claude and external systems
+- Sync data between Auto Code and external systems
 - Manage integration configuration and state
 """
 
@@ -16,15 +16,9 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from ..base import PluginBase, PluginMetadata, PluginType
-
-if TYPE_CHECKING:
-    try:
-        from claude_agent_sdk import create_sdk_mcp_server
-    except ImportError:
-        create_sdk_mcp_server = None
 
 logger = logging.getLogger(__name__)
 
@@ -102,13 +96,13 @@ class IntegrationPlugin(PluginBase):
     """
     Base class for integration plugins.
 
-    Integration plugins connect Auto Claude to external services by providing
+    Integration plugins connect Auto Code to external services by providing
     MCP tools, syncing data, and managing external service state.
 
     Key capabilities:
     - Create MCP tools for agent use
     - Connect to external services (REST APIs, databases, etc.)
-    - Sync data between Auto Claude and external systems
+    - Sync data between Auto Code and external systems
     - Manage configuration and persistent state
 
     Example:
@@ -257,7 +251,7 @@ class IntegrationPlugin(PluginBase):
 
     def sync_data(self, context: IntegrationContext) -> None:
         """
-        Sync data between Auto Claude and the external service.
+        Sync data between Auto Code and the external service.
 
         Override this to implement bidirectional sync:
         - Push subtasks/progress to external service
@@ -265,7 +259,7 @@ class IntegrationPlugin(PluginBase):
         - Update implementation plan with external data
 
         This is called periodically during builds and can be used to keep
-        external systems in sync with Auto Claude's state.
+        external systems in sync with Auto Code's state.
 
         Args:
             context: Integration context with project/spec information

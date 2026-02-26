@@ -1,222 +1,217 @@
-# Auto Claude
+<div align="center">
 
-**Autonomous multi-agent coding framework that plans, builds, and validates software for you.**
+# Auto Code
 
-![Auto Claude Kanban Board](.github/assets/Auto-Claude-Kanban.png)
+**Autonomous AI agents that plan, build, and test your software.**
 
-[![License](https://img.shields.io/badge/license-AGPL--3.0-green?style=flat-square)](./agpl-3.0.txt)
-[![Discord](https://img.shields.io/badge/Discord-Join%20Community-5865F2?style=flat-square&logo=discord&logoColor=white)](https://discord.gg/KCXaPBr4Dj)
-[![YouTube](https://img.shields.io/badge/YouTube-Subscribe-FF0000?style=flat-square&logo=youtube&logoColor=white)](https://www.youtube.com/@AndreMikalsen)
-[![CI](https://img.shields.io/github/actions/workflow/status/AndyMik90/Auto-Claude/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/AndyMik90/Auto-Claude/actions)
+Describe what you want. Auto Code creates the spec, writes the code, runs QA, and hands you a clean branch to review.
 
----
+[![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-green?style=flat-square)](./LICENSE)
+[![CI](https://img.shields.io/github/actions/workflow/status/OBenner/Auto-Coding/ci.yml?branch=develop&style=flat-square&label=CI)](https://github.com/OBenner/Auto-Coding/actions/workflows/ci.yml?query=branch%3Adevelop)
+[![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=OBenner_Auto-Coding&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=OBenner_Auto-Coding)
+[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue?style=flat-square)]()
+[![Version](https://img.shields.io/badge/version-3.0.0-orange?style=flat-square)](https://github.com/OBenner/Auto-Coding/releases)
 
-## Download
-
-### Stable Release
-
-<!-- STABLE_VERSION_BADGE -->
-[![Stable](https://img.shields.io/badge/stable-2.7.5-blue?style=flat-square)](https://github.com/AndyMik90/Auto-Claude/releases/tag/v2.7.5)
-<!-- STABLE_VERSION_BADGE_END -->
-
-<!-- STABLE_DOWNLOADS -->
-| Platform | Download |
-|----------|----------|
-| **Windows** | [Auto-Claude-2.7.5-win32-x64.exe](https://github.com/AndyMik90/Auto-Claude/releases/download/v2.7.5/Auto-Claude-2.7.5-win32-x64.exe) |
-| **macOS (Apple Silicon)** | [Auto-Claude-2.7.5-darwin-arm64.dmg](https://github.com/AndyMik90/Auto-Claude/releases/download/v2.7.5/Auto-Claude-2.7.5-darwin-arm64.dmg) |
-| **macOS (Intel)** | [Auto-Claude-2.7.5-darwin-x64.dmg](https://github.com/AndyMik90/Auto-Claude/releases/download/v2.7.5/Auto-Claude-2.7.5-darwin-x64.dmg) |
-| **Linux** | [Auto-Claude-2.7.5-linux-x86_64.AppImage](https://github.com/AndyMik90/Auto-Claude/releases/download/v2.7.5/Auto-Claude-2.7.5-linux-x86_64.AppImage) |
-| **Linux (Debian)** | [Auto-Claude-2.7.5-linux-amd64.deb](https://github.com/AndyMik90/Auto-Claude/releases/download/v2.7.5/Auto-Claude-2.7.5-linux-amd64.deb) |
-| **Linux (Flatpak)** | [Auto-Claude-2.7.5-linux-x86_64.flatpak](https://github.com/AndyMik90/Auto-Claude/releases/download/v2.7.5/Auto-Claude-2.7.5-linux-x86_64.flatpak) |
-<!-- STABLE_DOWNLOADS_END -->
-
-### Beta Release
-
-> ⚠️ Beta releases may contain bugs and breaking changes. [View all releases](https://github.com/AndyMik90/Auto-Claude/releases)
-
-<!-- BETA_VERSION_BADGE -->
-[![Beta](https://img.shields.io/badge/beta-2.7.2--beta.10-orange?style=flat-square)](https://github.com/AndyMik90/Auto-Claude/releases/tag/v2.7.2-beta.10)
-<!-- BETA_VERSION_BADGE_END -->
-
-<!-- BETA_DOWNLOADS -->
-| Platform | Download |
-|----------|----------|
-| **Windows** | [Auto-Claude-2.7.2-beta.10-win32-x64.exe](https://github.com/AndyMik90/Auto-Claude/releases/download/v2.7.2-beta.10/Auto-Claude-2.7.2-beta.10-win32-x64.exe) |
-| **macOS (Apple Silicon)** | [Auto-Claude-2.7.2-beta.10-darwin-arm64.dmg](https://github.com/AndyMik90/Auto-Claude/releases/download/v2.7.2-beta.10/Auto-Claude-2.7.2-beta.10-darwin-arm64.dmg) |
-| **macOS (Intel)** | [Auto-Claude-2.7.2-beta.10-darwin-x64.dmg](https://github.com/AndyMik90/Auto-Claude/releases/download/v2.7.2-beta.10/Auto-Claude-2.7.2-beta.10-darwin-x64.dmg) |
-| **Linux** | [Auto-Claude-2.7.2-beta.10-linux-x86_64.AppImage](https://github.com/AndyMik90/Auto-Claude/releases/download/v2.7.2-beta.10/Auto-Claude-2.7.2-beta.10-linux-x86_64.AppImage) |
-| **Linux (Debian)** | [Auto-Claude-2.7.2-beta.10-linux-amd64.deb](https://github.com/AndyMik90/Auto-Claude/releases/download/v2.7.2-beta.10/Auto-Claude-2.7.2-beta.10-linux-amd64.deb) |
-| **Linux (Flatpak)** | [Auto-Claude-2.7.2-beta.10-linux-x86_64.flatpak](https://github.com/AndyMik90/Auto-Claude/releases/download/v2.7.2-beta.10/Auto-Claude-2.7.2-beta.10-linux-x86_64.flatpak) |
-<!-- BETA_DOWNLOADS_END -->
-
-> All releases include SHA256 checksums and VirusTotal scan results for security verification.
+</div>
 
 ---
 
-## Requirements
+<!-- DEMO_GIF_PLACEHOLDER
+     To add an animated demo:
+     1. Record a GIF/video showing a task going from creation to merged PR
+     2. Save it to .github/assets/demo.gif (keep under 10 MB)
+     3. Replace this comment block with:
+        <p align="center">
+          <img src=".github/assets/demo.gif" alt="Auto Code demo" width="800" />
+        </p>
+-->
 
-- **Claude Pro/Max subscription** - [Get one here](https://claude.ai/upgrade)
-- **Claude Code CLI** - `npm install -g @anthropic-ai/claude-code`
-- **Git repository** - Your project must be initialized as a git repo
+<p align="center">
+  <img src=".github/assets/Auto-Claude-Kanban.png" alt="Auto Code Kanban Board" width="800" />
+</p>
 
 ---
 
-## Quick Start
+## What is Auto Code?
 
-1. **Download and install** the app for your platform
-2. **Open your project** - Select a git repository folder
-3. **Connect Claude** - The app will guide you through OAuth setup
-4. **Create a task** - Describe what you want to build
-5. **Watch it work** - Agents plan, code, and validate autonomously
+Auto Code is a multi-agent framework that turns a plain-language task description into working, tested code. You describe what you want, and a pipeline of specialized AI agents creates a specification, plans the implementation, writes the code, and validates it through automated QA -- all in isolated git worktrees so your main branch is never at risk. A built-in memory system means agents learn from previous sessions and get smarter over time.
 
 ---
 
 ## Features
 
-| Feature | Description |
-|---------|-------------|
-| **Autonomous Tasks** | Describe your goal; agents handle planning, implementation, and validation |
-| **Parallel Execution** | Run multiple builds simultaneously with up to 12 agent terminals |
-| **Isolated Workspaces** | All changes happen in git worktrees - your main branch stays safe |
-| **Self-Validating QA** | Built-in quality assurance loop catches issues before you review |
-| **AI-Powered Merge** | Automatic conflict resolution when integrating back to main |
-| **Memory Layer** | Agents retain insights across sessions for smarter builds |
-| **GitHub/GitLab Integration** | Import issues, investigate with AI, create merge requests |
-| **Linear Integration** | Sync tasks with Linear for team progress tracking |
-| **Cross-Platform** | Native desktop apps for Windows, macOS, and Linux |
-| **Auto-Updates** | App updates automatically when new versions are released |
+<table>
+<tr>
+<td width="50%">
+
+### Multi-Agent Pipeline
+Planner, Coder, QA Reviewer, and QA Fixer agents work in sequence -- each with a focused role and clear handoff.
+
+### Isolated Workspaces
+Every build runs in its own git worktree. Your main branch stays clean until you explicitly merge.
+
+### Cross-Session Memory
+Graphiti-powered knowledge graph stores patterns, gotchas, and discoveries so agents improve across builds.
+
+### Self-Validating QA
+A dedicated QA loop catches issues before you ever look at the code, with optional E2E testing via Electron.
+
+</td>
+<td width="50%">
+
+### Parallel Execution
+Run up to 12 agent terminals simultaneously. The Coder agent can spawn subagents for parallel subtask work.
+
+### GitHub, GitLab & Linear Integration
+Import issues, create PRs, and sync progress with your existing project management tools.
+
+### Multi-Provider LLM Support
+Works with Claude, OpenAI, Google Gemini, Azure OpenAI, Ollama, and more -- not locked to a single model.
+
+### Cross-Platform
+Native desktop apps for Windows, macOS, and Linux. Cloud-hosted option also available.
+
+</td>
+</tr>
+</table>
 
 ---
 
-## Interface
+## Screenshots
 
-### Kanban Board
-Visual task management from planning through completion. Create tasks and monitor agent progress in real-time.
+<details>
+<summary><strong>Kanban Board</strong> -- visual task management from planning through completion</summary>
+<br />
+<img src=".github/assets/Auto-Claude-Kanban.png" alt="Kanban Board" width="800" />
+</details>
 
-### Agent Terminals
-AI-powered terminals with one-click task context injection. Spawn multiple agents for parallel work.
+<details>
+<summary><strong>Agent Terminals</strong> -- multiple AI-powered terminals with one-click task context</summary>
+<br />
+<img src=".github/assets/Auto-Claude-Agents-terminals.png" alt="Agent Terminals" width="800" />
+</details>
 
-![Agent Terminals](.github/assets/Auto-Claude-Agents-terminals.png)
-
-### Roadmap
-AI-assisted feature planning with competitor analysis and audience targeting.
-
-![Roadmap](.github/assets/Auto-Claude-roadmap.png)
-
-### Additional Features
-- **Insights** - Chat interface for exploring your codebase
-- **Ideation** - Discover improvements, performance issues, and vulnerabilities
-- **Changelog** - Generate release notes from completed tasks
+<details>
+<summary><strong>Roadmap</strong> -- AI-assisted feature planning with competitor analysis</summary>
+<br />
+<img src=".github/assets/Auto-Claude-roadmap.png" alt="Roadmap" width="800" />
+</details>
 
 ---
 
-## Project Structure
+## Search & Navigation
+
+**Looking for something specific?**
+
+- **[📖 Documentation Portal](guides/DOCUMENTATION-PORTAL.md)** - Comprehensive guide to all documentation
+- **[📖 Search Index](docs/search/INDEX.md)** - Comprehensive searchable index with keywords
+- **[🔍 Search Guide](docs/search/SEARCH-GUIDE.md)** - Learn effective search strategies
+- **[✅ Verification Checklist](docs/VERIFICATION-CHECKLIST.md)** - Documentation quality verification
+
+**Quick links:**
+- [Quick Start Guide](guides/QUICK-START.md) - Get started in 15 minutes
+- [CLI Usage Guide](guides/CLI-USAGE.md) - Terminal-only usage
+- [Troubleshooting Guide](guides/TROUBLESHOOTING.md) - Having issues?
+
+---
+
+## Quick Start
+
+Get started in under 15 minutes with our comprehensive [Quick Start Guide](guides/QUICK-START.md).
+
+**TL;DR:** Download → Connect Claude → Open Project → Create Task → Watch agents build → Review & merge
+
+[Download the latest release](https://github.com/OBenner/Auto-Coding/releases) for your platform.
+
+---
+
+## How It Works
 
 ```
-Auto-Claude/
-├── apps/
-│   ├── backend/     # Python agents, specs, QA pipeline
-│   └── frontend/    # Electron desktop application
-├── guides/          # Additional documentation
-├── tests/           # Test suite
-└── scripts/         # Build utilities
+ You describe a task
+        |
+        v
+ +--------------+     +-----------+     +--------+     +-------------+     +-----------+
+ | Spec Creation | --> |  Planner  | --> | Coder  | --> | QA Reviewer | --> | QA Fixer  |
+ +--------------+     +-----------+     +--------+     +-------------+     +-----------+
+                                                                                  |
+                                                                                  v
+                                                                        You review & merge
 ```
+
+**Spec Creation** analyzes your request and produces a structured specification. The **Planner** breaks it into subtasks. The **Coder** implements each subtask (spawning subagents for parallel work when needed). The **QA Reviewer** validates against acceptance criteria, and the **QA Fixer** resolves any issues in a loop. You get a clean branch ready to merge.
+
+---
+
+## Deployment Options
+
+**Desktop (recommended for individual developers)** -- Download and run the native app. All processing happens locally.
+
+**Cloud-hosted (not ready)** – Deploy to your infrastructure for centralized, multi-user access with OAuth, usage tracking, and Kubernetes support. See the [Cloud Setup Guide](guides/CLOUD_SETUP.md).
 
 ---
 
 ## CLI Usage
 
-For headless operation, CI/CD integration, or terminal-only workflows:
+For headless operation, CI/CD integration, or terminal workflows:
 
 ```bash
 cd apps/backend
 
-# Create a spec interactively
-python spec_runner.py --interactive
+python spec_runner.py --interactive       # Create a spec interactively
+python spec_runner.py --task "Add auth"   # Create spec from description
 
-# Run autonomous build
-python run.py --spec 001
-
-# Review and merge
-python run.py --spec 001 --review
-python run.py --spec 001 --merge
+python run.py --spec 001                  # Run autonomous build
+python run.py --spec 001 --review         # Review changes
+python run.py --spec 001 --merge          # Merge into your branch
 ```
 
-See [guides/CLI-USAGE.md](guides/CLI-USAGE.md) for complete CLI documentation.
-
----
-
-## Development
-
-Want to build from source or contribute? See [CONTRIBUTING.md](CONTRIBUTING.md) for complete development setup instructions.
-
-For Linux-specific builds (Flatpak, AppImage), see [guides/linux.md](guides/linux.md).
+See [CLI Usage Guide](guides/CLI-USAGE.md) for full documentation.
 
 ---
 
 ## Security
 
-Auto Claude uses a three-layer security model:
+Auto Code uses a three-layer security model:
 
-1. **OS Sandbox** - Bash commands run in isolation
-2. **Filesystem Restrictions** - Operations limited to project directory
-3. **Dynamic Command Allowlist** - Only approved commands based on detected project stack
+- **OS Sandbox** -- bash commands run in isolation
+- **Filesystem restrictions** -- operations limited to the project directory
+- **Dynamic command allowlist** -- only approved commands based on detected project stack
 
-All releases are:
-- Scanned with VirusTotal before publishing
-- Include SHA256 checksums for verification
-- Code-signed where applicable (macOS)
-
----
-
-## Available Scripts
-
-| Command | Description |
-|---------|-------------|
-| `npm run install:all` | Install backend and frontend dependencies |
-| `npm start` | Build and run the desktop app |
-| `npm run dev` | Run in development mode with hot reload |
-| `npm run package` | Package for current platform |
-| `npm run package:mac` | Package for macOS |
-| `npm run package:win` | Package for Windows |
-| `npm run package:linux` | Package for Linux |
-| `npm run package:flatpak` | Package as Flatpak (see [guides/linux.md](guides/linux.md)) |
-| `npm run lint` | Run linter |
-| `npm test` | Run frontend tests |
-| `npm run test:backend` | Run backend tests |
-
----
-
-## Contributing
-
-We welcome contributions! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for:
-- Development setup instructions
-- Code style guidelines
-- Testing requirements
-- Pull request process
+All releases include SHA256 checksums. macOS builds are code-signed.
 
 ---
 
 ## Community
 
-- **Discord** - [Join our community](https://discord.gg/KCXaPBr4Dj)
-- **Issues** - [Report bugs or request features](https://github.com/AndyMik90/Auto-Claude/issues)
-- **Discussions** - [Ask questions](https://github.com/AndyMik90/Auto-Claude/discussions)
+- [Discord](https://discord.gg/KCXaPBr4Dj) -- chat, get help, share what you're building
+- [Issues](https://github.com/OBenner/Auto-Coding/issues) -- report bugs or request features
+- [Discussions](https://github.com/OBenner/Auto-Coding/discussions) -- ask questions and share ideas
+
+---
+
+## Contributing
+
+Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup instructions, code style, testing, and PR guidelines.
+
+---
+
+## Credits
+
+Auto Code was originally forked from [AndyMik90/Auto-Code](https://github.com/AndyMik90/Auto-Code). Thank you to the original author for laying the foundation.
 
 ---
 
 ## License
 
-**AGPL-3.0** - GNU Affero General Public License v3.0
-
-Auto Claude is free to use. If you modify and distribute it, or run it as a service, your code must also be open source under AGPL-3.0.
-
-Commercial licensing available for closed-source use cases.
+[AGPL-3.0](./LICENSE) -- Auto Code is free to use. If you modify and distribute it, or run it as a service, your changes must also be open source under AGPL-3.0.
 
 ---
 
-## Star History
+<div align="center">
 
-[![GitHub Repo stars](https://img.shields.io/github/stars/AndyMik90/Auto-Claude?style=social)](https://github.com/AndyMik90/Auto-Claude/stargazers)
+[![GitHub stars](https://img.shields.io/github/stars/OBenner/Auto-Coding?style=social)](https://github.com/OBenner/Auto-Coding/stargazers)
 
-[![Star History Chart](https://api.star-history.com/svg?repos=AndyMik90/Auto-Claude&type=Date)](https://star-history.com/#AndyMik90/Auto-Claude&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=OBenner/Auto-Coding&type=Date)](https://star-history.com/#OBenner/Auto-Coding&Date)
+
+</div>

@@ -1,6 +1,6 @@
-# Deployment Guide - Auto Claude Web Backend
+# Deployment Guide - Auto Code Web Backend
 
-This guide covers deploying the Auto Claude Web Backend (FastAPI server) to production environments.
+This guide covers deploying the Auto Code Web Backend (FastAPI server) to production environments.
 
 ## Table of Contents
 
@@ -48,7 +48,7 @@ docker --version
 ### 1. Clone Repository
 
 ```bash
-git clone https://github.com/AndyMik90/Auto-Claude.git
+git clone https://github.com/OBenner/Auto-Coding.git
 cd Auto-Claude/apps/web-backend
 ```
 
@@ -211,7 +211,7 @@ Create `/etc/systemd/system/auto-claude-web.service`:
 
 ```ini
 [Unit]
-Description=Auto Claude Web Backend
+Description=Auto Code Web Backend
 After=network.target
 
 [Service]
@@ -487,7 +487,7 @@ name: auto-claude-web
 services:
   - name: backend
     github:
-      repo: AndyMik90/Auto-Claude
+      repo: OBenner/Auto-Coding
       branch: main
       deploy_on_push: true
     source_dir: /apps/web-backend
@@ -882,7 +882,7 @@ Add to cron:
 
 For deployment issues:
 
-- **GitHub Issues**: https://github.com/AndyMik90/Auto-Claude/issues
+- **GitHub Issues**: https://github.com/OBenner/Auto-Coding/issues
 - **Documentation**: See main repository README
 - **Community**: Join discussions on GitHub
 

@@ -19,7 +19,7 @@ import json
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Optional
 
 from apps.backend.plugins.base import PluginMetadata
 from apps.backend.plugins.sdk.integration import IntegrationContext, IntegrationPlugin
@@ -307,7 +307,7 @@ class CustomIntegrationPlugin(IntegrationPlugin):
 
     def sync_data(self, context: IntegrationContext) -> None:
         """
-        Sync data between Auto Claude and the external TaskManager.
+        Sync data between Auto Code and the external TaskManager.
 
         This demonstrates how to push subtasks to an external system.
 
@@ -401,7 +401,7 @@ class CustomIntegrationPlugin(IntegrationPlugin):
         if self.client:
             self.client.create_task(
                 title=f"Build Started: {context.spec_name}",
-                description=f"Auto Claude build started for {context.project_name}",
+                description=f"Auto Code build started for {context.project_name}",
                 status="in_progress",
             )
 
@@ -429,7 +429,7 @@ class CustomIntegrationPlugin(IntegrationPlugin):
             build_start = context.get_state("build_start_time", "unknown")
             self.client.create_task(
                 title=f"Build {status.capitalize()}: {context.spec_name}",
-                description=f"Auto Claude build {status} for {context.project_name}\nStarted: {build_start}",
+                description=f"Auto Code build {status} for {context.project_name}\nStarted: {build_start}",
                 status=status,
             )
 

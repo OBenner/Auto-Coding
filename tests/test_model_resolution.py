@@ -133,14 +133,14 @@ class TestResolveModelId:
 
     def test_environment_variable_override_opus(self):
         """ANTHROPIC_DEFAULT_OPUS_MODEL overrides opus shorthand."""
-        custom_model = "glm-4.7"
+        custom_model = "glm-5"
         with patch.dict(os.environ, {"ANTHROPIC_DEFAULT_OPUS_MODEL": custom_model}):
             result = resolve_model_id("opus")
             assert result == custom_model
 
     def test_environment_variable_override_haiku(self):
         """ANTHROPIC_DEFAULT_HAIKU_MODEL overrides haiku shorthand."""
-        custom_model = "glm-4.7"
+        custom_model = "glm-5"
         with patch.dict(os.environ, {"ANTHROPIC_DEFAULT_HAIKU_MODEL": custom_model}):
             result = resolve_model_id("haiku")
             assert result == custom_model
@@ -162,7 +162,7 @@ class TestResolveModelId:
     def test_full_model_id_not_affected_by_environment_variable(self):
         """Full model IDs are not affected by environment variables."""
         custom_model = "my-custom-model-123"
-        with patch.dict(os.environ, {"ANTHROPIC_DEFAULT_SONNET_MODEL": "glm-4.7"}):
+        with patch.dict(os.environ, {"ANTHROPIC_DEFAULT_SONNET_MODEL": "glm-5"}):
             result = resolve_model_id(custom_model)
             assert result == custom_model
 
@@ -298,7 +298,7 @@ class TestParallelReviewerImportResolution:
 
     def test_parallel_reviewers_respect_environment_variables(self):
         """Parallel reviewers respect environment variable overrides."""
-        custom_model = "glm-4.7"
+        custom_model = "glm-5"
         with patch.dict(os.environ, {"ANTHROPIC_DEFAULT_SONNET_MODEL": custom_model}):
             config_model = None
             model_shorthand = config_model or "sonnet"

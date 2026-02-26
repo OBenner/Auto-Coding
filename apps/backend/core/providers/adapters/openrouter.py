@@ -151,8 +151,8 @@ class OpenRouterSession(AgentSession):
                 api_key=self._api_key,
                 base_url=self._base_url,
                 default_headers={
-                    "HTTP-Referer": "https://github.com/AndyMik90/Auto-Claude",
-                    "X-Title": "Auto-Claude",
+                    "HTTP-Referer": "https://github.com/OBenner/Auto-Coding",
+                    "X-Title": "Auto-Coding",
                 },
             )
 
@@ -329,6 +329,7 @@ class OpenRouterProvider(AIEngineProvider):
 
         # Verify openai package is installed
         try:
+            # Optional: openai is an optional runtime dependency
             from openai import AsyncOpenAI  # noqa: F401
         except ImportError as e:
             raise ProviderNotInstalled(
@@ -443,6 +444,7 @@ class OpenRouterProvider(AIEngineProvider):
 
         # Check if openai is installed
         try:
+            # Optional: openai is an optional runtime dependency
             from openai import AsyncOpenAI  # noqa: F401
 
             return True

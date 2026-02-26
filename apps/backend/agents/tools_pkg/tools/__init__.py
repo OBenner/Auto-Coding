@@ -1,6 +1,6 @@
 """
-Auto-Claude MCP Tools
-=====================
+Auto-Code MCP Tools
+===================
 
 Individual tool implementations organized by functionality.
 """

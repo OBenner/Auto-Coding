@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Sparkles, Loader2, CheckCircle2, MessageCircle } from 'lucide-react';
 import { Button } from '../../ui/button';
 import { Progress } from '../../ui/progress';
@@ -32,6 +33,7 @@ export function InvestigationDialog({
   onClose,
   projectId
 }: InvestigationDialogProps) {
+  const { t } = useTranslation('github');
   const [comments, setComments] = useState<GitHubComment[]>([]);
   const [selectedCommentIds, setSelectedCommentIds] = useState<number[]>([]);
   const [loadingComments, setLoadingComments] = useState(false);
@@ -194,7 +196,7 @@ export function InvestigationDialog({
           <div className="space-y-4">
             <div className="space-y-2">
               <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">{investigationStatus.message}</span>
+                <span className="text-muted-foreground">{t(investigationStatus.message)}</span>
                 <span className="text-foreground">{investigationStatus.progress}%</span>
               </div>
               <Progress value={investigationStatus.progress} className="h-2" />

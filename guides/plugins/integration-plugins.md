@@ -1,6 +1,6 @@
 # Integration Plugin Development Guide
 
-Integration plugins connect Auto Claude to external services by creating MCP (Model Context Protocol) tools that agents can use during builds. This guide covers everything you need to build robust integration plugins.
+Integration plugins connect Auto Code to external services by creating MCP (Model Context Protocol) tools that agents can use during builds. This guide covers everything you need to build robust integration plugins.
 
 ## Table of Contents
 
@@ -19,11 +19,11 @@ Integration plugins connect Auto Claude to external services by creating MCP (Mo
 
 ## Overview
 
-Integration plugins are Python classes that extend the `IntegrationPlugin` base class from the Auto Claude plugin SDK. They enable:
+Integration plugins are Python classes that extend the `IntegrationPlugin` base class from the Auto Code plugin SDK. They enable:
 
 - **MCP Tool Creation** - Provide tools that agents can invoke during sessions
 - **External Service Integration** - Connect to REST APIs, GraphQL, databases, or SDKs
-- **Data Synchronization** - Bidirectional sync between Auto Claude and external services
+- **Data Synchronization** - Bidirectional sync between Auto Code and external services
 - **Build Tracking** - Monitor build lifecycle and push updates to external systems
 - **Real-time Updates** - React to subtask status changes and sync immediately
 - **Configuration Management** - Manage API keys, endpoints, and settings
@@ -31,7 +31,7 @@ Integration plugins are Python classes that extend the `IntegrationPlugin` base 
 ### When to Use Integration Plugins
 
 Use integration plugins when you want to:
-- Connect Auto Claude to issue trackers (Jira, Linear, GitHub Issues)
+- Connect Auto Code to issue trackers (Jira, Linear, GitHub Issues)
 - Integrate with communication platforms (Slack, Discord, Microsoft Teams)
 - Sync with project management tools (Asana, Monday, ClickUp)
 - Push metrics to monitoring services (Datadog, New Relic)
@@ -479,7 +479,7 @@ State is saved as `.{plugin-name}_state.json` in the spec directory:
 
 ### One-way Sync (Push)
 
-Push Auto Claude subtasks to external service:
+Push Auto Code subtasks to external service:
 
 ```python
 def sync_data(self, context: IntegrationContext) -> None:
@@ -525,11 +525,11 @@ Sync in both directions:
 
 ```python
 def sync_data(self, context: IntegrationContext) -> None:
-    """Bidirectional sync between Auto Claude and external service."""
+    """Bidirectional sync between Auto Code and external service."""
     plan = self.load_implementation_plan(context)
     self.load_state(context)
 
-    # 1. PUSH: Auto Claude → External Service
+    # 1. PUSH: Auto Code → External Service
     subtasks = self.get_all_subtasks(plan)
     task_mapping = context.get_state("task_mapping", {})
 
@@ -551,7 +551,7 @@ def sync_data(self, context: IntegrationContext) -> None:
             )
             task_mapping[subtask_id] = task["id"]
 
-    # 2. PULL: External Service → Auto Claude
+    # 2. PULL: External Service → Auto Code
     external_tasks = self.client.list_tasks()
 
     for task in external_tasks:
@@ -579,18 +579,18 @@ def sync_data(self, context: IntegrationContext) -> None:
 ### Helper Methods for Sync
 
 ```python
-def map_status(self, auto_claude_status: str) -> str:
-    """Map Auto Claude status to external service status."""
+def map_status(self, auto_code_status: str) -> str:
+    """Map Auto Code status to external service status."""
     mapping = {
         "pending": "todo",
         "in_progress": "in_progress",
         "completed": "done",
         "failed": "failed"
     }
-    return mapping.get(auto_claude_status, "todo")
+    return mapping.get(auto_code_status, "todo")
 
 def map_external_status(self, external_status: str) -> str:
-    """Map external service status to Auto Claude status."""
+    """Map external service status to Auto Code status."""
     mapping = {
         "todo": "pending",
         "in_progress": "in_progress",
@@ -1423,7 +1423,7 @@ class CustomIntegrationPlugin(IntegrationPlugin):
 
 We welcome contributions to improve this guide or add more integration examples!
 
-- [GitHub Issues](https://github.com/AndyMik90/Auto-Claude/issues)
-- [GitHub Discussions](https://github.com/AndyMik90/Auto-Claude/discussions)
+- [GitHub Issues](https://github.com/OBenner/Auto-Coding/issues)
+- [GitHub Discussions](https://github.com/OBenner/Auto-Coding/discussions)
 
 Happy integrating! 🔌

@@ -72,7 +72,7 @@ interface OllamaEmbeddingModel {
 
 /**
  * Recommended Embedding Model Card
- * Pre-curated models suitable for Auto Claude memory system
+ * Pre-curated models suitable for Auto Code memory system
  */
 interface _OllamaRecommendedModel {
   name: string;          // Model identifier

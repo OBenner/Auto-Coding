@@ -5,17 +5,24 @@ Provides endpoints for starting and managing agent execution.
 """
 
 import logging
-from pathlib import Path
-from typing import Literal, Optional
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
+from services.agent_runner import (
+    cancel_task,
+    cleanup_completed_tasks,
+    get_task_status,
+    start_agent_task,
+)
 
 from core.config import settings
 from core.security import require_auth
-from services import agent_runner as _agent_runner
+
+from api.routes.shared import get_project_dir, sanitize_log
 
 logger = logging.getLogger(__name__)
+
 
 # Create router for agent endpoints
 router = APIRouter(prefix="/api/agents", tags=["agents"])
@@ -29,13 +36,9 @@ class AgentRunRequest(BaseModel):
         ..., description="Type of agent to run"
     )
     model: str = Field(
-        default="claude-sonnet-4-5-20250929",
-        description="Claude model to use"
+        default="claude-sonnet-4-5-20250929", description="Claude model to use"
     )
-    verbose: bool = Field(
-        default=False,
-        description="Enable verbose output"
-    )
+    verbose: bool = Field(default=False, description="Enable verbose output")
 
 
 class AgentRunResponse(BaseModel):
@@ -55,8 +58,8 @@ class AgentStatusResponse(BaseModel):
     status: Literal["running", "completed", "failed", "not_found"] = Field(
         ..., description="Current task status"
     )
-    result: Optional[dict] = Field(None, description="Task result (if completed)")
-    error: Optional[str] = Field(None, description="Error message (if failed)")
+    result: dict | None = Field(None, description="Task result (if completed)")
+    error: str | None = Field(None, description="Error message (if failed)")
 
 
 class AgentCancelResponse(BaseModel):
@@ -67,17 +70,9 @@ class AgentCancelResponse(BaseModel):
     message: str = Field(..., description="Human-readable message")
 
 
-def _get_project_dir() -> Path:
-    """Get the project directory from settings."""
-    # Use configured project directory or fall back to parent of backend
-    if hasattr(settings, "PROJECT_DIR") and settings.PROJECT_DIR:
-        return Path(settings.PROJECT_DIR)
-
-    # Default: parent of web-backend directory (../../ from api/routes/)
-    return Path(__file__).parent.parent.parent.parent.parent
-
-
-@router.post("/run", response_model=AgentRunResponse, status_code=status.HTTP_202_ACCEPTED)
+@router.post(
+    "/run", response_model=AgentRunResponse, status_code=status.HTTP_202_ACCEPTED
+)
 async def run_agent(request: AgentRunRequest, auth: dict = Depends(require_auth)):
     """
     Start an agent execution task.
@@ -106,14 +101,14 @@ async def run_agent(request: AgentRunRequest, auth: dict = Depends(require_auth)
     """
     try:
         logger.info(
-            f"Agent run request: spec_id={request.spec_id}, "
-            f"agent_type={request.agent_type}, model={request.model}"
+            f"Agent run request: spec_id={sanitize_log(request.spec_id)}, "
+            f"agent_type={sanitize_log(request.agent_type)}, model={sanitize_log(request.model)}"
         )
 
         # Start the agent task
-        project_dir = _get_project_dir()
+        project_dir = get_project_dir()
 
-        task_id = _agent_runner.start_agent_task(
+        task_id = start_agent_task(
             spec_id=request.spec_id,
             agent_type=request.agent_type,
             project_dir=project_dir,
@@ -122,14 +117,14 @@ async def run_agent(request: AgentRunRequest, auth: dict = Depends(require_auth)
         )
 
         # Clean up completed tasks
-        _agent_runner.cleanup_completed_tasks()
+        cleanup_completed_tasks()
 
         return AgentRunResponse(
             task_id=task_id,
             spec_id=request.spec_id,
             agent_type=request.agent_type,
             status="started",
-            message=f"Agent task started: {request.agent_type} for spec {request.spec_id}"
+            message=f"Agent task started: {request.agent_type} for spec {request.spec_id}",
         )
 
     except FileNotFoundError as e:
@@ -159,7 +154,11 @@ async def run_agent(request: AgentRunRequest, auth: dict = Depends(require_auth)
         )
 
 
-@router.get("/status/{task_id}", response_model=AgentStatusResponse, status_code=status.HTTP_200_OK)
+@router.get(
+    "/status/{task_id}",
+    response_model=AgentStatusResponse,
+    status_code=status.HTTP_200_OK,
+)
 async def get_agent_status(task_id: str, auth: dict = Depends(require_auth)):
     """
     Get the status of a running agent task.
@@ -181,7 +180,7 @@ async def get_agent_status(task_id: str, auth: dict = Depends(require_auth)):
         ```
     """
     try:
-        task_status = _agent_runner.get_task_status(task_id)
+        task_status = get_task_status(task_id)
 
         if task_status is None:
             raise HTTPException(
@@ -202,11 +201,15 @@ async def get_agent_status(task_id: str, auth: dict = Depends(require_auth)):
         logger.error(f"Error getting task status: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get task status: {str(e)}",
+            detail="Failed to get task status",
         )
 
 
-@router.post("/cancel/{task_id}", response_model=AgentCancelResponse, status_code=status.HTTP_200_OK)
+@router.post(
+    "/cancel/{task_id}",
+    response_model=AgentCancelResponse,
+    status_code=status.HTTP_200_OK,
+)
 async def cancel_agent(task_id: str, auth: dict = Depends(require_auth)):
     """
     Cancel a running agent task.
@@ -225,18 +228,17 @@ async def cancel_agent(task_id: str, auth: dict = Depends(require_auth)):
         ```
     """
     try:
-        cancelled = _agent_runner.cancel_task(task_id)
+        cancelled = cancel_task(task_id)
 
         if cancelled:
             return AgentCancelResponse(
-                task_id=task_id,
-                cancelled=True,
-                message=f"Task cancelled: {task_id}"
+                task_id=task_id, cancelled=True, message=f"Task cancelled: {task_id}"
             )
         else:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Task not found or already completed: {task_id}",
+            return AgentCancelResponse(
+                task_id=task_id,
+                cancelled=False,
+                message=f"Task not found or already completed: {task_id}",
             )
 
     except HTTPException:
@@ -245,7 +247,7 @@ async def cancel_agent(task_id: str, auth: dict = Depends(require_auth)):
         logger.error(f"Error cancelling task: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to cancel task: {str(e)}",
+            detail="Failed to cancel task",
         )
 
 

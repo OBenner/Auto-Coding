@@ -7,6 +7,7 @@
  */
 
 import * as fs from 'fs';
+import { promises as fsPromises } from 'fs';
 import * as path from 'path';
 import { getAppPath, isImmutableEnvironment, getMemoriesDir } from './config-paths';
 
@@ -97,7 +98,7 @@ export function safeWriteFile(filePath: string, content: string): string {
   const writablePath = getWritablePath(filePath, filename);
 
   try {
-    fs.writeFileSync(writablePath, content, 'utf-8');
+    atomicWriteFileSync(writablePath, content, 'utf-8');
     return writablePath;
   } catch (error) {
     console.error(`[fs-utils] Failed to write file ${writablePath}:`, error);
@@ -136,4 +137,77 @@ export function safeReadFile(originalPath: string): string | null {
   }
 
   return null;
+}
+
+/**
+ * Write a file atomically by writing to a temp file first, then renaming.
+ * This prevents 0-byte corruption if the process crashes mid-write.
+ *
+ * @param filePath - The target file path
+ * @param content - The content to write
+ * @param encoding - File encoding (default: 'utf-8')
+ */
+export function atomicWriteFileSync(filePath: string, content: string, encoding: BufferEncoding = 'utf-8'): void {
+  const dir = path.dirname(filePath);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+
+  const uniqueSuffix = `${process.pid}-${Date.now()}`;
+  const tmpPath = path.join(dir, `${path.basename(filePath)}.${uniqueSuffix}.tmp`);
+
+  try {
+    fs.writeFileSync(tmpPath, content, encoding);
+
+    // On Windows, file watchers/antivirus can briefly lock files, causing EPERM on rename.
+    // Retry with exponential backoff (100ms, 200ms, 400ms).
+    let lastErr: unknown;
+    for (let attempt = 0; attempt < 4; attempt++) {
+      try {
+        fs.renameSync(tmpPath, filePath);
+        return; // Success
+      } catch (renameErr) {
+        const code = (renameErr as NodeJS.ErrnoException).code;
+        if ((code === 'EPERM' || code === 'EACCES') && attempt < 3) {
+          lastErr = renameErr;
+          // Synchronous sleep via Atomics for retry delay
+          const delay = 100 * 2 ** attempt;
+          Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, delay);
+          continue;
+        }
+        throw renameErr;
+      }
+    }
+    throw lastErr;
+  } catch (err) {
+    try {
+      if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
+    } catch { /* ignore cleanup */ }
+    throw err;
+  }
+}
+
+/**
+ * Write a file atomically (async version).
+ * Writes to a uniquely-named temp file first, then renames to prevent
+ * 0-byte corruption and concurrent-write collisions.
+ *
+ * @param filePath - The target file path
+ * @param content - The content to write
+ * @param encoding - File encoding (default: 'utf-8')
+ */
+export async function atomicWriteFile(filePath: string, content: string, encoding: BufferEncoding = 'utf-8'): Promise<void> {
+  const dir = path.dirname(filePath);
+  await fsPromises.mkdir(dir, { recursive: true });
+
+  const uniqueSuffix = `${process.pid}-${Date.now()}`;
+  const tmpPath = path.join(dir, `${path.basename(filePath)}.${uniqueSuffix}.tmp`);
+
+  try {
+    await fsPromises.writeFile(tmpPath, content, encoding);
+    await fsPromises.rename(tmpPath, filePath);
+  } catch (err) {
+    try { await fsPromises.unlink(tmpPath); } catch { /* ignore cleanup */ }
+    throw err;
+  }
 }

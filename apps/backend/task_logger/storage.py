@@ -4,12 +4,16 @@ Storage functionality for task logs.
 
 import json
 import os
+import re
 import sys
 import tempfile
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
-from .models import LogEntry, LogPhase
+from .models import Bookmark, LogEntry, LogPhase, SessionMetadata, SubtaskTransition
+
+# Regex to strip ANSI escape codes (full CSI sequences including colors, cursor moves)
+_ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
 
 
 class LogStorage:
@@ -33,7 +37,15 @@ class LogStorage:
         if self.log_file.exists():
             try:
                 with open(self.log_file, encoding="utf-8") as f:
-                    return json.load(f)
+                    data = json.load(f)
+                    # Ensure required keys exist (for backward compatibility)
+                    if "sessions" not in data:
+                        data["sessions"] = []
+                    if "subtask_transitions" not in data:
+                        data["subtask_transitions"] = []
+                    if "bookmarks" not in data:
+                        data["bookmarks"] = []
+                    return data
             except (OSError, json.JSONDecodeError, UnicodeDecodeError):
                 pass
 
@@ -64,6 +76,9 @@ class LogStorage:
                     "entries": [],
                 },
             },
+            "sessions": [],
+            "subtask_transitions": [],
+            "bookmarks": [],
         }
 
     def save(self) -> None:
@@ -91,11 +106,17 @@ class LogStorage:
 
     def _timestamp(self) -> str:
         """Get current timestamp in ISO format."""
-        return datetime.now(timezone.utc).isoformat()
+        return datetime.now(UTC).isoformat()
+
+    @staticmethod
+    def _strip_ansi(text: str) -> str:
+        """Strip ANSI escape codes from text for clean storage and UI display."""
+        return _ANSI_ESCAPE_RE.sub("", text)
 
     def add_entry(self, entry: LogEntry) -> None:
         """
         Add an entry to the specified phase.
+        ANSI escape codes are stripped from content, detail, and tool_input fields before storage.
 
         Args:
             entry: The log entry to add
@@ -111,7 +132,16 @@ class LogStorage:
                 "entries": [],
             }
 
-        self._data["phases"][phase_key]["entries"].append(entry.to_dict())
+        entry_dict = entry.to_dict()
+        # Strip ANSI escape codes from text fields before persisting
+        if "content" in entry_dict and isinstance(entry_dict["content"], str):
+            entry_dict["content"] = self._strip_ansi(entry_dict["content"])
+        if "detail" in entry_dict and isinstance(entry_dict["detail"], str):
+            entry_dict["detail"] = self._strip_ansi(entry_dict["detail"])
+        if "tool_input" in entry_dict and isinstance(entry_dict["tool_input"], str):
+            entry_dict["tool_input"] = self._strip_ansi(entry_dict["tool_input"])
+
+        self._data["phases"][phase_key]["entries"].append(entry_dict)
         self.save()
 
     def update_phase_status(
@@ -157,6 +187,203 @@ class LogStorage:
             new_spec_id: New spec ID
         """
         self._data["spec_id"] = new_spec_id
+
+    def start_session(self, session_id: int) -> None:
+        """
+        Start a new session.
+
+        If a session with the given ID already exists, this is a no-op.
+
+        Args:
+            session_id: Session number
+        """
+        # Initialize sessions list if it doesn't exist (for backward compatibility)
+        if "sessions" not in self._data:
+            self._data["sessions"] = []
+
+        # Check for existing session with the same ID to prevent duplicates
+        for existing in self._data["sessions"]:
+            if existing.get("session_id") == session_id:
+                return
+
+        session = SessionMetadata(
+            session_id=session_id,
+            started_at=self._timestamp(),
+        )
+        self._data["sessions"].append(session.to_dict())
+        self.save()
+
+    def end_session(self, session_id: int) -> None:
+        """
+        End a session and calculate duration.
+
+        Args:
+            session_id: Session number to end
+        """
+        if "sessions" not in self._data:
+            return
+
+        # Find the session
+        for session in self._data["sessions"]:
+            if session["session_id"] == session_id:
+                completed_at = self._timestamp()
+                session["completed_at"] = completed_at
+
+                # Calculate duration in seconds
+                try:
+                    started = datetime.fromisoformat(session["started_at"])
+                    completed = datetime.fromisoformat(completed_at)
+                    duration = (completed - started).total_seconds()
+                    session["duration_seconds"] = duration
+                except (ValueError, KeyError):
+                    # Gracefully handle missing or malformed timestamps in session data
+                    pass
+
+                self.save()
+                break
+
+    def add_subtask_to_session(self, session_id: int, subtask_id: str) -> None:
+        """
+        Add a subtask to a session's list of subtasks.
+
+        Args:
+            session_id: Session number
+            subtask_id: Subtask ID
+        """
+        if "sessions" not in self._data:
+            return
+
+        # Find the session
+        for session in self._data["sessions"]:
+            if session["session_id"] == session_id:
+                if "subtasks" not in session:
+                    session["subtasks"] = []
+                if subtask_id not in session["subtasks"]:
+                    session["subtasks"].append(subtask_id)
+                    self.save()
+                break
+
+    def add_subtask_transition(
+        self,
+        from_subtask: str | None,
+        to_subtask: str | None,
+        session: int | None = None,
+    ) -> None:
+        """
+        Record a subtask transition.
+
+        Args:
+            from_subtask: Previous subtask ID (None if starting first subtask)
+            to_subtask: New subtask ID (None if ending subtask)
+            session: Session number
+        """
+        # Initialize subtask_transitions list if it doesn't exist (for backward compatibility)
+        if "subtask_transitions" not in self._data:
+            self._data["subtask_transitions"] = []
+
+        transition = SubtaskTransition(
+            timestamp=self._timestamp(),
+            from_subtask=from_subtask,
+            to_subtask=to_subtask,
+            session=session,
+        )
+        self._data["subtask_transitions"].append(transition.to_dict())
+        self.save()
+
+    def get_session_data(self, session_id: int) -> dict | None:
+        """
+        Get data for a specific session.
+
+        Args:
+            session_id: Session number
+
+        Returns:
+            Session data or None if not found
+        """
+        if "sessions" not in self._data:
+            return None
+
+        for session in self._data["sessions"]:
+            if session["session_id"] == session_id:
+                return session
+        return None
+
+    def add_bookmark(self, bookmark: Bookmark) -> None:
+        """
+        Add a bookmark to the logs.
+
+        Args:
+            bookmark: The bookmark to add
+        """
+        # Initialize bookmarks list if it doesn't exist (for backward compatibility)
+        if "bookmarks" not in self._data:
+            self._data["bookmarks"] = []
+
+        # Prevent duplicate bookmarks with the same ID
+        bookmark_dict = bookmark.to_dict()
+        bookmark_id = bookmark_dict.get("id")
+        if bookmark_id:
+            for existing in self._data["bookmarks"]:
+                if existing.get("id") == bookmark_id:
+                    return
+
+        self._data["bookmarks"].append(bookmark_dict)
+        self.save()
+
+    def get_bookmarks(
+        self,
+        phase: str | None = None,
+        session: int | None = None,
+        subtask_id: str | None = None,
+    ) -> list[dict]:
+        """
+        Get bookmarks, optionally filtered by phase, session, or subtask.
+
+        Args:
+            phase: Optional phase filter
+            session: Optional session filter
+            subtask_id: Optional subtask filter
+
+        Returns:
+            List of bookmark dictionaries
+        """
+        if "bookmarks" not in self._data:
+            return []
+
+        bookmarks = self._data["bookmarks"]
+
+        # Apply filters
+        if phase is not None:
+            bookmarks = [b for b in bookmarks if b.get("phase") == phase]
+        if session is not None:
+            bookmarks = [b for b in bookmarks if b.get("session") == session]
+        if subtask_id is not None:
+            bookmarks = [b for b in bookmarks if b.get("subtask_id") == subtask_id]
+
+        return bookmarks
+
+    def remove_bookmark(self, bookmark_id: str) -> bool:
+        """
+        Remove a bookmark by its ID.
+
+        Args:
+            bookmark_id: The bookmark ID to remove
+
+        Returns:
+            True if bookmark was found and removed, False otherwise
+        """
+        if "bookmarks" not in self._data:
+            return False
+
+        initial_length = len(self._data["bookmarks"])
+        self._data["bookmarks"] = [
+            b for b in self._data["bookmarks"] if b.get("id") != bookmark_id
+        ]
+
+        if len(self._data["bookmarks"]) < initial_length:
+            self.save()
+            return True
+        return False
 
 
 def load_task_logs(spec_dir: Path) -> dict | None:

@@ -1,4 +1,4 @@
-# Auto Claude Web Backend API Endpoints
+# Auto Code Web Backend API Endpoints
 
 ## Specs Management
 

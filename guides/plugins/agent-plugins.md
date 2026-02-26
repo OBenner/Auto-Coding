@@ -1,6 +1,6 @@
 # Agent Plugin Development Guide
 
-Agent plugins extend Auto Claude's agent capabilities by hooking into the agent lifecycle and providing custom behaviors, tools, or monitoring. This guide covers everything you need to build powerful agent plugins.
+Agent plugins extend Auto Code's agent capabilities by hooking into the agent lifecycle and providing custom behaviors, tools, or monitoring. This guide covers everything you need to build powerful agent plugins.
 
 ## Table of Contents
 
@@ -17,7 +17,7 @@ Agent plugins extend Auto Claude's agent capabilities by hooking into the agent 
 
 ## Overview
 
-Agent plugins are Python classes that extend the `AgentPlugin` base class from the Auto Claude plugin SDK. They can:
+Agent plugins are Python classes that extend the `AgentPlugin` base class from the Auto Code plugin SDK. They can:
 
 - **Monitor agent sessions** - Track when agents start, complete, or fail
 - **Access agent context** - Read project info, spec details, session metadata
@@ -86,7 +86,7 @@ Agent plugins can optionally implement these session hooks:
 
 ### on_load()
 
-Called when the plugin is first discovered and loaded by Auto Claude.
+Called when the plugin is first discovered and loaded by Auto Code.
 
 **Use this to:**
 - Validate configuration

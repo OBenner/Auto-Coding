@@ -1,5 +1,5 @@
 /**
- * Path resolution utilities for Auto Claude updater
+ * Path resolution utilities for Auto Code updater
  */
 
 import { existsSync, readFileSync } from 'fs';
@@ -58,22 +58,28 @@ export function getEffectiveSourcePath(): string {
   // First, check user settings for configured autoBuildPath
   try {
     const settingsPath = path.join(app.getPath('userData'), 'settings.json');
+    console.warn(`[path-resolver] Checking settings at: ${settingsPath}, exists: ${existsSync(settingsPath)}`);
     if (existsSync(settingsPath)) {
       const settings = JSON.parse(readFileSync(settingsPath, 'utf-8'));
-      if (settings.autoBuildPath && existsSync(settings.autoBuildPath)) {
+      const configuredPath = settings.autoBuildPath;
+      console.warn(`[path-resolver] settings.autoBuildPath: ${configuredPath}`);
+      if (configuredPath && existsSync(configuredPath)) {
         // Validate it's a proper backend source (must have runners/spec_runner.py)
-        const markerPath = path.join(settings.autoBuildPath, 'runners', 'spec_runner.py');
-        if (existsSync(markerPath)) {
-          return settings.autoBuildPath;
+        const markerPath = path.join(configuredPath, 'runners', 'spec_runner.py');
+        const markerExists = existsSync(markerPath);
+        console.warn(`[path-resolver] marker ${markerPath} exists: ${markerExists}`);
+        if (markerExists) {
+          console.warn(`[path-resolver] Using configured autoBuildPath: ${configuredPath}`);
+          return configuredPath;
         }
         // Invalid path - log warning and fall through to auto-detection
         console.warn(
-          `[path-resolver] Configured autoBuildPath "${settings.autoBuildPath}" is missing runners/spec_runner.py, falling back to bundled source`
+          `[path-resolver] Configured autoBuildPath "${configuredPath}" is missing runners/spec_runner.py, falling back to bundled source`
         );
       }
     }
-  } catch {
-    // Ignore settings read errors
+  } catch (err) {
+    console.warn('[path-resolver] Error reading settings:', err);
   }
 
   if (app.isPackaged) {

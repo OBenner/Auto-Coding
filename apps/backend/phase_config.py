@@ -18,8 +18,19 @@ MODEL_ID_MAP: dict[str, str] = {
     "haiku": "claude-haiku-4-5-20251001",
 }
 
+# Complexity thresholds for determining task complexity level
+COMPLEXITY_THRESHOLDS: dict[str, int] = {
+    "description_short": 100,  # Short task description (characters)
+    "description_medium": 500,  # Medium task description
+    "description_long": 1500,  # Long/complex task description
+    "files_simple": 3,  # Few files affected
+    "files_medium": 10,  # Moderate number of files
+    "services_simple": 1,  # Single service
+    "services_medium": 3,  # Multiple services
+}
+
 # Thinking level to budget tokens mapping (None = no extended thinking)
-# Values must match auto-claude-ui/src/shared/constants/models.ts THINKING_BUDGET_MAP
+# Values must match auto-code-ui/src/shared/constants/models.ts THINKING_BUDGET_MAP
 THINKING_BUDGET_MAP: dict[str, int | None] = {
     "none": None,
     "low": 1024,
@@ -53,6 +64,7 @@ DEFAULT_PHASE_MODELS: dict[str, str] = {
     "planning": "sonnet",  # Changed from "opus" (fix #433)
     "coding": "sonnet",
     "qa": "sonnet",
+    "test_generation": "sonnet",
 }
 
 DEFAULT_PHASE_THINKING: dict[str, str] = {
@@ -60,6 +72,7 @@ DEFAULT_PHASE_THINKING: dict[str, str] = {
     "planning": "high",
     "coding": "medium",
     "qa": "high",
+    "test_generation": "medium",
 }
 
 # Agent-level default model mapping
@@ -119,6 +132,7 @@ class PhaseModelConfig(TypedDict, total=False):
     planning: str
     coding: str
     qa: str
+    test_generation: str
 
 
 class PhaseThinkingConfig(TypedDict, total=False):
@@ -126,6 +140,7 @@ class PhaseThinkingConfig(TypedDict, total=False):
     planning: str
     coding: str
     qa: str
+    test_generation: str
 
 
 class AgentModelConfig(TypedDict, total=False):
@@ -175,7 +190,7 @@ class TaskMetadataConfig(TypedDict, total=False):
     thinkingLevel: str
 
 
-Phase = Literal["spec", "planning", "coding", "qa"]
+Phase = Literal["spec", "planning", "coding", "qa", "test_generation"]
 
 
 def resolve_model_id(model: str) -> str:
@@ -441,18 +456,7 @@ def get_phase_config(
     return model_id, thinking_level, thinking_budget
 
 
-# Complexity thresholds for suggest_thinking_budget()
-COMPLEXITY_THRESHOLDS: dict[str, int] = {
-    "description_short": 100,
-    "description_medium": 400,
-    "description_long": 800,
-    "files_simple": 3,
-    "files_medium": 8,
-    "services_simple": 2,
-    "services_medium": 4,
-}
-
-# Output constraint templates for get_output_constraint()
+# Output constraint templates for controlling response length
 OUTPUT_CONSTRAINT_TEMPLATES: dict[str, str] = {
     "summary": "Respond in {limit} words or less",
     "brief": "Keep your response under {limit} words",
@@ -461,23 +465,43 @@ OUTPUT_CONSTRAINT_TEMPLATES: dict[str, str] = {
 }
 
 
+def get_output_constraint(format_type: str, word_limit: int) -> str:
+    """
+    Get a formatted output constraint string.
+
+    Args:
+        format_type: Type of constraint format (summary, brief, concise, strict)
+        word_limit: Maximum word count
+
+    Returns:
+        Formatted constraint string
+    """
+    template = OUTPUT_CONSTRAINT_TEMPLATES.get(
+        format_type, OUTPUT_CONSTRAINT_TEMPLATES["summary"]
+    )
+    return template.format(limit=word_limit)
+
+
 def suggest_thinking_budget(
     description: str, file_count: int, service_count: int
 ) -> str:
     """
-    Suggest a thinking budget level based on task complexity.
+    Suggest thinking level based on task complexity.
+
+    Uses COMPLEXITY_THRESHOLDS to score description length, file count,
+    and service count, then maps the total score to a thinking level.
 
     Args:
         description: Task description text
-        file_count: Number of files in the project
-        service_count: Number of services
+        file_count: Number of files affected
+        service_count: Number of services involved
 
     Returns:
-        Thinking level string ('low', 'medium', 'high', 'ultrathink')
+        Thinking level string: "low", "medium", "high", or "ultrathink"
     """
     score = 0
 
-    # Description score (0-3)
+    # Score based on description length
     desc_len = len(description)
     if desc_len >= COMPLEXITY_THRESHOLDS["description_long"]:
         score += 3
@@ -486,16 +510,16 @@ def suggest_thinking_budget(
     elif desc_len >= COMPLEXITY_THRESHOLDS["description_short"]:
         score += 1
 
-    # Files score (0-2)
+    # Score based on file count
     if file_count >= COMPLEXITY_THRESHOLDS["files_medium"]:
         score += 2
     elif file_count >= COMPLEXITY_THRESHOLDS["files_simple"]:
         score += 1
 
-    # Services score (0-2)
+    # Score based on service count
     if service_count >= COMPLEXITY_THRESHOLDS["services_medium"]:
         score += 2
-    elif service_count >= COMPLEXITY_THRESHOLDS["services_simple"]:
+    elif service_count > COMPLEXITY_THRESHOLDS["services_simple"]:
         score += 1
 
     # Map score to thinking level
@@ -507,23 +531,6 @@ def suggest_thinking_budget(
         return "medium"
     else:
         return "low"
-
-
-def get_output_constraint(format_type: str, word_limit: int) -> str:
-    """
-    Get an output constraint string for a given format type and word limit.
-
-    Args:
-        format_type: Format type ('summary', 'brief', 'concise', 'strict')
-        word_limit: Maximum number of words
-
-    Returns:
-        Formatted constraint string
-    """
-    template = OUTPUT_CONSTRAINT_TEMPLATES.get(
-        format_type, OUTPUT_CONSTRAINT_TEMPLATES["summary"]
-    )
-    return template.format(limit=word_limit)
 
 
 def get_spec_phase_thinking_budget(phase_name: str) -> int | None:

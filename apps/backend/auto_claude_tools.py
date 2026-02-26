@@ -1,10 +1,11 @@
 """
-Auto Claude tools module facade.
+Auto Code tools module facade.
 
 Provides MCP tools for agent operations.
 Re-exports from agents.tools_pkg for clean imports.
 """
 
+# Optional: re-exported for public API facade
 from agents.tools_pkg.models import (  # noqa: F401
     ELECTRON_TOOLS,
     TOOL_GET_BUILD_PROGRESS,
@@ -16,7 +17,11 @@ from agents.tools_pkg.models import (  # noqa: F401
     TOOL_UPDATE_SUBTASK_STATUS,
     is_electron_mcp_enabled,
 )
+
+# Optional: re-exported for public API facade
 from agents.tools_pkg.permissions import get_allowed_tools  # noqa: F401
+
+# Optional: re-exported for public API facade
 from agents.tools_pkg.registry import (  # noqa: F401
     create_auto_claude_mcp_server,
     is_tools_available,

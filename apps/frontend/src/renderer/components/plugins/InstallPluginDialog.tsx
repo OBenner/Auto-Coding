@@ -143,10 +143,10 @@ export function InstallPluginDialog({
       // Call IPC to install plugin
       const result = await window.electronAPI.installPlugin(source);
 
-      if (result.success && result.plugin) {
+      if (result.success && result.data?.plugin) {
         toast({
           title: t('plugins:toast.installSuccess', 'Plugin installed successfully'),
-          description: `${result.plugin.name} v${result.plugin.version}`,
+          description: `${result.data.plugin.name} v${result.data.plugin.version}`,
         });
         onOpenChange(false);
         onPluginInstalled?.();
@@ -261,7 +261,7 @@ export function InstallPluginDialog({
                     </span>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    {t('plugins:install.marketplaceDescription', 'Install from the Auto Claude plugin marketplace')}
+                    {t('plugins:install.marketplaceDescription', 'Install from the Auto Code plugin marketplace')}
                   </p>
                 </Label>
               </div>

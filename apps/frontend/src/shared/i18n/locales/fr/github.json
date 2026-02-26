@@ -1,0 +1,10 @@
+{
+  "investigation": {
+    "progress": {
+      "fetchingIssue": "Récupération des détails du ticket...",
+      "analyzingIssue": "L'IA analyse le ticket...",
+      "creatingTask": "Création de la tâche à partir de l'investigation...",
+      "complete": "Investigation terminée !"
+    }
+  }
+}

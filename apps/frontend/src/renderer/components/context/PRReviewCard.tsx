@@ -10,16 +10,28 @@ import {
   AlertTriangle,
   Bug,
   Sparkles,
-  ExternalLink
+  ExternalLink,
+  Trash2
 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Card, CardContent } from '../ui/card';
 import { Badge } from '../ui/badge';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle
+} from '../ui/alert-dialog';
 import type { MemoryEpisode } from '../../../shared/types';
 import { formatDate } from './utils';
 
 interface PRReviewCardProps {
   memory: MemoryEpisode;
+  onDelete?: (memoryId: string) => void;
 }
 
 interface ParsedPRReview {
@@ -106,8 +118,9 @@ function SeverityBadge({ severity, count }: { severity: string; count: number })
   );
 }
 
-export function PRReviewCard({ memory }: PRReviewCardProps) {
+export function PRReviewCard({ memory, onDelete }: PRReviewCardProps) {
   const [expanded, setExpanded] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const parsed = useMemo(() => parsePRReviewContent(memory.content), [memory.content]);
 
   if (!parsed) {
@@ -189,27 +202,39 @@ export function PRReviewCard({ memory }: PRReviewCardProps) {
             </div>
           </div>
 
-          {/* Expand Button */}
-          {hasExpandableContent && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setExpanded(!expanded)}
-              className="shrink-0 gap-1"
-            >
-              {expanded ? (
-                <>
-                  <ChevronUp className="h-4 w-4" />
-                  Collapse
-                </>
-              ) : (
-                <>
-                  <ChevronDown className="h-4 w-4" />
-                  Details
-                </>
-              )}
-            </Button>
-          )}
+          {/* Action Buttons */}
+          <div className="flex items-center gap-1 shrink-0">
+            {onDelete && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowDeleteConfirm(true)}
+                className="text-destructive hover:text-destructive"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            )}
+            {hasExpandableContent && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setExpanded(!expanded)}
+                className="gap-1"
+              >
+                {expanded ? (
+                  <>
+                    <ChevronUp className="h-4 w-4" />
+                    Collapse
+                  </>
+                ) : (
+                  <>
+                    <ChevronDown className="h-4 w-4" />
+                    Details
+                  </>
+                )}
+              </Button>
+            )}
+          </div>
         </div>
 
         {/* Expanded Content */}
@@ -317,6 +342,30 @@ export function PRReviewCard({ memory }: PRReviewCardProps) {
           </div>
         )}
       </CardContent>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete PR Review Memory</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this PR review memory? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                onDelete?.(memory.id);
+                setShowDeleteConfirm(false);
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 }

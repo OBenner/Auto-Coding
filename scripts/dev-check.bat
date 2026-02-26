@@ -2,7 +2,7 @@
 setlocal EnableDelayedExpansion
 
 :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
-:: Auto Claude - Development Environment Verification Script (Windows)
+:: Auto Code - Development Environment Verification Script (Windows)
 :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 ::
 :: PURPOSE:
@@ -57,7 +57,7 @@ goto :parse_args
 :: Show help if requested
 if %SHOW_HELP% equ 1 (
     echo.
-    echo Auto Claude - Development Environment Check
+    echo Auto Code - Development Environment Check
     echo.
     echo USAGE:
     echo   scripts\dev-check.bat           Run all checks
@@ -81,7 +81,7 @@ set WARNINGS=0
 
 echo.
 echo ========================================================================
-echo            Auto Claude - Development Environment Check
+echo            Auto Code - Development Environment Check
 echo ========================================================================
 echo.
 

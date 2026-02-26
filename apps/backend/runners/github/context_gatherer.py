@@ -19,11 +19,14 @@ from __future__ import annotations
 import ast
 import asyncio
 import json
+import logging
 import os
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
+
+logger = logging.getLogger(__name__)
 
 try:
     from .gh_client import GHClient, PRTooLargeError
@@ -430,7 +433,7 @@ class PRContextGatherer:
                     flush=True,
                 )
                 return False
-        except asyncio.TimeoutError:
+        except TimeoutError:
             safe_print("[Context] Timeout fetching PR refs")
             return False
         except Exception as e:
@@ -534,7 +537,7 @@ class PRContextGatherer:
                 return ""
 
             return stdout.decode("utf-8")
-        except asyncio.TimeoutError:
+        except TimeoutError:
             safe_print(f"[Context] Timeout reading {path} from {ref}")
             return ""
         except Exception as e:
@@ -590,7 +593,7 @@ class PRContextGatherer:
                 return ""
 
             return stdout.decode("utf-8")
-        except asyncio.TimeoutError:
+        except TimeoutError:
             safe_print(f"[Context] Timeout getting patch for {path}")
             return ""
         except Exception as e:
@@ -791,7 +794,7 @@ class PRContextGatherer:
                             f"**Workspaces**: {', '.join(pkg_data['workspaces'])}"
                         )
             except (json.JSONDecodeError, KeyError):
-                pass
+                logger.debug("Failed to parse package.json for workspace info")
 
         # Check for Python project structure
         if (self.project_dir / "pyproject.toml").exists():

@@ -3,7 +3,7 @@ Claude Agent SDK Provider Adapter
 =================================
 
 Wraps the Claude Agent SDK client to implement the AIEngineProvider interface.
-This is the default and recommended provider for Auto-Claude.
+This is the default and recommended provider for Auto-Code.
 
 The adapter delegates to the existing create_client() function from core.client
 to preserve all existing functionality including:

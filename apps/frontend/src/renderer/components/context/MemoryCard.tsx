@@ -8,11 +8,22 @@ import {
   AlertTriangle,
   Sparkles,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Trash2
 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Card, CardContent } from '../ui/card';
 import { Badge } from '../ui/badge';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle
+} from '../ui/alert-dialog';
 import type { MemoryEpisode } from '../../../shared/types';
 import { memoryTypeIcons, memoryTypeColors, memoryTypeLabels } from './constants';
 import { formatDate } from './utils';
@@ -20,6 +31,7 @@ import { PRReviewCard } from './PRReviewCard';
 
 interface MemoryCardProps {
   memory: MemoryEpisode;
+  onDelete?: (memoryId: string) => void;
 }
 
 interface ParsedSessionInsight {
@@ -106,8 +118,9 @@ function isPRReviewMemory(memory: MemoryEpisode): boolean {
   }
 }
 
-export function MemoryCard({ memory }: MemoryCardProps) {
+export function MemoryCard({ memory, onDelete }: MemoryCardProps) {
   const [expanded, setExpanded] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const parsed = useMemo(() => parseMemoryContent(memory.content), [memory.content]);
 
   // Determine if there's meaningful content to show (must be called before early return)
@@ -128,7 +141,7 @@ export function MemoryCard({ memory }: MemoryCardProps) {
 
   // Delegate PR reviews to specialized component
   if (isPRReviewMemory(memory)) {
-    return <PRReviewCard memory={memory} />;
+    return <PRReviewCard memory={memory} onDelete={onDelete} />;
   }
 
   const Icon = memoryTypeIcons[memory.type] || memoryTypeIcons.session_insight;
@@ -176,26 +189,38 @@ export function MemoryCard({ memory }: MemoryCardProps) {
               </div>
             </div>
           </div>
-          {hasContent && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setExpanded(!expanded)}
-              className="shrink-0 gap-1"
-            >
-              {expanded ? (
-                <>
-                  <ChevronUp className="h-4 w-4" />
-                  Collapse
-                </>
-              ) : (
-                <>
-                  <ChevronDown className="h-4 w-4" />
-                  Expand
-                </>
-              )}
-            </Button>
-          )}
+          <div className="flex items-center gap-1 shrink-0">
+            {onDelete && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowDeleteConfirm(true)}
+                className="text-destructive hover:text-destructive"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            )}
+            {hasContent && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setExpanded(!expanded)}
+                className="gap-1"
+              >
+                {expanded ? (
+                  <>
+                    <ChevronUp className="h-4 w-4" />
+                    Collapse
+                  </>
+                ) : (
+                  <>
+                    <ChevronDown className="h-4 w-4" />
+                    Expand
+                  </>
+                )}
+              </Button>
+            )}
+          </div>
         </div>
 
         {/* Expanded Content */}
@@ -372,6 +397,30 @@ export function MemoryCard({ memory }: MemoryCardProps) {
           </pre>
         )}
       </CardContent>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Memory</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this memory? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                onDelete?.(memory.id);
+                setShowDeleteConfirm(false);
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 }

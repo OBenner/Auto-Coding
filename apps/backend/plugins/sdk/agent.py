@@ -70,7 +70,7 @@ class AgentPlugin(PluginBase):
     """
     Base class for agent plugins.
 
-    Agent plugins extend Auto Claude's agent capabilities by hooking into the
+    Agent plugins extend Auto Code's agent capabilities by hooking into the
     agent lifecycle and providing custom behaviors, tools, or monitoring.
 
     Lifecycle hooks:

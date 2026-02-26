@@ -6,6 +6,7 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { AgentState } from './agent-state';
+import type { AgentProcess } from './types';
 
 describe('AgentState - Queue Routing', () => {
   let state: AgentState;
@@ -24,9 +25,9 @@ describe('AgentState - Queue Routing', () => {
 
     it('should group tasks by profile', () => {
       // Add mock processes
-      state.addProcess('task-1', { pid: 1001 } as unknown as import('child_process').ChildProcess);
-      state.addProcess('task-2', { pid: 1002 } as unknown as import('child_process').ChildProcess);
-      state.addProcess('task-3', { pid: 1003 } as unknown as import('child_process').ChildProcess);
+      state.addProcess('task-1', { pid: 1001 } as unknown as AgentProcess);
+      state.addProcess('task-2', { pid: 1002 } as unknown as AgentProcess);
+      state.addProcess('task-3', { pid: 1003 } as unknown as AgentProcess);
 
       // Assign profiles
       state.assignProfileToTask('task-1', 'profile-1', 'Profile 1', 'proactive');
@@ -42,7 +43,7 @@ describe('AgentState - Queue Routing', () => {
 
     it('should use default profile for unassigned tasks', () => {
       // Add process without profile assignment
-      state.addProcess('task-1', { pid: 1001 } as unknown as import('child_process').ChildProcess);
+      state.addProcess('task-1', { pid: 1001 } as unknown as AgentProcess);
 
       const result = state.getRunningTasksByProfile();
 

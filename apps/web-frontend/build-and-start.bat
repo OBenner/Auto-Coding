@@ -1,6 +1,6 @@
 @echo off
 REM ============================================================================
-REM Auto Claude - Web Frontend Build and Start Script (Windows)
+REM Auto Code - Web Frontend Build and Start Script (Windows)
 REM ============================================================================
 REM
 REM PURPOSE:
@@ -30,7 +30,7 @@ cd /d "%~dp0"
 
 echo.
 echo ================================================================
-echo          Auto Claude - Web Frontend Build ^& Start
+echo          Auto Code - Web Frontend Build ^& Start
 echo ================================================================
 echo.
 

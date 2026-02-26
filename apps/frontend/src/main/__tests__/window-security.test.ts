@@ -42,7 +42,11 @@ vi.mock("electron", () => {
 
   // Mock process.resourcesPath for icon loading
   if (!process.resourcesPath) {
-    process.resourcesPath = "/tmp/test/resources";
+    Object.defineProperty(process, 'resourcesPath', {
+      value: "/tmp/test/resources",
+      writable: true,
+      configurable: true,
+    });
   }
 
   return {
@@ -55,7 +59,7 @@ vi.mock("electron", () => {
       whenReady: vi.fn(() => Promise.resolve()),
       quit: vi.fn(),
       setName: vi.fn(),
-      getName: vi.fn(() => "Auto Claude"),
+      getName: vi.fn(() => "Auto Code"),
       dock: {
         setIcon: vi.fn(),
       },

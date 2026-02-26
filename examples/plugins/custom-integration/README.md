@@ -1,6 +1,6 @@
 # Custom Integration Plugin
 
-An example integration plugin that demonstrates how to connect Auto Claude to external services using the IntegrationPlugin SDK.
+An example integration plugin that demonstrates how to connect Auto Code to external services using the IntegrationPlugin SDK.
 
 ## Overview
 
@@ -11,7 +11,7 @@ This plugin connects to a mock file-based "TaskManager" service and provides MCP
 - **Provides MCP tools** for agents to interact with an external service
 - **Manages configuration** (data directory, API settings)
 - **Persists state** across sessions (task counter, sync timestamps, task mappings)
-- **Syncs data** between Auto Claude and the external service
+- **Syncs data** between Auto Code and the external service
 - **Tracks build lifecycle** (creates tasks when builds start/complete)
 - **Updates tasks** in real-time when subtask statuses change
 
@@ -65,13 +65,13 @@ State is saved to `.custom-integration_state.json` in the spec directory.
 
 ### From Directory
 
-1. **Copy the plugin directory** to Auto Claude's plugin location:
+1. **Copy the plugin directory** to Auto Code's plugin location:
    ```bash
    cp -r examples/plugins/custom-integration ~/.auto-claude/plugins/user/
    ```
 
 2. **Using the Electron UI**:
-   - Open Auto Claude desktop app
+   - Open Auto Code desktop app
    - Navigate to **Plugins** (shortcut: `U`)
    - Click **Install Plugin**
    - Select **Directory** as installation source
@@ -260,12 +260,12 @@ To pull updates from the external service:
 
 ```python
 def sync_data(self, context: IntegrationContext) -> None:
-    # Push: Auto Claude → External Service
+    # Push: Auto Code → External Service
     plan = self.load_implementation_plan(context)
     for subtask in get_all_subtasks(plan):
         self.push_subtask_to_service(subtask)
 
-    # Pull: External Service → Auto Claude
+    # Pull: External Service → Auto Code
     external_tasks = self.client.list_tasks()
     for task in external_tasks:
         if task_needs_update(task):

@@ -1,5 +1,5 @@
 """
-Auto Claude project initialization utilities.
+Auto Code project initialization utilities.
 
 Handles first-time setup of .auto-claude directory and ensures proper gitignore configuration.
 """
@@ -69,14 +69,14 @@ def ensure_gitignore_entry(project_dir: Path, entry: str = ".auto-claude/") -> b
             content += "\n"
 
         # Add a comment and the entry
-        content += "\n# Auto Claude data directory\n"
+        content += "\n# Auto Code data directory\n"
         content += entry + "\n"
 
         gitignore_path.write_text(content, encoding="utf-8")
         return True
     else:
         # Create new .gitignore with the entry
-        content = "# Auto Claude data directory\n"
+        content = "# Auto Code data directory\n"
         content += entry + "\n"
 
         gitignore_path.write_text(content, encoding="utf-8")
@@ -94,7 +94,7 @@ def _is_git_repo(project_dir: Path) -> bool:
             timeout=10,
         )
         return result.returncode == 0
-    except (subprocess.TimeoutExpired, Exception) as e:
+    except Exception as e:
         logger.debug("Git repo check failed: %s", e)
         return False
 
@@ -152,7 +152,7 @@ def _commit_gitignore(project_dir: Path) -> bool:
         combined_output = result.stdout + result.stderr
         return result.returncode == 0 or "nothing to commit" in combined_output
 
-    except (subprocess.TimeoutExpired, Exception) as e:
+    except Exception as e:
         logger.debug("Git commit failed: %s", e)
         return False
 
@@ -198,7 +198,7 @@ def ensure_all_gitignore_entries(
     if content and not content.endswith("\n"):
         content += "\n"
 
-    content += "\n# Auto Claude generated files\n"
+    content += "\n# Auto Code generated files\n"
     for entry in entries_to_add:
         content += entry + "\n"
         added_entries.append(entry)

@@ -38,7 +38,7 @@ import sys
 # Python version check - must be before any imports using 3.10+ syntax
 if sys.version_info < (3, 10):  # noqa: UP036
     sys.exit(
-        f"Error: Auto Claude requires Python 3.10 or higher.\n"
+        f"Error: Auto Code requires Python 3.10 or higher.\n"
         f"You are running Python {sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}\n"
         f"\n"
         f"Please upgrade Python: https://www.python.org/downloads/"
@@ -67,7 +67,7 @@ if is_windows():
                 _stream.reconfigure(encoding="utf-8", errors="replace")
                 continue
             except (AttributeError, io.UnsupportedOperation, OSError):
-                pass
+                _stream = getattr(sys, _stream_name)  # re-fetch unchanged stream
         # Method 2: Wrap with TextIOWrapper for piped output
         try:
             if hasattr(_stream, "buffer"):
@@ -79,7 +79,7 @@ if is_windows():
                 )
                 setattr(sys, _stream_name, _new_stream)
         except (AttributeError, io.UnsupportedOperation, OSError):
-            pass
+            _stream = getattr(sys, _stream_name)  # re-fetch unchanged stream
     # Clean up temporary variables
     del _stream_name, _stream
     if "_new_stream" in dir():
@@ -137,7 +137,7 @@ Examples:
   python spec_runner.py --task "Update text" --complexity simple
 
   # Complex integration (auto-detected)
-  python spec_runner.py --task "Add Graphiti memory integration with FalkorDB"
+  python spec_runner.py --task "Add Graphiti memory integration with LadybugDB"
 
   # Interactive mode
   python spec_runner.py --interactive

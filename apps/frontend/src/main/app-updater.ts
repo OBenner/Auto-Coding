@@ -25,9 +25,10 @@ import { IPC_CHANNELS } from '../shared/constants';
 import type { AppUpdateInfo } from '../shared/types';
 import { compareVersions } from './updater/version-manager';
 
+
 // GitHub repo info for API calls
-const GITHUB_OWNER = 'AndyMik90';
-const GITHUB_REPO = 'Auto-Claude';
+const GITHUB_OWNER = 'OBenner';
+const GITHUB_REPO = 'Auto-Coding';
 
 // Debug mode - DEBUG_UPDATER=true or development mode
 const DEBUG_UPDATER = process.env.DEBUG_UPDATER === 'true' || process.env.NODE_ENV === 'development';
@@ -343,7 +344,7 @@ async function fetchLatestStableRelease(): Promise<AppUpdateInfo | null> {
     });
 
     request.setHeader('Accept', 'application/vnd.github.v3+json');
-    request.setHeader('User-Agent', `Auto-Claude/${getCurrentVersion()}`);
+    request.setHeader('User-Agent', `Auto-Code/${getCurrentVersion()}`);
 
     let data = '';
 
@@ -400,11 +401,9 @@ async function fetchLatestStableRelease(): Promise<AppUpdateInfo | null> {
             return;
           }
 
-          const version = latestStable.tag_name.replace(/^v/, '');
-          // Sanitize version string for logging (remove control characters and limit length)
-          // biome-ignore lint/suspicious/noControlCharactersInRegex: Intentionally matching control characters for sanitization
-          const safeVersion = String(version).replace(/[\x00-\x1f\x7f]/g, '').slice(0, 50);
-          console.warn('[app-updater] Found latest stable release:', safeVersion);
+          // biome-ignore lint/suspicious/noControlCharactersInRegex: Sanitizing for log injection
+          const version = latestStable.tag_name.replace(/^v/, '').replace(/[\x00-\x1f\x7f]/g, '').slice(0, 50);
+          console.warn('[app-updater] Found latest stable release: ' + version);
 
           resolve({
             version,
@@ -413,17 +412,18 @@ async function fetchLatestStableRelease(): Promise<AppUpdateInfo | null> {
           });
         } catch (e) {
           // Sanitize error message for logging (prevent log injection from malformed JSON)
-          const safeError = e instanceof Error ? e.message : 'Unknown parse error';
-          console.error('[app-updater] Failed to parse releases JSON:', safeError);
+          // biome-ignore lint/suspicious/noControlCharactersInRegex: Sanitizing for log injection
+          const safeError = (e instanceof Error ? e.message : 'Unknown parse error').replace(/[\x00-\x1f\x7f]/g, '').slice(0, 200);
+          console.error('[app-updater] Failed to parse releases JSON: ' + safeError);
           resolve(null);
         }
       });
     });
 
     request.on('error', (error) => {
-      // Sanitize error message for logging (use only the message property)
-      const safeErrorMessage = error instanceof Error ? error.message : 'Unknown error';
-      console.error('[app-updater] Failed to fetch releases:', safeErrorMessage);
+      // biome-ignore lint/suspicious/noControlCharactersInRegex: Sanitizing for log injection
+      const safeMsg = (error instanceof Error ? error.message : 'Unknown error').replace(/[\x00-\x1f\x7f]/g, '').slice(0, 200);
+      console.error('[app-updater] Failed to fetch releases: ' + safeMsg);
       resolve(null);
     });
 

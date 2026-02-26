@@ -2,7 +2,7 @@
 Integrations Module
 ===================
 
-External service integrations for Auto Claude.
+External service integrations for Auto Code.
 """
 
 __all__ = [

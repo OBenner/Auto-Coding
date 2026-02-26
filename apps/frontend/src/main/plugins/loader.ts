@@ -18,6 +18,7 @@ import type { IPCResult } from '../../shared/types';
 import {
   PluginInfo,
   PluginMetadata,
+  PluginPermission,
   PluginStatus,
   PluginType,
   PluginInstallResult,
@@ -42,7 +43,7 @@ function executePluginCommand(
   args: string[] = []
 ): unknown {
   try {
-    const pythonPath = getConfiguredPythonPath(projectPath);
+    const pythonPath = getConfiguredPythonPath();
     const sourcePath = getEffectiveSourcePath();
     const pluginCliPath = path.join(sourcePath, 'apps', 'backend', 'plugins', 'cli.py');
 
@@ -89,7 +90,7 @@ function parsePluginInfo(data: Record<string, unknown>): PluginInfo {
       author: metadata.author as string,
       description: metadata.description as string,
       plugin_type: metadata.plugin_type as PluginType,
-      required_permissions: metadata.required_permissions as string[],
+      required_permissions: metadata.required_permissions as PluginPermission[],
       dependencies: (metadata.dependencies as string[]) || [],
       homepage: metadata.homepage as string | undefined,
       license: metadata.license as string | undefined
@@ -242,7 +243,7 @@ export function registerPluginHandlers(projectId: string): void {
         const data = result as { success: boolean; plugin?: Record<string, unknown>; error?: string };
 
         if (data.success && data.plugin) {
-          const metadata = data.plugin as PluginMetadata;
+          const metadata = data.plugin as unknown as PluginMetadata;
           logger.info('[Plugin] Plugin installed successfully:', metadata.name);
           return {
             success: true,

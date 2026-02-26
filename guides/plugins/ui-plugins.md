@@ -1,6 +1,6 @@
 # UI Plugin Development Guide
 
-UI plugins extend Auto Claude's Electron frontend with custom React components, dashboard widgets, and backend communication via IPC handlers. This guide covers everything you need to build beautiful, functional UI extensions.
+UI plugins extend Auto Code's Electron frontend with custom React components, dashboard widgets, and backend communication via IPC handlers. This guide covers everything you need to build beautiful, functional UI extensions.
 
 ## Table of Contents
 
@@ -598,7 +598,7 @@ class MyUIPlugin(UIPlugin):
 
 ### Reading Implementation Plans
 
-Helper methods for accessing Auto Claude data:
+Helper methods for accessing Auto Code data:
 
 ```python
 def load_implementation_plan(self, spec_dir: Path) -> dict:
@@ -699,7 +699,7 @@ export const usePluginState = () => {
 
 ## Styling with Tailwind CSS
 
-Auto Claude uses Tailwind CSS for styling. Use Tailwind utility classes for consistent, responsive design.
+Auto Code uses Tailwind CSS for styling. Use Tailwind utility classes for consistent, responsive design.
 
 ### Basic Styling
 
@@ -1507,7 +1507,7 @@ export default ProjectStatsWidget;
 
 We welcome contributions to improve this guide or add more UI plugin examples!
 
-- [GitHub Issues](https://github.com/AndyMik90/Auto-Claude/issues)
-- [GitHub Discussions](https://github.com/AndyMik90/Auto-Claude/discussions)
+- [GitHub Issues](https://github.com/OBenner/Auto-Coding/issues)
+- [GitHub Discussions](https://github.com/OBenner/Auto-Coding/discussions)
 
 Happy building! 🎨

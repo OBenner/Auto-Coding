@@ -9,8 +9,10 @@ import json
 from collections.abc import Callable
 from pathlib import Path
 
+from agents.memory_manager import get_pattern_suggestions
 from analysis.analyzers import analyze_project
 from core.workspace.models import SpecNumberLock
+from debug import debug, debug_detailed
 from phase_config import get_thinking_budget
 from prompts_pkg.project_context import should_refresh_project_index
 from review import run_review_checkpoint
@@ -152,6 +154,50 @@ class SpecOrchestrator:
         # Format prior phase summaries for context
         prior_summaries = format_phase_summaries(self._phase_summaries)
 
+        # Fetch pattern suggestions for spec creation phases
+        # Patterns are most useful during spec writing, planning, and quick spec phases
+        pattern_phases = {"spec_writing", "planning", "quick_spec"}
+        if phase_name in pattern_phases:
+            try:
+                debug(
+                    "orchestrator",
+                    f"Fetching pattern suggestions for {phase_name} phase",
+                )
+                # Use task description as query for pattern matching
+                query = self.task_description or "spec creation"
+                patterns = await get_pattern_suggestions(
+                    spec_dir=self.spec_dir,
+                    project_dir=self.project_dir,
+                    query=query,
+                    categories=None,  # Get patterns from all categories
+                    num_results=5,
+                    min_score=0.5,
+                )
+
+                if patterns:
+                    debug_detailed(
+                        "orchestrator",
+                        f"Pattern suggestions retrieved for {phase_name}",
+                        patterns_length=len(patterns),
+                    )
+                    # Append patterns to additional context
+                    additional_context = (
+                        f"{additional_context}\n\n{patterns}"
+                        if additional_context
+                        else patterns
+                    )
+                else:
+                    debug(
+                        "orchestrator", f"No pattern suggestions found for {phase_name}"
+                    )
+            except Exception as e:
+                # Don't fail the phase if pattern fetching fails
+                debug(
+                    "orchestrator",
+                    f"Pattern fetching failed for {phase_name} (continuing without patterns)",
+                    error=str(e),
+                )
+
         return await runner.run_agent(
             prompt_file,
             additional_context,
@@ -235,6 +281,9 @@ class SpecOrchestrator:
         task_logger = get_task_logger(self.spec_dir)
         task_logger.start_phase(LogPhase.PLANNING, "Starting spec creation process")
 
+        # Track whether we've already ended the planning phase to avoid double-end
+        self._planning_phase_ended = False
+
         print(
             box(
                 f"Spec Directory: {self.spec_dir}\n"
@@ -288,9 +337,11 @@ class SpecOrchestrator:
         results.append(result)
         if not result.success:
             print_status("Discovery failed", "error")
-            task_logger.end_phase(
-                LogPhase.PLANNING, success=False, message="Discovery failed"
-            )
+            if not self._planning_phase_ended:
+                self._planning_phase_ended = True
+                task_logger.end_phase(
+                    LogPhase.PLANNING, success=False, message="Discovery failed"
+                )
             return False
         # Store summary for subsequent phases (compaction)
         await self._store_phase_summary("discovery")
@@ -302,17 +353,26 @@ class SpecOrchestrator:
         results.append(result)
         if not result.success:
             print_status("Requirements gathering failed", "error")
-            task_logger.end_phase(
-                LogPhase.PLANNING,
-                success=False,
-                message="Requirements gathering failed",
-            )
+            if not self._planning_phase_ended:
+                self._planning_phase_ended = True
+                task_logger.end_phase(
+                    LogPhase.PLANNING,
+                    success=False,
+                    message="Requirements gathering failed",
+                )
             return False
         # Store summary for subsequent phases (compaction)
         await self._store_phase_summary("requirements")
 
         # Rename spec folder with better name from requirements
-        rename_spec_dir_from_requirements(self.spec_dir)
+        # IMPORTANT: Update self.spec_dir after rename so subsequent phases use the correct path
+        new_spec_dir = rename_spec_dir_from_requirements(self.spec_dir)
+        if new_spec_dir != self.spec_dir:
+            self.spec_dir = new_spec_dir
+            self.validator = SpecValidator(self.spec_dir)
+            # Update phase executor to use the renamed directory
+            phase_executor.spec_dir = self.spec_dir
+            phase_executor.spec_validator = self.validator
 
         # Update task description from requirements
         req = requirements.load_requirements(self.spec_dir)
@@ -327,14 +387,18 @@ class SpecOrchestrator:
         # === PHASE 3: AI COMPLEXITY ASSESSMENT ===
         result = await run_phase(
             "complexity_assessment",
-            lambda: self._phase_complexity_assessment_with_requirements(),
+            self._phase_complexity_assessment_with_requirements,
         )
         results.append(result)
         if not result.success:
             print_status("Complexity assessment failed", "error")
-            task_logger.end_phase(
-                LogPhase.PLANNING, success=False, message="Complexity assessment failed"
-            )
+            if not self._planning_phase_ended:
+                self._planning_phase_ended = True
+                task_logger.end_phase(
+                    LogPhase.PLANNING,
+                    success=False,
+                    message="Complexity assessment failed",
+                )
             return False
 
         # Map of all available phases
@@ -393,20 +457,24 @@ class SpecOrchestrator:
                     f"Phase '{phase_name}' failed: {'; '.join(result.errors)}",
                     LogEntryType.ERROR,
                 )
-                task_logger.end_phase(
-                    LogPhase.PLANNING,
-                    success=False,
-                    message=f"Phase {phase_name} failed",
-                )
+                if not self._planning_phase_ended:
+                    self._planning_phase_ended = True
+                    task_logger.end_phase(
+                        LogPhase.PLANNING,
+                        success=False,
+                        message=f"Phase {phase_name} failed",
+                    )
                 return False
 
         # Summary
         self._print_completion_summary(results, phases_executed)
 
         # End planning phase successfully
-        task_logger.end_phase(
-            LogPhase.PLANNING, success=True, message="Spec creation complete"
-        )
+        if not self._planning_phase_ended:
+            self._planning_phase_ended = True
+            task_logger.end_phase(
+                LogPhase.PLANNING, success=True, message="Spec creation complete"
+            )
 
         # === HUMAN REVIEW CHECKPOINT ===
         return self._run_review_checkpoint(auto_approve)
@@ -442,7 +510,7 @@ class SpecOrchestrator:
         requirements_file = self.spec_dir / "requirements.json"
 
         # Load requirements for full context
-        requirements_context = self._load_requirements_context(requirements_file)
+        self._load_requirements_context(requirements_file)
 
         if self.complexity_override:
             # Manual override
@@ -639,7 +707,7 @@ class SpecOrchestrator:
         except SystemExit as e:
             if e.code != 0:
                 return False
-            return False
+            raise
         except KeyboardInterrupt:
             print()
             print_status("Review interrupted. Run again to continue.", "info")
@@ -671,19 +739,25 @@ class SpecOrchestrator:
         The functionality has been moved to models.rename_spec_dir_from_requirements.
 
         Returns:
-            True if successful or not needed, False on error
+            True if successful or not needed, False if prerequisites are missing
         """
-        result = rename_spec_dir_from_requirements(self.spec_dir)
-        # Update self.spec_dir if it was renamed
-        if result and self.spec_dir.name.endswith("-pending"):
-            # Find the renamed directory
-            parent = self.spec_dir.parent
-            prefix = self.spec_dir.name[:4]  # e.g., "001-"
-            for candidate in parent.iterdir():
-                if (
-                    candidate.name.startswith(prefix)
-                    and "pending" not in candidate.name
-                ):
-                    self.spec_dir = candidate
-                    break
-        return result
+        # Check prerequisites first
+        requirements_file = self.spec_dir / "requirements.json"
+        if not requirements_file.exists():
+            return False
+
+        try:
+            with open(requirements_file, encoding="utf-8") as f:
+                req = json.load(f)
+            task_desc = req.get("task_description", "")
+            if not task_desc:
+                return False
+        except (json.JSONDecodeError, OSError):
+            return False
+
+        # Attempt rename
+        new_spec_dir = rename_spec_dir_from_requirements(self.spec_dir)
+        if new_spec_dir != self.spec_dir:
+            self.spec_dir = new_spec_dir
+            self.validator = SpecValidator(self.spec_dir)
+        return True

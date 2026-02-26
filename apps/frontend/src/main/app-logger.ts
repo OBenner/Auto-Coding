@@ -3,9 +3,9 @@
  *
  * Provides persistent, always-on logging for the main process using electron-log.
  * Logs are stored in the standard OS log directory:
- * - macOS: ~/Library/Logs/Auto-Claude/
- * - Windows: %USERPROFILE%\AppData\Roaming\Auto-Claude\logs\
- * - Linux: ~/.config/Auto-Claude/logs/
+ * - macOS: ~/Library/Logs/Auto-Code/
+ * - Windows: %USERPROFILE%\AppData\Roaming\Auto-Code\logs\
+ * - Linux: ~/.config/Auto-Code/logs/
  *
  * Features:
  * - Automatic file rotation (7 days, max 10MB per file)
@@ -39,6 +39,18 @@ log.transports.file.fileName = 'main.log';
 // Console transport - always show warnings and errors, debug only in dev mode
 log.transports.console.level = process.env.NODE_ENV === 'development' ? 'debug' : 'warn';
 log.transports.console.format = '[{h}:{i}:{s}] [{level}] {text}';
+// Guard console transport writes so broken stdio streams do not crash the app.
+{
+  const originalConsoleWriteFn = log.transports.console.writeFn as (...args: unknown[]) => void;
+  log.transports.console.writeFn = (...args: unknown[]) => {
+    try {
+      originalConsoleWriteFn(...args);
+    } catch (error) {
+      const err = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+      safeStderrWrite(`[app-logger] console transport write failed: ${err}`);
+    }
+  };
+}
 
 // Determine if this is a beta version
 function isBetaVersion(): boolean {
@@ -138,7 +150,7 @@ export function generateDebugReport(): string {
   const recentErrors = getRecentErrors(10);
 
   const lines = [
-    '=== Auto Claude Debug Report ===',
+    '=== Auto Code Debug Report ===',
     `Generated: ${new Date().toISOString()}`,
     '',
     '--- System Information ---',
@@ -205,14 +217,44 @@ export const appLog = {
   log: (...args: unknown[]) => log.info(...args),
 };
 
+/**
+ * Best-effort stderr fallback used when electron-log itself throws (e.g. EIO).
+ * Must never throw, especially inside uncaught exception handlers.
+ */
+function safeStderrWrite(message: string): void {
+  try {
+    process.stderr.write(`${message}\n`);
+  } catch {
+    // Ignore - nothing else we can safely do here.
+  }
+}
+
+/**
+ * Log an unhandled error without risking recursive crashes if logger transport fails.
+ */
+function safeLogUnhandled(prefix: string, value: unknown): void {
+  try {
+    log.error(prefix, value);
+  } catch (loggingError) {
+    const loggingFailure = loggingError instanceof Error
+      ? `${loggingError.name}: ${loggingError.message}`
+      : String(loggingError);
+    const original = value instanceof Error
+      ? (value.stack || `${value.name}: ${value.message}`)
+      : String(value);
+    safeStderrWrite(`[app-logger] ${prefix} (logger failed: ${loggingFailure})`);
+    safeStderrWrite(original);
+  }
+}
+
 // Log unhandled errors
 export function setupErrorLogging(): void {
   process.on('uncaughtException', (error) => {
-    log.error('Uncaught exception:', error);
+    safeLogUnhandled('Uncaught exception:', error);
   });
 
   process.on('unhandledRejection', (reason) => {
-    log.error('Unhandled rejection:', reason);
+    safeLogUnhandled('Unhandled rejection:', reason);
   });
 
   log.info('Error logging initialized');
