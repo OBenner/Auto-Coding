@@ -22,7 +22,9 @@
       "descriptionRequired": "Description is required",
       "categoryRequired": "Category is required",
       "promptTooShort": "Custom prompt must be at least 20 characters",
-      "invalidVersion": "Invalid version format (use semantic versioning like 1.0.0)"
+      "invalidVersion": "Invalid version format (use semantic versioning like 1.0.0)",
+      "invalidNameFormat": "Name must be lowercase alphanumeric with hyphens only",
+      "exportFailed": "Export failed"
     },
     "actions": {
       "save": "Save Template",
@@ -31,8 +33,14 @@
       "import": "Import Template",
       "export": "Export Template",
       "importing": "Importing...",
-      "exporting": "Exporting..."
+      "exporting": "Exporting...",
+      "saving": "Saving...",
+      "testing": "Testing..."
     }
+  },
+  "selector": {
+    "noneOption": "None",
+    "useDefaultAgentHint": "(Use default agent)"
   },
   "wizard": {
     "title": "Template Parameters",

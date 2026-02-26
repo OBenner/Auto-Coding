@@ -9,6 +9,7 @@ custom agent templates. Templates can be filtered by category and listed
 for use in the agent system.
 """
 
+import threading
 from typing import Optional
 
 from agents.templates.models import AgentTemplate
@@ -19,6 +20,7 @@ class AgentTemplateRegistry:
 
     _instance: Optional["AgentTemplateRegistry"] = None
     _templates: dict[str, AgentTemplate] = {}
+    _lock: threading.Lock = threading.Lock()
 
     def __new__(cls):
         """Ensure singleton instance."""
@@ -42,7 +44,8 @@ class AgentTemplateRegistry:
         if errors:
             raise ValueError(f"Template validation failed: {', '.join(errors)}")
 
-        self._templates[template.name] = template
+        with self._lock:
+            self._templates[template.name] = template
 
     def get(self, name: str) -> AgentTemplate | None:
         """
@@ -129,17 +132,18 @@ class AgentTemplateRegistry:
         Raises:
             ValueError: If template validation fails or template doesn't exist
         """
-        if template.name not in self._templates:
-            raise ValueError(f"Template '{template.name}' not found in registry")
+        with self._lock:
+            if template.name not in self._templates:
+                raise ValueError(f"Template '{template.name}' not found in registry")
 
-        # Validate template before updating
-        errors = template.validate()
-        if errors:
-            raise ValueError(f"Template validation failed: {', '.join(errors)}")
+            # Validate template before updating
+            errors = template.validate()
+            if errors:
+                raise ValueError(f"Template validation failed: {', '.join(errors)}")
 
-        # Update timestamp
-        template.update_timestamp()
-        self._templates[template.name] = template
+            # Update timestamp
+            template.update_timestamp()
+            self._templates[template.name] = template
 
     def unregister(self, name: str) -> bool:
         """
@@ -151,10 +155,11 @@ class AgentTemplateRegistry:
         Returns:
             True if template was found and removed, False otherwise
         """
-        if name in self._templates:
-            del self._templates[name]
-            return True
-        return False
+        with self._lock:
+            if name in self._templates:
+                del self._templates[name]
+                return True
+            return False
 
     def exists(self, name: str) -> bool:
         """
@@ -170,4 +175,5 @@ class AgentTemplateRegistry:
 
     def clear(self) -> None:
         """Clear all registered templates (mainly for testing)."""
-        self._templates.clear()
+        with self._lock:
+            self._templates.clear()

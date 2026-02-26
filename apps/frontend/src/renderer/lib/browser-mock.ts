@@ -367,15 +367,15 @@ const browserMockAPI: ElectronAPI = {
     data: {
       id: `custom-template-${Date.now()}`,
       ...template,
-      createdAt: new Date(),
-      updatedAt: new Date()
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
     }
   }),
   updateCustomTemplate: async (template: import('../../shared/types/template').CustomTemplate) => ({
     success: true,
     data: {
       ...template,
-      updatedAt: new Date()
+      updatedAt: new Date().toISOString()
     }
   }),
   deleteCustomTemplate: async (_templateId: string) => ({
@@ -393,8 +393,8 @@ const browserMockAPI: ElectronAPI = {
       description: 'Imported from JSON',
       category: 'other' as const,
       parameters: {},
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
       isPublic: false
     }
   }),

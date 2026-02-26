@@ -9,17 +9,10 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import Any
-
-# Ensure parent directory is in path for imports (before other imports)
-_PARENT_DIR = Path(__file__).parent.parent
-if str(_PARENT_DIR) not in sys.path:
-    sys.path.insert(0, str(_PARENT_DIR))
 
 from agents.templates.models import AgentTemplate
-from agents.templates.registry import AgentTemplateRegistry
 from agents.templates.storage import load_template, load_templates
-from agents.templates.validator import validate_import, validate_template
+from agents.templates.validator import validate_template
 
 
 def list_templates_command(project_dir: Path, format: str = "table") -> None:
@@ -37,7 +30,9 @@ def list_templates_command(project_dir: Path, format: str = "table") -> None:
             print(json.dumps({"templates": [], "count": 0}))
         else:
             print("\nNo custom templates found.")
-            print("\nCreate your first template using the UI or by creating a JSON file")
+            print(
+                "\nCreate your first template using the UI or by creating a JSON file"
+            )
             print("in .auto-claude/templates/")
         return
 
@@ -258,7 +253,9 @@ def test_template_command(
     print()
     print("To use this template in a real build:")
     print(f"  1. Select '{template.name}' in the UI task creation wizard")
-    print("  2. Or use it programmatically via create_client(template='{template.name}')")
+    print(
+        f"  2. Or use it programmatically via create_client(template='{template.name}')"
+    )
     print()
     print("-" * 80)
     print()
@@ -342,8 +339,17 @@ def show_template_info_command(project_dir: Path, template_name: str) -> None:
     print()
 
 
+def _ensure_backend_in_path() -> None:
+    """Add the backend directory to sys.path if not already present."""
+    _parent_dir = str(Path(__file__).parent.parent)
+    if _parent_dir not in sys.path:
+        sys.path.insert(0, _parent_dir)
+
+
 def main():
     """Main entry point for template CLI commands."""
+    _ensure_backend_in_path()
+
     parser = argparse.ArgumentParser(
         description="Manage custom agent templates",
         formatter_class=argparse.RawDescriptionHelpFormatter,

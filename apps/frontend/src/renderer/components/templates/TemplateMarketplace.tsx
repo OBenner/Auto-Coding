@@ -23,7 +23,6 @@ import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { ScrollArea } from '../ui/scroll-area';
-import { useTemplateStore } from '../../stores/template-store';
 import { useTranslation } from 'react-i18next';
 import type { SharedTemplateMetadata, TemplateCategory } from '../../../shared/types';
 import { cn } from '../../lib/utils';
@@ -90,7 +89,6 @@ interface TemplateMarketplaceProps {
 
 export function TemplateMarketplace({ onTemplateImport }: TemplateMarketplaceProps) {
   const { t } = useTranslation(['templates', 'common']);
-  const importTemplate = useTemplateStore((state) => state.importTemplate);
 
   // Helper function for pluralization
   const tPlural = (key: string, count: number) => {
@@ -127,16 +125,6 @@ export function TemplateMarketplace({ onTemplateImport }: TemplateMarketplacePro
     loadCommunityTemplates();
   }, []);
 
-  // Get available categories from templates
-  const availableCategories = useMemo(() => {
-    const categories = new Set<TemplateCategory>();
-    templates.forEach(t => {
-      // We don't have category in SharedTemplateMetadata, so we'd need to fetch it
-      // For now, just show common categories as filters
-    });
-    return Array.from(categories);
-  }, [templates]);
-
   // Filter templates
   const filteredTemplates = useMemo(() => {
     return templates.filter(template => {
@@ -151,7 +139,7 @@ export function TemplateMarketplace({ onTemplateImport }: TemplateMarketplacePro
         return (
           template.templateName.toLowerCase().includes(query) ||
           template.author.toLowerCase().includes(query) ||
-          template.tags.some(tag => tag.toLowerCase().includes(query))
+          template.tags?.some(tag => tag.toLowerCase().includes(query))
         );
       }
 
@@ -347,7 +335,7 @@ export function TemplateMarketplace({ onTemplateImport }: TemplateMarketplacePro
                       </div>
 
                       {/* Tags */}
-                      {template.tags.length > 0 && (
+                      {template.tags?.length > 0 && (
                         <div className="flex flex-wrap gap-1.5">
                           {template.tags.slice(0, 3).map((tag) => (
                             <Badge
@@ -358,9 +346,9 @@ export function TemplateMarketplace({ onTemplateImport }: TemplateMarketplacePro
                               {tag}
                             </Badge>
                           ))}
-                          {template.tags.length > 3 && (
+                          {template.tags?.length > 3 && (
                             <Badge variant="outline" className="text-xs px-2 py-0">
-                              +{template.tags.length - 3}
+                              +{template.tags?.length - 3}
                             </Badge>
                           )}
                         </div>

@@ -14,19 +14,16 @@ This module provides defense-in-depth for user-provided templates,
 preventing malicious or misconfigured templates from compromising the system.
 """
 
+import ipaddress
 import logging
 import re
 from typing import Any
+from urllib.parse import urlparse
 
 from agents.templates.models import AgentTemplate
 from agents.tools_pkg import (
     BASE_READ_TOOLS,
     BASE_WRITE_TOOLS,
-    CONTEXT7_TOOLS,
-    ELECTRON_TOOLS,
-    GRAPHITI_MCP_TOOLS,
-    LINEAR_TOOLS,
-    PUPPETEER_TOOLS,
     WEB_TOOLS,
 )
 
@@ -246,11 +243,11 @@ def validate_prompt_safety(prompt: str) -> list[str]:
 
     # Check for dangerous patterns
     for pattern in DANGEROUS_PROMPT_PATTERNS:
-        matches = re.findall(pattern, prompt, re.MULTILINE)
-        if matches:
+        match = re.search(pattern, prompt, re.MULTILINE)
+        if match:
             errors.append(
                 f"Potentially dangerous pattern detected in prompt: {pattern[:50]}... "
-                f"(matched: {matches[0] if matches else 'N/A'})"
+                f"(matched: {match.group(0)})"
             )
 
     # Check prompt length (prevent DoS via huge prompts)
@@ -286,7 +283,6 @@ def validate_tool_permissions(tools: list[str]) -> list[str]:
         return errors
 
     if not tools:
-        errors.append("At least one tool must be specified")
         return errors
 
     # Check for unknown tools
@@ -318,9 +314,7 @@ def validate_mcp_server_permissions(mcp_servers: list[str]) -> list[str]:
     errors = []
 
     if not isinstance(mcp_servers, list):
-        errors.append(
-            f"MCP servers must be a list, got: {type(mcp_servers).__name__}"
-        )
+        errors.append(f"MCP servers must be a list, got: {type(mcp_servers).__name__}")
         return errors
 
     # Empty MCP server list is valid (some agents don't need MCP)
@@ -427,7 +421,7 @@ def validate_safety_constraints(template: AgentTemplate) -> list[str]:
         )
 
     # Warn if template has minimal tools (might not be useful)
-    if len(tools) < 2:
+    if 0 < len(tools) < 2:
         errors.append(
             f"Warning: Template only has {len(tools)} tool(s). "
             "Consider adding more tools for better functionality."
@@ -475,7 +469,9 @@ def validate_import(data: dict[str, Any]) -> tuple[bool, list[str]]:
 
     # Validate field types
     if "name" in data and not isinstance(data["name"], str):
-        errors.append(f"Field 'name' must be a string, got: {type(data['name']).__name__}")
+        errors.append(
+            f"Field 'name' must be a string, got: {type(data['name']).__name__}"
+        )
 
     if "description" in data and not isinstance(data["description"], str):
         errors.append(
@@ -488,7 +484,9 @@ def validate_import(data: dict[str, Any]) -> tuple[bool, list[str]]:
         )
 
     if "tools" in data and not isinstance(data["tools"], list):
-        errors.append(f"Field 'tools' must be a list, got: {type(data['tools']).__name__}")
+        errors.append(
+            f"Field 'tools' must be a list, got: {type(data['tools']).__name__}"
+        )
 
     if "mcp_servers" in data and not isinstance(data["mcp_servers"], list):
         errors.append(
@@ -557,9 +555,7 @@ def validate_import_statements(prompt: str) -> list[str]:
         if matches:
             # Extract the import statement for better error reporting
             import_lines = [
-                line.strip()
-                for line in prompt.split("\n")
-                if re.search(pattern, line)
+                line.strip() for line in prompt.split("\n") if re.search(pattern, line)
             ]
             if import_lines:
                 errors.append(
@@ -575,8 +571,8 @@ def validate_import_statements(prompt: str) -> list[str]:
         if re.search(module_pattern, prompt):
             # Only warn if it looks like actual usage, not just documentation
             context_patterns = [
-                rf"{module}\.\w+",  # module.function or module.constant
-                rf"\w+\.{module}",  # something.module
+                rf"{re.escape(module)}\.\w+",  # module.function or module.constant
+                rf"\b{re.escape(module)}\.[A-Za-z_][A-Za-z0-9_]*\b",  # something.module
             ]
             if any(re.search(p, prompt) for p in context_patterns):
                 errors.append(
@@ -586,6 +582,19 @@ def validate_import_statements(prompt: str) -> list[str]:
                 break  # Only report first dangerous module to avoid spam
 
     return errors
+
+
+def _is_private_host(hostname: str) -> bool:
+    """Check if a hostname resolves to a private/local address."""
+    if not hostname:
+        return False
+    if hostname in {"localhost", ""}:
+        return True
+    try:
+        addr = ipaddress.ip_address(hostname)
+        return addr.is_private or addr.is_loopback or addr.is_reserved
+    except ValueError:
+        return False
 
 
 def validate_urls(data: dict[str, Any]) -> list[str]:
@@ -614,7 +623,9 @@ def validate_urls(data: dict[str, Any]) -> list[str]:
 
         url = data[field]
         if not isinstance(url, str):
-            errors.append(f"Field '{field}' must be a string, got: {type(url).__name__}")
+            errors.append(
+                f"Field '{field}' must be a string, got: {type(url).__name__}"
+            )
             continue
 
         # Check for dangerous protocols
@@ -627,23 +638,17 @@ def validate_urls(data: dict[str, Any]) -> list[str]:
                     f"Only http:// and https:// URLs are allowed."
                 )
 
-        # Check for SSRF risks (localhost, internal IPs)
-        ssrf_patterns = [
-            r"://localhost",
-            r"://127\.0\.0\.1",
-            r"://0\.0\.0\.0",
-            r"://::1",
-            r"://10\.",
-            r"://172\.(1[6-9]|2[0-9]|3[0-1])\.",
-            r"://192\.168\.",
-        ]
-        for pattern in ssrf_patterns:
-            if re.search(pattern, url_lower):
+        # Check for SSRF risks (localhost, internal IPs) using proper URL parsing
+        try:
+            parsed = urlparse(url)
+            hostname = parsed.hostname or ""
+            if _is_private_host(hostname):
                 errors.append(
                     f"Potentially unsafe URL in '{field}': {url}. "
                     f"Local/internal network addresses are not allowed."
                 )
-                break
+        except Exception:
+            errors.append(f"Could not parse URL in '{field}': {url}.")
 
     return errors
 
@@ -780,9 +785,7 @@ def validate_template_for_import(data: dict[str, Any]) -> tuple[bool, list[str]]
 
     # Add summary if there are errors
     if errors:
-        error_summary = [
-            f"Template validation failed with {len(errors)} error(s):"
-        ]
+        error_summary = [f"Template validation failed with {len(errors)} error(s):"]
         error_summary.extend(errors)
         return is_valid, error_summary
 

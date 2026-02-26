@@ -89,8 +89,8 @@ export function CustomTemplateSelector({
           <SelectContent>
             <SelectItem value="">
               <div className="flex items-center gap-2 text-muted-foreground">
-                <span>None</span>
-                <span className="text-xs">(Use default agent)</span>
+                <span>{t('selector.noneOption')}</span>
+                <span className="text-xs">{t('selector.useDefaultAgentHint')}</span>
               </div>
             </SelectItem>
             {templates.map((template) => (

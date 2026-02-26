@@ -600,17 +600,28 @@ print(json.dumps(suggestions))
 
     try {
       await fsPromises.access(templatesPath);
+    } catch {
+      // File doesn't exist - return empty array
+      return [];
+    }
+
+    try {
       const content = await fsPromises.readFile(templatesPath, 'utf-8');
       const templates = JSON.parse(content);
 
-      // Convert date strings back to Date objects
-      return templates.map((t: import('../../shared/types/template').CustomTemplate) => ({
-        ...t,
-        createdAt: new Date(t.createdAt),
-        updatedAt: new Date(t.updatedAt)
-      }));
-    } catch {
-      // File doesn't exist or is invalid - return empty array
+      // Convert date strings back to Date objects with validation
+      return templates.map((t: import('../../shared/types/template').CustomTemplate) => {
+        const createdAt = t.createdAt ? new Date(t.createdAt) : undefined;
+        const updatedAt = t.updatedAt ? new Date(t.updatedAt) : undefined;
+
+        return {
+          ...t,
+          createdAt: (createdAt && !isNaN(createdAt.getTime())) ? createdAt : new Date(),
+          updatedAt: (updatedAt && !isNaN(updatedAt.getTime())) ? updatedAt : new Date()
+        };
+      });
+    } catch (error) {
+      debugError('[loadCustomTemplates] Failed to read/parse templates file:', error);
       return [];
     }
   }
@@ -622,7 +633,9 @@ print(json.dumps(suggestions))
     templates: import('../../shared/types/template').CustomTemplate[]
   ): Promise<void> {
     const templatesPath = getCustomTemplatesPath();
-    await fsPromises.writeFile(templatesPath, JSON.stringify(templates, null, 2), 'utf-8');
+    const tmpPath = templatesPath + '.tmp';
+    await fsPromises.writeFile(tmpPath, JSON.stringify(templates, null, 2), 'utf-8');
+    await fsPromises.rename(tmpPath, templatesPath);
   }
 
   /**
@@ -656,6 +669,7 @@ print(json.dumps(suggestions))
     // Validate parameters if present
     if (template.parameters) {
       for (const [paramName, paramConfig] of Object.entries(template.parameters)) {
+        if (!paramConfig) continue;
         if (!paramConfig.type || !['str', 'int', 'float', 'bool', 'list', 'dict'].includes(paramConfig.type)) {
           errors.push(`Parameter '${paramName}' has invalid type: ${paramConfig.type}`);
         }
@@ -721,7 +735,7 @@ print(json.dumps(suggestions))
         const templates = await loadCustomTemplates();
 
         // Check for duplicate names
-        const duplicate = templates.find(t => t.name.toLowerCase() === template.name.toLowerCase());
+        const duplicate = templates.find(t => t.name.normalize('NFC').trim().toLowerCase() === template.name.normalize('NFC').trim().toLowerCase());
         if (duplicate) {
           return {
             success: false,
@@ -801,7 +815,7 @@ print(json.dumps(suggestions))
 
         // Check for duplicate names (exclude current template)
         const duplicate = templates.find(
-          t => t.id !== template.id && t.name.toLowerCase() === template.name.toLowerCase()
+          t => t.id !== template.id && t.name.normalize('NFC').trim().toLowerCase() === template.name.normalize('NFC').trim().toLowerCase()
         );
         if (duplicate) {
           return {
@@ -915,6 +929,14 @@ print(json.dumps(suggestions))
       try {
         debugLog('[TEMPLATE_CUSTOM_IMPORT] Importing template from JSON');
 
+        // Validate payload size
+        if (typeof jsonData !== 'string' || jsonData.length > 256 * 1024) {
+          return {
+            success: false,
+            error: 'Invalid or oversized payload (max 256 KB)'
+          };
+        }
+
         // Parse JSON
         const template = JSON.parse(jsonData) as import('../../shared/types/template').CustomTemplate;
 
@@ -936,7 +958,7 @@ print(json.dumps(suggestions))
         const templates = await loadCustomTemplates();
 
         // Check for duplicate names
-        const duplicate = templates.find(t => t.name.toLowerCase() === template.name.toLowerCase());
+        const duplicate = templates.find(t => t.name.normalize('NFC').trim().toLowerCase() === template.name.normalize('NFC').trim().toLowerCase());
         if (duplicate) {
           return {
             success: false,
