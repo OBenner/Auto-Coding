@@ -554,25 +554,25 @@ def _references_entity(change: SemanticChange, entity_name: str) -> bool:
     Returns:
         True if the change references the entity
     """
-    # Check if target matches
+    # Guard target-specific checks when target is a string; still run
+    # content_before/content_after checks even when target is non-string.
     target = getattr(change, "target", None)
-    if not isinstance(target, str):
-        return False
-
-    if target == entity_name:
-        return True
-
-    # Check if target contains entity_name as a whole word (case-insensitive).
-    # Use word-boundary regex to avoid false positives from substring matches
-    # (e.g. entity_name "foo" should not match target "foobar").
-    if entity_name:
-        word_pattern = re.compile(
-            rf"\b{re.escape(entity_name.casefold())}\b", re.IGNORECASE
-        )
-        if word_pattern.search(target.casefold()):
+    if isinstance(target, str):
+        if target == entity_name:
             return True
 
-    # Check content_before/content_after for references (case-insensitive)
+        # Check if target contains entity_name as a whole word (case-insensitive).
+        # Use word-boundary regex to avoid false positives from substring matches
+        # (e.g. entity_name "foo" should not match target "foobar").
+        if entity_name:
+            word_pattern = re.compile(
+                rf"\b{re.escape(entity_name.casefold())}\b", re.IGNORECASE
+            )
+            if word_pattern.search(target.casefold()):
+                return True
+
+    # Check content_before/content_after for references (case-insensitive).
+    # These checks always run regardless of target type.
     entity_cf = entity_name.casefold() if entity_name else ""
     content_before = getattr(change, "content_before", None)
     if isinstance(content_before, str) and entity_cf in content_before.casefold():

@@ -10,8 +10,12 @@ the function name, parameters, and return type information for semantic analysis
 
 from __future__ import annotations
 
+import ast
 import re
-from typing import NamedTuple
+from typing import TYPE_CHECKING, NamedTuple
+
+if TYPE_CHECKING:
+    from .types import FunctionSignature
 
 
 class ParameterInfo(NamedTuple):
@@ -103,7 +107,9 @@ def parse_function_signature(signature: str) -> FunctionSignature:
     # Parse parameter names (extract just the names, ignore type hints and defaults)
     param_names = _extract_parameter_names(params_str)
 
-    return FunctionSignature(
+    from .types import FunctionSignature as _FunctionSignature  # lazy runtime import
+
+    return _FunctionSignature(
         name=func_name,
         params=param_names,
         return_type=return_type,
@@ -134,6 +140,10 @@ def _extract_parameter_names(params_str: str) -> list[str]:
         if not param:
             continue
 
+        # Skip the positional-only parameter marker
+        if param == "/":
+            continue
+
         # Handle *args and **kwargs
         if param.startswith("*"):
             # Extract name after * or **
@@ -154,37 +164,87 @@ def _extract_parameter_names(params_str: str) -> list[str]:
 
 def _split_parameters(params_str: str) -> list[str]:
     """
-    Split parameter string by commas, handling nested brackets.
+    Split parameter string into individual parameter tokens.
+
+    Uses the ``ast`` module for accurate parsing of valid Python parameter
+    strings (handles quoted commas, nested generics, defaults, *args/**kwargs,
+    and the positional-only ``/`` separator).  Falls back to a depth-aware
+    character scan for fragments that are not self-contained valid Python
+    (e.g. parameters extracted from partial diffs).
 
     Args:
         params_str: Raw parameter string
 
     Returns:
-        List of individual parameter strings
+        List of individual parameter strings (annotations and defaults included)
     """
-    params = []
-    current = []
-    depth = 0  # Track bracket/paren depth for generics like Dict[str, int]
+    if not params_str.strip():
+        return []
 
-    for char in params_str:
-        if char in "[{(":
-            depth += 1
-            current.append(char)
-        elif char in "]})":
-            depth -= 1
-            current.append(char)
-        elif char == "," and depth == 0:
-            # Top-level comma - split here
+    try:
+        tree = ast.parse(f"def _tmp({params_str}): pass")
+        fa = tree.body[0].args  # type: ignore[attr-defined]
+
+        parts: list[str] = []
+
+        # Positional-only args (Python 3.8+) followed by the "/" separator
+        posonlyargs: list[ast.arg] = getattr(fa, "posonlyargs", [])
+        all_pos: list[ast.arg] = list(posonlyargs) + list(fa.args)
+        num_defaults = len(fa.defaults)
+        total_pos = len(all_pos)
+
+        for idx, arg in enumerate(all_pos):
+            default_idx = idx - (total_pos - num_defaults)
+            if default_idx >= 0:
+                parts.append(
+                    f"{ast.unparse(arg)}={ast.unparse(fa.defaults[default_idx])}"
+                )
+            else:
+                parts.append(ast.unparse(arg))
+            # Insert "/" after the last positional-only arg when more args follow
+            if posonlyargs and idx == len(posonlyargs) - 1 and idx < total_pos - 1:
+                parts.append("/")
+
+        # *args, or bare "*" when there are keyword-only args but no vararg
+        if fa.vararg:
+            parts.append(f"*{ast.unparse(fa.vararg)}")
+        elif fa.kwonlyargs:
+            parts.append("*")
+
+        # Keyword-only args
+        for idx, arg in enumerate(fa.kwonlyargs):
+            default = fa.kw_defaults[idx]
+            if default is not None:
+                parts.append(f"{ast.unparse(arg)}={ast.unparse(default)}")
+            else:
+                parts.append(ast.unparse(arg))
+
+        # **kwargs
+        if fa.kwarg:
+            parts.append(f"**{ast.unparse(fa.kwarg)}")
+
+        return parts
+
+    except SyntaxError:
+        # Fall back to depth-aware character scan for non-parseable fragments.
+        params: list[str] = []
+        current: list[str] = []
+        depth = 0
+        for char in params_str:
+            if char in "[{(":
+                depth += 1
+                current.append(char)
+            elif char in "]})":
+                depth -= 1
+                current.append(char)
+            elif char == "," and depth == 0:
+                params.append("".join(current))
+                current = []
+            else:
+                current.append(char)
+        if current:
             params.append("".join(current))
-            current = []
-        else:
-            current.append(char)
-
-    # Add the last parameter
-    if current:
-        params.append("".join(current))
-
-    return [p.strip() for p in params if p.strip()]
+        return [p.strip() for p in params if p.strip()]
 
 
 def get_signature_fingerprint(signature: str) -> str:
@@ -248,7 +308,3 @@ def signatures_match(sig1: str, sig2: str) -> bool:
     except ValueError:
         # If either signature is invalid, they don't match
         return False
-
-
-# Import at end to avoid circular dependency
-from .types import FunctionSignature

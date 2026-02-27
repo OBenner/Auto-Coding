@@ -26,6 +26,14 @@ def extract_function_definitions(code: str, ext: str) -> dict[str, str]:
 
     Returns:
         Dictionary mapping function name to full definition (including body)
+
+    Known limitations (TODO: switch to AST-based extraction):
+        - Uses indentation heuristics that miss decorated functions (the decorator
+          line is not included in the collected definition).
+        - Multi-line signatures are not collected; only single-line ``def`` starters
+          are detected, so the first line of the definition may be incomplete.
+        - Class-level docstrings that appear at the same indent as the ``def`` can
+          prematurely terminate body collection.
     """
     if ext != ".py":
         return {}
@@ -72,6 +80,25 @@ def extract_function_definitions(code: str, ext: str) -> dict[str, str]:
         i += 1
 
     return definitions
+
+
+def _get_func_line_range(code: str, func_def: str) -> tuple[int, int]:
+    """
+    Return the 1-based (line_start, line_end) of func_def within code.
+
+    Args:
+        code: The source text to search within
+        func_def: The function definition string to locate
+
+    Returns:
+        (line_start, line_end) tuple, or (1, 1) when not found
+    """
+    idx = code.find(func_def)
+    if idx < 0:
+        return 1, 1
+    line_start = code[:idx].count("\n") + 1
+    line_end = line_start + func_def.count("\n")
+    return line_start, line_end
 
 
 def analyze_with_regex(
@@ -206,13 +233,17 @@ def analyze_with_regex(
                         # This is a rename, not remove+add
                         location = f"function:{added_func}"
                         scope = infer_scope(added_func, location)
+                        # Look up accurate line numbers from the stored definitions
+                        added_start, added_end = _get_func_line_range(
+                            after_normalized, added_def
+                        )
                         changes.append(
                             SemanticChange(
                                 change_type=ChangeType.RENAME_FUNCTION,
                                 target=f"{removed_func}->{added_func}",
                                 location=location,
-                                line_start=1,
-                                line_end=1,
+                                line_start=added_start,
+                                line_end=added_end,
                                 content_before=removed_func,
                                 content_after=added_func,
                                 metadata={
@@ -388,6 +419,9 @@ def extract_function_signatures(code: str, ext: str) -> dict[str, str]:
     """
     Extract function signatures from code.
 
+    Handles both single-line and multi-line function signatures by accumulating
+    continuation lines until the opening parenthesis is balanced.
+
     Args:
         code: Source code to parse
         ext: File extension
@@ -401,22 +435,34 @@ def extract_function_signatures(code: str, ext: str) -> dict[str, str]:
 
     signatures = {}
     lines = code.split("\n")
+    i = 0
 
-    for line in lines:
-        line_stripped = line.strip()
-        # Match function definition lines
+    while i < len(lines):
+        line_stripped = lines[i].strip()
+        # Match start of a function definition
         if re.match(r"^(async\s+)?def\s+\w+", line_stripped):
-            # Extract function name
             match = re.match(r"^(?:async\s+)?def\s+(\w+)\s*\(", line_stripped)
             if match:
                 func_name = match.group(1)
-                # Extract only the signature portion (up to and including colon)
-                # This ensures we get "def foo(x):" not "def foo(x): pass"
+                # Accumulate lines until parentheses balance (handles multiline sigs)
+                sig_parts = [line_stripped]
+                depth = line_stripped.count("(") - line_stripped.count(")")
+                j = i + 1
+                while depth > 0 and j < len(lines):
+                    next_stripped = lines[j].strip()
+                    depth += next_stripped.count("(") - next_stripped.count(")")
+                    sig_parts.append(next_stripped)
+                    j += 1
+                # Normalise to a single line and extract the signature up to ':'
+                full_sig = re.sub(r"\s+", " ", " ".join(sig_parts))
                 sig_match = re.match(
                     r"^(async\s+)?def\s+\w+\s*\([^)]*\)(?:\s*->\s*[^:]+)?:",
-                    line_stripped,
+                    full_sig,
                 )
                 if sig_match:
                     signatures[func_name] = sig_match.group(0)
+                i = j
+                continue
+        i += 1
 
     return signatures
