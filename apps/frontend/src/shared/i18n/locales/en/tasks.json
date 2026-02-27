@@ -114,6 +114,7 @@
     "unlockColumn": "Unlock column width",
     "columnLocked": "Column width is locked",
     "expandAll": "Expand all columns",
+    "dragDisabledAutoSort": "Drag-and-drop disabled when auto-sort is active",
     "searchPlaceholder": "Search tasks...",
     "clearFilters": "Clear Filters"
   },
