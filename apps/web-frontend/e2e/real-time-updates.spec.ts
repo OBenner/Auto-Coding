@@ -106,7 +106,7 @@ async function receiveOneEvent(page: Page, messageData: any): Promise<any[]> {
 test.describe('WebSocket Real-Time Updates', () => {
   test.beforeEach(async ({ page }) => {
     await setupWebSocketMock(page);
-    await page.goto('http://localhost:3000');
+    await page.goto('/');
     await page.waitForTimeout(300);
   });
 
@@ -238,71 +238,48 @@ test.describe('WebSocket Real-Time Updates', () => {
   });
 
   test.describe('Message Receiving', () => {
-    test('should receive execution events', async ({ page }) => {
-      const result = await receiveOneEvent(page, {
-        event_type: 'execution',
-        spec_id: '001',
-        timestamp: new Date().toISOString(),
+    const eventCases: Array<{ type: string; data: Record<string, unknown>; assertFn: (r: any) => void }> = [
+      {
+        type: 'execution',
         data: { phase: 'implementation', progress: 50 },
-      });
-
-      expect(result.length).toBe(1);
-      expect(result[0].event_type).toBe('execution');
-      expect(result[0].data.phase).toBe('implementation');
-      expect(result[0].data.progress).toBe(50);
-    });
-
-    test('should receive log events', async ({ page }) => {
-      const result = await receiveOneEvent(page, {
-        event_type: 'log',
-        spec_id: '001',
-        timestamp: new Date().toISOString(),
+        assertFn: (r: any) => { expect(r.data.phase).toBe('implementation'); expect(r.data.progress).toBe(50); },
+      },
+      {
+        type: 'log',
         data: { level: 'info', message: 'Test log' },
-      });
-
-      expect(result.length).toBe(1);
-      expect(result[0].event_type).toBe('log');
-      expect(result[0].data.message).toBe('Test log');
-    });
-
-    test('should receive error events', async ({ page }) => {
-      const result = await receiveOneEvent(page, {
-        event_type: 'error',
-        spec_id: '001',
-        timestamp: new Date().toISOString(),
+        assertFn: (r: any) => { expect(r.data.message).toBe('Test log'); },
+      },
+      {
+        type: 'error',
         data: { error: 'Test error', message: 'Something went wrong' },
-      });
-
-      expect(result.length).toBe(1);
-      expect(result[0].event_type).toBe('error');
-      expect(result[0].data.error).toBe('Test error');
-    });
-
-    test('should receive ideation events', async ({ page }) => {
-      const result = await receiveOneEvent(page, {
-        event_type: 'ideation',
-        spec_id: '001',
-        timestamp: new Date().toISOString(),
+        assertFn: (r: any) => { expect(r.data.error).toBe('Test error'); },
+      },
+      {
+        type: 'ideation',
         data: { thought: 'Planning approach...', context: 'design' },
-      });
-
-      expect(result.length).toBe(1);
-      expect(result[0].event_type).toBe('ideation');
-      expect(result[0].data.thought).toBe('Planning approach...');
-    });
-
-    test('should receive roadmap events', async ({ page }) => {
-      const result = await receiveOneEvent(page, {
-        event_type: 'roadmap',
-        spec_id: '001',
-        timestamp: new Date().toISOString(),
+        assertFn: (r: any) => { expect(r.data.thought).toBe('Planning approach...'); },
+      },
+      {
+        type: 'roadmap',
         data: { phase: 'planning', steps: ['Step 1', 'Step 2'], current_step: 'Step 1' },
-      });
+        assertFn: (r: any) => { expect(r.data.phase).toBe('planning'); },
+      },
+    ];
 
-      expect(result.length).toBe(1);
-      expect(result[0].event_type).toBe('roadmap');
-      expect(result[0].data.phase).toBe('planning');
-    });
+    for (const { type, data, assertFn } of eventCases) {
+      test(`should receive ${type} events`, async ({ page }) => {
+        const result = await receiveOneEvent(page, {
+          event_type: type,
+          spec_id: '001',
+          timestamp: new Date().toISOString(),
+          data,
+        });
+
+        expect(result.length).toBe(1);
+        expect(result[0].event_type).toBe(type);
+        assertFn(result[0]);
+      });
+    }
 
     test('should handle multiple events in sequence', async ({ page }) => {
       const result = await page.evaluate(async () => {

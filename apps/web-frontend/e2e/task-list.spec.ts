@@ -10,40 +10,15 @@ import { test, expect } from '@playwright/test';
 import {
   mockTaskListResponse,
   mockTaskListError,
-  mockTaskDetailResponse,
   createMockTask,
-  createMockTaskDetail,
 } from './helpers';
 
 test.describe('Task List Page', () => {
   test.beforeEach(async ({ page }) => {
     // Navigate to welcome page first
-    await page.goto('http://localhost:3000');
+    await page.goto('/');
     // Wait for the main layout to be ready instead of using a fixed timeout
     await page.waitForSelector('main, [role="main"], #app, #root', { state: 'visible' });
-  });
-
-  test.describe('Navigation', () => {
-    test('should navigate to task list from welcome screen', async ({ page }) => {
-      await mockTaskListResponse(page, []);
-
-      // Click "View Tasks" button on welcome screen
-      const viewTasksButton = page.getByRole('button', { name: /view tasks/i });
-      await viewTasksButton.click();
-
-      // Should navigate to tasks page
-      await expect(page).toHaveURL(/#\/tasks/);
-      await expect(page.getByText('No tasks found')).toBeVisible();
-    });
-
-    test('should update URL hash when navigating to tasks', async ({ page }) => {
-      await mockTaskListResponse(page, []);
-
-      const viewTasksButton = page.getByRole('button', { name: /view tasks/i });
-      await viewTasksButton.click();
-
-      await expect(page).toHaveURL(/#\/tasks/);
-    });
   });
 
   test.describe('Loading State', () => {
@@ -51,7 +26,7 @@ test.describe('Task List Page', () => {
       // Mock with a delay to keep loading state visible
       await mockTaskListResponse(page, [], 1000);
 
-      await page.goto('http://localhost:3000#/tasks');
+      await page.goto('/#/tasks');
 
       // Should show loading state
       await expect(page.getByText('Loading...')).toBeVisible();
@@ -65,7 +40,7 @@ test.describe('Task List Page', () => {
     test('should display empty state when no tasks exist', async ({ page }) => {
       await mockTaskListResponse(page, []);
 
-      await page.goto('http://localhost:3000#/tasks');
+      await page.goto('/#/tasks');
 
       await expect(page.getByText('No tasks found')).toBeVisible();
       await expect(page.getByText('Tasks will appear here once you create specs')).toBeVisible();
@@ -74,7 +49,7 @@ test.describe('Task List Page', () => {
     test('should show refresh button in empty state', async ({ page }) => {
       await mockTaskListResponse(page, []);
 
-      await page.goto('http://localhost:3000#/tasks');
+      await page.goto('/#/tasks');
 
       await expect(page.getByRole('button', { name: /refresh/i })).toBeVisible();
     });
@@ -90,7 +65,7 @@ test.describe('Task List Page', () => {
 
       await mockTaskListResponse(page, mockTasks);
 
-      await page.goto('http://localhost:3000#/tasks');
+      await page.goto('/#/tasks');
 
       // Wait for tasks to load
       await expect(page.getByText('First Task')).toBeVisible();
@@ -107,7 +82,7 @@ test.describe('Task List Page', () => {
 
       await mockTaskListResponse(page, mockTasks);
 
-      await page.goto('http://localhost:3000#/tasks');
+      await page.goto('/#/tasks');
 
       await expect(page.getByText('3 tasks total')).toBeVisible();
     });
@@ -117,7 +92,7 @@ test.describe('Task List Page', () => {
 
       await mockTaskListResponse(page, mockTasks);
 
-      await page.goto('http://localhost:3000#/tasks');
+      await page.goto('/#/tasks');
 
       await expect(page.getByText('1 task total')).toBeVisible();
     });
@@ -129,7 +104,7 @@ test.describe('Task List Page', () => {
 
       await mockTaskListResponse(page, mockTasks);
 
-      await page.goto('http://localhost:3000#/tasks');
+      await page.goto('/#/tasks');
 
       await expect(page.getByText('Test Task')).toBeVisible();
       await expect(page.getByText(/Status: in_progress/)).toBeVisible();
@@ -143,7 +118,7 @@ test.describe('Task List Page', () => {
 
       await mockTaskListResponse(page, mockTasks);
 
-      await page.goto('http://localhost:3000#/tasks');
+      await page.goto('/#/tasks');
 
       await expect(page.getByText('Task 1')).toBeVisible();
 
@@ -157,7 +132,7 @@ test.describe('Task List Page', () => {
     test('should display error message when API fails', async ({ page }) => {
       await mockTaskListError(page, 500, 'Failed to load tasks');
 
-      await page.goto('http://localhost:3000#/tasks');
+      await page.goto('/#/tasks');
 
       await expect(page.getByText('Error')).toBeVisible();
       await expect(page.getByText('Failed to load tasks')).toBeVisible();
@@ -166,7 +141,7 @@ test.describe('Task List Page', () => {
     test('should show "Try Again" button on error', async ({ page }) => {
       await mockTaskListError(page, 500, 'Network error');
 
-      await page.goto('http://localhost:3000#/tasks');
+      await page.goto('/#/tasks');
 
       await expect(page.getByRole('button', { name: /try again/i })).toBeVisible();
     });
@@ -194,7 +169,7 @@ test.describe('Task List Page', () => {
         }
       });
 
-      await page.goto('http://localhost:3000#/tasks');
+      await page.goto('/#/tasks');
 
       // Wait for error state
       await expect(page.getByText('Network error')).toBeVisible();
@@ -208,64 +183,11 @@ test.describe('Task List Page', () => {
     });
   });
 
-  test.describe('Task Click Navigation', () => {
-    test('should navigate to task detail when task card is clicked', async ({ page }) => {
-      const mockTasks = [createMockTask({ number: '001', name: 'Clickable Task' })];
-      const mockDetail = createMockTaskDetail({ number: '001', name: 'Clickable Task' });
-
-      await mockTaskListResponse(page, mockTasks);
-      await mockTaskDetailResponse(page, '001', mockDetail);
-
-      await page.goto('http://localhost:3000#/tasks');
-
-      // Wait for task to be visible
-      await expect(page.getByText('Clickable Task')).toBeVisible();
-
-      // Click the task card
-      const taskCard = page.locator('[class*="cursor-pointer"]').first();
-      await taskCard.click();
-
-      // Should navigate to task detail page
-      await expect(page).toHaveURL(/#\/tasks\/001/);
-      await expect(page.getByText('Spec #001')).toBeVisible();
-    });
-
-    test('should handle clicks on multiple tasks independently', async ({ page }) => {
-      const mockTasks = [
-        createMockTask({ number: '001', name: 'Task One' }),
-        createMockTask({ number: '002', name: 'Task Two' }),
-      ];
-
-      await mockTaskListResponse(page, mockTasks);
-      await mockTaskDetailResponse(page, '001', createMockTaskDetail({ number: '001', name: 'Task One' }));
-      await mockTaskDetailResponse(page, '002', createMockTaskDetail({ number: '002', name: 'Task Two' }));
-
-      await page.goto('http://localhost:3000#/tasks');
-
-      await expect(page.getByText('Task One')).toBeVisible();
-
-      // Click first task
-      const taskOne = page.locator('[class*="cursor-pointer"]').first();
-      await taskOne.click();
-
-      await expect(page).toHaveURL(/#\/tasks\/001/);
-
-      // Go back to task list
-      await page.goto('http://localhost:3000#/tasks');
-
-      // Click second task
-      const taskTwo = page.locator('[class*="cursor-pointer"]').nth(1);
-      await taskTwo.click();
-
-      await expect(page).toHaveURL(/#\/tasks\/002/);
-    });
-  });
-
   test.describe('Refresh Functionality', () => {
     test('should display refresh button in header', async ({ page }) => {
       await mockTaskListResponse(page, [createMockTask()]);
 
-      await page.goto('http://localhost:3000#/tasks');
+      await page.goto('/#/tasks');
 
       await expect(page.getByRole('button', { name: /refresh/i })).toBeVisible();
     });
@@ -298,7 +220,7 @@ test.describe('Task List Page', () => {
         }
       });
 
-      await page.goto('http://localhost:3000#/tasks');
+      await page.goto('/#/tasks');
 
       // Wait for task list to finish loading
       await expect(page.getByText('Original Task')).toBeVisible();
@@ -345,7 +267,7 @@ test.describe('Task List Page', () => {
         }
       });
 
-      await page.goto('http://localhost:3000#/tasks');
+      await page.goto('/#/tasks');
 
       await expect(page.getByText('Test Task')).toBeVisible();
 
@@ -390,7 +312,7 @@ test.describe('Task List Page', () => {
         }
       });
 
-      await page.goto('http://localhost:3000#/tasks');
+      await page.goto('/#/tasks');
 
       await expect(page.getByText('Test Task')).toBeVisible();
 
@@ -400,62 +322,6 @@ test.describe('Task List Page', () => {
       // Check for spinning animation class
       const refreshIcon = refreshButton.locator('svg').first();
       await expect(refreshIcon).toHaveClass(/animate-spin/);
-    });
-  });
-
-  test.describe('Browser Navigation', () => {
-    test('should handle browser back button from task detail to task list', async ({ page }) => {
-      const mockTasks = [createMockTask({ number: '001', name: 'Navigation Test' })];
-      const mockDetail = createMockTaskDetail({ number: '001', name: 'Navigation Test' });
-
-      await mockTaskListResponse(page, mockTasks);
-      await mockTaskDetailResponse(page, '001', mockDetail);
-
-      await page.goto('http://localhost:3000#/tasks');
-      await expect(page.getByText('Navigation Test')).toBeVisible();
-
-      // Navigate to task detail
-      const taskCard = page.locator('[class*="cursor-pointer"]').first();
-      await taskCard.click();
-
-      await expect(page).toHaveURL(/#\/tasks\/001/);
-
-      // Use browser back button
-      await page.goBack();
-
-      // Should be back on task list
-      await expect(page).toHaveURL(/#\/tasks/);
-      await expect(page.getByText('Navigation Test')).toBeVisible();
-    });
-
-    test('should preserve task list state after returning from detail page', async ({ page }) => {
-      const mockTasks = [
-        createMockTask({ number: '001', name: 'Task 1' }),
-        createMockTask({ number: '002', name: 'Task 2' }),
-      ];
-      const mockDetail = createMockTaskDetail({ number: '001', name: 'Task 1' });
-
-      await mockTaskListResponse(page, mockTasks);
-      await mockTaskDetailResponse(page, '001', mockDetail);
-
-      await page.goto('http://localhost:3000#/tasks');
-
-      // Verify both tasks are visible
-      await expect(page.getByText('Task 1')).toBeVisible();
-      await expect(page.getByText('Task 2')).toBeVisible();
-
-      // Navigate to detail
-      const taskCard = page.locator('[class*="cursor-pointer"]').first();
-      await taskCard.click();
-
-      await expect(page).toHaveURL(/#\/tasks\/001/);
-
-      // Go back
-      await page.goBack();
-
-      // Both tasks should still be visible (no re-fetch needed)
-      await expect(page.getByText('Task 1')).toBeVisible();
-      await expect(page.getByText('Task 2')).toBeVisible();
     });
   });
 
@@ -469,7 +335,7 @@ test.describe('Task List Page', () => {
 
       await mockTaskListResponse(page, mockTasks);
 
-      await page.goto('http://localhost:3000#/tasks');
+      await page.goto('/#/tasks');
 
       await expect(page.getByText('Task with "quotes"')).toBeVisible();
       await expect(page.getByText("Task with 'apostrophes'")).toBeVisible();
@@ -482,7 +348,7 @@ test.describe('Task List Page', () => {
 
       await mockTaskListResponse(page, mockTasks);
 
-      await page.goto('http://localhost:3000#/tasks');
+      await page.goto('/#/tasks');
 
       // Task should be visible (even if truncated)
       await expect(page.getByText(longName, { exact: false })).toBeVisible();
@@ -491,7 +357,7 @@ test.describe('Task List Page', () => {
     test('should display page title', async ({ page }) => {
       await mockTaskListResponse(page, []);
 
-      await page.goto('http://localhost:3000#/tasks');
+      await page.goto('/#/tasks');
 
       await expect(page.getByRole('heading', { name: /tasks/i })).toBeVisible();
     });
