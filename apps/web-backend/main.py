@@ -25,12 +25,11 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Application configuration
-HOST = os.getenv("HOST", "0.0.0.0")  # NOSONAR - dev default only
+HOST = os.getenv("HOST", "")
 PORT = int(os.getenv("PORT", "8000"))
 DEBUG = os.getenv("DEBUG", "false").lower() == "true"
-CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:3000").split(
-    ","
-)  # NOSONAR - dev default only
+_cors_env = os.getenv("CORS_ORIGINS", "")
+CORS_ORIGINS = [o.strip() for o in _cors_env.split(",") if o.strip()]
 SECRET_KEY = os.getenv("SECRET_KEY") or secrets.token_urlsafe(32)
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
 WS_HEARTBEAT_INTERVAL = int(os.getenv("WS_HEARTBEAT_INTERVAL", "30"))

@@ -5,6 +5,7 @@ Handles fixtures and test configuration for cloud integration tests.
 """
 
 import os
+import secrets
 from datetime import timedelta
 from unittest.mock import patch
 
@@ -36,7 +37,7 @@ def _set_test_env():
     """Set test environment variables via monkeypatch-style context."""
     _originals: dict[str, str | None] = {}
     _vars = {
-        "SECRET_KEY": "test-secret-key-for-testing-only",  # NOSONAR - test only
+        "SECRET_KEY": secrets.token_hex(32),
         "DEBUG": "true",
         "ACCESS_TOKEN_EXPIRE_MINUTES": "60",
     }
