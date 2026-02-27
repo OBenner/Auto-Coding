@@ -453,10 +453,12 @@ def extract_function_signatures(code: str, ext: str) -> dict[str, str]:
                     depth += next_stripped.count("(") - next_stripped.count(")")
                     sig_parts.append(next_stripped)
                     j += 1
-                # Normalise to a single line and extract the signature up to ':'
+                # Normalise to a single line; with whitespace pre-normalised,
+                # use simple fixed-space patterns to avoid adjacent optional
+                # quantifiers that can cause polynomial regex backtracking.
                 full_sig = re.sub(r"\s+", " ", " ".join(sig_parts))
                 sig_match = re.match(
-                    r"^(async\s+)?def\s+\w+\s*\([^)]*\)(?:\s*->\s*[^:]+)?:",
+                    r"^(async )?def \w+ ?\([^)]*\)(?: -> [^:]+)?:",
                     full_sig,
                 )
                 if sig_match:
