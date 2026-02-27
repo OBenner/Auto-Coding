@@ -57,6 +57,9 @@ class MergeAnalyticsEntry:
 
     # Additional context
     merge_intent: str = ""  # Why this merge was performed
+    resolution_explanations: dict[str, str] = field(
+        default_factory=dict
+    )  # File path -> explanation
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
@@ -77,6 +80,7 @@ class MergeAnalyticsEntry:
             "conflicts_ai_resolved": self.conflicts_ai_resolved,
             "conflicts_remaining": self.conflicts_remaining,
             "merge_intent": self.merge_intent,
+            "resolution_explanations": self.resolution_explanations,
         }
 
     @classmethod
@@ -103,6 +107,7 @@ class MergeAnalyticsEntry:
             conflicts_ai_resolved=data.get("conflicts_ai_resolved", 0),
             conflicts_remaining=data.get("conflicts_remaining", 0),
             merge_intent=data.get("merge_intent", ""),
+            resolution_explanations=data.get("resolution_explanations", {}),
         )
 
     @property
@@ -265,6 +270,9 @@ class ConflictPattern:
     auto_resolved_count: int = 0
     ai_resolved_count: int = 0
     manual_required_count: int = 0
+    resolution_accuracy: float = (
+        0.0  # Accuracy rate (0.0 to 1.0) for resolved conflicts
+    )
 
     # Additional context
     description: str = ""
@@ -284,6 +292,7 @@ class ConflictPattern:
             "auto_resolved_count": self.auto_resolved_count,
             "ai_resolved_count": self.ai_resolved_count,
             "manual_required_count": self.manual_required_count,
+            "resolution_accuracy": self.resolution_accuracy,
             "description": self.description,
         }
 
@@ -303,6 +312,7 @@ class ConflictPattern:
             auto_resolved_count=data.get("auto_resolved_count", 0),
             ai_resolved_count=data.get("ai_resolved_count", 0),
             manual_required_count=data.get("manual_required_count", 0),
+            resolution_accuracy=data.get("resolution_accuracy", 0.0),
             description=data.get("description", ""),
         )
 

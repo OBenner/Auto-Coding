@@ -17,6 +17,22 @@ from enum import Enum
 from typing import Any
 
 
+class VariableScope(Enum):
+    """
+    Variable scope levels.
+
+    Used in SemanticChange metadata to track the visibility context
+    of variable additions and modifications.
+    """
+
+    LOCAL = "local"  # Function/method local variable
+    FUNCTION = "function"  # Function-level scope
+    CLASS = "class"  # Class member/property
+    MODULE = "module"  # Module/global level
+    GLOBAL = "global"  # Global variable
+    BLOCK = "block"  # Block-scoped (if/for/while blocks)
+
+
 class ChangeType(Enum):
     """
     Semantic classification of code changes.
@@ -48,6 +64,7 @@ class ChangeType(Enum):
     ADD_VARIABLE = "add_variable"
     REMOVE_VARIABLE = "remove_variable"
     MODIFY_VARIABLE = "modify_variable"
+    RENAME_VARIABLE = "rename_variable"
     ADD_CONSTANT = "add_constant"
 
     # Class changes
@@ -137,6 +154,42 @@ class MergeDecision(Enum):
 
 
 @dataclass
+class FunctionSignature:
+    """
+    Signature of a function for semantic comparison.
+
+    Used in function signature analysis to detect parameter changes,
+    return type modifications, and function renames.
+
+    Attributes:
+        name: Function/method name
+        params: List of parameter names
+        return_type: Return type (as string, language-specific format)
+    """
+
+    name: str
+    params: list[str] = field(default_factory=list)
+    return_type: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dictionary for serialization."""
+        return {
+            "name": self.name,
+            "params": self.params,
+            "return_type": self.return_type,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> FunctionSignature:
+        """Create from dictionary."""
+        return cls(
+            name=data["name"],
+            params=data.get("params", []),
+            return_type=data.get("return_type", ""),
+        )
+
+
+@dataclass
 class SemanticChange:
     """
     A single semantic change within a file.
@@ -152,7 +205,8 @@ class SemanticChange:
         line_end: Ending line number (1-indexed)
         content_before: The code before the change (for modifications)
         content_after: The code after the change
-        metadata: Additional context (dependency info, etc.)
+        metadata: Additional context (dependency info, scope for variables, etc.)
+            For variable changes, includes 'scope' key (local, function, class, module, global, block)
     """
 
     change_type: ChangeType
@@ -222,6 +276,17 @@ class SemanticChange:
             ChangeType.ADD_COMMENT,
         }
         return self.change_type in additive_types
+
+    @property
+    def scope(self) -> str | None:
+        """
+        Get the variable scope from metadata.
+
+        Returns the scope value if present in metadata (e.g., 'local', 'function', 'class'),
+        or None if no scope information is available. Used primarily for variable-related
+        changes (ADD_VARIABLE, MODIFY_VARIABLE, REMOVE_VARIABLE).
+        """
+        return self.metadata.get("scope")
 
 
 @dataclass
@@ -533,6 +598,7 @@ class MergeResult:
         ai_calls_made: Number of AI calls required
         tokens_used: Approximate tokens used for AI calls
         explanation: Human-readable explanation of what was done
+        resolution_explanation: Detailed explanation of how conflicts were resolved
         error: Error message if merge failed
     """
 
@@ -544,6 +610,7 @@ class MergeResult:
     ai_calls_made: int = 0
     tokens_used: int = 0
     explanation: str = ""
+    resolution_explanation: str = ""
     error: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
@@ -557,6 +624,7 @@ class MergeResult:
             "ai_calls_made": self.ai_calls_made,
             "tokens_used": self.tokens_used,
             "explanation": self.explanation,
+            "resolution_explanation": self.resolution_explanation,
             "error": self.error,
         }
 
@@ -575,6 +643,52 @@ class MergeResult:
         return (
             len(self.conflicts_remaining) > 0
             or self.decision == MergeDecision.NEEDS_HUMAN_REVIEW
+        )
+
+
+@dataclass
+class ResolutionPreview:
+    """
+    Preview of a suggested conflict resolution.
+
+    Used in the resolution preview system to show users how conflicts
+    could be resolved before applying the merge.
+
+    Attributes:
+        file_path: Path to the file with conflicts
+        original: The original conflicting code section
+        suggested: The suggested merged/resolved code
+        explanation: Optional explanation of the resolution strategy
+        conflicts_addressed: List of conflict regions this preview addresses
+    """
+
+    file_path: str
+    original: str
+    suggested: str
+    explanation: str = ""
+    conflicts_addressed: list[ConflictRegion] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dictionary for serialization."""
+        return {
+            "file_path": self.file_path,
+            "original": self.original,
+            "suggested": self.suggested,
+            "explanation": self.explanation,
+            "conflicts_addressed": [c.to_dict() for c in self.conflicts_addressed],
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> ResolutionPreview:
+        """Create from dictionary."""
+        return cls(
+            file_path=data["file_path"],
+            original=data["original"],
+            suggested=data["suggested"],
+            explanation=data.get("explanation", ""),
+            conflicts_addressed=[
+                ConflictRegion.from_dict(c) for c in data.get("conflicts_addressed", [])
+            ],
         )
 
 
