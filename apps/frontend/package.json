@@ -95,7 +95,7 @@
     "electron-updater": "^6.6.2",
     "i18next": "^25.7.3",
     "lucide-react": "^0.575.0",
-    "minimatch": "^10.1.1",
+    "minimatch": "^10.2.3",
     "motion": "^12.23.26",
     "@modelcontextprotocol/sdk": "^1.0.4",
     "proper-lockfile": "^4.1.2",
