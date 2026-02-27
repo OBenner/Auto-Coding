@@ -203,8 +203,16 @@ class SecurityReport:
             "detections": detections,
             "vulnerabilities": vulnerabilities,
             "scan_errors": [],
-            "has_critical_issues": self.summary_counts["critical"] > 0,
-            "should_block_qa": self.summary_counts["critical"] > 0,
+            "has_critical_issues": (
+                self.summary_counts.get("critical", 0) > 0
+                or self.summary_counts.get("high", 0) > 0
+                or len(detections) > 0
+            ),
+            "should_block_qa": (
+                self.summary_counts.get("critical", 0) > 0
+                or self.summary_counts.get("high", 0) > 0
+                or len(detections) > 0
+            ),
             "summary": {
                 "total_detections": len(detections),
                 "total_vulnerabilities": len(vulnerabilities),
@@ -941,7 +949,7 @@ class SecurityAuditAgent:
                         findings.append(finding)
 
             except (OSError, UnicodeDecodeError) as e:
-                logger.debug("Skipping unreadable file %s: %s", py_file, e)
+                logger.debug("Skipping unreadable file %s: %s", js_file, e)
 
         return findings
 
@@ -1180,8 +1188,10 @@ class SecurityAuditAgent:
                         )
                         findings.append(finding)
 
-            except (OSError, UnicodeDecodeError, StopIteration):
-                pass
+            except StopIteration:
+                pass  # No matching files — expected, not an error
+            except (OSError, UnicodeDecodeError) as e:
+                logger.debug("Skipping unreadable file during session check: %s", e)
 
         return findings
 
@@ -1375,16 +1385,18 @@ class SecurityAuditAgent:
             scanner = OWASPScanner()
             scan_result = scanner.scan(project_dir)
 
-            # Set coverage from scanner results: a category is covered if
-            # the scanner explicitly scanned it (has "scanned"/"executed" flag)
-            # or it appears in the summary at all (was part of the scan).
+            # Use canonical OWASP category list so all categories appear
+            # in coverage, not just those with findings in scan_result.summary.
+            from analysis.owasp_scanner import OWASP_CATEGORIES
+
             report.owasp_coverage = {}
-            for category, stats in scan_result.summary.items():
+            for category in OWASP_CATEGORIES:
+                stats = scan_result.summary.get(category, {})
                 scanned = stats.get("scanned", stats.get("executed"))
                 if scanned is not None:
                     report.owasp_coverage[f"{category}_2021"] = bool(scanned)
                 else:
-                    # Category present in summary means it was scanned
+                    # Category was scanned (all canonical categories are)
                     report.owasp_coverage[f"{category}_2021"] = True
 
             # Convert OWASP vulnerabilities to SecurityFindings
@@ -1417,7 +1429,7 @@ class SecurityAuditAgent:
                     remediation="Investigate the scan failure and re-run the security audit.",
                 )
             )
-            report.owasp_coverage = None
+            report.owasp_coverage = {}  # Safe default for downstream .values() calls
 
     def generate_remediation(
         self,

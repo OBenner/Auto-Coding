@@ -505,19 +505,19 @@ db.execute(query, [req.query.search]);
 
 ## Prioritized Remediation Plan
 
-### Immediate (Fix Today)
+### Critical Priority
 
 1. **SEC-001**: Fix SQL injection in user search
 2. **SEC-002**: Remove hardcoded database password
 
-### Within 7 Days
+### High Priority
 
 3. Upgrade vulnerable dependencies (lodash, express)
 4. Implement rate limiting on authentication endpoints
 5. Add input validation middleware
 6. Fix XSS vulnerability in comments
 
-### Within 30 Days
+### Medium Priority
 
 7. Add MFA support
 8. Strengthen password policy

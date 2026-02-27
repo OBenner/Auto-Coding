@@ -119,25 +119,27 @@ def handle_security_audit_command(
                 print(f"  {icon(Icons.SUCCESS)} {category}")
             print()
 
-        # Save report
-        print(divider())
-        print_header("Saving Report")
-        print()
+        # Save report (skip if spec_dir provided — run_full_audit already saved)
+        if not spec_dir:
+            print(divider())
+            print_header("Saving Report")
+            print()
 
-        # Determine output directory
-        output_dir = spec_dir if spec_dir else project_dir / ".auto-claude"
-        output_dir.mkdir(parents=True, exist_ok=True)
+            output_dir = project_dir / ".auto-claude"
+            output_dir.mkdir(parents=True, exist_ok=True)
 
-        # Save in requested format(s)
-        if output_format in ("json", "both"):
-            json_path = output_dir / "security_audit_report.json"
-            report.to_json_file(json_path)
-            print(success(f"{icon(Icons.FILE)} JSON report saved: {json_path}"))
+            if output_format in ("json", "both"):
+                json_path = output_dir / "security_audit_report.json"
+                report.to_json_file(json_path)
+                print(success(f"{icon(Icons.FILE)} JSON report saved: {json_path}"))
 
-        if output_format in ("markdown", "both"):
-            md_path = output_dir / "security_audit_report.md"
-            report.to_markdown_file(md_path)
-            print(success(f"{icon(Icons.FILE)} Markdown report saved: {md_path}"))
+            if output_format in ("markdown", "both"):
+                md_path = output_dir / "security_audit_report.md"
+                report.to_markdown_file(md_path)
+                print(success(f"{icon(Icons.FILE)} Markdown report saved: {md_path}"))
+        else:
+            print(divider())
+            print(success(f"{icon(Icons.FILE)} Report saved to {spec_dir}"))
 
         print()
 

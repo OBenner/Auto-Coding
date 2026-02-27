@@ -439,14 +439,11 @@ To add detection patterns for new vulnerability types:
 1. **Add patterns to `owasp_scanner.py`:**
 
 ```python
-# In VULNERABILITY_PATTERNS dict
-"A03": {
-    "name": "Injection",
-    "patterns": [
-        # Existing patterns...
-        r"your_new_pattern",  # Add new pattern
-    ],
-}
+# In the PATTERNS dict (list of (regex, description) tuples per category)
+"A03": [
+    # Existing patterns...
+    (r"your_new_pattern", "Description of vulnerability detected"),
+]
 ```
 
 1. **Add detection method (if needed):**
@@ -578,11 +575,13 @@ auditor.min_severity = "high"  # Only report high and critical
 **Issue: Specific file types not scanned**
 
 ```python
-# Solution: Add file extensions to scanner
-from analysis.owasp_scanner import OWASPScanner
+# Solution: Add extensions to the SCANNABLE_EXTENSIONS constant in owasp_scanner.py
+# The scanner uses a module-level frozenset; to add custom extensions,
+# create a subclass or modify the constant before scanning:
+from analysis.owasp_scanner import SCANNABLE_EXTENSIONS
 
-scanner = OWASPScanner()
-scanner.file_extensions.append(".your_extension")
+# Add your extension (requires creating a new frozenset)
+custom_extensions = SCANNABLE_EXTENSIONS | frozenset({".your_extension"})
 ```
 
 **Issue: Missing OWASP category coverage**
