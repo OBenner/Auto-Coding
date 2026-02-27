@@ -59,6 +59,34 @@ async function waitForStoreInit(): Promise<void> {
   }
 }
 
+/**
+ * Pre-populate projects.json so initializeAsync loads the project from disk,
+ * avoiding a race where slow macOS CI I/O lets initializeAsync complete AFTER
+ * addProject and overwrite in-memory data.
+ */
+function writePrepopulatedProjects(projectId: string, projectPath: string): void {
+  const storePath = path.join(USER_DATA_PATH, 'store', 'projects.json');
+  writeFileSync(storePath, JSON.stringify({
+    projects: [{
+      id: projectId,
+      name: path.basename(projectPath),
+      path: projectPath,
+      autoBuildPath: '.auto-claude',
+      settings: {
+        model: 'sonnet',
+        memoryBackend: 'file',
+        linearSync: false,
+        notifications: { onTaskComplete: true, onTaskFailed: true, onReviewNeeded: true, sound: false },
+        graphitiMcpEnabled: true,
+        graphitiMcpUrl: 'http://localhost:8000/mcp/'
+      },
+      createdAt: '2024-01-01T00:00:00Z',
+      updatedAt: '2024-01-01T00:00:00Z'
+    }],
+    settings: {}
+  }));
+}
+
 // Setup test directories with unique secure temp dir
 function setupTestDirs(): void {
   // Create a unique, secure temporary directory
@@ -946,23 +974,8 @@ describe('ProjectStore', () => {
       };
       writeFileSync(path.join(specsDir, 'implementation_plan.json'), JSON.stringify(plan));
 
-      // Pre-populate projects.json so initializeAsync loads the project from
-      // disk, avoiding a race where slow macOS CI I/O lets initializeAsync
-      // complete AFTER addProject and overwrite in-memory data.
       const projectId = 'cache-test-project-id';
-      const storePath = path.join(USER_DATA_PATH, 'store', 'projects.json');
-      writeFileSync(storePath, JSON.stringify({
-        projects: [{
-          id: projectId,
-          name: 'test-project',
-          path: TEST_PROJECT_PATH,
-          autoBuildPath: '.auto-claude',
-          settings: { model: 'sonnet', memoryBackend: 'file', linearSync: false, notifications: { onTaskComplete: true, onTaskFailed: true, onReviewNeeded: true, sound: false }, graphitiMcpEnabled: true, graphitiMcpUrl: 'http://localhost:8000/mcp/' },
-          createdAt: '2024-01-01T00:00:00Z',
-          updatedAt: '2024-01-01T00:00:00Z'
-        }],
-        settings: {}
-      }));
+      writePrepopulatedProjects(projectId, TEST_PROJECT_PATH);
 
       const { ProjectStore } = await import('../project-store');
       const store = new ProjectStore();
@@ -1002,23 +1015,8 @@ describe('ProjectStore', () => {
       };
       writeFileSync(path.join(specsDir, 'implementation_plan.json'), JSON.stringify(plan));
 
-      // Pre-populate projects.json so initializeAsync loads the project from
-      // disk, avoiding a race where slow macOS CI I/O lets initializeAsync
-      // complete AFTER addProject and overwrite in-memory data.
       const projectId = 'invalidate-test-project-id';
-      const storePath = path.join(USER_DATA_PATH, 'store', 'projects.json');
-      writeFileSync(storePath, JSON.stringify({
-        projects: [{
-          id: projectId,
-          name: 'test-project',
-          path: TEST_PROJECT_PATH,
-          autoBuildPath: '.auto-claude',
-          settings: { model: 'sonnet', memoryBackend: 'file', linearSync: false, notifications: { onTaskComplete: true, onTaskFailed: true, onReviewNeeded: true, sound: false }, graphitiMcpEnabled: true, graphitiMcpUrl: 'http://localhost:8000/mcp/' },
-          createdAt: '2024-01-01T00:00:00Z',
-          updatedAt: '2024-01-01T00:00:00Z'
-        }],
-        settings: {}
-      }));
+      writePrepopulatedProjects(projectId, TEST_PROJECT_PATH);
 
       const { ProjectStore } = await import('../project-store');
       const store = new ProjectStore();

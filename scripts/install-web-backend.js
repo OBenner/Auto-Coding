@@ -92,18 +92,26 @@ async function main() {
     console.log(`\n✓ Virtual environment already exists at ${venvDir}`);
   } else {
     console.log('\nCreating virtual environment...');
-    if (!run(`${python} -m venv .venv`)) {
-      console.error('Failed to create virtual environment');
-      process.exit(1);
+    // Prefer uv (repo standard per CLAUDE.md), fall back to python -m venv
+    if (!run('uv venv')) {
+      console.log('  uv not available, falling back to python -m venv...');
+      if (!run(`${python} -m venv .venv`)) {
+        console.error('Failed to create virtual environment');
+        process.exit(1);
+      }
     }
   }
 
   // Install dependencies (includes test dependencies in web-backend)
   console.log('\nInstalling dependencies...');
-  const pip = getPipPath();
-  if (!run(`"${pip}" install -r requirements.txt`)) {
-    console.error('Failed to install dependencies');
-    process.exit(1);
+  // Prefer uv pip (repo standard), fall back to venv pip
+  if (!run('uv pip install -r requirements.txt')) {
+    console.log('  uv pip not available, falling back to venv pip...');
+    const pip = getPipPath();
+    if (!run(`"${pip}" install -r requirements.txt`)) {
+      console.error('Failed to install dependencies');
+      process.exit(1);
+    }
   }
 
   // Create .env file from .env.example if it doesn't exist

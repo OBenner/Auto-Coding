@@ -38,6 +38,7 @@ The Auto Code Web Backend provides a web API layer on top of the Auto Code auton
 ### Installation
 
 1. **Create virtual environment:**
+
    ```bash
    cd apps/web-backend
    # Recommended (requires `uv`, see CLAUDE.md):
@@ -50,6 +51,7 @@ The Auto Code Web Backend provides a web API layer on top of the Auto Code auton
    ```
 
 2. **Install dependencies:**
+
    ```bash
    # Recommended (uses the `uv` package manager):
    uv pip install -r requirements.txt
