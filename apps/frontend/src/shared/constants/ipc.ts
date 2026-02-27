@@ -478,6 +478,7 @@ export const IPC_CHANNELS = {
   // Productivity Analytics operations
   PRODUCTIVITY_ANALYTICS_GET_SUMMARY: 'productivityAnalytics:getSummary',
   PRODUCTIVITY_ANALYTICS_GET_TRENDS: 'productivityAnalytics:getTrends',
+  PRODUCTIVITY_ANALYTICS_GET_FAILURE_METRICS: 'productivityAnalytics:getFailureMetrics',
   PRODUCTIVITY_ANALYTICS_EXPORT: 'productivityAnalytics:export',
 
   // Memory Infrastructure status (LadybugDB - no Docker required)
@@ -653,6 +654,8 @@ export const IPC_CHANNELS = {
   TEMPLATE_CUSTOM_EXPORT: 'template:custom:export',
   TEMPLATE_CUSTOM_IMPORT: 'template:custom:import',
   TEMPLATE_CUSTOM_TEST: 'template:custom:test',
+
+
   // Session Replay operations
   SESSION_REPLAY_LIST: 'sessionReplay:list',
   SESSION_REPLAY_GET_SESSION: 'sessionReplay:getSession',

@@ -259,7 +259,7 @@ def test_template_command(
     print("To use this template in a real build:")
     print(f"  1. Select '{template.name}' in the UI task creation wizard")
     print(
-        "  2. Or use it programmatically via create_client(template='{template.name}')"
+        f"  2. Or use it programmatically via create_client(template='{template.name}')"
     )
     print()
     print("-" * 80)

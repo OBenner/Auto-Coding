@@ -905,6 +905,36 @@
     "trend": "Tendance",
     "alert": "Alerte de qualité"
   },
+  "failureAnalysis": {
+    "title": "Tendances d'analyse des échecs",
+    "loading": "Chargement de l'analyse des échecs...",
+    "noData": "Aucune donnée de tendance d'échec disponible",
+    "noDataHint": "Complétez plus d'itérations QA pour voir les tendances d'échec",
+    "chartFooter": "Tendances des échecs sur les 7 derniers jours - Un taux de récurrence plus bas indique un meilleur apprentissage",
+    "chartAriaLabel": "Graphique des tendances d'analyse des échecs montrant les échecs, le taux de cause racine et le taux de récurrence au fil du temps",
+    "chartTitle": "Graphique des tendances d'analyse des échecs",
+    "totalFailures": "Total des échecs",
+    "rootCauseRate": "Taux de cause racine",
+    "recurrenceRate": "Taux de récurrence",
+    "metrics": {
+      "failures": "Échecs",
+      "rootCauseRatePercent": "Taux de cause racine (%)",
+      "recurrenceRatePercent": "Taux de récurrence (%)"
+    }
+  },
+  "failurePatterns": {
+    "title": "Modèles d'échec",
+    "failureCount": "{{count}} échec",
+    "failureCount_plural": "{{count}} échecs",
+    "loading": "Chargement de l'analyse des échecs...",
+    "noData": "Aucune donnée d'échec enregistrée",
+    "noDataHint": "L'analyse des échecs apparaîtra ici après les itérations QA",
+    "totalFailures": "Total des échecs",
+    "rootCauseRate": "Taux de cause racine",
+    "patternDetection": "Détection de modèles",
+    "recurrenceRate": "Taux de récurrence",
+    "commonCategories": "Catégories d'échec courantes"
+  },
   "patternReview": {
     "title": "Patrons appris",
     "subtitle": "Examiner et gérer les patrons appris de votre base de code",

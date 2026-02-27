@@ -712,7 +712,11 @@ def load_custom_template_prompt(template_name: str, project_dir: Path) -> str:
     if not template.custom_prompt or not template.custom_prompt.strip():
         raise ValueError(
             f"Template '{template_name}' has no custom prompt defined.\n"
-            f"Templates must include a custom_prompt field with at least 20 characters."
+            f"Templates must include a non-empty custom_prompt field."
+        )
+    if len(template.custom_prompt.strip()) < 20:
+        raise ValueError(
+            f"Template '{template_name}' custom_prompt is too short (minimum 20 characters)."
         )
 
     return template.custom_prompt

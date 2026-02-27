@@ -14,9 +14,11 @@ This module provides defense-in-depth for user-provided templates,
 preventing malicious or misconfigured templates from compromising the system.
 """
 
+import ipaddress
 import logging
 import re
 from typing import Any
+from urllib.parse import urlparse
 
 from agents.templates.models import AgentTemplate
 from agents.tools_pkg import (
@@ -209,7 +211,7 @@ def validate_template(
     errors.extend(param_errors)
 
     # Additional safety checks
-    safety_errors = validate_safety_constraints(template)
+    safety_errors = validate_safety_constraints(template, strict=strict)
     errors.extend(safety_errors)
 
     is_valid = len(errors) == 0
@@ -241,11 +243,10 @@ def validate_prompt_safety(prompt: str) -> list[str]:
 
     # Check for dangerous patterns
     for pattern in DANGEROUS_PROMPT_PATTERNS:
-        matches = re.findall(pattern, prompt, re.MULTILINE)
-        if matches:
+        match = re.search(pattern, prompt, re.MULTILINE)
+        if match:
             errors.append(
-                f"Potentially dangerous pattern detected in prompt: {pattern[:50]}... "
-                f"(matched: {matches[0] if matches else 'N/A'})"
+                f"Potentially dangerous pattern detected in prompt: {pattern[:50]}..."
             )
 
     # Check prompt length (prevent DoS via huge prompts)
@@ -281,7 +282,6 @@ def validate_tool_permissions(tools: list[str]) -> list[str]:
         return errors
 
     if not tools:
-        errors.append("At least one tool must be specified")
         return errors
 
     # Check for unknown tools
@@ -386,7 +386,9 @@ def validate_parameters(parameters: dict[str, Any]) -> list[str]:
     return errors
 
 
-def validate_safety_constraints(template: AgentTemplate) -> list[str]:
+def validate_safety_constraints(
+    template: AgentTemplate, strict: bool = True
+) -> list[str]:
     """
     Validate additional safety constraints on templates.
 
@@ -397,6 +399,7 @@ def validate_safety_constraints(template: AgentTemplate) -> list[str]:
 
     Args:
         template: AgentTemplate instance to validate
+        strict: If True, single-tool warning is treated as an error. If False, it is omitted.
 
     Returns:
         List of error messages (empty if valid)
@@ -420,11 +423,13 @@ def validate_safety_constraints(template: AgentTemplate) -> list[str]:
         )
 
     # Warn if template has minimal tools (might not be useful)
-    if len(tools) < 2:
-        errors.append(
+    if 0 < len(tools) < 2:
+        msg = (
             f"Warning: Template only has {len(tools)} tool(s). "
             "Consider adding more tools for better functionality."
         )
+        if strict:
+            errors.append(msg)
 
     return errors
 
@@ -568,10 +573,9 @@ def validate_import_statements(prompt: str) -> list[str]:
         # Use word boundaries to avoid false positives
         module_pattern = r"\b" + re.escape(module) + r"\b"
         if re.search(module_pattern, prompt):
-            # Only warn if it looks like actual usage, not just documentation
+            # Only warn if it looks like actual usage (module.attribute), not just documentation
             context_patterns = [
-                rf"{module}\.\w+",  # module.function or module.constant
-                rf"\w+\.{module}",  # something.module
+                rf"\b{re.escape(module)}\.[A-Za-z_][A-Za-z0-9_]*\b",  # module.attribute
             ]
             if any(re.search(p, prompt) for p in context_patterns):
                 errors.append(
@@ -581,6 +585,37 @@ def validate_import_statements(prompt: str) -> list[str]:
                 break  # Only report first dangerous module to avoid spam
 
     return errors
+
+
+def _is_private_host(hostname: str) -> bool:
+    """Check if a hostname resolves to a private/local address."""
+    import socket
+
+    if not hostname:
+        return False
+    if hostname in {"localhost", "127.0.0.1", "::1", ""}:
+        return True
+    # Try literal IP first
+    try:
+        addr = ipaddress.ip_address(hostname)
+        return addr.is_private or addr.is_loopback or addr.is_reserved
+    except ValueError:
+        pass
+    # Resolve hostname via DNS; treat unresolvable as untrusted (private)
+    try:
+        results = socket.getaddrinfo(hostname, None)
+        for result in results:
+            addr_str = result[4][0]
+            try:
+                addr = ipaddress.ip_address(addr_str)
+                if addr.is_private or addr.is_loopback or addr.is_reserved:
+                    return True
+            except ValueError:
+                continue
+        return False
+    except OSError:
+        # DNS resolution failed - treat as private/untrusted
+        return True
 
 
 def validate_urls(data: dict[str, Any]) -> list[str]:
@@ -624,23 +659,22 @@ def validate_urls(data: dict[str, Any]) -> list[str]:
                     f"Only http:// and https:// URLs are allowed."
                 )
 
-        # Check for SSRF risks (localhost, internal IPs)
-        ssrf_patterns = [
-            r"://localhost",
-            r"://127\.0\.0\.1",
-            r"://0\.0\.0\.0",
-            r"://::1",
-            r"://10\.",
-            r"://172\.(1[6-9]|2[0-9]|3[0-1])\.",
-            r"://192\.168\.",
-        ]
-        for pattern in ssrf_patterns:
-            if re.search(pattern, url_lower):
+        # Check for SSRF risks (localhost, internal IPs) using proper URL parsing
+        try:
+            parsed = urlparse(url)
+            if parsed.scheme not in {"http", "https"}:
+                errors.append(
+                    f"Unsafe URL scheme in '{field}': {url}. Only http/https are allowed."
+                )
+                continue
+            hostname = parsed.hostname or ""
+            if _is_private_host(hostname):
                 errors.append(
                     f"Potentially unsafe URL in '{field}': {url}. "
                     f"Local/internal network addresses are not allowed."
                 )
-                break
+        except Exception:
+            errors.append(f"Could not parse URL in '{field}': {url}.")
 
     return errors
 

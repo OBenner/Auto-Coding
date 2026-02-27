@@ -59,7 +59,8 @@ import type {
   ProductivitySummary,
   ProductivityTrendPoint,
   ProductivityAnalyticsFilter,
-  ProductivityAnalyticsExportOptions
+  ProductivityAnalyticsExportOptions,
+  FailureMetrics
 } from './productivity-analytics';
 import type {
   TerminalCreateOptions,
@@ -926,6 +927,7 @@ export interface ElectronAPI {
   // Productivity analytics operations
   getProductivitySummary: (projectId: string, filter?: ProductivityAnalyticsFilter) => Promise<IPCResult<ProductivitySummary>>;
   getProductivityTrends: (projectId: string, filter?: ProductivityAnalyticsFilter) => Promise<IPCResult<ProductivityTrendPoint[]>>;
+  getFailureMetrics: (projectId: string) => Promise<IPCResult<FailureMetrics>>;
   exportProductivityAnalytics: (projectId: string, options: ProductivityAnalyticsExportOptions) => Promise<IPCResult<string>>;
 
   // Template library operations
@@ -941,6 +943,7 @@ export interface ElectronAPI {
     specId?: string
   ) => Promise<IPCResult<{ specId: string; specPath: string }>>;
   suggestTemplates: (projectId: string, taskDescription: string) => Promise<IPCResult<string[]>>;
+
   // Custom agent template operations (user-created templates)
   listCustomTemplates: () => Promise<IPCResult<import('./template').CustomTemplate[]>>;
   saveCustomTemplate: (template: Omit<import('./template').CustomTemplate, 'id' | 'createdAt' | 'updatedAt'>) => Promise<IPCResult<import('./template').CustomTemplate & { validationErrors?: string[] }>>;

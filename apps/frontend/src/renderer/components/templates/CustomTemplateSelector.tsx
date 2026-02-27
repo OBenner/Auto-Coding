@@ -89,8 +89,8 @@ export function CustomTemplateSelector({
           <SelectContent>
             <SelectItem value="">
               <div className="flex items-center gap-2 text-muted-foreground">
-                <span>None</span>
-                <span className="text-xs">(Use default agent)</span>
+                <span>{t('selector.noneOption')}</span>
+                <span className="text-xs">{t('selector.useDefaultAgentHint')}</span>
               </div>
             </SelectItem>
             {templates.map((template) => (
@@ -115,7 +115,7 @@ export function CustomTemplateSelector({
             {/* Category */}
             <div className="flex items-center gap-2 text-xs">
               <Tag className="h-3 w-3 text-muted-foreground" />
-              <span className="text-muted-foreground">Category:</span>
+              <span className="text-muted-foreground">{t('selector.category')}</span>
               <span className="font-medium text-foreground capitalize">
                 {selectedTemplate.category}
               </span>
@@ -130,7 +130,7 @@ export function CustomTemplateSelector({
             {selectedTemplate.parameters.tools && (
               <div className="flex items-center gap-2 text-xs">
                 <Wrench className="h-3 w-3 text-muted-foreground" />
-                <span className="text-muted-foreground">Tools configured</span>
+                <span className="text-muted-foreground">{t('selector.toolsConfigured')}</span>
               </div>
             )}
           </div>
