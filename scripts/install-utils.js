@@ -28,6 +28,8 @@ function findPython() {
 
   for (const cmd of candidates) {
     try {
+      // SECURITY: cmd values come exclusively from the hardcoded candidates
+      // array above — no user input is interpolated into the command string.
       const result = spawnSync(cmd, ['--version'], {
         encoding: 'utf8',
         shell: true,
@@ -108,6 +110,8 @@ function createRunHelper(cwd) {
   return function run(cmd, options = {}) {
     console.log(`> ${cmd}`);
     try {
+      // SECURITY: All callers pass fixed command strings (uv, python, pip)
+      // built from deterministic paths — no user input is interpolated.
       execSync(cmd, { stdio: 'inherit', cwd, ...options });
       return true;
     } catch {
