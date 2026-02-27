@@ -282,10 +282,210 @@ def detect_implicit_conflicts(
 
     # Check for import removal + usage
     # (If task A removes an import and task B uses it)
-    # TODO: Implement import conflict detection
+    import_conflicts = _detect_import_conflicts(task_analyses)
+    if import_conflicts:
+        debug_detailed(
+            MODULE,
+            f"Found {len(import_conflicts)} import-related conflicts",
+        )
+        conflicts.extend(import_conflicts)
 
     # Check for variable rename + references
-    # TODO: Implement variable rename conflict detection
+    var_rename_conflicts = _detect_variable_rename_conflicts(task_analyses)
+    if var_rename_conflicts:
+        debug_detailed(
+            MODULE,
+            f"Found {len(var_rename_conflicts)} variable-rename conflicts",
+        )
+        conflicts.extend(var_rename_conflicts)
+
+    return conflicts
+
+
+def _detect_import_conflicts(
+    task_analyses: dict[str, FileAnalysis],
+) -> list[ConflictRegion]:
+    """
+    Detect conflicts where one task removes an import that another task adds or uses.
+
+    This catches cases where:
+    - Task A removes an import
+    - Task B adds or relies on the same import
+
+    Args:
+        task_analyses: Map of task_id -> FileAnalysis
+
+    Returns:
+        List of import-related conflict regions
+    """
+    conflicts = []
+
+    # Group by file path
+    by_file: dict[str, dict[str, FileAnalysis]] = defaultdict(dict)
+    for task_id, analysis in task_analyses.items():
+        by_file[analysis.file_path][task_id] = analysis
+
+    for file_path, file_analyses in by_file.items():
+        # Collect imports added and removed per task
+        adds_by_task: dict[str, set[str]] = {}
+        removes_by_task: dict[str, set[str]] = {}
+
+        for task_id, analysis in file_analyses.items():
+            adds_by_task[task_id] = set(analysis.imports_added)
+            removes_by_task[task_id] = set(analysis.imports_removed)
+
+        # Check for collisions: task A removes X, task B adds X
+        task_ids = list(file_analyses.keys())
+        for i, task_a in enumerate(task_ids):
+            for task_b in task_ids[i + 1 :]:
+                # A removes, B adds — conflict
+                collisions_ab = removes_by_task[task_a] & adds_by_task[task_b]
+                # B removes, A adds — conflict
+                collisions_ba = removes_by_task[task_b] & adds_by_task[task_a]
+                # Both remove the same import — potential inconsistency
+                both_remove = removes_by_task[task_a] & removes_by_task[task_b]
+
+                for import_name in collisions_ab | collisions_ba:
+                    conflicts.append(
+                        ConflictRegion(
+                            file_path=file_path,
+                            location="file_top",
+                            tasks_involved=[task_a, task_b],
+                            change_types=[
+                                ChangeType.ADD_IMPORT,
+                                ChangeType.REMOVE_IMPORT,
+                            ],
+                            severity=ConflictSeverity.MEDIUM,
+                            can_auto_merge=False,
+                            merge_strategy=MergeStrategy.AI_REQUIRED,
+                            reason=(
+                                f"Import '{import_name}' is added by one task "
+                                f"and removed by another"
+                            ),
+                        )
+                    )
+
+                # Duplicate removal is low-severity (compatible — idempotent)
+                for import_name in both_remove:
+                    conflicts.append(
+                        ConflictRegion(
+                            file_path=file_path,
+                            location="file_top",
+                            tasks_involved=[task_a, task_b],
+                            change_types=[
+                                ChangeType.REMOVE_IMPORT,
+                                ChangeType.REMOVE_IMPORT,
+                            ],
+                            severity=ConflictSeverity.LOW,
+                            can_auto_merge=True,
+                            merge_strategy=MergeStrategy.COMBINE_IMPORTS,
+                            reason=(
+                                f"Import '{import_name}' is removed by both tasks "
+                                f"(idempotent, can auto-merge)"
+                            ),
+                        )
+                    )
+
+    return conflicts
+
+
+def _detect_variable_rename_conflicts(
+    task_analyses: dict[str, FileAnalysis],
+) -> list[ConflictRegion]:
+    """
+    Detect conflicts where one task renames a variable that another task references.
+
+    This catches RENAME_VARIABLE conflicts that target the same original name,
+    or where one task renames a variable used by another task's changes.
+
+    Args:
+        task_analyses: Map of task_id -> FileAnalysis
+
+    Returns:
+        List of variable-rename conflict regions
+    """
+    conflicts = []
+
+    # Group by file path
+    by_file: dict[str, dict[str, FileAnalysis]] = defaultdict(dict)
+    for task_id, analysis in task_analyses.items():
+        by_file[analysis.file_path][task_id] = analysis
+
+    for file_path, file_analyses in by_file.items():
+        # Collect variable rename mappings per task: old_name -> new_name
+        var_renames_by_task: dict[str, dict[str, str]] = defaultdict(dict)
+
+        for task_id, analysis in file_analyses.items():
+            for change in analysis.changes:
+                if change.change_type == ChangeType.RENAME_VARIABLE:
+                    if change.metadata:
+                        old_name = change.metadata.get("old_name")
+                        new_name = change.metadata.get("new_name")
+                        if old_name and new_name:
+                            var_renames_by_task[task_id][old_name] = new_name
+
+        if not var_renames_by_task:
+            continue
+
+        task_ids = list(file_analyses.keys())
+
+        # Case 1: Two tasks rename the same variable to different names
+        for i, task_a in enumerate(task_ids):
+            for task_b in task_ids[i + 1 :]:
+                shared_vars = set(var_renames_by_task[task_a].keys()) & set(
+                    var_renames_by_task[task_b].keys()
+                )
+                for old_name in shared_vars:
+                    new_a = var_renames_by_task[task_a][old_name]
+                    new_b = var_renames_by_task[task_b][old_name]
+                    if new_a != new_b:
+                        conflicts.append(
+                            ConflictRegion(
+                                file_path=file_path,
+                                location="variable:" + old_name,
+                                tasks_involved=[task_a, task_b],
+                                change_types=[
+                                    ChangeType.RENAME_VARIABLE,
+                                    ChangeType.RENAME_VARIABLE,
+                                ],
+                                severity=ConflictSeverity.HIGH,
+                                can_auto_merge=False,
+                                merge_strategy=MergeStrategy.AI_REQUIRED,
+                                reason=(
+                                    f"Both tasks rename variable '{old_name}': "
+                                    f"task {task_a} → '{new_a}', "
+                                    f"task {task_b} → '{new_b}'"
+                                ),
+                            )
+                        )
+
+        # Case 2: Task A renames variable X; task B modifies/uses X under old name
+        for rename_task, renames in var_renames_by_task.items():
+            for other_task, other_analysis in file_analyses.items():
+                if other_task == rename_task:
+                    continue
+                for change in other_analysis.changes:
+                    for old_name, new_name in renames.items():
+                        if _references_entity(change, old_name):
+                            conflicts.append(
+                                ConflictRegion(
+                                    file_path=file_path,
+                                    location=change.location,
+                                    tasks_involved=[rename_task, other_task],
+                                    change_types=[
+                                        ChangeType.RENAME_VARIABLE,
+                                        change.change_type,
+                                    ],
+                                    severity=ConflictSeverity.MEDIUM,
+                                    can_auto_merge=False,
+                                    merge_strategy=MergeStrategy.AI_REQUIRED,
+                                    reason=(
+                                        f"Task {rename_task} renamed variable "
+                                        f"'{old_name}' → '{new_name}', but task "
+                                        f"{other_task} references the old name"
+                                    ),
+                                )
+                            )
 
     return conflicts
 
@@ -336,6 +536,19 @@ def _detect_rename_conflicts(
             continue
 
         # Check if any other task modifies/uses the old names
+        # Also collect the rename change objects keyed by (task_id, old_name)
+        rename_changes_by_task: dict[str, dict[str, SemanticChange]] = defaultdict(dict)
+        for task_id, analysis in file_analyses.items():
+            for change in analysis.changes:
+                if change.change_type in (
+                    ChangeType.RENAME_FUNCTION,
+                    ChangeType.RENAME_VARIABLE,
+                ):
+                    if change.metadata:
+                        old_name = change.metadata.get("old_name")
+                        if old_name:
+                            rename_changes_by_task[task_id][old_name] = change
+
         for rename_task, renames in renames_by_task.items():
             for other_task, other_analysis in file_analyses.items():
                 if other_task == rename_task:
@@ -346,6 +559,15 @@ def _detect_rename_conflicts(
                     # Check if this change references a renamed entity
                     for old_name, new_name in renames.items():
                         if _references_entity(change, old_name):
+                            # Determine rename type from the rename task's change
+                            rename_change = rename_changes_by_task[rename_task].get(
+                                old_name
+                            )
+                            rename_change_type = (
+                                rename_change.change_type
+                                if rename_change is not None
+                                else ChangeType.RENAME_FUNCTION
+                            )
                             # Found implicit conflict: rename + modify/call old name
                             conflicts.append(
                                 ConflictRegion(
@@ -353,10 +575,7 @@ def _detect_rename_conflicts(
                                     location=change.location,
                                     tasks_involved=[rename_task, other_task],
                                     change_types=[
-                                        ChangeType.RENAME_FUNCTION
-                                        if change.change_type
-                                        == ChangeType.RENAME_FUNCTION
-                                        else ChangeType.RENAME_VARIABLE,
+                                        rename_change_type,
                                         change.change_type,
                                     ],
                                     severity=ConflictSeverity.HIGH,
@@ -398,8 +617,8 @@ def _references_entity(change: SemanticChange, entity_name: str) -> bool:
     if target == entity_name:
         return True
 
-    # Check if target contains entity_name (e.g., "calling foo")
-    if entity_name in target.lower():
+    # Check if target contains entity_name (case-insensitive using casefold)
+    if entity_name and entity_name.casefold() in target.casefold():
         return True
 
     # Check content_before/content_after for references

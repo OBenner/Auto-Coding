@@ -317,7 +317,7 @@ def compare_semantic_vs_textual(
         conflicts_avoided=conflicts_avoided,
         resolution_quality_score=quality_score,
         merge_strategy_used="semantic",
-        notes=getattr(semantic_result, "explanation", None),
+        notes=getattr(semantic_result, "explanation", None) or "",
     )
 
 

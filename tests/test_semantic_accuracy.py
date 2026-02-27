@@ -35,9 +35,16 @@ from merge.types import (
 
 def test_semantic_accuracy_improvement(tmp_path):
     """
-    End-to-end test for 40% accuracy improvement goal.
+    Framework validation test for the 40% accuracy improvement goal.
 
-    Tests realistic merge scenarios comparing semantic vs text-only approaches.
+    NOTE: This test uses synthetic MergeResult instances (with
+    conflicts_remaining=[], conflicts_resolved populated, and ai_calls_made set)
+    to validate the *benchmarking and reporting framework* — not to measure real
+    semantic merge accuracy. The 100% improvement per scenario is by construction
+    and confirms the framework correctly aggregates and reports metrics.
+
+    For integration tests that exercise real merge operations against git repos,
+    see test_semantic_merge_e2e.py.
     """
     print("Testing Semantic Merge Accuracy Improvement")
     print("=" * 60)
