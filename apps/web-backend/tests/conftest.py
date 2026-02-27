@@ -36,7 +36,7 @@ def _set_test_env():
     """Set test environment variables via monkeypatch-style context."""
     _originals: dict[str, str | None] = {}
     _vars = {
-        "SECRET_KEY": "test-secret-key-for-testing-only",
+        "SECRET_KEY": "test-secret-key-for-testing-only",  # NOSONAR - test only
         "DEBUG": "true",
         "ACCESS_TOKEN_EXPIRE_MINUTES": "60",
     }

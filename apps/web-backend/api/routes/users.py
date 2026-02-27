@@ -89,7 +89,7 @@ async def register_user(
 
     return TokenResponse(
         access_token=access_token,
-        token_type="bearer",  # nosec B106 - OAuth2 standard token type, not a password
+        token_type="bearer",  # NOSONAR - OAuth2 standard token type, not a password
         user=user_response,
     )
 
@@ -157,6 +157,6 @@ async def login_user(
 
     return TokenResponse(
         access_token=access_token,
-        token_type="bearer",  # nosec B106 - OAuth2 standard token type, not a password
+        token_type="bearer",  # NOSONAR - OAuth2 standard token type, not a password
         user=user_response,
     )

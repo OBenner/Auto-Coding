@@ -27,13 +27,13 @@ from api.models.user import User
 from services.usage_tracker import UsageTracker
 
 # Test-only credential values (not real secrets)
-_TEST_SECRET = "securepass123"  # noqa: S105
-_TEST_SECRET_ALT = "anotherpass123"  # noqa: S105
-_TEST_SECRET_LOGIN = "mypassword"  # noqa: S105
-_TEST_SECRET_CORRECT = "correctpass"  # noqa: S105
-_TEST_SECRET_WRONG = "wrongpass"  # noqa: S105
-_TEST_SECRET_ANY = "anypass"  # noqa: S105
-_TEST_SECRET_SETUP = "pass123"  # noqa: S105
+_TEST_SECRET = "securepass123"  # NOSONAR - test only
+_TEST_SECRET_ALT = "anotherpass123"  # NOSONAR - test only
+_TEST_SECRET_LOGIN = "mypassword"  # NOSONAR - test only
+_TEST_SECRET_CORRECT = "correctpass"  # NOSONAR - test only
+_TEST_SECRET_WRONG = "wrongpass"  # NOSONAR - test only
+_TEST_SECRET_ANY = "anypass"  # NOSONAR - test only
+_TEST_SECRET_SETUP = "pass123"  # NOSONAR - test only
 
 
 # Helper function to check if bcrypt is working
