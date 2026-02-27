@@ -946,14 +946,30 @@ describe('ProjectStore', () => {
       };
       writeFileSync(path.join(specsDir, 'implementation_plan.json'), JSON.stringify(plan));
 
+      // Pre-populate projects.json so initializeAsync loads the project from
+      // disk, avoiding a race where slow macOS CI I/O lets initializeAsync
+      // complete AFTER addProject and overwrite in-memory data.
+      const projectId = 'cache-test-project-id';
+      const storePath = path.join(USER_DATA_PATH, 'store', 'projects.json');
+      writeFileSync(storePath, JSON.stringify({
+        projects: [{
+          id: projectId,
+          name: 'test-project',
+          path: TEST_PROJECT_PATH,
+          autoBuildPath: '.auto-claude',
+          settings: { model: 'sonnet', memoryBackend: 'file', linearSync: false, notifications: { onTaskComplete: true, onTaskFailed: true, onReviewNeeded: true, sound: false }, graphitiMcpEnabled: true, graphitiMcpUrl: 'http://localhost:8000/mcp/' },
+          createdAt: '2024-01-01T00:00:00Z',
+          updatedAt: '2024-01-01T00:00:00Z'
+        }],
+        settings: {}
+      }));
+
       const { ProjectStore } = await import('../project-store');
       const store = new ProjectStore();
-      // Wait for async init to complete so it doesn't race with addProject
-      // and overwrite in-memory data (the constructor fires initializeAsync
-      // in the background which reloads this.data from disk).
       await waitForStoreInit();
 
       const project = store.addProject(TEST_PROJECT_PATH);
+      expect(project.id).toBe(projectId);
 
       // First call should populate cache
       const tasksBefore = await store.getTasks(project.id);
@@ -986,14 +1002,30 @@ describe('ProjectStore', () => {
       };
       writeFileSync(path.join(specsDir, 'implementation_plan.json'), JSON.stringify(plan));
 
+      // Pre-populate projects.json so initializeAsync loads the project from
+      // disk, avoiding a race where slow macOS CI I/O lets initializeAsync
+      // complete AFTER addProject and overwrite in-memory data.
+      const projectId = 'invalidate-test-project-id';
+      const storePath = path.join(USER_DATA_PATH, 'store', 'projects.json');
+      writeFileSync(storePath, JSON.stringify({
+        projects: [{
+          id: projectId,
+          name: 'test-project',
+          path: TEST_PROJECT_PATH,
+          autoBuildPath: '.auto-claude',
+          settings: { model: 'sonnet', memoryBackend: 'file', linearSync: false, notifications: { onTaskComplete: true, onTaskFailed: true, onReviewNeeded: true, sound: false }, graphitiMcpEnabled: true, graphitiMcpUrl: 'http://localhost:8000/mcp/' },
+          createdAt: '2024-01-01T00:00:00Z',
+          updatedAt: '2024-01-01T00:00:00Z'
+        }],
+        settings: {}
+      }));
+
       const { ProjectStore } = await import('../project-store');
       const store = new ProjectStore();
-      // Wait for async init to complete so it doesn't race with addProject
-      // and overwrite in-memory data (the constructor fires initializeAsync
-      // in the background which reloads this.data from disk).
       await waitForStoreInit();
 
       const project = store.addProject(TEST_PROJECT_PATH);
+      expect(project.id).toBe(projectId);
 
       // First call should populate cache
       const tasksBefore = await store.getTasks(project.id);

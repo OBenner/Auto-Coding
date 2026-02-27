@@ -16,6 +16,8 @@ const venvDir = path.join(webBackendDir, '.venv');
 console.log('Installing Auto Code web-backend dependencies...\n');
 
 // Helper to run commands
+// SECURITY: Commands are constructed from a fixed set of candidates and paths
+// (Python launcher variants, venv-local pip). No arbitrary user input is passed here.
 function run(cmd, options = {}) {
   console.log(`> ${cmd}`);
   try {
@@ -35,23 +37,26 @@ function findPython() {
 
   for (const cmd of candidates) {
     try {
-      const result = spawnSync(cmd.split(' ')[0], [...cmd.split(' ').slice(1), '--version'], {
+      // Use shell: true with the full command string to handle entries like 'py -3.12'
+      const result = spawnSync(cmd, ['--version'], {
         encoding: 'utf8',
         shell: true,
       });
-      // Accept Python 3.12+ using proper version parsing
+
       if (result.status === 0) {
-        const versionMatch = result.stdout.match(/Python (\d+)\.(\d+)/);
+        // Some platforms write version to stderr instead of stdout
+        const output = result.stdout || result.stderr || '';
+        const versionMatch = output.match(/Python (\d+)\.(\d+)/);
         if (versionMatch) {
           const major = parseInt(versionMatch[1], 10);
           const minor = parseInt(versionMatch[2], 10);
           if (major === 3 && minor >= 12) {
-            console.log(`Found Python 3.12+: ${cmd} -> ${result.stdout.trim()}`);
+            console.log(`Found Python 3.12+: ${cmd} -> ${output.trim()}`);
             return cmd;
           }
         }
       }
-    } catch (e) {
+    } catch {
       // Continue to next candidate
     }
   }
@@ -82,17 +87,15 @@ async function main() {
     process.exit(1);
   }
 
-  // Remove existing venv if present
+  // Create virtual environment (skip if already exists)
   if (fs.existsSync(venvDir)) {
-    console.log('\nRemoving existing virtual environment...');
-    fs.rmSync(venvDir, { recursive: true, force: true });
-  }
-
-  // Create virtual environment
-  console.log('\nCreating virtual environment...');
-  if (!run(`${python} -m venv .venv`)) {
-    console.error('Failed to create virtual environment');
-    process.exit(1);
+    console.log(`\n✓ Virtual environment already exists at ${venvDir}`);
+  } else {
+    console.log('\nCreating virtual environment...');
+    if (!run(`${python} -m venv .venv`)) {
+      console.error('Failed to create virtual environment');
+      process.exit(1);
+    }
   }
 
   // Install dependencies (includes test dependencies in web-backend)
@@ -127,8 +130,8 @@ async function main() {
 
   console.log('\n✓ Web-backend installation complete!');
   console.log(`  Virtual environment: ${venvDir}`);
-  console.log('  Runtime dependencies: installed');
-  console.log('  Test dependencies: installed (pytest, httpx, fakeredis)');
+  console.log('  Runtime dependencies: installed from requirements.txt');
+  console.log('  Test dependencies: installed if listed in requirements.txt');
 }
 
 main().catch((err) => {
