@@ -88,12 +88,9 @@ async def specs_health():
     Returns:
         Dictionary with status and configuration info
     """
-    specs_dir = get_specs_dir()
-
     return {
         "status": "ok",
         "endpoint": "specs",
-        "specs_dir_exists": specs_dir.exists(),
     }
 
 

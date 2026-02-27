@@ -99,8 +99,8 @@ test.describe('Task List Page', () => {
   test.beforeEach(async ({ page }) => {
     // Navigate to welcome page first
     await page.goto('http://localhost:3000');
-    // Wait for initial loading to complete
-    await page.waitForTimeout(600);
+    // Wait for the main layout to be ready instead of using a fixed timeout
+    await page.waitForSelector('main, [role="main"], #app, #root', { state: 'visible' });
   });
 
   test.describe('Navigation', () => {
@@ -122,7 +122,7 @@ test.describe('Task List Page', () => {
       const viewTasksButton = page.getByRole('button', { name: /view tasks/i });
       await viewTasksButton.click();
 
-      expect(page.url()).toContain('#/tasks');
+      await expect(page).toHaveURL(/#\/tasks/);
     });
   });
 
@@ -384,6 +384,8 @@ test.describe('Task List Page', () => {
       await expect(page.getByText('Original Task')).toBeVisible();
 
       // Verify task count (check for "task" text which is part of "1 task total")
+      // Regex /\d+ tasks? total/ is safe: no nested quantifiers or ambiguous alternations,
+      // so there is no risk of catastrophic backtracking.
       const taskCountText = page.getByText(/\d+ tasks? total/);
       await expect(taskCountText).toBeVisible();
 

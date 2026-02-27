@@ -442,7 +442,8 @@ describe('TaskDetail', () => {
         expect(screen.getByText('60%')).toBeInTheDocument();
       });
 
-      // Find progress bar by looking for bg-blue-600 class
+      // Note: Locating by Tailwind class is fragile; if a role or data-testid is
+      // added to the progress bar element, prefer using that instead.
       const progressBar = document.querySelector('.bg-blue-600');
       expect(progressBar).toBeInTheDocument();
       expect(progressBar).toHaveStyle({ width: '60%' });
@@ -568,7 +569,7 @@ describe('TaskDetail', () => {
         expect(screen.getByText('Test Task')).toBeInTheDocument();
       });
 
-      // Empty content should still show the section but with empty pre
+      // Empty content hides the Specification section entirely
       expect(screen.queryByText('Specification')).not.toBeInTheDocument();
     });
 

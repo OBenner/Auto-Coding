@@ -80,19 +80,16 @@ async def test_verify_token_empty_authorization_header(async_client: AsyncClient
 
 
 @pytest.mark.asyncio
-async def test_verify_token_malformed_jwt(async_client: AsyncClient):
+@pytest.mark.parametrize("malformed_token", [
+    pytest.param("Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9", id="one-part-jwt"),
+    pytest.param("Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0In0", id="two-part-jwt"),
+    pytest.param("Bearer not.a.jwt.at.all", id="invalid-base64"),
+])
+async def test_verify_token_malformed_jwt(async_client: AsyncClient, malformed_token: str):
     """Test that verify_token rejects malformed JWT tokens"""
-    # A valid JWT has 3 parts separated by dots
-    malformed_tokens = [
-        "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9",  # Only 1 part
-        "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0In0",  # Only 2 parts
-        "Bearer not.a.jwt.at.all",  # Invalid base64
-    ]
-
-    for token in malformed_tokens:
-        headers = {"Authorization": token}
-        response = await async_client.post("/api/auth/verify", headers=headers)
-        assert response.status_code == 401
+    headers = {"Authorization": malformed_token}
+    response = await async_client.post("/api/auth/verify", headers=headers)
+    assert response.status_code == 401
 
 
 @pytest.mark.asyncio
@@ -146,14 +143,14 @@ async def test_verify_token_with_multiple_requests(async_client: AsyncClient, au
 
 
 @pytest.mark.asyncio
-async def test_verify_token_case_sensitive_bearer(async_client: AsyncClient, auth_token: str):
-    """Test Bearer scheme case-insensitivity behavior (lowercase 'bearer')"""
-    # FastAPI's HTTPBearer is case-insensitive: 'bearer' and 'Bearer' are both accepted
+async def test_verify_token_case_insensitive_bearer(async_client: AsyncClient, auth_token: str):
+    """Test that Bearer scheme is case-insensitive per RFC 7235 (lowercase 'bearer')"""
+    # FastAPI's HTTPBearer accepts 'bearer' and 'Bearer' interchangeably
     headers = {"Authorization": f"bearer {auth_token}"}  # lowercase 'bearer'
     response = await async_client.post("/api/auth/verify", headers=headers)
-    # Should not be a server error regardless of whether the scheme is accepted
-    assert response.status_code != 500
-    assert "detail" in response.json() or response.status_code == 200
+    assert response.status_code == 200
+    data = response.json()
+    assert data["valid"] is True
 
 
 @pytest.mark.asyncio

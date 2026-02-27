@@ -7,7 +7,6 @@ error handling, and response formats.
 
 import json
 import pytest
-from pathlib import Path
 from httpx import AsyncClient
 
 
@@ -274,24 +273,22 @@ async def test_get_task_detail_spec_read_error(async_client: AsyncClient, auth_h
     spec_folder = specs_dir / "005-unreadable-feature"
     spec_folder.mkdir(parents=True)
 
-    # Create spec.md but make it unreadable (we'll simulate this with monkeypatch)
+    # Create spec.md then replace it with a directory to simulate an unreadable file
     spec_file = spec_folder / "spec.md"
     spec_file.write_text("# Feature", encoding="utf-8")
 
     def mock_get_specs_dir():
         return specs_dir
 
-    # Mock read_text to raise an exception
-    original_read_text = Path.read_text
-
-    def mock_read_text(self, *args, **kwargs):
-        if self.name == "spec.md":
-            raise OSError("Permission denied")
-        return original_read_text(self, *args, **kwargs)
-
     import api.routes.tasks as tasks_module
     monkeypatch.setattr(tasks_module, "_get_specs_dir", mock_get_specs_dir)
-    monkeypatch.setattr(Path, "read_text", mock_read_text)
+
+    # Simulate a permission error by replacing spec.md with a directory of
+    # the same name.  Path.exists() returns True for directories but
+    # read_text() raises an OSError, avoiding a global monkeypatch on
+    # pathlib.Path.read_text.
+    spec_file.unlink()
+    spec_file.mkdir()
 
     response = await async_client.get("/api/tasks/005", headers=auth_headers)
     assert response.status_code == 200

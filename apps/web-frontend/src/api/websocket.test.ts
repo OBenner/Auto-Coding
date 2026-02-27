@@ -94,6 +94,7 @@ WebSocketMock.OPEN = 1;
 WebSocketMock.CLOSING = 2;
 WebSocketMock.CLOSED = 3;
 
+const originalWebSocket = global.WebSocket;
 global.WebSocket = WebSocketMock as unknown as typeof WebSocket;
 
 describe('WebSocketClient', () => {
@@ -105,6 +106,9 @@ describe('WebSocketClient', () => {
     // Reset state before each test
     mockWsInstance = null;
     vi.useFakeTimers();
+
+    // Install mock WebSocket
+    global.WebSocket = WebSocketMock as unknown as typeof WebSocket;
 
     // Spy on WebSocket constructor to track calls
     websocketSpy = vi.spyOn(global, 'WebSocket');
@@ -125,6 +129,8 @@ describe('WebSocketClient', () => {
 
   afterEach(() => {
     client.disconnect();
+    // Restore original WebSocket
+    global.WebSocket = originalWebSocket;
     vi.restoreAllMocks();
     vi.useRealTimers();
   });

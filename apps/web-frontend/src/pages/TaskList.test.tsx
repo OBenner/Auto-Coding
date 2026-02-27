@@ -416,7 +416,7 @@ describe('TaskList', () => {
 
   describe('Edge Cases', () => {
     it('should handle API returning undefined error', async () => {
-      vi.mocked(apiClient.listTasks).mockRejectedValue('Network failure');
+      vi.mocked(apiClient.listTasks).mockRejectedValue(new Error('Network failure'));
 
       render(<TaskList onTaskClick={mockOnTaskClick} />);
 

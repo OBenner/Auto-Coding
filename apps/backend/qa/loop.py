@@ -209,8 +209,8 @@ These tests are waiting for your review and approval before being committed to t
 
 2. **Approve tests** (if they look good):
    ```bash
-   # Copy approved tests to your project (preserving directory structure)
-   cp -r {review_dir}/ {project_dir}/
+   # Copy approved tests to your project (cross-platform)
+   python -c "import shutil, sys; shutil.copytree(sys.argv[1], sys.argv[2], dirs_exist_ok=True)" "{review_dir}" "{project_dir}"
 
    # Commit them with your changes
    git add tests/ apps/frontend/src/

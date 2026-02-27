@@ -531,7 +531,9 @@ async def test_run_agent_server_error(async_client: AsyncClient, auth_headers: d
 
     data = response.json()
     assert "detail" in data
+    # API must return a generic error message, not leak the raw exception
     assert "failed" in data["detail"].lower()
+    assert "Unexpected server error" not in data["detail"]
 
 
 @pytest.mark.asyncio

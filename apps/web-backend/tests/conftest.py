@@ -27,10 +27,25 @@ from sqlalchemy.pool import StaticPool
 
 __all__ = ["User", "GitRepository"]
 
-# Set test environment variables before importing the app.
-os.environ.setdefault("SECRET_KEY", "test-secret-key-for-testing-only")
-os.environ.setdefault("DEBUG", "true")
-os.environ.setdefault("ACCESS_TOKEN_EXPIRE_MINUTES", "60")
+
+@pytest.fixture(scope="session", autouse=True)
+def _set_test_env():
+    """Set test environment variables via monkeypatch-style context."""
+    _originals: dict[str, str | None] = {}
+    _vars = {
+        "SECRET_KEY": "test-secret-key-for-testing-only",
+        "DEBUG": "true",
+        "ACCESS_TOKEN_EXPIRE_MINUTES": "60",
+    }
+    for key, val in _vars.items():
+        _originals[key] = os.environ.get(key)
+        os.environ.setdefault(key, val)
+    yield
+    for key, orig in _originals.items():
+        if orig is None:
+            os.environ.pop(key, None)
+        else:
+            os.environ[key] = orig
 
 
 # Test database configuration (in-memory SQLite)
@@ -164,8 +179,8 @@ def expired_token() -> str:
         "email": "test@example.com",
         "name": "Test User"
     }
-    # Create token that expires immediately
-    return create_access_token(token_data, expires_delta=timedelta(seconds=-1))
+    # Create token that expired 60 seconds ago (enough margin for slow CI)
+    return create_access_token(token_data, expires_delta=timedelta(seconds=-60))
 
 
 @pytest.fixture

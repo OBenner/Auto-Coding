@@ -23,7 +23,7 @@ import type {
 
 // Mock fetch globally
 const mockFetch = vi.fn();
-global.fetch = mockFetch;
+const originalFetch = global.fetch;
 
 describe('ApiClient', () => {
   let client: ApiClient;
@@ -32,6 +32,9 @@ describe('ApiClient', () => {
     // Reset mocks before each test
     vi.clearAllMocks();
     vi.useFakeTimers();
+
+    // Install mock fetch
+    global.fetch = mockFetch;
 
     // Create client with test config
     client = new ApiClient({
@@ -43,6 +46,8 @@ describe('ApiClient', () => {
   });
 
   afterEach(() => {
+    // Restore original fetch
+    global.fetch = originalFetch;
     vi.restoreAllMocks();
     vi.useRealTimers();
   });

@@ -77,8 +77,8 @@ test.describe('Application Navigation', () => {
   test.beforeEach(async ({ page }) => {
     // Navigate to welcome page first
     await page.goto('http://localhost:3000');
-    // Wait for initial loading to complete
-    await page.waitForTimeout(600);
+    // Wait for the main layout to be ready instead of using a fixed timeout
+    await page.waitForSelector('main, [role="main"], #app, #root', { state: 'visible' });
   });
 
   test.describe('Welcome to Task List Navigation', () => {
@@ -103,7 +103,7 @@ test.describe('Application Navigation', () => {
       const viewTasksButton = page.getByRole('button', { name: /view tasks/i });
       await viewTasksButton.click();
 
-      expect(page.url()).toContain('#/tasks');
+      await expect(page).toHaveURL(/#\/tasks/);
     });
 
     test('should display task list with tasks after navigation', async ({ page }) => {
@@ -155,7 +155,7 @@ test.describe('Application Navigation', () => {
       const taskCard = page.locator('[class*="cursor-pointer"]').first();
       await taskCard.click();
 
-      expect(page.url()).toContain('#/tasks/123');
+      await expect(page).toHaveURL(/#\/tasks\/123/);
     });
 
     test('should navigate between multiple task details', async ({ page }) => {
