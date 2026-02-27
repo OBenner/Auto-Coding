@@ -202,27 +202,30 @@ EDGE CASE COVERAGE:
 
 #### 3.4.5: Run Generated Tests and Check Coverage
 
+**CRITICAL**: Test coverage report is mandatory for QA approval. Minimum 80% coverage required (configurable via `implementation_plan.json` field `qa_acceptance.unit_tests.minimum_coverage` or project config).
+
 ```bash
 # Run the newly generated tests
 pytest tests/ -v --tb=short
 
 # Check coverage of generated tests on target code
-# Extract target files from build-progress.txt or implementation_plan.json
-pytest tests/ --cov=apps/backend --cov-report=term-missing --cov-report=json
+pytest tests/ --cov=apps/backend --cov-report=term-missing --cov-report=json:coverage.json
 
-# Parse coverage report
+# For frontend (if applicable) - use Vitest directly
+cd apps/frontend && npx vitest run --coverage --coverage.reporter=json
+cd -
+
+# Parse coverage using the project's coverage_reporter module
 python -c "
-import json
-try:
-    with open('coverage.json', 'r') as f:
-        cov = json.load(f)
-    total_coverage = cov['totals']['percent_covered']
-    print(f'Total Coverage: {total_coverage:.1f}%')
-    if total_coverage >= 80:
-        print('PASS: Coverage >= 80%')
-    else:
-        print(f'FAIL: Coverage {total_coverage:.1f}% < 80%')
-except FileNotFoundError:
+from apps.backend.analysis.coverage_reporter import collect_coverage, format_coverage_summary
+result = collect_coverage('.')
+if result:
+    print(format_coverage_summary(result))
+    # List files below threshold
+    for f in result.files:
+        if f.coverage_percentage < 80:
+            print(f'  LOW: {f.file_path} ({f.coverage_percentage:.1f}%) - missing lines: {f.missing_lines[:10]}')
+else:
     print('WARNING: No coverage report found')
 "
 ```
@@ -231,9 +234,12 @@ except FileNotFoundError:
 ```
 GENERATED TESTS EXECUTION:
 - Tests run: PASS/FAIL (X/Y tests)
-- Coverage: X% (Target: 80%+)
+- Test coverage: X% (Target: 80%+ REQUIRED)
 - Edge cases covered: PASS/FAIL
+- Coverage gaps: [list uncovered critical code paths or "None"]
 ```
+
+**If coverage < threshold:** Document which code paths are missing tests and add them to the QA report as critical issues.
 
 #### 3.4.6: Review Test Quality Manually
 
@@ -721,7 +727,7 @@ Create a comprehensive QA report:
 | Unit Tests | ✓/✗ | X/Y passing |
 | Integration Tests | ✓/✗ | X/Y passing |
 | E2E Tests | ✓/✗ | X/Y passing |
-| Test Coverage | ✓/✗ | X% (required: Y%) |
+| Test Coverage | ✓/✗ | X% coverage (required: Y%, Target: 80%+) |
 | Browser Verification | ✓/✗ | [summary] |
 | Project-Specific Validation | ✓/✗ | [summary based on project type] |
 | Database Verification | ✓/✗ | [summary] |
@@ -788,24 +794,17 @@ Update `implementation_plan.json` to record QA sign-off:
 }
 ```
 
-Save the QA report:
-```bash
-# Save report to spec directory
-cat > qa_report.md << 'EOF'
-[QA Report content]
-EOF
+Save the QA report using the **Write** tool to create `qa_report.md` with the report content.
 
-# Note: qa_report.md and implementation_plan.json are in .auto-claude/specs/ (gitignored)
-# Do NOT commit them - the framework tracks QA status automatically
-# Only commit actual code changes to the project
-```
+Note: qa_report.md and implementation_plan.json are in .auto-claude/specs/ (gitignored). Do NOT commit them - the framework tracks QA status automatically. Only commit actual code changes to the project.
+
+**IMPORTANT**: Use the Write tool to create this file. Do NOT use `cat >`, heredoc (`<< EOF`), or bash redirection — these hang on Windows.
 
 ### If REJECTED:
 
-Create a fix request file:
+Create a fix request file using the **Write** tool to create `QA_FIX_REQUEST.md`:
 
-```bash
-cat > QA_FIX_REQUEST.md << 'EOF'
+```markdown
 <!-- AUTO_GENERATED_BY_QA_AGENT -->
 
 # QA Fix Request
@@ -846,12 +845,11 @@ This allows you to:
 - Add missing context
 - Provide specific guidance for fixes
 - Override automated QA decisions
+```
 
-EOF
+**IMPORTANT**: Use the Write tool to create this file. Do NOT use `cat >`, heredoc (`<< EOF`), or bash redirection — these hang on Windows.
 
-# Note: QA_FIX_REQUEST.md and implementation_plan.json are in .auto-claude/specs/ (gitignored)
-# Do NOT commit them - the framework tracks QA status automatically
-# Only commit actual code fixes to the project
+Note: QA_FIX_REQUEST.md and implementation_plan.json are in .auto-claude/specs/ (gitignored). Do NOT commit them - the framework tracks QA status automatically. Only commit actual code fixes to the project.
 ```
 
 Update `implementation_plan.json`:
@@ -890,7 +888,7 @@ All acceptance criteria verified:
 - Unit tests: PASS
 - Integration tests: PASS
 - E2E tests: PASS
-- Test coverage: PASS (X% meets threshold)
+- Test coverage: PASS (X% meets threshold, ≥80%)
 - Browser verification: PASS
 - Project-specific validation: PASS (or N/A)
 - Database verification: PASS
@@ -934,8 +932,9 @@ The QA → Fix → QA loop continues until:
 
 1. **All critical issues resolved**
 2. **All tests pass**
-3. **No regressions**
-4. **QA approves**
+3. **Test coverage ≥ 80%**
+4. **No regressions**
+5. **QA approves**
 
 Maximum iterations: 5 (configurable)
 

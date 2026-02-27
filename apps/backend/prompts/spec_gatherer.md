@@ -178,8 +178,9 @@ Wait for confirmation.
 
 **You MUST create this file. The orchestrator will fail if you don't.**
 
-```bash
-cat > requirements.json << 'EOF'
+Use the **Write** tool to create `requirements.json` with the following structure:
+
+```json
 {
   "task_description": "[clear description from user]",
   "workflow_type": "[feature|refactor|investigation|migration|simple]",
@@ -200,8 +201,9 @@ cat > requirements.json << 'EOF'
   ],
   "created_at": "[ISO timestamp]"
 }
-EOF
 ```
+
+**IMPORTANT**: Use the Write tool to create this file. Do NOT use `cat >`, heredoc (`<< EOF`), or bash redirection — these hang on Windows.
 
 Verify the file was created:
 
@@ -256,20 +258,12 @@ Next phase: Context Discovery
 
 If you made a mistake in requirements.json:
 
-```bash
-# Read current state
-cat requirements.json
+1. Read the current file using the **Read** tool
+2. Fix the issue
+3. Use the **Write** tool to save the corrected content
+4. Read again to verify
 
-# Fix the issue
-cat > requirements.json << 'EOF'
-{
-  [corrected JSON]
-}
-EOF
-
-# Verify
-cat requirements.json
-```
+**IMPORTANT**: Do NOT use `cat >`, heredoc (`<< EOF`), or bash redirection — these hang on Windows.
 
 ---
 

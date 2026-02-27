@@ -5,40 +5,23 @@ Pydantic models for real-time agent progress events sent via WebSocket.
 These models match the event structure expected by the frontend agent-events.ts parser.
 """
 
-from typing import Optional, Literal
-from pydantic import BaseModel, Field
+from typing import Literal
 
+from pydantic import BaseModel, Field
 
 # Execution phases matching frontend expectations
 ExecutionPhase = Literal[
-    "idle",
-    "planning",
-    "coding",
-    "qa_review",
-    "qa_fixing",
-    "complete",
-    "failed"
+    "idle", "planning", "coding", "qa_review", "qa_fixing", "complete", "failed"
 ]
 
 # Ideation phases for spec creation
 IdeationPhase = Literal[
-    "idle",
-    "analyzing",
-    "discovering",
-    "generating",
-    "finalizing",
-    "complete",
-    "error"
+    "idle", "analyzing", "discovering", "generating", "finalizing", "complete", "error"
 ]
 
 # Roadmap phases for roadmap generation
 RoadmapPhase = Literal[
-    "idle",
-    "analyzing",
-    "discovering",
-    "generating",
-    "complete",
-    "error"
+    "idle", "analyzing", "discovering", "generating", "complete", "error"
 ]
 
 
@@ -54,10 +37,16 @@ class ExecutionProgressData(BaseModel):
     """Real-time execution progress data"""
 
     phase: ExecutionPhase = Field(..., description="Current execution phase")
-    phase_progress: float = Field(default=0.0, description="Progress within current phase (0-100)")
-    overall_progress: float = Field(default=0.0, description="Overall build progress (0-100)")
-    message: Optional[str] = Field(None, description="Human-readable status message")
-    current_subtask: Optional[str] = Field(None, description="Currently executing subtask ID")
+    phase_progress: float = Field(
+        default=0.0, description="Progress within current phase (0-100)"
+    )
+    overall_progress: float = Field(
+        default=0.0, description="Overall build progress (0-100)"
+    )
+    message: str | None = Field(None, description="Human-readable status message")
+    current_subtask: str | None = Field(
+        None, description="Currently executing subtask ID"
+    )
 
 
 class IdeationProgressData(BaseModel):
@@ -65,8 +54,10 @@ class IdeationProgressData(BaseModel):
 
     phase: IdeationPhase = Field(..., description="Current ideation phase")
     progress: float = Field(default=0.0, description="Phase progress (0-100)")
-    message: Optional[str] = Field(None, description="Human-readable status message")
-    completed_types: int = Field(default=0, description="Number of completed idea types")
+    message: str | None = Field(None, description="Human-readable status message")
+    completed_types: int = Field(
+        default=0, description="Number of completed idea types"
+    )
     total_types: int = Field(default=0, description="Total number of idea types")
 
 
@@ -75,7 +66,7 @@ class RoadmapProgressData(BaseModel):
 
     phase: RoadmapPhase = Field(..., description="Current roadmap phase")
     progress: float = Field(default=0.0, description="Phase progress (0-100)")
-    message: Optional[str] = Field(None, description="Human-readable status message")
+    message: str | None = Field(None, description="Human-readable status message")
 
 
 class AgentEvent(BaseModel):
@@ -86,7 +77,7 @@ class AgentEvent(BaseModel):
     )
     timestamp: str = Field(..., description="ISO 8601 timestamp")
     spec_id: str = Field(..., description="Spec/task ID this event relates to")
-    data: Optional[dict] = Field(None, description="Event-specific data payload")
+    data: dict | None = Field(None, description="Event-specific data payload")
 
 
 class ExecutionEvent(AgentEvent):
@@ -125,17 +116,17 @@ class ErrorEvent(AgentEvent):
 
     event_type: Literal["error"] = "error"
     error_message: str = Field(..., description="Error message")
-    error_type: Optional[str] = Field(None, description="Error type/category")
-    traceback: Optional[str] = Field(None, description="Error traceback if available")
+    error_type: str | None = Field(None, description="Error type/category")
+    traceback: str | None = Field(None, description="Error traceback if available")
 
 
 class PhaseEvent(BaseModel):
     """Structured phase transition event (matching frontend phase-event-parser)"""
 
     phase: str = Field(..., description="New phase name")
-    message: Optional[str] = Field(None, description="Human-readable message")
-    subtask: Optional[str] = Field(None, description="Current subtask ID")
-    progress: Optional[float] = Field(None, description="Phase progress (0-100)")
+    message: str | None = Field(None, description="Human-readable message")
+    subtask: str | None = Field(None, description="Current subtask ID")
+    progress: float | None = Field(None, description="Phase progress (0-100)")
 
 
 class WebSocketMessage(BaseModel):
@@ -144,4 +135,4 @@ class WebSocketMessage(BaseModel):
     action: Literal["subscribe", "unsubscribe", "ping"] = Field(
         ..., description="Client action"
     )
-    spec_id: Optional[str] = Field(None, description="Spec ID to subscribe to")
+    spec_id: str | None = Field(None, description="Spec ID to subscribe to")

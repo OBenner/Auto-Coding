@@ -21,7 +21,9 @@
     "worktrees": "Worktrees",
     "agentTools": "MCP Overview",
     "analytics": "Analytics",
-    "mergeAnalytics": "Merge Analytics"
+    "mergeAnalytics": "Merge Analytics",
+    "sessions": "Session Replay",
+    "feedback": "Feedback"
   },
   "actions": {
     "settings": "Settings",

@@ -45,6 +45,7 @@ interface FeedbackRequest {
 interface FeedbackResult {
   recorded: boolean;
   message?: string;
+  reason?: string;
 }
 
 /**
@@ -66,6 +67,7 @@ async function executeFeedbackRecorder(
       error: 'Python environment is not ready yet. Feedback will not be recorded.'
     };
   }
+
 
   // Use configured Python path (venv if ready, otherwise bundled/system)
   const pythonCmd = getConfiguredPythonPath();
@@ -145,7 +147,19 @@ async function executeFeedbackRecorder(
     const timeoutId = setTimeout(() => {
       if (!resolved) {
         resolved = true;
-        proc.kill();
+        // Graceful shutdown: SIGTERM first, then force kill after grace period
+        try {
+          proc.kill('SIGTERM');
+        } catch {
+          // Ignore errors from already-exited processes
+        }
+        setTimeout(() => {
+          try {
+            proc.kill('SIGKILL');
+          } catch {
+            // Ignore
+          }
+        }, 2_000);
         resolve({
           success: false,
           error: 'Feedback recording timeout (30s)'
@@ -174,10 +188,14 @@ async function executeFeedbackRecorder(
             console.error('[Feedback] Recording failed:', result.error);
             resolve({
               success: false,
+              data: {
+                recorded: false,
+                reason: result.error || 'Failed to save feedback to memory'
+              },
               error: result.error || 'Failed to record feedback'
             });
           }
-        } catch (e) {
+        } catch (_e) {
           console.error('[Feedback] Invalid JSON response:', stdout);
           resolve({
             success: false,
@@ -212,7 +230,7 @@ async function executeFeedbackRecorder(
  * @param {() => BrowserWindow | null} getMainWindow - Function to get the main window
  */
 export function registerFeedbackHandlers(
-  getMainWindow: () => BrowserWindow | null
+  _getMainWindow: () => BrowserWindow | null
 ): void {
   // Submit feedback for adaptive agent learning
   ipcMain.handle(

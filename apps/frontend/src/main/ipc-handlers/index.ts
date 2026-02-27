@@ -40,8 +40,11 @@ import { registerMergeAnalyticsHandlers } from './merge-analytics-handlers';
 import { registerAnalyticsHandlers } from './analytics-handlers';
 import { registerTokenStatsHandlers } from './token-stats-handler';
 import { registerTemplateHandlers } from './template-handlers';
+import { registerPatternHandlers } from './pattern-handlers';
+import { registerSessionReplayHandlers } from './session-replay-handlers';
 import { registerFeedbackHandlers } from './feedback-handlers';
 import { notificationService } from '../notification-service';
+import { setAgentManagerRef } from './utils';
 
 /**
  * Setup all IPC handlers across all domains
@@ -59,6 +62,9 @@ export function setupIpcHandlers(
 ): void {
   // Initialize notification service
   notificationService.initialize(getMainWindow);
+
+  // Wire up agent manager for circuit breaker cleanup
+  setAgentManagerRef(agentManager);
 
   // Project handlers (including Python environment setup)
   registerProjectHandlers(pythonEnvManager, agentManager, getMainWindow);
@@ -144,6 +150,12 @@ export function setupIpcHandlers(
   // Template library handlers
   registerTemplateHandlers();
 
+  // Pattern learning handlers
+  registerPatternHandlers();
+
+  // Session replay handlers
+  registerSessionReplayHandlers();
+
   // Feedback handlers (adaptive agent learning)
   registerFeedbackHandlers(getMainWindow);
 
@@ -183,6 +195,8 @@ export {
   registerAnalyticsHandlers,
   registerTokenStatsHandlers,
   registerTemplateHandlers,
+  registerPatternHandlers,
+  registerSessionReplayHandlers,
   registerFeedbackHandlers,
   registerSchedulerHandlers
 };

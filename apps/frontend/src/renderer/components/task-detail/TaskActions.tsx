@@ -1,4 +1,4 @@
-import { Play, Square, CheckCircle2, RotateCcw, Trash2, Loader2, AlertTriangle } from 'lucide-react';
+import { Play, Square, CheckCircle2, RotateCcw, Trash2, Loader2, AlertTriangle, Archive } from 'lucide-react';
 import { Button } from '../ui/button';
 import {
   AlertDialog,
@@ -23,6 +23,7 @@ interface TaskActionsProps {
   deleteError: string | null;
   onStartStop: () => void;
   onRecover: () => void;
+  onExport: () => void;
   onDelete: () => void;
   onShowDeleteDialog: (show: boolean) => void;
 }
@@ -38,6 +39,7 @@ export function TaskActions({
   deleteError,
   onStartStop,
   onRecover,
+  onExport,
   onDelete,
   onShowDeleteDialog
 }: TaskActionsProps) {
@@ -97,6 +99,17 @@ export function TaskActions({
             <span className="font-medium">Task completed successfully</span>
           </div>
         )}
+
+        {/* Export Button - always visible */}
+        <Button
+          variant="ghost"
+          size="sm"
+          className="w-full mt-3 text-muted-foreground hover:text-foreground hover:bg-accent"
+          onClick={onExport}
+        >
+          <Archive className="mr-2 h-4 w-4" />
+          Export Spec
+        </Button>
 
         {/* Delete Button - always visible but disabled when running */}
         <Button
