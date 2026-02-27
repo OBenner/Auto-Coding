@@ -1058,11 +1058,15 @@ class SecurityAuditAgent:
                 if "password" in content.lower():
                     # Look for password length checks
                     if not re.search(
-                        r"len\(.*password.*\)\s*[<>]=\s*\d+", content, re.IGNORECASE
+                        r"len\([^)]*password[^)]*\)\s*[<>]=\s*\d+",
+                        content,
+                        re.IGNORECASE,
                     ):
                         # If password handling exists but no length check found
                         if re.search(
-                            r"def.*password|class.*password", content, re.IGNORECASE
+                            r"(?:def|class)\s+\w*password",
+                            content,
+                            re.IGNORECASE,
                         ):
                             finding = SecurityFinding(
                                 category="auth",
