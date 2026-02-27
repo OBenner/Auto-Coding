@@ -138,12 +138,12 @@ function createVenv(run, python, venvDir) {
     return;
   }
 
-  console.log('\nCreating virtual environment...');
+  console.log(`\nCreating virtual environment at ${venvDir}...`);
   // Prefer uv (repo standard per CLAUDE.md), fall back to python -m venv
-  if (!run('uv venv')) {
+  if (!run(`uv venv "${venvDir}"`)) {
     console.log('  uv not available, falling back to python -m venv...');
-    if (!run(`${python} -m venv .venv`)) {
-      console.error('Failed to create virtual environment');
+    if (!run(`${python} -m venv "${venvDir}"`)) {
+      console.error(`Failed to create virtual environment at ${venvDir}`);
       process.exit(1);
     }
   }
