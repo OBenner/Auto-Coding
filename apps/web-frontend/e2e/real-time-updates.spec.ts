@@ -89,7 +89,7 @@ async function setupWebSocketMock(page: Page) {
  */
 async function receiveOneEvent(page: Page, messageData: any): Promise<any[]> {
   return page.evaluate(async (data) => {
-    const ws = new WebSocket('ws://localhost:8000/ws/test');
+    const ws = new WebSocket('wss://localhost:8000/ws/test');
     await new Promise<void>((resolve) => {
       ws.onopen = () => resolve();
     });
@@ -113,7 +113,7 @@ test.describe('WebSocket Real-Time Updates', () => {
   test.describe('WebSocket Creation and Connection', () => {
     test('should create WebSocket instance', async ({ page }) => {
       const result = await page.evaluate(() => {
-        const ws = new WebSocket('ws://localhost:8000/ws/test');
+        const ws = new WebSocket('wss://localhost:8000/ws/test');
         return {
           created: ws !== null,
           url: ws.url,
@@ -122,13 +122,13 @@ test.describe('WebSocket Real-Time Updates', () => {
       });
 
       expect(result.created).toBe(true);
-      expect(result.url).toBe('ws://localhost:8000/ws/test');
+      expect(result.url).toBe('wss://localhost:8000/ws/test');
       expect(result.readyState).toBe(0); // CONNECTING
     });
 
     test('should transition to OPEN state', async ({ page }) => {
       const result = await page.evaluate(async () => {
-        const ws = new WebSocket('ws://localhost:8000/ws/test');
+        const ws = new WebSocket('wss://localhost:8000/ws/test');
         const initialState = ws.readyState;
 
         await new Promise((resolve) => {
@@ -148,16 +148,16 @@ test.describe('WebSocket Real-Time Updates', () => {
 
     test('should accept connection URL with path', async ({ page }) => {
       const url = await page.evaluate(() => {
-        const ws = new WebSocket('ws://localhost:8000/ws/agent-events');
+        const ws = new WebSocket('wss://localhost:8000/ws/agent-events');
         return ws.url;
       });
 
-      expect(url).toBe('ws://localhost:8000/ws/agent-events');
+      expect(url).toBe('wss://localhost:8000/ws/agent-events');
     });
 
     test('should handle close event', async ({ page }) => {
       const result = await page.evaluate(async () => {
-        const ws = new WebSocket('ws://localhost:8000/ws/test');
+        const ws = new WebSocket('wss://localhost:8000/ws/test');
 
         await new Promise((resolve) => ws.onopen = resolve);
 
@@ -180,7 +180,7 @@ test.describe('WebSocket Real-Time Updates', () => {
   test.describe('Message Sending', () => {
     test('should send JSON messages', async ({ page }) => {
       await page.evaluate(async () => {
-        const ws = new WebSocket('ws://localhost:8000/ws/test');
+        const ws = new WebSocket('wss://localhost:8000/ws/test');
         await new Promise((resolve) => ws.onopen = resolve);
 
         ws.send(JSON.stringify({ action: 'ping' }));
@@ -200,7 +200,7 @@ test.describe('WebSocket Real-Time Updates', () => {
 
     test('should send subscribe messages', async ({ page }) => {
       await page.evaluate(async () => {
-        const ws = new WebSocket('ws://localhost:8000/ws/test');
+        const ws = new WebSocket('wss://localhost:8000/ws/test');
         await new Promise((resolve) => ws.onopen = resolve);
 
         ws.send(JSON.stringify({ action: 'subscribe', spec_id: '042' }));
@@ -219,7 +219,7 @@ test.describe('WebSocket Real-Time Updates', () => {
 
     test('should send unsubscribe messages', async ({ page }) => {
       await page.evaluate(async () => {
-        const ws = new WebSocket('ws://localhost:8000/ws/test');
+        const ws = new WebSocket('wss://localhost:8000/ws/test');
         await new Promise((resolve) => ws.onopen = resolve);
 
         ws.send(JSON.stringify({ action: 'unsubscribe', spec_id: '001' }));
@@ -283,7 +283,7 @@ test.describe('WebSocket Real-Time Updates', () => {
 
     test('should handle multiple events in sequence', async ({ page }) => {
       const result = await page.evaluate(async () => {
-        const ws = new WebSocket('ws://localhost:8000/ws/test');
+        const ws = new WebSocket('wss://localhost:8000/ws/test');
         await new Promise((resolve) => ws.onopen = resolve);
 
         const receivedEvents: any[] = [];
@@ -311,7 +311,7 @@ test.describe('WebSocket Real-Time Updates', () => {
       const opened = await page.evaluate(async () => {
         let callbackCalled = false;
 
-        const ws = new WebSocket('ws://localhost:8000/ws/test');
+        const ws = new WebSocket('wss://localhost:8000/ws/test');
         ws.onopen = () => {
           callbackCalled = true;
         };
@@ -328,7 +328,7 @@ test.describe('WebSocket Real-Time Updates', () => {
       const closed = await page.evaluate(async () => {
         let callbackCalled = false;
 
-        const ws = new WebSocket('ws://localhost:8000/ws/test');
+        const ws = new WebSocket('wss://localhost:8000/ws/test');
         await new Promise((resolve) => ws.onopen = resolve);
 
         ws.onclose = () => {
@@ -349,7 +349,7 @@ test.describe('WebSocket Real-Time Updates', () => {
       const errorHandled = await page.evaluate(async () => {
         let callbackCalled = false;
 
-        const ws = new WebSocket('ws://localhost:8000/ws/test');
+        const ws = new WebSocket('wss://localhost:8000/ws/test');
         await new Promise((resolve) => ws.onopen = resolve);
 
         ws.onerror = () => {
@@ -370,7 +370,7 @@ test.describe('WebSocket Real-Time Updates', () => {
       const messageReceived = await page.evaluate(async () => {
         let receivedData: any = null;
 
-        const ws = new WebSocket('ws://localhost:8000/ws/test');
+        const ws = new WebSocket('wss://localhost:8000/ws/test');
         await new Promise((resolve) => ws.onopen = resolve);
 
         ws.onmessage = (event) => {
@@ -391,7 +391,7 @@ test.describe('WebSocket Real-Time Updates', () => {
   test.describe('Connection State Management', () => {
     test('should track readyState correctly', async ({ page }) => {
       const states = await page.evaluate(async () => {
-        const ws = new WebSocket('ws://localhost:8000/ws/test');
+        const ws = new WebSocket('wss://localhost:8000/ws/test');
         const stateAfterCreate = ws.readyState;
 
         await new Promise((resolve) => ws.onopen = resolve);
@@ -415,7 +415,7 @@ test.describe('WebSocket Real-Time Updates', () => {
 
     test('should maintain connection for extended period', async ({ page }) => {
       const stillConnected = await page.evaluate(async () => {
-        const ws = new WebSocket('ws://localhost:8000/ws/test');
+        const ws = new WebSocket('wss://localhost:8000/ws/test');
         await new Promise((resolve) => ws.onopen = resolve);
 
         // Wait 1 second
@@ -433,9 +433,9 @@ test.describe('WebSocket Real-Time Updates', () => {
 
         // Store connections to satisfy usage requirements; tracking is via getMockWebSockets()
         const connections = [
-          new WebSocket('ws://localhost:8000/ws/test1'),
-          new WebSocket('ws://localhost:8000/ws/test2'),
-          new WebSocket('ws://localhost:8000/ws/test3'),
+          new WebSocket('wss://localhost:8000/ws/test1'),
+          new WebSocket('wss://localhost:8000/ws/test2'),
+          new WebSocket('wss://localhost:8000/ws/test3'),
         ];
 
         const finalCount = (globalThis as any).getMockWebSockets().length;
@@ -456,7 +456,7 @@ test.describe('WebSocket Real-Time Updates', () => {
   test.describe('Error Handling', () => {
     test('should handle invalid JSON gracefully', async ({ page }) => {
       const result = await page.evaluate(async () => {
-        const ws = new WebSocket('ws://localhost:8000/ws/test');
+        const ws = new WebSocket('wss://localhost:8000/ws/test');
         await new Promise((resolve) => ws.onopen = resolve);
 
         let errorCaught = false;
@@ -484,7 +484,7 @@ test.describe('WebSocket Real-Time Updates', () => {
 
     test('should continue working after receiving invalid messages', async ({ page }) => {
       const result = await page.evaluate(async () => {
-        const ws = new WebSocket('ws://localhost:8000/ws/test');
+        const ws = new WebSocket('wss://localhost:8000/ws/test');
         await new Promise((resolve) => ws.onopen = resolve);
 
         const receivedMessages: any[] = [];
@@ -514,7 +514,7 @@ test.describe('WebSocket Real-Time Updates', () => {
   test.describe('Performance', () => {
     test('should handle rapid message bursts', async ({ page }) => {
       const messageCount = await page.evaluate(async () => {
-        const ws = new WebSocket('ws://localhost:8000/ws/test');
+        const ws = new WebSocket('wss://localhost:8000/ws/test');
         await new Promise((resolve) => ws.onopen = resolve);
 
         const receivedMessages: any[] = [];
@@ -546,7 +546,7 @@ test.describe('WebSocket Real-Time Updates', () => {
 
     test('should handle large messages', async ({ page }) => {
       const received = await page.evaluate(async () => {
-        const ws = new WebSocket('ws://localhost:8000/ws/test');
+        const ws = new WebSocket('wss://localhost:8000/ws/test');
         await new Promise((resolve) => ws.onopen = resolve);
 
         let receivedData: any = null;
