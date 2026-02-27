@@ -104,9 +104,6 @@ async def bash_security_hook(
     # Split into segments for per-command validation
     segments = split_command_segments(command)
 
-    # Get all allowed commands
-    allowed = profile.get_all_allowed_commands()
-
     # Check each command against the allowlist
     for cmd in commands:
         # Check if command is allowed
@@ -125,9 +122,9 @@ async def bash_security_hook(
                 cmd_segment = command
 
             validator = VALIDATORS[cmd]
-            allowed, reason = validator(cmd_segment)
-            if not allowed:
-                return {"decision": "block", "reason": reason}
+            validation_ok, validation_reason = validator(cmd_segment)
+            if not validation_ok:
+                return {"decision": "block", "reason": validation_reason}
 
     return {}
 
@@ -168,8 +165,8 @@ def validate_command(
                 cmd_segment = command
 
             validator = VALIDATORS[cmd]
-            allowed, reason = validator(cmd_segment)
-            if not allowed:
-                return False, reason
+            validation_ok, validation_reason = validator(cmd_segment)
+            if not validation_ok:
+                return False, validation_reason
 
     return True, ""

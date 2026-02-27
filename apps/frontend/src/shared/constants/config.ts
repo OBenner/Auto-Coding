@@ -3,6 +3,8 @@
  * Default settings, file paths, and project structure
  */
 
+import { DEFAULT_KEYBOARD_SHORTCUTS } from '../types/settings';
+
 // ============================================
 // Terminal Timing Constants
 // ============================================
@@ -59,7 +61,15 @@ export const DEFAULT_APP_SETTINGS = {
   // Anonymous error reporting (Sentry) - enabled by default to help improve the app
   sentryEnabled: true,
   // Auto-name Claude terminals based on initial message (enabled by default)
-  autoNameClaudeTerminals: true
+  autoNameClaudeTerminals: true,
+  // Keyboard shortcuts (customizable by users)
+  keyboardShortcuts: DEFAULT_KEYBOARD_SHORTCUTS,
+  // Recent actions for quick actions menu (persisted between sessions)
+  recentActions: [],
+  // Feedback collection (enabled by default)
+  feedbackEnabled: true,
+  // GPU acceleration for terminal rendering (off by default for stability)
+  gpuAcceleration: 'off' as const
 };
 
 // ============================================
@@ -103,6 +113,7 @@ export const AUTO_BUILD_PATHS = {
   ROADMAP_FILE: 'roadmap.json',
   ROADMAP_DISCOVERY: 'roadmap_discovery.json',
   COMPETITOR_ANALYSIS: 'competitor_analysis.json',
+  MANUAL_COMPETITORS: 'manual_competitors.json',
   IDEATION_FILE: 'ideation.json',
   IDEATION_CONTEXT: 'ideation_context.json',
   PROJECT_INDEX: '.auto-claude/project_index.json',

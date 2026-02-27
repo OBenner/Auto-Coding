@@ -157,11 +157,64 @@ class GitHubProvider:
         """Fetch the diff for a pull request."""
         return await self._gh_client.pr_diff(number)
 
+    @staticmethod
+    def _format_finding_location(finding) -> str:
+        """Format the file location string for a review finding."""
+        if not finding.file:
+            return ""
+        location = f" (`{finding.file}"
+        if finding.line:
+            location += f":{finding.line}"
+            if finding.end_line and finding.end_line != finding.line:
+                location += f"-{finding.end_line}"
+        location += "`)"
+        return location
+
+    @staticmethod
+    def _format_finding(finding) -> str:
+        """Format a single review finding as markdown."""
+        _SEVERITY_ICONS = {
+            "critical": "\u274c",
+            "high": "\u26a0\ufe0f",
+            "medium": "\U0001f7e1",
+            "low": "\U0001f535",
+            "info": "\u2139\ufe0f",
+        }
+        icon = _SEVERITY_ICONS.get(finding.severity, "\u2022")
+        location = GitHubProvider._format_finding_location(finding)
+        lines = [
+            f"- {icon} **[{finding.severity.upper()}]** {finding.title}{location}",
+            f"  {finding.description}",
+        ]
+        for evidence_line in finding.evidence:
+            lines.append(f"  > {evidence_line}")
+        lines.append("")
+        return "\n".join(lines)
+
     async def post_review(self, pr_number: int, review: ReviewData) -> int:
-        """Post a review to a pull request."""
+        """Post a review to a pull request.
+
+        If the review contains structured findings, they are appended to the
+        review body with inline evidence (code quotes).
+        """
+        body = review.body
+
+        # Append structured findings with evidence if present
+        if review.findings:
+            body += "\n\n---\n\n### Structured Findings\n\n"
+            body += "\n".join(self._format_finding(f) for f in review.findings)
+
+        # GitHub API enforces a 65 536-character limit on review bodies.
+        _MAX_REVIEW_BODY = 65_536
+        if len(body) > _MAX_REVIEW_BODY:
+            truncation_note = (
+                "\n\n---\n*Review truncated due to GitHub body-size limit.*\n"
+            )
+            body = body[: _MAX_REVIEW_BODY - len(truncation_note)] + truncation_note
+
         return await self._gh_client.pr_review(
             pr_number=pr_number,
-            body=review.body,
+            body=body,
             event=review.event.upper(),
         )
 
@@ -524,9 +577,8 @@ class GitHubProvider:
             return []
         reviewers = []
         for req in review_requests:
-            if isinstance(req, dict):
-                if "requestedReviewer" in req:
-                    reviewer = req["requestedReviewer"]
-                    if isinstance(reviewer, dict):
-                        reviewers.append(reviewer.get("login", ""))
+            if isinstance(req, dict) and "requestedReviewer" in req:
+                reviewer = req["requestedReviewer"]
+                if isinstance(reviewer, dict):
+                    reviewers.append(reviewer.get("login", ""))
         return reviewers

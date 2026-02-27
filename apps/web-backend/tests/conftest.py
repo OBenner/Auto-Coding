@@ -4,15 +4,24 @@ Pytest configuration for integration tests
 Handles fixtures and test configuration for cloud integration tests.
 """
 
-import pytest
-import fakeredis
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from fastapi.testclient import TestClient
 from unittest.mock import patch
+
+import fakeredis
+import pytest
+from api.models.repository import GitRepository  # noqa: F401
+
+# Import all models so Base.metadata knows about all tables
+# These imports register models with SQLAlchemy Base.metadata
+from api.models.user import User  # noqa: F401
 
 # Import application components
 from core.database import Base, get_db
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
+
+__all__ = ["User", "GitRepository"]
 
 
 # Test database configuration (in-memory SQLite)
@@ -25,11 +34,13 @@ def test_db():
     Create a fresh test database for each test.
 
     Uses in-memory SQLite for fast, isolated tests.
+    StaticPool ensures all connections share the same in-memory database.
     """
-    # Create test engine
+    # Create test engine with StaticPool for shared in-memory DB
     engine = create_engine(
         TEST_DATABASE_URL,
-        connect_args={"check_same_thread": False}
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
     )
 
     # Create all tables
@@ -77,7 +88,7 @@ def test_client(test_db, test_redis):
             pass
 
     # Mock Redis connections in the app
-    with patch('services.usage_tracker.redis.Redis') as mock_redis_class:
+    with patch("services.usage_tracker.redis.Redis") as mock_redis_class:
         # Make Redis() return our fake Redis
         mock_redis_class.return_value = test_redis
 

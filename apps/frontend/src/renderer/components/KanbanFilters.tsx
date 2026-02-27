@@ -16,9 +16,9 @@
  * <KanbanFilters projectId={projectId} />
  * ```
  */
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Search, X, ArrowUpIcon, ArrowDownIcon } from 'lucide-react';
+import { Search, X, ArrowUp, ArrowDown } from 'lucide-react';
 import { Input } from './ui/input';
 import { Button } from './ui/button';
 import {
@@ -69,22 +69,33 @@ export function KanbanFilters({ projectId }: KanbanFiltersProps) {
     }
   }, [projectId, loadFilters]);
 
+  // Debounce timer ref for search saves
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Clean up debounce timer on unmount
+  useEffect(() => {
+    return () => {
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+      }
+    };
+  }, []);
+
   // Handle search input change
-  const handleSearchChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleSearchChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const query = event.target.value;
     setSearchQuery(query);
 
     // Save filters to localStorage after a short debounce
     if (projectId) {
-      // Use setTimeout to debounce saves during rapid typing
-      const timeoutId = setTimeout(() => {
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+      }
+      saveTimerRef.current = setTimeout(() => {
         saveFilters(projectId);
       }, 300);
-
-      // Cleanup function to clear timeout
-      return () => clearTimeout(timeoutId);
     }
-  };
+  }, [projectId, setSearchQuery, saveFilters]);
 
   // Handle sort mode change
   const handleSortChange = (value: SortMode) => {
@@ -180,9 +191,9 @@ export function KanbanFilters({ projectId }: KanbanFiltersProps) {
                 aria-label={t('filters.sortOrderToggle')}
               >
                 {filters?.sortOrder === 'asc' ? (
-                  <ArrowUpIcon className="h-4 w-4" />
+                  <ArrowUp className="h-4 w-4" />
                 ) : (
-                  <ArrowDownIcon className="h-4 w-4" />
+                  <ArrowDown className="h-4 w-4" />
                 )}
               </Button>
             </TooltipTrigger>

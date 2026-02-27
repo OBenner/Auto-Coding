@@ -2,13 +2,13 @@
 import os
 import pytest
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 # Add auto-claude to path
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent / "apps" / "backend"))
 
-from graphiti_config import is_graphiti_enabled, get_graphiti_status, GraphitiConfig
+from integrations.graphiti.config import is_graphiti_enabled, get_graphiti_status, GraphitiConfig
 
 
 class TestIsGraphitiEnabled:
@@ -302,7 +302,7 @@ class TestAvailableProviders:
 
     def test_available_providers_openai_only(self):
         """Only OpenAI available when only OpenAI key is set."""
-        from graphiti_config import get_available_providers
+        from integrations.graphiti.config import get_available_providers
 
         with patch.dict(os.environ, {
             "OPENAI_API_KEY": "sk-test"
@@ -315,7 +315,7 @@ class TestAvailableProviders:
 
     def test_available_providers_all_configured(self):
         """All providers available when all are configured."""
-        from graphiti_config import get_available_providers
+        from integrations.graphiti.config import get_available_providers
 
         with patch.dict(os.environ, {
             "OPENAI_API_KEY": "sk-test",
@@ -339,12 +339,12 @@ class TestGraphitiProviders:
 
     def test_provider_error_import(self):
         """ProviderError and ProviderNotInstalled can be imported."""
-        from graphiti_providers import ProviderError, ProviderNotInstalled
+        from integrations.graphiti.providers_pkg import ProviderError, ProviderNotInstalled
         assert issubclass(ProviderNotInstalled, ProviderError)
 
     def test_create_llm_client_unknown_provider(self):
         """create_llm_client raises ProviderError for unknown provider."""
-        from graphiti_providers import create_llm_client, ProviderError
+        from integrations.graphiti.providers_pkg import create_llm_client, ProviderError
 
         with patch.dict(os.environ, {
             "GRAPHITI_ENABLED": "true",
@@ -356,7 +356,7 @@ class TestGraphitiProviders:
 
     def test_create_embedder_unknown_provider(self):
         """create_embedder raises ProviderError for unknown provider."""
-        from graphiti_providers import create_embedder, ProviderError
+        from integrations.graphiti.providers_pkg import create_embedder, ProviderError
 
         with patch.dict(os.environ, {
             "GRAPHITI_ENABLED": "true",
@@ -368,7 +368,7 @@ class TestGraphitiProviders:
 
     def test_create_llm_client_missing_openai_key(self):
         """create_llm_client raises ProviderError when OpenAI key missing."""
-        from graphiti_providers import ProviderError, ProviderNotInstalled, create_llm_client
+        from integrations.graphiti.providers_pkg import ProviderError, ProviderNotInstalled, create_llm_client
 
         with patch.dict(os.environ, {
             "GRAPHITI_ENABLED": "true",
@@ -387,7 +387,7 @@ class TestGraphitiProviders:
 
     def test_create_embedder_missing_ollama_model(self):
         """create_embedder raises ProviderError when Ollama model missing."""
-        from graphiti_providers import ProviderError, ProviderNotInstalled, create_embedder
+        from integrations.graphiti.providers_pkg import ProviderError, ProviderNotInstalled, create_embedder
 
         with patch.dict(os.environ, {
             "GRAPHITI_ENABLED": "true",
@@ -407,7 +407,7 @@ class TestGraphitiProviders:
 
     def test_embedding_dimensions_lookup(self):
         """get_expected_embedding_dim returns correct dimensions."""
-        from graphiti_providers import get_expected_embedding_dim, EMBEDDING_DIMENSIONS
+        from integrations.graphiti.providers_pkg import get_expected_embedding_dim
 
         # Test known models
         assert get_expected_embedding_dim("text-embedding-3-small") == 1536
@@ -422,7 +422,7 @@ class TestGraphitiProviders:
 
     def test_validate_embedding_config_ollama_no_dim(self):
         """validate_embedding_config fails for Ollama without dimension."""
-        from graphiti_providers import validate_embedding_config
+        from integrations.graphiti.providers_pkg import validate_embedding_config
 
         with patch.dict(os.environ, {
             "GRAPHITI_ENABLED": "true",
@@ -437,7 +437,7 @@ class TestGraphitiProviders:
 
     def test_validate_embedding_config_openai_valid(self):
         """validate_embedding_config succeeds for valid OpenAI config."""
-        from graphiti_providers import validate_embedding_config
+        from integrations.graphiti.providers_pkg import validate_embedding_config
 
         with patch.dict(os.environ, {
             "GRAPHITI_ENABLED": "true",
@@ -450,8 +450,8 @@ class TestGraphitiProviders:
 
     def test_is_graphiti_enabled_reexport(self):
         """is_graphiti_enabled is re-exported from graphiti_providers."""
-        from graphiti_providers import is_graphiti_enabled as provider_is_enabled
-        from graphiti_config import is_graphiti_enabled as config_is_enabled
+        from integrations.graphiti.providers_pkg import is_graphiti_enabled as provider_is_enabled
+        from integrations.graphiti.config import is_graphiti_enabled as config_is_enabled
 
         # Both should return same result
         with patch.dict(os.environ, {
@@ -466,7 +466,7 @@ class TestGraphitiState:
 
     def test_graphiti_state_to_dict(self):
         """GraphitiState serializes correctly."""
-        from graphiti_config import GraphitiState
+        from integrations.graphiti.config import GraphitiState
 
         state = GraphitiState(
             initialized=True,
@@ -485,7 +485,7 @@ class TestGraphitiState:
 
     def test_graphiti_state_from_dict(self):
         """GraphitiState deserializes correctly."""
-        from graphiti_config import GraphitiState
+        from integrations.graphiti.config import GraphitiState
 
         data = {
             "initialized": True,
@@ -506,7 +506,7 @@ class TestGraphitiState:
 
     def test_graphiti_state_record_error(self):
         """GraphitiState records errors correctly."""
-        from graphiti_config import GraphitiState
+        from integrations.graphiti.config import GraphitiState
 
         state = GraphitiState()
         state.record_error("Test error 1")
@@ -519,7 +519,7 @@ class TestGraphitiState:
 
     def test_graphiti_state_error_limit(self):
         """GraphitiState limits error log to 10 entries."""
-        from graphiti_config import GraphitiState
+        from integrations.graphiti.config import GraphitiState
 
         state = GraphitiState()
         for i in range(15):
@@ -529,3 +529,274 @@ class TestGraphitiState:
         assert len(state.error_log) == 10
         assert "Error 5" in state.error_log[0]["error"]
         assert "Error 14" in state.error_log[-1]["error"]
+
+
+# =============================================================================
+# LADYBUGDB LOCK RETRY LOGIC TESTS
+# =============================================================================
+
+
+class TestIsLockError:
+    """Tests for _is_lock_error lock detection function."""
+
+    def test_lock_file_error_detected(self):
+        """Detects lock + file pattern in error messages."""
+        from integrations.graphiti.queries_pkg.client import _is_lock_error
+
+        assert _is_lock_error(Exception("Could not set lock on file")) is True
+
+    def test_lock_database_error_detected(self):
+        """Detects lock + database pattern in error messages."""
+        from integrations.graphiti.queries_pkg.client import _is_lock_error
+
+        assert _is_lock_error(Exception("Database lock contention detected")) is True
+
+    def test_could_not_set_lock_detected(self):
+        """Detects 'could not set lock' pattern."""
+        from integrations.graphiti.queries_pkg.client import _is_lock_error
+
+        assert _is_lock_error(Exception("could not set lock")) is True
+
+    def test_non_lock_error_not_detected(self):
+        """Non-lock errors are not detected as lock errors."""
+        from integrations.graphiti.queries_pkg.client import _is_lock_error
+
+        assert _is_lock_error(Exception("Connection refused")) is False
+        assert _is_lock_error(Exception("Timeout error")) is False
+        assert _is_lock_error(Exception("Permission denied")) is False
+
+    def test_lock_without_file_or_database_not_detected(self):
+        """'lock' alone without 'file' or 'database' is not detected."""
+        from integrations.graphiti.queries_pkg.client import _is_lock_error
+
+        # 'lock' without 'file' or 'database' and no 'could not set lock'
+        assert _is_lock_error(Exception("Object is locked by user")) is False
+
+
+class TestBackoffWithJitter:
+    """Tests for _backoff_with_jitter calculation."""
+
+    def test_backoff_increases_with_attempt(self):
+        """Backoff time increases with attempt number."""
+        from integrations.graphiti.queries_pkg.client import _backoff_with_jitter
+
+        # Run multiple times to account for jitter
+        attempt_0_values = [_backoff_with_jitter(0) for _ in range(20)]
+        attempt_3_values = [_backoff_with_jitter(3) for _ in range(20)]
+
+        avg_0 = sum(attempt_0_values) / len(attempt_0_values)
+        avg_3 = sum(attempt_3_values) / len(attempt_3_values)
+
+        assert avg_3 > avg_0, "Higher attempts should have higher average backoff"
+
+    def test_backoff_is_positive(self):
+        """Backoff is always positive."""
+        from integrations.graphiti.queries_pkg.client import _backoff_with_jitter
+
+        for attempt in range(10):
+            for _ in range(10):
+                assert _backoff_with_jitter(attempt) > 0
+
+    def test_backoff_capped_at_max(self):
+        """Backoff should not exceed MAX_BACKOFF_SECONDS + jitter."""
+        from integrations.graphiti.queries_pkg.client import (
+            JITTER_PERCENT,
+            MAX_BACKOFF_SECONDS,
+            _backoff_with_jitter,
+        )
+
+        max_possible = MAX_BACKOFF_SECONDS * (1 + JITTER_PERCENT)
+        for _ in range(50):
+            val = _backoff_with_jitter(100)  # Very high attempt
+            assert val <= max_possible + 0.01, f"Backoff {val} exceeded max {max_possible}"
+
+
+class TestGraphitiClientRetryLogic:
+    """Tests for LadybugDB lock retry logic in GraphitiClient.initialize().
+
+    These tests exercise the retry loop behavior by mocking the modules
+    that are imported locally inside initialize(). We patch at the source
+    module level since the imports are local to the method.
+    """
+
+    def _make_config(self):
+        """Create a mock GraphitiConfig for testing."""
+        config = MagicMock()
+        config.llm_provider = "openai"
+        config.embedder_provider = "openai"
+        import tempfile
+        config.get_db_path.return_value = Path(tempfile.gettempdir()) / "test-db"
+        config.get_provider_summary.return_value = "openai/openai"
+        return config
+
+    def _make_mock_providers(self):
+        """Create mock graphiti_providers module."""
+        mock_providers = MagicMock()
+        mock_providers.create_llm_client = MagicMock(return_value=MagicMock())
+        mock_providers.create_embedder = MagicMock(return_value=MagicMock())
+        mock_providers.ProviderError = type("ProviderError", (Exception,), {})
+        mock_providers.ProviderNotInstalled = type(
+            "ProviderNotInstalled", (mock_providers.ProviderError,), {}
+        )
+        return mock_providers
+
+    def _make_noop_sleep(self):
+        """Create an async no-op replacement for asyncio.sleep."""
+
+        async def _noop_sleep(_delay):
+            return
+
+        return _noop_sleep
+
+    @pytest.mark.asyncio
+    async def test_successful_retry_after_lock_error(self):
+        """Client retries and succeeds after transient lock error."""
+        from integrations.graphiti.queries_pkg.client import GraphitiClient
+
+        config = self._make_config()
+        client = GraphitiClient(config)
+
+        call_count = 0
+
+        def mock_create_driver(db=""):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise OSError("Could not set lock on file /tmp/test-db")
+            return MagicMock()
+
+        mock_graphiti_instance = MagicMock()
+
+        async def mock_build_indices():
+            pass
+
+        mock_graphiti_instance.build_indices_and_constraints = mock_build_indices
+
+        mock_graphiti_cls = MagicMock(return_value=mock_graphiti_instance)
+        mock_graphiti_core = MagicMock()
+        mock_graphiti_core.Graphiti = mock_graphiti_cls
+
+        mock_kuzu_driver = MagicMock()
+        mock_kuzu_driver.create_patched_kuzu_driver = mock_create_driver
+
+        with (
+            patch.dict(sys.modules, {
+                "graphiti_core": mock_graphiti_core,
+                "integrations.graphiti.queries_pkg.kuzu_driver_patched": mock_kuzu_driver,
+            }),
+            patch(
+                "integrations.graphiti.providers_pkg.create_llm_client",
+                return_value=MagicMock(),
+            ),
+            patch(
+                "integrations.graphiti.providers_pkg.create_embedder",
+                return_value=MagicMock(),
+            ),
+            patch(
+                "integrations.graphiti.queries_pkg.client._apply_ladybug_monkeypatch",
+                return_value=True,
+            ),
+            patch(
+                "integrations.graphiti.queries_pkg.client.asyncio.sleep",
+                side_effect=self._make_noop_sleep(),
+            ),
+        ):
+            result = await client.initialize()
+
+        assert call_count == 2, "Should have retried once after lock error"
+        assert result is True, "Should succeed after retry"
+
+    @pytest.mark.asyncio
+    async def test_exhausted_retries_returns_false(self):
+        """Client returns False after exhausting all retries on lock errors."""
+        from integrations.graphiti.queries_pkg.client import (
+            MAX_LOCK_RETRIES,
+            GraphitiClient,
+        )
+
+        config = self._make_config()
+        client = GraphitiClient(config)
+
+        call_count = 0
+
+        def always_lock_error(db=""):
+            nonlocal call_count
+            call_count += 1
+            raise OSError("Could not set lock on database file")
+
+        mock_kuzu_driver = MagicMock()
+        mock_kuzu_driver.create_patched_kuzu_driver = always_lock_error
+
+        with (
+            patch.dict(sys.modules, {
+                "graphiti_core": MagicMock(),
+                "integrations.graphiti.queries_pkg.kuzu_driver_patched": mock_kuzu_driver,
+            }),
+            patch(
+                "integrations.graphiti.providers_pkg.create_llm_client",
+                return_value=MagicMock(),
+            ),
+            patch(
+                "integrations.graphiti.providers_pkg.create_embedder",
+                return_value=MagicMock(),
+            ),
+            patch(
+                "integrations.graphiti.queries_pkg.client._apply_ladybug_monkeypatch",
+                return_value=True,
+            ),
+            patch(
+                "integrations.graphiti.queries_pkg.client.capture_exception",
+            ),
+            patch(
+                "integrations.graphiti.queries_pkg.client.asyncio.sleep",
+                side_effect=self._make_noop_sleep(),
+            ),
+        ):
+            result = await client.initialize()
+
+        assert result is False, "Should return False after exhausting retries"
+        assert call_count == MAX_LOCK_RETRIES + 1
+
+    @pytest.mark.asyncio
+    async def test_non_lock_error_fails_immediately(self):
+        """Non-lock errors cause immediate failure without retry."""
+        from integrations.graphiti.queries_pkg.client import GraphitiClient
+
+        config = self._make_config()
+        client = GraphitiClient(config)
+
+        call_count = 0
+
+        def connection_error(db=""):
+            nonlocal call_count
+            call_count += 1
+            raise RuntimeError("Connection refused - server not running")
+
+        mock_kuzu_driver = MagicMock()
+        mock_kuzu_driver.create_patched_kuzu_driver = connection_error
+
+        with (
+            patch.dict(sys.modules, {
+                "graphiti_core": MagicMock(),
+                "integrations.graphiti.queries_pkg.kuzu_driver_patched": mock_kuzu_driver,
+            }),
+            patch(
+                "integrations.graphiti.providers_pkg.create_llm_client",
+                return_value=MagicMock(),
+            ),
+            patch(
+                "integrations.graphiti.providers_pkg.create_embedder",
+                return_value=MagicMock(),
+            ),
+            patch(
+                "integrations.graphiti.queries_pkg.client._apply_ladybug_monkeypatch",
+                return_value=True,
+            ),
+            patch(
+                "integrations.graphiti.queries_pkg.client.capture_exception",
+            ),
+        ):
+            result = await client.initialize()
+
+        assert call_count == 1, "Non-lock errors should not trigger retries"
+        assert result is False

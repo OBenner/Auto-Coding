@@ -1,0 +1,66 @@
+{
+  "empty": {
+    "noDecisions": "Aucune décision enregistrée",
+    "noDisplay": "Aucune décision à afficher"
+  },
+  "types": {
+    "approach": "Approche",
+    "implementation": "Implémentation",
+    "tool_selection": "Sélection d'outil",
+    "file_modification": "Modification de fichier",
+    "error_recovery": "Récupération d'erreur",
+    "architecture": "Architecture",
+    "optimization": "Optimisation",
+    "other": "Autre"
+  },
+  "confidence": {
+    "very_low": "Très faible",
+    "low": "Faible",
+    "medium": "Moyen",
+    "high": "Élevé",
+    "very_high": "Très élevé",
+    "average": "Moy"
+  },
+  "labels": {
+    "reviewNeeded": "Révision requise",
+    "review": "Révision",
+    "allDecisions": "Toutes les décisions",
+    "unknown": "Inconnu",
+    "yes": "Oui",
+    "no": "Non",
+    "decision": "décision",
+    "decision_plural": "décisions",
+    "alternative": "alternative",
+    "alternative_plural": "alternatives",
+    "reasoningStep": "étape de raisonnement",
+    "reasoningStep_plural": "étapes de raisonnement",
+    "considered": "considérée"
+  },
+  "sections": {
+    "context": "Contexte",
+    "chosenApproach": "Approche choisie",
+    "reasoning": "Raisonnement",
+    "reasoningSteps": "Étapes de raisonnement",
+    "alternativesConsidered": "Alternatives considérées",
+    "impact": "Impact",
+    "reversible": "Réversible",
+    "dependencies": "Dépendances",
+    "whyConsidered": "Pourquoi considérée",
+    "whyRejected": "Pourquoi rejetée",
+    "confidenceImpact": "Impact sur la confiance",
+    "tradeoffs": "Compromis"
+  },
+  "tree": {
+    "groupBy": {
+      "phase": "Grouper par phase",
+      "type": "Grouper par type",
+      "confidence": "Grouper par confiance"
+    }
+  },
+  "hints": {
+    "alternativesCount": "{{count}} alternative considérée",
+    "alternativesCount_plural": "{{count}} alternatives considérées",
+    "reasoningCount": "{{count}} étape de raisonnement",
+    "reasoningCount_plural": "{{count}} étapes de raisonnement"
+  }
+}

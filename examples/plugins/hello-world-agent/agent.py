@@ -13,7 +13,6 @@ This plugin:
 """
 
 import logging
-from pathlib import Path
 
 from apps.backend.plugins.sdk.agent import AgentContext, AgentPlugin
 

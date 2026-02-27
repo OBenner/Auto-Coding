@@ -13,3 +13,8 @@ export * from './linear-api';
 export * from './github-api';
 export * from './shell-api';
 export * from './debug-api';
+export * from './pattern-api';
+export * from './session-replay-api';
+export * from './context-viewer-api';
+export * from './session-context-api';
+export * from './productivity-analytics-api';

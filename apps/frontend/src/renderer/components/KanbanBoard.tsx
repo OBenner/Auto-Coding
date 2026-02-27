@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useCallback, useRef, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useViewState } from '../contexts/ViewStateContext';
+import { useTaskFiltering } from '../hooks/useTaskFiltering';
 import {
   DndContext,
   DragOverlay,
@@ -19,10 +20,11 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy
 } from '@dnd-kit/sortable';
-import { Plus, Inbox, Loader2, Eye, CheckCircle2, Archive, RefreshCw, GitPullRequest, X, Settings, ListPlus, ChevronLeft, ChevronRight, ChevronsRight, Lock, Unlock } from 'lucide-react';
+import { Plus, Inbox, Loader2, Eye, CheckCircle2, Archive, RefreshCw, GitPullRequest, X, Settings, ListPlus, ChevronLeft, ChevronRight, ChevronsRight, Lock, Unlock, Search } from 'lucide-react';
 import { Checkbox } from './ui/checkbox';
 import { ScrollArea } from './ui/scroll-area';
 import { Button } from './ui/button';
+import { Input } from './ui/input';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
 import { TaskCard } from './TaskCard';
 import { SortableTaskCard } from './SortableTaskCard';
@@ -407,13 +409,12 @@ const DroppableColumn = memo(function DroppableColumn({ status, tasks, onTaskCli
   return (
     <div
       className="relative flex"
-      style={columnWidth ? { width: columnWidth, minWidth: MIN_COLUMN_WIDTH, maxWidth: MAX_COLUMN_WIDTH, flexShrink: 0 } : undefined}
+      style={{ flex: '1 1 0%', minWidth: MIN_COLUMN_WIDTH, maxWidth: MAX_COLUMN_WIDTH }}
     >
       <div
         ref={setNodeRef}
         className={cn(
-          'flex flex-1 flex-col rounded-xl border border-white/5 bg-linear-to-b from-secondary/30 to-transparent backdrop-blur-sm transition-all duration-200',
-          !columnWidth && 'min-w-80 max-w-[30rem]',
+          'flex flex-1 flex-col min-w-0 rounded-xl border border-white/5 bg-linear-to-b from-secondary/30 to-transparent backdrop-blur-sm transition-all duration-200',
           getColumnBorderColor(),
           'border-t-2',
           isOver && 'drop-zone-highlight'
@@ -583,8 +584,8 @@ const DroppableColumn = memo(function DroppableColumn({ status, tasks, onTaskCli
       </div>
 
       {/* Task list */}
-      <div className="flex-1 min-h-0">
-        <ScrollArea className="h-full px-3 pb-3 pt-2">
+      <div className="flex-1 min-h-0 min-w-0 overflow-hidden">
+        <ScrollArea className="h-full px-3 pb-3 pt-2 kanban-column-scroll">
           <SortableContext
             items={taskIds}
             strategy={verticalListSortingStrategy}
@@ -744,12 +745,17 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
   }, [columnPreferences]);
 
   // Filter tasks based on archive status
-  const filteredTasks = useMemo(() => {
+  const tasksFilteredByArchive = useMemo(() => {
     if (showArchived) {
       return tasks; // Show all tasks including archived
     }
     return tasks.filter((t) => !t.metadata?.archivedAt);
   }, [tasks, showArchived]);
+
+  // Apply task filtering hook for search and advanced filtering
+  const { filteredTasks, filterState, hasActiveFilters, setSearchQuery, clearFilters } = useTaskFiltering(
+    tasksFilteredByArchive
+  );
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -776,8 +782,8 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
     const searchQuery = filters?.searchQuery?.trim().toLowerCase() ?? '';
     const searchFilteredTasks = searchQuery
       ? filteredTasks.filter((task) => {
-          const title = task.title.toLowerCase();
-          const description = task.description.toLowerCase();
+          const title = (task.title ?? '').toLowerCase();
+          const description = (task.description ?? '').toLowerCase();
           return title.includes(searchQuery) || description.includes(searchQuery);
         })
       : filteredTasks;
@@ -865,11 +871,12 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
               comparison = (dateB - dateA) * multiplier; // Apply multiplier
               break;
             }
-            default:
+            default: {
               // Fallback to createdAt for manual mode without custom order
               const dateA = new Date(a.createdAt).getTime();
               const dateB = new Date(b.createdAt).getTime();
               comparison = dateB - dateA;
+            }
           }
 
           return comparison;
@@ -1473,49 +1480,75 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick, onRefresh, isR
 
   return (
     <div className="flex h-full flex-col">
-      {/* Kanban filters */}
+      {/* Kanban filters (sort mode, sort order, clear) */}
       <KanbanFilters projectId={projectId} />
 
-      {/* Kanban header with refresh button and expand all */}
-      {(onRefresh || collapsedColumnCount >= 3) && (
-        <div className="flex items-center justify-between px-6 pt-4 pb-2">
-          <div className="flex items-center gap-2">
-            {/* Expand All button - appears when 3+ columns are collapsed */}
-            {collapsedColumnCount >= 3 && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleExpandAll}
-                className="gap-2 text-muted-foreground hover:text-foreground"
-              >
-                <ChevronsRight className="h-4 w-4" />
-                {t('tasks:kanban.expandAll')}
-              </Button>
-            )}
+      {/* Kanban header with search, filters, refresh button and expand all */}
+      <div className="px-6 pt-4 pb-2 space-y-2">
+        {/* Search and filters */}
+        <div className="flex items-center gap-3">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder={t('tasks:kanban.searchPlaceholder')}
+              value={filterState.searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9"
+            />
           </div>
-          <div className="flex items-center gap-2">
-            {onRefresh && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={onRefresh}
-                disabled={isRefreshing}
-                className="gap-2 text-muted-foreground hover:text-foreground"
-              >
-                <RefreshCw className={cn("h-4 w-4", isRefreshing && "animate-spin")} />
-                {isRefreshing ? t('common:buttons.refreshing') : t('tasks:refreshTasks')}
-              </Button>
-            )}
-          </div>
+          {hasActiveFilters && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={clearFilters}
+              className="gap-2 text-muted-foreground hover:text-foreground"
+            >
+              <X className="h-4 w-4" />
+              {t('tasks:kanban.clearFilters')}
+            </Button>
+          )}
         </div>
-      )}
+        {/* Action buttons row */}
+        {(onRefresh || collapsedColumnCount >= 3) && (
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              {/* Expand All button - appears when 3+ columns are collapsed */}
+              {collapsedColumnCount >= 3 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleExpandAll}
+                  className="gap-2 text-muted-foreground hover:text-foreground"
+                >
+                  <ChevronsRight className="h-4 w-4" />
+                  {t('tasks:kanban.expandAll')}
+                </Button>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              {onRefresh && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={onRefresh}
+                  disabled={isRefreshing}
+                  className="gap-2 text-muted-foreground hover:text-foreground"
+                >
+                  <RefreshCw className={cn("h-4 w-4", isRefreshing && "animate-spin")} />
+                  {isRefreshing ? t('common:buttons.refreshing') : t('tasks:refreshTasks')}
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
       {/* Kanban columns */}
       <DndContext
         sensors={sensors}
         collisionDetection={closestCorners}
-        onDragStart={handleDragStart}
-        onDragOver={handleDragOver}
-        onDragEnd={handleDragEnd}
+        onDragStart={isAutoSortActive ? undefined : handleDragStart}
+        onDragOver={isAutoSortActive ? undefined : handleDragOver}
+        onDragEnd={isAutoSortActive ? undefined : handleDragEnd}
       >
         <div className="flex flex-1 gap-4 overflow-x-auto p-6">
           {TASK_STATUS_COLUMNS.map((status) => (
