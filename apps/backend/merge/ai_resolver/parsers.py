@@ -117,24 +117,34 @@ def extract_explanation(response: str) -> str | None:
         Extracted explanation text, or None if not found
     """
     # Look for "EXPLANATION:" / "Explanation:" / "**Explanation:**" headers.
-    # Pattern allows optional leading asterisks, optional trailing asterisks
-    # after the colon, and optional colon/dash separator.
-    # Use re.MULTILINE so ^ matches any line start (not just the string start).
+    # Uses line-by-line string matching to avoid polynomial-backtracking regex.
     # Bounded input to mitigate ReDoS on very large AI responses.
     if len(response) > 100_000:
         response = response[:100_000]
 
-    # Split on the first ``` to isolate text before code blocks, avoiding
-    # the need for re.DOTALL with (.*?) which risks polynomial backtracking.
+    # Split on the first ``` to isolate text before code blocks.
     text_section = response.split("```")[0] if "```" in response else response
 
-    # Match the Explanation header line; content is everything after the header.
-    pattern = r"^\s*\*{0,2}\s*Explanation\s*[:\-]?\s*\*{0,2}\s*"
-    match = re.search(pattern, text_section, re.IGNORECASE | re.MULTILINE)
+    # Scan lines for the "Explanation" header without a complex regex.
+    # Handles: "Explanation:", "**Explanation:**", "EXPLANATION -", etc.
+    lines = text_section.split("\n")
+    for idx, line in enumerate(lines):
+        # Strip markdown bold markers and surrounding whitespace for comparison.
+        normalized = line.strip().lstrip("*").strip()
+        if not normalized.lower().startswith("explanation"):
+            continue
 
-    if match:
-        # Everything after the header is the explanation text
-        explanation = text_section[match.end() :].strip()
+        # Extract any inline content on the header line (after ":" or "-").
+        inline = ""
+        for sep in (":", "-"):
+            sep_pos = normalized.find(sep)
+            if sep_pos >= 0:
+                inline = normalized[sep_pos + 1 :].strip().lstrip("*").strip()
+                break
+
+        # Combine inline content with all subsequent lines.
+        after = "\n".join(lines[idx + 1 :]).strip()
+        explanation = (inline + "\n" + after).strip() if inline else after
         explanation = re.sub(r"\*{1,2}([^*]+)\*{1,2}", r"\1", explanation)
         return explanation or None
 

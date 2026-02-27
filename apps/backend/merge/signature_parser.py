@@ -58,42 +58,36 @@ def parse_function_signature(signature: str) -> FunctionSignature:
     if not signature or not isinstance(signature, str):
         raise ValueError("Signature must be a non-empty string")
 
-    # Strip leading/trailing whitespace
-    signature = signature.strip()
+    # Strip leading/trailing whitespace and normalise runs of whitespace to a
+    # single space so that the patterns below do not need adjacent \s* groups
+    # (which can exhibit polynomial backtracking on non-matching input).
+    signature = re.sub(r"\s+", " ", signature.strip())
 
-    # Match the function signature pattern
-    # Supports: async def, regular def, with type hints, with return types
+    # Match the function signature pattern.
+    # Supports: async def, regular def, with type hints, with return types.
     # The trailing colon is required for syntactically valid Python signatures;
     # we also accept signatures without a colon (e.g., extracted from diffs).
-    pattern = r"""
-        ^\s*
-        (async\s+)?  # Optional async keyword
-        def\s+        # def keyword
-        ([a-zA-Z_]\w*)  # Function name (capture group 2)
-        \s*          # Optional whitespace
-        \(            # Opening paren
-        ([^)]*)      # Parameters (capture group 3) - everything until closing paren
-        \)            # Closing paren
-        (?:\s*->\s*([^:(]+))?  # Optional return type with leading space (capture group 4)
-        \s*          # Optional whitespace before colon
-        :             # Trailing colon (required for valid Python signatures)
-        \s*$         # End of string
-    """
+    # With whitespace pre-normalised, each space slot uses ' ?' (at most one).
+    pattern = (
+        r"^(async )?"  # Optional async keyword
+        r"def ([a-zA-Z_]\w*) ?"  # def + function name
+        r"\(([^)]*)\)"  # Parameters in parens
+        r"(?: -> ([^:(]+))?"  # Optional return type
+        r" ?:$"  # Trailing colon
+    )
 
-    match = re.match(pattern, signature, re.VERBOSE)
+    match = re.match(pattern, signature)
 
     # Fall back to accepting signatures without a trailing colon (e.g., from diffs)
     if not match:
-        pattern_no_colon = r"""
-            ^\s*
-            (async\s+)?
-            def\s+
-            ([a-zA-Z_]\w*)
-            \s*\(([^)]*)\)
-            (?:\s*->\s*([^:(]+))?
-            \s*$
-        """
-        match = re.match(pattern_no_colon, signature, re.VERBOSE)
+        pattern_no_colon = (
+            r"^(async )?"
+            r"def ([a-zA-Z_]\w*) ?"
+            r"\(([^)]*)\)"
+            r"(?: -> ([^:(]+))?"
+            r" ?$"
+        )
+        match = re.match(pattern_no_colon, signature)
 
     if not match:
         raise ValueError(
