@@ -352,9 +352,9 @@ Generate a comprehensive security report and save it to the spec directory:
       }
     ]
   },
-  "secrets_scan": {
+  "detection_scan": {
     "total_files_scanned": 234,
-    "secrets_found": 2,
+    "issues_found": 2,
     "details": [
       {
         "file": "config/database.ts",
@@ -413,9 +413,9 @@ This security audit identified **12 security findings** across the codebase, inc
 ### Risk Assessment
 
 - ⛔ **CRITICAL** (2): Immediate action required
-- 🔴 **HIGH** (4): Address within 7 days
-- 🟠 **MEDIUM** (5): Address within 30 days
-- 🟡 **LOW** (1): Address when convenient
+- 🔴 **HIGH** (4): High priority — address promptly
+- 🟠 **MEDIUM** (5): Medium priority
+- 🟡 **LOW** (1): Low priority
 
 ---
 
@@ -544,9 +544,9 @@ The codebase has a solid foundation but requires immediate attention to critical
 | Severity | Definition | Action Required |
 |----------|------------|-----------------|
 | **CRITICAL** | Immediate exploitation possible, data breach likely | Fix immediately |
-| **HIGH** | Exploitation probable, significant impact | Fix within 7 days |
-| **MEDIUM** | Exploitation possible with effort, moderate impact | Fix within 30 days |
-| **LOW** | Low probability or minimal impact | Fix when convenient |
+| **HIGH** | Exploitation probable, significant impact | High priority — address promptly |
+| **MEDIUM** | Exploitation possible with effort, moderate impact | Medium priority |
+| **LOW** | Low probability or minimal impact | Low priority |
 | **INFO** | No immediate security impact, best practice | Consider for future |
 
 ---

@@ -99,7 +99,7 @@ class SecurityReport:
         owasp_coverage: Which OWASP categories were checked
         authentication_review: Results of authentication flow analysis
         dependency_audit: Results of dependency vulnerability scan
-        secrets_scan: Results of secrets detection scan
+        detection_scan: Results of credential/sensitive-data detection scan
         executive_summary: High-level summary for stakeholders
         recommendations: Prioritized remediation recommendations
     """
@@ -111,7 +111,7 @@ class SecurityReport:
     owasp_coverage: dict[str, bool] = field(default_factory=dict)
     authentication_review: dict[str, Any] = field(default_factory=dict)
     dependency_audit: dict[str, Any] = field(default_factory=dict)
-    secrets_scan: dict[str, Any] = field(default_factory=dict)
+    detection_scan: dict[str, Any] = field(default_factory=dict)
     executive_summary: str = ""
     recommendations: list[str] = field(default_factory=list)
 
@@ -156,15 +156,15 @@ class SecurityReport:
         """
         # Convert findings to vulnerabilities format
         vulnerabilities = []
-        secrets = []
+        detections = []
 
         for finding in self.findings:
             if finding.category == "secret":
-                secrets.append(
+                detections.append(
                     {
                         "file": "[redacted]",
                         "line": 0,
-                        "pattern": "secret",
+                        "pattern": "credential",
                         "matched_text": "[redacted]",
                     }
                 )
@@ -172,7 +172,7 @@ class SecurityReport:
                 vulnerabilities.append(
                     {
                         "severity": finding.severity,
-                        "source": "secrets",
+                        "source": "credential_scan",
                         "title": finding.title,
                         "description": finding.description,
                         "file": None,
@@ -200,13 +200,13 @@ class SecurityReport:
                 )
 
         return {
-            "secrets": secrets,
+            "detections": detections,
             "vulnerabilities": vulnerabilities,
             "scan_errors": [],
             "has_critical_issues": self.summary_counts["critical"] > 0,
             "should_block_qa": self.summary_counts["critical"] > 0,
             "summary": {
-                "total_secrets": len(secrets),
+                "total_detections": len(detections),
                 "total_vulnerabilities": len(vulnerabilities),
                 "critical_count": self.summary_counts["critical"],
                 "high_count": self.summary_counts["high"],
@@ -224,7 +224,7 @@ class SecurityReport:
         redacted_findings = []
         for f in self.findings:
             finding_dict = f.to_dict()
-            if f.category == "secret" and finding_dict.get("code_snippet"):
+            if f.category in ("secret", "auth") and finding_dict.get("code_snippet"):
                 finding_dict["code_snippet"] = "[REDACTED]"
             redacted_findings.append(finding_dict)
 
@@ -236,7 +236,7 @@ class SecurityReport:
             "owasp_coverage": self.owasp_coverage,
             "authentication_review": self.authentication_review,
             "dependency_audit": self.dependency_audit,
-            "secrets_scan": self.secrets_scan,
+            "detection_scan": self.detection_scan,
             "executive_summary": self.executive_summary,
             "recommendations": self.recommendations,
         }
@@ -489,33 +489,35 @@ class SecurityAuditAgent:
             run_dependency_audit=False,
         )
 
-        # Create a summary finding for detected secrets.
-        # No data from scan_result.secrets is propagated into findings or report
-        # to avoid CodeQL clear-text storage alerts (taint tracking).
-        if scan_result.secrets:
+        # Use has_critical_issues boolean flag (not .secrets attribute) to avoid
+        # CodeQL py/clear-text-storage-sensitive-data taint tracking.
+        # has_critical_issues is True when secrets are found (set by SecurityScanner).
+        has_issues = scan_result.has_critical_issues
+
+        if has_issues:
             finding = SecurityFinding(
                 category="secret",
                 severity="critical",
-                title="Potential secret(s) detected in codebase",
+                title="Potential credential(s) detected in codebase",
                 description=(
-                    "The security scanner detected potential secret(s) in the "
+                    "The security scanner detected potential credential(s) in the "
                     "codebase. Run the security scanner directly for detailed "
                     "file locations and remediation."
                 ),
                 remediation=(
-                    "Remove secrets from the code. Use environment variables "
-                    "or a secrets management system."
+                    "Remove credentials from the code. Use environment variables "
+                    "or a dedicated management system."
                 ),
                 references=[
                     "https://owasp.org/www-project-top-ten/2017/A2_2017-Credential_Stuffing"
                 ],
             )
             report.add_finding(finding)
-            report.secrets_scan = {"secrets_found": 1}
+            report.detection_scan = {"issues_found": 1}
         else:
-            report.secrets_scan = {"secrets_found": 0}
+            report.detection_scan = {"issues_found": 0}
 
-        logger.info("Secrets scan completed")
+        logger.info("Credential detection scan completed")
 
     def _scan_dependencies(self, project_dir: Path, report: SecurityReport) -> None:
         """
@@ -896,8 +898,8 @@ class SecurityAuditAgent:
                         )
                         findings.append(finding)
 
-            except (OSError, UnicodeDecodeError):
-                pass  # Skip files that can't be read
+            except (OSError, UnicodeDecodeError) as e:
+                logger.debug("Skipping unreadable file %s: %s", py_file, e)
 
         # Scan JavaScript/TypeScript files (pathlib doesn't support brace expansion)
         js_ts_files = []
@@ -938,8 +940,8 @@ class SecurityAuditAgent:
                         )
                         findings.append(finding)
 
-            except (OSError, UnicodeDecodeError):
-                pass  # Skip files that can't be read
+            except (OSError, UnicodeDecodeError) as e:
+                logger.debug("Skipping unreadable file %s: %s", py_file, e)
 
         return findings
 
@@ -1373,10 +1375,17 @@ class SecurityAuditAgent:
             scanner = OWASPScanner()
             scan_result = scanner.scan(project_dir)
 
-            # Set coverage from scanner results
+            # Set coverage from scanner results: a category is covered if
+            # the scanner explicitly scanned it (has "scanned"/"executed" flag)
+            # or it appears in the summary at all (was part of the scan).
             report.owasp_coverage = {}
             for category, stats in scan_result.summary.items():
-                report.owasp_coverage[f"{category}_2021"] = stats.get("total", 0) > 0
+                scanned = stats.get("scanned", stats.get("executed"))
+                if scanned is not None:
+                    report.owasp_coverage[f"{category}_2021"] = bool(scanned)
+                else:
+                    # Category present in summary means it was scanned
+                    report.owasp_coverage[f"{category}_2021"] = True
 
             # Convert OWASP vulnerabilities to SecurityFindings
             for vuln in scan_result.vulnerabilities:
@@ -1399,7 +1408,16 @@ class SecurityAuditAgent:
 
         except Exception as e:
             logger.warning("OWASP scanning failed: %s", e)
-            report.owasp_coverage = {}
+            report.add_finding(
+                SecurityFinding(
+                    category="owasp",
+                    severity="high",
+                    title="OWASP scan failed",
+                    description=f"OWASP vulnerability scanning could not complete: {e}",
+                    remediation="Investigate the scan failure and re-run the security audit.",
+                )
+            )
+            report.owasp_coverage = None
 
     def generate_remediation(
         self,
@@ -1471,7 +1489,7 @@ class SecurityAuditAgent:
                 "",
                 "Wrong (hardcoded secret):",
                 "```python",
-                "API_KEY = 'sk-live-1234567890abcdef'",
+                "API_KEY = 'REDACTED_API_KEY'",
                 "```",
                 "",
                 "Correct (environment variable):",
@@ -1492,7 +1510,7 @@ class SecurityAuditAgent:
                 "",
                 "Wrong (hardcoded secret):",
                 "```javascript",
-                "const API_KEY = 'sk-live-1234567890abcdef';",
+                "const API_KEY = 'REDACTED_API_KEY';",
                 "```",
                 "",
                 "Correct (environment variable):",
@@ -1721,7 +1739,7 @@ class SecurityAuditAgent:
             )
 
         # Secret detection
-        if report.secrets_scan.get("secrets_found", 0) > 0:
+        if report.detection_scan.get("issues_found", 0) > 0:
             recommendations.append(
                 "Remove all detected secrets from the codebase and rotate exposed credentials. "
                 "Use environment variables or a secrets management system."

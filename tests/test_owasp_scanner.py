@@ -491,7 +491,7 @@ def incomplete_function(
         code_file = temp_dir / "creds.py"
         code_file.write_text("""
 password = "my_secret_password_123"
-api_key = "PLACEHOLDER_TEST_KEY_LIVE_0000"
+api_key = "placeholder_api_key"
 secret = "very_long_secret_value"
 token = "jwt_token_here_12345"
 """)

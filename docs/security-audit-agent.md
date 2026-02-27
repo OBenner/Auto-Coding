@@ -26,7 +26,7 @@ The Security Audit Agent extends Auto Code's security foundation with automated 
 
 The Security Audit Agent consists of three main components:
 
-```
+```text
 apps/backend/
 ├── agents/
 │   └── security_auditor.py       # Main agent coordinating security scans
@@ -393,7 +393,7 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: security-report
-          path: .auto-claude/security-reports/*.json
+          path: .auto-claude/*.json
 ```
 
 ### Example 3: Custom Security Check
@@ -449,7 +449,7 @@ To add detection patterns for new vulnerability types:
 }
 ```
 
-2. **Add detection method (if needed):**
+1. **Add detection method (if needed):**
 
 ```python
 def scan_new_vulnerability_type(self, file_path: Path) -> list[OWASPVulnerability]:
@@ -459,7 +459,7 @@ def scan_new_vulnerability_type(self, file_path: Path) -> list[OWASPVulnerabilit
     return vulnerabilities
 ```
 
-3. **Add tests in `tests/test_owasp_scanner.py`:**
+1. **Add tests in `tests/test_owasp_scanner.py`:**
 
 ```python
 def test_detect_new_vulnerability():
@@ -472,7 +472,7 @@ def test_detect_new_vulnerability():
     assert len(result.vulnerabilities) > 0
 ```
 
-4. **Validate coverage:**
+1. **Validate coverage:**
 
 ```bash
 python -c "from analysis.owasp_scanner import validate_owasp_coverage; validate_owasp_coverage()"
@@ -542,9 +542,9 @@ The Security Audit Agent is optimized for large codebases:
 - **Incremental scanning** - Can scan specific directories or files
 
 **Typical performance:**
-- Small project (< 1000 files): 5-10 seconds
-- Medium project (1000-5000 files): 30-60 seconds
-- Large project (> 5000 files): 2-5 minutes
+- Small project (< 1000 files): fast feedback cycle
+- Medium project (1000-5000 files): moderate analysis time
+- Large project (> 5000 files): plan for extended analysis
 
 ## Security Considerations
 

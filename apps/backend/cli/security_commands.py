@@ -50,7 +50,7 @@ def handle_security_audit_command(
         verbose: Enable verbose output
     """
     print_banner()
-    print(f"\n{icon(Icons.SECURITY)} Security Audit\n")
+    print(f"\n{icon(Icons.SHIELD)} Security Audit\n")
 
     if verbose:
         print(muted(f"Project: {project_dir}"))
@@ -116,7 +116,7 @@ def handle_security_audit_command(
             print_header("OWASP Top 10 Coverage")
             print()
             for category in report.owasp_coverage:
-                print(f"  {icon(Icons.CHECK)} {category}")
+                print(f"  {icon(Icons.SUCCESS)} {category}")
             print()
 
         # Save report
@@ -132,12 +132,12 @@ def handle_security_audit_command(
         if output_format in ("json", "both"):
             json_path = output_dir / "security_audit_report.json"
             report.to_json_file(json_path)
-            print(success(f"{icon(Icons.SAVE)} JSON report saved: {json_path}"))
+            print(success(f"{icon(Icons.FILE)} JSON report saved: {json_path}"))
 
         if output_format in ("markdown", "both"):
             md_path = output_dir / "security_audit_report.md"
             report.to_markdown_file(md_path)
-            print(success(f"{icon(Icons.SAVE)} Markdown report saved: {md_path}"))
+            print(success(f"{icon(Icons.FILE)} Markdown report saved: {md_path}"))
 
         print()
 
@@ -145,7 +145,7 @@ def handle_security_audit_command(
         critical_findings = report.get_critical_findings()
         if critical_findings:
             print(divider())
-            print_header("Critical Findings")
+            print_header("High and Critical Findings")
             print()
 
             for finding in critical_findings[:5]:  # Show first 5

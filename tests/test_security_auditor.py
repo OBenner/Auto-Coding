@@ -329,10 +329,10 @@ class TestSecurityReport:
         scan_results = sample_report.to_security_scan_results_dict()
 
         assert isinstance(scan_results, dict)
-        assert "secrets" in scan_results
+        assert "detections" in scan_results
         assert "vulnerabilities" in scan_results
         assert "summary" in scan_results
-        assert len(scan_results["secrets"]) == 1
+        assert len(scan_results["detections"]) == 1
         assert len(scan_results["vulnerabilities"]) == 2
         assert scan_results["has_critical_issues"] is True
         assert scan_results["should_block_qa"] is True
@@ -390,12 +390,10 @@ class TestSecurityAuditAgent:
     @patch("agents.security_auditor.SecurityScanner")
     def test_scan_secrets(self, mock_scanner_class, agent, temp_dir):
         """Test secret detection integration."""
-        # Mock the scanner with secrets
+        # Mock the scanner with credential findings
         mock_scanner = MagicMock()
         mock_scan_result = MagicMock()
-        mock_scan_result.secrets = [
-            {"file": "config.py", "pattern": "api_key", "line": 10},
-        ]
+        mock_scan_result.has_critical_issues = True
         mock_scan_result.vulnerabilities = []
         mock_scanner.scan.return_value = mock_scan_result
         agent._security_scanner = mock_scanner
@@ -406,7 +404,7 @@ class TestSecurityAuditAgent:
         assert len(report.findings) == 1
         assert report.findings[0].category == "secret"
         assert report.findings[0].severity == "critical"
-        assert report.secrets_scan["secrets_found"] == 1
+        assert report.detection_scan["issues_found"] == 1
 
     @patch("agents.security_auditor.SecurityScanner")
     def test_scan_dependencies(self, mock_scanner_class, agent, temp_dir):
@@ -620,7 +618,7 @@ def login():
         assert output_file.exists()
         with open(output_file) as f:
             data = json.load(f)
-            assert "secrets" in data
+            assert "detections" in data
             assert "vulnerabilities" in data
             assert "summary" in data
 

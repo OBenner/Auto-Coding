@@ -128,6 +128,16 @@ SCANNABLE_EXTENSIONS = frozenset(
     }
 )
 
+# Regex for redacting sensitive values in code snippets
+_SENSITIVE_VALUE_RE = re.compile(
+    r"""(?<=['"])[a-zA-Z0-9_\-/+=]{16,}(?=['"])""",
+)
+
+
+def _redact_snippet(snippet: str) -> str:
+    """Redact potential sensitive values from a code snippet."""
+    return _SENSITIVE_VALUE_RE.sub("<REDACTED>", snippet)
+
 
 def _safe_relative(file_path: Path, project_dir: Path | None = None) -> str:
     """Compute relative path against project_dir with fallback."""
@@ -391,7 +401,7 @@ class OWASPScanner:
                                     description=f"Pattern matched: {description}",
                                     file=str(file_path.relative_to(project_dir)),
                                     line=line_num,
-                                    code_snippet=line.strip(),
+                                    code_snippet=_redact_snippet(line.strip()),
                                     recommendation=self._get_recommendation(
                                         "A03", description
                                     ),
@@ -450,7 +460,9 @@ class OWASPScanner:
                                     description=f"Use of {node.func.id}() allows code injection",
                                     file=str(_safe_relative(file_path, project_dir)),
                                     line=node.lineno,
-                                    code_snippet=lines[node.lineno - 1].strip()
+                                    code_snippet=_redact_snippet(
+                                        lines[node.lineno - 1].strip()
+                                    )
                                     if node.lineno <= len(lines)
                                     else "",
                                     recommendation="Avoid eval/exec; use safer alternatives",
@@ -478,9 +490,9 @@ class OWASPScanner:
                                                         file_path, project_dir
                                                     ),
                                                     line=node.lineno,
-                                                    code_snippet=lines[
-                                                        node.lineno - 1
-                                                    ].strip()
+                                                    code_snippet=_redact_snippet(
+                                                        lines[node.lineno - 1].strip()
+                                                    )
                                                     if node.lineno <= len(lines)
                                                     else "",
                                                     recommendation="Avoid shell=True; use list arguments for subprocess",
@@ -642,7 +654,7 @@ class OWASPScanner:
                                 _safe_relative(file_path, project_dir)
                             ),  # Relative path
                             line=line_num,
-                            code_snippet=line.strip(),
+                            code_snippet=_redact_snippet(line.strip()),
                             recommendation=self._get_recommendation(
                                 category, description
                             ),
@@ -692,9 +704,11 @@ class OWASPScanner:
                                                     file_path, project_dir
                                                 ),
                                                 line=node.lineno,
-                                                code_snippet=content.splitlines()[
-                                                    node.lineno - 1
-                                                ].strip(),
+                                                code_snippet=_redact_snippet(
+                                                    content.splitlines()[
+                                                        node.lineno - 1
+                                                    ].strip()
+                                                ),
                                                 recommendation="Use environment variables or secret management",
                                             )
                                         )
@@ -712,9 +726,9 @@ class OWASPScanner:
                                     description=f"Use of {node.func.attr}() function",
                                     file=str(_safe_relative(file_path, project_dir)),
                                     line=node.lineno,
-                                    code_snippet=content.splitlines()[
-                                        node.lineno - 1
-                                    ].strip(),
+                                    code_snippet=_redact_snippet(
+                                        content.splitlines()[node.lineno - 1].strip()
+                                    ),
                                     recommendation="Avoid eval/exec; use safer alternatives",
                                 )
                             )
