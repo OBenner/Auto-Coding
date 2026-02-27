@@ -25,9 +25,10 @@ def extract_code_block(response: str, language: str) -> str | None:
         Extracted code block, or None if not found
     """
     # Try to find fenced code block
+    escaped_lang = re.escape(language)
     patterns = [
-        rf"```{language}\n(.*?)```",
-        rf"```{language.lower()}\n(.*?)```",
+        rf"```{escaped_lang}\n(.*?)```",
+        rf"```{re.escape(language.lower())}\n(.*?)```",
         r"```\n(.*?)```",
         r"```(.*?)```",
     ]
@@ -93,7 +94,9 @@ def extract_batch_code_blocks(
         Extracted code block for the location, or None if not found
     """
     # Try to find the resolution for this location
-    pattern = rf"## Location: {re.escape(location)}.*?```{language}\n(.*?)```"
+    pattern = (
+        rf"## Location: {re.escape(location)}.*?```{re.escape(language)}\n(.*?)```"
+    )
     match = re.search(pattern, response, re.DOTALL)
 
     if match:

@@ -480,10 +480,15 @@ def test_benchmark_storage(tmp_path):
 
 
 if __name__ == "__main__":
+    import tempfile
+    from pathlib import Path
+
     # Run all tests
     test_accuracy_calculation()
-    test_benchmark_storage()
-    test_semantic_accuracy_improvement()
+    with tempfile.TemporaryDirectory() as _d:
+        test_benchmark_storage(Path(_d))
+    with tempfile.TemporaryDirectory() as _d:
+        test_semantic_accuracy_improvement(Path(_d))
 
     print("\n" + "=" * 60)
     print("All tests completed successfully!")

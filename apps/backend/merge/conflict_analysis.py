@@ -411,11 +411,6 @@ def _references_entity(change: SemanticChange, entity_name: str) -> bool:
     if isinstance(content_after, str) and entity_name in content_after:
         return True
 
-    # For MODIFY_FUNCTION, check if it's modifying the entity
-    if change.change_type == ChangeType.MODIFY_FUNCTION:
-        if target == entity_name:
-            return True
-
     return False
 
 
