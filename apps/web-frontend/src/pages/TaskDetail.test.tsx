@@ -344,7 +344,7 @@ describe('TaskDetail', () => {
       expect(apiClient.getTask).toHaveBeenCalledTimes(2);
     });
 
-    it('should disable refresh button while refreshing', async () => {
+    it('should disable refresh button and show spinning icon while refreshing', async () => {
       // Create a promise we can control
       let resolveRefresh: (value: any) => void;
       const refreshPromise = new Promise((resolve) => {
@@ -372,38 +372,6 @@ describe('TaskDetail', () => {
         expect(refreshButton).toBeDisabled();
       });
 
-      // Resolve the refresh
-      resolveRefresh!(createMockTaskDetail());
-
-      // Button should be enabled again
-      await waitFor(() => {
-        expect(refreshButton).not.toBeDisabled();
-      });
-    });
-
-    it('should show spinning icon while refreshing', async () => {
-      // Create a promise we can control
-      let resolveRefresh: (value: any) => void;
-      const refreshPromise = new Promise((resolve) => {
-        resolveRefresh = resolve;
-      });
-
-      // Initial load
-      vi.mocked(apiClient.getTask).mockResolvedValueOnce(createMockTaskDetail());
-
-      render(<TaskDetail taskId={testTaskId} onBack={mockOnBack} />);
-
-      await waitFor(() => {
-        expect(screen.getByText('Test Task')).toBeInTheDocument();
-      });
-
-      // Setup delayed refresh
-      vi.mocked(apiClient.getTask).mockReturnValueOnce(refreshPromise as any);
-
-      // Click refresh
-      const refreshButton = screen.getByRole('button', { name: /refresh/i });
-      fireEvent.click(refreshButton);
-
       // Check for spinning animation class
       await waitFor(() => {
         const icon = refreshButton.querySelector('.animate-spin');
@@ -413,7 +381,11 @@ describe('TaskDetail', () => {
       // Resolve the refresh
       resolveRefresh!(createMockTaskDetail());
 
-      // Icon should stop spinning
+      // Button should be enabled and icon should stop spinning
+      await waitFor(() => {
+        expect(refreshButton).not.toBeDisabled();
+      });
+
       await waitFor(() => {
         const icon = refreshButton.querySelector('.animate-spin');
         expect(icon).not.toBeInTheDocument();

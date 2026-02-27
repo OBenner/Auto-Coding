@@ -48,25 +48,8 @@ def count_subtasks(spec_dir: Path) -> tuple[int, int]:
     Returns:
         (completed_count, total_count)
     """
-    plan_file = spec_dir / PLAN_FILE
-    if not plan_file.exists():
-        return 0, 0
-
-    try:
-        with open(plan_file, encoding="utf-8") as f:
-            plan = json.load(f)
-
-        total = 0
-        completed = 0
-        for phase in plan.get("phases", []):
-            for subtask in phase.get("subtasks", []):
-                total += 1
-                if subtask.get("status") == "completed":
-                    completed += 1
-
-        return completed, total
-    except (OSError, json.JSONDecodeError, UnicodeDecodeError):
-        return 0, 0
+    result = count_subtasks_detailed(spec_dir)
+    return result["completed"], result["total"]
 
 
 def count_subtasks_detailed(spec_dir: Path) -> dict:

@@ -99,6 +99,35 @@ export async function setupTwoTaskNavigation(page: Page): Promise<void> {
 }
 
 /**
+ * Set up a two-phase route: first request returns firstBody (with firstStatus),
+ * subsequent requests return secondBody with status 200.
+ */
+export async function setupTwoPhaseRoute(
+  page: Page,
+  firstBody: Record<string, unknown>,
+  secondBody: Record<string, unknown>,
+  firstStatus = 200
+): Promise<void> {
+  let requestCount = 0;
+  await page.route('**/api/tasks', async (route) => {
+    requestCount++;
+    if (requestCount === 1) {
+      await route.fulfill({
+        status: firstStatus,
+        contentType: 'application/json',
+        body: JSON.stringify(firstBody),
+      });
+    } else {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(secondBody),
+      });
+    }
+  });
+}
+
+/**
  * Set up a delayed refresh route for testing button/spinner state during refresh.
  * First request responds immediately; subsequent requests are delayed by delayMs.
  */

@@ -12,6 +12,7 @@ import {
   mockTaskListError,
   createMockTask,
   setupDelayedRefreshRoute,
+  setupTwoPhaseRoute,
 } from './helpers';
 
 test.describe('Task List Page', () => {
@@ -148,27 +149,12 @@ test.describe('Task List Page', () => {
     });
 
     test('should retry fetching tasks when "Try Again" is clicked', async ({ page }) => {
-      // First call fails
-      let requestCount = 0;
-      await page.route('**/api/tasks', async (route) => {
-        requestCount++;
-        if (requestCount === 1) {
-          await route.fulfill({
-            status: 500,
-            contentType: 'application/json',
-            body: JSON.stringify({ detail: 'Network error' }),
-          });
-        } else {
-          await route.fulfill({
-            status: 200,
-            contentType: 'application/json',
-            body: JSON.stringify({
-              tasks: [createMockTask({ name: 'Recovered Task' })],
-              total: 1,
-            }),
-          });
-        }
-      });
+      await setupTwoPhaseRoute(
+        page,
+        { detail: 'Network error' },
+        { tasks: [createMockTask({ name: 'Recovered Task' })], total: 1 },
+        500
+      );
 
       await page.goto('/#/tasks');
 
@@ -194,32 +180,17 @@ test.describe('Task List Page', () => {
     });
 
     test('should reload tasks when refresh button is clicked', async ({ page }) => {
-      let requestCount = 0;
-      await page.route('**/api/tasks', async (route) => {
-        requestCount++;
-        if (requestCount === 1) {
-          await route.fulfill({
-            status: 200,
-            contentType: 'application/json',
-            body: JSON.stringify({
-              tasks: [createMockTask({ name: 'Original Task' })],
-              total: 1,
-            }),
-          });
-        } else {
-          await route.fulfill({
-            status: 200,
-            contentType: 'application/json',
-            body: JSON.stringify({
-              tasks: [
-                createMockTask({ name: 'Original Task' }),
-                createMockTask({ number: '002', name: 'New Task' }),
-              ],
-              total: 2,
-            }),
-          });
+      await setupTwoPhaseRoute(
+        page,
+        { tasks: [createMockTask({ name: 'Original Task' })], total: 1 },
+        {
+          tasks: [
+            createMockTask({ name: 'Original Task' }),
+            createMockTask({ number: '002', name: 'New Task' }),
+          ],
+          total: 2,
         }
-      });
+      );
 
       await page.goto('/#/tasks');
 
