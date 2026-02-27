@@ -112,6 +112,34 @@ OWASP_CATEGORIES = {
 
 
 # =============================================================================
+# CONSTANTS
+# =============================================================================
+
+SCANNABLE_EXTENSIONS = frozenset(
+    {
+        ".py",
+        ".js",
+        ".ts",
+        ".jsx",
+        ".tsx",
+        ".java",
+        ".go",
+        ".rs",
+    }
+)
+
+
+def _safe_relative(file_path: Path, project_dir: Path | None = None) -> str:
+    """Compute relative path against project_dir with fallback."""
+    if project_dir:
+        try:
+            return str(file_path.relative_to(project_dir))
+        except ValueError:
+            pass
+    return file_path.name
+
+
+# =============================================================================
 # OWASP SCANNER
 # =============================================================================
 
@@ -145,7 +173,10 @@ class OWASPScanner:
         "A02": [  # Cryptographic Failures
             (r"hashlib\.md5\(", "MD5 hash - weak cryptographic algorithm"),
             (r"hashlib\.sha1\(", "SHA1 hash - weak cryptographic algorithm"),
-            (r"base64\.(encode|decode)\(", "Base64 encoding used for encryption"),
+            (
+                r"base64\.b(?:64|32|16)(?:encode|decode)\(.*(?:key|secret|password|token|cipher|encrypt|iv)",
+                "Base64 encoding used with sensitive data - verify not used as encryption",
+            ),
             (r"cipher.*AES.*ecb", "AES in ECB mode - insecure"),
             (r"crypto\.Cipher\.(ARC4|DES)", "Weak cipher algorithm"),
             (r"password.*=.*['\"]\w+['\"]", "Hardcoded password"),
@@ -370,7 +401,9 @@ class OWASPScanner:
                 # Python-specific AST analysis for injection
                 if file_path.suffix == ".py":
                     injection_vulns.extend(
-                        self._analyze_python_for_injection(file_path, content)
+                        self._analyze_python_for_injection(
+                            file_path, content, project_dir
+                        )
                     )
 
             except Exception as e:
@@ -382,6 +415,7 @@ class OWASPScanner:
         self,
         file_path: Path,
         content: str,
+        project_dir: Path | None = None,
     ) -> list[OWASPVulnerability]:
         """
         Analyze Python AST for injection vulnerabilities.
@@ -389,10 +423,12 @@ class OWASPScanner:
         Args:
             file_path: Path to the file
             content: File content
+            project_dir: Project root for computing relative paths
 
         Returns:
             List of injection vulnerabilities found
         """
+
         injection_vulns: list[OWASPVulnerability] = []
 
         try:
@@ -412,9 +448,7 @@ class OWASPScanner:
                                     severity="critical",
                                     title=f"Dangerous function: {node.func.id}",
                                     description=f"Use of {node.func.id}() allows code injection",
-                                    file=str(
-                                        file_path.relative_to(file_path.parents[1])
-                                    ),
+                                    file=str(_safe_relative(file_path, project_dir)),
                                     line=node.lineno,
                                     code_snippet=lines[node.lineno - 1].strip()
                                     if node.lineno <= len(lines)
@@ -440,10 +474,8 @@ class OWASPScanner:
                                                     severity="critical",
                                                     title=f"OS command injection via {node.func.attr}",
                                                     description=f"Use of {node.func.attr}(shell=True) allows command injection",
-                                                    file=str(
-                                                        file_path.relative_to(
-                                                            file_path.parents[1]
-                                                        )
+                                                    file=_safe_relative(
+                                                        file_path, project_dir
                                                     ),
                                                     line=node.lineno,
                                                     code_snippet=lines[
@@ -464,7 +496,9 @@ class OWASPScanner:
                         pass  # This is noisy, so we skip it
 
         except SyntaxError:
-            pass  # Skip files with syntax errors
+            # Expected for non-standard Python files or files under development;
+            # safe to skip as we continue scanning other files
+            logger.debug("Skipping %s: syntax error in AST parsing", file_path)
         except Exception as e:
             logger.debug(f"AST injection analysis error for {file_path}: {e}")
 
@@ -505,7 +539,7 @@ class OWASPScanner:
 
         # Scan each file
         for file_path in files_to_scan:
-            self._scan_file(file_path, categories_to_scan, result)
+            self._scan_file(file_path, categories_to_scan, result, project_dir)
 
         # Calculate summary
         self._calculate_summary(result)
@@ -518,33 +552,13 @@ class OWASPScanner:
 
     def _is_scannable_file(self, file_path: str) -> bool:
         """Check if file should be scanned."""
-        scannable_extensions = {
-            ".py",
-            ".js",
-            ".ts",
-            ".jsx",
-            ".tsx",
-            ".java",
-            ".go",
-            ".rs",
-        }
-        return any(file_path.endswith(ext) for ext in scannable_extensions)
+        return any(file_path.endswith(ext) for ext in SCANNABLE_EXTENSIONS)
 
     def _find_scannable_files(self, project_dir: Path) -> list[Path]:
         """Find all scannable files in the project."""
-        scannable_extensions = {
-            ".py",
-            ".js",
-            ".ts",
-            ".jsx",
-            ".tsx",
-            ".java",
-            ".go",
-            ".rs",
-        }
         files = []
 
-        for ext in scannable_extensions:
+        for ext in SCANNABLE_EXTENSIONS:
             files.extend(project_dir.glob(f"**/*{ext}"))
 
         # Exclude common directories
@@ -570,6 +584,7 @@ class OWASPScanner:
         file_path: Path,
         categories: list[str],
         result: OWASPScanResult,
+        project_dir: Path | None = None,
     ) -> None:
         """Scan a single file for OWASP vulnerabilities."""
         try:
@@ -577,17 +592,23 @@ class OWASPScanner:
                 content = f.read()
                 lines = content.splitlines()
 
-            # Scan for each category
+            # Scan for each category using pre-compiled patterns
             for category in categories:
-                patterns = self.PATTERNS.get(category, [])
-                for pattern, description in patterns:
+                compiled = self._compiled_patterns.get(category, [])
+                for regex, description in compiled:
                     self._scan_for_pattern(
-                        file_path, lines, category, pattern, description, result
+                        file_path,
+                        lines,
+                        category,
+                        regex,
+                        description,
+                        result,
+                        project_dir,
                     )
 
             # Python-specific AST analysis
             if file_path.suffix == ".py":
-                self._analyze_python_ast(file_path, content, result)
+                self._analyze_python_ast(file_path, content, result, project_dir)
 
         except Exception as e:
             result.scan_errors.append(f"Error scanning {file_path}: {str(e)}")
@@ -597,13 +618,14 @@ class OWASPScanner:
         file_path: Path,
         lines: list[str],
         category: str,
-        pattern: str,
+        compiled_pattern: re.Pattern[str],
         description: str,
         result: OWASPScanResult,
+        project_dir: Path | None = None,
     ) -> None:
         """Scan file content for a specific regex pattern."""
         try:
-            regex = re.compile(pattern)
+            regex = compiled_pattern
             for line_num, line in enumerate(lines, start=1):
                 if regex.search(line):
                     # Determine severity based on category
@@ -617,7 +639,7 @@ class OWASPScanner:
                             title=description,
                             description=f"Pattern matched: {description}",
                             file=str(
-                                file_path.relative_to(file_path.parents[1])
+                                _safe_relative(file_path, project_dir)
                             ),  # Relative path
                             line=line_num,
                             code_snippet=line.strip(),
@@ -627,13 +649,16 @@ class OWASPScanner:
                         )
                     )
         except re.error as e:
-            logger.warning(f"Invalid regex pattern: {pattern} - {e}")
+            logger.warning(
+                "Invalid regex pattern: %s - %s", compiled_pattern.pattern, e
+            )
 
     def _analyze_python_ast(
         self,
         file_path: Path,
         content: str,
         result: OWASPScanResult,
+        project_dir: Path | None = None,
     ) -> None:
         """Analyze Python AST for additional vulnerabilities."""
         try:
@@ -663,10 +688,8 @@ class OWASPScanner:
                                                 severity="high",
                                                 title="Hardcoded credential",
                                                 description=f"Hardcoded {target.id} value",
-                                                file=str(
-                                                    file_path.relative_to(
-                                                        file_path.parents[1]
-                                                    )
+                                                file=_safe_relative(
+                                                    file_path, project_dir
                                                 ),
                                                 line=node.lineno,
                                                 code_snippet=content.splitlines()[
@@ -687,9 +710,7 @@ class OWASPScanner:
                                     severity="critical",
                                     title=f"Dangerous function: {node.func.attr}",
                                     description=f"Use of {node.func.attr}() function",
-                                    file=str(
-                                        file_path.relative_to(file_path.parents[1])
-                                    ),
+                                    file=str(_safe_relative(file_path, project_dir)),
                                     line=node.lineno,
                                     code_snippet=content.splitlines()[
                                         node.lineno - 1
@@ -699,7 +720,9 @@ class OWASPScanner:
                             )
 
         except SyntaxError:
-            pass  # Skip files with syntax errors
+            # Expected for non-standard Python files or files under development;
+            # safe to skip as we continue scanning other files
+            logger.debug("Skipping %s: syntax error in AST parsing", file_path)
         except Exception as e:
             logger.debug(f"AST analysis error for {file_path}: {e}")
 

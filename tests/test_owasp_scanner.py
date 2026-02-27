@@ -85,7 +85,7 @@ import base64
 
 # A02: Cryptographic Failures
 password = "hardcoded_password123"
-api_key = "sk-1234567890abcdefghij1234567890ab"
+api_key = "PLACEHOLDER_TEST_KEY_00000000000000"
 
 def weak_hash(data):
     return hashlib.md5(data.encode()).hexdigest()
@@ -377,7 +377,7 @@ def another_hash(data):
         """Test detecting hardcoded passwords and API keys."""
         (temp_dir / "config.py").write_text("""
 password = "my_secret_password"
-api_key = "sk-1234567890abcdefghijklmnopqrstuvwxyz"
+api_key = "PLACEHOLDER_TEST_KEY_ABCDEFGHIJKLMNOPQR"
 """)
 
         result = scanner.scan(temp_dir, include_patterns=["A02"])
@@ -491,7 +491,7 @@ def incomplete_function(
         code_file = temp_dir / "creds.py"
         code_file.write_text("""
 password = "my_secret_password_123"
-api_key = "sk_live_1234567890abcdefghij"
+api_key = "PLACEHOLDER_TEST_KEY_LIVE_0000"
 secret = "very_long_secret_value"
 token = "jwt_token_here_12345"
 """)
@@ -917,7 +917,7 @@ class TestEdgeCases:
     def test_multiple_vulnerabilities_same_line(self, scanner, temp_dir):
         """Test handling multiple vulnerabilities on same line."""
         (temp_dir / "test.py").write_text("""
-password = "secret123"; api_key = "sk-1234567890abcdefghij1234567890"
+password = "secret123"; api_key = "PLACEHOLDER_TEST_KEY_000000000000"
 """)
 
         result = scanner.scan(temp_dir, include_patterns=["A02"])

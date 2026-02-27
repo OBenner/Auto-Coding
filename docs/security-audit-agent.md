@@ -263,7 +263,7 @@ Security reports include:
 
 **Markdown** - Human-readable reports:
 
-```markdown
+````markdown
 # Security Audit Report
 
 **Project:** my-project
@@ -297,7 +297,7 @@ cursor.execute(f"SELECT * FROM users WHERE id={user_id}")
 
 **Remediation:**
 Use parameterized queries to prevent SQL injection...
-```
+````
 
 ## Configuration
 
@@ -312,7 +312,7 @@ SECURITY_SCAN_EXCLUDE_PATTERNS=tests/*,*.test.js,node_modules/*
 
 # Report settings
 SECURITY_REPORT_FORMAT=both  # json, markdown, both
-SECURITY_REPORT_DIR=.auto-claude/security-reports
+SECURITY_REPORT_DIR=.auto-claude  # or spec_dir if --spec is provided
 
 # Severity thresholds
 SECURITY_FAIL_ON_CRITICAL=true

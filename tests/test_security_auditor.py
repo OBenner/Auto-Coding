@@ -88,7 +88,7 @@ import os
 
 # Test file with security issues
 password = "hardcoded123"
-api_key = "sk-test1234567890abcdefghij"
+api_key = "PLACEHOLDER_TEST_KEY_000000"
 
 def login(username, password):
     if password == "admin123":

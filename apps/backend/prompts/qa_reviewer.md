@@ -519,11 +519,11 @@ DATABASE VERIFICATION:
 # Run security audit on the project
 python apps/backend/cli/main.py --security-audit
 
-# Check for generated security report
-ls -la security_audit_report.md security_audit_report.json 2>/dev/null || echo "No security audit report found"
+# Check for generated security report (written to spec_dir or .auto-claude/)
+ls -la ${SPEC_DIR:-.auto-claude}/security_audit_report.md ${SPEC_DIR:-.auto-claude}/security_audit_report.json 2>/dev/null || echo "No security audit report found"
 
 # Read security audit findings
-cat security_audit_report.md
+cat ${SPEC_DIR:-.auto-claude}/security_audit_report.md
 ```
 
 #### 6.0.2: Review Security Findings
@@ -640,7 +640,7 @@ THIRD-PARTY API VALIDATION:
 
 If issues are found, add them to the QA report as they indicate the implementation doesn't follow the library's documented patterns.
 
-### 6.1: Security Review
+### 6.2: Security Review
 
 Check for common vulnerabilities:
 
@@ -656,7 +656,7 @@ grep -r "shell=True" --include="*.py" .
 grep -rE "(password|secret|api_key|token)\s*=\s*['\"][^'\"]+['\"]" --include="*.py" --include="*.js" --include="*.ts" .
 ```
 
-### 6.2: Pattern Compliance
+### 6.3: Pattern Compliance
 
 Verify code follows established patterns:
 
@@ -668,7 +668,7 @@ cat context.json | jq '.files_to_reference'
 # [Read and compare files]
 ```
 
-### 6.3: Document Findings
+### 6.4: Document Findings
 
 ```
 CODE REVIEW:

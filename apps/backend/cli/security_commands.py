@@ -89,7 +89,7 @@ def handle_security_audit_command(
 
         # Show findings by severity
         summary = report.summary_counts
-        total_findings = sum(summary.values())
+        total_findings = summary.get("total", 0)
 
         if total_findings == 0:
             print(success(f"{icon(Icons.SUCCESS)} No security issues found!"))

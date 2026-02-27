@@ -396,7 +396,7 @@ Generate a comprehensive security report and save it to the spec directory:
 
 Generate a human-readable markdown report:
 
-```markdown
+````markdown
 # Security Audit Report
 
 **Date**: 2026-02-13
@@ -535,7 +535,7 @@ The codebase has a solid foundation but requires immediate attention to critical
 2. Create remediation tickets for each finding
 3. Re-run security audit after fixes are implemented
 4. Consider implementing automated security scanning in CI/CD
-```
+````
 
 ---
 

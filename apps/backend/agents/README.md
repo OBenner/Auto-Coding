@@ -54,6 +54,7 @@ auto-claude/agents/
 - Recovery and stuck subtask handling
 
 ### `security_auditor.py` (71.7 KB)
+
 - `SecurityAuditAgent` - Comprehensive security analysis agent
 - OWASP Top 10 vulnerability scanning
 - Dependency vulnerability checking
