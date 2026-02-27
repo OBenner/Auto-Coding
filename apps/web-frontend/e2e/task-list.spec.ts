@@ -11,6 +11,7 @@ import {
   mockTaskListResponse,
   mockTaskListError,
   createMockTask,
+  setupDelayedRefreshRoute,
 } from './helpers';
 
 test.describe('Task List Page', () => {
@@ -240,32 +241,8 @@ test.describe('Task List Page', () => {
       await expect(page.getByText('2 tasks total')).toBeVisible();
     });
 
-    test('should disable refresh button while refreshing', async ({ page }) => {
-      let firstCall = true;
-      await page.route('**/api/tasks', async (route) => {
-        if (firstCall) {
-          firstCall = false;
-          await route.fulfill({
-            status: 200,
-            contentType: 'application/json',
-            body: JSON.stringify({
-              tasks: [createMockTask()],
-              total: 1,
-            }),
-          });
-        } else {
-          // Add delay for second call
-          await new Promise((resolve) => setTimeout(resolve, 500));
-          await route.fulfill({
-            status: 200,
-            contentType: 'application/json',
-            body: JSON.stringify({
-              tasks: [createMockTask()],
-              total: 1,
-            }),
-          });
-        }
-      });
+    test('should show loading state while refreshing', async ({ page }) => {
+      await setupDelayedRefreshRoute(page, 500);
 
       await page.goto('/#/tasks');
 
@@ -279,49 +256,15 @@ test.describe('Task List Page', () => {
       // Button should be disabled while refreshing
       await expect(refreshButton).toBeDisabled();
 
+      // Check for spinning animation class
+      const refreshIcon = refreshButton.locator('svg').first();
+      await expect(refreshIcon).toHaveClass(/animate-spin/);
+
       // Wait for refresh to complete
       await page.waitForTimeout(600);
 
       // Button should be enabled again
       await expect(refreshButton).not.toBeDisabled();
-    });
-
-    test('should show spinning icon while refreshing', async ({ page }) => {
-      let firstCall = true;
-      await page.route('**/api/tasks', async (route) => {
-        if (firstCall) {
-          firstCall = false;
-          await route.fulfill({
-            status: 200,
-            contentType: 'application/json',
-            body: JSON.stringify({
-              tasks: [createMockTask()],
-              total: 1,
-            }),
-          });
-        } else {
-          await new Promise((resolve) => setTimeout(resolve, 500));
-          await route.fulfill({
-            status: 200,
-            contentType: 'application/json',
-            body: JSON.stringify({
-              tasks: [createMockTask()],
-              total: 1,
-            }),
-          });
-        }
-      });
-
-      await page.goto('/#/tasks');
-
-      await expect(page.getByText('Test Task')).toBeVisible();
-
-      const refreshButton = page.getByRole('button', { name: /refresh/i });
-      await refreshButton.click();
-
-      // Check for spinning animation class
-      const refreshIcon = refreshButton.locator('svg').first();
-      await expect(refreshIcon).toHaveClass(/animate-spin/);
     });
   });
 

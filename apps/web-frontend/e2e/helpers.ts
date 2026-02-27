@@ -68,6 +68,61 @@ export function createMockTask(overrides: any = {}) {
   };
 }
 
+/**
+ * Navigate directly to a task detail page.
+ * Sets up route mocks, navigates to the task list, then clicks the task.
+ */
+export async function navigateToTaskDetail(
+  page: Page,
+  taskNum: string,
+  taskName: string
+): Promise<void> {
+  await mockTaskListResponse(page, [createMockTask({ number: taskNum, name: taskName })]);
+  await mockTaskDetailResponse(page, taskNum, createMockTaskDetail({ number: taskNum, name: taskName }));
+  await page.goto('/#/tasks');
+  await page.getByText(taskName).click();
+}
+
+/**
+ * Set up route mocks for a two-task list and navigate to it.
+ * Tasks are "Task One" (#001) and "Task Two" (#002).
+ */
+export async function setupTwoTaskNavigation(page: Page): Promise<void> {
+  const tasks = [
+    createMockTask({ number: '001', name: 'Task One' }),
+    createMockTask({ number: '002', name: 'Task Two' }),
+  ];
+  await mockTaskListResponse(page, tasks);
+  await mockTaskDetailResponse(page, '001', createMockTaskDetail({ number: '001', name: 'Task One' }));
+  await mockTaskDetailResponse(page, '002', createMockTaskDetail({ number: '002', name: 'Task Two' }));
+  await page.goto('/#/tasks');
+}
+
+/**
+ * Set up a delayed refresh route for testing button/spinner state during refresh.
+ * First request responds immediately; subsequent requests are delayed by delayMs.
+ */
+export async function setupDelayedRefreshRoute(page: Page, delayMs = 500): Promise<void> {
+  let firstCall = true;
+  await page.route('**/api/tasks', async (route) => {
+    if (firstCall) {
+      firstCall = false;
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ tasks: [createMockTask()], total: 1 }),
+      });
+    } else {
+      await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ tasks: [createMockTask()], total: 1 }),
+      });
+    }
+  });
+}
+
 export function createMockTaskDetail(overrides: any = {}) {
   return {
     number: '001',

@@ -11,6 +11,8 @@ import {
   mockTaskDetailResponse,
   createMockTask,
   createMockTaskDetail,
+  navigateToTaskDetail,
+  setupTwoTaskNavigation,
 } from './helpers';
 
 test.describe('Application Navigation', () => {
@@ -63,18 +65,7 @@ test.describe('Application Navigation', () => {
 
   test.describe('Task List to Task Detail Navigation', () => {
     test('should navigate from task list to task detail', async ({ page }) => {
-      const mockTasks = [createMockTask({ number: '001', name: 'Test Task' })];
-      const mockDetail = createMockTaskDetail({ number: '001', name: 'Test Task' });
-
-      await mockTaskListResponse(page, mockTasks);
-      await mockTaskDetailResponse(page, '001', mockDetail);
-
-      // Navigate to task list
-      await page.goto('/#/tasks');
-      await expect(page.getByText('Test Task')).toBeVisible();
-
-      // Click task card by its visible name
-      await page.getByText('Test Task').click();
+      await navigateToTaskDetail(page, '001', 'Test Task');
 
       // Should navigate to task detail
       await expect(page).toHaveURL(/#\/tasks\/001/);
@@ -82,31 +73,13 @@ test.describe('Application Navigation', () => {
     });
 
     test('should update URL with task ID', async ({ page }) => {
-      const mockTasks = [createMockTask({ number: '123', name: 'Task 123' })];
-      const mockDetail = createMockTaskDetail({ number: '123', name: 'Task 123' });
-
-      await mockTaskListResponse(page, mockTasks);
-      await mockTaskDetailResponse(page, '123', mockDetail);
-
-      await page.goto('/#/tasks');
-      await expect(page.getByText('Task 123')).toBeVisible();
-
-      await page.getByText('Task 123').click();
+      await navigateToTaskDetail(page, '123', 'Task 123');
 
       await expect(page).toHaveURL(/#\/tasks\/123/);
     });
 
     test('should navigate between multiple task details', async ({ page }) => {
-      const mockTasks = [
-        createMockTask({ number: '001', name: 'Task One' }),
-        createMockTask({ number: '002', name: 'Task Two' }),
-      ];
-
-      await mockTaskListResponse(page, mockTasks);
-      await mockTaskDetailResponse(page, '001', createMockTaskDetail({ number: '001', name: 'Task One' }));
-      await mockTaskDetailResponse(page, '002', createMockTaskDetail({ number: '002', name: 'Task Two' }));
-
-      await page.goto('/#/tasks');
+      await setupTwoTaskNavigation(page);
       await expect(page.getByText('Task One')).toBeVisible();
 
       // Navigate to first task
@@ -126,18 +99,7 @@ test.describe('Application Navigation', () => {
 
   test.describe('Task Detail to Task List Navigation', () => {
     test('should navigate back to task list using back button', async ({ page }) => {
-      const mockTasks = [createMockTask({ number: '001', name: 'Test Task' })];
-      const mockDetail = createMockTaskDetail({ number: '001', name: 'Test Task' });
-
-      await mockTaskListResponse(page, mockTasks);
-      await mockTaskDetailResponse(page, '001', mockDetail);
-
-      // Start at task list
-      await page.goto('/#/tasks');
-      await expect(page.getByText('Test Task')).toBeVisible();
-
-      // Navigate to detail
-      await page.getByText('Test Task').click();
+      await navigateToTaskDetail(page, '001', 'Test Task');
       await expect(page).toHaveURL(/#\/tasks\/001/);
 
       // Click back button in task detail (icon-only button)
@@ -218,17 +180,7 @@ test.describe('Application Navigation', () => {
     });
 
     test('should handle browser back button from task detail to task list', async ({ page }) => {
-      const mockTasks = [createMockTask({ number: '001', name: 'Test Task' })];
-      const mockDetail = createMockTaskDetail({ number: '001', name: 'Test Task' });
-
-      await mockTaskListResponse(page, mockTasks);
-      await mockTaskDetailResponse(page, '001', mockDetail);
-
-      await page.goto('/#/tasks');
-      await expect(page.getByText('Test Task')).toBeVisible();
-
-      // Navigate to task detail
-      await page.getByText('Test Task').click();
+      await navigateToTaskDetail(page, '001', 'Test Task');
       await expect(page).toHaveURL(/#\/tasks\/001/);
 
       // Use browser back button
@@ -240,17 +192,7 @@ test.describe('Application Navigation', () => {
     });
 
     test('should handle browser forward button from task list to task detail', async ({ page }) => {
-      const mockTasks = [createMockTask({ number: '001', name: 'Test Task' })];
-      const mockDetail = createMockTaskDetail({ number: '001', name: 'Test Task' });
-
-      await mockTaskListResponse(page, mockTasks);
-      await mockTaskDetailResponse(page, '001', mockDetail);
-
-      await page.goto('/#/tasks');
-      await expect(page.getByText('Test Task')).toBeVisible();
-
-      // Navigate to task detail
-      await page.getByText('Test Task').click();
+      await navigateToTaskDetail(page, '001', 'Test Task');
       await expect(page).toHaveURL(/#\/tasks\/001/);
 
       // Go back
@@ -378,16 +320,7 @@ test.describe('Application Navigation', () => {
     });
 
     test('should handle rapid navigation changes', async ({ page }) => {
-      const mockTasks = [
-        createMockTask({ number: '001', name: 'Task One' }),
-        createMockTask({ number: '002', name: 'Task Two' }),
-      ];
-
-      await mockTaskListResponse(page, mockTasks);
-      await mockTaskDetailResponse(page, '001', createMockTaskDetail({ number: '001', name: 'Task One' }));
-      await mockTaskDetailResponse(page, '002', createMockTaskDetail({ number: '002', name: 'Task Two' }));
-
-      await page.goto('/#/tasks');
+      await setupTwoTaskNavigation(page);
       await expect(page.getByText('Task One')).toBeVisible();
 
       // Rapidly click different tasks
@@ -456,15 +389,7 @@ test.describe('Application Navigation', () => {
     });
 
     test('should handle navigation without errors', async ({ page }) => {
-      const mockTasks = [createMockTask({ number: '001', name: 'Test Task' })];
-      await mockTaskListResponse(page, mockTasks);
-      await mockTaskDetailResponse(page, '001', createMockTaskDetail({ number: '001', name: 'Test Task' }));
-
-      await page.goto('/#/tasks');
-      await expect(page.getByText('Test Task')).toBeVisible();
-
-      // Navigate to detail
-      await page.getByText('Test Task').click();
+      await navigateToTaskDetail(page, '001', 'Test Task');
       await expect(page).toHaveURL(/#\/tasks\/001/);
 
       // Go back using browser navigation
