@@ -18,26 +18,45 @@ import pytest
 backend_path = Path(__file__).parent.parent / "apps" / "backend"
 sys.path.insert(0, str(backend_path))
 
-# Ensure claude_agent_sdk has a proper tool decorator (passthrough)
-# This is needed when the full test suite runs and another test module
-# already mocked claude_agent_sdk with a MagicMock
+# Mock claude_agent_sdk with a proper tool decorator so statistics.py tools are async
+_mock_agent_sdk = MagicMock()
+
+# Track all modules we modify so we can restore them later
+_original_sdk_module = sys.modules.get('claude_agent_sdk')
+_popped_modules: dict[str, object] = {}
+
+
 def _mock_tool_decorator(name, description, params):
     def decorator(func):
         func._tool_name = name
+        func._tool_description = description
+        func._tool_params = params
         return func
     return decorator
 
-_mock_sdk = MagicMock()
-_mock_sdk.tool = _mock_tool_decorator
-sys.modules.setdefault('claude_agent_sdk', _mock_sdk)
 
-# Patch the statistics module directly if already imported
-try:
-    import agents.tools_pkg.tools.statistics as _stats_mod
-    _stats_mod.tool = _mock_tool_decorator
-    _stats_mod.SDK_TOOLS_AVAILABLE = True
-except ImportError:
-    _stats_mod = None  # Module not yet imported; will be patched later
+_mock_agent_sdk.tool = _mock_tool_decorator
+sys.modules['claude_agent_sdk'] = _mock_agent_sdk
+
+# Force fresh import so statistics.py picks up our mock tool decorator
+for _mod in ['agents.tools_pkg.tools.statistics', 'agents.tools_pkg.tools', 'agents.tools_pkg']:
+    _existing = sys.modules.pop(_mod, None)
+    if _existing is not None:
+        _popped_modules[_mod] = _existing
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _restore_sys_modules_after_all_tests():
+    """Restore sys.modules mutations made at module level after all tests complete."""
+    yield
+    # Restore or remove the claude_agent_sdk mock
+    if _original_sdk_module is not None:
+        sys.modules['claude_agent_sdk'] = _original_sdk_module
+    else:
+        sys.modules.pop('claude_agent_sdk', None)
+    # Restore any popped statistics modules
+    for mod_name, mod_obj in _popped_modules.items():
+        sys.modules[mod_name] = mod_obj
 
 
 class TestTimestampParsing:
@@ -481,6 +500,21 @@ class TestCreateStatisticsTools:
 
 class TestGetSpecStatistics:
     """Tests for the get_spec_statistics tool function."""
+
+    @pytest.fixture(autouse=True)
+    def reload_statistics_with_mock(self):
+        """Force fresh import of statistics module with the proper mock tool decorator."""
+        # Ensure our mock (with _mock_tool_decorator) is active before re-importing
+        sys.modules['claude_agent_sdk'] = _mock_agent_sdk
+        # Save current state before popping so we can restore it after the test
+        _saved: dict = {}
+        for mod in ['agents.tools_pkg.tools.statistics', 'agents.tools_pkg.tools', 'agents.tools_pkg']:
+            if mod in sys.modules:
+                _saved[mod] = sys.modules.pop(mod)
+        yield
+        # Restore any modules that were present before this fixture ran
+        for mod, obj in _saved.items():
+            sys.modules[mod] = obj
 
     @pytest.fixture
     def temp_spec_dir(self, tmp_path):
