@@ -5,9 +5,6 @@ Tests all /api/agents endpoints including authentication, validation,
 error handling, and response formats.
 """
 
-from pathlib import Path
-from unittest.mock import MagicMock, patch
-
 import pytest
 from httpx import AsyncClient
 

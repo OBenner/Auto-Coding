@@ -256,8 +256,8 @@ class TestFailurAnalysisE2E:
         valid_trends = ["improving", "stable", "declining", "insufficient_data"]
         assert trends["trend"] in valid_trends
 
-        # success_rate_trend is a float (positive = improving)
-        assert isinstance(trends["success_rate_trend"], float)
+        # success_rate_trend is numeric (positive = improving)
+        assert isinstance(trends["success_rate_trend"], (int, float))
 
         # recurring_issues_trend can be "reducing", "stable", "increasing", or "unknown"
         assert trends["recurring_issues_trend"] in ["reducing", "stable", "increasing", "unknown"]

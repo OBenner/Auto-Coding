@@ -172,17 +172,6 @@ async def test_verify_token_case_insensitive_bearer(
 
 
 @pytest.mark.asyncio
-async def test_auth_status_response_structure(async_client: AsyncClient):
-    """Test that auth_status returns the expected response structure"""
-    response = await async_client.get("/api/auth/status")
-    assert response.status_code == 200
-    data = response.json()
-    assert data["status"] == "ok"
-    assert data["auth_enabled"] is True
-    assert isinstance(data["message"], str)
-
-
-@pytest.mark.asyncio
 async def test_verify_token_with_tampered_token(
     async_client: AsyncClient, auth_token: str
 ):

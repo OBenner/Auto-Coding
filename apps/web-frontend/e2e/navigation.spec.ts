@@ -76,7 +76,7 @@ function createMockTaskDetail(overrides: any = {}) {
 test.describe('Application Navigation', () => {
   test.beforeEach(async ({ page }) => {
     // Navigate to welcome page first
-    await page.goto('http://localhost:3000');
+    await page.goto('/');
     // Wait for the main layout to be ready instead of using a fixed timeout
     await page.waitForSelector('main, [role="main"], #app, #root', { state: 'visible' });
   });
@@ -130,12 +130,11 @@ test.describe('Application Navigation', () => {
       await mockTaskDetailResponse(page, '001', mockDetail);
 
       // Navigate to task list
-      await page.goto('http://localhost:3000#/tasks');
+      await page.goto('/#/tasks');
       await expect(page.getByText('Test Task')).toBeVisible();
 
-      // Click task card
-      const taskCard = page.locator('[class*="cursor-pointer"]').first();
-      await taskCard.click();
+      // Click task card by its visible name
+      await page.getByText('Test Task').click();
 
       // Should navigate to task detail
       await expect(page).toHaveURL(/#\/tasks\/001/);
@@ -149,11 +148,10 @@ test.describe('Application Navigation', () => {
       await mockTaskListResponse(page, mockTasks);
       await mockTaskDetailResponse(page, '123', mockDetail);
 
-      await page.goto('http://localhost:3000#/tasks');
+      await page.goto('/#/tasks');
       await expect(page.getByText('Task 123')).toBeVisible();
 
-      const taskCard = page.locator('[class*="cursor-pointer"]').first();
-      await taskCard.click();
+      await page.getByText('Task 123').click();
 
       await expect(page).toHaveURL(/#\/tasks\/123/);
     });
@@ -168,21 +166,19 @@ test.describe('Application Navigation', () => {
       await mockTaskDetailResponse(page, '001', createMockTaskDetail({ number: '001', name: 'Task One' }));
       await mockTaskDetailResponse(page, '002', createMockTaskDetail({ number: '002', name: 'Task Two' }));
 
-      await page.goto('http://localhost:3000#/tasks');
+      await page.goto('/#/tasks');
       await expect(page.getByText('Task One')).toBeVisible();
 
       // Navigate to first task
-      const taskOne = page.locator('[class*="cursor-pointer"]').first();
-      await taskOne.click();
+      await page.getByText('Task One').click();
       await expect(page).toHaveURL(/#\/tasks\/001/);
       await expect(page.getByText('Spec #001')).toBeVisible();
 
       // Go back to list
-      await page.goto('http://localhost:3000#/tasks');
+      await page.goto('/#/tasks');
 
       // Navigate to second task
-      const taskTwo = page.locator('[class*="cursor-pointer"]').nth(1);
-      await taskTwo.click();
+      await page.getByText('Task Two').click();
       await expect(page).toHaveURL(/#\/tasks\/002/);
       await expect(page.getByText('Spec #002')).toBeVisible();
     });
@@ -197,12 +193,11 @@ test.describe('Application Navigation', () => {
       await mockTaskDetailResponse(page, '001', mockDetail);
 
       // Start at task list
-      await page.goto('http://localhost:3000#/tasks');
+      await page.goto('/#/tasks');
       await expect(page.getByText('Test Task')).toBeVisible();
 
       // Navigate to detail
-      const taskCard = page.locator('[class*="cursor-pointer"]').first();
-      await taskCard.click();
+      await page.getByText('Test Task').click();
       await expect(page).toHaveURL(/#\/tasks\/001/);
 
       // Click back button in task detail (icon-only button)
@@ -225,14 +220,13 @@ test.describe('Application Navigation', () => {
       await mockTaskListResponse(page, mockTasks);
       await mockTaskDetailResponse(page, '002', mockDetail);
 
-      await page.goto('http://localhost:3000#/tasks');
+      await page.goto('/#/tasks');
       await expect(page.getByText('Task One')).toBeVisible();
       await expect(page.getByText('Task Two')).toBeVisible();
       await expect(page.getByText('Task Three')).toBeVisible();
 
-      // Navigate to task detail
-      const taskCard = page.locator('[class*="cursor-pointer"]').nth(1);
-      await taskCard.click();
+      // Navigate to task detail (second task)
+      await page.getByText('Task Two').click();
       await expect(page).toHaveURL(/#\/tasks\/002/);
 
       // Go back (icon-only button)
@@ -290,12 +284,11 @@ test.describe('Application Navigation', () => {
       await mockTaskListResponse(page, mockTasks);
       await mockTaskDetailResponse(page, '001', mockDetail);
 
-      await page.goto('http://localhost:3000#/tasks');
+      await page.goto('/#/tasks');
       await expect(page.getByText('Test Task')).toBeVisible();
 
       // Navigate to task detail
-      const taskCard = page.locator('[class*="cursor-pointer"]').first();
-      await taskCard.click();
+      await page.getByText('Test Task').click();
       await expect(page).toHaveURL(/#\/tasks\/001/);
 
       // Use browser back button
@@ -313,12 +306,11 @@ test.describe('Application Navigation', () => {
       await mockTaskListResponse(page, mockTasks);
       await mockTaskDetailResponse(page, '001', mockDetail);
 
-      await page.goto('http://localhost:3000#/tasks');
+      await page.goto('/#/tasks');
       await expect(page.getByText('Test Task')).toBeVisible();
 
       // Navigate to task detail
-      const taskCard = page.locator('[class*="cursor-pointer"]').first();
-      await taskCard.click();
+      await page.getByText('Test Task').click();
       await expect(page).toHaveURL(/#\/tasks\/001/);
 
       // Go back
@@ -345,8 +337,7 @@ test.describe('Application Navigation', () => {
       await viewTasksButton.click();
       await expect(page).toHaveURL(/#\/tasks/);
 
-      const taskCard = page.locator('[class*="cursor-pointer"]').first();
-      await taskCard.click();
+      await page.getByText('Test Task').click();
       await expect(page).toHaveURL(/#\/tasks\/001/);
 
       // Go back twice: Detail -> Tasks -> Welcome
@@ -371,7 +362,7 @@ test.describe('Application Navigation', () => {
       await mockTaskListResponse(page, mockTasks);
 
       // Navigate directly to task list URL
-      await page.goto('http://localhost:3000#/tasks');
+      await page.goto('/#/tasks');
 
       await expect(page.getByText('Direct Task')).toBeVisible();
     });
@@ -381,26 +372,26 @@ test.describe('Application Navigation', () => {
       await mockTaskDetailResponse(page, '042', mockDetail);
 
       // Navigate directly to task detail URL
-      await page.goto('http://localhost:3000#/tasks/042');
+      await page.goto('/#/tasks/042');
 
       await expect(page.getByText('Spec #042')).toBeVisible();
       await expect(page.getByText('Direct Detail Task')).toBeVisible();
     });
 
     test('should load welcome screen for root URL', async ({ page }) => {
-      await page.goto('http://localhost:3000');
+      await page.goto('/');
 
       await expect(page.getByRole('heading', { name: /auto claude/i })).toBeVisible();
     });
 
     test('should load welcome screen for empty hash', async ({ page }) => {
-      await page.goto('http://localhost:3000#/');
+      await page.goto('/#/');
 
       await expect(page.getByRole('heading', { name: /auto claude/i })).toBeVisible();
     });
 
     test('should handle unknown routes by defaulting to welcome', async ({ page }) => {
-      await page.goto('http://localhost:3000#/unknown-route');
+      await page.goto('/#/unknown-route');
 
       await expect(page.getByRole('heading', { name: /auto claude/i })).toBeVisible();
     });
@@ -409,7 +400,7 @@ test.describe('Application Navigation', () => {
       const mockDetail = createMockTaskDetail({ number: 'abc-123', name: 'Alphanumeric Task' });
       await mockTaskDetailResponse(page, 'abc-123', mockDetail);
 
-      await page.goto('http://localhost:3000#/tasks/abc-123');
+      await page.goto('/#/tasks/abc-123');
 
       await expect(page.getByText('Spec #abc-123')).toBeVisible();
     });
@@ -425,12 +416,12 @@ test.describe('Application Navigation', () => {
       await mockTaskListResponse(page, mockTasks);
       await mockTaskDetailResponse(page, '010', mockDetail);
 
-      await page.goto('http://localhost:3000#/tasks');
+      await page.goto('/#/tasks');
       await expect(page.getByText('Task 1').first()).toBeVisible();
 
       // Scroll down to see Task 10
       await page.evaluate(() => window.scrollTo(0, 500));
-      await page.waitForTimeout(100);
+      await page.waitForFunction(() => window.scrollY > 0);
 
       // Click Task 10
       const task10Card = page.getByText('Task 10').locator('..').locator('..');
@@ -456,20 +447,17 @@ test.describe('Application Navigation', () => {
       await mockTaskDetailResponse(page, '001', createMockTaskDetail({ number: '001', name: 'Task One' }));
       await mockTaskDetailResponse(page, '002', createMockTaskDetail({ number: '002', name: 'Task Two' }));
 
-      await page.goto('http://localhost:3000#/tasks');
+      await page.goto('/#/tasks');
       await expect(page.getByText('Task One')).toBeVisible();
 
       // Rapidly click different tasks
-      const taskOne = page.locator('[class*="cursor-pointer"]').first();
-      const taskTwo = page.locator('[class*="cursor-pointer"]').nth(1);
-
-      await taskOne.click();
-      await page.waitForTimeout(100);
+      await page.getByText('Task One').click();
+      await page.waitForURL(/#\/tasks\/001/);
 
       await page.goBack();
-      await page.waitForTimeout(100);
+      await page.waitForURL(/#\/tasks/);
 
-      await taskTwo.click();
+      await page.getByText('Task Two').click();
       await expect(page).toHaveURL(/#\/tasks\/002/);
       await expect(page.getByText('Spec #002')).toBeVisible();
     });
@@ -480,7 +468,7 @@ test.describe('Application Navigation', () => {
       const mockTasks = [createMockTask({ number: '001', name: 'Test Task' })];
       await mockTaskListResponse(page, mockTasks);
 
-      await page.goto('http://localhost:3000');
+      await page.goto('/');
 
       // Programmatically change hash
       await page.evaluate(() => {
@@ -494,7 +482,7 @@ test.describe('Application Navigation', () => {
       const mockDetail = createMockTaskDetail({ number: '001-special', name: 'Special Task' });
       await mockTaskDetailResponse(page, '001-special', mockDetail);
 
-      await page.goto('http://localhost:3000');
+      await page.goto('/');
 
       // Programmatically change to hash with special characters
       await page.evaluate(() => {
@@ -506,11 +494,13 @@ test.describe('Application Navigation', () => {
   });
 
   test.describe('Navigation Performance', () => {
+    const MAX_NAVIGATION_MS = 2000;
+
     test('should navigate quickly between pages', async ({ page }) => {
       const mockTasks = [createMockTask({ number: '001', name: 'Performance Task' })];
       await mockTaskListResponse(page, mockTasks);
 
-      await page.goto('http://localhost:3000');
+      await page.goto('/');
 
       const startTime = Date.now();
 
@@ -521,8 +511,8 @@ test.describe('Application Navigation', () => {
 
       const navigationTime = Date.now() - startTime;
 
-      // Navigation should complete within reasonable time (2 seconds)
-      expect(navigationTime).toBeLessThan(2000);
+      // Navigation should complete within reasonable time
+      expect(navigationTime).toBeLessThan(MAX_NAVIGATION_MS);
     });
 
     test('should handle navigation without errors', async ({ page }) => {
@@ -530,12 +520,11 @@ test.describe('Application Navigation', () => {
       await mockTaskListResponse(page, mockTasks);
       await mockTaskDetailResponse(page, '001', createMockTaskDetail({ number: '001', name: 'Test Task' }));
 
-      await page.goto('http://localhost:3000#/tasks');
+      await page.goto('/#/tasks');
       await expect(page.getByText('Test Task')).toBeVisible();
 
       // Navigate to detail
-      const taskCard = page.locator('[class*="cursor-pointer"]').first();
-      await taskCard.click();
+      await page.getByText('Test Task').click();
       await expect(page).toHaveURL(/#\/tasks\/001/);
 
       // Go back using browser navigation

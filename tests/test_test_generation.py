@@ -343,7 +343,10 @@ class TestCodeAnalyzer:
         assert "edge_cases" in result
 
         # Should detect error handling (raise ValueError)
-        edge_case_types = [ec.get("type", "") for ec in result["edge_cases"]]
+        assert all("type" in ec for ec in result["edge_cases"]), (
+            "Every edge case entry must have a 'type' key"
+        )
+        edge_case_types = [ec["type"] for ec in result["edge_cases"]]
         assert "error_raising" in edge_case_types
 
     def test_analyze_file_handles_missing_file(self, temp_dir: Path):
@@ -501,7 +504,10 @@ def validate_input(data):
         assert "edge_cases" in result
         assert len(result["edge_cases"]) >= 3
 
-        edge_case_types = [ec.get("type", "") for ec in result["edge_cases"]]
+        assert all("type" in ec for ec in result["edge_cases"]), (
+            "Every edge case entry must have a 'type' key"
+        )
+        edge_case_types = [ec["type"] for ec in result["edge_cases"]]
         assert "boundary_condition" in edge_case_types
         assert "type_validation" in edge_case_types
         assert "error_raising" in edge_case_types

@@ -13,7 +13,10 @@ from .config import settings
 
 # Create SQLAlchemy engine (SQLite doesn't support pool_size/max_overflow)
 _engine_kwargs: dict = {"pool_pre_ping": True}
-if not settings.DATABASE_URL.startswith("sqlite"):
+if settings.DATABASE_URL.startswith("sqlite"):
+    # SQLite requires check_same_thread=False for use across multiple threads
+    _engine_kwargs["connect_args"] = {"check_same_thread": False}
+else:
     _engine_kwargs["pool_size"] = 10
     _engine_kwargs["max_overflow"] = 20
 

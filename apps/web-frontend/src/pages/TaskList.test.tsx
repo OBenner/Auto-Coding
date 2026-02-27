@@ -229,11 +229,8 @@ describe('TaskList', () => {
         expect(screen.getByText('Clickable Task')).toBeInTheDocument();
       });
 
-      // Click the task card (click on the card itself)
-      const taskCard = screen.getByText('Clickable Task').closest('[class*="cursor-pointer"]');
-      if (taskCard) {
-        fireEvent.click(taskCard);
-      }
+      // Click the task card directly — click bubbles up to the parent handler
+      fireEvent.click(screen.getByText('Clickable Task'));
 
       expect(mockOnTaskClick).toHaveBeenCalledWith('001');
       expect(mockOnTaskClick).toHaveBeenCalledTimes(1);
@@ -257,18 +254,12 @@ describe('TaskList', () => {
       });
 
       // Click first task
-      const taskOne = screen.getByText('Task One').closest('[class*="cursor-pointer"]');
-      if (taskOne) {
-        fireEvent.click(taskOne);
-      }
+      fireEvent.click(screen.getByText('Task One'));
 
       expect(mockOnTaskClick).toHaveBeenCalledWith('001');
 
       // Click second task
-      const taskTwo = screen.getByText('Task Two').closest('[class*="cursor-pointer"]');
-      if (taskTwo) {
-        fireEvent.click(taskTwo);
-      }
+      fireEvent.click(screen.getByText('Task Two'));
 
       expect(mockOnTaskClick).toHaveBeenCalledWith('002');
       expect(mockOnTaskClick).toHaveBeenCalledTimes(2);
@@ -415,7 +406,7 @@ describe('TaskList', () => {
 
   describe('Edge Cases', () => {
     it('should handle API returning undefined error', async () => {
-      vi.mocked(apiClient.listTasks).mockRejectedValue(new Error('Network failure'));
+      vi.mocked(apiClient.listTasks).mockRejectedValue(undefined);
 
       render(<TaskList onTaskClick={mockOnTaskClick} />);
 

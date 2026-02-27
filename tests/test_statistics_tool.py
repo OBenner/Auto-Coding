@@ -506,9 +506,15 @@ class TestGetSpecStatistics:
         """Force fresh import of statistics module with the proper mock tool decorator."""
         # Ensure our mock (with _mock_tool_decorator) is active before re-importing
         sys.modules['claude_agent_sdk'] = _mock_agent_sdk
+        # Save current state before popping so we can restore it after the test
+        _saved: dict = {}
         for mod in ['agents.tools_pkg.tools.statistics', 'agents.tools_pkg.tools', 'agents.tools_pkg']:
-            sys.modules.pop(mod, None)
+            if mod in sys.modules:
+                _saved[mod] = sys.modules.pop(mod)
         yield
+        # Restore any modules that were present before this fixture ran
+        for mod, obj in _saved.items():
+            sys.modules[mod] = obj
 
     @pytest.fixture
     def temp_spec_dir(self, tmp_path):

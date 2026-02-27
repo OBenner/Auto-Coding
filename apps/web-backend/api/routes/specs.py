@@ -114,15 +114,14 @@ async def get_spec_progress(spec_id: str, auth: Annotated[dict, Depends(require_
         )
 
     counts = count_subtasks_detailed(spec_folder)
-    total = counts["total"]
-    percentage = (counts["completed"] / total * 100) if total > 0 else 0.0
+    percentage = get_progress_percentage(spec_folder)
 
     return {
         "completed": counts["completed"],
         "in_progress": counts["in_progress"],
         "pending": counts["pending"],
         "failed": counts["failed"],
-        "total": total,
+        "total": counts["total"],
         "percentage": percentage,
     }
 

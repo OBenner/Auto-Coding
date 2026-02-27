@@ -21,9 +21,15 @@ import type {
   ErrorEvent,
 } from './types';
 
+// Internal constants — do not reference the global WebSocket so that MockWebSocket
+// is self-contained and works regardless of when the global is replaced.
+const WS_CONNECTING = 0;
+const WS_OPEN = 1;
+const WS_CLOSED = 3;
+
 // Mock WebSocket
 class MockWebSocket {
-  public readyState: number = WebSocket.CONNECTING;
+  public readyState: number = WS_CONNECTING;
   public onopen: ((event: Event) => void) | null = null;
   public onclose: ((event: CloseEvent) => void) | null = null;
   public onerror: ((event: Event) => void) | null = null;
@@ -34,14 +40,14 @@ class MockWebSocket {
   constructor(public url: string) {}
 
   send(data: string): void {
-    if (this.readyState !== WebSocket.OPEN) {
+    if (this.readyState !== WS_OPEN) {
       throw new Error('WebSocket is not open');
     }
     this.sentMessages.push(data);
   }
 
   close(): void {
-    this.readyState = WebSocket.CLOSED;
+    this.readyState = WS_CLOSED;
     if (this.onclose) {
       this.onclose(new CloseEvent('close'));
     }
@@ -49,7 +55,7 @@ class MockWebSocket {
 
   // Test helpers
   simulateOpen(): void {
-    this.readyState = WebSocket.OPEN;
+    this.readyState = WS_OPEN;
     if (this.onopen) {
       this.onopen(new Event('open'));
     }

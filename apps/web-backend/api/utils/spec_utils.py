@@ -29,6 +29,10 @@ def get_specs_dir() -> Path:
         # Default: five levels up from this file
         # api/utils/spec_utils.py → api/utils → api → web-backend → apps → project
         project_dir = Path(__file__).parent.parent.parent.parent.parent
+        logger.warning(
+            "PROJECT_DIR not configured; falling back to relative path: %s",
+            project_dir,
+        )
     return project_dir / ".auto-claude" / "specs"
 
 
@@ -95,7 +99,9 @@ def count_subtasks_detailed(spec_dir: Path) -> dict:
                 if subtask_status in result:
                     result[subtask_status] += 1
                 else:
-                    result["pending"] += 1
+                    logger.warning(
+                        "Unknown subtask status %r; skipping count", subtask_status
+                    )
 
         return result
     except (OSError, json.JSONDecodeError, UnicodeDecodeError):
