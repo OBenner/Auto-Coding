@@ -326,22 +326,17 @@ Customize scanning behavior in code:
 ```python
 from agents.security_auditor import SecurityAuditAgent
 
-# Configure scanner
 auditor = SecurityAuditAgent()
 
-# Custom exclude patterns
-auditor.exclude_patterns = [
-    "tests/**/*",
-    "node_modules/**/*",
-    "*.test.js",
-    "*.spec.ts"
-]
-
-# Custom severity thresholds
-auditor.fail_on_severity = ["critical", "high"]
-
-# Run audit with custom config
-report = auditor.run_full_audit(project_dir, spec_dir)
+# Run audit with selected scan types
+report = auditor.run_full_audit(
+    project_dir=project_dir,
+    spec_dir=spec_dir,
+    scan_dependencies=True,
+    scan_secrets=True,
+    analyze_auth=True,
+    scan_owasp=True,
+)
 ```
 
 ## Examples
