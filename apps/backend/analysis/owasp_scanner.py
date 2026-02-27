@@ -153,9 +153,15 @@ class OWASPScanner:
         ],
         "A03": [  # Injection
             (r'f".*{.*}.*["\'].*["\']', "Possible SQL injection via f-string"),
-            (r'\+.*["\'].*["\'].*(execute|executemany|query)', "SQL injection via string concatenation"),
+            (
+                r'\+.*["\'].*["\'].*(execute|executemany|query)',
+                "SQL injection via string concatenation",
+            ),
             (r"os\.system\(.+[^)]\)", "OS command injection vulnerability"),
-            (r"subprocess\.(call|run|Popen)\(.+shell=True", "OS command injection via shell=True"),
+            (
+                r"subprocess\.(call|run|Popen)\(.+shell=True",
+                "OS command injection via shell=True",
+            ),
             (r"eval\(", "Code injection via eval()"),
             (r"exec\(", "Code injection via exec()"),
             (r"pickle\.loads?\(", "Deserialization vulnerability"),
@@ -231,7 +237,6 @@ class OWASPScanner:
         Raises:
             ValueError: If any OWASP category is missing patterns or configuration
         """
-        missing_categories = []
         missing_patterns = []
         missing_severity = []
         missing_recommendations = []
@@ -261,12 +266,16 @@ class OWASPScanner:
         if missing_severity:
             errors.append(f"Missing severity mapping: {', '.join(missing_severity)}")
         if missing_recommendations:
-            errors.append(f"Missing recommendations: {', '.join(missing_recommendations)}")
+            errors.append(
+                f"Missing recommendations: {', '.join(missing_recommendations)}"
+            )
 
         if errors:
-            raise ValueError(f"OWASP coverage validation failed:\n" + "\n".join(errors))
+            raise ValueError("OWASP coverage validation failed:\n" + "\n".join(errors))
 
-        logger.info(f"✓ All OWASP Top 10 (2021) categories covered: {len(OWASP_CATEGORIES)} categories")
+        logger.info(
+            f"✓ All OWASP Top 10 (2021) categories covered: {len(OWASP_CATEGORIES)} categories"
+        )
 
     def validate_owasp_coverage(self) -> dict[str, Any]:
         """
@@ -286,7 +295,8 @@ class OWASPScanner:
                 "category_name": category_name,
                 "pattern_count": pattern_count,
                 "severity": severity,
-                "has_recommendation": recommendation != "Review and fix the vulnerability",
+                "has_recommendation": recommendation
+                != "Review and fix the vulnerability",
                 "has_patterns": pattern_count > 0,
                 "is_covered": pattern_count > 0,
             }
@@ -328,7 +338,7 @@ class OWASPScanner:
         # Scan each file for injection patterns
         for file_path in file_paths:
             try:
-                with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                with open(file_path, encoding="utf-8", errors="ignore") as f:
                     content = f.read()
                     lines = content.splitlines()
 
@@ -351,7 +361,9 @@ class OWASPScanner:
                                     file=str(file_path.relative_to(project_dir)),
                                     line=line_num,
                                     code_snippet=line.strip(),
-                                    recommendation=self._get_recommendation("A03", description),
+                                    recommendation=self._get_recommendation(
+                                        "A03", description
+                                    ),
                                 )
                             )
 
@@ -400,9 +412,13 @@ class OWASPScanner:
                                     severity="critical",
                                     title=f"Dangerous function: {node.func.id}",
                                     description=f"Use of {node.func.id}() allows code injection",
-                                    file=str(file_path.relative_to(file_path.parents[1])),
+                                    file=str(
+                                        file_path.relative_to(file_path.parents[1])
+                                    ),
                                     line=node.lineno,
-                                    code_snippet=lines[node.lineno - 1].strip() if node.lineno <= len(lines) else "",
+                                    code_snippet=lines[node.lineno - 1].strip()
+                                    if node.lineno <= len(lines)
+                                    else "",
                                     recommendation="Avoid eval/exec; use safer alternatives",
                                 )
                             )
@@ -418,20 +434,32 @@ class OWASPScanner:
                                             injection_vulns.append(
                                                 OWASPVulnerability(
                                                     category="A03",
-                                                    category_name=OWASP_CATEGORIES["A03"],
+                                                    category_name=OWASP_CATEGORIES[
+                                                        "A03"
+                                                    ],
                                                     severity="critical",
                                                     title=f"OS command injection via {node.func.attr}",
                                                     description=f"Use of {node.func.attr}(shell=True) allows command injection",
-                                                    file=str(file_path.relative_to(file_path.parents[1])),
+                                                    file=str(
+                                                        file_path.relative_to(
+                                                            file_path.parents[1]
+                                                        )
+                                                    ),
                                                     line=node.lineno,
-                                                    code_snippet=lines[node.lineno - 1].strip() if node.lineno <= len(lines) else "",
+                                                    code_snippet=lines[
+                                                        node.lineno - 1
+                                                    ].strip()
+                                                    if node.lineno <= len(lines)
+                                                    else "",
                                                     recommendation="Avoid shell=True; use list arguments for subprocess",
                                                 )
                                             )
 
                 # Check for SQL string concatenation patterns
                 if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
-                    if isinstance(node.left, ast.Constant) and isinstance(node.left.value, str):
+                    if isinstance(node.left, ast.Constant) and isinstance(
+                        node.left.value, str
+                    ):
                         # Could be SQL concatenation - flag for review
                         pass  # This is noisy, so we skip it
 
@@ -490,19 +518,45 @@ class OWASPScanner:
 
     def _is_scannable_file(self, file_path: str) -> bool:
         """Check if file should be scanned."""
-        scannable_extensions = {".py", ".js", ".ts", ".jsx", ".tsx", ".java", ".go", ".rs"}
+        scannable_extensions = {
+            ".py",
+            ".js",
+            ".ts",
+            ".jsx",
+            ".tsx",
+            ".java",
+            ".go",
+            ".rs",
+        }
         return any(file_path.endswith(ext) for ext in scannable_extensions)
 
     def _find_scannable_files(self, project_dir: Path) -> list[Path]:
         """Find all scannable files in the project."""
-        scannable_extensions = {".py", ".js", ".ts", ".jsx", ".tsx", ".java", ".go", ".rs"}
+        scannable_extensions = {
+            ".py",
+            ".js",
+            ".ts",
+            ".jsx",
+            ".tsx",
+            ".java",
+            ".go",
+            ".rs",
+        }
         files = []
 
         for ext in scannable_extensions:
             files.extend(project_dir.glob(f"**/*{ext}"))
 
         # Exclude common directories
-        excluded_dirs = {".git", "__pycache__", "node_modules", ".venv", "venv", "dist", "build"}
+        excluded_dirs = {
+            ".git",
+            "__pycache__",
+            "node_modules",
+            ".venv",
+            "venv",
+            "dist",
+            "build",
+        }
         files = [
             f
             for f in files
@@ -519,7 +573,7 @@ class OWASPScanner:
     ) -> None:
         """Scan a single file for OWASP vulnerabilities."""
         try:
-            with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+            with open(file_path, encoding="utf-8", errors="ignore") as f:
                 content = f.read()
                 lines = content.splitlines()
 
@@ -562,10 +616,14 @@ class OWASPScanner:
                             severity=severity,
                             title=description,
                             description=f"Pattern matched: {description}",
-                            file=str(file_path.relative_to(file_path.parents[1])),  # Relative path
+                            file=str(
+                                file_path.relative_to(file_path.parents[1])
+                            ),  # Relative path
                             line=line_num,
                             code_snippet=line.strip(),
-                            recommendation=self._get_recommendation(category, description),
+                            recommendation=self._get_recommendation(
+                                category, description
+                            ),
                         )
                     )
         except re.error as e:
@@ -594,9 +652,10 @@ class OWASPScanner:
                                 "private_key",
                             }:
                                 if isinstance(node.value, ast.Constant):
-                                    if isinstance(node.value.value, str) and len(
-                                        node.value.value
-                                    ) > 8:
+                                    if (
+                                        isinstance(node.value.value, str)
+                                        and len(node.value.value) > 8
+                                    ):
                                         result.vulnerabilities.append(
                                             OWASPVulnerability(
                                                 category="A02",
@@ -628,7 +687,9 @@ class OWASPScanner:
                                     severity="critical",
                                     title=f"Dangerous function: {node.func.attr}",
                                     description=f"Use of {node.func.attr}() function",
-                                    file=str(file_path.relative_to(file_path.parents[1])),
+                                    file=str(
+                                        file_path.relative_to(file_path.parents[1])
+                                    ),
                                     line=node.lineno,
                                     code_snippet=content.splitlines()[
                                         node.lineno - 1
@@ -794,7 +855,9 @@ def main() -> None:
     import argparse
 
     parser = argparse.ArgumentParser(description="Run OWASP Top 10 scans")
-    parser.add_argument("project_dir", type=Path, nargs="?", help="Path to project root")
+    parser.add_argument(
+        "project_dir", type=Path, nargs="?", help="Path to project root"
+    )
     parser.add_argument("--spec-dir", type=Path, help="Path to spec directory")
     parser.add_argument(
         "--categories",
@@ -822,10 +885,12 @@ def main() -> None:
                 print(f"Total Categories: {coverage['total_categories']}")
                 print(f"Covered Categories: {coverage['covered_categories']}")
                 print(f"Total Detection Patterns: {coverage['total_patterns']}")
-                print(f"All Categories Covered: {'✓ YES' if coverage['all_covered'] else '✗ NO'}")
+                print(
+                    f"All Categories Covered: {'✓ YES' if coverage['all_covered'] else '✗ NO'}"
+                )
                 print("\nCategory Details:")
-                for cat, details in coverage['categories'].items():
-                    status = "✓" if details['is_covered'] else "✗"
+                for cat, details in coverage["categories"].items():
+                    status = "✓" if details["is_covered"] else "✗"
                     print(
                         f"  {status} {cat} - {details['category_name']}: "
                         f"{details['pattern_count']} patterns, "
@@ -865,7 +930,7 @@ def main() -> None:
                 )
 
         if result.vulnerabilities:
-            print(f"\nTop Vulnerabilities:")
+            print("\nTop Vulnerabilities:")
             for v in result.vulnerabilities[:10]:
                 print(
                     f"  [{v.severity.upper()}] {v.category} - {v.title} "

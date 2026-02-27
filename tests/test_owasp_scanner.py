@@ -18,8 +18,6 @@ Tests cover:
 import json
 import tempfile
 from pathlib import Path
-from unittest.mock import patch, MagicMock
-
 import pytest
 
 # Add auto-claude to path for imports

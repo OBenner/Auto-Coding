@@ -166,7 +166,9 @@ def handle_security_audit_command(
         # Final summary
         print(divider())
         if report.has_blocking_issues():
-            print(warning(f"{icon(Icons.WARNING)} Security audit found blocking issues."))
+            print(
+                warning(f"{icon(Icons.WARNING)} Security audit found blocking issues.")
+            )
             print(muted("Review the report for remediation guidance."))
         else:
             print(success(f"{icon(Icons.SUCCESS)} Security audit complete."))
@@ -180,6 +182,7 @@ def handle_security_audit_command(
         print(warning(f"{icon(Icons.WARNING)} Security audit failed: {e}"))
         if verbose:
             import traceback
+
             print()
             print(muted("Traceback:"))
             print(muted(traceback.format_exc()))

@@ -23,11 +23,12 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from analysis.security_scanner import SecurityScanner, SecurityVulnerability
+from analysis.security_scanner import SecurityScanner
 
 logger = logging.getLogger(__name__)
 
@@ -159,22 +160,26 @@ class SecurityReport:
 
         for finding in self.findings:
             if finding.category == "secret":
-                secrets.append({
-                    "file": finding.file,
-                    "line": finding.line,
-                    "pattern": finding.title.replace("Potential secret: ", ""),
-                    "matched_text": "[redacted]",
-                })
+                secrets.append(
+                    {
+                        "file": finding.file,
+                        "line": finding.line,
+                        "pattern": finding.title.replace("Potential secret: ", ""),
+                        "matched_text": "[redacted]",
+                    }
+                )
                 # Also add as vulnerability
-                vulnerabilities.append({
-                    "severity": finding.severity,
-                    "source": "secrets",
-                    "title": finding.title,
-                    "description": finding.description,
-                    "file": finding.file,
-                    "line": finding.line,
-                    "cwe": finding.cwe,
-                })
+                vulnerabilities.append(
+                    {
+                        "severity": finding.severity,
+                        "source": "secrets",
+                        "title": finding.title,
+                        "description": finding.description,
+                        "file": finding.file,
+                        "line": finding.line,
+                        "cwe": finding.cwe,
+                    }
+                )
             else:
                 # Map category to source
                 source_map = {
@@ -182,15 +187,17 @@ class SecurityReport:
                     "dependency": "dependency_audit",
                     "owasp": "owasp_scanner",
                 }
-                vulnerabilities.append({
-                    "severity": finding.severity,
-                    "source": source_map.get(finding.category, finding.category),
-                    "title": finding.title,
-                    "description": finding.description,
-                    "file": finding.file,
-                    "line": finding.line,
-                    "cwe": finding.cwe,
-                })
+                vulnerabilities.append(
+                    {
+                        "severity": finding.severity,
+                        "source": source_map.get(finding.category, finding.category),
+                        "title": finding.title,
+                        "description": finding.description,
+                        "file": finding.file,
+                        "line": finding.line,
+                        "cwe": finding.cwe,
+                    }
+                )
 
         return {
             "secrets": secrets,
@@ -209,11 +216,22 @@ class SecurityReport:
         }
 
     def to_dict(self) -> dict[str, Any]:
-        """Convert report to dictionary for JSON serialization."""
+        """Convert report to dictionary for JSON serialization.
+
+        Sensitive data (code snippets from secret findings) is redacted
+        to avoid clear-text storage of secrets in report files.
+        """
+        redacted_findings = []
+        for f in self.findings:
+            finding_dict = f.to_dict()
+            if f.category == "secret" and finding_dict.get("code_snippet"):
+                finding_dict["code_snippet"] = "[REDACTED]"
+            redacted_findings.append(finding_dict)
+
         return {
             "project_dir": self.project_dir,
             "timestamp": self.timestamp,
-            "findings": [f.to_dict() for f in self.findings],
+            "findings": redacted_findings,
             "summary_counts": self.summary_counts,
             "owasp_coverage": self.owasp_coverage,
             "authentication_review": self.authentication_review,
@@ -255,48 +273,60 @@ class SecurityReport:
         for severity in severity_order:
             findings_at_severity = [f for f in self.findings if f.severity == severity]
             if findings_at_severity:
-                lines.extend([
-                    f"## {severity.capitalize()} Severity Findings",
-                    "",
-                ])
+                lines.extend(
+                    [
+                        f"## {severity.capitalize()} Severity Findings",
+                        "",
+                    ]
+                )
                 for finding in findings_at_severity:
-                    lines.extend([
-                        f"### {finding.title}",
-                        "",
-                        f"**Severity:** {finding.severity.upper()}",
-                        f"**Category:** {finding.category}",
-                        "",
-                        finding.description,
-                        "",
-                    ])
+                    lines.extend(
+                        [
+                            f"### {finding.title}",
+                            "",
+                            f"**Severity:** {finding.severity.upper()}",
+                            f"**Category:** {finding.category}",
+                            "",
+                            finding.description,
+                            "",
+                        ]
+                    )
                     if finding.file:
-                        lines.append(f"**Location:** `{finding.file}:{finding.line or '?'}`")
+                        lines.append(
+                            f"**Location:** `{finding.file}:{finding.line or '?'}`"
+                        )
                         lines.append("")
                     if finding.remediation:
-                        lines.extend([
-                            "**Remediation:**",
-                            "",
-                            finding.remediation,
-                            "",
-                        ])
+                        lines.extend(
+                            [
+                                "**Remediation:**",
+                                "",
+                                finding.remediation,
+                                "",
+                            ]
+                        )
                     if finding.cwe:
                         lines.append(f"**CWE:** {finding.cwe}")
                         lines.append("")
                     if finding.references:
-                        lines.extend([
-                            "**References:**",
-                            "",
-                        ])
+                        lines.extend(
+                            [
+                                "**References:**",
+                                "",
+                            ]
+                        )
                         for ref in finding.references:
                             lines.append(f"- {ref}")
                         lines.append("")
 
         # Recommendations
         if self.recommendations:
-            lines.extend([
-                "## Recommendations",
-                "",
-            ])
+            lines.extend(
+                [
+                    "## Recommendations",
+                    "",
+                ]
+            )
             for i, rec in enumerate(self.recommendations, 1):
                 lines.append(f"{i}. {rec}")
             lines.append("")
@@ -503,7 +533,8 @@ class SecurityAuditAgent:
 
         # Filter for dependency vulnerabilities
         dep_vulnerabilities = [
-            v for v in scan_result.vulnerabilities
+            v
+            for v in scan_result.vulnerabilities
             if v.source in ("npm_audit", "pip_audit", "yarn_audit")
         ]
 
@@ -526,11 +557,15 @@ class SecurityAuditAgent:
         # Store dependency audit results
         report.dependency_audit = {
             "vulnerabilities_found": len(dep_vulnerabilities),
-            "critical_count": sum(1 for v in dep_vulnerabilities if v.severity == "critical"),
+            "critical_count": sum(
+                1 for v in dep_vulnerabilities if v.severity == "critical"
+            ),
             "high_count": sum(1 for v in dep_vulnerabilities if v.severity == "high"),
         }
 
-        logger.info(f"Dependency audit found {len(dep_vulnerabilities)} vulnerabilities")
+        logger.info(
+            f"Dependency audit found {len(dep_vulnerabilities)} vulnerabilities"
+        )
 
     def analyze_authentication(
         self,
@@ -609,7 +644,9 @@ class SecurityAuditAgent:
             },
         }
 
-    def _analyze_authentication(self, project_dir: Path, report: SecurityReport) -> None:
+    def _analyze_authentication(
+        self, project_dir: Path, report: SecurityReport
+    ) -> None:
         """
         Analyze authentication flows for security issues.
 
@@ -635,7 +672,9 @@ class SecurityAuditAgent:
             "summary": auth_result["summary"],
         }
 
-        logger.info(f"Authentication analysis found {len(auth_result['findings'])} issues")
+        logger.info(
+            f"Authentication analysis found {len(auth_result['findings'])} issues"
+        )
 
     def _scan_auth_patterns(self, project_dir: Path) -> list[SecurityFinding]:
         """
@@ -650,7 +689,6 @@ class SecurityAuditAgent:
         Returns:
             List of security findings related to authentication
         """
-        import re
 
         findings = []
 
@@ -795,8 +833,10 @@ class SecurityAuditAgent:
                 # Check for hardcoded credentials
                 for pattern, config in CREDENTIAL_PATTERNS.items():
                     for match in re.finditer(pattern, content, re.IGNORECASE):
-                        line_num = content[:match.start()].count("\n") + 1
-                        line_content = lines[line_num - 1] if line_num <= len(lines) else ""
+                        line_num = content[: match.start()].count("\n") + 1
+                        line_content = (
+                            lines[line_num - 1] if line_num <= len(lines) else ""
+                        )
 
                         finding = SecurityFinding(
                             category="auth",
@@ -823,15 +863,20 @@ class SecurityAuditAgent:
                 # Check for insecure authentication patterns
                 for pattern, config in INSECURE_AUTH_PATTERNS.items():
                     for match in re.finditer(pattern, content, re.IGNORECASE):
-                        line_num = content[:match.start()].count("\n") + 1
-                        line_content = lines[line_num - 1] if line_num <= len(lines) else ""
+                        line_num = content[: match.start()].count("\n") + 1
+                        line_content = (
+                            lines[line_num - 1] if line_num <= len(lines) else ""
+                        )
 
                         finding = SecurityFinding(
                             category="auth",
                             owasp_category="A07_2021",
                             severity=config["severity"],
                             title=config["title"],
-                            description=config.get("description", "Insecure authentication pattern detected"),
+                            description=config.get(
+                                "description",
+                                "Insecure authentication pattern detected",
+                            ),
                             file=str(py_file.relative_to(project_dir)),
                             line=line_num,
                             code_snippet=line_content.strip(),
@@ -861,8 +906,10 @@ class SecurityAuditAgent:
                     # Adjust pattern for JavaScript syntax
                     js_pattern = pattern.replace(r"\s*=\s*", r"\s*[:=]\s*")
                     for match in re.finditer(js_pattern, content, re.IGNORECASE):
-                        line_num = content[:match.start()].count("\n") + 1
-                        line_content = lines[line_num - 1] if line_num <= len(lines) else ""
+                        line_num = content[: match.start()].count("\n") + 1
+                        line_content = (
+                            lines[line_num - 1] if line_num <= len(lines) else ""
+                        )
 
                         finding = SecurityFinding(
                             category="auth",
@@ -899,7 +946,6 @@ class SecurityAuditAgent:
         Returns:
             List of detected authentication mechanisms
         """
-        import re
 
         mechanisms = []
 
@@ -924,8 +970,8 @@ class SecurityAuditAgent:
                     mechanisms.append("bcrypt")
                 if "argon2" in content.lower():
                     mechanisms.append("Argon2")
-            except (OSError, UnicodeDecodeError):
-                pass
+            except (OSError, UnicodeDecodeError) as e:
+                logger.debug("Could not read package.json: %s", e)
 
         # Check requirements.txt for Python projects
         requirements = project_dir / "requirements.txt"
@@ -948,8 +994,8 @@ class SecurityAuditAgent:
                     mechanisms.append("Passlib")
                 if "authlib" in content.lower():
                     mechanisms.append("Authlib")
-            except (OSError, UnicodeDecodeError):
-                pass
+            except (OSError, UnicodeDecodeError) as e:
+                logger.debug("Could not read requirements.txt: %s", e)
 
         # Check for common auth files
         auth_files = [
@@ -973,8 +1019,8 @@ class SecurityAuditAgent:
                     if "JWT" not in mechanisms:
                         mechanisms.append("JWT")
                     break
-            except (OSError, UnicodeDecodeError):
-                pass
+            except (OSError, UnicodeDecodeError) as e:
+                logger.debug("Could not read %s for JWT check: %s", py_file, e)
 
         return list(set(mechanisms)) if mechanisms else ["No auth mechanisms detected"]
 
@@ -993,7 +1039,6 @@ class SecurityAuditAgent:
         Returns:
             List of security findings
         """
-        import re
 
         findings = []
 
@@ -1005,9 +1050,13 @@ class SecurityAuditAgent:
                 # Check if password validation exists
                 if "password" in content.lower():
                     # Look for password length checks
-                    if not re.search(r"len\(.*password.*\)\s*[<>]=\s*\d+", content, re.IGNORECASE):
+                    if not re.search(
+                        r"len\(.*password.*\)\s*[<>]=\s*\d+", content, re.IGNORECASE
+                    ):
                         # If password handling exists but no length check found
-                        if re.search(r"def.*password|class.*password", content, re.IGNORECASE):
+                        if re.search(
+                            r"def.*password|class.*password", content, re.IGNORECASE
+                        ):
                             finding = SecurityFinding(
                                 category="auth",
                                 owasp_category="A07_2021",
@@ -1027,8 +1076,10 @@ class SecurityAuditAgent:
                             )
                             findings.append(finding)
 
-            except (OSError, UnicodeDecodeError):
-                pass
+            except (OSError, UnicodeDecodeError) as e:
+                logger.debug(
+                    "Could not read %s for password policy check: %s", py_file, e
+                )
 
         return findings
 
@@ -1047,7 +1098,6 @@ class SecurityAuditAgent:
         Returns:
             List of security findings
         """
-        import re
 
         findings = []
 
@@ -1059,9 +1109,12 @@ class SecurityAuditAgent:
 
                 if "session" in content.lower():
                     # Check for secure cookie flags
-                    if re.search(r"session\.cookie_httponly\s*=\s*False", content, re.IGNORECASE):
+                    if re.search(
+                        r"session\.cookie_httponly\s*=\s*False", content, re.IGNORECASE
+                    ):
                         line_num = next(
-                            i for i, line in enumerate(lines)
+                            i
+                            for i, line in enumerate(lines)
                             if "session.cookie_httponly" in line.lower()
                         )
                         finding = SecurityFinding(
@@ -1085,9 +1138,12 @@ class SecurityAuditAgent:
                         )
                         findings.append(finding)
 
-                    if re.search(r"session\.cookie_secure\s*=\s*False", content, re.IGNORECASE):
+                    if re.search(
+                        r"session\.cookie_secure\s*=\s*False", content, re.IGNORECASE
+                    ):
                         line_num = next(
-                            i for i, line in enumerate(lines)
+                            i
+                            for i, line in enumerate(lines)
                             if "session.cookie_secure" in line.lower()
                         )
                         finding = SecurityFinding(
@@ -1131,7 +1187,6 @@ class SecurityAuditAgent:
         Returns:
             List of security findings
         """
-        import re
 
         findings = []
 
@@ -1144,7 +1199,9 @@ class SecurityAuditAgent:
                     # Check for token validation
                     if re.search(r"jwt\.decode\(", content, re.IGNORECASE):
                         # Check if verification is being done
-                        decode_matches = list(re.finditer(r"jwt\.decode\(", content, re.IGNORECASE))
+                        decode_matches = list(
+                            re.finditer(r"jwt\.decode\(", content, re.IGNORECASE)
+                        )
                         for match in decode_matches:
                             # Get the context around the match
                             start = max(0, match.start() - 200)
@@ -1153,7 +1210,7 @@ class SecurityAuditAgent:
 
                             # Check if verify parameter is set to False
                             if "verify=False" in context or "verify = False" in context:
-                                line_num = content[:match.start()].count("\n") + 1
+                                line_num = content[: match.start()].count("\n") + 1
                                 finding = SecurityFinding(
                                     category="auth",
                                     owasp_category="A07_2021",
@@ -1174,8 +1231,10 @@ class SecurityAuditAgent:
                                 )
                                 findings.append(finding)
 
-            except (OSError, UnicodeDecodeError):
-                pass
+            except (OSError, UnicodeDecodeError) as e:
+                logger.debug(
+                    "Could not read %s for JWT verification check: %s", py_file, e
+                )
 
         return findings
 
@@ -1206,15 +1265,23 @@ class SecurityAuditAgent:
                 content = py_file.read_text(encoding="utf-8", errors="ignore")
 
                 # Check for rate limiting
-                if any(keyword in content.lower() for keyword in ["rate_limit", "ratelimit", "throttle", "limiter"]):
+                if any(
+                    keyword in content.lower()
+                    for keyword in ["rate_limit", "ratelimit", "throttle", "limiter"]
+                ):
                     has_rate_limiting = True
 
                 # Check for account lockout
-                if any(keyword in content.lower() for keyword in ["lockout", "account_lock", "max_login_attempts"]):
+                if any(
+                    keyword in content.lower()
+                    for keyword in ["lockout", "account_lock", "max_login_attempts"]
+                ):
                     has_account_lockout = True
 
-            except (OSError, UnicodeDecodeError):
-                pass
+            except (OSError, UnicodeDecodeError) as e:
+                logger.debug(
+                    "Could not read %s for rate limiting check: %s", py_file, e
+                )
 
         # If auth endpoints exist but no rate limiting found
         if not has_rate_limiting:
@@ -1222,7 +1289,10 @@ class SecurityAuditAgent:
             for py_file in project_dir.rglob("*.py"):
                 try:
                     content = py_file.read_text(encoding="utf-8", errors="ignore")
-                    if any(keyword in content.lower() for keyword in ["login", "authenticate", "signin"]):
+                    if any(
+                        keyword in content.lower()
+                        for keyword in ["login", "authenticate", "signin"]
+                    ):
                         finding = SecurityFinding(
                             category="auth",
                             owasp_category="A07_2021",
@@ -1243,8 +1313,14 @@ class SecurityAuditAgent:
                         )
                         findings.append(finding)
                         break
-                except (OSError, UnicodeDecodeError):
-                    pass
+                except (OSError, UnicodeDecodeError) as e:
+                    logger.debug(
+                        "Could not read %s for auth endpoint check: %s", py_file, e
+                    )
+
+        # If no account lockout detected but auth endpoints exist
+        if not has_account_lockout and not has_rate_limiting:
+            logger.debug("No account lockout mechanism detected")
 
         return findings
 
@@ -1274,9 +1350,7 @@ class SecurityAuditAgent:
             "A10_2021": "Server-Side Request Forgery",
         }
 
-        report.owasp_coverage = {
-            category: False for category in owasp_categories.keys()
-        }
+        report.owasp_coverage = dict.fromkeys(owasp_categories.keys(), False)
 
         logger.info("OWASP Top 10 scanning will be implemented in subtask-1-2")
 
@@ -1329,70 +1403,78 @@ class SecurityAuditAgent:
             )
 
         # What to do
-        guidance_parts.extend([
-            "",
-            "## Immediate Actions",
-            "",
-            "1. Remove the secret from code immediately",
-            "2. Rotate the credential - assume it has been compromised",
-            "3. Use environment variables or a secrets management system",
-            "",
-            "## Code Examples",
-            "",
-        ])
+        guidance_parts.extend(
+            [
+                "",
+                "## Immediate Actions",
+                "",
+                "1. Remove the secret from code immediately",
+                "2. Rotate the credential - assume it has been compromised",
+                "3. Use environment variables or a secrets management system",
+                "",
+                "## Code Examples",
+                "",
+            ]
+        )
 
         # Python examples
-        guidance_parts.extend([
-            "### Python",
-            "",
-            "Wrong (hardcoded secret):",
-            "```python",
-            "API_KEY = 'sk-live-1234567890abcdef'",
-            "```",
-            "",
-            "Correct (environment variable):",
-            "```python",
-            "import os",
-            "api_key = os.getenv('API_KEY')",
-            "if not api_key:",
-            "    raise ValueError('API_KEY not set')",
-            "```",
-            "",
-        ])
+        guidance_parts.extend(
+            [
+                "### Python",
+                "",
+                "Wrong (hardcoded secret):",
+                "```python",
+                "API_KEY = 'sk-live-1234567890abcdef'",
+                "```",
+                "",
+                "Correct (environment variable):",
+                "```python",
+                "import os",
+                "api_key = os.getenv('API_KEY')",
+                "if not api_key:",
+                "    raise ValueError('API_KEY not set')",
+                "```",
+                "",
+            ]
+        )
 
         # JavaScript examples
-        guidance_parts.extend([
-            "### JavaScript",
-            "",
-            "Wrong (hardcoded secret):",
-            "```javascript",
-            "const API_KEY = 'sk-live-1234567890abcdef';",
-            "```",
-            "",
-            "Correct (environment variable):",
-            "```javascript",
-            "const apiKey = process.env.API_KEY;",
-            "if (!apiKey) {",
-            "  throw new Error('API_KEY not set');",
-            "}",
-            "```",
-            "",
-        ])
+        guidance_parts.extend(
+            [
+                "### JavaScript",
+                "",
+                "Wrong (hardcoded secret):",
+                "```javascript",
+                "const API_KEY = 'sk-live-1234567890abcdef';",
+                "```",
+                "",
+                "Correct (environment variable):",
+                "```javascript",
+                "const apiKey = process.env.API_KEY;",
+                "if (!apiKey) {",
+                "  throw new Error('API_KEY not set');",
+                "}",
+                "```",
+                "",
+            ]
+        )
 
         # Best practices
-        guidance_parts.extend([
-            "## Best Practices",
-            "",
-            "- Use .env files for local development only",
-            "- Add .env to .gitignore before committing secrets",
-            "- Use cloud secrets managers in production (AWS Secrets Manager, Azure Key Vault, GCP Secret Manager)",
-            "- Rotate credentials regularly (90 days recommended)",
-            "- Never commit secrets to version control",
-            "",
-            "## References",
-            "- [OWASP Secrets Management Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Secrets_Management_Cheat_Sheet.html)",
-            "- [GitHub Secret Scanning](https://docs.github.com/en/code-security/secret-scanning)",
-        ])
+        guidance_parts.extend(
+            [
+                "## Best Practices",
+                "",
+                "- Use .env files for local development only",
+                "- Add .env to .gitignore before committing secrets",
+                "- Use cloud secrets managers in production (AWS Secrets Manager, Azure Key Vault, GCP Secret Manager)",
+                "- Rotate credentials regularly (90 days recommended)",
+                "- Never commit secrets to version control",
+                "",
+                "## References",
+                "- [OWASP Secrets Management Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Secrets_Management_Cheat_Sheet.html)",
+                "- [GitHub Secret Scanning](https://docs.github.com/en/code-security/secret-scanning)",
+            ]
+        )
 
         return "\n".join(guidance_parts)
 
@@ -1734,8 +1816,6 @@ class SecurityAuditAgent:
             report: SecurityReport to export
             filepath: Path to output file
         """
-        import json
-
         filepath = Path(filepath)
         filepath.parent.mkdir(parents=True, exist_ok=True)
 
