@@ -509,7 +509,83 @@ DATABASE VERIFICATION:
 
 ## PHASE 6: CODE REVIEW
 
-### 6.0: Third-Party API/Library Validation (Use Context7)
+### 6.0: Run Security Audit
+
+**CRITICAL**: Run automated security audit using the SecurityAuditAgent before manual code review.
+
+#### 6.0.1: Execute Security Audit
+
+```bash
+# Run security audit on the project
+python apps/backend/cli/main.py --security-audit
+
+# Check for generated security report (written to spec_dir or .auto-claude/)
+ls -la ${SPEC_DIR:-.auto-claude}/security_audit_report.md ${SPEC_DIR:-.auto-claude}/security_audit_report.json 2>/dev/null || echo "No security audit report found"
+
+# Read security audit findings
+cat ${SPEC_DIR:-.auto-claude}/security_audit_report.md
+```
+
+#### 6.0.2: Review Security Findings
+
+The security audit checks for:
+- **OWASP Top 10 vulnerabilities** (A01-A10:2021)
+- **Dependency vulnerabilities** (outdated/vulnerable packages)
+- **Authentication flow issues** (broken auth, session management)
+- **Secrets in code** (API keys, passwords, tokens)
+- **Security misconfigurations**
+
+#### 6.0.3: Evaluate Severity
+
+**Document results:**
+```
+SECURITY AUDIT:
+- Critical findings: [count] (blocks sign-off)
+- High severity: [count] (should fix)
+- Medium severity: [count] (consider fixing)
+- Low severity: [count] (informational)
+
+Critical Issues:
+1. [Vulnerability type] - [File:line] - [Description]
+```
+
+#### 6.0.4: Security Audit Decision Rules
+
+**REJECT if:**
+- Any CRITICAL severity findings exist
+- HIGH severity findings in authentication/authorization code
+- Hardcoded secrets detected
+- Known vulnerable dependencies with available patches
+
+**APPROVE with warnings if:**
+- Only MEDIUM/LOW severity findings
+- Findings are false positives (document why)
+- Findings are accepted risks (document justification)
+
+#### 6.0.5: Include in QA Report
+
+Add security audit results to your QA report:
+
+```markdown
+## Security Audit
+
+| Category | Findings | Status |
+|----------|----------|--------|
+| OWASP Top 10 | [count] | ✓/✗ |
+| Dependencies | [count] | ✓/✗ |
+| Secrets | [count] | ✓/✗ |
+| Auth Flows | [count] | ✓/✗ |
+
+**Overall Security**: PASS/FAIL
+
+**Critical Issues**:
+- [List critical findings requiring immediate fix]
+
+**Remediation Guidance**:
+- [Reference security_audit_report.md for detailed fixes]
+```
+
+### 6.1: Third-Party API/Library Validation (Use Context7)
 
 **CRITICAL**: If the implementation uses third-party libraries or APIs, validate the usage against official documentation.
 
@@ -564,7 +640,7 @@ THIRD-PARTY API VALIDATION:
 
 If issues are found, add them to the QA report as they indicate the implementation doesn't follow the library's documented patterns.
 
-### 6.1: Security Review
+### 6.2: Security Review
 
 Check for common vulnerabilities:
 
@@ -580,7 +656,7 @@ grep -r "shell=True" --include="*.py" .
 grep -rE "(password|secret|api_key|token)\s*=\s*['\"][^'\"]+['\"]" --include="*.py" --include="*.js" --include="*.ts" .
 ```
 
-### 6.2: Pattern Compliance
+### 6.3: Pattern Compliance
 
 Verify code follows established patterns:
 
@@ -592,7 +668,7 @@ cat context.json | jq '.files_to_reference'
 # [Read and compare files]
 ```
 
-### 6.3: Document Findings
+### 6.4: Document Findings
 
 ```
 CODE REVIEW:
