@@ -654,6 +654,8 @@ export const IPC_CHANNELS = {
   TEMPLATE_CUSTOM_EXPORT: 'template:custom:export',
   TEMPLATE_CUSTOM_IMPORT: 'template:custom:import',
   TEMPLATE_CUSTOM_TEST: 'template:custom:test',
+
+
   // Session Replay operations
   SESSION_REPLAY_LIST: 'sessionReplay:list',
   SESSION_REPLAY_GET_SESSION: 'sessionReplay:getSession',

@@ -22,7 +22,18 @@
       "descriptionRequired": "Description is required",
       "categoryRequired": "Category is required",
       "promptTooShort": "Custom prompt must be at least 20 characters",
-      "invalidVersion": "Invalid version format (use semantic versioning like 1.0.0)"
+      "invalidVersion": "Invalid version format (use semantic versioning like 1.0.0)",
+      "invalidNameFormat": "Name must be lowercase alphanumeric with hyphens only",
+      "exportFailed": "Export failed"
+    },
+    "updateAvailable": "Update Available",
+    "update": "Update",
+    "upToDate": "Up to Date",
+    "currentVersion": "Current Version",
+    "newVersionAvailable": "New version {{version}} available",
+    "hints": {
+      "versionFormat": "Semantic versioning (e.g., 1.0.0)",
+      "customPrompt": "This prompt will override the default agent system prompt. Use clear instructions to define the agent's behavior and capabilities."
     },
     "actions": {
       "save": "Save Template",
@@ -31,8 +42,16 @@
       "import": "Import Template",
       "export": "Export Template",
       "importing": "Importing...",
-      "exporting": "Exporting..."
+      "exporting": "Exporting...",
+      "saving": "Saving...",
+      "testing": "Testing..."
     }
+  },
+  "selector": {
+    "noneOption": "None",
+    "useDefaultAgentHint": "(Use default agent)",
+    "category": "Category:",
+    "toolsConfigured": "Tools configured"
   },
   "wizard": {
     "title": "Template Parameters",
@@ -123,7 +142,8 @@
     "runTest": "Run Test",
     "running": "Running test...",
     "testFailed": "Template test failed. Please check the template configuration and try again.",
-    "testSuccess": "Test completed successfully! The template generated the following:"
+    "testSuccess": "Test completed successfully! The template generated the following:",
+    "apiNotAvailable": "API not available"
   },
   "marketplace": {
     "title": "Template Marketplace",

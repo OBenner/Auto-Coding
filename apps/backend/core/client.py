@@ -12,6 +12,8 @@ The client factory now uses AGENT_CONFIGS from agents/tools_pkg/models.py as the
 single source of truth for phase-aware tool and MCP server configuration.
 """
 
+from __future__ import annotations
+
 import copy
 import json
 import logging
@@ -19,7 +21,7 @@ import os
 import threading
 import time
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from core.platform import (
     is_windows,
@@ -138,7 +140,9 @@ def invalidate_project_cache(project_dir: Path | None = None) -> None:
                 logger.debug(f"Invalidated project index cache for {project_dir}")
 
 
-from agents.templates.models import AgentTemplate
+if TYPE_CHECKING:
+    from agents.templates.models import AgentTemplate
+
 from agents.tools_pkg import (
     CONTEXT7_TOOLS,
     ELECTRON_TOOLS,
@@ -795,10 +799,11 @@ def create_client(
             raise ValueError(f"Custom template validation failed: {'; '.join(errors)}")
 
         # Use template's tool configuration
-        allowed_tools_list = custom_template.tools
+        allowed_tools_list = list(custom_template.tools or [])
 
         # Use template's MCP server configuration
-        required_servers = custom_template.mcp_servers
+        mcp_servers_raw = custom_template.mcp_servers or []
+        required_servers = list(mcp_servers_raw)
 
         # Override max_thinking_tokens based on template's thinking level if not explicitly set
         if max_thinking_tokens is None:
@@ -1103,10 +1108,11 @@ def create_client(
             f"# Custom Agent Instructions (from template: {custom_template.name})\n\n"
             f"{custom_template.custom_prompt}"
         )
-        print(
-            f"   - Custom template: {custom_template.name} ({custom_template.category})"
+        logger.info(
+            "Custom template enabled: name=%s category=%s",
+            custom_template.name,
+            custom_template.category,
         )
-        print(f"   - Template description: {custom_template.description}")
 
     # Include CLAUDE.md if enabled and present
     if should_use_claude_md():

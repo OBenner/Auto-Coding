@@ -943,6 +943,7 @@ export interface ElectronAPI {
     specId?: string
   ) => Promise<IPCResult<{ specId: string; specPath: string }>>;
   suggestTemplates: (projectId: string, taskDescription: string) => Promise<IPCResult<string[]>>;
+
   // Custom agent template operations (user-created templates)
   listCustomTemplates: () => Promise<IPCResult<import('./template').CustomTemplate[]>>;
   saveCustomTemplate: (template: Omit<import('./template').CustomTemplate, 'id' | 'createdAt' | 'updatedAt'>) => Promise<IPCResult<import('./template').CustomTemplate & { validationErrors?: string[] }>>;
