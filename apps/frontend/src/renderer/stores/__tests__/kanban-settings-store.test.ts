@@ -374,32 +374,16 @@ describe('KanbanSettingsStore - Filter State Management', () => {
       useKanbanSettingsStore.getState().initializePreferences();
     });
 
-    it('should set sort mode to priority', () => {
-      const { setSortBy } = useKanbanSettingsStore.getState();
+    it.each(['priority', 'created', 'updated'] as const)(
+      'should set sort mode to %s',
+      (mode) => {
+        const { setSortBy } = useKanbanSettingsStore.getState();
+        setSortBy(mode);
 
-      setSortBy('priority');
-
-      const { filters } = useKanbanSettingsStore.getState();
-      expect(filters?.sortBy).toBe('priority');
-    });
-
-    it('should set sort mode to created date', () => {
-      const { setSortBy } = useKanbanSettingsStore.getState();
-
-      setSortBy('created');
-
-      const { filters } = useKanbanSettingsStore.getState();
-      expect(filters?.sortBy).toBe('created');
-    });
-
-    it('should set sort mode to updated date', () => {
-      const { setSortBy } = useKanbanSettingsStore.getState();
-
-      setSortBy('updated');
-
-      const { filters } = useKanbanSettingsStore.getState();
-      expect(filters?.sortBy).toBe('updated');
-    });
+        const { filters } = useKanbanSettingsStore.getState();
+        expect(filters?.sortBy).toBe(mode);
+      }
+    );
 
     it('should default to manual sort', () => {
       const { initializePreferences } = useKanbanSettingsStore.getState();
