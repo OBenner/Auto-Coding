@@ -88,7 +88,7 @@ export function registerInvestigateIssue(
           phase: 'fetching',
           issueNumber,
           progress: 10,
-          message: 'Fetching issue details...'
+          message: 'investigation.progress.fetchingIssue'
         });
 
         // Fetch the issue
@@ -131,7 +131,7 @@ export function registerInvestigateIssue(
           phase: 'analyzing',
           issueNumber,
           progress: 30,
-          message: 'AI is analyzing the issue...'
+          message: 'investigation.progress.analyzingIssue'
         });
 
         // Build task description
@@ -161,7 +161,7 @@ export function registerInvestigateIssue(
           phase: 'creating_task',
           issueNumber,
           progress: 70,
-          message: 'Creating task from investigation...'
+          message: 'investigation.progress.creatingTask'
         });
 
         // Build investigation result
@@ -187,7 +187,7 @@ export function registerInvestigateIssue(
           phase: 'complete',
           issueNumber,
           progress: 100,
-          message: 'Investigation complete!'
+          message: 'investigation.progress.complete'
         });
 
         sendComplete(mainWindow, projectId, investigationResult);

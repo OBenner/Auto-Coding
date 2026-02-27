@@ -76,6 +76,7 @@ def setup_qa_report_mocks() -> None:
     mock_progress = MagicMock()
     mock_progress.count_subtasks = MagicMock(return_value=(3, 3))
     mock_progress.is_build_complete = MagicMock(return_value=True)
+    mock_progress.is_build_ready_for_qa = MagicMock(return_value=True)
     sys.modules['progress'] = mock_progress
 
     # Mock task_logger

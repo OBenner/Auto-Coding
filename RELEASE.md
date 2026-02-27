@@ -56,7 +56,7 @@ On your development branch (typically `develop` or a feature branch):
 
 ```bash
 # Navigate to project root
-cd /path/to/auto-claude
+cd /path/to/auto-code
 
 # Bump version (choose one)
 node scripts/bump-version.js patch   # 2.7.1 -> 2.7.2 (bug fixes)

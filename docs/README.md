@@ -2,6 +2,18 @@
 
 Central documentation hub for Auto Code architecture, templates, and guides.
 
+## Search & Navigation
+
+**Looking for something specific?**
+
+- **[📖 Search Index](search/INDEX.md)** - Comprehensive searchable index with keywords
+- **[🔍 Search Guide](search/SEARCH-GUIDE.md)** - Learn effective search strategies
+
+**Quick links:**
+- [Getting Started](../../guides/QUICK-START.md) - New to Auto Code? Start here
+- [CLAUDE.md](../../CLAUDE.md) - Architecture for AI agents
+- [Contributing](../../CONTRIBUTING.md) - Contribution guidelines
+
 ## Documentation Structure
 
 This directory contains comprehensive documentation for understanding, extending, and contributing to Auto Code.

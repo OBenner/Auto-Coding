@@ -48,9 +48,10 @@ export function extractChangelog(output: string): string {
 
   // Find where the actual changelog starts (look for markdown heading)
   // This handles cases where AI includes preamble like "I'll analyze..." or "Here's the changelog:"
+  // codeql[js/regex/duplicate-in-character-class] Intentional: matching both straight apostrophe (') and curly apostrophe (\u2019)
   const changelogStartPatterns = [
     /^(##\s*\[[\d.]+\])/m,           // Keep-a-changelog: ## [1.0.0]
-    /^(##\s*What['']?s\s+New)/im,    // GitHub release: ## What's New
+    /^(##\s*What['\u2019]?s\s+New)/im, // GitHub release: ## What's New (straight or curly apostrophe)
     /^(#\s*Release\s+v?[\d.]+)/im,   // Simple: # Release v1.0.0
     /^(#\s*Changelog)/im,             // # Changelog
     /^(##\s*v?[\d.]+)/m               // ## v1.0.0 or ## 1.0.0
@@ -66,10 +67,11 @@ export function extractChangelog(output: string): string {
   }
 
   // Additional cleanup - remove common AI preambles if they somehow remain
+  // codeql[js/regex/duplicate-in-character-class] Intentional: matching both straight apostrophe (') and curly apostrophe (\u2019)
   const prefixes = [
-    /^I['']ll\s+analyze[^#]*(?=#)/is,
-    /^I['']ll\s+generate[^#]*(?=#)/is,
-    /^Here['']s the changelog[:\s]*/i,
+    /^I['\u2019]ll\s+analyze[^#]*(?=#)/is,
+    /^I['\u2019]ll\s+generate[^#]*(?=#)/is,
+    /^Here['\u2019]s the changelog[:\s]*/i,
     /^The changelog[:\s]*/i,
     /^Changelog[:\s]*/i,
     /^Based on[^#]*(?=#)/is,

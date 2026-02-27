@@ -19,8 +19,11 @@ Usage:
 """
 
 import json
+import logging
 from dataclasses import dataclass, field
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -141,7 +144,7 @@ class ServiceContextGenerator:
                         if pkg and pkg not in context.dependencies:
                             context.dependencies.append(pkg)
             except OSError:
-                pass
+                logger.debug("Failed to read requirements.txt in %s", service_path)
 
         # Node.js
         package_json = service_path / "package.json"
@@ -154,7 +157,7 @@ class ServiceContextGenerator:
                         [d for d in deps if d not in context.dependencies]
                     )
             except (OSError, json.JSONDecodeError, UnicodeDecodeError):
-                pass
+                logger.debug("Failed to parse package.json in %s", service_path)
 
     def _discover_api_patterns(self, service_path: Path, context: ServiceContext):
         """Discover API patterns (routes, endpoints)."""
@@ -179,7 +182,7 @@ class ServiceContextGenerator:
                 elif "express.Router" in content or "app.get" in content:
                     context.api_patterns.append(f"Express routes in {route_file.name}")
             except (OSError, UnicodeDecodeError):
-                pass
+                logger.debug("Failed to read route file: %s", route_file)
 
     def _discover_common_commands(self, service_path: Path, context: ServiceContext):
         """Discover common commands from package files and Makefiles."""
@@ -194,7 +197,7 @@ class ServiceContextGenerator:
                         if name in scripts:
                             context.common_commands[name] = f"npm run {name}"
             except (OSError, json.JSONDecodeError, UnicodeDecodeError):
-                pass
+                logger.debug("Failed to parse package.json scripts in %s", service_path)
 
         # From Makefile
         makefile = service_path / "Makefile"
@@ -214,7 +217,7 @@ class ServiceContextGenerator:
                         ]:
                             context.common_commands[target] = f"make {target}"
             except OSError:
-                pass
+                logger.debug("Failed to read Makefile in %s", service_path)
 
         # Infer from framework
         if context.framework == "flask":
@@ -244,7 +247,7 @@ class ServiceContextGenerator:
                             if var_name and var_name not in context.environment_vars:
                                 context.environment_vars.append(var_name)
                 except OSError:
-                    pass
+                    logger.debug("Failed to read env file: %s", env_path)
                 break  # Only use first found
 
     def generate_markdown(self, context: ServiceContext) -> str:
