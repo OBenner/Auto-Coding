@@ -162,9 +162,9 @@ class SecurityReport:
             if finding.category == "secret":
                 secrets.append(
                     {
-                        "file": finding.file,
-                        "line": finding.line,
-                        "pattern": finding.title.replace("Potential secret: ", ""),
+                        "file": "[redacted]",
+                        "line": 0,
+                        "pattern": "secret",
                         "matched_text": "[redacted]",
                     }
                 )
@@ -175,8 +175,8 @@ class SecurityReport:
                         "source": "secrets",
                         "title": finding.title,
                         "description": finding.description,
-                        "file": finding.file,
-                        "line": finding.line,
+                        "file": None,
+                        "line": None,
                         "cwe": finding.cwe,
                     }
                 )
@@ -489,29 +489,37 @@ class SecurityAuditAgent:
             run_dependency_audit=False,
         )
 
-        # Convert secrets to findings
-        for secret in scan_result.secrets:
+        # Create a summary finding for detected secrets.
+        # Individual secret details (matched_text, file paths) are intentionally
+        # NOT propagated into findings to avoid clear-text storage of sensitive data.
+        num_secrets = len(scan_result.secrets)
+
+        if num_secrets > 0:
             finding = SecurityFinding(
                 category="secret",
                 severity="critical",
-                title=f"Potential secret: {secret.get('pattern', 'unknown')}",
-                description=f"Found potential {secret.get('pattern')} in file",
-                file=secret.get("file"),
-                line=secret.get("line"),
-                remediation="Remove the secret from the code. Use environment variables or a secrets management system.",
+                title=f"{num_secrets} potential secret(s) detected in codebase",
+                description=(
+                    f"The security scanner detected {num_secrets} potential "
+                    "secret(s) in the codebase. Run the security scanner "
+                    "directly for detailed file locations and remediation."
+                ),
+                remediation=(
+                    "Remove secrets from the code. Use environment variables "
+                    "or a secrets management system."
+                ),
                 references=[
                     "https://owasp.org/www-project-top-ten/2017/A2_2017-Credential_Stuffing"
                 ],
             )
             report.add_finding(finding)
 
-        # Store secrets scan results
+        # Store secrets scan summary (counts only, no sensitive data)
         report.secrets_scan = {
-            "secrets_found": len(scan_result.secrets),
-            "files_affected": len(set(s.get("file", "") for s in scan_result.secrets)),
+            "secrets_found": num_secrets,
         }
 
-        logger.info(f"Secrets scan found {len(scan_result.secrets)} potential secrets")
+        logger.info(f"Secrets scan found {num_secrets} potential secrets")
 
     def _scan_dependencies(self, project_dir: Path, report: SecurityReport) -> None:
         """
