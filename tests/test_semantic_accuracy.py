@@ -15,6 +15,7 @@ The test compares semantic merge results against simulated text-only baseline
 to measure the accuracy improvement metric.
 """
 
+import math
 from datetime import datetime
 
 from merge.benchmark import (
@@ -383,7 +384,9 @@ def test_accuracy_calculation():
     textual_conflicts = 1
     improvement = calculate_accuracy_improvement(result_perfect, textual_conflicts)
     print(f"Perfect resolution: {improvement * 100:.1f}% improvement")
-    assert improvement == 1.0, "Should be 100% improvement when all conflicts resolved"
+    assert math.isclose(improvement, 1.0), (
+        "Should be 100% improvement when all conflicts resolved"
+    )
 
     # Test Case 2: Partial resolution (50% improvement)
     result_partial = MergeResult(
@@ -417,7 +420,9 @@ def test_accuracy_calculation():
     textual_conflicts = 2
     improvement = calculate_accuracy_improvement(result_partial, textual_conflicts)
     print(f"Partial resolution (1 of 2): {improvement * 100:.1f}% improvement")
-    assert improvement == 0.5, "Should be 50% improvement when half resolved"
+    assert math.isclose(improvement, 0.5), (
+        "Should be 50% improvement when half resolved"
+    )
 
     # Test Case 3: No baseline conflicts (0% improvement)
     result_no_baseline = MergeResult(
@@ -431,7 +436,9 @@ def test_accuracy_calculation():
     textual_conflicts = 0
     improvement = calculate_accuracy_improvement(result_no_baseline, textual_conflicts)
     print(f"No baseline conflicts: {improvement * 100:.1f}% improvement")
-    assert improvement == 0.0, "Should be 0% improvement when no baseline conflicts"
+    assert abs(improvement) < 1e-9, (
+        "Should be 0% improvement when no baseline conflicts"
+    )
 
     print("✓ Accuracy calculation tests passed\n")
 

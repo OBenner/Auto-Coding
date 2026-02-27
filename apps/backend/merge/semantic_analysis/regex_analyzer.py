@@ -413,7 +413,7 @@ def extract_function_signatures(code: str, ext: str) -> dict[str, str]:
                 # Extract only the signature portion (up to and including colon)
                 # This ensures we get "def foo(x):" not "def foo(x): pass"
                 sig_match = re.match(
-                    r"^(async\s+)?def\s+\w+\s*\(.*?\)\s*(?:->\s*[^:]+)?\s*:",
+                    r"^(async\s+)?def\s+\w+\s*\([^)]*\)(?:\s*->\s*[^:]+)?\s*:",
                     line_stripped,
                 )
                 if sig_match:

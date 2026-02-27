@@ -69,14 +69,13 @@ def parse_function_signature(signature: str) -> FunctionSignature:
         ^\s*
         (async\s+)?  # Optional async keyword
         def\s+        # def keyword
-        ([a-zA-Z_][a-zA-Z0-9_]*)  # Function name (capture group 2)
+        ([a-zA-Z_]\w*)  # Function name (capture group 2)
         \s*          # Optional whitespace
         \(            # Opening paren
         ([^)]*)      # Parameters (capture group 3) - everything until closing paren
         \)            # Closing paren
-        \s*          # Optional whitespace
-        (?:->\s*([^:(]+))?  # Optional return type (capture group 4)
-        \s*          # Optional whitespace
+        (?:\s*->\s*([^:(]+))?  # Optional return type with leading space (capture group 4)
+        \s*          # Optional whitespace before colon
         :             # Trailing colon (required for valid Python signatures)
         \s*$         # End of string
     """
@@ -89,9 +88,9 @@ def parse_function_signature(signature: str) -> FunctionSignature:
             ^\s*
             (async\s+)?
             def\s+
-            ([a-zA-Z_][a-zA-Z0-9_]*)
+            ([a-zA-Z_]\w*)
             \s*\(([^)]*)\)
-            \s*(?:->\s*([^:(]+))?
+            (?:\s*->\s*([^:(]+))?
             \s*$
         """
         match = re.match(pattern_no_colon, signature, re.VERBOSE)

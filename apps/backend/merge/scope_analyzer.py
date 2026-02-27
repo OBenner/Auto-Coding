@@ -91,20 +91,10 @@ def is_same_scope(scope1: str, scope2: str) -> bool:
     Returns:
         True if variables in these scopes won't conflict
     """
-    # Same scope always compatible
-    if scope1 == scope2:
-        return True
-
-    # Module and global are equivalent
-    if {scope1, scope2} == {"module", "global"}:
-        return True
-
-    # Class and special methods are compatible
-    if {scope1, scope2} == {"class", "special"}:
-        return True
-
-    # Different scopes generally don't conflict
-    # (e.g., a local variable in one function vs a global)
+    # Python's scoping rules ensure that variables in different scopes are independent
+    # (a local in one function never conflicts with a global, class attribute, etc.).
+    # All scope pairings are therefore compatible for merge purposes.
+    # Callers needing strict equality should compare scope1 == scope2 directly.
     return True
 
 

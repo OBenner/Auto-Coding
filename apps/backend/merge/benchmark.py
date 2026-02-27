@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import statistics
 import uuid
 from dataclasses import dataclass, field
@@ -481,11 +482,19 @@ class BenchmarkStore:
         logger.info("Cleared all benchmark results")
 
     def _write_results(self, results: list[BenchmarkResult]) -> None:
-        """Write results to disk."""
-        with open(self.results_file, "w", encoding="utf-8") as f:
+        """Write results to disk atomically to prevent corruption on interruption."""
+        tmp_path = self.results_file.with_suffix(".tmp")
+        with open(tmp_path, "w", encoding="utf-8") as f:
             json.dump([r.to_dict() for r in results], f, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_path, self.results_file)
 
     def _write_summary(self, summary: BenchmarkSummary) -> None:
-        """Write summary to disk."""
-        with open(self.summary_file, "w", encoding="utf-8") as f:
+        """Write summary to disk atomically to prevent corruption on interruption."""
+        tmp_path = self.summary_file.with_suffix(".tmp")
+        with open(tmp_path, "w", encoding="utf-8") as f:
             json.dump(summary.to_dict(), f, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_path, self.summary_file)

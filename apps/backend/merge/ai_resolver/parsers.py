@@ -26,9 +26,10 @@ def extract_code_block(response: str, language: str) -> str | None:
     """
     # Try to find fenced code block
     escaped_lang = re.escape(language)
+    escaped_lang_lower = re.escape(language.lower())
     patterns = [
         rf"```{escaped_lang}\n(.*?)```",
-        rf"```{re.escape(language.lower())}\n(.*?)```",
+        rf"```{escaped_lang_lower}\n(.*?)```",
         r"```\n(.*?)```",
         r"```(.*?)```",
     ]
@@ -122,12 +123,18 @@ def extract_explanation(response: str) -> str | None:
     # Bounded input to mitigate ReDoS on very large AI responses.
     if len(response) > 100_000:
         response = response[:100_000]
-    pattern = r"^\s*\*{0,2}\s*Explanation\s*[:\-]?\s*\*{0,2}\s*(.*?)(?:```|$)"
-    match = re.search(pattern, response, re.DOTALL | re.IGNORECASE | re.MULTILINE)
+
+    # Split on the first ``` to isolate text before code blocks, avoiding
+    # the need for re.DOTALL with (.*?) which risks polynomial backtracking.
+    text_section = response.split("```")[0] if "```" in response else response
+
+    # Match the Explanation header line; content is everything after the header.
+    pattern = r"^\s*\*{0,2}\s*Explanation\s*[:\-]?\s*\*{0,2}\s*"
+    match = re.search(pattern, text_section, re.IGNORECASE | re.MULTILINE)
 
     if match:
-        # Strip markdown formatting from the extracted text
-        explanation = match.group(1).strip()
+        # Everything after the header is the explanation text
+        explanation = text_section[match.end() :].strip()
         explanation = re.sub(r"\*{1,2}([^*]+)\*{1,2}", r"\1", explanation)
         return explanation or None
 
