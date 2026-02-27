@@ -23,7 +23,7 @@ import type {
 
 // Mock fetch globally
 const mockFetch = vi.fn();
-const originalFetch = global.fetch;
+const originalFetch = globalThis.fetch;
 
 describe('ApiClient', () => {
   let client: ApiClient;
@@ -34,7 +34,7 @@ describe('ApiClient', () => {
     vi.useFakeTimers();
 
     // Install mock fetch
-    global.fetch = mockFetch;
+    globalThis.fetch = mockFetch;
 
     // Create client with test config
     client = new ApiClient({
@@ -47,7 +47,7 @@ describe('ApiClient', () => {
 
   afterEach(() => {
     // Restore original fetch
-    global.fetch = originalFetch;
+    globalThis.fetch = originalFetch;
     vi.restoreAllMocks();
     vi.useRealTimers();
   });
@@ -80,14 +80,16 @@ describe('ApiClient', () => {
 
     it('should not log when debug is false', () => {
       const consoleSpy = vi.spyOn(console, 'log');
-      new ApiClient({ debug: false });
+      const silentClient = new ApiClient({ debug: false });
+      expect(silentClient).toBeDefined();
 
       expect(consoleSpy).not.toHaveBeenCalled();
     });
 
     it('should log when debug is true', () => {
       const consoleSpy = vi.spyOn(console, 'log');
-      new ApiClient({ debug: true });
+      const verboseClient = new ApiClient({ debug: true });
+      expect(verboseClient).toBeDefined();
 
       expect(consoleSpy).toHaveBeenCalledWith(
         expect.stringContaining('[ApiClient] ApiClient initialized'),

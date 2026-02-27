@@ -6,7 +6,9 @@ Tasks and specs are synonymous in Auto Code.
 """
 
 import logging
+from typing import Annotated
 
+from core.security import require_auth
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from api.models.task import (
@@ -19,12 +21,9 @@ from api.routes.shared import (
     count_subtasks_detailed,
     find_spec_dir,
     get_progress_percentage,
-    get_specs_dir,
     list_specs,
     sanitize_log,
 )
-from core.config import settings
-from core.security import require_auth
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +33,7 @@ router = APIRouter(prefix="/api/tasks", tags=["tasks"])
 
 
 @router.get("", response_model=TaskListResponse, status_code=status.HTTP_200_OK)
-async def list_tasks(auth: dict = Depends(require_auth)):
+async def list_tasks(auth: Annotated[dict, Depends(require_auth)]):
     """
     List all tasks (specs) in the project.
 
@@ -99,7 +98,7 @@ async def tasks_health():
 
 
 @router.get("/{task_id}", response_model=TaskDetail, status_code=status.HTTP_200_OK)
-async def get_task_detail(task_id: str, auth: dict = Depends(require_auth)):
+async def get_task_detail(task_id: str, auth: Annotated[dict, Depends(require_auth)]):
     """
     Get detailed information for a specific task.
 

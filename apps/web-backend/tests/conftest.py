@@ -8,6 +8,9 @@ import os
 from datetime import timedelta
 from unittest.mock import patch
 
+# Must set DATABASE_URL before importing any models that trigger core.database
+os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
+
 import fakeredis
 import pytest
 from api.models.repository import GitRepository  # noqa: F401
@@ -103,6 +106,7 @@ def test_client(test_db, test_redis):
     Overrides the database and Redis dependencies to use test instances.
     """
     # Import app here to avoid issues
+    from core.security import require_auth
     from main import app
 
     def override_get_db():
@@ -111,12 +115,16 @@ def test_client(test_db, test_redis):
         finally:
             pass
 
+    def override_require_auth():
+        return {"sub": "test-user", "email": "test@example.com"}
+
     # Mock Redis connections in the app
     with patch("services.usage_tracker.redis.Redis") as mock_redis_class:
         # Make Redis() return our fake Redis
         mock_redis_class.return_value = test_redis
 
         app.dependency_overrides[get_db] = override_get_db
+        app.dependency_overrides[require_auth] = override_require_auth
 
         client = TestClient(app)
 
@@ -135,6 +143,7 @@ def test_app():
         FastAPI: The configured FastAPI application
     """
     from main import app
+
     return app
 
 
@@ -158,11 +167,7 @@ def auth_token() -> str:
     Returns:
         str: Valid JWT token string
     """
-    token_data = {
-        "sub": "test-user",
-        "email": "test@example.com",
-        "name": "Test User"
-    }
+    token_data = {"sub": "test-user", "email": "test@example.com", "name": "Test User"}
     return create_access_token(token_data)
 
 
@@ -174,11 +179,7 @@ def expired_token() -> str:
     Returns:
         str: Expired JWT token string
     """
-    token_data = {
-        "sub": "test-user",
-        "email": "test@example.com",
-        "name": "Test User"
-    }
+    token_data = {"sub": "test-user", "email": "test@example.com", "name": "Test User"}
     # Create token that expired 60 seconds ago (enough margin for slow CI)
     return create_access_token(token_data, expires_delta=timedelta(seconds=-60))
 

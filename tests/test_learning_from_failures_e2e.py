@@ -620,7 +620,12 @@ class TestEndToEndFlow:
         # First half: 2/5 = 40%
         # Second half: 4/5 = 80%
         # Difference = 0.4, which is > 0.1 = improving
-        assert trends["success_rate_trend"] > 0.1  # positive float means improving
+        # success_rate_trend should always be numeric (float); guard against unexpected types
+        srt = trends["success_rate_trend"]
+        assert isinstance(srt, (int, float)), (
+            f"success_rate_trend should be numeric, got {type(srt).__name__}: {srt!r}"
+        )
+        assert srt > 0.1  # positive float means improving
         assert trends["trend"] == "improving"
 
 

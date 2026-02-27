@@ -6,6 +6,7 @@ error handling, and response formats.
 """
 
 import json
+
 import pytest
 from httpx import AsyncClient
 
@@ -21,7 +22,9 @@ async def test_list_tasks_without_auth(async_client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_list_tasks_with_expired_token(async_client: AsyncClient, expired_token: str):
+async def test_list_tasks_with_expired_token(
+    async_client: AsyncClient, expired_token: str
+):
     """Test that list_tasks rejects expired tokens"""
     headers = {"Authorization": f"Bearer {expired_token}"}
     response = await async_client.get("/api/tasks", headers=headers)
@@ -60,14 +63,18 @@ async def test_list_tasks_success(async_client: AsyncClient, auth_headers: dict)
 
 
 @pytest.mark.asyncio
-async def test_list_tasks_empty_specs_dir(async_client: AsyncClient, auth_headers: dict, monkeypatch, tmp_path):
+async def test_list_tasks_empty_specs_dir(
+    async_client: AsyncClient, auth_headers: dict, monkeypatch, tmp_path
+):
     """Test list_tasks when specs directory doesn't exist"""
+
     # Patch the _get_specs_dir function to return a non-existent path
     def mock_get_specs_dir():
         return tmp_path / "nonexistent-specs"
 
-    import api.routes.tasks as tasks_module
-    monkeypatch.setattr(tasks_module, "_get_specs_dir", mock_get_specs_dir)
+    import api.routes.shared as shared_module
+
+    monkeypatch.setattr(shared_module, "get_specs_dir", mock_get_specs_dir)
 
     response = await async_client.get("/api/tasks", headers=auth_headers)
     assert response.status_code == 200
@@ -88,7 +95,9 @@ async def test_get_task_detail_without_auth(async_client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_get_task_detail_with_expired_token(async_client: AsyncClient, expired_token: str):
+async def test_get_task_detail_with_expired_token(
+    async_client: AsyncClient, expired_token: str
+):
     """Test that get_task_detail rejects expired tokens"""
     headers = {"Authorization": f"Bearer {expired_token}"}
     response = await async_client.get("/api/tasks/001", headers=headers)
@@ -96,14 +105,18 @@ async def test_get_task_detail_with_expired_token(async_client: AsyncClient, exp
 
 
 @pytest.mark.asyncio
-async def test_get_task_detail_not_found(async_client: AsyncClient, auth_headers: dict, monkeypatch, tmp_path):
+async def test_get_task_detail_not_found(
+    async_client: AsyncClient, auth_headers: dict, monkeypatch, tmp_path
+):
     """Test get_task_detail when task doesn't exist"""
+
     # Patch to return non-existent specs dir
     def mock_get_specs_dir():
         return tmp_path / "nonexistent-specs"
 
-    import api.routes.tasks as tasks_module
-    monkeypatch.setattr(tasks_module, "_get_specs_dir", mock_get_specs_dir)
+    import api.routes.shared as shared_module
+
+    monkeypatch.setattr(shared_module, "get_specs_dir", mock_get_specs_dir)
 
     response = await async_client.get("/api/tasks/999", headers=auth_headers)
     assert response.status_code == 404
@@ -115,7 +128,9 @@ async def test_get_task_detail_not_found(async_client: AsyncClient, auth_headers
 
 
 @pytest.mark.asyncio
-async def test_get_task_detail_success(async_client: AsyncClient, auth_headers: dict, tmp_path, monkeypatch):
+async def test_get_task_detail_success(
+    async_client: AsyncClient, auth_headers: dict, tmp_path, monkeypatch
+):
     """Test successful task detail retrieval"""
     # Create a mock spec directory structure
     specs_dir = tmp_path / "specs"
@@ -136,8 +151,8 @@ async def test_get_task_detail_success(async_client: AsyncClient, auth_headers: 
                 "subtasks": [
                     {"id": "subtask-1", "status": "completed"},
                     {"id": "subtask-2", "status": "in_progress"},
-                    {"id": "subtask-3", "status": "pending"}
-                ]
+                    {"id": "subtask-3", "status": "pending"},
+                ],
             }
         ]
     }
@@ -147,8 +162,9 @@ async def test_get_task_detail_success(async_client: AsyncClient, auth_headers: 
     def mock_get_specs_dir():
         return specs_dir
 
-    import api.routes.tasks as tasks_module
-    monkeypatch.setattr(tasks_module, "_get_specs_dir", mock_get_specs_dir)
+    import api.routes.shared as shared_module
+
+    monkeypatch.setattr(shared_module, "get_specs_dir", mock_get_specs_dir)
 
     # Test with task number
     response = await async_client.get("/api/tasks/001", headers=auth_headers)
@@ -173,7 +189,9 @@ async def test_get_task_detail_success(async_client: AsyncClient, auth_headers: 
 
 
 @pytest.mark.asyncio
-async def test_get_task_detail_with_full_folder_name(async_client: AsyncClient, auth_headers: dict, tmp_path, monkeypatch):
+async def test_get_task_detail_with_full_folder_name(
+    async_client: AsyncClient, auth_headers: dict, tmp_path, monkeypatch
+):
     """Test get_task_detail using full folder name instead of just number"""
     # Create a mock spec directory structure
     specs_dir = tmp_path / "specs"
@@ -186,11 +204,14 @@ async def test_get_task_detail_with_full_folder_name(async_client: AsyncClient, 
     def mock_get_specs_dir():
         return specs_dir
 
-    import api.routes.tasks as tasks_module
-    monkeypatch.setattr(tasks_module, "_get_specs_dir", mock_get_specs_dir)
+    import api.routes.shared as shared_module
+
+    monkeypatch.setattr(shared_module, "get_specs_dir", mock_get_specs_dir)
 
     # Test with full folder name
-    response = await async_client.get("/api/tasks/002-another-feature", headers=auth_headers)
+    response = await async_client.get(
+        "/api/tasks/002-another-feature", headers=auth_headers
+    )
     assert response.status_code == 200
 
     data = response.json()
@@ -199,7 +220,9 @@ async def test_get_task_detail_with_full_folder_name(async_client: AsyncClient, 
 
 
 @pytest.mark.asyncio
-async def test_get_task_detail_no_implementation_plan(async_client: AsyncClient, auth_headers: dict, tmp_path, monkeypatch):
+async def test_get_task_detail_no_implementation_plan(
+    async_client: AsyncClient, auth_headers: dict, tmp_path, monkeypatch
+):
     """Test get_task_detail when implementation_plan.json doesn't exist"""
     specs_dir = tmp_path / "specs"
     spec_folder = specs_dir / "003-pending-feature"
@@ -212,8 +235,9 @@ async def test_get_task_detail_no_implementation_plan(async_client: AsyncClient,
     def mock_get_specs_dir():
         return specs_dir
 
-    import api.routes.tasks as tasks_module
-    monkeypatch.setattr(tasks_module, "_get_specs_dir", mock_get_specs_dir)
+    import api.routes.shared as shared_module
+
+    monkeypatch.setattr(shared_module, "get_specs_dir", mock_get_specs_dir)
 
     response = await async_client.get("/api/tasks/003", headers=auth_headers)
     assert response.status_code == 200
@@ -222,11 +246,13 @@ async def test_get_task_detail_no_implementation_plan(async_client: AsyncClient,
     assert data["status"] == "pending"
     assert data["has_build"] is False
     assert data["progress"]["total"] == 0
-    assert data["progress"]["percentage"] == 0.0
+    assert data["progress"]["percentage"] == pytest.approx(0.0)
 
 
 @pytest.mark.asyncio
-async def test_get_task_detail_completed_task(async_client: AsyncClient, auth_headers: dict, tmp_path, monkeypatch):
+async def test_get_task_detail_completed_task(
+    async_client: AsyncClient, auth_headers: dict, tmp_path, monkeypatch
+):
     """Test get_task_detail for a fully completed task"""
     specs_dir = tmp_path / "specs"
     spec_folder = specs_dir / "004-completed-feature"
@@ -243,8 +269,8 @@ async def test_get_task_detail_completed_task(async_client: AsyncClient, auth_he
                 "name": "Phase 1",
                 "subtasks": [
                     {"id": "subtask-1", "status": "completed"},
-                    {"id": "subtask-2", "status": "completed"}
-                ]
+                    {"id": "subtask-2", "status": "completed"},
+                ],
             }
         ]
     }
@@ -253,8 +279,9 @@ async def test_get_task_detail_completed_task(async_client: AsyncClient, auth_he
     def mock_get_specs_dir():
         return specs_dir
 
-    import api.routes.tasks as tasks_module
-    monkeypatch.setattr(tasks_module, "_get_specs_dir", mock_get_specs_dir)
+    import api.routes.shared as shared_module
+
+    monkeypatch.setattr(shared_module, "get_specs_dir", mock_get_specs_dir)
 
     response = await async_client.get("/api/tasks/004", headers=auth_headers)
     assert response.status_code == 200
@@ -263,11 +290,13 @@ async def test_get_task_detail_completed_task(async_client: AsyncClient, auth_he
     assert data["status"] == "complete"
     assert data["progress"]["completed"] == 2
     assert data["progress"]["total"] == 2
-    assert data["progress"]["percentage"] == 100.0
+    assert data["progress"]["percentage"] == pytest.approx(100.0)
 
 
 @pytest.mark.asyncio
-async def test_get_task_detail_spec_read_error(async_client: AsyncClient, auth_headers: dict, tmp_path, monkeypatch):
+async def test_get_task_detail_spec_read_error(
+    async_client: AsyncClient, auth_headers: dict, tmp_path, monkeypatch
+):
     """Test get_task_detail when spec.md exists but can't be read"""
     specs_dir = tmp_path / "specs"
     spec_folder = specs_dir / "005-unreadable-feature"
@@ -280,8 +309,9 @@ async def test_get_task_detail_spec_read_error(async_client: AsyncClient, auth_h
     def mock_get_specs_dir():
         return specs_dir
 
-    import api.routes.tasks as tasks_module
-    monkeypatch.setattr(tasks_module, "_get_specs_dir", mock_get_specs_dir)
+    import api.routes.shared as shared_module
+
+    monkeypatch.setattr(shared_module, "get_specs_dir", mock_get_specs_dir)
 
     # Simulate a permission error by replacing spec.md with a directory of
     # the same name.  Path.exists() returns True for directories but
@@ -309,12 +339,15 @@ async def test_tasks_health(async_client: AsyncClient):
     assert data["status"] == "ok"
     assert data["endpoint"] == "tasks"
     assert "project_dir" not in data, "Health endpoint must not expose filesystem paths"
-    assert "specs_dir_exists" in data
-    assert isinstance(data["specs_dir_exists"], bool)
+    assert "specs_dir_exists" not in data, (
+        "Health endpoint must not expose filesystem details"
+    )
 
 
 @pytest.mark.asyncio
-async def test_list_tasks_with_multiple_specs(async_client: AsyncClient, auth_headers: dict, tmp_path, monkeypatch):
+async def test_list_tasks_with_multiple_specs(
+    async_client: AsyncClient, auth_headers: dict, tmp_path, monkeypatch
+):
     """Test list_tasks with multiple specs in different states"""
     specs_dir = tmp_path / "specs"
 
@@ -328,14 +361,7 @@ async def test_list_tasks_with_multiple_specs(async_client: AsyncClient, auth_he
     spec2.mkdir(parents=True)
     (spec2 / "spec.md").write_text("# In Progress", encoding="utf-8")
     plan2 = {
-        "phases": [
-            {
-                "subtasks": [
-                    {"status": "completed"},
-                    {"status": "in_progress"}
-                ]
-            }
-        ]
+        "phases": [{"subtasks": [{"status": "completed"}, {"status": "in_progress"}]}]
     }
     (spec2 / "implementation_plan.json").write_text(json.dumps(plan2), encoding="utf-8")
 
@@ -344,22 +370,16 @@ async def test_list_tasks_with_multiple_specs(async_client: AsyncClient, auth_he
     spec3.mkdir(parents=True)
     (spec3 / "spec.md").write_text("# Complete", encoding="utf-8")
     plan3 = {
-        "phases": [
-            {
-                "subtasks": [
-                    {"status": "completed"},
-                    {"status": "completed"}
-                ]
-            }
-        ]
+        "phases": [{"subtasks": [{"status": "completed"}, {"status": "completed"}]}]
     }
     (spec3 / "implementation_plan.json").write_text(json.dumps(plan3), encoding="utf-8")
 
     def mock_get_specs_dir():
         return specs_dir
 
-    import api.routes.tasks as tasks_module
-    monkeypatch.setattr(tasks_module, "_get_specs_dir", mock_get_specs_dir)
+    import api.routes.shared as shared_module
+
+    monkeypatch.setattr(shared_module, "get_specs_dir", mock_get_specs_dir)
 
     response = await async_client.get("/api/tasks", headers=auth_headers)
     assert response.status_code == 200

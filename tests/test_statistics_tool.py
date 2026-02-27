@@ -21,6 +21,10 @@ sys.path.insert(0, str(backend_path))
 # Mock claude_agent_sdk with a proper tool decorator so statistics.py tools are async
 _mock_agent_sdk = MagicMock()
 
+# Track all modules we modify so we can restore them later
+_original_sdk_module = sys.modules.get('claude_agent_sdk')
+_popped_modules: dict[str, object] = {}
+
 
 def _mock_tool_decorator(name, description, params):
     def decorator(func):
@@ -36,7 +40,23 @@ sys.modules['claude_agent_sdk'] = _mock_agent_sdk
 
 # Force fresh import so statistics.py picks up our mock tool decorator
 for _mod in ['agents.tools_pkg.tools.statistics', 'agents.tools_pkg.tools', 'agents.tools_pkg']:
-    sys.modules.pop(_mod, None)
+    _existing = sys.modules.pop(_mod, None)
+    if _existing is not None:
+        _popped_modules[_mod] = _existing
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _restore_sys_modules_after_all_tests():
+    """Restore sys.modules mutations made at module level after all tests complete."""
+    yield
+    # Restore or remove the claude_agent_sdk mock
+    if _original_sdk_module is not None:
+        sys.modules['claude_agent_sdk'] = _original_sdk_module
+    else:
+        sys.modules.pop('claude_agent_sdk', None)
+    # Restore any popped statistics modules
+    for mod_name, mod_obj in _popped_modules.items():
+        sys.modules[mod_name] = mod_obj
 
 
 class TestTimestampParsing:

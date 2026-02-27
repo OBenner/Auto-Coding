@@ -239,9 +239,18 @@ class TestCalculatorClass:
     """Tests for Calculator class."""
 
     def test_calculator_initialization(self):
-        """Calculator is a conceptual class; verify basic int behavior."""
-        value = 0
-        assert value == 0
+        """Calculator stores precision and starts with empty history."""
+        precision = 2
+        history = []
+        assert precision == 2
+        assert len(history) == 0
+
+    def test_calculator_history_tracking(self):
+        """Calculator records operations in history."""
+        history = []
+        history.append(("+", 1, 2, 3))
+        assert len(history) == 1
+        assert history[0][0] == "+"
 '''
 
     test_file = temp_dir / "test_calculator.py"
@@ -334,7 +343,7 @@ class TestCodeAnalyzer:
         assert "edge_cases" in result
 
         # Should detect error handling (raise ValueError)
-        edge_case_types = [ec["type"] for ec in result["edge_cases"]]
+        edge_case_types = [ec.get("type", "") for ec in result["edge_cases"]]
         assert "error_raising" in edge_case_types
 
     def test_analyze_file_handles_missing_file(self, temp_dir: Path):
@@ -492,7 +501,7 @@ def validate_input(data):
         assert "edge_cases" in result
         assert len(result["edge_cases"]) >= 3
 
-        edge_case_types = [ec["type"] for ec in result["edge_cases"]]
+        edge_case_types = [ec.get("type", "") for ec in result["edge_cases"]]
         assert "boundary_condition" in edge_case_types
         assert "type_validation" in edge_case_types
         assert "error_raising" in edge_case_types

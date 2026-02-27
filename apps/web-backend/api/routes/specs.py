@@ -6,7 +6,9 @@ Specs and tasks are synonymous in Auto Code - this is an alias endpoint.
 """
 
 import logging
+from typing import Annotated
 
+from core.security import require_auth
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from api.models.spec import (
@@ -19,12 +21,9 @@ from api.routes.shared import (
     count_subtasks_detailed,
     find_spec_dir,
     get_progress_percentage,
-    get_specs_dir,
     list_specs,
     sanitize_log,
 )
-from core.config import settings
-from core.security import require_auth
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +33,7 @@ router = APIRouter(prefix="/api/specs", tags=["specs"])
 
 
 @router.get("", response_model=SpecListResponse, status_code=status.HTTP_200_OK)
-async def list_specs_endpoint(auth: dict = Depends(require_auth)):
+async def list_specs_endpoint(auth: Annotated[dict, Depends(require_auth)]):
     """
     List all specs in the project.
 
@@ -95,7 +94,7 @@ async def specs_health():
 
 
 @router.get("/{spec_id}/progress", status_code=status.HTTP_200_OK)
-async def get_spec_progress(spec_id: str, auth: dict = Depends(require_auth)):
+async def get_spec_progress(spec_id: str, auth: Annotated[dict, Depends(require_auth)]):
     """
     Get progress statistics for a specific spec.
 
@@ -129,7 +128,7 @@ async def get_spec_progress(spec_id: str, auth: dict = Depends(require_auth)):
 
 
 @router.get("/{spec_id}", response_model=SpecDetail, status_code=status.HTTP_200_OK)
-async def get_spec_detail(spec_id: str, auth: dict = Depends(require_auth)):
+async def get_spec_detail(spec_id: str, auth: Annotated[dict, Depends(require_auth)]):
     """
     Get detailed information for a specific spec.
 

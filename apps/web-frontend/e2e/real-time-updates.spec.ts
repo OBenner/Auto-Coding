@@ -16,10 +16,10 @@ async function setupWebSocketMock(page: Page) {
     const sentMessages: any[] = [];
 
     class MockWebSocket extends EventTarget {
-      static CONNECTING = 0;
-      static OPEN = 1;
-      static CLOSING = 2;
-      static CLOSED = 3;
+      static readonly CONNECTING = 0;
+      static readonly OPEN = 1;
+      static readonly CLOSING = 2;
+      static readonly CLOSED = 3;
 
       url: string;
       readyState: number;
@@ -47,7 +47,7 @@ async function setupWebSocketMock(page: Page) {
       send(data: string) {
         try {
           sentMessages.push(JSON.parse(data));
-        } catch (e) {
+        } catch {
           sentMessages.push(data);
         }
       }
@@ -77,10 +77,10 @@ async function setupWebSocketMock(page: Page) {
       }
     }
 
-    (window as any).WebSocket = MockWebSocket;
-    (window as any).getMockWebSockets = () => mockSockets;
-    (window as any).getSentMessages = () => sentMessages;
-    (window as any).clearSentMessages = () => { sentMessages.length = 0; };
+    (globalThis as any).WebSocket = MockWebSocket;
+    (globalThis as any).getMockWebSockets = () => mockSockets;
+    (globalThis as any).getSentMessages = () => sentMessages;
+    (globalThis as any).clearSentMessages = () => { sentMessages.length = 0; };
   });
 }
 
@@ -171,7 +171,7 @@ test.describe('WebSocket Real-Time Updates', () => {
       await page.waitForTimeout(100);
 
       const messages = await page.evaluate(() => {
-        return (window as any).getSentMessages();
+        return (globalThis as any).getSentMessages();
       });
 
       expect(messages.length).toBeGreaterThanOrEqual(2);
@@ -190,7 +190,7 @@ test.describe('WebSocket Real-Time Updates', () => {
       await page.waitForTimeout(50);
 
       const messages = await page.evaluate(() => {
-        return (window as any).getSentMessages();
+        return (globalThis as any).getSentMessages();
       });
 
       const subscribeMsg = messages.find((m: any) => m.action === 'subscribe');
@@ -209,7 +209,7 @@ test.describe('WebSocket Real-Time Updates', () => {
       await page.waitForTimeout(50);
 
       const messages = await page.evaluate(() => {
-        return (window as any).getSentMessages();
+        return (globalThis as any).getSentMessages();
       });
 
       const unsubscribeMsg = messages.find((m: any) => m.action === 'unsubscribe');
@@ -504,22 +504,27 @@ test.describe('WebSocket Real-Time Updates', () => {
 
     test('should track multiple independent connections', async ({ page }) => {
       const result = await page.evaluate(() => {
-        const initialCount = (window as any).getMockWebSockets().length;
+        const initialCount = (globalThis as any).getMockWebSockets().length;
 
-        new WebSocket('ws://localhost:8000/ws/test1');
-        new WebSocket('ws://localhost:8000/ws/test2');
-        new WebSocket('ws://localhost:8000/ws/test3');
+        // Store connections to satisfy usage requirements; tracking is via getMockWebSockets()
+        const connections = [
+          new WebSocket('ws://localhost:8000/ws/test1'),
+          new WebSocket('ws://localhost:8000/ws/test2'),
+          new WebSocket('ws://localhost:8000/ws/test3'),
+        ];
 
-        const finalCount = (window as any).getMockWebSockets().length;
+        const finalCount = (globalThis as any).getMockWebSockets().length;
 
         return {
           added: finalCount - initialCount,
           total: finalCount,
+          connectionCount: connections.length,
         };
       });
 
       expect(result.added).toBe(3);
       expect(result.total).toBeGreaterThanOrEqual(3);
+      expect(result.connectionCount).toBe(3);
     });
   });
 
@@ -535,7 +540,7 @@ test.describe('WebSocket Real-Time Updates', () => {
         ws.onmessage = (event) => {
           try {
             receivedMessages.push(JSON.parse(event.data));
-          } catch (e) {
+          } catch {
             errorCaught = true;
           }
         };
@@ -562,8 +567,8 @@ test.describe('WebSocket Real-Time Updates', () => {
         ws.onmessage = (event) => {
           try {
             receivedMessages.push(JSON.parse(event.data));
-          } catch (e) {
-            // Ignore parse errors
+          } catch {
+            // Ignore parse errors for invalid messages
           }
         };
 

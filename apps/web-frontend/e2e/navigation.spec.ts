@@ -259,7 +259,7 @@ test.describe('Application Navigation', () => {
       await page.goBack();
 
       // Should be back on welcome screen
-      await expect(page).toHaveURL(/\#?\/?$/);
+      await expect(page).toHaveURL(/#?\/?$/);
       await expect(page.getByRole('heading', { name: /auto claude/i })).toBeVisible();
     });
 
@@ -273,7 +273,7 @@ test.describe('Application Navigation', () => {
 
       // Go back to welcome
       await page.goBack();
-      await expect(page).toHaveURL(/\#?\/?$/);
+      await expect(page).toHaveURL(/#?\/?$/);
 
       // Use browser forward button
       await page.goForward();
@@ -354,7 +354,7 @@ test.describe('Application Navigation', () => {
       await expect(page).toHaveURL(/#\/tasks/);
 
       await page.goBack();
-      await expect(page).toHaveURL(/\#?\/?$/);
+      await expect(page).toHaveURL(/#?\/?$/);
 
       // Go forward twice: Welcome -> Tasks -> Detail
       await page.goForward();
@@ -484,7 +484,7 @@ test.describe('Application Navigation', () => {
 
       // Programmatically change hash
       await page.evaluate(() => {
-        window.location.hash = '#/tasks';
+        globalThis.location.hash = '#/tasks';
       });
 
       await expect(page.getByText('Test Task')).toBeVisible();
@@ -498,7 +498,7 @@ test.describe('Application Navigation', () => {
 
       // Programmatically change to hash with special characters
       await page.evaluate(() => {
-        window.location.hash = '#/tasks/001-special';
+        globalThis.location.hash = '#/tasks/001-special';
       });
 
       await expect(page.getByText('Spec #001-special')).toBeVisible();

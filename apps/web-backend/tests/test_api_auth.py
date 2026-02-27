@@ -29,7 +29,9 @@ async def test_verify_token_with_invalid_token(async_client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_verify_token_with_expired_token(async_client: AsyncClient, expired_token: str):
+async def test_verify_token_with_expired_token(
+    async_client: AsyncClient, expired_token: str
+):
     """Test that verify_token rejects expired tokens"""
     headers = {"Authorization": f"Bearer {expired_token}"}
     response = await async_client.post("/api/auth/verify", headers=headers)
@@ -60,7 +62,9 @@ async def test_verify_token_success(async_client: AsyncClient, auth_headers: dic
 
 
 @pytest.mark.asyncio
-async def test_verify_token_missing_bearer_prefix(async_client: AsyncClient, auth_token: str):
+async def test_verify_token_missing_bearer_prefix(
+    async_client: AsyncClient, auth_token: str
+):
     """Test that verify_token rejects tokens without Bearer prefix"""
     headers = {"Authorization": auth_token}  # Missing "Bearer " prefix
     response = await async_client.post("/api/auth/verify", headers=headers)
@@ -80,12 +84,20 @@ async def test_verify_token_empty_authorization_header(async_client: AsyncClient
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("malformed_token", [
-    pytest.param("Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9", id="one-part-jwt"),
-    pytest.param("Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0In0", id="two-part-jwt"),
-    pytest.param("Bearer not.a.jwt.at.all", id="invalid-base64"),
-])
-async def test_verify_token_malformed_jwt(async_client: AsyncClient, malformed_token: str):
+@pytest.mark.parametrize(
+    "malformed_token",
+    [
+        pytest.param("Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9", id="one-part-jwt"),
+        pytest.param(
+            "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0In0",
+            id="two-part-jwt",
+        ),
+        pytest.param("Bearer not.a.jwt.at.all", id="invalid-base64"),
+    ],
+)
+async def test_verify_token_malformed_jwt(
+    async_client: AsyncClient, malformed_token: str
+):
     """Test that verify_token rejects malformed JWT tokens"""
     headers = {"Authorization": malformed_token}
     response = await async_client.post("/api/auth/verify", headers=headers)
@@ -116,7 +128,9 @@ async def test_auth_status_with_auth(async_client: AsyncClient, auth_headers: di
 
 
 @pytest.mark.asyncio
-async def test_verify_token_response_model(async_client: AsyncClient, auth_headers: dict):
+async def test_verify_token_response_model(
+    async_client: AsyncClient, auth_headers: dict
+):
     """Test that verify_token returns correct response model structure"""
     response = await async_client.post("/api/auth/verify", headers=auth_headers)
     assert response.status_code == 200
@@ -132,7 +146,9 @@ async def test_verify_token_response_model(async_client: AsyncClient, auth_heade
 
 
 @pytest.mark.asyncio
-async def test_verify_token_with_multiple_requests(async_client: AsyncClient, auth_headers: dict):
+async def test_verify_token_with_multiple_requests(
+    async_client: AsyncClient, auth_headers: dict
+):
     """Test that the same token can be verified multiple times"""
     # Make multiple requests with the same token
     for _ in range(3):
@@ -143,7 +159,9 @@ async def test_verify_token_with_multiple_requests(async_client: AsyncClient, au
 
 
 @pytest.mark.asyncio
-async def test_verify_token_case_insensitive_bearer(async_client: AsyncClient, auth_token: str):
+async def test_verify_token_case_insensitive_bearer(
+    async_client: AsyncClient, auth_token: str
+):
     """Test that Bearer scheme is case-insensitive per RFC 7235 (lowercase 'bearer')"""
     # FastAPI's HTTPBearer accepts 'bearer' and 'Bearer' interchangeably
     headers = {"Authorization": f"bearer {auth_token}"}  # lowercase 'bearer'
@@ -165,7 +183,9 @@ async def test_auth_status_response_structure(async_client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_verify_token_with_tampered_token(async_client: AsyncClient, auth_token: str):
+async def test_verify_token_with_tampered_token(
+    async_client: AsyncClient, auth_token: str
+):
     """Test that verify_token rejects tokens with tampered payload"""
     # Tamper with the token by changing one character
     tampered_token = auth_token[:-5] + "XXXXX"

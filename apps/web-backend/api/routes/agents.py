@@ -5,8 +5,9 @@ Provides endpoints for starting and managing agent execution.
 """
 
 import logging
-from typing import Literal
+from typing import Annotated, Literal
 
+from core.security import require_auth
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from services.agent_runner import (
@@ -15,9 +16,6 @@ from services.agent_runner import (
     get_task_status,
     start_agent_task,
 )
-
-from core.config import settings
-from core.security import require_auth
 
 from api.routes.shared import get_project_dir, sanitize_log
 
@@ -73,7 +71,9 @@ class AgentCancelResponse(BaseModel):
 @router.post(
     "/run", response_model=AgentRunResponse, status_code=status.HTTP_202_ACCEPTED
 )
-async def run_agent(request: AgentRunRequest, auth: dict = Depends(require_auth)):
+async def run_agent(
+    request: AgentRunRequest, auth: Annotated[dict, Depends(require_auth)]
+):
     """
     Start an agent execution task.
 
@@ -159,7 +159,7 @@ async def run_agent(request: AgentRunRequest, auth: dict = Depends(require_auth)
     response_model=AgentStatusResponse,
     status_code=status.HTTP_200_OK,
 )
-async def get_agent_status(task_id: str, auth: dict = Depends(require_auth)):
+async def get_agent_status(task_id: str, auth: Annotated[dict, Depends(require_auth)]):
     """
     Get the status of a running agent task.
 
@@ -210,7 +210,7 @@ async def get_agent_status(task_id: str, auth: dict = Depends(require_auth)):
     response_model=AgentCancelResponse,
     status_code=status.HTTP_200_OK,
 )
-async def cancel_agent(task_id: str, auth: dict = Depends(require_auth)):
+async def cancel_agent(task_id: str, auth: Annotated[dict, Depends(require_auth)]):
     """
     Cancel a running agent task.
 
@@ -235,10 +235,9 @@ async def cancel_agent(task_id: str, auth: dict = Depends(require_auth)):
                 task_id=task_id, cancelled=True, message=f"Task cancelled: {task_id}"
             )
         else:
-            return AgentCancelResponse(
-                task_id=task_id,
-                cancelled=False,
-                message=f"Task not found or already completed: {task_id}",
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Task not found or already completed: {task_id}",
             )
 
     except HTTPException:

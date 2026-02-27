@@ -9,7 +9,6 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, within, fireEvent } from '@testing-library/react';
 import { TaskList } from './TaskList';
 import { apiClient } from '../api/client';
-import type { Task } from '../shared/types';
 import type { TaskSummary } from '../api/types';
 
 // Mock the API client

@@ -57,22 +57,21 @@ vi.stubGlobal("WebSocket", MockWebSocket);
 
 // Mock ResizeObserver
 class MockResizeObserver {
-	observe(): void {}
-	unobserve(): void {}
-	disconnect(): void {}
+	observe(): void { /* intentional no-op mock */ }
+	unobserve(): void { /* intentional no-op mock */ }
+	disconnect(): void { /* intentional no-op mock */ }
 }
 
 vi.stubGlobal("ResizeObserver", MockResizeObserver);
 
 // Mock IntersectionObserver
 class MockIntersectionObserver {
-	constructor() {}
-	disconnect(): void {}
-	observe(): void {}
+	disconnect(): void { /* intentional no-op mock */ }
+	observe(): void { /* intentional no-op mock */ }
 	takeRecords(): IntersectionObserverEntry[] {
 		return [];
 	}
-	unobserve(): void {}
+	unobserve(): void { /* intentional no-op mock */ }
 }
 
 vi.stubGlobal("IntersectionObserver", MockIntersectionObserver);

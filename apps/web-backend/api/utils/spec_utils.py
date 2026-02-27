@@ -12,11 +12,13 @@ patching the ``_get_specs_dir`` helper that lives in each route module).
 import json
 import logging
 from pathlib import Path
-from typing import List, Optional, Tuple
 
 from core.config import settings
 
 logger = logging.getLogger(__name__)
+
+# Name of the implementation plan file inside each spec directory
+PLAN_FILE = "implementation_plan.json"
 
 
 def get_specs_dir() -> Path:
@@ -35,14 +37,14 @@ def get_specs_dir() -> Path:
 # ---------------------------------------------------------------------------
 
 
-def count_subtasks(spec_dir: Path) -> Tuple[int, int]:
+def count_subtasks(spec_dir: Path) -> tuple[int, int]:
     """
     Count completed and total subtasks in implementation_plan.json.
 
     Returns:
         (completed_count, total_count)
     """
-    plan_file = spec_dir / "implementation_plan.json"
+    plan_file = spec_dir / PLAN_FILE
     if not plan_file.exists():
         return 0, 0
 
@@ -70,7 +72,7 @@ def count_subtasks_detailed(spec_dir: Path) -> dict:
     Returns:
         Dict with completed, in_progress, pending, failed, total counts
     """
-    plan_file = spec_dir / "implementation_plan.json"
+    plan_file = spec_dir / PLAN_FILE
     result = {
         "completed": 0,
         "in_progress": 0,
@@ -113,14 +115,23 @@ def get_progress_percentage(spec_dir: Path) -> float:
 # ---------------------------------------------------------------------------
 
 
-def list_specs_in(specs_dir: Path) -> List[dict]:
+def _spec_status_and_progress(spec_folder: Path) -> tuple[str, str]:
+    """Return (status, progress) for a spec folder that already has a build."""
+    completed, total = count_subtasks(spec_folder)
+    if total > 0:
+        raw = "complete" if completed == total else "in_progress"
+        return f"{raw} (has build)", f"{completed}/{total}"
+    return "initialized (has build)", "0/0"
+
+
+def list_specs_in(specs_dir: Path) -> list[dict]:
     """
     List all specs found inside *specs_dir*.
 
     Returns:
         List of spec dicts with keys: number, name, folder, status, progress, has_build
     """
-    specs: List[dict] = []
+    specs: list[dict] = []
 
     if not specs_dir.exists():
         return specs
@@ -134,32 +145,19 @@ def list_specs_in(specs_dir: Path) -> List[dict]:
         if len(parts) != 2 or not parts[0].isdigit():
             continue
 
-        number = parts[0]
-        name = parts[1]
-
-        spec_file = spec_folder / "spec.md"
-        if not spec_file.exists():
+        if not (spec_folder / "spec.md").exists():
             continue
 
-        has_build = (spec_folder / "implementation_plan.json").exists()
-
+        has_build = (spec_folder / PLAN_FILE).exists()
         if has_build:
-            completed, total = count_subtasks(spec_folder)
-            if total > 0:
-                spec_status = "complete" if completed == total else "in_progress"
-                progress = f"{completed}/{total}"
-            else:
-                spec_status = "initialized"
-                progress = "0/0"
-            spec_status = f"{spec_status} (has build)"
+            spec_status, progress = _spec_status_and_progress(spec_folder)
         else:
-            spec_status = "pending"
-            progress = "-"
+            spec_status, progress = "pending", "-"
 
         specs.append(
             {
-                "number": number,
-                "name": name,
+                "number": parts[0],
+                "name": parts[1],
                 "folder": folder_name,
                 "status": spec_status,
                 "progress": progress,
@@ -170,7 +168,7 @@ def list_specs_in(specs_dir: Path) -> List[dict]:
     return specs
 
 
-def find_spec_in(specs_dir: Path, spec_id: str) -> Optional[Path]:
+def find_spec_in(specs_dir: Path, spec_id: str) -> Path | None:
     """
     Find the spec directory for *spec_id* inside *specs_dir*.
 

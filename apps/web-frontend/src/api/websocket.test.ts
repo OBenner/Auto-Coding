@@ -79,23 +79,21 @@ class MockWebSocket {
 // Setup WebSocket mock globally
 let mockWsInstance: MockWebSocket | null = null;
 
-// Create a proper WebSocket mock class
-class WebSocketMock {
-  constructor(url: string) {
-    mockWsInstance = new MockWebSocket(url);
-    // Return the mock instance (not 'this')
-    return mockWsInstance as unknown as WebSocket;
-  }
+// Factory function acting as a WebSocket constructor mock.
+// Using a function instead of a class avoids "class with only a constructor" and
+// "unexpected return in constructor" linter rules while retaining the same behaviour.
+function WebSocketMock(url: string): WebSocket {
+  mockWsInstance = new MockWebSocket(url);
+  return mockWsInstance as unknown as WebSocket;
 }
-
-// Set up constants
+// Required static constants mirroring the real WebSocket interface
 WebSocketMock.CONNECTING = 0;
 WebSocketMock.OPEN = 1;
 WebSocketMock.CLOSING = 2;
 WebSocketMock.CLOSED = 3;
 
-const originalWebSocket = global.WebSocket;
-global.WebSocket = WebSocketMock as unknown as typeof WebSocket;
+const originalWebSocket = globalThis.WebSocket;
+globalThis.WebSocket = WebSocketMock as unknown as typeof WebSocket;
 
 describe('WebSocketClient', () => {
   let client: WebSocketClient;
@@ -108,10 +106,10 @@ describe('WebSocketClient', () => {
     vi.useFakeTimers();
 
     // Install mock WebSocket
-    global.WebSocket = WebSocketMock as unknown as typeof WebSocket;
+    globalThis.WebSocket = WebSocketMock as unknown as typeof WebSocket;
 
     // Spy on WebSocket constructor to track calls
-    websocketSpy = vi.spyOn(global, 'WebSocket');
+    websocketSpy = vi.spyOn(globalThis, 'WebSocket');
 
     // Spy on console.error to suppress error output in tests
     consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -130,7 +128,7 @@ describe('WebSocketClient', () => {
   afterEach(() => {
     client.disconnect();
     // Restore original WebSocket
-    global.WebSocket = originalWebSocket;
+    globalThis.WebSocket = originalWebSocket;
     vi.restoreAllMocks();
     vi.useRealTimers();
   });
@@ -165,14 +163,16 @@ describe('WebSocketClient', () => {
 
     it('should not log when debug is false', () => {
       const consoleSpy = vi.spyOn(console, 'log');
-      new WebSocketClient({ debug: false });
+      const silentClient = new WebSocketClient({ debug: false });
+      expect(silentClient).toBeDefined();
 
       expect(consoleSpy).not.toHaveBeenCalled();
     });
 
     it('should log when debug is true', () => {
       const consoleSpy = vi.spyOn(console, 'log');
-      new WebSocketClient({ debug: true });
+      const verboseClient = new WebSocketClient({ debug: true });
+      expect(verboseClient).toBeDefined();
 
       expect(consoleSpy).toHaveBeenCalledWith(
         expect.stringContaining('[WebSocketClient] WebSocketClient initialized'),
@@ -512,7 +512,6 @@ describe('WebSocketClient', () => {
       client.onStateChange(handler);
 
       client.connect();
-      const ws = mockWsInstance;
       handler.mockClear();
 
       // Try to connect again while connecting
@@ -893,7 +892,7 @@ describe('WebSocketClient', () => {
       client.subscribe('spec-002');
       client.subscribe('spec-003');
 
-      expect(client.getSubscriptions().sort()).toEqual(['spec-001', 'spec-002', 'spec-003']);
+      expect(client.getSubscriptions().sort((a, b) => a.localeCompare(b))).toEqual(['spec-001', 'spec-002', 'spec-003']);
     });
 
     it('should return a copy of subscriptions array', () => {

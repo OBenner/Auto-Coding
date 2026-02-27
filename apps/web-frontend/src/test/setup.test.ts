@@ -10,11 +10,11 @@ describe('Test Infrastructure', () => {
     element.textContent = 'Hello World';
     document.body.appendChild(element);
     expect(element).toBeInTheDocument();
-    document.body.removeChild(element);
+    element.remove();
   });
 
   it('should have jsdom environment', () => {
-    expect(typeof window).toBe('object');
+    expect(typeof globalThis.window).toBe('object');
     expect(typeof document).toBe('object');
   });
 });
