@@ -81,7 +81,7 @@ def save_template(template: AgentTemplate, project_dir: Path) -> None:
             if tmp_file.exists():
                 tmp_file.unlink()
         except OSError:
-            pass
+            pass  # Ignore tmp-file cleanup errors; the original save error is re-raised below
         raise OSError(f"Failed to save template '{template.name}': {e}") from e
 
 
@@ -256,5 +256,5 @@ def export_template(template: AgentTemplate, export_path: Path) -> None:
             if tmp_path.exists():
                 tmp_path.unlink()
         except OSError:
-            pass
+            pass  # Ignore tmp-file cleanup errors; the original export error is re-raised below
         raise OSError(f"Failed to export template to '{export_path}': {e}") from e

@@ -615,18 +615,19 @@ print(json.dumps(suggestions))
     const templatesPath = getCustomTemplatesPath();
 
     try {
-      await fsPromises.access(templatesPath);
-    } catch {
-      // File doesn't exist - return empty array
-      return [];
-    }
-
-    try {
       const content = await fsPromises.readFile(templatesPath, 'utf-8');
       const raw = JSON.parse(content);
 
       if (!Array.isArray(raw)) {
-        debugError('[loadCustomTemplates] Templates file is not an array, resetting');
+        // File contains valid JSON but has wrong structure — back it up before resetting
+        const backupPath = `${templatesPath}.corrupt.${Date.now()}`;
+        debugError('[loadCustomTemplates] Templates file is not an array, backing up and resetting');
+        try {
+          await fsPromises.copyFile(templatesPath, backupPath);
+          debugError('[loadCustomTemplates] Malformed file backed up to:', backupPath);
+        } catch {
+          // Ignore backup errors — we still reset to a clean state below
+        }
         return [];
       }
 
