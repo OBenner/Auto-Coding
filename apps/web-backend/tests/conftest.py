@@ -156,7 +156,7 @@ async def async_client(test_app):
     Uses httpx.AsyncClient with ASGITransport for async FastAPI testing.
     """
     transport = ASGITransport(app=test_app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(transport=transport, base_url="https://test") as client:
         yield client
 
 

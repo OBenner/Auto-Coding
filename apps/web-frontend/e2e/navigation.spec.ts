@@ -5,73 +5,13 @@
  * Tests routing, browser back/forward functionality, and URL hash handling.
  */
 
-import { test, expect, type Page } from '@playwright/test';
-
-/**
- * Helper: Mock API response for task list
- */
-async function mockTaskListResponse(page: Page, tasks: any[] = []) {
-  await page.route('**/api/tasks', async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        tasks,
-        total: tasks.length,
-      }),
-    });
-  });
-}
-
-/**
- * Helper: Mock API response for task detail
- */
-async function mockTaskDetailResponse(page: Page, taskId: string, taskDetail: any) {
-  await page.route(`**/api/tasks/${taskId}`, async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify(taskDetail),
-    });
-  });
-}
-
-/**
- * Helper: Create mock task summary
- */
-function createMockTask(overrides: any = {}) {
-  return {
-    number: '001',
-    name: 'Test Task',
-    folder: '001-test-task',
-    status: 'backlog',
-    progress: '0',
-    has_build: false,
-    ...overrides,
-  };
-}
-
-/**
- * Helper: Create mock task detail
- */
-function createMockTaskDetail(overrides: any = {}) {
-  return {
-    number: '001',
-    name: 'Test Task',
-    folder: '001-test-task',
-    status: 'backlog',
-    has_build: false,
-    spec_content: '# Test Specification\n\nThis is a test spec.',
-    progress: {
-      percentage: 0,
-      completed: 0,
-      in_progress: 0,
-      pending: 5,
-      failed: 0,
-    },
-    ...overrides,
-  };
-}
+import { test, expect } from '@playwright/test';
+import {
+  mockTaskListResponse,
+  mockTaskDetailResponse,
+  createMockTask,
+  createMockTaskDetail,
+} from './helpers';
 
 test.describe('Application Navigation', () => {
   test.beforeEach(async ({ page }) => {

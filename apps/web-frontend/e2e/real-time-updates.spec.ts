@@ -84,6 +84,25 @@ async function setupWebSocketMock(page: Page) {
   });
 }
 
+/**
+ * Helper: Open a WebSocket, receive one simulated message, return received events.
+ */
+async function receiveOneEvent(page: Page, messageData: any): Promise<any[]> {
+  return page.evaluate(async (data) => {
+    const ws = new WebSocket('ws://localhost:8000/ws/test');
+    await new Promise<void>((resolve) => {
+      ws.onopen = () => resolve();
+    });
+    const receivedEvents: any[] = [];
+    ws.onmessage = (event) => {
+      receivedEvents.push(JSON.parse(event.data));
+    };
+    (ws as any).simulateMessage(data);
+    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+    return receivedEvents;
+  }, messageData);
+}
+
 test.describe('WebSocket Real-Time Updates', () => {
   test.beforeEach(async ({ page }) => {
     await setupWebSocketMock(page);
@@ -220,26 +239,11 @@ test.describe('WebSocket Real-Time Updates', () => {
 
   test.describe('Message Receiving', () => {
     test('should receive execution events', async ({ page }) => {
-      const result = await page.evaluate(async () => {
-        const ws = new WebSocket('ws://localhost:8000/ws/test');
-        await new Promise((resolve) => ws.onopen = resolve);
-
-        const receivedEvents: any[] = [];
-        ws.onmessage = (event) => {
-          receivedEvents.push(JSON.parse(event.data));
-        };
-
-        // Simulate receiving an event
-        (ws as any).simulateMessage({
-          event_type: 'execution',
-          spec_id: '001',
-          timestamp: new Date().toISOString(),
-          data: { phase: 'implementation', progress: 50 },
-        });
-
-        await new Promise((resolve) => setTimeout(resolve, 50));
-
-        return receivedEvents;
+      const result = await receiveOneEvent(page, {
+        event_type: 'execution',
+        spec_id: '001',
+        timestamp: new Date().toISOString(),
+        data: { phase: 'implementation', progress: 50 },
       });
 
       expect(result.length).toBe(1);
@@ -249,25 +253,11 @@ test.describe('WebSocket Real-Time Updates', () => {
     });
 
     test('should receive log events', async ({ page }) => {
-      const result = await page.evaluate(async () => {
-        const ws = new WebSocket('ws://localhost:8000/ws/test');
-        await new Promise((resolve) => ws.onopen = resolve);
-
-        const receivedEvents: any[] = [];
-        ws.onmessage = (event) => {
-          receivedEvents.push(JSON.parse(event.data));
-        };
-
-        (ws as any).simulateMessage({
-          event_type: 'log',
-          spec_id: '001',
-          timestamp: new Date().toISOString(),
-          data: { level: 'info', message: 'Test log' },
-        });
-
-        await new Promise((resolve) => setTimeout(resolve, 50));
-
-        return receivedEvents;
+      const result = await receiveOneEvent(page, {
+        event_type: 'log',
+        spec_id: '001',
+        timestamp: new Date().toISOString(),
+        data: { level: 'info', message: 'Test log' },
       });
 
       expect(result.length).toBe(1);
@@ -276,25 +266,11 @@ test.describe('WebSocket Real-Time Updates', () => {
     });
 
     test('should receive error events', async ({ page }) => {
-      const result = await page.evaluate(async () => {
-        const ws = new WebSocket('ws://localhost:8000/ws/test');
-        await new Promise((resolve) => ws.onopen = resolve);
-
-        const receivedEvents: any[] = [];
-        ws.onmessage = (event) => {
-          receivedEvents.push(JSON.parse(event.data));
-        };
-
-        (ws as any).simulateMessage({
-          event_type: 'error',
-          spec_id: '001',
-          timestamp: new Date().toISOString(),
-          data: { error: 'Test error', message: 'Something went wrong' },
-        });
-
-        await new Promise((resolve) => setTimeout(resolve, 50));
-
-        return receivedEvents;
+      const result = await receiveOneEvent(page, {
+        event_type: 'error',
+        spec_id: '001',
+        timestamp: new Date().toISOString(),
+        data: { error: 'Test error', message: 'Something went wrong' },
       });
 
       expect(result.length).toBe(1);
@@ -303,25 +279,11 @@ test.describe('WebSocket Real-Time Updates', () => {
     });
 
     test('should receive ideation events', async ({ page }) => {
-      const result = await page.evaluate(async () => {
-        const ws = new WebSocket('ws://localhost:8000/ws/test');
-        await new Promise((resolve) => ws.onopen = resolve);
-
-        const receivedEvents: any[] = [];
-        ws.onmessage = (event) => {
-          receivedEvents.push(JSON.parse(event.data));
-        };
-
-        (ws as any).simulateMessage({
-          event_type: 'ideation',
-          spec_id: '001',
-          timestamp: new Date().toISOString(),
-          data: { thought: 'Planning approach...', context: 'design' },
-        });
-
-        await new Promise((resolve) => setTimeout(resolve, 50));
-
-        return receivedEvents;
+      const result = await receiveOneEvent(page, {
+        event_type: 'ideation',
+        spec_id: '001',
+        timestamp: new Date().toISOString(),
+        data: { thought: 'Planning approach...', context: 'design' },
       });
 
       expect(result.length).toBe(1);
@@ -330,25 +292,11 @@ test.describe('WebSocket Real-Time Updates', () => {
     });
 
     test('should receive roadmap events', async ({ page }) => {
-      const result = await page.evaluate(async () => {
-        const ws = new WebSocket('ws://localhost:8000/ws/test');
-        await new Promise((resolve) => ws.onopen = resolve);
-
-        const receivedEvents: any[] = [];
-        ws.onmessage = (event) => {
-          receivedEvents.push(JSON.parse(event.data));
-        };
-
-        (ws as any).simulateMessage({
-          event_type: 'roadmap',
-          spec_id: '001',
-          timestamp: new Date().toISOString(),
-          data: { phase: 'planning', steps: ['Step 1', 'Step 2'], current_step: 'Step 1' },
-        });
-
-        await new Promise((resolve) => setTimeout(resolve, 50));
-
-        return receivedEvents;
+      const result = await receiveOneEvent(page, {
+        event_type: 'roadmap',
+        spec_id: '001',
+        timestamp: new Date().toISOString(),
+        data: { phase: 'planning', steps: ['Step 1', 'Step 2'], current_step: 'Step 1' },
       });
 
       expect(result.length).toBe(1);

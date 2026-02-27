@@ -38,8 +38,8 @@ describe('ApiClient', () => {
 
     // Create client with test config
     client = new ApiClient({
-      baseUrl: 'http://test-api.local',
-      wsUrl: 'ws://test-api.local',
+      baseUrl: 'https://test-api.local',
+      wsUrl: 'wss://test-api.local',
       timeout: 5000,
       debug: false,
     });
@@ -68,12 +68,12 @@ describe('ApiClient', () => {
 
     it('should merge custom config with defaults', () => {
       const customClient = new ApiClient({
-        baseUrl: 'http://custom.local',
+        baseUrl: 'https://custom.local',
         timeout: 10000,
       });
       const config = customClient.getConfig();
 
-      expect(config.baseUrl).toBe('http://custom.local');
+      expect(config.baseUrl).toBe('https://custom.local');
       expect(config.timeout).toBe(10000);
       expect(config.wsUrl).toBeDefined(); // Should still have default
     });
@@ -100,10 +100,10 @@ describe('ApiClient', () => {
 
   describe('updateConfig', () => {
     it('should update configuration', () => {
-      client.updateConfig({ baseUrl: 'http://new-api.local' });
+      client.updateConfig({ baseUrl: 'https://new-api.local' });
       const config = client.getConfig();
 
-      expect(config.baseUrl).toBe('http://new-api.local');
+      expect(config.baseUrl).toBe('https://new-api.local');
     });
 
     it('should merge partial config updates', () => {
@@ -156,7 +156,7 @@ describe('ApiClient', () => {
       const result = await client.listTasks();
 
       expect(mockFetch).toHaveBeenCalledWith(
-        'http://test-api.local/api/tasks',
+        'https://test-api.local/api/tasks',
         expect.objectContaining({
           headers: expect.objectContaining({
             'Content-Type': 'application/json',
@@ -194,7 +194,7 @@ describe('ApiClient', () => {
       const result = await client.getTask('001');
 
       expect(mockFetch).toHaveBeenCalledWith(
-        'http://test-api.local/api/tasks/001',
+        'https://test-api.local/api/tasks/001',
         expect.any(Object)
       );
       expect(result).toEqual(mockResponse);
@@ -214,7 +214,7 @@ describe('ApiClient', () => {
       const result = await client.checkTasksHealth();
 
       expect(mockFetch).toHaveBeenCalledWith(
-        'http://test-api.local/api/tasks/health',
+        'https://test-api.local/api/tasks/health',
         expect.any(Object)
       );
       expect(result).toEqual(mockResponse);
@@ -250,7 +250,7 @@ describe('ApiClient', () => {
       const result = await client.listSpecs();
 
       expect(mockFetch).toHaveBeenCalledWith(
-        'http://test-api.local/api/specs',
+        'https://test-api.local/api/specs',
         expect.any(Object)
       );
       expect(result).toEqual(mockResponse);
@@ -284,7 +284,7 @@ describe('ApiClient', () => {
       const result = await client.getSpec('001');
 
       expect(mockFetch).toHaveBeenCalledWith(
-        'http://test-api.local/api/specs/001',
+        'https://test-api.local/api/specs/001',
         expect.any(Object)
       );
       expect(result).toEqual(mockResponse);
@@ -304,7 +304,7 @@ describe('ApiClient', () => {
       const result = await client.checkSpecsHealth();
 
       expect(mockFetch).toHaveBeenCalledWith(
-        'http://test-api.local/api/specs/health',
+        'https://test-api.local/api/specs/health',
         expect.any(Object)
       );
       expect(result).toEqual(mockResponse);
@@ -341,7 +341,7 @@ describe('ApiClient', () => {
       const result = await client.runAgent(request);
 
       expect(mockFetch).toHaveBeenCalledWith(
-        'http://test-api.local/api/agents/run',
+        'https://test-api.local/api/agents/run',
         expect.objectContaining({
           method: 'POST',
           body: JSON.stringify(request),
@@ -367,7 +367,7 @@ describe('ApiClient', () => {
       const result = await client.getAgentStatus('task-123');
 
       expect(mockFetch).toHaveBeenCalledWith(
-        'http://test-api.local/api/agents/status/task-123',
+        'https://test-api.local/api/agents/status/task-123',
         expect.any(Object)
       );
       expect(result).toEqual(mockResponse);
@@ -429,7 +429,7 @@ describe('ApiClient', () => {
       const result = await client.cancelAgent('task-123');
 
       expect(mockFetch).toHaveBeenCalledWith(
-        'http://test-api.local/api/agents/cancel/task-123',
+        'https://test-api.local/api/agents/cancel/task-123',
         expect.objectContaining({
           method: 'POST',
         })
@@ -451,7 +451,7 @@ describe('ApiClient', () => {
       const result = await client.checkAgentsHealth();
 
       expect(mockFetch).toHaveBeenCalledWith(
-        'http://test-api.local/api/agents/health',
+        'https://test-api.local/api/agents/health',
         expect.any(Object)
       );
       expect(result).toEqual(mockResponse);
@@ -475,7 +475,7 @@ describe('ApiClient', () => {
       const result = await client.verifyAuth('test-token');
 
       expect(mockFetch).toHaveBeenCalledWith(
-        'http://test-api.local/api/auth/verify',
+        'https://test-api.local/api/auth/verify',
         expect.objectContaining({
           headers: expect.objectContaining({
             Authorization: 'Bearer test-token',
@@ -513,7 +513,7 @@ describe('ApiClient', () => {
       const result = await client.getAuthStatus();
 
       expect(mockFetch).toHaveBeenCalledWith(
-        'http://test-api.local/api/auth/status',
+        'https://test-api.local/api/auth/status',
         expect.any(Object)
       );
       expect(result).toEqual(mockResponse);
@@ -769,7 +769,7 @@ describe('ApiClient', () => {
       await client.getAgentStatus('task-with-special-chars');
 
       expect(mockFetch).toHaveBeenCalledWith(
-        'http://test-api.local/api/agents/status/task-with-special-chars',
+        'https://test-api.local/api/agents/status/task-with-special-chars',
         expect.any(Object)
       );
     });
@@ -782,11 +782,11 @@ describe('ApiClient', () => {
   describe('createApiClient', () => {
     it('should create a new client instance', () => {
       const newClient = createApiClient({
-        baseUrl: 'http://factory-test.local',
+        baseUrl: 'https://factory-test.local',
       });
 
       expect(newClient).toBeInstanceOf(ApiClient);
-      expect(newClient.getConfig().baseUrl).toBe('http://factory-test.local');
+      expect(newClient.getConfig().baseUrl).toBe('https://factory-test.local');
     });
 
     it('should create client with default config', () => {
