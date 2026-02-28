@@ -63,6 +63,7 @@ async function executeHealthAnalyzer(
   }
 
   // Build Python command to execute the module function
+  // Pass paths as command-line arguments to avoid code injection via user-supplied paths
   const [pythonExe, baseArgs] = parsePythonCommand(pythonCmd);
   const args = [
     ...baseArgs,
@@ -70,11 +71,11 @@ async function executeHealthAnalyzer(
     `
 import sys
 import json
-sys.path.insert(0, '${path.dirname(scriptPath).replace(/\\/g, '\\\\')}')
+sys.path.insert(0, sys.argv[1])
 from health_analyzer import ${command}
 
-project_dir = r'${projectPath.replace(/\\/g, '\\\\')}'
-spec_dir = ${specDir ? `r'${specDir.replace(/\\/g, '\\\\')}'` : 'None'}
+project_dir = sys.argv[2]
+spec_dir = sys.argv[3] if len(sys.argv) > 3 and sys.argv[3] != '' else None
 
 try:
     result = ${command}(project_dir, spec_dir)
@@ -82,7 +83,10 @@ try:
 except Exception as e:
     print(json.dumps({"error": str(e)}), file=sys.stderr)
     sys.exit(1)
-`.trim()
+`.trim(),
+    path.dirname(scriptPath),
+    projectPath,
+    ...(specDir ? [specDir] : [''])
   ];
 
   return new Promise((resolve) => {
@@ -119,14 +123,19 @@ except Exception as e:
 
       if (code === 0 && stdout) {
         try {
-          const data = JSON.parse(stdout);
+          const trimmed = stdout.trim();
+          // Prefer last non-empty line to tolerate incidental logging
+          const lines = trimmed.split(/\r?\n/).filter(Boolean);
+          const jsonCandidate = lines.length > 0 ? lines[lines.length - 1] : trimmed;
+
+          const data = JSON.parse(jsonCandidate);
           if (data.error) {
             resolve({ success: false, error: data.error });
           } else {
             resolve({ success: true, data });
           }
         } catch (e) {
-          resolve({ success: false, error: `Invalid JSON output: ${stdout}` });
+          resolve({ success: false, error: `Invalid JSON output: ${stdout.substring(0, 200)}` });
         }
       } else {
         const errorMsg = stderr || stdout || `Process exited with code ${code}`;

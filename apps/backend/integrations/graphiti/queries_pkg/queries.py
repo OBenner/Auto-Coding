@@ -14,8 +14,11 @@ from .schema import (
     EPISODE_TYPE_CODEBASE_DISCOVERY,
     EPISODE_TYPE_GOTCHA,
     EPISODE_TYPE_PATTERN,
+    EPISODE_TYPE_PREFERENCE_PROFILE,
+    EPISODE_TYPE_ROOT_CAUSE,
     EPISODE_TYPE_SESSION_INSIGHT,
     EPISODE_TYPE_TASK_OUTCOME,
+    EPISODE_TYPE_USER_CORRECTION,
 )
 
 logger = logging.getLogger(__name__)
@@ -302,6 +305,122 @@ class GraphitiQueries:
             )
             return False
 
+    async def add_root_cause(
+        self,
+        failure_type: str,
+        root_cause: dict,
+        failure_context: dict | None = None,
+    ) -> bool:
+        """
+        Save a root cause analysis for a failure.
+
+        Args:
+            failure_type: Type of failure ("qa_rejection", "build_error", "test_failure")
+            root_cause: Root cause analysis dict from failure_analyzer
+            failure_context: Optional additional context about the failure
+
+        Returns:
+            True if saved successfully
+        """
+        try:
+            from graphiti_core.nodes import EpisodeType
+
+            episode_content = {
+                "type": EPISODE_TYPE_ROOT_CAUSE,
+                "spec_id": self.spec_context_id,
+                "failure_type": failure_type,
+                "category": root_cause.get("category", "unknown"),
+                "description": root_cause.get("description", ""),
+                "affected_files": root_cause.get("affected_files", []),
+                "confidence": root_cause.get("confidence", 0.0),
+                "recommendations": root_cause.get("recommendations", []),
+                "is_recurring": root_cause.get("is_recurring", False),
+                "timestamp": datetime.now(UTC).isoformat(),
+                **(failure_context or {}),
+            }
+
+            await self.client.graphiti.add_episode(
+                name=f"root_cause_{failure_type}_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}",
+                episode_body=json.dumps(episode_content),
+                source=EpisodeType.text,
+                source_description=f"Root cause analysis for {failure_type}: {root_cause.get('category', 'unknown')}",
+                reference_time=datetime.now(UTC),
+                group_id=self.group_id,
+            )
+
+            logger.info(
+                f"Saved root cause to Graphiti: {failure_type} - {root_cause.get('category', 'unknown')}"
+            )
+            return True
+
+        except Exception as e:
+            logger.warning(f"Failed to save root cause: {e}")
+            capture_exception(
+                e,
+                operation="add_root_cause",
+                group_id=self.group_id,
+                spec_id=self.spec_context_id,
+                failure_type=failure_type,
+                category=root_cause.get("category", "unknown"),
+                content_summary=root_cause.get("description", "")[:100],
+            )
+            return False
+
+    async def add_user_correction(
+        self,
+        what_was_wrong: str,
+        what_was_corrected: str,
+        correction_context: dict | None = None,
+    ) -> bool:
+        """
+        Save a user correction episode.
+
+        This captures instances where the user had to correct the agent's work,
+        enabling the system to learn from mistakes and avoid repeating them.
+
+        Args:
+            what_was_wrong: Description of what the agent did incorrectly
+            what_was_corrected: Description of the user's correction
+            correction_context: Optional additional context (files affected, subtask, etc.)
+
+        Returns:
+            True if saved successfully
+        """
+        try:
+            from graphiti_core.nodes import EpisodeType
+
+            episode_content = {
+                "type": EPISODE_TYPE_USER_CORRECTION,
+                "spec_id": self.spec_context_id,
+                "what_was_wrong": what_was_wrong,
+                "what_was_corrected": what_was_corrected,
+                "timestamp": datetime.now(UTC).isoformat(),
+                **(correction_context or {}),
+            }
+
+            await self.client.graphiti.add_episode(
+                name=f"user_correction_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}",
+                episode_body=json.dumps(episode_content),
+                source=EpisodeType.text,
+                source_description=f"User correction: {what_was_wrong[:100]}",
+                reference_time=datetime.now(UTC),
+                group_id=self.group_id,
+            )
+
+            logger.info(f"Saved user correction to Graphiti: {what_was_wrong[:50]}")
+            return True
+
+        except Exception as e:
+            logger.warning(f"Failed to save user correction: {e}")
+            capture_exception(
+                e,
+                operation="add_user_correction",
+                group_id=self.group_id,
+                spec_id=self.spec_context_id,
+                what_was_wrong_summary=what_was_wrong[:100],
+            )
+            return False
+
     async def add_structured_insights(self, insights: dict) -> bool:
         """
         Save extracted insights as multiple focused episodes.
@@ -537,3 +656,106 @@ class GraphitiQueries:
                 content_summary=", ".join(insight_types) if insight_types else "empty",
             )
             return False
+
+    async def save_preference_profile(
+        self,
+        profile_data: dict,
+    ) -> bool:
+        """
+        Save or update a preference profile to the knowledge graph.
+
+        Args:
+            profile_data: PreferenceProfile dictionary from PreferenceProfile.to_dict()
+
+        Returns:
+            True if saved successfully
+        """
+        try:
+            try:
+                from graphiti_core.nodes import EpisodeType
+            except ImportError as e:
+                logger.warning("graphiti_core.nodes not available: %s", e)
+                capture_exception(
+                    e,
+                    operation="save_preference_profile_import_error",
+                    group_id=self.group_id,
+                    spec_id=self.spec_context_id,
+                )
+                return False
+
+            now = datetime.now(UTC)
+            episode_content = {
+                "type": EPISODE_TYPE_PREFERENCE_PROFILE,
+                "spec_id": self.spec_context_id,
+                "timestamp": now.isoformat(),
+                "profile": profile_data,
+            }
+
+            await self.client.graphiti.add_episode(
+                name=f"preference_profile_{self.group_id}",
+                episode_body=json.dumps(episode_content),
+                source=EpisodeType.text,
+                source_description=f"User preference profile for {self.group_id}",
+                reference_time=now,
+                group_id=self.group_id,
+            )
+
+            logger.info(
+                "Saved preference profile to Graphiti (group: %s)", self.group_id
+            )
+            return True
+
+        except Exception as e:
+            logger.warning("Failed to save preference profile: %s", e)
+            capture_exception(
+                e,
+                operation="save_preference_profile",
+                group_id=self.group_id,
+                spec_id=self.spec_context_id,
+            )
+            return False
+
+    async def get_preference_profile(self) -> dict | None:
+        """
+        Get the most recent preference profile from the knowledge graph.
+
+        Returns:
+            PreferenceProfile dictionary or None if not found
+        """
+        try:
+            # Search for preference profile episodes
+            episodes = await self.client.graphiti.search(
+                query="user preference profile settings verbosity risk tolerance",
+                group_ids=[self.group_id],
+                num_results=5,
+            )
+
+            if not episodes:
+                return None
+
+            # Find the most recent preference profile episode
+            for episode in episodes:
+                try:
+                    episode_data = json.loads(episode.content)
+                    if episode_data.get("type") == EPISODE_TYPE_PREFERENCE_PROFILE:
+                        profile_data = episode_data.get("profile")
+                        if profile_data:
+                            logger.info(
+                                f"Retrieved preference profile from Graphiti (group: {self.group_id})"
+                            )
+                            return profile_data
+                except (json.JSONDecodeError, KeyError) as e:
+                    logger.debug(f"Failed to parse episode as preference profile: {e}")
+                    continue
+
+            return None
+
+        except Exception as e:
+            logger.warning(f"Failed to get preference profile: {e}")
+            capture_exception(
+                e,
+                operation="get_preference_profile",
+                group_id=self.group_id,
+                spec_id=self.spec_context_id,
+            )
+            return None

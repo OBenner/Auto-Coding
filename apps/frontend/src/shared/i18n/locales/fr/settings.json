@@ -41,9 +41,21 @@
       "title": "Notifications",
       "description": "Préférences d'alertes"
     },
+    "feedback": {
+      "title": "Retours",
+      "description": "Paramètres de collecte de retours"
+    },
     "debug": {
       "title": "Debug & Logs",
       "description": "Outils de dépannage"
+    },
+    "keyboardShortcuts": {
+      "title": "Raccourcis clavier",
+      "description": "Personnaliser les raccourcis clavier pour les actions courantes"
+    },
+    "envConfig": {
+      "title": "Config. d'environnement",
+      "description": "Configurer l'authentification Claude et les tokens d'environnement"
     }
   },
   "apiProfiles": {
@@ -52,10 +64,12 @@
     "addButton": "Ajouter un profil",
     "presets": {
       "anthropic": "Anthropic",
+      "openai": "OpenAI",
       "openrouter": "OpenRouter",
       "groq": "Groq",
       "glmGlobal": "GLM (Global)",
-      "glmChina": "GLM (China)"
+      "glmChina": "GLM (China)",
+      "ollama": "Ollama (Local)"
     },
     "fields": {
       "name": "Nom",
@@ -181,6 +195,14 @@
     "comfortable": "Confortable",
     "large": "Grand"
   },
+  "gpuAcceleration": {
+    "label": "Accélération GPU",
+    "description": "Utiliser WebGL pour le rendu des terminaux (expérimental, plus rapide avec plusieurs terminaux)",
+    "auto": "Auto (utiliser WebGL si supporté)",
+    "on": "Toujours activé",
+    "off": "Désactivé (par défaut)",
+    "helperText": "Les modifications s'appliquent uniquement aux nouveaux terminaux"
+  },
   "general": {
     "otherAgentSettings": "Autres paramètres de l'agent",
     "otherAgentSettingsDescription": "Options de configuration supplémentaires de l'agent",
@@ -215,6 +237,7 @@
     "sourceHomebrew": "Homebrew",
     "sourceNvm": "NVM",
     "sourceSystemPath": "PATH système",
+    "sourceWindowsWhere": "Windows Where",
     "sourceBundled": "Intégré",
     "sourceFallback": "Valeur par défaut",
     "notDetected": "Non détecté",
@@ -306,6 +329,12 @@
     "onReviewNeededDescription": "Notifier quand le QA nécessite votre révision",
     "sound": "Son",
     "soundDescription": "Jouer un son avec les notifications"
+  },
+  "feedback": {
+    "title": "Paramètres de retour",
+    "description": "Configurer les préférences de collecte de retours",
+    "enableFeedback": "Activer la collecte de retours",
+    "enableFeedbackDescription": "Collecter les retours après la fin des tâches de l'agent pour aider à améliorer le système"
   },
   "actions": {
     "save": "Enregistrer les paramètres",
@@ -772,6 +801,100 @@
       "createAnthropicKey": "Créer une clé API Anthropic",
       "openai": "Ceci ressemble à une API OpenAI. Vous aurez besoin d'une clé API.",
       "createOpenaiKey": "Créer une clé API OpenAI"
+    }
+  },
+  "keyboardShortcuts": {
+    "title": "Raccourcis clavier",
+    "description": "Personnaliser les raccourcis clavier pour les actions courantes",
+    "infoBanner": "Cliquez sur un raccourci pour enregistrer une nouvelle combinaison de touches. Appuyez sur Échap pour annuler l'enregistrement.",
+    "unsavedChanges": "Vous avez des modifications non enregistrées",
+    "actions": {
+      "change": "Modifier",
+      "resetToDefaults": "Réinitialiser par défaut",
+      "save": "Enregistrer les modifications",
+      "saving": "Enregistrement...",
+      "commandPalette": {
+        "label": "Ouvrir la palette de commandes",
+        "description": "Rechercher et exécuter des commandes rapidement"
+      },
+      "quickActions": {
+        "label": "Actions rapides",
+        "description": "Accéder aux actions récentes et aux tâches rapides"
+      },
+      "createTask": {
+        "label": "Créer une nouvelle tâche",
+        "description": "Créer une nouvelle tâche ou spec"
+      },
+      "batchQA": {
+        "label": "QA par lot",
+        "description": "Exécuter la QA sur plusieurs tâches à la fois"
+      },
+      "batchStatusUpdate": {
+        "label": "Mise à jour de statut par lot",
+        "description": "Mettre à jour le statut de plusieurs tâches"
+      }
+    },
+    "recording": {
+      "pressKeys": "Appuyez sur les touches...",
+      "cancel": "Annuler"
+    },
+    "toast": {
+      "resetTitle": "Raccourcis réinitialisés",
+      "resetDescription": "Tous les raccourcis clavier ont été réinitialisés aux valeurs par défaut",
+      "savedTitle": "Raccourcis enregistrés",
+      "savedDescription": "Vos raccourcis clavier ont été enregistrés avec succès",
+      "saveFailedTitle": "Échec de l'enregistrement",
+      "saveFailedDescription": "Échec de l'enregistrement des raccourcis clavier. Veuillez réessayer."
+    }
+  },
+  "agentPreferences": {
+    "title": "Préférences de comportement de l'agent",
+    "description": "Configurez comment les agents adaptent leur comportement à vos préférences",
+    "verbosity": {
+      "label": "Verbosité des réponses",
+      "description": "Contrôlez le niveau de détail des explications de l'agent",
+      "minimal": "Très bref",
+      "concise": "Court",
+      "normal": "Standard",
+      "detailed": "Détaillé",
+      "verbose": "Très détaillé"
+    },
+    "riskTolerance": {
+      "label": "Tolérance au risque",
+      "description": "À quel point les agents doivent être prudents lors de modifications",
+      "cautious": "Sécurité d'abord",
+      "balanced": "Modéré",
+      "aggressive": "Agir vite"
+    },
+    "projectType": {
+      "label": "Type de projet",
+      "description": "Niveau de maturité du projet affectant les décisions de risque",
+      "greenfield": "Nouveau projet",
+      "established": "Stable",
+      "legacy": "Ancienne base de code"
+    },
+    "codingStyle": {
+      "label": "Préférences de style de code",
+      "description": "Apprendre et correspondre automatiquement aux conventions du projet",
+      "indentation": "Indentation",
+      "quoteStyle": "Style de guillemets",
+      "namingConvention": "Convention de nommage",
+      "commentDensity": "Densité des commentaires",
+      "typeHints": "Utiliser les annotations de type",
+      "typeHintsDescription": "Ajouter des annotations de type au code",
+      "auto": "Détection auto",
+      "spaces": "Espaces",
+      "tabs": "Tabulations",
+      "single": "Guillemets simples",
+      "double": "Guillemets doubles",
+      "minimal": "Minimal",
+      "normalComments": "Normal",
+      "verbose": "Verbeux"
+    },
+    "userInstructions": {
+      "label": "Instructions personnalisées",
+      "description": "Ajoutez des préférences explicites comme 'être plus prudent' ou 'utiliser TypeScript'",
+      "placeholder": "ex : 'être plus prudent' ou 'préférer le style fonctionnel'"
     }
   }
 }

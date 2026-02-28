@@ -36,7 +36,7 @@ import asyncio
 import json
 import os
 import sys
-from datetime import UTC, datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 # Add auto-claude to path
@@ -67,6 +67,7 @@ def apply_ladybug_monkeypatch():
 
     # Try native kuzu as fallback
     try:
+        # Optional: kuzu is optional (fallback if LadybugDB unavailable)
         import kuzu  # noqa: F401
 
         return True

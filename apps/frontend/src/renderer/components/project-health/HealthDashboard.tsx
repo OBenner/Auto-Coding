@@ -27,15 +27,17 @@ export function HealthDashboard({ projectId }: HealthDashboardProps) {
 
       // Load comprehensive health data
       const result = await window.electronAPI.getProjectHealth(projectId);
-      if (result.success && result.data) {
+      if (result.success && result.data && 'overall_score' in result.data && 'status' in result.data) {
         setHealth(result.data);
       } else {
         setHealth(null);
-        toast({
-          title: 'Error',
-          description: result.error || 'Failed to load project health data.',
-          variant: 'destructive',
-        });
+        if (!result.success) {
+          toast({
+            title: 'Error',
+            description: result.error || 'Failed to load project health data.',
+            variant: 'destructive',
+          });
+        }
       }
 
       if (showRefreshToast) {

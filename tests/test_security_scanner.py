@@ -21,7 +21,7 @@ import pytest
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent / "apps" / "backend"))
 
-from security_scanner import (
+from analysis.security_scanner import (
     SecurityVulnerability,
     SecurityScanResult,
     SecurityScanner,
@@ -384,9 +384,17 @@ class TestEdgeCases:
         """Test handling of non-existent directory."""
         fake_dir = Path("/nonexistent/path")
 
-        # Should not crash, may have errors
-        result = scanner.scan(fake_dir)
-        assert isinstance(result, SecurityScanResult)
+        # Targeted mock: only return False for paths under /nonexistent
+        _original_exists = Path.exists
+
+        def _selective_exists(self):
+            if str(self).startswith("/nonexistent"):
+                return False
+            return _original_exists(self)
+
+        with patch.object(Path, 'exists', _selective_exists):
+            result = scanner.scan(fake_dir)
+            assert isinstance(result, SecurityScanResult)
 
     def test_scan_specific_files(self, scanner, python_project):
         """Test scanning specific files only."""

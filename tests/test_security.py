@@ -10,8 +10,7 @@ Tests the security.py module functionality including:
 - Security hook behavior
 """
 
-import pytest
-from project_analyzer import BASE_COMMANDS, SecurityProfile
+from project_analyzer import SecurityProfile
 from security import (
     extract_commands,
     get_command_for_validation,
@@ -33,7 +32,6 @@ from security import (
     validate_redis_cli_command,
     validate_rm_command,
     validate_sh_command,
-    validate_shell_c_command,
     validate_zsh_command,
 )
 
@@ -377,7 +375,6 @@ class TestSecurityProfileIntegration:
 
     def test_profile_caching(self, python_project):
         """Profile is cached after first analysis."""
-        from project_analyzer import get_or_create_profile
         from security import get_security_profile, reset_profile_cache
         reset_profile_cache()
 
@@ -393,10 +390,12 @@ class TestSecurityProfileIntegration:
 class TestGitCommitValidator:
     """Tests for git commit validation (secret scanning)."""
 
-    def test_allows_normal_commit(self, temp_git_repo, stage_files):
+    def test_allows_normal_commit(self, temp_git_repo, stage_files, monkeypatch):
         """Allows commit without secrets."""
         stage_files({"normal.py": "x = 42\n"})
 
+        # Change CWD to temp_git_repo so get_staged_files() scans the right repo
+        monkeypatch.chdir(temp_git_repo)
         allowed, reason = validate_git_commit("git commit -m 'test'")
         assert allowed is True
 

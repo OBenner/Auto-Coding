@@ -110,7 +110,12 @@ def _load_requirements_txt(project_dir: Path) -> list[str]:
 
     try:
         with open(req_file, encoding="utf-8") as f:
-            return [line.strip() for line in f if line.strip() and not line.startswith("#")]
+            lines = []
+            for raw in f:
+                line = raw.strip()
+                if line and not line.startswith("#"):
+                    lines.append(line)
+            return lines
     except (OSError, UnicodeDecodeError):
         return []
 
@@ -543,13 +548,16 @@ def _calculate_overall_score(
     dependency_score = metrics["dependencies"]["freshness_score"]
     activity_score = metrics["agent_activity"]["success_rate"]
 
+    # Merge user weights with defaults to prevent missing key errors
+    merged_weights = {**DEFAULT_WEIGHTS, **(weights or {})}
+
     # Calculate weighted average
     overall = (
-        test_score * weights["test_coverage"]
-        + quality_score * weights["code_quality"]
-        + security_score * weights["security"]
-        + dependency_score * weights["dependencies"]
-        + activity_score * weights["agent_activity"]
+        test_score * merged_weights["test_coverage"]
+        + quality_score * merged_weights["code_quality"]
+        + security_score * merged_weights["security"]
+        + dependency_score * merged_weights["dependencies"]
+        + activity_score * merged_weights["agent_activity"]
     )
 
     return round(overall, 1)
@@ -581,7 +589,9 @@ def _get_health_status(score: float) -> str:
 
 
 def get_project_health(
-    project_dir: Path | str, spec_dir: Path | str | None = None, weights: dict[str, float] | None = None
+    project_dir: Path | str,
+    spec_dir: Path | str | None = None,
+    weights: dict[str, float] | None = None,
 ) -> dict[str, Any]:
     """
     Get comprehensive project health metrics.
@@ -613,7 +623,9 @@ def get_project_health(
         "code_quality": _calculate_code_quality(project_path),
         "security": _calculate_security_score(project_path),
         "dependencies": _calculate_dependency_health(project_path),
-        "agent_activity": _calculate_agent_activity(spec_path) if spec_path.exists() else {
+        "agent_activity": _calculate_agent_activity(spec_path)
+        if spec_path.exists()
+        else {
             "total_iterations": 0,
             "success_rate": 0.0,
             "average_fix_time": 0.0,
@@ -637,7 +649,9 @@ def get_project_health(
     }
 
 
-def get_health_summary(project_dir: Path | str, spec_dir: Path | str | None = None) -> dict[str, Any]:
+def get_health_summary(
+    project_dir: Path | str, spec_dir: Path | str | None = None
+) -> dict[str, Any]:
     """
     Get condensed health summary for quick display.
 
@@ -661,7 +675,9 @@ def get_health_summary(project_dir: Path | str, spec_dir: Path | str | None = No
     recommendations = []
 
     if health["security"]["critical_count"] > 0:
-        critical.append(f"{health['security']['critical_count']} critical security vulnerabilities")
+        critical.append(
+            f"{health['security']['critical_count']} critical security vulnerabilities"
+        )
         recommendations.append("Run security scan and update vulnerable dependencies")
 
     if health["test_coverage"]["percentage"] < 50.0:
@@ -669,7 +685,9 @@ def get_health_summary(project_dir: Path | str, spec_dir: Path | str | None = No
         recommendations.append("Increase test coverage to at least 70%")
 
     if health["dependencies"]["outdated_count"] > 10:
-        critical.append(f"{health['dependencies']['outdated_count']} outdated dependencies")
+        critical.append(
+            f"{health['dependencies']['outdated_count']} outdated dependencies"
+        )
         recommendations.append("Update dependencies to latest stable versions")
 
     return {

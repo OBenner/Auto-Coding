@@ -15,7 +15,6 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-
 from analysis.health_analyzer import (
     _calculate_agent_activity,
     _calculate_code_quality,
@@ -35,7 +34,6 @@ from analysis.health_analyzer import (
     get_health_summary,
     get_project_health,
 )
-
 
 # =============================================================================
 # FIXTURES
@@ -79,7 +77,7 @@ def sample_package_json() -> dict:
         "devDependencies": {
             "jest": "^29.0.0",
             "@types/react": "^18.0.0",
-        }
+        },
     }
 
 
@@ -91,7 +89,9 @@ def sample_package_json() -> dict:
 class TestLoadImplementationPlan:
     """Tests for _load_implementation_plan function."""
 
-    def test_load_valid_plan(self, temp_spec_dir: Path, sample_implementation_plan: dict):
+    def test_load_valid_plan(
+        self, temp_spec_dir: Path, sample_implementation_plan: dict
+    ):
         """Test loading a valid implementation plan."""
         plan_file = temp_spec_dir / "implementation_plan.json"
         plan_file.write_text(json.dumps(sample_implementation_plan))
@@ -99,7 +99,10 @@ class TestLoadImplementationPlan:
         result = _load_implementation_plan(temp_spec_dir)
 
         assert result is not None
-        assert result["qa_iteration_history"] == sample_implementation_plan["qa_iteration_history"]
+        assert (
+            result["qa_iteration_history"]
+            == sample_implementation_plan["qa_iteration_history"]
+        )
 
     def test_load_missing_plan(self, temp_spec_dir: Path):
         """Test loading when implementation_plan.json doesn't exist."""
@@ -118,7 +121,9 @@ class TestLoadImplementationPlan:
 class TestLoadPackageJson:
     """Tests for _load_package_json function."""
 
-    def test_load_valid_package_json(self, temp_project_dir: Path, sample_package_json: dict):
+    def test_load_valid_package_json(
+        self, temp_project_dir: Path, sample_package_json: dict
+    ):
         """Test loading a valid package.json."""
         package_file = temp_project_dir / "package.json"
         package_file.write_text(json.dumps(sample_package_json))
@@ -219,12 +224,8 @@ class TestParseJestCoverage:
         """Test parsing valid Jest/Vitest coverage JSON."""
         coverage_file = temp_project_dir / "coverage.json"
         coverage_data = {
-            "file1.js": {
-                "lines": {"total": 100, "covered": 75}
-            },
-            "file2.js": {
-                "lines": {"total": 50, "covered": 50}
-            }
+            "file1.js": {"lines": {"total": 100, "covered": 75}},
+            "file2.js": {"lines": {"total": 50, "covered": 50}},
         }
         coverage_file.write_text(json.dumps(coverage_data))
 
@@ -262,7 +263,7 @@ class TestParsePythonCoverageJson:
             "totals": {
                 "covered_lines": 450,
                 "num_statements": 500,
-                "percent_covered": 90.0
+                "percent_covered": 90.0,
             }
         }
         coverage_file.write_text(json.dumps(coverage_data))
@@ -346,11 +347,7 @@ class TestCalculateTestCoverage:
     def test_jest_coverage_priority(self, temp_project_dir: Path):
         """Test that Jest coverage is parsed correctly."""
         coverage_file = temp_project_dir / "coverage.json"
-        coverage_data = {
-            "file1.js": {
-                "lines": {"total": 100, "covered": 80}
-            }
-        }
+        coverage_data = {"file1.js": {"lines": {"total": 100, "covered": 80}}}
         coverage_file.write_text(json.dumps(coverage_data))
 
         (temp_project_dir / "test_file.py").touch()
@@ -437,7 +434,9 @@ class TestCalculateSecurityScore:
 class TestCalculateDependencyHealth:
     """Tests for _calculate_dependency_health function."""
 
-    def test_calculate_with_package_json(self, temp_project_dir: Path, sample_package_json: dict):
+    def test_calculate_with_package_json(
+        self, temp_project_dir: Path, sample_package_json: dict
+    ):
         """Test dependency calculation with package.json."""
         package_file = temp_project_dir / "package.json"
         package_file.write_text(json.dumps(sample_package_json))
@@ -457,7 +456,9 @@ class TestCalculateDependencyHealth:
         assert result["total_dependencies"] == 2
         assert result["freshness_score"] == 100.0
 
-    def test_calculate_with_both(self, temp_project_dir: Path, sample_package_json: dict):
+    def test_calculate_with_both(
+        self, temp_project_dir: Path, sample_package_json: dict
+    ):
         """Test dependency calculation with both package types."""
         package_file = temp_project_dir / "package.json"
         package_file.write_text(json.dumps(sample_package_json))
@@ -478,7 +479,9 @@ class TestCalculateDependencyHealth:
 class TestCalculateAgentActivity:
     """Tests for _calculate_agent_activity function."""
 
-    def test_calculate_with_valid_plan(self, temp_spec_dir: Path, sample_implementation_plan: dict):
+    def test_calculate_with_valid_plan(
+        self, temp_spec_dir: Path, sample_implementation_plan: dict
+    ):
         """Test activity calculation with valid plan."""
         plan_file = temp_spec_dir / "implementation_plan.json"
         plan_file.write_text(json.dumps(sample_implementation_plan))
@@ -500,7 +503,11 @@ class TestCalculateAgentActivity:
     def test_calculate_truncates_recent_activity(self, temp_spec_dir: Path):
         """Test that recent activity is limited to last 5 iterations."""
         history = [
-            {"iteration": i, "status": "approved", "timestamp": f"2026-02-09T{i:02d}:00:00Z"}
+            {
+                "iteration": i,
+                "status": "approved",
+                "timestamp": f"2026-02-09T{i:02d}:00:00Z",
+            }
             for i in range(1, 11)
         ]
         plan_data = {"qa_iteration_history": history}
@@ -630,14 +637,18 @@ class TestGetProjectHealth:
         assert "agent_activity" in health
         assert "generated_at" in health
 
-    def test_get_health_with_spec_dir(self, temp_project_dir: Path, temp_spec_dir: Path):
+    def test_get_health_with_spec_dir(
+        self, temp_project_dir: Path, temp_spec_dir: Path
+    ):
         """Test project health with spec directory."""
         health = get_project_health(temp_project_dir, temp_spec_dir)
 
         assert health["agent_activity"]["total_iterations"] == 0
         assert health["agent_activity"]["success_rate"] == 0.0
 
-    def test_get_health_with_package_json(self, temp_project_dir: Path, sample_package_json: dict):
+    def test_get_health_with_package_json(
+        self, temp_project_dir: Path, sample_package_json: dict
+    ):
         """Test health calculation with package.json."""
         package_file = temp_project_dir / "package.json"
         package_file.write_text(json.dumps(sample_package_json))
@@ -649,11 +660,7 @@ class TestGetProjectHealth:
     def test_get_health_with_coverage(self, temp_project_dir: Path):
         """Test health calculation with coverage file."""
         coverage_file = temp_project_dir / "coverage.json"
-        coverage_data = {
-            "file1.js": {
-                "lines": {"total": 100, "covered": 85}
-            }
-        }
+        coverage_data = {"file1.js": {"lines": {"total": 100, "covered": 85}}}
         coverage_file.write_text(json.dumps(coverage_data))
 
         health = get_project_health(temp_project_dir)
@@ -693,12 +700,17 @@ class TestGetHealthSummary:
     def test_summary_with_critical_vulnerabilities(self, temp_project_dir: Path):
         """Test summary identifies critical security issues."""
         # We need to mock get_project_health to return critical vulnerabilities
-        with patch('analysis.health_analyzer.get_project_health') as mock_health:
+        with patch("analysis.health_analyzer.get_project_health") as mock_health:
             mock_health.return_value = {
                 "overall_score": 50.0,
                 "status": "fair",
                 "test_coverage": {"percentage": 80.0},
-                "security": {"critical_count": 3, "high_count": 0, "medium_count": 0, "low_count": 0},
+                "security": {
+                    "critical_count": 3,
+                    "high_count": 0,
+                    "medium_count": 0,
+                    "low_count": 0,
+                },
                 "dependencies": {"outdated_count": 5},
             }
 
@@ -710,35 +722,53 @@ class TestGetHealthSummary:
 
     def test_summary_with_low_coverage(self, temp_project_dir: Path):
         """Test summary identifies low test coverage."""
-        with patch('analysis.health_analyzer.get_project_health') as mock_health:
+        with patch("analysis.health_analyzer.get_project_health") as mock_health:
             mock_health.return_value = {
                 "overall_score": 40.0,
                 "status": "poor",
                 "test_coverage": {"percentage": 30.0},
-                "security": {"critical_count": 0, "high_count": 0, "medium_count": 0, "low_count": 0},
+                "security": {
+                    "critical_count": 0,
+                    "high_count": 0,
+                    "medium_count": 0,
+                    "low_count": 0,
+                },
                 "dependencies": {"outdated_count": 5},
             }
 
             summary = get_health_summary(temp_project_dir)
 
-            assert any("Low test coverage" in issue for issue in summary["critical_issues"])
-            assert any("Increase test coverage" in rec for rec in summary["recommendations"])
+            assert any(
+                "Low test coverage" in issue for issue in summary["critical_issues"]
+            )
+            assert any(
+                "Increase test coverage" in rec for rec in summary["recommendations"]
+            )
 
     def test_summary_with_outdated_dependencies(self, temp_project_dir: Path):
         """Test summary identifies outdated dependencies."""
-        with patch('analysis.health_analyzer.get_project_health') as mock_health:
+        with patch("analysis.health_analyzer.get_project_health") as mock_health:
             mock_health.return_value = {
                 "overall_score": 60.0,
                 "status": "fair",
                 "test_coverage": {"percentage": 80.0},
-                "security": {"critical_count": 0, "high_count": 0, "medium_count": 0, "low_count": 0},
+                "security": {
+                    "critical_count": 0,
+                    "high_count": 0,
+                    "medium_count": 0,
+                    "low_count": 0,
+                },
                 "dependencies": {"outdated_count": 15},
             }
 
             summary = get_health_summary(temp_project_dir)
 
-            assert any("outdated dependencies" in issue for issue in summary["critical_issues"])
-            assert any("Update dependencies" in rec for rec in summary["recommendations"])
+            assert any(
+                "outdated dependencies" in issue for issue in summary["critical_issues"]
+            )
+            assert any(
+                "Update dependencies" in rec for rec in summary["recommendations"]
+            )
 
 
 # =============================================================================
@@ -794,7 +824,7 @@ class TestEdgeCases:
         package_data = {
             "name": "test-package",
             "version": "1.0.0",
-            "description": "Test with unicode: ñ, é, 中文"
+            "description": "Test with unicode: ñ, é, 中文",
         }
         package_file.write_text(json.dumps(package_data), encoding="utf-8")
 

@@ -11,7 +11,9 @@ import {
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Badge } from '../ui/badge';
-import type { ProjectHealth, HealthStatus } from '../../../shared/types/health';
+import type { ProjectHealth, HealthStatus, TrendDirection } from '../../../shared/types/health';
+
+const TEST_COVERAGE_BASELINE = 70;
 
 interface HealthSummaryCardProps {
   health: ProjectHealth | null;
@@ -59,7 +61,7 @@ function StatCard({ icon: Icon, label, value, trend, trendValue, variant = 'defa
   );
 }
 
-function getStatusVariant(status: HealthStatus): 'default' | 'success' | 'warning' | 'destructive' {
+function getStatusBadgeVariant(status: HealthStatus): 'default' | 'success' | 'warning' | 'destructive' {
   switch (status) {
     case 'excellent':
       return 'success';
@@ -106,7 +108,7 @@ function getDependencyVariant(freshnessScore: number): 'default' | 'success' | '
   return 'error';
 }
 
-function getTrendFromDirection(direction: string): 'up' | 'down' | 'neutral' {
+function getTrendFromDirection(direction: TrendDirection): 'up' | 'down' | 'neutral' {
   if (direction === 'improving') return 'up';
   if (direction === 'declining') return 'down';
   return 'neutral';
@@ -154,7 +156,7 @@ export function HealthSummaryCard({ health, isLoading = false }: HealthSummaryCa
             Project Health Summary
           </CardTitle>
           {hasData && health && (
-            <Badge variant={getStatusVariant(health.status)} className="text-xs">
+            <Badge variant={getStatusBadgeVariant(health.status)} className="text-xs">
               {getStatusLabel(health.status)} ({stats.overallScore}/100)
             </Badge>
           )}
@@ -182,7 +184,7 @@ export function HealthSummaryCard({ health, isLoading = false }: HealthSummaryCa
               value={formatPercentage(stats.testCoverage)}
               variant={getTestCoverageVariant(stats.testCoverage)}
               trend={stats.testCoverageTrend}
-              trendValue={stats.testCoverageTrend !== 'neutral' ? formatPercentage(Math.abs(stats.testCoverage - 70)) : undefined}
+              trendValue={stats.testCoverageTrend !== 'neutral' ? formatPercentage(Math.abs(stats.testCoverage - TEST_COVERAGE_BASELINE)) : undefined}
             />
             <StatCard
               icon={Activity}
