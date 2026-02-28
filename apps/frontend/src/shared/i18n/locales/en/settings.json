@@ -778,6 +778,10 @@
       "openrouter": {
         "name": "OpenRouter",
         "description": "Cloud multi-model routing with 400+ models"
+      },
+      "zhipuai": {
+        "name": "ZhipuAI (GLM)",
+        "description": "Zhipu AI GLM models (glm-4, glm-4-flash)"
       }
     },
     "apiKeys": {
@@ -796,6 +800,11 @@
         "label": "OpenRouter API Key",
         "placeholder": "sk-or-...",
         "description": "Required for OpenRouter multi-model routing"
+      },
+      "zhipuai": {
+        "label": "ZhipuAI API Key",
+        "placeholder": "Enter your ZhipuAI API key",
+        "description": "Required for GLM models (glm-4, glm-4-flash)"
       }
     },
     "models": {

@@ -423,7 +423,7 @@ export const DEFAULT_KEYBOARD_SHORTCUTS: Record<KeyboardShortcutAction, KeyCombi
 // AI Provider Configuration (Backend .env sync)
 // ============================================
 
-export type AIEngineProvider = 'claude' | 'openai' | 'google' | 'litellm' | 'openrouter' | 'ollama';
+export type AIEngineProvider = 'claude' | 'openai' | 'google' | 'litellm' | 'openrouter' | 'zhipuai' | 'ollama';
 
 export interface AIProviderConfig {
   provider: AIEngineProvider;
@@ -440,6 +440,8 @@ export interface AIProviderConfig {
   openrouterApiKey?: string;
   openrouterModel?: string;
   openrouterBaseUrl?: string;
+  zhipuaiApiKey?: string;
+  zhipuaiModel?: string;
   ollamaModel?: string;
   ollamaBaseUrl?: string;
   // Per-agent model overrides

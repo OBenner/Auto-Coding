@@ -20,6 +20,7 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
   const [openaiApiKey, setOpenaiApiKey] = useState('');
   const [googleApiKey, setGoogleApiKey] = useState('');
   const [openrouterApiKey, setOpenrouterApiKey] = useState('');
+  const [zhipuaiApiKey, setZhipuaiApiKey] = useState('');
 
   // Model selection per agent type
   const [plannerModel, setPlannerModel] = useState('');
@@ -40,6 +41,7 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
           if (data.openaiApiKey) setOpenaiApiKey(data.openaiApiKey);
           if (data.googleApiKey) setGoogleApiKey(data.googleApiKey);
           if (data.openrouterApiKey) setOpenrouterApiKey(data.openrouterApiKey);
+          if (data.zhipuaiApiKey) setZhipuaiApiKey(data.zhipuaiApiKey);
           if (data.plannerModel) setPlannerModel(data.plannerModel);
           if (data.coderModel) setCoderModel(data.coderModel);
           if (data.qaModel) setQaModel(data.qaModel);
@@ -59,6 +61,7 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
         openaiApiKey: openaiApiKey || undefined,
         googleApiKey: googleApiKey || undefined,
         openrouterApiKey: openrouterApiKey || undefined,
+        zhipuaiApiKey: zhipuaiApiKey || undefined,
         plannerModel: plannerModel || undefined,
         coderModel: coderModel || undefined,
         qaModel: qaModel || undefined,
@@ -114,6 +117,14 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
                   <span className="font-medium">{t('settings:aiProvider.providers.openrouter.name')}</span>
                   <span className="text-xs text-muted-foreground">
                     {t('settings:aiProvider.providers.openrouter.description')}
+                  </span>
+                </div>
+              </SelectItem>
+              <SelectItem value="zhipuai">
+                <div className="flex flex-col items-start">
+                  <span className="font-medium">{t('settings:aiProvider.providers.zhipuai.name')}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {t('settings:aiProvider.providers.zhipuai.description')}
                   </span>
                 </div>
               </SelectItem>
@@ -188,6 +199,26 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
                 />
                 <p className="text-xs text-muted-foreground">
                   {t('settings:aiProvider.apiKeys.openrouter.description')}
+                </p>
+              </div>
+            )}
+
+            {/* ZhipuAI provider shows ZhipuAI key */}
+            {selectedProvider === 'zhipuai' && (
+              <div className="space-y-2">
+                <Label htmlFor="zhipuaiApiKey" className="text-sm font-medium text-foreground">
+                  {t('settings:aiProvider.apiKeys.zhipuai.label')}
+                </Label>
+                <Input
+                  id="zhipuaiApiKey"
+                  type="password"
+                  placeholder={t('settings:aiProvider.apiKeys.zhipuai.placeholder')}
+                  value={zhipuaiApiKey}
+                  onChange={(e) => setZhipuaiApiKey(e.target.value)}
+                  className="max-w-md"
+                />
+                <p className="text-xs text-muted-foreground">
+                  {t('settings:aiProvider.apiKeys.zhipuai.description')}
                 </p>
               </div>
             )}

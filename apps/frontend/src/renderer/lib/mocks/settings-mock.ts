@@ -40,6 +40,8 @@ export const settingsMock = {
       openaiApiKey: undefined,
       googleApiKey: undefined,
       openrouterApiKey: undefined,
+      zhipuaiApiKey: undefined,
+      zhipuaiModel: undefined,
       plannerModel: undefined,
       coderModel: undefined,
       qaModel: undefined,
@@ -57,6 +59,7 @@ export const settingsMock = {
         'google' as const,
         'litellm' as const,
         'openrouter' as const,
+        'zhipuai' as const,
         'ollama' as const
       ]
     }

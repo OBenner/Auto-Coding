@@ -27,7 +27,8 @@ import type {
 const AI_ENGINE_PROVIDERS: { value: AIEngineProvider; labelKey: string; descriptionKey: string }[] = [
   { value: 'claude', labelKey: 'aiProvider.providers.claude.name', descriptionKey: 'aiProvider.providers.claude.description' },
   { value: 'litellm', labelKey: 'aiProvider.providers.litellm.name', descriptionKey: 'aiProvider.providers.litellm.description' },
-  { value: 'openrouter', labelKey: 'aiProvider.providers.openrouter.name', descriptionKey: 'aiProvider.providers.openrouter.description' }
+  { value: 'openrouter', labelKey: 'aiProvider.providers.openrouter.name', descriptionKey: 'aiProvider.providers.openrouter.description' },
+  { value: 'zhipuai', labelKey: 'aiProvider.providers.zhipuai.name', descriptionKey: 'aiProvider.providers.zhipuai.description' }
 ];
 
 /**
