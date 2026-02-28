@@ -507,6 +507,18 @@ def get_electron_mcp_log_level() -> str:
     return level
 
 
+def is_actor_critic_mcp_enabled() -> bool:
+    """
+    Check if Actor-Critic MCP server integration is enabled and available.
+
+    Delegates to actor_critic_config.is_actor_critic_enabled() which checks
+    both the ACTOR_CRITIC_MCP_ENABLED env var AND npx availability.
+    """
+    from core.actor_critic_config import is_actor_critic_enabled
+
+    return is_actor_critic_enabled()
+
+
 def should_use_claude_md() -> bool:
     """Check if CLAUDE.md instructions should be included in system prompt."""
     return os.environ.get("USE_CLAUDE_MD", "").lower() == "true"
@@ -1012,6 +1024,8 @@ def create_client(
         mcp_servers_list.append("linear (project management)")
     if graphiti_mcp_enabled:
         mcp_servers_list.append("graphiti-memory (knowledge graph)")
+    if "actor-critic-thinking" in required_servers:
+        mcp_servers_list.append("actor-critic-thinking (dual-perspective analysis)")
     if "auto-claude" in required_servers and auto_claude_tools_enabled:
         mcp_servers_list.append(f"auto-claude ({agent_type} tools)")
     if mcp_servers_list:
@@ -1084,6 +1098,13 @@ def create_client(
         mcp_servers["graphiti-memory"] = {
             "type": "http",
             "url": get_graphiti_mcp_url(),
+        }
+
+    # Actor-Critic Thinking MCP server for dual-perspective analysis
+    if "actor-critic-thinking" in required_servers:
+        mcp_servers["actor-critic-thinking"] = {
+            "command": "npx",
+            "args": ["-y", "mcp-server-actor-critic-thinking"],
         }
 
     # Add custom auto-claude MCP server if required and available

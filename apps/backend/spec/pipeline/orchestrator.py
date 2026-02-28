@@ -11,6 +11,7 @@ from pathlib import Path
 
 from agents.memory_manager import get_pattern_suggestions
 from analysis.analyzers import analyze_project
+from core.actor_critic_config import validate_actor_critic_config
 from core.workspace.models import SpecNumberLock
 from debug import debug, debug_detailed
 from phase_config import get_thinking_budget
@@ -296,6 +297,12 @@ class SpecOrchestrator:
 
         # Smart cache: refresh project index if dependency files have changed
         await self._ensure_fresh_project_index()
+
+        # Validate Actor-Critic MCP configuration (if enabled)
+        try:
+            validate_actor_critic_config()
+        except RuntimeError as e:
+            print_status(f"Actor-Critic MCP disabled: {e}", "warning")
 
         # Create phase executor
         phase_executor = phases.PhaseExecutor(

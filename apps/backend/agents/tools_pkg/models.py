@@ -163,9 +163,10 @@ AGENT_CONFIGS = {
     },
     "spec_critic": {
         "tools": BASE_READ_TOOLS,
-        "mcp_servers": [],  # Self-critique, no external tools
+        "mcp_servers": [],  # No required MCP; actor-critic-thinking added dynamically when enabled
         "auto_claude_tools": [],
         "thinking_default": "ultrathink",
+        "actor-critic-thinking": True,  # Enables actor-critic MCP server when available
     },
     "spec_discovery": {
         "tools": BASE_READ_TOOLS + WEB_TOOLS,
@@ -182,6 +183,30 @@ AGENT_CONFIGS = {
     "spec_validation": {
         "tools": BASE_READ_TOOLS,
         "mcp_servers": [],
+        "auto_claude_tools": [],
+        "thinking_default": "high",
+    },
+    "spec_requirements": {
+        "tools": BASE_READ_TOOLS + WEB_TOOLS,
+        "mcp_servers": [],  # Requirements gathering - reads project
+        "auto_claude_tools": [],
+        "thinking_default": "medium",
+    },
+    "spec_research": {
+        "tools": BASE_READ_TOOLS + WEB_TOOLS,
+        "mcp_servers": ["context7"],  # Needs docs lookup
+        "auto_claude_tools": [],
+        "thinking_default": "medium",
+    },
+    "spec_writing": {
+        "tools": BASE_READ_TOOLS + BASE_WRITE_TOOLS,
+        "mcp_servers": [],  # Writes spec.md
+        "auto_claude_tools": [],
+        "thinking_default": "high",
+    },
+    "spec_planning": {
+        "tools": BASE_READ_TOOLS + BASE_WRITE_TOOLS,
+        "mcp_servers": [],  # Creates implementation_plan.json
         "auto_claude_tools": [],
         "thinking_default": "high",
     },
@@ -436,6 +461,7 @@ def _map_mcp_server_name(
         "electron": "electron",
         "puppeteer": "puppeteer",
         "auto-claude": "auto-claude",
+        "actor-critic-thinking": "actor-critic-thinking",
     }
     # Check if it's a known mapping
     mapped = mappings.get(name.lower().strip())
@@ -522,6 +548,15 @@ def get_required_mcp_servers(
     # Filter graphiti if not enabled
     if "graphiti" in servers and not os.environ.get("GRAPHITI_MCP_URL"):
         servers = [s for s in servers if s != "graphiti"]
+
+    # Handle actor-critic-thinking for agents that have it enabled
+    # This is a special marker in agent configs that adds the server when enabled
+    # Unlike "linear" which is in mcp_servers_optional list, this is a boolean flag
+    if config.get("actor-critic-thinking", False):
+        from core.actor_critic_config import is_actor_critic_enabled
+
+        if is_actor_critic_enabled():
+            servers.append("actor-critic-thinking")
 
     # ========== Apply per-agent MCP overrides ==========
     # Format: AGENT_MCP_<agent_type>_ADD=server1,server2
