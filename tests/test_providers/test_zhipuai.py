@@ -524,7 +524,7 @@ class TestZhipuAIProviderCreateSession:
             session = provider.create_session(session_config)
 
             # Temperature should be stored in session (via _temperature)
-            assert session._temperature == 0.8
+            assert abs(session._temperature - 0.8) < 1e-9
 
     def test_create_session_passes_max_tokens(self):
         """Tests create_session passes max_tokens to session."""
