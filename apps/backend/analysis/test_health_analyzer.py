@@ -232,7 +232,7 @@ class TestParseJestCoverage:
         result = _parse_jest_coverage(coverage_file)
 
         assert result is not None
-        assert result["percentage"] == 83.33
+        assert result["percentage"] == pytest.approx(83.33)
         assert result["covered_lines"] == 125
         assert result["total_lines"] == 150
 
@@ -271,7 +271,7 @@ class TestParsePythonCoverageJson:
         result = _parse_python_coverage_json(coverage_file)
 
         assert result is not None
-        assert result["percentage"] == 90.0
+        assert result["percentage"] == pytest.approx(90.0)
         assert result["covered_lines"] == 450
         assert result["total_lines"] == 500
 
@@ -320,7 +320,7 @@ class TestParseCoberturaCoverage:
         result = _parse_cobertura_coverage(coverage_file)
 
         assert result is not None
-        assert result["percentage"] == 85.0
+        assert result["percentage"] == pytest.approx(85.0)
         assert result["covered_lines"] == 2
         assert result["total_lines"] == 3
 
@@ -340,7 +340,7 @@ class TestCalculateTestCoverage:
         """Test when no coverage files exist."""
         result = calculate_test_coverage(temp_project_dir)
 
-        assert result["percentage"] == 0.0
+        assert result["percentage"] == pytest.approx(0.0)
         assert result["test_count"] == 0
         assert result["trend"] == "unknown"
 
@@ -354,7 +354,7 @@ class TestCalculateTestCoverage:
 
         result = calculate_test_coverage(temp_project_dir)
 
-        assert result["percentage"] == 80.0
+        assert result["percentage"] == pytest.approx(80.0)
         assert result["test_count"] == 1
 
     def test_cobertura_coverage(self, temp_project_dir: Path):
@@ -382,7 +382,7 @@ class TestCalculateTestCoverage:
 
         result = calculate_test_coverage(temp_project_dir)
 
-        assert result["percentage"] == 90.0
+        assert result["percentage"] == pytest.approx(90.0)
         assert result["trend"] == "unknown"
 
 
@@ -402,7 +402,7 @@ class TestCalculateCodeQuality:
         assert "duplication_percentage" in result
         assert "maintainability_index" in result
         assert "issues_count" in result
-        assert result["maintainability_index"] == 100.0
+        assert result["maintainability_index"] == pytest.approx(100.0)
 
 
 # =============================================================================
@@ -444,7 +444,7 @@ class TestCalculateDependencyHealth:
         result = _calculate_dependency_health(temp_project_dir)
 
         assert result["total_dependencies"] == 4  # 2 deps + 2 devDeps
-        assert result["freshness_score"] == 100.0
+        assert result["freshness_score"] == pytest.approx(100.0)
 
     def test_calculate_with_requirements_txt(self, temp_project_dir: Path):
         """Test dependency calculation with requirements.txt."""
@@ -454,7 +454,7 @@ class TestCalculateDependencyHealth:
         result = _calculate_dependency_health(temp_project_dir)
 
         assert result["total_dependencies"] == 2
-        assert result["freshness_score"] == 100.0
+        assert result["freshness_score"] == pytest.approx(100.0)
 
     def test_calculate_with_both(
         self, temp_project_dir: Path, sample_package_json: dict
@@ -489,7 +489,7 @@ class TestCalculateAgentActivity:
         result = _calculate_agent_activity(temp_spec_dir)
 
         assert result["total_iterations"] == 3
-        assert result["success_rate"] == 66.7  # 2 out of 3 approved
+        assert result["success_rate"] == pytest.approx(66.7)  # 2 out of 3 approved
         assert len(result["recent_activity"]) == 3
 
     def test_calculate_without_plan(self, temp_spec_dir: Path):
@@ -497,7 +497,7 @@ class TestCalculateAgentActivity:
         result = _calculate_agent_activity(temp_spec_dir)
 
         assert result["total_iterations"] == 0
-        assert result["success_rate"] == 0.0
+        assert result["success_rate"] == pytest.approx(0.0)
         assert result["recent_activity"] == []
 
     def test_calculate_truncates_recent_activity(self, temp_spec_dir: Path):
@@ -546,7 +546,7 @@ class TestCalculateOverallScore:
         # deps: 95.0 * 0.15 = 14.25
         # activity: 85.0 * 0.15 = 12.75
         # Total: 87.5
-        assert result == 87.5
+        assert result == pytest.approx(87.5)
 
     def test_calculate_custom_weights(self):
         """Test score calculation with custom weights."""
@@ -574,7 +574,7 @@ class TestCalculateOverallScore:
         # deps: 95.0 * 0.1 = 9.5
         # activity: 85.0 * 0.1 = 8.5
         # Total: 86.0
-        assert result == 86.0
+        assert result == pytest.approx(86.0)
 
     def test_security_score_clamping(self):
         """Test that security score is clamped between 0 and 100."""
@@ -644,7 +644,7 @@ class TestGetProjectHealth:
         health = get_project_health(temp_project_dir, temp_spec_dir)
 
         assert health["agent_activity"]["total_iterations"] == 0
-        assert health["agent_activity"]["success_rate"] == 0.0
+        assert health["agent_activity"]["success_rate"] == pytest.approx(0.0)
 
     def test_get_health_with_package_json(
         self, temp_project_dir: Path, sample_package_json: dict
@@ -665,7 +665,7 @@ class TestGetProjectHealth:
 
         health = get_project_health(temp_project_dir)
 
-        assert health["test_coverage"]["percentage"] == 85.0
+        assert health["test_coverage"]["percentage"] == pytest.approx(85.0)
 
     def test_get_health_custom_weights(self, temp_project_dir: Path):
         """Test health calculation with custom weights."""
@@ -785,13 +785,13 @@ class TestEdgeCases:
         # The function uses Path() which doesn't raise until operations are performed
         health = get_project_health("/nonexistent/path/that/does/not/exist")
         # Should return a result with zeroed values rather than crashing
-        assert health["test_coverage"]["percentage"] == 0.0
+        assert health["test_coverage"]["percentage"] == pytest.approx(0.0)
 
     def test_empty_project_directory(self, tmp_path: Path):
         """Test handling of empty project directory."""
         health = get_project_health(tmp_path)
         assert health["overall_score"] >= 0.0
-        assert health["test_coverage"]["percentage"] == 0.0
+        assert health["test_coverage"]["percentage"] == pytest.approx(0.0)
 
     def test_invalid_coverage_json(self, temp_project_dir: Path):
         """Test handling of invalid coverage JSON."""
@@ -801,7 +801,7 @@ class TestEdgeCases:
         health = get_project_health(temp_project_dir)
 
         # Should gracefully handle invalid coverage
-        assert health["test_coverage"]["percentage"] == 0.0
+        assert health["test_coverage"]["percentage"] == pytest.approx(0.0)
 
     def test_corrupted_implementation_plan(self, temp_spec_dir: Path):
         """Test handling of corrupted implementation plan."""
