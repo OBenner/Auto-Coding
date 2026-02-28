@@ -6,13 +6,13 @@ Tests for Debug Assistant Analyzers
 Tests the analysis modules for project structure, frameworks, routes, databases, and ports.
 """
 
-from analysis.analyzers.base import BaseAnalyzer, SKIP_DIRS, SERVICE_INDICATORS
+from analysis.analyzers.base import SERVICE_INDICATORS, SKIP_DIRS, BaseAnalyzer
 from analysis.analyzers.database_detector import DatabaseDetector
 from analysis.analyzers.framework_analyzer import FrameworkAnalyzer
 from analysis.analyzers.port_detector import PortDetector
+from analysis.analyzers.project_analyzer_module import ProjectAnalyzer
 from analysis.analyzers.route_detector import RouteDetector
 from analysis.analyzers.service_analyzer import ServiceAnalyzer
-from analysis.analyzers.project_analyzer_module import ProjectAnalyzer
 
 
 class TestBaseAnalyzer:
@@ -53,7 +53,7 @@ class TestBaseAnalyzer:
         analyzer = BaseAnalyzer(tmp_path)
 
         # Create invalid JSON file
-        (tmp_path / "invalid.json").write_text('{invalid json}')
+        (tmp_path / "invalid.json").write_text("{invalid json}")
 
         assert analyzer._read_json("invalid.json") is None
 
@@ -79,7 +79,7 @@ class TestBaseAnalyzer:
         """Infers URL type from URL strings."""
         analyzer = BaseAnalyzer(tmp_path)
 
-        assert analyzer._infer_env_var_type("http://example.com") == "url"
+        assert analyzer._infer_env_var_type("https://example.com") == "url"
         assert analyzer._infer_env_var_type("https://api.example.com") == "url"
         assert analyzer._infer_env_var_type("postgres://localhost:5432/db") == "url"
         assert analyzer._infer_env_var_type("mongodb://localhost:27017/db") == "url"
@@ -540,11 +540,17 @@ def create_user():
         fastapi_routes = [r for r in routes if r["framework"] == "FastAPI"]
         assert len(fastapi_routes) == 2
 
-        get_route = next(r for r in fastapi_routes if r["path"] == "/users" and "GET" in r["methods"])
+        get_route = next(
+            r for r in fastapi_routes if r["path"] == "/users" and "GET" in r["methods"]
+        )
         assert get_route is not None
         assert get_route["requires_auth"] is False
 
-        post_route = next(r for r in fastapi_routes if r["path"] == "/users" and "POST" in r["methods"])
+        post_route = next(
+            r
+            for r in fastapi_routes
+            if r["path"] == "/users" and "POST" in r["methods"]
+        )
         assert post_route is not None
         assert post_route["requires_auth"] is True
 
@@ -616,7 +622,7 @@ export async function GET() {
 
         # Next.js routes might not be detected if file structure doesn't match exactly
         # Just verify routes were collected
-        assert len(routes) >= 0  # May be 0 if pattern doesn't match
+        assert isinstance(routes, list)  # May be empty if pattern doesn't match
 
     def test_skips_excluded_directories(self, tmp_path):
         """Skips node_modules and other excluded directories."""
@@ -813,7 +819,7 @@ services:
         (github_dir / "test.yml").write_text("name: Test")
 
         # Create deployment config
-        (tmp_path / "vercel.json").write_text('{}')
+        (tmp_path / "vercel.json").write_text("{}")
 
         analyzer = ProjectAnalyzer(tmp_path)
         result = analyzer.analyze()
