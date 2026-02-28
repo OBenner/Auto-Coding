@@ -181,7 +181,9 @@ export const CostBreakdownChart: React.FC<CostBreakdownChartProps> = ({
                   {providerCost.modelBreakdown
                     .sort((a, b) => b.cost - a.cost)
                     .map((model) => {
-                      const modelPercentage = (model.cost / providerCost.cost) * 100;
+                      const modelPercentage = providerCost.cost > 0
+                        ? (model.cost / providerCost.cost) * 100
+                        : 0;
                       return (
                         <div
                           key={model.model}

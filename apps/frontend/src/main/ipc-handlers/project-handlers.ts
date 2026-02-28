@@ -536,9 +536,21 @@ export function registerProjectHandlers(
           return { success: false, error: 'Project not found' };
         }
 
+        // Validate specId to prevent path traversal
+        if (!specId || /[/\\]|\.\./.test(specId)) {
+          return { success: false, error: 'Invalid spec ID' };
+        }
+
         // Build path to cost_report.json
         const specsDir = getSpecsDir(project.autoBuildPath);
         const costReportPath = path.join(specsDir, specId, 'cost_report.json');
+
+        // Ensure resolved path is within specs directory
+        const resolvedPath = path.resolve(costReportPath);
+        const resolvedSpecsDir = path.resolve(specsDir);
+        if (!resolvedPath.startsWith(resolvedSpecsDir)) {
+          return { success: false, error: 'Invalid spec ID' };
+        }
 
         // Check if cost report exists
         if (!(await fileExists(costReportPath))) {

@@ -76,8 +76,22 @@ def mock_openai_api():
 # =============================================================================
 
 
-def create_openai_env_config(spec_dir: Path, openai_api_key: str = "test-key") -> Path:
-    """Create .env file with OpenAI provider configuration."""
+def create_openai_env_config(
+    spec_dir: Path,
+    openai_api_key: str = "test-key",
+    monkeypatch: pytest.MonkeyPatch | None = None,
+) -> Path:
+    """Configure OpenAI provider via environment variables.
+
+    Prefers monkeypatch.setenv to avoid writing secrets to disk.
+    Falls back to writing a .env file if monkeypatch is not provided.
+    """
+    if monkeypatch:
+        monkeypatch.setenv("AI_ENGINE_PROVIDER", "litellm")
+        monkeypatch.setenv("LITELLM_MODEL", "gpt-4")
+        monkeypatch.setenv("OPENAI_API_KEY", openai_api_key)
+        return spec_dir.parent.parent.parent / ".env"
+
     env_file = spec_dir.parent.parent.parent / ".env"
     env_content = f"""# OpenAI Provider Configuration
 AI_ENGINE_PROVIDER=litellm
@@ -161,7 +175,7 @@ class TestOpenAIProviderConfiguration:
 
         # Verify configuration
         assert config.provider == "litellm", f"Provider should be litellm, got {config.provider}"
-        assert config.model == "gpt-4", f"Model should be gpt-4, got {config.model}"
+        assert config.get_model_for_provider() == "gpt-4", f"Model should be gpt-4, got {config.get_model_for_provider()}"
 
     def test_openai_api_key_required(self, test_env_openai, monkeypatch):
         """Test that OpenAI API key is required for litellm provider."""
@@ -287,7 +301,7 @@ class TestOpenAIProviderFactory:
         # Create provider (this will use the factory)
         # Note: Actual provider creation may require additional setup
         assert config.provider == "litellm"
-        assert config.model == "gpt-4"
+        assert config.get_model_for_provider() == "gpt-4"
 
 
 # =============================================================================
@@ -322,7 +336,7 @@ class TestE2EOpenAIIntegration:
         # Step 2: Verify provider configuration
         config = ProviderConfig.from_env()
         assert config.provider == "litellm"
-        assert config.model == "gpt-4"
+        assert config.get_model_for_provider() == "gpt-4"
 
         # Step 3: Create simple spec
         create_simple_spec(spec_dir)
@@ -371,7 +385,7 @@ class TestE2EOpenAIIntegration:
         # Step 2: Verify provider configuration loaded correctly
         config = ProviderConfig.from_env()
         assert config.provider == "litellm", f"Provider should be litellm, got {config.provider}"
-        assert config.model == "gpt-4", f"Model should be gpt-4, got {config.model}"
+        assert config.get_model_for_provider() == "gpt-4", f"Model should be gpt-4, got {config.get_model_for_provider()}"
 
         # Step 3: Create minimal spec and plan
         spec_file = create_simple_spec(spec_dir)

@@ -120,17 +120,28 @@ ${vars['AGENT_MODEL_QA_REVIEWER'] ? `AGENT_MODEL_QA_REVIEWER=${vars['AGENT_MODEL
 
   // Parse existing content line by line and update provider-related variables
   const lines = existingContent.split('\n');
+
+  // First pass: find which variables already have active (non-commented) assignments
+  const activeVars = new Set<string>();
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed && !trimmed.startsWith('#')) {
+      const match = trimmed.match(/^([A-Z_]+)=/);
+      if (match) activeVars.add(match[1]);
+    }
+  }
+
   const updatedLines = lines.map(line => {
     const trimmed = line.trim();
 
     // Skip empty lines and comments (but preserve them)
     if (!trimmed || trimmed.startsWith('#')) {
-      // Check if it's a commented-out variable we want to uncomment and set
+      // Only uncomment a commented-out variable if there's no active assignment for it
       const commentMatch = trimmed.match(/^#\s*([A-Z_]+)=/);
       if (commentMatch) {
         const varName = commentMatch[1];
-        if (vars[varName] !== undefined) {
-          // Uncomment and set the value
+        if (vars[varName] !== undefined && !activeVars.has(varName)) {
+          activeVars.add(varName); // Track that we've now activated this variable
           return `${varName}=${vars[varName]}`;
         }
       }

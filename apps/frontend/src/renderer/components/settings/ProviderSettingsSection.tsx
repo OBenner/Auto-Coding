@@ -5,8 +5,9 @@ import { Input } from '../ui/input';
 import { Button } from '../ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { SettingsSection } from './SettingsSection';
+import type { AIEngineProvider } from '../../../shared/types/settings';
 
-type ProviderType = 'claude' | 'litellm' | 'openrouter';
+type ProviderType = AIEngineProvider;
 
 interface ProviderSettingsSectionProps {
   // Future: add settings state and onChange handler
@@ -27,17 +28,26 @@ export function ProviderSettingsSection(props: ProviderSettingsSectionProps) {
   const [coderModel, setCoderModel] = useState('');
   const [qaModel, setQaModel] = useState('');
 
-  const handleSave = () => {
-    // TODO: Implement save functionality via IPC
-    console.log('Saving provider settings:', {
-      provider: selectedProvider,
-      openaiApiKey,
-      googleApiKey,
-      openrouterApiKey,
-      plannerModel,
-      coderModel,
-      qaModel,
-    });
+  const [saving, setSaving] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
+
+  const handleSave = async () => {
+    setSaving(true);
+    setSaveStatus('idle');
+    try {
+      const config: Partial<import('../../../shared/types/settings').AIProviderConfig> = {
+        provider: selectedProvider,
+        openaiApiKey: openaiApiKey || undefined,
+        googleApiKey: googleApiKey || undefined,
+        openrouterApiKey: openrouterApiKey || undefined,
+      };
+      const result = await window.electronAPI?.updateProviderConfig?.(config);
+      setSaveStatus(result?.success ? 'success' : 'error');
+    } catch {
+      setSaveStatus('error');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (

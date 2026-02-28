@@ -76,8 +76,22 @@ def mock_multi_provider_api():
 # =============================================================================
 
 
-def create_multi_provider_env_config(spec_dir: Path) -> Path:
-    """Create .env file with per-agent provider configuration."""
+def create_multi_provider_env_config(
+    spec_dir: Path, monkeypatch: pytest.MonkeyPatch | None = None
+) -> Path:
+    """Configure per-agent provider via environment variables.
+
+    Prefers monkeypatch.setenv to avoid writing secrets to disk.
+    """
+    if monkeypatch:
+        monkeypatch.setenv("AGENT_PROVIDER_PLANNER", "claude")
+        monkeypatch.setenv("AGENT_MODEL_PLANNER", "claude-opus-4-20250514")
+        monkeypatch.setenv("AGENT_PROVIDER_CODER", "litellm")
+        monkeypatch.setenv("AGENT_MODEL_CODER", "gpt-4")
+        monkeypatch.setenv("OPENAI_API_KEY", "test-key-123")
+        monkeypatch.setenv("AI_ENGINE_PROVIDER", "claude")
+        return spec_dir.parent.parent.parent / ".env"
+
     env_file = spec_dir.parent.parent.parent / ".env"
     env_content = """# Per-Agent Provider Configuration
 # Planner uses Claude Opus
@@ -311,7 +325,7 @@ class TestMultiProviderFactory:
         config = ProviderConfig.from_env(agent_type="planner")
 
         assert config.provider == "claude"
-        assert config.model == "claude-opus-4-20250514"
+        assert config.get_model_for_provider() == "claude-opus-4-20250514"
 
     def test_create_litellm_provider_for_coder(self, test_env_multi_provider, monkeypatch):
         """Test creating LiteLLM provider for coder agent."""
@@ -328,7 +342,7 @@ class TestMultiProviderFactory:
         config = ProviderConfig.from_env(agent_type="coder")
 
         assert config.provider == "litellm"
-        assert config.model == "gpt-4"
+        assert config.get_model_for_provider() == "gpt-4"
 
 
 # =============================================================================
@@ -365,11 +379,11 @@ class TestE2EPerAgentProviderSelection:
         # Step 2: Verify provider configurations
         planner_config = ProviderConfig.from_env(agent_type="planner")
         assert planner_config.provider == "claude"
-        assert planner_config.model == "claude-opus-4-20250514"
+        assert planner_config.get_model_for_provider() == "claude-opus-4-20250514"
 
         coder_config = ProviderConfig.from_env(agent_type="coder")
         assert coder_config.provider == "litellm"
-        assert coder_config.model == "gpt-4"
+        assert coder_config.get_model_for_provider() == "gpt-4"
 
         # Step 3: Create spec and plan
         create_simple_spec(spec_dir)
@@ -421,11 +435,11 @@ class TestE2EPerAgentProviderSelection:
         # Step 2: Verify provider configurations loaded correctly
         planner_config = ProviderConfig.from_env(agent_type="planner")
         assert planner_config.provider == "claude", f"Planner provider should be claude, got {planner_config.provider}"
-        assert planner_config.model == "claude-opus-4-20250514", f"Planner model should be opus, got {planner_config.model}"
+        assert planner_config.get_model_for_provider() == "claude-opus-4-20250514", f"Planner model should be opus, got {planner_config.get_model_for_provider()}"
 
         coder_config = ProviderConfig.from_env(agent_type="coder")
         assert coder_config.provider == "litellm", f"Coder provider should be litellm, got {coder_config.provider}"
-        assert coder_config.model == "gpt-4", f"Coder model should be gpt-4, got {coder_config.model}"
+        assert coder_config.get_model_for_provider() == "gpt-4", f"Coder model should be gpt-4, got {coder_config.get_model_for_provider()}"
 
         # Step 3: Create minimal spec and plan
         spec_file = create_simple_spec(spec_dir)

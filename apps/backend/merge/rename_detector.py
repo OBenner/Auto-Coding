@@ -76,16 +76,24 @@ def _compare_ast_nodes(
         # If not checking names, any Name matches any Name
         return isinstance(node2, ast.Name)
 
-    # For Constant/Num/Str/etc., compare values
-    if isinstance(node1, (ast.Constant, ast.Num, ast.Str, ast.Bytes)):
-        if isinstance(node1, ast.Constant):
-            return node1.value == node2.value
-        if isinstance(node1, ast.Num):
-            return node1.n == node2.n  # type: ignore
-        if isinstance(node1, ast.Str):
-            return node1.s == node2.s  # type: ignore
-        if isinstance(node1, ast.Bytes):
-            return node1.s == node2.s  # type: ignore
+    # For Constant nodes, compare values
+    # (ast.Num/ast.Str/ast.Bytes were removed in Python 3.14; use ast.Constant)
+    _constant_types = (ast.Constant,)
+    for _legacy in ("Num", "Str", "Bytes"):
+        if hasattr(ast, _legacy):
+            _constant_types = (*_constant_types, getattr(ast, _legacy))
+    if isinstance(node1, _constant_types):
+        val1 = (
+            node1.value
+            if isinstance(node1, ast.Constant)
+            else getattr(node1, "n", getattr(node1, "s", None))
+        )
+        val2 = (
+            node2.value
+            if isinstance(node2, ast.Constant)
+            else getattr(node2, "n", getattr(node2, "s", None))
+        )
+        return val1 == val2
 
     # Compare all child fields recursively
     for field in _get_ast_fields(node1):

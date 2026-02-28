@@ -43,7 +43,6 @@ from prompts_pkg.prompt_generator import (
     generate_subtask_prompt,
     load_subtask_context,
 )
-from prompts_pkg.prompts import is_first_run
 from recovery import RecoveryAction, RecoveryManager
 from security.constants import PROJECT_DIR_ENV_VAR
 from task_logger import (
@@ -628,6 +627,9 @@ async def run_autonomous_agent(
             print()
 
     # Check if this is a fresh start or continuation
+    # Lazy import to avoid circular import: prompts_pkg → agents → coder → prompts_pkg
+    from prompts_pkg.prompts import is_first_run
+
     first_run = is_first_run(spec_dir)
 
     # Track which phase we're in for logging
@@ -841,15 +843,23 @@ async def run_autonomous_agent(
             },
         )
 
-        session = provider.create_session(
-            session_config,
-            project_dir=project_dir,
-            spec_dir=spec_dir,
-            agent_type=agent_type_for_session,
-            max_thinking_tokens=phase_thinking_budget,
-        )
+        # Only pass Claude-specific kwargs to Claude provider
+        if provider.name == "claude":
+            session = provider.create_session(
+                session_config,
+                project_dir=project_dir,
+                spec_dir=spec_dir,
+                agent_type=agent_type_for_session,
+                max_thinking_tokens=phase_thinking_budget,
+            )
+        else:
+            session = provider.create_session(session_config)
 
-        # Get the underlying Claude SDK client from the session
+        if not hasattr(session, "client"):
+            raise AttributeError(
+                f"Provider {provider.name} session missing 'client' attribute"
+            )
+
         client = session.client
 
         # Generate appropriate prompt

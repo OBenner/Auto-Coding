@@ -60,6 +60,11 @@ MODEL_PRICING: dict[str, dict[str, float]] = {
     # ========================================
     # Claude Models (Anthropic)
     # ========================================
+    # Claude 4 Opus
+    "claude-opus-4-20250514": {
+        "input": 15.00,
+        "output": 75.00,
+    },
     # Claude 4.5 Opus - Most capable model
     "claude-opus-4-5-20251101": {
         "input": 15.00,
@@ -334,15 +339,35 @@ class UsageRecord:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> UsageRecord:
-        """Create from dictionary loaded from JSON."""
-        return cls(
-            agent_type=data["agent_type"],
-            model=data["model"],
-            input_tokens=data["input_tokens"],
-            output_tokens=data["output_tokens"],
-            cost=data["cost"],
-            timestamp=data["timestamp"],
-        )
+        """Create from dictionary loaded from JSON.
+
+        Defensive against missing or malformed fields to avoid
+        crashing when loading historical cost_report.json files.
+        """
+        try:
+            return cls(
+                agent_type=str(data.get("agent_type", "unknown")),
+                model=str(data.get("model", "unknown")),
+                input_tokens=int(data.get("input_tokens", 0)),
+                output_tokens=int(data.get("output_tokens", 0)),
+                cost=float(data.get("cost", 0.0)),
+                timestamp=str(
+                    data.get(
+                        "timestamp",
+                        datetime.now(UTC).isoformat(),
+                    )
+                ),
+            )
+        except (TypeError, ValueError) as exc:
+            logger.warning("Failed to deserialize UsageRecord from %r: %s", data, exc)
+            return cls(
+                agent_type="unknown",
+                model="unknown",
+                input_tokens=0,
+                output_tokens=0,
+                cost=0.0,
+                timestamp=datetime.now(UTC).isoformat(),
+            )
 
 
 @dataclass

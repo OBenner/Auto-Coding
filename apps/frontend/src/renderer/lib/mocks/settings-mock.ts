@@ -30,6 +30,17 @@ export const settingsMock = {
     }
   }),
 
+  // AI Provider Configuration (mock - no backend in browser mode)
+  getProviderConfig: async () => ({
+    success: true,
+    data: { provider: 'claude' as const }
+  }),
+  updateProviderConfig: async () => ({ success: true }),
+  validateProviderConfig: async () => ({
+    success: true,
+    data: { isValid: true, errors: [], availableProviders: ['claude' as const] }
+  }),
+
   // App Info
   getAppVersion: async () => '0.1.0-browser',
 

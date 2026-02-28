@@ -76,8 +76,20 @@ def mock_ollama_api():
 # =============================================================================
 
 
-def create_ollama_env_config(spec_dir: Path) -> Path:
-    """Create .env file with Ollama provider configuration."""
+def create_ollama_env_config(
+    spec_dir: Path,
+    monkeypatch: pytest.MonkeyPatch | None = None,
+) -> Path:
+    """Configure Ollama provider via environment variables.
+
+    Prefers monkeypatch.setenv to avoid writing to disk.
+    """
+    if monkeypatch:
+        monkeypatch.setenv("AI_ENGINE_PROVIDER", "litellm")
+        monkeypatch.setenv("LITELLM_MODEL", "ollama/llama3")
+        monkeypatch.setenv("OLLAMA_API_BASE", "http://localhost:11434")
+        return spec_dir.parent.parent.parent / ".env"
+
     env_file = spec_dir.parent.parent.parent / ".env"
     env_content = """# Ollama Provider Configuration (Local, Zero Cost)
 AI_ENGINE_PROVIDER=litellm
@@ -162,7 +174,7 @@ class TestOllamaProviderConfiguration:
 
         # Verify configuration
         assert config.provider == "litellm", f"Provider should be litellm, got {config.provider}"
-        assert config.model == "ollama/llama3", f"Model should be ollama/llama3, got {config.model}"
+        assert config.get_model_for_provider() == "ollama/llama3", f"Model should be ollama/llama3, got {config.get_model_for_provider()}"
 
     def test_ollama_no_api_key_required(self, test_env_ollama, monkeypatch):
         """Test that Ollama does not require an API key (local model)."""
@@ -315,7 +327,7 @@ class TestOllamaProviderFactory:
 
         # Verify configuration
         assert config.provider == "litellm"
-        assert config.model == "ollama/llama3"
+        assert config.get_model_for_provider() == "ollama/llama3"
 
 
 # =============================================================================
@@ -346,7 +358,7 @@ class TestE2EOllamaIntegration:
         # Step 2: Verify provider configuration loaded correctly
         config = ProviderConfig.from_env()
         assert config.provider == "litellm", f"Provider should be litellm, got {config.provider}"
-        assert config.model == "ollama/llama3", f"Model should be ollama/llama3, got {config.model}"
+        assert config.get_model_for_provider() == "ollama/llama3", f"Model should be ollama/llama3, got {config.get_model_for_provider()}"
 
         # Step 3: Create minimal spec and plan
         spec_file = create_simple_spec(spec_dir)

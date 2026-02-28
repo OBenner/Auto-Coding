@@ -607,8 +607,9 @@ def get_provider_for_agent(agent_type: str) -> str:
 
     Priority:
     1. Environment variable AGENT_PROVIDER_<agent_type> (if set)
-    2. Global AI_ENGINE_PROVIDER environment variable
-    3. Default to 'claude'
+    2. AGENT_DEFAULT_PROVIDERS mapping (if agent_type has a default)
+    3. Global AI_ENGINE_PROVIDER environment variable
+    4. Default to 'claude'
 
     Args:
         agent_type: The agent type (e.g., 'coder', 'planner', 'qa_reviewer')
@@ -616,14 +617,20 @@ def get_provider_for_agent(agent_type: str) -> str:
     Returns:
         Provider name ('claude', 'litellm', or 'openrouter')
     """
-    # Check for agent-specific environment variable override
+    # 1. Check for agent-specific environment variable override
     env_var_name = f"AGENT_PROVIDER_{agent_type.upper()}"
     env_provider = os.environ.get(env_var_name)
     if env_provider:
         return env_provider
 
-    # Fall back to global provider configuration
-    from core.providers.config import get_provider_config
+    # 2. Check agent default providers mapping
+    default_provider = AGENT_DEFAULT_PROVIDERS.get(agent_type)
+    if default_provider:
+        return default_provider
 
-    config = get_provider_config()
-    return config.provider
+    # 3. Fall back to global provider configuration
+    global_provider = os.environ.get("AI_ENGINE_PROVIDER")
+    if global_provider:
+        return global_provider
+
+    return "claude"

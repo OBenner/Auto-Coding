@@ -18,10 +18,18 @@ def test_per_agent_provider_configuration():
 
     print("Testing per-agent provider configuration...")
 
-    # Save original env vars
-    orig_provider = os.environ.get("AI_ENGINE_PROVIDER")
-    orig_planner = os.environ.get("AGENT_PROVIDER_PLANNER")
-    orig_coder = os.environ.get("AGENT_PROVIDER_CODER")
+    # Save ALL env vars we'll mutate
+    env_vars_to_save = [
+        "AI_ENGINE_PROVIDER",
+        "AGENT_PROVIDER_PLANNER",
+        "AGENT_PROVIDER_CODER",
+        "AGENT_PROVIDER_QA_REVIEWER",
+        "AGENT_MODEL_PLANNER",
+        "AGENT_MODEL_CODER",
+        "OPENAI_API_KEY",
+        "ANTHROPIC_API_KEY",
+    ]
+    saved_env = {k: os.environ.get(k) for k in env_vars_to_save}
 
     try:
         # Set test configuration
@@ -48,21 +56,12 @@ def test_per_agent_provider_configuration():
         print("✓ QA reviewer falls back to default Claude")
 
     finally:
-        # Restore original env vars
-        if orig_provider:
-            os.environ["AI_ENGINE_PROVIDER"] = orig_provider
-        else:
-            os.environ.pop("AI_ENGINE_PROVIDER", None)
-
-        if orig_planner:
-            os.environ["AGENT_PROVIDER_PLANNER"] = orig_planner
-        else:
-            os.environ.pop("AGENT_PROVIDER_PLANNER", None)
-
-        if orig_coder:
-            os.environ["AGENT_PROVIDER_CODER"] = orig_coder
-        else:
-            os.environ.pop("AGENT_PROVIDER_CODER", None)
+        # Restore ALL saved env vars
+        for key, value in saved_env.items():
+            if value is not None:
+                os.environ[key] = value
+            else:
+                os.environ.pop(key, None)
 
 
 def test_cost_tracking_multi_provider():

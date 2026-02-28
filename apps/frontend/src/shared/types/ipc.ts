@@ -86,7 +86,7 @@ import type {
   AllProfilesUsage,
   TerminalProfileChangedEvent
 } from './agent';
-import type { AppSettings, SourceEnvConfig, SourceEnvCheckResult } from './settings';
+import type { AppSettings, SourceEnvConfig, SourceEnvCheckResult, AIProviderConfig, ProviderConfigValidation } from './settings';
 import type { AppUpdateInfo, AppUpdateProgress, AppUpdateAvailableEvent, AppUpdateDownloadedEvent } from './app-update';
 import type {
   ChangelogTask,
@@ -360,6 +360,11 @@ export interface ElectronAPI {
   // App settings
   getSettings: () => Promise<IPCResult<AppSettings>>;
   saveSettings: (settings: Partial<AppSettings>) => Promise<IPCResult>;
+
+  // AI Provider Configuration (backend .env sync)
+  getProviderConfig: () => Promise<IPCResult<AIProviderConfig>>;
+  updateProviderConfig: (config: Partial<AIProviderConfig>) => Promise<IPCResult>;
+  validateProviderConfig: () => Promise<IPCResult<ProviderConfigValidation>>;
 
   // Sentry error reporting
   notifySentryStateChanged: (enabled: boolean) => void;
