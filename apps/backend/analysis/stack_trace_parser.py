@@ -224,7 +224,7 @@ def parse_rust_trace(trace: str) -> ParsedStackTrace | None:
         # "   0: function_name at file:line:col"
         # "    at /path/to/file:line:col"
         frame_pattern = re.compile(
-            r"[ \t]+\d+:[ \t]+(\S+)[ \t]+at[ \t]+([^:\n]+):(\d+):\d+"
+            r"[ \t]+\d+:[ \t]+(\S+)[ \t]+at[ \t]+([^:\n]{1,500}):(\d+):\d+"
         )
 
         for line in lines:
@@ -278,7 +278,7 @@ def parse_generic_trace(trace: str) -> ParsedStackTrace | None:
         # Look for lines containing "file:line" or "file(line)"
         frame_patterns = [
             re.compile(r"\(([^:]+):(\d+)\)"),  # (file:line)
-            re.compile(r"at[ \t]+([^:\n]+):(\d+)"),  # at file:line
+            re.compile(r"at[ \t]+([^:\n]{1,500}):(\d+)"),  # at file:line
             re.compile(r"([^:\s]+\.py):(\d+)"),  # file.py:line
             re.compile(r"([^:\s]+\.js):(\d+)"),  # file.js:line
             re.compile(r"([^:\s]+\.rs):(\d+)"),  # file.rs:line
