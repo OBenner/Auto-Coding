@@ -29,8 +29,9 @@ from __future__ import annotations
 
 import json
 import logging
-import os
+import shlex
 import subprocess
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -184,9 +185,7 @@ class FixVerifier:
             return f"{project_dir}:{fix.fix_category}:{len(fix.suggested_fixes)}"
         return f"{project_dir}:{fix.get('fix_category', 'unknown')}:{len(fix.get('suggested_fixes', []))}"
 
-    def _assess_risk(
-        self, fix: FixSuggestion, parsed_trace: dict | None
-    ) -> str:
+    def _assess_risk(self, fix: FixSuggestion, parsed_trace: dict | None) -> str:
         """
         Assess the risk level of applying a fix.
 
@@ -256,27 +255,27 @@ class FixVerifier:
         category_warnings = {
             "import_error": [
                 "Adding new dependencies may affect deployment",
-                "Verify dependency version compatibility"
+                "Verify dependency version compatibility",
             ],
             "type_error": [
                 "Type changes may break dependent code",
-                "Run full test suite to catch cascading issues"
+                "Run full test suite to catch cascading issues",
             ],
             "null_reference": [
                 "Adding null checks is safe but may hide underlying issues",
-                "Ensure all code paths initialize the variable"
+                "Ensure all code paths initialize the variable",
             ],
             "file_error": [
                 "File paths may differ across environments",
-                "Use path utilities for cross-platform compatibility"
+                "Use path utilities for cross-platform compatibility",
             ],
             "permission_error": [
                 "Permission fixes may not work in all environments",
-                "Verify permissions match deployment environment"
+                "Verify permissions match deployment environment",
             ],
             "network_error": [
                 "Network issues may be transient",
-                "Verify service availability before applying fix"
+                "Verify service availability before applying fix",
             ],
         }
 
@@ -284,40 +283,56 @@ class FixVerifier:
 
         # Confidence-based warnings
         if fix.confidence < 0.5:
-            warnings.append("Low confidence suggestion - review carefully before applying")
+            warnings.append(
+                "Low confidence suggestion - review carefully before applying"
+            )
 
         return warnings
 
-    def _generate_recommendations(self, fix: FixSuggestion, risk_level: str) -> list[str]:
+    def _generate_recommendations(
+        self, fix: FixSuggestion, risk_level: str
+    ) -> list[str]:
         """Generate recommendations for safe fix application."""
         recommendations = []
 
         # Always recommend creating a backup
-        recommendations.append("Create a backup or commit current changes before applying fix")
+        recommendations.append(
+            "Create a backup or commit current changes before applying fix"
+        )
 
         # Risk-specific recommendations
         if risk_level == "high":
-            recommendations.extend([
-                "Test in isolated environment first",
-                "Review fix with team before applying to production",
-                "Monitor system closely after applying fix"
-            ])
+            recommendations.extend(
+                [
+                    "Test in isolated environment first",
+                    "Review fix with team before applying to production",
+                    "Monitor system closely after applying fix",
+                ]
+            )
         elif risk_level == "medium":
-            recommendations.extend([
-                "Run affected tests to verify fix",
-                "Check for side effects in related code"
-            ])
+            recommendations.extend(
+                [
+                    "Run affected tests to verify fix",
+                    "Check for side effects in related code",
+                ]
+            )
         elif risk_level == "low":
-            recommendations.extend([
-                "Run quick smoke tests to verify fix",
-                "Consider edge cases that may not be covered"
-            ])
+            recommendations.extend(
+                [
+                    "Run quick smoke tests to verify fix",
+                    "Consider edge cases that may not be covered",
+                ]
+            )
 
         # Category-specific recommendations
         if fix.fix_category == "import_error":
-            recommendations.append("Update requirements.txt or package.json if adding new dependency")
+            recommendations.append(
+                "Update requirements.txt or package.json if adding new dependency"
+            )
         elif fix.fix_category == "file_error":
-            recommendations.append("Verify file paths work across different operating systems")
+            recommendations.append(
+                "Verify file paths work across different operating systems"
+            )
 
         return recommendations
 
@@ -362,10 +377,13 @@ class FixVerifier:
         try:
             logger.info(f"Running test command: {test_command}")
 
-            # Run test command
+            # Run test command (split into args to avoid shell=True)
+            if sys.platform == "win32":
+                cmd_args = test_command.split()
+            else:
+                cmd_args = shlex.split(test_command)
             process = subprocess.Popen(
-                test_command,
-                shell=True,
+                cmd_args,
                 cwd=project_dir,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
@@ -514,7 +532,7 @@ def main() -> None:
             for rec in result.recommendations:
                 print(f"  - {rec}")
         if result.test_results.get("ran"):
-            print(f"\nTest results:")
+            print("\nTest results:")
             print(f"  - Passed: {result.test_results.get('passed', False)}")
             print(f"  - Exit code: {result.test_results.get('exit_code')}")
 

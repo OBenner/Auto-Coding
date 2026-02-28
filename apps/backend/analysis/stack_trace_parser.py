@@ -13,7 +13,6 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -50,7 +49,9 @@ class ParsedStackTrace:
 
     def __str__(self) -> str:
         """String representation of the parsed trace."""
-        return f"{self.error_type}: {self.error_message}\n" + "\n".join(str(frame) for frame in self.frames)
+        return f"{self.error_type}: {self.error_message}\n" + "\n".join(
+            str(frame) for frame in self.frames
+        )
 
 
 # =============================================================================
@@ -147,9 +148,11 @@ def parse_javascript_trace(trace: str) -> ParsedStackTrace | None:
         # "    at file:line:col"
         # "    at functionName (https://...:line:col)"
         frame_patterns = [
-            re.compile(r'\s+at (\S+) \(([^:]+):(\d+):\d+\)'),  # function (file:line:col)
-            re.compile(r'\s+at (\S+):(\d+):\d+'),  # file:line:col (anonymous)
-            re.compile(r'\s+at ([^(]+) \(([^:]+):(\d+)\)'),  # function (file:line)
+            re.compile(
+                r"\s+at (\S+) \(([^:]+):(\d+):\d+\)"
+            ),  # function (file:line:col)
+            re.compile(r"\s+at (\S+):(\d+):\d+"),  # file:line:col (anonymous)
+            re.compile(r"\s+at ([^(]+) \(([^:]+):(\d+)\)"),  # function (file:line)
         ]
 
         for line in lines[1:]:
@@ -220,7 +223,7 @@ def parse_rust_trace(trace: str) -> ParsedStackTrace | None:
         # Rust frame patterns:
         # "   0: function_name at file:line:col"
         # "    at /path/to/file:line:col"
-        frame_pattern = re.compile(r'\s+\d+:\s+(\S+)\s+at\s+([^:]+):(\d+):\d+')
+        frame_pattern = re.compile(r"\s+\d+:\s+(\S+)\s+at\s+([^:]+):(\d+):\d+")
 
         for line in lines:
             match = frame_pattern.match(line)
@@ -272,11 +275,11 @@ def parse_generic_trace(trace: str) -> ParsedStackTrace | None:
         # Generic patterns that match most stack traces
         # Look for lines containing "file:line" or "file(line)"
         frame_patterns = [
-            re.compile(r'\(([^:]+):(\d+)\)'),  # (file:line)
-            re.compile(r'at\s+([^:]+):(\d+)'),  # at file:line
-            re.compile(r'([^:\s]+\.py):(\d+)'),  # file.py:line
-            re.compile(r'([^:\s]+\.js):(\d+)'),  # file.js:line
-            re.compile(r'([^:\s]+\.rs):(\d+)'),  # file.rs:line
+            re.compile(r"\(([^:]+):(\d+)\)"),  # (file:line)
+            re.compile(r"at\s+([^:]+):(\d+)"),  # at file:line
+            re.compile(r"([^:\s]+\.py):(\d+)"),  # file.py:line
+            re.compile(r"([^:\s]+\.js):(\d+)"),  # file.js:line
+            re.compile(r"([^:\s]+\.rs):(\d+)"),  # file.rs:line
         ]
 
         for line in lines[1:]:
@@ -286,8 +289,10 @@ def parse_generic_trace(trace: str) -> ParsedStackTrace | None:
                     file_path = match.group(1)
                     line_number = int(match.group(2))
                     # Try to extract function name
-                    function_match = re.search(r'at\s+(\w+)', line)
-                    function_name = function_match.group(1) if function_match else "<unknown>"
+                    function_match = re.search(r"at\s+(\w+)", line)
+                    function_name = (
+                        function_match.group(1) if function_match else "<unknown>"
+                    )
                     frames.append(StackFrame(file_path, line_number, function_name))
                     break
 
@@ -309,7 +314,9 @@ def parse_generic_trace(trace: str) -> ParsedStackTrace | None:
 # =============================================================================
 
 
-def parse_stack_trace(trace: str, language: str | None = None) -> ParsedStackTrace | None:
+def parse_stack_trace(
+    trace: str, language: str | None = None
+) -> ParsedStackTrace | None:
     """
     Parse a stack trace and extract structured information.
 
@@ -345,7 +352,9 @@ def parse_stack_trace(trace: str, language: str | None = None) -> ParsedStackTra
             result = parser(trace)
             if result:
                 return result
-            logger.warning(f"Failed to parse as {language}, falling back to auto-detection")
+            logger.warning(
+                f"Failed to parse as {language}, falling back to auto-detection"
+            )
 
     # Auto-detect language based on trace patterns
     # Python patterns: "File \".py\", line", "Traceback (most recent call last)"
@@ -355,13 +364,15 @@ def parse_stack_trace(trace: str, language: str | None = None) -> ParsedStackTra
             return result
 
     # JavaScript patterns: "at function (file:line:col)", ".js:"
-    if re.search(r'\bat\s+\S+\s+\([^:]+:\d+:\d+\)', trace) or re.search(r'\.js:\d+:\d+', trace):
+    if re.search(r"\bat\s+\S+\s+\([^:]+:\d+:\d+\)", trace) or re.search(
+        r"\.js:\d+:\d+", trace
+    ):
         result = parse_javascript_trace(trace)
         if result:
             return result
 
     # Rust patterns: "panicked at", "rs:"
-    if "panicked at" in trace or re.search(r'\.rs:\d+:\d+', trace):
+    if "panicked at" in trace or re.search(r"\.rs:\d+:\d+", trace):
         result = parse_rust_trace(trace)
         if result:
             return result

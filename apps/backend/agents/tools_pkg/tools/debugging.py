@@ -43,7 +43,12 @@ def create_debugging_tools(spec_dir: Path, project_dir: Path) -> list:
     @tool(
         "debug_error",
         "Comprehensively debug an error. Analyzes stack traces, identifies root causes, explains errors in plain language, suggests fixes with code examples, looks up historical errors, and verifies fixes before applying. Use this when you encounter an error or exception.",
-        {"error_trace": str, "code_context": str, "log_content": str, "use_historical": bool},
+        {
+            "error_trace": str,
+            "code_context": str,
+            "log_content": str,
+            "use_historical": bool,
+        },
     )
     async def debug_error(args: dict[str, Any]) -> dict[str, Any]:
         """
@@ -119,9 +124,7 @@ def create_debugging_tools(spec_dir: Path, project_dir: Path) -> list:
         except Exception as e:
             logging.exception("Error during debug_error tool execution")
             return {
-                "content": [
-                    {"type": "text", "text": f"Error debugging error: {e}"}
-                ]
+                "content": [{"type": "text", "text": f"Error debugging error: {e}"}]
             }
 
     tools.append(debug_error)
@@ -195,9 +198,7 @@ def create_debugging_tools(spec_dir: Path, project_dir: Path) -> list:
         except Exception as e:
             logging.exception("Error during explain_error tool execution")
             return {
-                "content": [
-                    {"type": "text", "text": f"Error explaining error: {e}"}
-                ]
+                "content": [{"type": "text", "text": f"Error explaining error: {e}"}]
             }
 
     tools.append(explain_error)
@@ -317,7 +318,7 @@ def _format_debug_report(report: dict[str, Any]) -> str:
     # Historical errors
     historical_count = report.get("historical_errors_count", 0)
     if historical_count > 0:
-        lines.append(f"## 📚 Historical Context")
+        lines.append("## 📚 Historical Context")
         lines.append(f"Found **{historical_count}** similar error(s) in memory.")
         historical = report.get("historical_errors", [])
         for i, hist in enumerate(historical[:3], 1):
@@ -362,7 +363,9 @@ def _format_debug_report(report: dict[str, Any]) -> str:
         if log_analysis.get("summary"):
             lines.append(f"**Summary:** {log_analysis['summary']}")
         if log_analysis.get("relevant_lines"):
-            lines.append(f"**Relevant Lines:** {len(log_analysis['relevant_lines'])} found")
+            lines.append(
+                f"**Relevant Lines:** {len(log_analysis['relevant_lines'])} found"
+            )
         lines.append("")
 
     # Recommendations
@@ -432,7 +435,7 @@ def _format_breakpoint_suggestions(suggestions: list[dict[str, Any]]) -> str:
         return "No breakpoint suggestions found for this file."
 
     lines = []
-    lines.append(f"# 🎯 Breakpoint Suggestions")
+    lines.append("# 🎯 Breakpoint Suggestions")
     lines.append(f"Found **{len(suggestions)}** strategic breakpoint location(s)")
     lines.append("")
 
@@ -445,7 +448,15 @@ def _format_breakpoint_suggestions(suggestions: list[dict[str, Any]]) -> str:
         by_category[category].append(suggestion)
 
     # Display by category (priority order)
-    priority_order = ["error_context", "function_entry", "conditional", "loop", "exception_handler", "assignment", "other"]
+    priority_order = [
+        "error_context",
+        "function_entry",
+        "conditional",
+        "loop",
+        "exception_handler",
+        "assignment",
+        "other",
+    ]
 
     for category in priority_order:
         if category not in by_category:

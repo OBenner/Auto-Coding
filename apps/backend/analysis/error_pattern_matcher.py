@@ -529,9 +529,7 @@ def match_error_pattern(
     for pattern in patterns:
         if pattern.matches(error_type, error_message):
             # Calculate confidence score
-            confidence = _calculate_confidence(
-                pattern, error_type, error_message
-            )
+            confidence = _calculate_confidence(pattern, error_type, error_message)
 
             if confidence > best_confidence:
                 best_match = pattern

@@ -454,7 +454,9 @@ class GraphitiSearch:
                             similar_errors.append(
                                 {
                                     "type": "root_cause",
-                                    "error_description": data.get("error_description", ""),
+                                    "error_description": data.get(
+                                        "error_description", ""
+                                    ),
                                     "root_cause": data.get("root_cause", ""),
                                     "solution": data.get("solution", ""),
                                     "prevention": data.get("prevention", ""),

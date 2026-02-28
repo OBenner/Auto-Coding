@@ -94,7 +94,10 @@ def parse_log_entry(line: str) -> dict[str, Any] | None:
             if len(groups) >= 4:
                 return {
                     "timestamp": groups[0],
-                    "level": groups[1] if groups[1].upper() in ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] else "INFO",
+                    "level": groups[1]
+                    if groups[1].upper()
+                    in ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
+                    else "INFO",
                     "logger": groups[2] if len(groups) > 3 else None,
                     "message": groups[-2] if len(groups) > 3 else groups[-1],
                     "status": groups[-1] if groups[-1].isdigit() else None,
@@ -108,7 +111,9 @@ def parse_log_entry(line: str) -> dict[str, Any] | None:
             elif len(groups) == 2:
                 level = groups[0].upper()
                 return {
-                    "level": level if level in ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] else "INFO",
+                    "level": level
+                    if level in ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
+                    else "INFO",
                     "message": groups[1],
                 }
 
@@ -255,9 +260,8 @@ def extract_relevant_lines(
         level = parsed.get("level", "").upper()
 
         # Check if line matches error criteria
-        is_error_line = (
-            level in ["ERROR", "CRITICAL", "FATAL"]
-            or any(keyword in message for keyword in error_keywords)
+        is_error_line = level in ["ERROR", "CRITICAL", "FATAL"] or any(
+            keyword in message for keyword in error_keywords
         )
 
         if is_error_line:
@@ -361,14 +365,20 @@ def _analyze_logs_heuristics(
             "Review timeout settings and external service availability"
         )
 
-    if any("permission" in msg.lower() or "access denied" in msg.lower() for msg in error_messages):
+    if any(
+        "permission" in msg.lower() or "access denied" in msg.lower()
+        for msg in error_messages
+    ):
         analysis["patterns_found"].append("permission_issues")
         analysis["affected_components"].append("authentication/authorization")
         analysis["recommendations"].append(
             "Verify user permissions and access control settings"
         )
 
-    if any("memory" in msg.lower() or "out of memory" in msg.lower() for msg in error_messages):
+    if any(
+        "memory" in msg.lower() or "out of memory" in msg.lower()
+        for msg in error_messages
+    ):
         analysis["patterns_found"].append("memory_issues")
         analysis["affected_components"].append("application_runtime")
         analysis["recommendations"].append(
@@ -383,7 +393,9 @@ def _analyze_logs_heuristics(
         analysis["confidence"] = 0.7
 
         if analysis["critical_issues"]:
-            analysis["summary"] += f" with {len(analysis['critical_issues'])} critical issues"
+            analysis["summary"] += (
+                f" with {len(analysis['critical_issues'])} critical issues"
+            )
             analysis["confidence"] = 0.8
 
     return analysis

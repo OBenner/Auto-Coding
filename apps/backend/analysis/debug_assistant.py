@@ -32,19 +32,17 @@ except ImportError:
 
 from core.auth import get_auth_token
 
+from .error_pattern_matcher import match_error_pattern
+from .fix_suggester import suggest_fix
+from .fix_verifier import FixVerifier
+from .log_analyzer import analyze_logs
+
 # Import all analyzer modules
 from .stack_trace_parser import (
-    ParsedStackTrace,
-    extract_error_type,
     get_failing_file,
     get_failing_line,
     parse_stack_trace,
-    summarize_trace,
 )
-from .error_pattern_matcher import match_error_pattern
-from .fix_suggester import suggest_fix
-from .fix_verifier import FixVerifier, verify_fix
-from .log_analyzer import analyze_logs, extract_relevant_lines, find_log_files
 
 # Default model for debug assistant (fast and accurate)
 DEFAULT_ASSISTANT_MODEL = "claude-haiku-4-5-20251001"
@@ -260,7 +258,11 @@ class DebugAssistant:
         # Add detail-level information
         if detail_level in ["detailed", "comprehensive"]:
             explanation["stack_frames"] = [
-                {"file": f.file_path, "line": f.line_number, "function": f.function_name}
+                {
+                    "file": f.file_path,
+                    "line": f.line_number,
+                    "function": f.function_name,
+                }
                 for f in parsed.frames
             ]
 
@@ -756,7 +758,7 @@ Output ONLY valid JSON with: root_cause, explanation, suggested_fixes, verificat
         code_section = f"""
 
 ### FAILING CODE
-```{code_context.get('language', 'unknown')}
+```{code_context.get("language", "unknown")}
 {failing_code}
 ```
 """
@@ -806,14 +808,18 @@ def _parse_ai_debug_response(response_text: str) -> dict[str, Any] | None:
         text = "\n".join(lines).strip()
 
         if not text:
-            logger.warning("Cannot parse AI debug: response contained only markdown markers")
+            logger.warning(
+                "Cannot parse AI debug: response contained only markdown markers"
+            )
             return None
 
     try:
         debug_result = json.loads(text)
 
         if not isinstance(debug_result, dict):
-            logger.warning(f"AI debug is not a dict, got type: {type(debug_result).__name__}")
+            logger.warning(
+                f"AI debug is not a dict, got type: {type(debug_result).__name__}"
+            )
             return None
 
         # Ensure required keys exist
@@ -828,5 +834,7 @@ def _parse_ai_debug_response(response_text: str) -> dict[str, Any] | None:
     except json.JSONDecodeError as e:
         logger.warning(f"Failed to parse AI debug JSON: {e}")
         preview_length = min(500, len(text))
-        logger.warning(f"Response text preview (first {preview_length} chars): {text[:preview_length]}")
+        logger.warning(
+            f"Response text preview (first {preview_length} chars): {text[:preview_length]}"
+        )
         return None

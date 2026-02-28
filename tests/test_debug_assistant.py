@@ -6,7 +6,6 @@ Tests for Debug Assistant Analyzers
 Tests the analysis modules for project structure, frameworks, routes, databases, and ports.
 """
 
-from pathlib import Path
 from analysis.analyzers.base import BaseAnalyzer, SKIP_DIRS, SERVICE_INDICATORS
 from analysis.analyzers.database_detector import DatabaseDetector
 from analysis.analyzers.framework_analyzer import FrameworkAnalyzer
@@ -615,7 +614,6 @@ export async function GET() {
         detector = RouteDetector(tmp_path)
         routes = detector.detect_all_routes()
 
-        next_routes = [r for r in routes if r["framework"] == "Next.js"]
         # Next.js routes might not be detected if file structure doesn't match exactly
         # Just verify routes were collected
         assert len(routes) >= 0  # May be 0 if pattern doesn't match
@@ -648,7 +646,6 @@ class TestServiceAnalyzer:
         (tmp_path / "requirements.txt").write_text("fastapi\nuvicorn")
         (tmp_path / "main.py").write_text("if __name__ == '__main__':\n    run()")
 
-        analysis = {}
         analyzer = ServiceAnalyzer(tmp_path, "backend")
         result = analyzer.analyze()
 

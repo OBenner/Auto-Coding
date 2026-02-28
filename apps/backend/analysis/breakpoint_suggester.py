@@ -263,7 +263,7 @@ class BreakpointSuggester:
             suggestions.append(
                 BreakpointSuggestion(
                     line=handler_line,
-                    reason=f"Exception handler - verify error catching",
+                    reason="Exception handler - verify error catching",
                     confidence=0.80,
                     category="exception_handler",
                 )
@@ -287,7 +287,7 @@ class BreakpointSuggester:
             suggestions.append(
                 BreakpointSuggestion(
                     line=post_error_line,
-                    reason=f"After error location - check cleanup/exit",
+                    reason="After error location - check cleanup/exit",
                     confidence=0.60,
                     category="post_error",
                 )
@@ -432,7 +432,6 @@ class BreakpointSuggester:
         start = max(0, error_line - context - 1)
         end = min(len(lines), error_line + context)
 
-        context_lines = lines[start:end]
         return f"Lines {start + 1}-{end} of {len(lines)} total"
 
     def _analysis_to_dict(
@@ -506,7 +505,9 @@ class BreakpointSuggester:
         return {
             "suggestions": suggestions,
             "total_count": len(suggestions),
-            "high_priority_count": len([s for s in suggestions if s["confidence"] >= 0.75]),
+            "high_priority_count": len(
+                [s for s in suggestions if s["confidence"] >= 0.75]
+            ),
             "code_summary": f"Lines 1-{total_lines} (heuristic analysis)",
         }
 

@@ -16,7 +16,6 @@ import json
 import logging
 import os
 from pathlib import Path
-from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -198,9 +197,9 @@ def _format_historical_errors(inputs: dict) -> str:
         lines.append(f"  - Fix: {fix_applied}")
 
         if outcome == "success":
-            lines.append(f"  - ✅ This fix worked")
+            lines.append("  - ✅ This fix worked")
         else:
-            lines.append(f"  - ❌ This fix did not work")
+            lines.append("  - ❌ This fix did not work")
         lines.append("")
 
     return "\n".join(lines) if lines else "(No historical errors available)"
@@ -238,8 +237,6 @@ async def run_fix_suggestion(
 
     try:
         # Use simple_client for fix suggestion
-        from pathlib import Path
-
         from core.simple_client import create_simple_client
 
         client = create_simple_client(
@@ -402,7 +399,11 @@ def get_pattern_based_suggestion(
         }
 
     # Fallback for unknown errors
-    error_type = parsed_trace.get("error_type", "UnknownError") if parsed_trace else "UnknownError"
+    error_type = (
+        parsed_trace.get("error_type", "UnknownError")
+        if parsed_trace
+        else "UnknownError"
+    )
     return {
         "root_cause": f"An error of type '{error_type}' occurred",
         "fix_category": "unknown",
@@ -471,7 +472,14 @@ def _get_verification_steps(category: str) -> list[str]:
         ],
     }
 
-    return steps.get(category, ["Test the fix thoroughly", "Verify error is resolved", "Check for side effects"])
+    return steps.get(
+        category,
+        [
+            "Test the fix thoroughly",
+            "Verify error is resolved",
+            "Check for side effects",
+        ],
+    )
 
 
 # =============================================================================
@@ -547,12 +555,8 @@ if __name__ == "__main__":
     import asyncio
 
     parser = argparse.ArgumentParser(description="Test fix suggestion")
-    parser.add_argument(
-        "--trace-file", type=Path, help="File containing stack trace"
-    )
-    parser.add_argument(
-        "--project-dir", type=Path, help="Project directory"
-    )
+    parser.add_argument("--trace-file", type=Path, help="File containing stack trace")
+    parser.add_argument("--project-dir", type=Path, help="Project directory")
 
     args = parser.parse_args()
 
@@ -572,8 +576,12 @@ if __name__ == "__main__":
         "error_type": parsed.error_type if parsed else "UnknownError",
         "error_message": parsed.error_message if parsed else "",
         "language": parsed.language if parsed else "unknown",
-        "failing_file": parsed.frames[-1].file_path if parsed and parsed.frames else None,
-        "failing_line": parsed.frames[-1].line_number if parsed and parsed.frames else None,
+        "failing_file": parsed.frames[-1].file_path
+        if parsed and parsed.frames
+        else None,
+        "failing_line": parsed.frames[-1].line_number
+        if parsed and parsed.frames
+        else None,
         "frame_count": len(parsed.frames) if parsed else 0,
     }
 
