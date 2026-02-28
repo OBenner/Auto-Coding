@@ -79,7 +79,7 @@ export function WebhookLogsViewer({ logs, loading = false }: WebhookLogsViewerPr
   const availableEventTypes = useMemo(() => {
     const types = new Set<WebhookEventType>();
     logs.forEach((log) => types.add(log.event_type));
-    return Array.from(types).sort();
+    return Array.from(types).sort((a, b) => a.localeCompare(b));
   }, [logs]);
 
   const filteredLogs = useMemo(() => {

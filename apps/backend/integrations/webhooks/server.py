@@ -53,14 +53,6 @@ from .storage import WebhookStorage
 logger = logging.getLogger(__name__)
 
 
-def _sanitize_log_value(value: str, max_length: int = 100) -> str:
-    """Sanitize user-provided value for safe logging (prevent log injection)."""
-    sanitized = value.replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t")
-    if len(sanitized) > max_length:
-        sanitized = sanitized[:max_length] + "..."
-    return sanitized
-
-
 # =============================================================================
 # Request/Response Models
 # =============================================================================
@@ -259,10 +251,7 @@ def create_webhook_server(
                 break
 
         if not webhook_config:
-            logger.warning(
-                "No webhook config found for path: /%s",
-                _sanitize_log_value(webhook_path),
-            )
+            logger.warning("No webhook config found for the requested path")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="No webhook configured for the requested path",
@@ -515,11 +504,7 @@ def create_webhook_server(
         except HTTPException:
             raise
         except Exception as e:
-            logger.error(
-                "Error testing webhook %s: %s",
-                _sanitize_log_value(request.webhook_id),
-                e,
-            )
+            logger.error("Error testing webhook connection: %s", e)
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="An internal error occurred while testing the webhook",
