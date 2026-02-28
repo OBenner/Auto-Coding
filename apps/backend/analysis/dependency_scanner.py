@@ -25,12 +25,10 @@ Usage:
 from __future__ import annotations
 
 import json
-import re
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
-
 
 # =============================================================================
 # DATA CLASSES
@@ -148,14 +146,12 @@ class DependencyScanner:
             self._scan_node_dependencies(project_dir, result)
             result.scan_metadata["scanned_ecosystems"].append("node")
 
-        # Check for security vulnerabilities
-        if check_security:
+        # Check for security vulnerabilities (only for scanned ecosystems)
+        if check_security and (scan_python or scan_node):
             self._check_security_vulnerabilities(project_dir, result)
 
         # Separate security updates
-        result.security_updates = [
-            u for u in result.updates_available if u.is_security
-        ]
+        result.security_updates = [u for u in result.updates_available if u.is_security]
 
         # Update flags
         result.has_updates = len(result.updates_available) > 0
@@ -230,9 +226,7 @@ class DependencyScanner:
                 result.updates_available.append(update)
 
         except subprocess.TimeoutExpired:
-            result.scan_errors.append(
-                "pip list --outdated timed out after 30 seconds"
-            )
+            result.scan_errors.append("pip list --outdated timed out after 30 seconds")
         except json.JSONDecodeError as e:
             result.scan_errors.append(f"Failed to parse pip output: {e}")
         except Exception as e:
@@ -326,9 +320,7 @@ class DependencyScanner:
 
             # npm outdated returns non-zero when updates are available, so check stderr
             if proc.returncode not in (0, 1):
-                result.scan_errors.append(
-                    f"npm outdated failed: {proc.stderr.strip()}"
-                )
+                result.scan_errors.append(f"npm outdated failed: {proc.stderr.strip()}")
                 return
 
             # Parse JSON output
@@ -359,9 +351,7 @@ class DependencyScanner:
                 result.updates_available.append(update)
 
         except subprocess.TimeoutExpired:
-            result.scan_errors.append(
-                "npm outdated timed out after 30 seconds"
-            )
+            result.scan_errors.append("npm outdated timed out after 30 seconds")
         except json.JSONDecodeError as e:
             result.scan_errors.append(f"Failed to parse npm output: {e}")
         except Exception as e:
@@ -414,7 +404,6 @@ class DependencyScanner:
                 # Format: [{"name": "package", "version": "1.0", "vulns": [{"id": "CVE-...", ...}]}]
                 for vuln_entry in audit_output:
                     pkg_name = vuln_entry.get("name", "").lower()
-                    pkg_version = vuln_entry.get("version", "")
                     vulnerabilities = vuln_entry.get("vulns", [])
 
                     if not vulnerabilities:
@@ -422,7 +411,10 @@ class DependencyScanner:
 
                     # Find matching update in our results
                     for update in result.updates_available:
-                        if update.name.lower() == pkg_name and update.ecosystem == "python":
+                        if (
+                            update.name.lower() == pkg_name
+                            and update.ecosystem == "python"
+                        ):
                             # This package has known vulnerabilities
                             update.is_security = True
 
@@ -460,9 +452,7 @@ class DependencyScanner:
         except Exception as e:
             result.scan_errors.append(f"Python CVE check error: {e}")
 
-    def _check_node_cves(
-        self, project_dir: Path, result: DependencyScanResult
-    ) -> None:
+    def _check_node_cves(self, project_dir: Path, result: DependencyScanResult) -> None:
         """
         Check Node.js dependencies for CVE vulnerabilities using npm audit.
 
@@ -516,7 +506,8 @@ class DependencyScanner:
                                 url = via_entry.get("url", "")
                                 if "CVE-" in url:
                                     import re
-                                    cve_match = re.search(r'CVE-\d{4}-\d+', url)
+
+                                    cve_match = re.search(r"CVE-\d{4}-\d+", url)
                                     if cve_match and cve_match.group() not in cve_ids:
                                         cve_ids.append(cve_match.group())
 
@@ -604,9 +595,7 @@ class DependencyScanner:
                 self._uv_available = False
         return self._uv_available
 
-    def _classify_update_type(
-        self, current: str, latest: str
-    ) -> str:
+    def _classify_update_type(self, current: str, latest: str) -> str:
         """
         Classify update type based on semantic versioning.
 
@@ -702,14 +691,10 @@ class DependencyScanner:
                     1 for u in result.updates_available if u.update_type == "patch"
                 ),
                 "critical_security": sum(
-                    1
-                    for u in result.security_updates
-                    if u.severity == "critical"
+                    1 for u in result.security_updates if u.severity == "critical"
                 ),
                 "high_security": sum(
-                    1
-                    for u in result.security_updates
-                    if u.severity == "high"
+                    1 for u in result.security_updates if u.severity == "high"
                 ),
             },
         }
@@ -827,7 +812,9 @@ def main() -> None:
                 print(f"  - {error}")
 
         if result.scan_metadata:
-            print(f"\nScanned Ecosystems: {', '.join(result.scan_metadata.get('scanned_ecosystems', []))}")
+            print(
+                f"\nScanned Ecosystems: {', '.join(result.scan_metadata.get('scanned_ecosystems', []))}"
+            )
 
 
 if __name__ == "__main__":

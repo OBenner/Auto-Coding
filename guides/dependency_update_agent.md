@@ -214,7 +214,7 @@ The agent classifies updates into three risk levels:
 - **Recommended action**: Update immediately, especially if security-related
 
 **Example:**
-```
+```text
 requests: 2.32.0 → 2.32.3 (patch) - Low risk
 ```
 
@@ -226,8 +226,8 @@ requests: 2.32.0 → 2.32.3 (patch) - Low risk
 - **Recommended action**: Review changelog, test before deploying
 
 **Example:**
-```
-django: 4.2.0 → 5.0.0 (minor) - Medium risk
+```text
+django: 4.2.0 → 4.3.0 (minor) - Medium risk
 ```
 
 ### 🔴 High Risk (Major Updates)
@@ -238,7 +238,7 @@ django: 4.2.0 → 5.0.0 (minor) - Medium risk
 - **Recommended action**: Careful testing, update code as needed
 
 **Example:**
-```
+```text
 protobuf: 3.20.0 → 4.25.0 (major) - High risk
 ```
 
@@ -339,7 +339,7 @@ The Auto Code agent will:
 
 ### Basic Options
 
-```
+```text
 --project PATH          Project directory to scan (default: current directory)
 --output PATH          Output directory for reports
                         (default: project/.auto-claude/dependency-reports)
@@ -347,7 +347,7 @@ The Auto Code agent will:
 
 ### Scan Options
 
-```
+```text
 --ecosystems python,node
                        Comma-separated list of ecosystems to scan
                        (default: all ecosystems)
@@ -357,7 +357,7 @@ The Auto Code agent will:
 
 ### Output Options
 
-```
+```text
 --format json|markdown|both
                        Output format for reports (default: markdown)
 --dry-run              Run scan without saving reports
@@ -365,14 +365,14 @@ The Auto Code agent will:
 
 ### Spec Generation
 
-```
+```text
 --generate-spec        Generate spec file for automated dependency updates
 --batch ID             Generate spec for specific batch ID
 ```
 
 ### Advanced Options
 
-```
+```text
 --model haiku|sonnet|opus
                        Model to use for AI analysis (default: sonnet)
 --thinking-level none|low|medium|high|ultrathink

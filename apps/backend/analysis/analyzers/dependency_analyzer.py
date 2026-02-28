@@ -14,7 +14,6 @@ from typing import Any
 
 from .base import BaseAnalyzer
 
-
 # =============================================================================
 # DATA CLASSES
 # =============================================================================
@@ -102,7 +101,11 @@ class DependencyAnalyzer(BaseAnalyzer):
         self.analysis = analysis if analysis is not None else {}
 
     def analyze_update_risk(
-        self, package_name: str, current_version: str, target_version: str, ecosystem: str
+        self,
+        package_name: str,
+        current_version: str,
+        target_version: str,
+        ecosystem: str,
     ) -> DependencyRiskAssessment:
         """
         Analyze the risk of updating a single dependency.
@@ -159,13 +162,22 @@ class DependencyAnalyzer(BaseAnalyzer):
 
         # Add ecosystem-specific risk factors
         if ecosystem == "python" and package_name in [
-            "django", "flask", "fastapi", "sqlalchemy", "pytest"
+            "django",
+            "flask",
+            "fastapi",
+            "sqlalchemy",
+            "pytest",
         ]:
             risk_factors.append("Core framework dependency - requires thorough testing")
             breaking_change_probability = min(breaking_change_probability + 0.1, 1.0)
 
         elif ecosystem == "npm" and package_name in [
-            "react", "vue", "angular", "express", "next", "typescript"
+            "react",
+            "vue",
+            "angular",
+            "express",
+            "next",
+            "typescript",
         ]:
             risk_factors.append("Core framework dependency - requires thorough testing")
             breaking_change_probability = min(breaking_change_probability + 0.1, 1.0)
@@ -189,9 +201,7 @@ class DependencyAnalyzer(BaseAnalyzer):
             notes=notes,
         )
 
-    def batch_updates(
-        self, updates: list[dict[str, Any]]
-    ) -> list[UpdateBatch]:
+    def batch_updates(self, updates: list[dict[str, Any]]) -> list[UpdateBatch]:
         """
         Group compatible updates into batches.
 
@@ -223,6 +233,7 @@ class DependencyAnalyzer(BaseAnalyzer):
         patch_updates_by_ecosystem: dict[str, list[dict[str, Any]]] = {}
         minor_updates_by_ecosystem: dict[str, list[dict[str, Any]]] = {}
         major_updates: list[dict[str, Any]] = []
+        unknown_updates_by_ecosystem: dict[str, list[dict[str, Any]]] = {}
 
         # Categorize updates
         for update in updates:
@@ -231,26 +242,20 @@ class DependencyAnalyzer(BaseAnalyzer):
             is_security = update.get("is_security", False)
 
             if is_security:
-                # Security updates get their own category
-                if ecosystem not in security_updates_by_ecosystem:
-                    security_updates_by_ecosystem[ecosystem] = []
-                security_updates_by_ecosystem[ecosystem].append(update)
+                security_updates_by_ecosystem.setdefault(ecosystem, []).append(update)
 
             elif update_type == "patch":
-                # Group patch updates together (safe to batch)
-                if ecosystem not in patch_updates_by_ecosystem:
-                    patch_updates_by_ecosystem[ecosystem] = []
-                patch_updates_by_ecosystem[ecosystem].append(update)
+                patch_updates_by_ecosystem.setdefault(ecosystem, []).append(update)
 
             elif update_type == "minor":
-                # Group minor updates by ecosystem
-                if ecosystem not in minor_updates_by_ecosystem:
-                    minor_updates_by_ecosystem[ecosystem] = []
-                minor_updates_by_ecosystem[ecosystem].append(update)
+                minor_updates_by_ecosystem.setdefault(ecosystem, []).append(update)
 
             elif update_type == "major":
-                # Major updates are kept separate due to high risk
                 major_updates.append(update)
+
+            else:
+                # Unknown update types (non-semver versions)
+                unknown_updates_by_ecosystem.setdefault(ecosystem, []).append(update)
 
         # Create security update batches (highest priority)
         for ecosystem, sec_updates in security_updates_by_ecosystem.items():
@@ -287,7 +292,7 @@ class DependencyAnalyzer(BaseAnalyzer):
                 is_security_batch=True,
                 priority=avg_priority,
                 notes=f"Security updates for {len(sec_updates)} {ecosystem} package(s). "
-                      f"Max severity: {max_severity}. Recommend immediate update and testing.",
+                f"Max severity: {max_severity}. Recommend immediate update and testing.",
             )
             batches.append(batch)
 
@@ -313,7 +318,7 @@ class DependencyAnalyzer(BaseAnalyzer):
                 is_security_batch=False,
                 priority=avg_priority,
                 notes=f"Patch updates for {len(patch_updates_list)} {ecosystem} package(s). "
-                      f"Low risk - typically backwards compatible. Safe to batch together.",
+                f"Low risk - typically backwards compatible. Safe to batch together.",
             )
             batches.append(batch)
 
@@ -339,7 +344,7 @@ class DependencyAnalyzer(BaseAnalyzer):
                 is_security_batch=False,
                 priority=avg_priority,
                 notes=f"Minor updates for {len(minor_updates_list)} {ecosystem} package(s). "
-                      f"Medium risk - may include new features. Test in development environment.",
+                f"Medium risk - may include new features. Test in development environment.",
             )
             batches.append(batch)
 
@@ -364,8 +369,34 @@ class DependencyAnalyzer(BaseAnalyzer):
                 is_security_batch=False,
                 priority=priority,
                 notes=f"Major update for {package_name} ({major_update.get('current_version')} → "
-                      f"{major_update.get('latest_version')}). High risk - likely contains breaking changes. "
-                      f"Review release notes and test in separate branch.",
+                f"{major_update.get('latest_version')}). High risk - likely contains breaking changes. "
+                f"Review release notes and test in separate branch.",
+            )
+            batches.append(batch)
+
+        # Create batches for unknown update types (conservative default)
+        for ecosystem, unknown_list in unknown_updates_by_ecosystem.items():
+            batch_counter += 1
+
+            avg_priority = sum(
+                self.get_update_priority(
+                    u.get("name", ""),
+                    u.get("update_type", ""),
+                    False,
+                )
+                for u in unknown_list
+            ) // max(len(unknown_list), 1)
+
+            batch = UpdateBatch(
+                batch_id=f"unknown-{ecosystem}-{batch_counter}",
+                update_type="unknown",
+                ecosystem=ecosystem,
+                packages=[u.get("name", "") for u in unknown_list],
+                risk_level="medium",
+                is_security_batch=False,
+                priority=avg_priority,
+                notes=f"Updates with non-semver versions for {len(unknown_list)} "
+                f"{ecosystem} package(s). Review changelog before applying.",
             )
             batches.append(batch)
 

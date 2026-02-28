@@ -30,7 +30,6 @@ Usage:
 """
 
 import asyncio
-import json
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -54,7 +53,6 @@ if env_file.exists():
     load_dotenv(env_file)
 
 from phase_config import resolve_model_id
-from review import ReviewState
 
 
 def _generate_task_description(
@@ -73,7 +71,6 @@ def _generate_task_description(
     Returns:
         Formatted task description string
     """
-    from analysis.dependency_scanner import DependencyUpdate
 
     # Filter batches if specific batch_id requested
     if batch_id:
@@ -90,18 +87,32 @@ def _generate_task_description(
         sec_updates_in_batches = []
         for batch in batches:
             for pkg_name in batch.packages:
-                if any(u.name == pkg_name and u.is_security for u in scan_result.security_updates):
+                if any(
+                    u.name == pkg_name and u.is_security
+                    for u in scan_result.security_updates
+                ):
                     sec_updates_in_batches.append(pkg_name)
 
         if sec_updates_in_batches:
             lines.append("**Security Updates (Priority)**:")
             for pkg_name in sec_updates_in_batches[:5]:
-                update = next((u for u in scan_result.updates_available if u.name == pkg_name), None)
+                update = next(
+                    (u for u in scan_result.updates_available if u.name == pkg_name),
+                    None,
+                )
                 if update:
-                    cve_info = f" (CVEs: {', '.join(update.cve_ids)})" if update.cve_ids else ""
-                    lines.append(f"- {pkg_name}: {update.current_version} → {update.latest_version}{cve_info}")
+                    cve_info = (
+                        f" (CVEs: {', '.join(update.cve_ids)})"
+                        if update.cve_ids
+                        else ""
+                    )
+                    lines.append(
+                        f"- {pkg_name}: {update.current_version} → {update.latest_version}{cve_info}"
+                    )
             if len(sec_updates_in_batches) > 5:
-                lines.append(f"- ... and {len(sec_updates_in_batches) - 5} more security updates")
+                lines.append(
+                    f"- ... and {len(sec_updates_in_batches) - 5} more security updates"
+                )
             lines.append("")
 
     # All updates in batches
@@ -112,9 +123,13 @@ def _generate_task_description(
         lines.append(f"- Packages ({len(batch.packages)}):")
 
         for pkg_name in batch.packages[:5]:
-            update = next((u for u in scan_result.updates_available if u.name == pkg_name), None)
+            update = next(
+                (u for u in scan_result.updates_available if u.name == pkg_name), None
+            )
             if update:
-                lines.append(f"  - {pkg_name}: {update.current_version} → {update.latest_version} ({update.update_type})")
+                lines.append(
+                    f"  - {pkg_name}: {update.current_version} → {update.latest_version} ({update.update_type})"
+                )
 
         if len(batch.packages) > 5:
             lines.append(f"  - ... and {len(batch.packages) - 5} more packages")
@@ -147,14 +162,15 @@ def _generate_markdown_report(
     Returns:
         Markdown formatted report string
     """
-    from analysis.dependency_scanner import DependencyUpdate
 
     lines = []
 
     # Header
     lines.append("# Dependency Update Report")
     lines.append("")
-    lines.append(f"**Generated**: {datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S UTC')}")
+    lines.append(
+        f"**Generated**: {datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S UTC')}"
+    )
     lines.append(f"**Project**: `{project_dir}`")
     lines.append("")
 
@@ -179,7 +195,9 @@ def _generate_markdown_report(
     if scan_result.security_updates:
         lines.append("## 🔒 Security Vulnerabilities")
         lines.append("")
-        lines.append(f"Found **{security_updates}** package(s) with security vulnerabilities:")
+        lines.append(
+            f"Found **{security_updates}** package(s) with security vulnerabilities:"
+        )
         lines.append("")
 
         # Group by severity
@@ -192,7 +210,9 @@ def _generate_markdown_report(
             lines.append("### 🚨 Critical")
             for update in critical:
                 lines.append(f"- **{update.name}** ({update.ecosystem})")
-                lines.append(f"  - Current: `{update.current_version}` → Latest: `{update.latest_version}`")
+                lines.append(
+                    f"  - Current: `{update.current_version}` → Latest: `{update.latest_version}`"
+                )
                 if update.cve_ids:
                     lines.append(f"  - CVEs: {', '.join(update.cve_ids)}")
                 lines.append("")
@@ -201,7 +221,9 @@ def _generate_markdown_report(
             lines.append("### 🔴 High")
             for update in high:
                 lines.append(f"- **{update.name}** ({update.ecosystem})")
-                lines.append(f"  - Current: `{update.current_version}` → Latest: `{update.latest_version}`")
+                lines.append(
+                    f"  - Current: `{update.current_version}` → Latest: `{update.latest_version}`"
+                )
                 if update.cve_ids:
                     lines.append(f"  - CVEs: {', '.join(update.cve_ids)}")
                 lines.append("")
@@ -210,7 +232,9 @@ def _generate_markdown_report(
             lines.append("### 🟡 Medium")
             for update in medium:
                 lines.append(f"- **{update.name}** ({update.ecosystem})")
-                lines.append(f"  - Current: `{update.current_version}` → Latest: `{update.latest_version}`")
+                lines.append(
+                    f"  - Current: `{update.current_version}` → Latest: `{update.latest_version}`"
+                )
                 if update.cve_ids:
                     lines.append(f"  - CVEs: {', '.join(update.cve_ids)}")
                 lines.append("")
@@ -219,7 +243,9 @@ def _generate_markdown_report(
             lines.append("### 🟢 Low")
             for update in low:
                 lines.append(f"- **{update.name}** ({update.ecosystem})")
-                lines.append(f"  - Current: `{update.current_version}` → Latest: `{update.latest_version}`")
+                lines.append(
+                    f"  - Current: `{update.current_version}` → Latest: `{update.latest_version}`"
+                )
                 if update.cve_ids:
                     lines.append(f"  - CVEs: {', '.join(update.cve_ids)}")
                 lines.append("")
@@ -234,7 +260,13 @@ def _generate_markdown_report(
     lines.append("")
 
     for i, batch in enumerate(batches, 1):
-        risk_icon = "🔴" if batch.risk_level == "high" else "🟡" if batch.risk_level == "medium" else "🟢"
+        risk_icon = (
+            "🔴"
+            if batch.risk_level == "high"
+            else "🟡"
+            if batch.risk_level == "medium"
+            else "🟢"
+        )
         security_badge = " 🔒 **SECURITY**" if batch.is_security_batch else ""
 
         lines.append(f"### Batch {i}: `{batch.batch_id}` {security_badge}")
@@ -259,8 +291,12 @@ def _generate_markdown_report(
     lines.append("")
 
     # Group by ecosystem
-    python_updates = [u for u in scan_result.updates_available if u.ecosystem == "python"]
-    node_updates = [u for u in scan_result.updates_available if u.ecosystem == "node"]
+    python_updates = [
+        u for u in scan_result.updates_available if u.ecosystem == "python"
+    ]
+    node_updates = [
+        u for u in scan_result.updates_available if u.ecosystem in ("node", "npm")
+    ]
 
     if python_updates:
         lines.append("### Python Packages")
@@ -273,7 +309,11 @@ def _generate_markdown_report(
         for update in python_updates:
             security_badge = "🔒" if update.is_security else ""
             cve_list = ", ".join(update.cve_ids) if update.cve_ids else ""
-            package_link = f"[{update.name}]({update.changelog_url})" if update.changelog_url else update.name
+            package_link = (
+                f"[{update.name}]({update.changelog_url})"
+                if update.changelog_url
+                else update.name
+            )
             lines.append(
                 f"| {package_link} | "
                 f"`{update.current_version}` | "
@@ -294,7 +334,11 @@ def _generate_markdown_report(
         for update in node_updates:
             security_badge = "🔒" if update.is_security else ""
             cve_list = ", ".join(update.cve_ids) if update.cve_ids else ""
-            package_link = f"[{update.name}]({update.changelog_url})" if update.changelog_url else update.name
+            package_link = (
+                f"[{update.name}]({update.changelog_url})"
+                if update.changelog_url
+                else update.name
+            )
             lines.append(
                 f"| {package_link} | "
                 f"`{update.current_version}` | "
@@ -445,21 +489,21 @@ Examples:
         output_dir = project_dir / ".auto-claude" / "dependency-reports"
     output_dir = output_dir.resolve()
 
-    print(f"🔍 Dependency Update Scanner")
+    print("🔍 Dependency Update Scanner")
     print(f"📁 Project: {project_dir}")
     print(f"📊 Output: {output_dir}")
     if args.dry_run:
-        print(f"🏃 Mode: Dry run (no changes)")
+        print("🏃 Mode: Dry run (no changes)")
     if args.security_only:
-        print(f"🔒 Filter: Security vulnerabilities only")
+        print("🔒 Filter: Security vulnerabilities only")
     if ecosystems_filter:
         print(f"🎯 Ecosystems: {', '.join(ecosystems_filter)}")
     print()
 
     # Import scanner and analyzer
     try:
-        from analysis.dependency_scanner import DependencyScanner
         from analysis.analyzers.dependency_analyzer import DependencyAnalyzer
+        from analysis.dependency_scanner import DependencyScanner
     except ImportError as e:
         print(f"✗ Error: Failed to import dependency modules: {e}")
         return 1
@@ -483,8 +527,15 @@ Examples:
         spec_dir=None,  # We'll save results manually
         scan_python=scan_python,
         scan_node=scan_node,
-        check_security=not args.skip_dev,  # Check security unless disabled
+        check_security=True,
     )
+
+    # Warn about --skip-dev (not yet implemented)
+    if args.skip_dev:
+        print(
+            "⚠️  --skip-dev: Filtering dev dependencies is not yet implemented. "
+            "All dependencies are included in the scan."
+        )
 
     # Check for scan errors
     if scan_result.scan_errors:
@@ -497,7 +548,7 @@ Examples:
     updates_to_process = scan_result.updates_available
     if args.security_only:
         updates_to_process = scan_result.security_updates
-        print(f"🔒 Filtered to security updates only")
+        print("🔒 Filtered to security updates only")
 
     # Check if any updates were found
     if not updates_to_process:
@@ -509,28 +560,54 @@ Examples:
         return 0
 
     # Print summary
-    print(f"\n📊 Scan Results:")
+    print("\n📊 Scan Results:")
     print(f"  Total updates available: {len(scan_result.updates_available)}")
     print(f"  Security updates: {len(scan_result.security_updates)}")
     if scan_result.security_updates:
-        critical = sum(1 for u in scan_result.security_updates if u.severity == "critical")
+        critical = sum(
+            1 for u in scan_result.security_updates if u.severity == "critical"
+        )
         high = sum(1 for u in scan_result.security_updates if u.severity == "high")
         if critical > 0:
             print(f"    - Critical: {critical}")
         if high > 0:
             print(f"    - High: {high}")
-    print(f"  Ecosystems scanned: {', '.join(scan_result.scan_metadata.get('scanned_ecosystems', []))}")
+    print(
+        f"  Ecosystems scanned: {', '.join(scan_result.scan_metadata.get('scanned_ecosystems', []))}"
+    )
     print()
 
-    # Batch compatible updates
+    # Batch compatible updates (respect --security-only filter)
     print("🔄 Analyzing and batching compatible updates...")
-    batches = analyzer.batch_updates(scanner.to_dict(scan_result)["updates_available"])
+    updates_as_dicts = [
+        {
+            "name": u.name,
+            "current_version": u.current_version,
+            "latest_version": u.latest_version,
+            "update_type": u.update_type,
+            "ecosystem": u.ecosystem,
+            "is_security": u.is_security,
+            "cve_ids": u.cve_ids,
+            "severity": u.severity,
+            "changelog_url": u.changelog_url,
+        }
+        for u in updates_to_process
+    ]
+    batches = analyzer.batch_updates(updates_as_dicts)
 
     print(f"\n📦 Update Batches ({len(batches)}):")
     for batch in batches:
-        risk_icon = "🔴" if batch.risk_level == "high" else "🟡" if batch.risk_level == "medium" else "🟢"
+        risk_icon = (
+            "🔴"
+            if batch.risk_level == "high"
+            else "🟡"
+            if batch.risk_level == "medium"
+            else "🟢"
+        )
         security_marker = " [SECURITY]" if batch.is_security_batch else ""
-        print(f"  {risk_icon} {batch.batch_id}: {len(batch.packages)} package(s){security_marker}")
+        print(
+            f"  {risk_icon} {batch.batch_id}: {len(batch.packages)} package(s){security_marker}"
+        )
         print(f"     Priority: {batch.priority} | Risk: {batch.risk_level}")
         print(f"     Packages: {', '.join(batch.packages[:5])}")
         if len(batch.packages) > 5:
@@ -557,6 +634,7 @@ Examples:
             for b in batches
         ]
         import json
+
         with open(json_file, "w", encoding="utf-8") as f:
             json.dump(report_data, f, indent=2)
         print(f"   Saved to: {json_file}")
@@ -603,16 +681,20 @@ Examples:
 
         # Run spec creation
         try:
-            success = asyncio.run(orchestrator.run(interactive=False, auto_approve=True))
+            success = asyncio.run(
+                orchestrator.run(interactive=False, auto_approve=True)
+            )
 
             if not success:
                 print("✗ Spec creation failed")
                 return 1
 
             print(f"\n✓ Spec created successfully: {orchestrator.spec_dir}")
-            print(f"\nNext steps:")
+            print("\nNext steps:")
             print(f"  1. Review the spec at: {orchestrator.spec_dir / 'spec.md'}")
-            print(f"  2. Start the build: python run.py --spec {orchestrator.spec_dir.name}")
+            print(
+                f"  2. Start the build: python run.py --spec {orchestrator.spec_dir.name}"
+            )
 
         except KeyboardInterrupt:
             print("\n\nSpec creation interrupted.")
