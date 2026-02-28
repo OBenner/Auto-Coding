@@ -1,0 +1,74 @@
+{
+  "priority": {
+    "critical": "Critical",
+    "criticalDescription": "Highest priority - executes first",
+    "high": "High",
+    "highDescription": "Important task - executes before normal priority",
+    "normal": "Normal",
+    "normalDescription": "Standard priority - default execution order",
+    "low": "Low",
+    "lowDescription": "Lower priority - executes when no higher priority tasks",
+    "background": "Background",
+    "backgroundDescription": "Lowest priority - only executes when system is idle"
+  },
+  "time": {
+    "now": "Now",
+    "tonight": "Tonight 10pm",
+    "tomorrowMorning": "Tomorrow 9am",
+    "tomorrowEvening": "Tomorrow 6pm",
+    "mondayMorning": "Monday 9am"
+  },
+  "calendar": {
+    "title": "Scheduled Builds",
+    "noBuilds": "No Scheduled Builds",
+    "noBuildsDescription": "You haven't scheduled any builds yet. Click 'Schedule Build' to create one.",
+    "loading": "Loading scheduled builds...",
+    "today": "Today",
+    "tomorrow": "Tomorrow",
+    "thisWeek": "This Week",
+    "later": "Later",
+    "status": {
+      "pending": "Pending",
+      "queued": "Queued",
+      "running": "Running",
+      "completed": "Completed",
+      "failed": "Failed",
+      "cancelled": "Cancelled",
+      "retrying": "Retrying"
+    },
+    "scheduledFor": "Scheduled for {{date}}",
+    "priority": "Priority",
+    "dependencies": "Dependencies",
+    "noDependencies": "None",
+    "viewDetails": "View Details",
+    "cancelBuild": "Cancel Build",
+    "retryBuild": "Retry Build"
+  },
+  "queue": {
+    "title": "Build Queue",
+    "noBuilds": "Queue is Empty",
+    "noBuildsDescription": "No builds are currently queued or running. Schedule a build to get started.",
+    "loading": "Loading queue...",
+    "active": "Active",
+    "waiting": "Waiting",
+    "status": {
+      "pending": "Pending",
+      "queued": "Queued",
+      "running": "Running",
+      "completed": "Completed",
+      "failed": "Failed",
+      "cancelled": "Cancelled",
+      "retrying": "Retrying"
+    },
+    "position": "Position {{position}}",
+    "priority": "Priority",
+    "dependencies": "Dependencies",
+    "noDependencies": "None",
+    "blockingTasks": "Blocking {{count}} builds",
+    "blockedBy": "Blocked by {{count}} builds",
+    "estimatedWait": "Est. wait: {{minutes}}m",
+    "duration": "Duration: {{minutes}}m {{seconds}}s",
+    "cancelBuild": "Cancel Build",
+    "viewLogs": "View Logs"
+  }
+}

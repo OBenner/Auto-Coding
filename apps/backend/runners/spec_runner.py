@@ -67,7 +67,7 @@ if is_windows():
                 _stream.reconfigure(encoding="utf-8", errors="replace")
                 continue
             except (AttributeError, io.UnsupportedOperation, OSError):
-                pass
+                _stream = getattr(sys, _stream_name)  # re-fetch unchanged stream
         # Method 2: Wrap with TextIOWrapper for piped output
         try:
             if hasattr(_stream, "buffer"):
@@ -79,7 +79,7 @@ if is_windows():
                 )
                 setattr(sys, _stream_name, _new_stream)
         except (AttributeError, io.UnsupportedOperation, OSError):
-            pass
+            _stream = getattr(sys, _stream_name)  # re-fetch unchanged stream
     # Clean up temporary variables
     del _stream_name, _stream
     if "_new_stream" in dir():
@@ -137,7 +137,7 @@ Examples:
   python spec_runner.py --task "Update text" --complexity simple
 
   # Complex integration (auto-detected)
-  python spec_runner.py --task "Add Graphiti memory integration with FalkorDB"
+  python spec_runner.py --task "Add Graphiti memory integration with LadybugDB"
 
   # Interactive mode
   python spec_runner.py --interactive

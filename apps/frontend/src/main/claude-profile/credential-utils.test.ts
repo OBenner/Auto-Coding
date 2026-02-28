@@ -16,6 +16,10 @@ vi.mock('../platform', () => ({
   getCurrentOS: vi.fn(() => 'linux'),
 }));
 
+vi.mock('../platform/paths', () => ({
+  getPowerShellExecutablePath: vi.fn(() => ['/mock/pwsh']),
+}));
+
 vi.mock('fs', () => ({
   existsSync: vi.fn(() => false),
   readFileSync: vi.fn(() => ''),
@@ -23,6 +27,7 @@ vi.mock('fs', () => ({
 
 vi.mock('child_process', () => ({
   execFileSync: vi.fn(() => ''),
+  execFile: vi.fn(),
 }));
 
 vi.mock('os', () => ({

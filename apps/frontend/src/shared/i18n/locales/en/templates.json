@@ -1,4 +1,58 @@
 {
+  "editor": {
+    "title": "Agent Template Editor",
+    "description": "Create and manage custom agent templates",
+    "fields": {
+      "name": "Template Name",
+      "description": "Description",
+      "category": "Category",
+      "version": "Version",
+      "customPrompt": "Custom System Prompt",
+      "thinkingLevel": "Thinking Level"
+    },
+    "placeholders": {
+      "name": "e.g., documentation-agent",
+      "description": "What does this agent template do?",
+      "category": "e.g., documentation, testing, security",
+      "version": "1.0.0",
+      "customPrompt": "Enter the custom system prompt for this agent..."
+    },
+    "validation": {
+      "nameRequired": "Template name is required",
+      "descriptionRequired": "Description is required",
+      "categoryRequired": "Category is required",
+      "promptTooShort": "Custom prompt must be at least 20 characters",
+      "invalidVersion": "Invalid version format (use semantic versioning like 1.0.0)",
+      "invalidNameFormat": "Name must be lowercase alphanumeric with hyphens only",
+      "exportFailed": "Export failed"
+    },
+    "updateAvailable": "Update Available",
+    "update": "Update",
+    "upToDate": "Up to Date",
+    "currentVersion": "Current Version",
+    "newVersionAvailable": "New version {{version}} available",
+    "hints": {
+      "versionFormat": "Semantic versioning (e.g., 1.0.0)",
+      "customPrompt": "This prompt will override the default agent system prompt. Use clear instructions to define the agent's behavior and capabilities."
+    },
+    "actions": {
+      "save": "Save Template",
+      "cancel": "Cancel",
+      "test": "Test Template",
+      "import": "Import Template",
+      "export": "Export Template",
+      "importing": "Importing...",
+      "exporting": "Exporting...",
+      "saving": "Saving...",
+      "testing": "Testing..."
+    }
+  },
+  "selector": {
+    "noneOption": "None",
+    "useDefaultAgentHint": "(Use default agent)",
+    "category": "Category:",
+    "toolsConfigured": "Tools configured"
+  },
   "wizard": {
     "title": "Template Parameters",
     "description": "Fill in the parameters to generate your spec",
@@ -47,5 +101,72 @@
       "title": "No spec content",
       "description": "Generate a spec to see preview content"
     }
+  },
+  "toolSelector": {
+    "title": "Tool Configuration",
+    "description": "Select which tools and MCP servers this agent template can use",
+    "baseTools": "Base Tools",
+    "mcpServers": "MCP Servers",
+    "tools": {
+      "read": "Read - Read file contents",
+      "glob": "Glob - Find files by pattern",
+      "grep": "Grep - Search file contents",
+      "write": "Write - Create new files",
+      "edit": "Edit - Modify existing files",
+      "bash": "Bash - Execute commands",
+      "webFetch": "WebFetch - Fetch web pages",
+      "webSearch": "WebSearch - Search the web"
+    },
+    "mcp": {
+      "context7": "Context7 - Documentation lookup",
+      "graphiti": "Graphiti Memory - Knowledge graph",
+      "linear": "Linear - Project management",
+      "electron": "Electron - Desktop app automation",
+      "puppeteer": "Puppeteer - Browser automation",
+      "autoClaude": "Auto-Code - Build management"
+    },
+    "selectAll": "Select All",
+    "deselectAll": "Deselect All",
+    "noToolsSelected": "At least one tool must be selected",
+    "autoClaudeRequired": "Auto-Code MCP is required and always enabled"
+  },
+  "testDialog": {
+    "title": "Test Template",
+    "description": "Run a dry-run test of {{name}} template with sample input",
+    "templateName": "Template",
+    "category": "Category",
+    "testInput": "Test Input",
+    "inputPlaceholder": "Enter a sample task description to test the template...",
+    "inputHint": "Describe a task you would use this template for. The template will generate a spec without making any changes.",
+    "inputRequired": "Test input is required",
+    "runTest": "Run Test",
+    "running": "Running test...",
+    "testFailed": "Template test failed. Please check the template configuration and try again.",
+    "testSuccess": "Test completed successfully! The template generated the following:",
+    "apiNotAvailable": "API not available"
+  },
+  "marketplace": {
+    "title": "Template Marketplace",
+    "description": "Browse and import community-shared agent templates",
+    "searchPlaceholder": "Search community templates...",
+    "filter": "Filter options",
+    "all": "All",
+    "noTemplates": "No templates found",
+    "emptyMarketplace": "Community Marketplace",
+    "emptyMarketplaceHint": "Community templates will appear here once the marketplace is available.",
+    "searchEmptyHint": "Try adjusting your search or filters",
+    "templateCount": "{{count}} template",
+    "templateCount_plural": "{{count}} templates",
+    "filteredCount": "Filtered from {{total}}",
+    "import": "Import Template",
+    "importing": "Importing...",
+    "stats": {
+      "downloads": "{{count}} download",
+      "downloads_plural": "{{count}} downloads",
+      "reviews": "{{count}} review",
+      "reviews_plural": "{{count}} reviews"
+    },
+    "author": "By {{author}}",
+    "version": "v{{version}}"
   }
 }

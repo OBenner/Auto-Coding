@@ -299,8 +299,8 @@ class CIDiscovery:
             if isinstance(variables, dict):
                 result.environment_variables.extend(variables.keys())
 
-        except Exception:
-            pass
+        except (ValueError, KeyError, TypeError, OSError):
+            pass  # Config parsing failed, return partial result
 
         return result
 
@@ -357,8 +357,8 @@ class CIDiscovery:
                     )
                 )
 
-        except Exception:
-            pass
+        except (ValueError, KeyError, TypeError, OSError):
+            pass  # Config parsing failed, return partial result
 
         return result
 
@@ -377,7 +377,6 @@ class CIDiscovery:
             matches = sh_pattern.findall(content)
 
             steps = []
-            test_related = False
 
             for cmd in matches:
                 steps.append(cmd)
@@ -386,7 +385,7 @@ class CIDiscovery:
                 if any(
                     kw in cmd.lower() for kw in ["test", "pytest", "jest", "coverage"]
                 ):
-                    test_related = True
+                    pass
 
             # Extract stage names
             stage_pattern = re.compile(r'stage\s*\([\'"]([^\'"]+)[\'"]\)')
@@ -402,8 +401,8 @@ class CIDiscovery:
                     )
                 )
 
-        except Exception:
-            pass
+        except (ValueError, KeyError, TypeError, OSError):
+            pass  # Config parsing failed, return partial result
 
         return result
 
@@ -412,7 +411,7 @@ class CIDiscovery:
         if HAS_YAML:
             try:
                 return yaml.safe_load(content)
-            except Exception:
+            except (ValueError, TypeError):
                 return None
 
         # Basic fallback for simple YAML (very limited)
@@ -435,9 +434,8 @@ class CIDiscovery:
             "npm test" in cmd_lower
             or "yarn test" in cmd_lower
             or "pnpm test" in cmd_lower
-        ):
-            if "unit" not in result.test_commands:
-                result.test_commands["unit"] = cmd.strip()
+        ) and "unit" not in result.test_commands:
+            result.test_commands["unit"] = cmd.strip()
 
         # Jest/Vitest
         if "jest" in cmd_lower or "vitest" in cmd_lower:
@@ -457,14 +455,12 @@ class CIDiscovery:
             result.test_commands["integration"] = cmd.strip()
 
         # Go tests
-        if "go test" in cmd_lower:
-            if "unit" not in result.test_commands:
-                result.test_commands["unit"] = cmd.strip()
+        if "go test" in cmd_lower and "unit" not in result.test_commands:
+            result.test_commands["unit"] = cmd.strip()
 
         # Rust tests
-        if "cargo test" in cmd_lower:
-            if "unit" not in result.test_commands:
-                result.test_commands["unit"] = cmd.strip()
+        if "cargo test" in cmd_lower and "unit" not in result.test_commands:
+            result.test_commands["unit"] = cmd.strip()
 
     def to_dict(self, result: CIConfig) -> dict[str, Any]:
         """Convert result to dictionary for JSON serialization."""

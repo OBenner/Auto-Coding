@@ -15,7 +15,7 @@ import json
 import pytest
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, patch, AsyncMock
+from unittest.mock import MagicMock
 
 # Store original modules for cleanup
 _original_modules = {}
@@ -658,9 +658,9 @@ class TestRunAIComplexityAssessment:
                 "needs_self_critique": False,
             },
         }
-        (spec_dir / "complexity_assessment.json").write_text(json.dumps(assessment_data))
-
         async def mock_agent(prompt_file, additional_context=None):
+            # Simulate the real agent writing the assessment file
+            (spec_dir / "complexity_assessment.json").write_text(json.dumps(assessment_data))
             return (True, "Assessment created")
 
         result = await run_ai_complexity_assessment(

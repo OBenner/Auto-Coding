@@ -432,8 +432,9 @@ fi
 
 Create the UI/UX ideas structure:
 
-```bash
-cat > ui_ux_ideas.json << 'EOF'
+Use the **Write** tool to create `ui_ux_ideas.json` with the following structure:
+
+```json
 {
   "ui_ux_improvements": [
     {
@@ -453,8 +454,9 @@ cat > ui_ux_ideas.json << 'EOF'
     }
   ]
 }
-EOF
 ```
+
+**IMPORTANT**: Use the Write tool to create this file. Do NOT use `cat >`, heredoc (`<< EOF`), or bash redirection — these hang on Windows.
 
 Verify:
 ```bash

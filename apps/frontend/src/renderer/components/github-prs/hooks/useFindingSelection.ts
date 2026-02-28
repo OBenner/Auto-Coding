@@ -30,21 +30,37 @@ export function useFindingSelection({
     onSelectionChange(next);
   }, [selectedIds, onSelectionChange]);
 
-  // Select all findings
+  // Select all findings (preserve selections for IDs not in active findings list)
   const selectAll = useCallback(() => {
-    onSelectionChange(new Set(findings.map(f => f.id)));
-  }, [findings, onSelectionChange]);
+    const activeIds = new Set(findings.map(f => f.id));
+    const preserved = new Set<string>();
+    for (const id of selectedIds) {
+      if (!activeIds.has(id)) {
+        preserved.add(id);
+      }
+    }
+    const next = new Set([...preserved, ...findings.map(f => f.id)]);
+    onSelectionChange(next);
+  }, [findings, selectedIds, onSelectionChange]);
 
   // Clear all selections
   const selectNone = useCallback(() => {
     onSelectionChange(new Set());
   }, [onSelectionChange]);
 
-  // Select only critical and high severity findings
+  // Select only critical and high severity findings (preserve selections for IDs not in active findings list)
   const selectImportant = useCallback(() => {
+    const activeIds = new Set(findings.map(f => f.id));
+    const preserved = new Set<string>();
+    for (const id of selectedIds) {
+      if (!activeIds.has(id)) {
+        preserved.add(id);
+      }
+    }
     const important = [...groupedFindings.critical, ...groupedFindings.high];
-    onSelectionChange(new Set(important.map(f => f.id)));
-  }, [groupedFindings, onSelectionChange]);
+    const next = new Set([...preserved, ...important.map(f => f.id)]);
+    onSelectionChange(next);
+  }, [findings, groupedFindings, selectedIds, onSelectionChange]);
 
   // Toggle entire severity group selection
   const toggleSeverityGroup = useCallback((severity: SeverityGroup) => {

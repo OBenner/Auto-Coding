@@ -915,7 +915,6 @@ class TestIntegrationPipeline:
 
     def test_pipeline_flow_low_confidence_filtered(self, make_finding):
         """Test that low confidence findings are filtered even with valid evidence."""
-        changed_files = ["src/auth.py"]
         finding = make_finding(
             file="src/auth.py",
             line=15,
