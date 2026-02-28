@@ -64,7 +64,7 @@ import { SessionContextIndicator } from './SessionContextIndicator';
 import { NavIndicator } from './NavIndicator';
 import type { Project, AutoBuildVersionInfo, GitStatus, ProjectEnvConfig } from '../../shared/types';
 
-export type SidebarView = 'kanban' | 'terminals' | 'roadmap' | 'context' | 'ideation' | 'github-issues' | 'gitlab-issues' | 'github-prs' | 'gitlab-merge-requests' | 'changelog' | 'insights' | 'worktrees' | 'agent-tools' | 'plugins' | 'analytics' | 'merge-analytics' | 'projectHealth' | 'sessions' | 'scheduler' | 'feedback';
+export type SidebarView = 'kanban' | 'terminals' | 'roadmap' | 'context' | 'ideation' | 'github-issues' | 'gitlab-issues' | 'github-prs' | 'gitlab-merge-requests' | 'changelog' | 'insights' | 'worktrees' | 'agent-tools' | 'plugins' | 'analytics' | 'merge-analytics' | 'sessions' | 'scheduler' | 'feedback';
 
 interface SidebarProps {
   onSettingsClick: () => void;
@@ -95,7 +95,6 @@ const baseNavItems: NavItem[] = [
   { id: 'worktrees', labelKey: 'navigation:items.worktrees', icon: GitBranch, shortcut: 'W' },
   { id: 'analytics', labelKey: 'navigation:items.analytics', icon: Activity, shortcut: 'T' },
   { id: 'merge-analytics', labelKey: 'navigation:items.mergeAnalytics', icon: BarChart3, shortcut: 'Y' },
-  { id: 'projectHealth', labelKey: 'navigation:items.projectHealth', icon: Activity, shortcut: 'H' },
   { id: 'sessions', labelKey: 'navigation:items.sessions', icon: Play },
   { id: 'feedback', labelKey: 'navigation:items.feedback', icon: MessageSquare, shortcut: 'F' }
 ];

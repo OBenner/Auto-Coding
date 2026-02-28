@@ -601,60 +601,6 @@ const browserMockAPI: ElectronAPI = {
   getConflictPatterns: async () => ({ success: true, data: [] }),
   exportMergeAnalytics: async () => ({ success: true, data: { path: '/mock/export' } }),
 
-  // Project health operations
-  getProjectHealth: async () => ({
-    success: true,
-    data: {
-      overall_score: 85,
-      status: 'good' as const,
-      test_coverage: {
-        percentage: 75,
-        covered_lines: 1500,
-        total_lines: 2000,
-        test_count: 120,
-        trend: 'stable' as const
-      },
-      code_quality: {
-        complexity_score: 15,
-        duplication_percentage: 5,
-        maintainability_index: 80,
-        issues_count: 3
-      },
-      security: {
-        vulnerability_count: 2,
-        critical_count: 0,
-        high_count: 1,
-        medium_count: 1,
-        low_count: 0,
-        scan_date: new Date().toISOString()
-      },
-      dependencies: {
-        total_dependencies: 50,
-        outdated_count: 5,
-        major_updates_available: 1,
-        minor_updates_available: 2,
-        patch_updates_available: 2,
-        freshness_score: 85
-      },
-      agent_activity: {
-        total_iterations: 25,
-        success_rate: 88,
-        average_fix_time: 12.5,
-        recent_activity: []
-      },
-      generated_at: new Date().toISOString()
-    }
-  }),
-  getHealthSummary: async () => ({
-    success: true,
-    data: {
-      overall_score: 85,
-      status: 'good' as const,
-      critical_issues: [],
-      recommendations: ['Consider updating outdated dependencies']
-    }
-  }),
-
   // Memory graph operations
   getGraphData: async () => ({ success: true, data: { nodes: [], edges: [], node_count: 0, edge_count: 0 } }),
   deleteMemory: async () => ({ success: true, data: { success: true } }),

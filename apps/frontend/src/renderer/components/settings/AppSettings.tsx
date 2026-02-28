@@ -20,6 +20,7 @@ import {
   Bug,
   Users,
   Keyboard,
+  DollarSign,
   MessageSquare
 } from 'lucide-react';
 
@@ -57,6 +58,8 @@ import { DevToolsSettings } from './DevToolsSettings';
 import { DebugSettings } from './DebugSettings';
 import { AccountSettings } from './AccountSettings';
 import { KeyboardShortcutsSettings } from './KeyboardShortcutsSettings';
+import { ProviderSettings } from './ProviderSettings';
+import { CostComparison } from './CostComparison';
 import { ProjectSelector } from './ProjectSelector';
 import { ProjectSettingsContent, ProjectSettingsSection } from './ProjectSettingsContent';
 import { useProjectStore } from '../../stores/project-store';
@@ -71,7 +74,7 @@ interface AppSettingsDialogProps {
 }
 
 // App-level settings sections
-export type AppSection = 'appearance' | 'display' | 'language' | 'devtools' | 'agent' | 'paths' | 'accounts' | 'updates' | 'notifications' | 'feedback' | 'keyboardShortcuts' | 'debug';
+export type AppSection = 'appearance' | 'display' | 'language' | 'devtools' | 'provider' | 'cost' | 'agent' | 'paths' | 'accounts' | 'updates' | 'notifications' | 'feedback' | 'keyboardShortcuts' | 'debug';
 
 interface NavItemConfig<T extends string> {
   id: T;
@@ -83,6 +86,8 @@ const appNavItemsConfig: NavItemConfig<AppSection>[] = [
   { id: 'display', icon: Monitor },
   { id: 'language', icon: Globe },
   { id: 'devtools', icon: Code },
+  { id: 'provider', icon: Sparkles },
+  { id: 'cost', icon: DollarSign },
   { id: 'agent', icon: Bot },
   { id: 'paths', icon: FolderOpen },
   { id: 'accounts', icon: Users },
@@ -193,6 +198,10 @@ export function AppSettingsDialog({ open, onOpenChange, initialSection, initialP
         return <LanguageSettings settings={settings} onSettingsChange={setSettings} />;
       case 'devtools':
         return <DevToolsSettings settings={settings} onSettingsChange={setSettings} />;
+      case 'provider':
+        return <ProviderSettings />;
+      case 'cost':
+        return <CostComparison />;
       case 'agent':
         return <GeneralSettings settings={settings} onSettingsChange={setSettings} section="agent" />;
       case 'paths':
