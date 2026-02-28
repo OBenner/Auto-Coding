@@ -166,7 +166,7 @@ export function WebhooksSection({
                         </span>
                         {status.connected ? (
                           <span className="text-xs text-success">
-                            {t('settings:webhooks.status.active')}
+                            {t('settings:webhooks.status.connected')}
                           </span>
                         ) : (
                           <span className="text-xs text-muted-foreground">

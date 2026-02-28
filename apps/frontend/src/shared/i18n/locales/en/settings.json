@@ -970,6 +970,18 @@
       "duration": {
         "unavailable": "N/A"
       }
+    },
+    "events": {
+      "build_started": "Build Started",
+      "build_completed": "Build Completed",
+      "build_failed": "Build Failed",
+      "subtask_started": "Subtask Started",
+      "subtask_completed": "Subtask Completed",
+      "subtask_failed": "Subtask Failed",
+      "pr_opened": "PR Opened",
+      "pr_merged": "PR Merged",
+      "pr_closed": "PR Closed",
+      "custom": "Custom"
     }
   },
   "agentPreferences": {

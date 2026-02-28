@@ -13,12 +13,15 @@ import logging
 import os
 import tempfile
 import threading
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 from .models import WebhookConfig, WebhookLog
 
 logger = logging.getLogger(__name__)
+
+# Process-wide lock so all WebhookStorage instances coordinate writes
+_storage_lock = threading.Lock()
 
 
 @dataclass
@@ -33,9 +36,6 @@ class WebhookStorage:
     spec_dir: Path
     config_file: str = "webhook_configs.json"
     log_file: str = "webhook_logs.json"
-    _lock: threading.Lock = field(
-        default_factory=threading.Lock, init=False, repr=False
-    )
 
     def get_config_path(self) -> Path:
         """Get path to webhook configs file."""
@@ -129,7 +129,7 @@ class WebhookStorage:
         log_path = self.get_log_path()
         log_path.parent.mkdir(parents=True, exist_ok=True)
 
-        with self._lock:
+        with _storage_lock:
             # Load existing logs
             logs = []
             if log_path.exists():
@@ -163,36 +163,38 @@ class WebhookStorage:
         return None
 
     def save_config(self, config: WebhookConfig) -> None:
-        """Save or update a webhook configuration."""
-        configs = self.load_configs()
+        """Save or update a webhook configuration (thread-safe)."""
+        with _storage_lock:
+            configs = self.load_configs()
 
-        # Update existing or append new
-        updated = False
-        for i, cfg in enumerate(configs):
-            if cfg.id == config.id:
-                configs[i] = config
-                updated = True
-                break
+            # Update existing or append new
+            updated = False
+            for i, cfg in enumerate(configs):
+                if cfg.id == config.id:
+                    configs[i] = config
+                    updated = True
+                    break
 
-        if not updated:
-            configs.append(config)
+            if not updated:
+                configs.append(config)
 
-        self.save_configs(configs)
+            self.save_configs(configs)
 
     def delete_config(self, webhook_id: str) -> bool:
-        """Delete a webhook configuration."""
-        configs = self.load_configs()
-        original_count = len(configs)
-        configs = [cfg for cfg in configs if cfg.id != webhook_id]
+        """Delete a webhook configuration (thread-safe)."""
+        with _storage_lock:
+            configs = self.load_configs()
+            original_count = len(configs)
+            configs = [cfg for cfg in configs if cfg.id != webhook_id]
 
-        if len(configs) < original_count:
-            self.save_configs(configs)
-            return True
-        return False
+            if len(configs) < original_count:
+                self.save_configs(configs)
+                return True
+            return False
 
     def clear_logs(self, webhook_id: str | None = None) -> int:
         """
-        Clear webhook logs from disk.
+        Clear webhook logs from disk (thread-safe).
 
         Args:
             webhook_id: Optional filter for specific webhook.
@@ -201,27 +203,34 @@ class WebhookStorage:
         Returns:
             Number of logs cleared
         """
-        log_path = self.get_log_path()
-        if not log_path.exists():
-            return 0
+        with _storage_lock:
+            log_path = self.get_log_path()
+            if not log_path.exists():
+                return 0
 
-        try:
-            with open(log_path, encoding="utf-8") as f:
-                logs = json.load(f)
-        except (OSError, json.JSONDecodeError, UnicodeDecodeError):
-            return 0
+            try:
+                with open(log_path, encoding="utf-8") as f:
+                    logs = json.load(f)
+            except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+                return 0
 
-        original_count = len(logs)
+            original_count = len(logs)
 
-        if webhook_id:
-            # Filter out logs for this webhook
-            logs = [log for log in logs if log.get("webhook_id") != webhook_id]
-        else:
-            # Clear all logs
-            logs = []
+            if webhook_id:
+                # Filter out logs for this webhook
+                logs = [log for log in logs if log.get("webhook_id") != webhook_id]
+            else:
+                # Clear all logs
+                logs = []
 
-        # Save remaining logs
-        with open(log_path, "w", encoding="utf-8") as f:
-            json.dump(logs, f, indent=2)
+            # Atomic write
+            try:
+                fd, tmp_path = tempfile.mkstemp(dir=str(log_path.parent), suffix=".tmp")
+                with os.fdopen(fd, "w", encoding="utf-8") as f:
+                    json.dump(logs, f, indent=2)
+                Path(tmp_path).replace(log_path)
+            except OSError:
+                with open(log_path, "w", encoding="utf-8") as f:
+                    json.dump(logs, f, indent=2)
 
-        return original_count - len(logs)
+            return original_count - len(logs)

@@ -20,6 +20,7 @@ Usage:
 
 from __future__ import annotations
 
+import asyncio
 import inspect
 import logging
 import uuid
@@ -350,7 +351,7 @@ def create_webhook_server(
                 if inspect.iscoroutinefunction(custom_handler):
                     await custom_handler(webhook_config, payload)
                 else:
-                    custom_handler(webhook_config, payload)
+                    await asyncio.to_thread(custom_handler, webhook_config, payload)
 
             # Mark as successful
             webhook_log.mark_completed(
@@ -401,23 +402,32 @@ def create_webhook_server(
     @app.post("/api/webhooks/test", tags=["webhooks"])
     async def test_webhook_connection(
         request: TestConnectionRequest,
+        raw_request: Request,
     ) -> JSONResponse:
         """
         Test a webhook connection by sending a test event.
 
-        This endpoint is used by the frontend UI to test webhook configurations
-        before enabling them. It loads the webhook config, creates a test event,
-        and attempts to send it to the configured URL.
+        This endpoint is restricted to localhost callers only and is used
+        by the frontend UI to test webhook configurations before enabling them.
 
         Args:
             request: TestConnectionRequest with webhook_id and project_dir
+            raw_request: FastAPI request for client host verification
 
         Returns:
             JSONResponse with test result
 
         Raises:
-            HTTPException: If webhook not found or send fails
+            HTTPException: If unauthorized, webhook not found, or send fails
         """
+        # Restrict to localhost only
+        client_host = raw_request.client.host if raw_request.client else None
+        if client_host not in ("127.0.0.1", "::1", "localhost"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="This endpoint is only accessible from localhost",
+            )
+
         try:
             # Validate project_dir to prevent path traversal attacks
             raw_project_dir = request.project_dir
@@ -625,7 +635,8 @@ async def _authenticate_request(
 
     # API key authentication
     elif auth_config.auth_type == "api_key":
-        api_key = request.headers.get("X-Webhook-API-Key")
+        header_name = auth_config.api_key_header or "X-Webhook-API-Key"
+        api_key = request.headers.get(header_name)
         if verify_api_key(api_key, webhook_config):
             logger.debug(f"Webhook {webhook_config.id} authenticated via API key")
             return True

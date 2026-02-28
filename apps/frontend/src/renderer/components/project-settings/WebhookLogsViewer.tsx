@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ChevronDown, ChevronUp, Clock, AlertCircle, CheckCircle2, XCircle, Loader2, Filter, FileText, ExternalLink } from 'lucide-react';
 import { StatusBadge } from './StatusBadge';
@@ -19,7 +19,7 @@ interface WebhookLogsViewerProps {
   loading?: boolean;
 }
 
-const SENSITIVE_HEADER_PATTERNS = [
+const SENSITIVE_PATTERNS = [
   'authorization',
   'x-api-key',
   'x-auth-token',
@@ -29,18 +29,45 @@ const SENSITIVE_HEADER_PATTERNS = [
   'password',
   'api_key',
   'apikey',
+  'access_token',
+  'ssn',
+  'credential',
 ];
 
 function redactSensitiveHeaders(headers: Record<string, string>): Record<string, string> {
   const redacted: Record<string, string> = {};
   for (const [key, value] of Object.entries(headers)) {
     const keyLower = key.toLowerCase();
-    const isSensitive = SENSITIVE_HEADER_PATTERNS.some(
+    const isSensitive = SENSITIVE_PATTERNS.some(
       (pattern) => keyLower === pattern || keyLower.includes(pattern),
     );
     redacted[key] = isSensitive ? '***REDACTED***' : value;
   }
   return redacted;
+}
+
+function redactSensitiveFields(data: unknown): unknown {
+  if (data === null || data === undefined) return data;
+  if (typeof data === 'string') return data;
+  if (typeof data === 'number' || typeof data === 'boolean') return data;
+
+  if (Array.isArray(data)) {
+    return data.map(redactSensitiveFields);
+  }
+
+  if (typeof data === 'object') {
+    const result: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(data as Record<string, unknown>)) {
+      const keyLower = key.toLowerCase();
+      const isSensitive = SENSITIVE_PATTERNS.some(
+        (pattern) => keyLower === pattern || keyLower.includes(pattern),
+      );
+      result[key] = isSensitive ? '***REDACTED***' : redactSensitiveFields(value);
+    }
+    return result;
+  }
+
+  return data;
 }
 
 export function WebhookLogsViewer({ logs, loading = false }: WebhookLogsViewerProps) {
@@ -111,15 +138,29 @@ export function WebhookLogsViewer({ logs, loading = false }: WebhookLogsViewerPr
     }
   };
 
-  const getEventTypeName = (eventType: WebhookEventType): string => {
-    return eventType
-      .split('_')
-      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(' ');
-  };
+  const getEventTypeName = useCallback(
+    (eventType: WebhookEventType): string => {
+      const key = `settings:webhooks.events.${eventType}`;
+      const translated = t(key, { defaultValue: '' });
+      if (translated && translated !== key) return translated;
+      // Fallback: snake_case to Title Case
+      return eventType
+        .split('_')
+        .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' ');
+    },
+    [t],
+  );
 
   const toggleLogExpansion = (logId: string) => {
     setExpandedLogId((prev) => (prev === logId ? null : logId));
+  };
+
+  const handleRowKeyDown = (e: React.KeyboardEvent, logId: string) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      toggleLogExpansion(logId);
+    }
   };
 
   return (
@@ -235,13 +276,19 @@ export function WebhookLogsViewer({ logs, loading = false }: WebhookLogsViewerPr
             const statusInfo = getStatusBadge(log.status);
             const StatusIcon = statusInfo.icon;
             const isExpanded = expandedLogId === log.id;
+            const detailsPanelId = `log-details-${log.id}`;
 
             return (
               <div key={log.id} className="rounded-lg border border-border overflow-hidden">
-                {/* Log summary */}
+                {/* Log summary - accessible interactive row */}
                 <div
-                  className="p-3 cursor-pointer hover:bg-muted/30 transition-colors"
+                  className="p-3 cursor-pointer hover:bg-muted/30 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   onClick={() => toggleLogExpansion(log.id)}
+                  onKeyDown={(e) => handleRowKeyDown(e, log.id)}
+                  role="button"
+                  tabIndex={0}
+                  aria-expanded={isExpanded}
+                  aria-controls={detailsPanelId}
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -282,13 +329,13 @@ export function WebhookLogsViewer({ logs, loading = false }: WebhookLogsViewerPr
                         </div>
                       </div>
 
-                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0 flex-shrink-0">
+                      <div className="h-6 w-6 flex items-center justify-center flex-shrink-0">
                         {isExpanded ? (
                           <ChevronUp className="h-4 w-4" />
                         ) : (
                           <ChevronDown className="h-4 w-4" />
                         )}
-                      </Button>
+                      </div>
                     </div>
                   </div>
 
@@ -302,7 +349,7 @@ export function WebhookLogsViewer({ logs, loading = false }: WebhookLogsViewerPr
 
                 {/* Expanded details */}
                 {isExpanded && (
-                  <>
+                  <div id={detailsPanelId} role="region">
                     <Separator />
                     <div className="p-3 space-y-3 bg-muted/20">
                       {/* Request details */}
@@ -355,7 +402,11 @@ export function WebhookLogsViewer({ logs, loading = false }: WebhookLogsViewerPr
                                   {t('settings:webhooks.logs.body')}
                                 </span>
                                 <pre className="mt-1 text-xs bg-muted p-2 rounded overflow-x-auto max-h-40 overflow-y-auto">
-                                  {JSON.stringify(log.request_body, null, 2)}
+                                  {JSON.stringify(
+                                    redactSensitiveFields(log.request_body),
+                                    null,
+                                    2,
+                                  )}
                                 </pre>
                               </div>
                             )}
@@ -407,7 +458,13 @@ export function WebhookLogsViewer({ logs, loading = false }: WebhookLogsViewerPr
                                   {t('settings:webhooks.logs.body')}
                                 </span>
                                 <pre className="mt-1 text-xs bg-muted p-2 rounded overflow-x-auto max-h-40 overflow-y-auto">
-                                  {log.response_body}
+                                  {typeof log.response_body === 'string'
+                                    ? log.response_body
+                                    : JSON.stringify(
+                                        redactSensitiveFields(log.response_body),
+                                        null,
+                                        2,
+                                      )}
                                 </pre>
                               </div>
                             )}
@@ -422,7 +479,11 @@ export function WebhookLogsViewer({ logs, loading = false }: WebhookLogsViewerPr
                             {t('settings:webhooks.logs.eventData')}
                           </p>
                           <pre className="text-xs bg-muted p-2 rounded overflow-x-auto max-h-40 overflow-y-auto">
-                            {JSON.stringify(log.event_data, null, 2)}
+                            {JSON.stringify(
+                              redactSensitiveFields(log.event_data),
+                              null,
+                              2,
+                            )}
                           </pre>
                         </div>
                       )}
@@ -443,7 +504,7 @@ export function WebhookLogsViewer({ logs, loading = false }: WebhookLogsViewerPr
                         )}
                       </div>
                     </div>
-                  </>
+                  </div>
                 )}
               </div>
             );

@@ -974,6 +974,18 @@
       "duration": {
         "unavailable": "N/D"
       }
+    },
+    "events": {
+      "build_started": "Build démarré",
+      "build_completed": "Build terminé",
+      "build_failed": "Build échoué",
+      "subtask_started": "Sous-tâche démarrée",
+      "subtask_completed": "Sous-tâche terminée",
+      "subtask_failed": "Sous-tâche échouée",
+      "pr_opened": "PR ouverte",
+      "pr_merged": "PR fusionnée",
+      "pr_closed": "PR fermée",
+      "custom": "Personnalisé"
     }
   },
   "agentPreferences": {

@@ -882,8 +882,15 @@ class OutgoingWebhookSender:
         """
         try:
             event_dict = event.to_dict()
+            # Flatten: merge top-level metadata (type, timestamp) with data fields
+            # so filter expressions like "subtask_id == 'abc'" resolve correctly
+            context: dict[str, Any] = {}
+            context.update(event_dict.get("data", {}))
+            context.update(event_dict.get("metadata", {}))
+            context["type"] = event_dict.get("type")
+            context["timestamp"] = event_dict.get("timestamp")
             tree = ast.parse(filter_expr, mode="eval")
-            return bool(self._safe_eval_node(tree.body, event_dict))
+            return bool(self._safe_eval_node(tree.body, context))
         except Exception as e:
             logger.warning(f"Failed to evaluate event filter '{filter_expr}': {e}")
             return False

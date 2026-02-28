@@ -1,3 +1,4 @@
+import type { ReactNode, KeyboardEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CheckCircle2, Settings } from 'lucide-react';
 import { StatusBadge } from './StatusBadge';
@@ -10,7 +11,7 @@ interface WebhookIntegrationCardProps {
   disabled?: boolean;
 }
 
-const INTEGRATION_ICONS: Record<string, React.ReactNode> = {
+const INTEGRATION_ICONS: Record<string, ReactNode> = {
   slack: '💬',
   discord: '🎮',
   teams: '👥',
@@ -35,7 +36,7 @@ export function WebhookIntegrationCard({
     ? t('settings:webhooks.actions.configure')
     : t('settings:webhooks.actions.setup');
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  const handleKeyDown = (e: KeyboardEvent) => {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
       onConfigure();
@@ -51,6 +52,7 @@ export function WebhookIntegrationCard({
       role="button"
       tabIndex={!disabled ? 0 : undefined}
       onKeyDown={!disabled ? handleKeyDown : undefined}
+      aria-disabled={disabled || undefined}
       aria-label={t('settings:webhooks.actions.configureAriaLabel', {
         integration: integrationName,
       })}
