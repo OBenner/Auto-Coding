@@ -3,7 +3,7 @@ ZhipuAI (GLM) Provider Adapter
 ==============================
 
 Wraps the ZhipuAI SDK (GLM models) to implement the AIEngineProvider interface.
-This enables access to ZhipuAI's Chinese language models through a unified API.
+Enables access to ZhipuAI's Chinese language models through a unified API.
 
 ZhipuAI supports models:
 - glm-4-flash: Free model (use glm-4-flash-250414 for testing)
