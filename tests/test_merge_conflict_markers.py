@@ -14,7 +14,6 @@ Covers:
 - Full integration flow
 """
 
-import pytest
 
 from merge.prompts import (
     parse_conflict_markers,

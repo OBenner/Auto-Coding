@@ -51,6 +51,12 @@ export interface GitLabAPINote {
   system: boolean;
 }
 
+export interface GitLabAPINoteBasic {
+  id: number;
+  body: string;
+  author: { username: string };
+}
+
 export interface GitLabAPIMergeRequest {
   id: number;
   iid: number;

@@ -47,10 +47,15 @@ try:
     from .pydantic_models import AgentAgreement, ParallelOrchestratorResponse
     from .sdk_utils import process_sdk_stream
 except (ImportError, ValueError, SystemError):
-    from context_gatherer import PRContext, PRContextGatherer, _validate_git_ref
     from core.client import create_client
-    from gh_client import GHClient
-    from models import (
+    from phase_config import get_thinking_budget, resolve_model_id
+    from runners.github.context_gatherer import (
+        PRContext,
+        PRContextGatherer,
+        _validate_git_ref,
+    )
+    from runners.github.gh_client import GHClient
+    from runners.github.models import (
         BRANCH_BEHIND_BLOCKER_MSG,
         BRANCH_BEHIND_REASONING,
         GitHubRunnerConfig,
@@ -59,12 +64,14 @@ except (ImportError, ValueError, SystemError):
         PRReviewResult,
         ReviewSeverity,
     )
-    from phase_config import get_thinking_budget, resolve_model_id
-    from services.category_utils import map_category
-    from services.io_utils import safe_print
-    from services.pr_worktree_manager import PRWorktreeManager
-    from services.pydantic_models import AgentAgreement, ParallelOrchestratorResponse
-    from services.sdk_utils import process_sdk_stream
+    from runners.github.services.category_utils import map_category
+    from runners.github.services.io_utils import safe_print
+    from runners.github.services.pr_worktree_manager import PRWorktreeManager
+    from runners.github.services.pydantic_models import (
+        AgentAgreement,
+        ParallelOrchestratorResponse,
+    )
+    from runners.github.services.sdk_utils import process_sdk_stream
 
 
 logger = logging.getLogger(__name__)
@@ -579,6 +586,13 @@ The SDK will run invoked agents in parallel automatically.
         except ValueError:
             severity = ReviewSeverity.MEDIUM
 
+        # Try verification.code_examined first (richer evidence), fall back to evidence
+        evidence = finding_data.evidence
+        if hasattr(finding_data, "verification") and finding_data.verification:
+            code_examined = getattr(finding_data.verification, "code_examined", None)
+            if code_examined:
+                evidence = code_examined
+
         return PRReviewFinding(
             id=finding_id,
             file=finding_data.file,
@@ -588,7 +602,7 @@ The SDK will run invoked agents in parallel automatically.
             category=category,
             severity=severity,
             suggested_fix=finding_data.suggested_fix or "",
-            evidence=finding_data.evidence,
+            evidence=evidence,
         )
 
     async def review(self, context: PRContext) -> PRReviewResult:
@@ -676,7 +690,7 @@ The SDK will run invoked agents in parallel automatically.
                                 file_count += 1
                                 if file_count >= MAX_FILE_COUNT:
                                     break
-                    except (OSError, PermissionError):
+                    except OSError:
                         file_count = 0
                     file_count_str = (
                         f"{file_count:,}+"
@@ -783,7 +797,7 @@ The SDK will run invoked agents in parallel automatically.
                 result_text = stream_result["result_text"]
                 structured_output = stream_result["structured_output"]
                 agents_invoked = stream_result["agents_invoked"]
-                msg_count = stream_result["msg_count"]
+                stream_result["msg_count"]
 
             self._report_progress(
                 "finalizing",
@@ -871,16 +885,35 @@ The SDK will run invoked agents in parallel automatically.
                 f"{len(validated_findings) - len(routed_findings)} dropped (low confidence)"
             )
 
-            # Use routed findings for verdict and summary
-            unique_findings = routed_findings
+            # Separate active findings (drive verdict) from dismissed (shown in UI only)
+            active_findings = []
+            dismissed_findings = []
+            for f in routed_findings:
+                if f.validation_status == "dismissed_false_positive":
+                    dismissed_findings.append(f)
+                else:
+                    active_findings.append(f)
 
+            safe_print(
+                f"[ParallelOrchestrator] Final: {len(active_findings)} active, "
+                f"{len(dismissed_findings)} disputed by validator",
+                flush=True,
+            )
             logger.info(
-                f"[ParallelOrchestrator] Review complete: {len(unique_findings)} findings"
+                f"[PRReview] Final findings: {len(active_findings)} active, "
+                f"{len(dismissed_findings)} disputed"
             )
 
-            # Generate verdict (includes merge conflict check and branch-behind check)
+            # All findings (active + dismissed) go in the result for UI display
+            all_review_findings = routed_findings
+            logger.info(
+                f"[ParallelOrchestrator] Review complete: {len(all_review_findings)} findings "
+                f"({len(active_findings)} active, {len(dismissed_findings)} disputed)"
+            )
+
+            # Generate verdict from ACTIVE findings only (dismissed don't affect verdict)
             verdict, verdict_reasoning, blockers = self._generate_verdict(
-                unique_findings,
+                active_findings,
                 has_merge_conflicts=context.has_merge_conflicts,
                 merge_state_status=context.merge_state_status,
             )
@@ -890,7 +923,7 @@ The SDK will run invoked agents in parallel automatically.
                 verdict=verdict,
                 verdict_reasoning=verdict_reasoning,
                 blockers=blockers,
-                findings=unique_findings,
+                findings=all_review_findings,
                 agents_invoked=final_agents,
             )
 
@@ -935,7 +968,7 @@ The SDK will run invoked agents in parallel automatically.
                 pr_number=context.pr_number,
                 repo=self.config.repo,
                 success=True,
-                findings=unique_findings,
+                findings=all_review_findings,
                 summary=summary,
                 overall_status=overall_status,
                 verdict=verdict,

@@ -89,7 +89,12 @@ def start_webhook_server_if_enabled(spec_dir: Path) -> bool:
         return True
 
     # Check if webhooks are enabled
-    webhooks_enabled = os.getenv("WEBHOOKS_ENABLED", "").lower() in ("true", "1", "yes", "on")
+    webhooks_enabled = os.getenv("WEBHOOKS_ENABLED", "").lower() in (
+        "true",
+        "1",
+        "yes",
+        "on",
+    )
     if not webhooks_enabled:
         logger.debug("Webhooks not enabled (set WEBHOOKS_ENABLED=true to enable)")
         return False
@@ -183,7 +188,7 @@ def _is_git_repo(project_dir: Path) -> bool:
             timeout=10,
         )
         return result.returncode == 0
-    except (subprocess.TimeoutExpired, Exception) as e:
+    except Exception as e:
         logger.debug("Git repo check failed: %s", e)
         return False
 
@@ -241,7 +246,7 @@ def _commit_gitignore(project_dir: Path) -> bool:
         combined_output = result.stdout + result.stderr
         return result.returncode == 0 or "nothing to commit" in combined_output
 
-    except (subprocess.TimeoutExpired, Exception) as e:
+    except Exception as e:
         logger.debug("Git commit failed: %s", e)
         return False
 

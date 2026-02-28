@@ -410,7 +410,7 @@ describe('TaskCard', () => {
           overallProgress: 50
         }
       });
-      const { container } = render(<TaskCard task={task} onClick={mockOnClick} />);
+      render(<TaskCard task={task} onClick={mockOnClick} />);
 
       // Status badge should be hidden when phase is active
       // Phase indicator should be visible instead

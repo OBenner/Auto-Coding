@@ -683,7 +683,7 @@ export function registerAutoFixHandlers(
             throw new Error(result.error ?? 'Failed to batch issues');
           }
 
-          sendComplete(result.data as typeof result.data & NonNullable<unknown>);
+          sendComplete(result.data as NonNullable<typeof result.data>);
         });
       } catch (error) {
         debugLog('Batch auto-fix failed', { error: error instanceof Error ? error.message : error });
@@ -794,7 +794,7 @@ export function registerAutoFixHandlers(
             throw new Error(result.error ?? 'Failed to analyze issues');
           }
 
-          sendComplete(result.data as typeof result.data & NonNullable<unknown>);
+          sendComplete(result.data as NonNullable<typeof result.data>);
         });
       } catch (error) {
         debugLog('Analyze preview failed', { error: error instanceof Error ? error.message : error });

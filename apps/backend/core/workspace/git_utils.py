@@ -388,7 +388,7 @@ def is_process_running(pid: int) -> bool:
     try:
         os.kill(pid, 0)
         return True
-    except (OSError, ProcessLookupError):
+    except OSError:
         return False
 
 
@@ -463,7 +463,6 @@ def validate_merged_syntax(
 
                 # Fall back to npx if not found
                 if not esbuild_cmd:
-                    esbuild_cmd = "npx"
                     args = ["npx", "esbuild", tmp_path, "--log-level=error"]
                 else:
                     args = [esbuild_cmd, tmp_path, "--log-level=error"]
@@ -503,7 +502,7 @@ def validate_merged_syntax(
             return True, ""  # Timeout = assume ok
         except FileNotFoundError:
             return True, ""  # No esbuild = skip validation
-        except Exception as e:
+        except Exception:
             return True, ""  # Other errors = skip validation
 
     # Python validation
@@ -589,7 +588,7 @@ def create_conflict_file_with_git(
             Path(wt_path).unlink(missing_ok=True)
             Path(base_path).unlink(missing_ok=True)
 
-    except Exception as e:
+    except Exception:
         return None, False
 
 

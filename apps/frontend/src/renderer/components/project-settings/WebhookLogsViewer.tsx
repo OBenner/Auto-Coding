@@ -248,7 +248,7 @@ export function WebhookLogsViewer({ logs, loading = false }: WebhookLogsViewerPr
                             <Clock className="h-3 w-3" />
                             {formatTimestamp(log.created_at)}
                           </span>
-                          {log.duration_ms !== null && (
+                          {log.duration_ms != null && (
                             <span>{formatDuration(log.duration_ms)}</span>
                           )}
                           {log.request_url && (

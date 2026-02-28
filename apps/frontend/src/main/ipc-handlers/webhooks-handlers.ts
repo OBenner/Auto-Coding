@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron';
+import { ipcMain, BrowserWindow } from 'electron';
 import { promises as fsPromises } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -369,43 +369,43 @@ export function registerWebhookHandlers(
           };
         }
 
-        // Import axios dynamically to avoid startup overhead
-        const axios = (await import('axios')).default;
-
         // Get webhook server port from environment (default to 8080)
         const webhookPort = process.env.WEBHOOK_PORT || '8080';
         const webhookUrl = `http://127.0.0.1:${webhookPort}/api/webhooks/test`;
 
-        // Call backend webhook test endpoint
-        const response = await axios.post(
-          webhookUrl,
-          {
-            webhook_id: config.id,
-            project_dir: project.path
-          },
-          {
-            timeout: 10000, // 10 second timeout
-            headers: {
-              'Content-Type': 'application/json'
-            }
-          }
-        );
+        // Call backend webhook test endpoint using native fetch
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
 
-        // Return result from backend
-        return {
-          success: true,
-          data: {
-            success: response.data.success,
-            integration: config.integration,
-            message: response.data.message || 'Test completed',
-            timestamp: new Date().toISOString()
-          }
-        };
+        try {
+          const response = await fetch(webhookUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              webhook_id: config.id,
+              project_dir: project.path
+            }),
+            signal: controller.signal
+          });
+
+          const data = await response.json();
+          clearTimeout(timeoutId);
+
+          // Return result from backend
+          return {
+            success: true,
+            data: {
+              success: data.success,
+              integration: config.integration,
+              message: data.message || 'Test completed'
+            }
+          };
+        } finally {
+          clearTimeout(timeoutId);
+        }
       } catch (error: any) {
-        // Handle errors (axios errors, connection refused, etc.)
-        const errorMsg = error.response?.data?.detail ||
-                         error.message ||
-                         'Failed to test webhook';
+        // Handle errors (connection refused, timeout, etc.)
+        const errorMsg = error.message || 'Failed to test webhook';
 
         return {
           success: true, // IPC succeeded
@@ -413,8 +413,7 @@ export function registerWebhookHandlers(
             success: false,
             integration: config.integration,
             message: errorMsg,
-            error: errorMsg,
-            timestamp: new Date().toISOString()
+            error: errorMsg
           }
         };
       }

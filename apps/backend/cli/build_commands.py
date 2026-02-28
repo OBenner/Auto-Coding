@@ -48,6 +48,9 @@ from .input_handlers import (
     read_multiline_input,
 )
 
+# Pattern management commands are available in pattern_commands.py
+# Run: python apps/backend/cli/pattern_commands.py --help
+
 
 def handle_build_command(
     project_dir: Path,
@@ -79,7 +82,7 @@ def handle_build_command(
         base_branch: Base branch for worktree creation (default: current branch)
     """
     # Lazy imports to avoid loading heavy modules
-    from agent import run_autonomous_agent, sync_spec_to_source
+    from agents import run_autonomous_agent, sync_spec_to_source
     from debug import (
         debug,
         debug_info,
@@ -290,7 +293,6 @@ def handle_build_command(
             except KeyboardInterrupt:
                 print("\n\nQA validation paused.")
                 print(f"Resume: python auto-claude/run.py --spec {spec_dir.name} --qa")
-                qa_approved = False
 
         # Post-build finalization (only for isolated sequential mode)
         # This happens AFTER QA validation so the worktree still exists
@@ -345,7 +347,7 @@ def _handle_build_interrupt(
         max_iterations: Maximum iterations
         verbose: Verbose mode flag
     """
-    from agent import run_autonomous_agent
+    from agents import run_autonomous_agent
 
     # Print paused banner
     print_paused_banner(spec_dir, spec_dir.name, has_worktree=bool(worktree_manager))
@@ -442,7 +444,7 @@ def _handle_build_interrupt(
         if choice == "skip":
             print()
             print_status("Resuming build...", "info")
-            status_manager.update(state=BuildState.RUNNING)
+            status_manager.update(state=BuildState.BUILDING)
             asyncio.run(
                 run_autonomous_agent(
                     project_dir=working_dir,

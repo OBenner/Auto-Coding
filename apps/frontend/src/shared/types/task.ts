@@ -74,10 +74,43 @@ export interface QAIssue {
   line?: number;
 }
 
+// QA Escalation types - for QA_ESCALATION.md parsing
+export interface QAEscalation {
+  generated: string;  // ISO timestamp
+  iteration: number;
+  maxIterations: number;
+  reason: string;
+  summary: QAEscalationSummary;
+  recurringIssues: QARecurringIssue[];
+  mostCommonIssues: QACommonIssue[];
+}
+
+export interface QAEscalationSummary {
+  totalIterations: number;
+  totalIssues: number;
+  uniqueIssues: number;
+  fixSuccessRate: number;  // 0-1 (percentage as decimal)
+}
+
+export interface QARecurringIssue {
+  title: string;
+  file?: string;
+  line?: number;
+  type?: string;
+  occurrences: number;
+  description: string;
+}
+
+export interface QACommonIssue {
+  title: string;
+  file?: string;
+  occurrences: number;
+}
+
 // Task Log Types - for persistent, phase-based logging
 export type TaskLogPhase = 'planning' | 'coding' | 'validation';
 export type TaskLogPhaseStatus = 'pending' | 'active' | 'completed' | 'failed';
-export type TaskLogEntryType = 'text' | 'tool_start' | 'tool_end' | 'phase_start' | 'phase_end' | 'error' | 'success' | 'info';
+export type TaskLogEntryType = 'text' | 'tool_start' | 'tool_end' | 'phase_start' | 'phase_end' | 'error' | 'success' | 'info' | 'decision';
 
 export interface TaskLogEntry {
   timestamp: string;
@@ -92,6 +125,8 @@ export interface TaskLogEntry {
   detail?: string;  // Full content that can be expanded (e.g., file contents, command output)
   subphase?: string;  // Subphase grouping (e.g., "PROJECT DISCOVERY", "CONTEXT GATHERING")
   collapsed?: boolean;  // Whether to show collapsed by default in UI
+  // Decision data for decision log entries
+  decision_data?: Record<string, unknown>;  // DecisionPoint data (imported separately to avoid circular deps)
 }
 
 export interface TaskPhaseLog {
@@ -115,7 +150,7 @@ export interface TaskLogs {
 
 // Streaming markers from Python (similar to InsightsStreamChunk)
 export interface TaskLogStreamChunk {
-  type: 'text' | 'tool_start' | 'tool_end' | 'phase_start' | 'phase_end' | 'error';
+  type: 'text' | 'tool_start' | 'tool_end' | 'phase_start' | 'phase_end' | 'error' | 'decision';
   content?: string;
   phase?: TaskLogPhase;
   timestamp?: string;
@@ -125,6 +160,7 @@ export interface TaskLogStreamChunk {
     success?: boolean;
   };
   subtask_id?: string;
+  decision_data?: Record<string, unknown>;  // DecisionPoint data for decision entries
 }
 
 // Log filtering and search types
@@ -189,6 +225,7 @@ export interface TaskDraft {
   referencedFiles: ReferencedFile[];
   requireReviewBeforeCoding?: boolean;
   agentModels?: Record<string, string>;  // Agent-specific model overrides
+  customTemplateId?: string;  // Custom agent template ID
   savedAt: Date;
 }
 
@@ -226,6 +263,7 @@ export interface TaskMetadata {
   gitlabIssueIid?: number;  // Reference to GitLab issue IID if from GitLab
   gitlabUrl?: string;  // GitLab issue URL
   templateName?: string;  // Template name if created from template
+  customTemplateId?: string;  // Custom agent template ID if using custom template
 
   // Classification
   category?: TaskCategory;
