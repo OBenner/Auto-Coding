@@ -156,10 +156,15 @@ describe('PRDetail - Clean Review State Reset Integration', () => {
     expect(screen.queryByRole('button', { name: /post clean review/i })).not.toBeInTheDocument();
 
     // Rerender with a different PR (number 456)
+    // Use key={pr.number} to force a full remount, which triggers the
+    // mount-only useEffect that resets cleanReviewPosted state.
+    // The production useEffect has an empty dependency array [], so a
+    // simple rerender without key change won't re-run the reset logic.
     const differentPR = createMockPR({ number: 456 });
     rerender(
       <I18nWrapper>
         <PRDetail
+          key={differentPR.number}
           pr={differentPR}
           projectId={mockProjectId}
           reviewResult={cleanReviewResult}
@@ -180,10 +185,12 @@ describe('PRDetail - Clean Review State Reset Integration', () => {
       </I18nWrapper>
     );
 
-    // After PR change, the "Post Clean Review" button should be visible again
-    // because cleanReviewPosted state was reset by useEffect when pr.number changed
-    const postCleanReviewButtonAfterChange = screen.queryByRole('button', { name: /post clean review/i });
-    expect(postCleanReviewButtonAfterChange).toBeInTheDocument();
+    // After PR change (remount via key), the "Post Clean Review" button should be visible again
+    // because cleanReviewPosted state was reset by the mount useEffect on the new instance.
+    // Use waitFor because the remounted component needs to process effects asynchronously.
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: /post clean review/i })).toBeInTheDocument();
+    });
     unmount();
   }, 15000); // Increased timeout for slower CI environments (Windows)
 

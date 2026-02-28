@@ -3,7 +3,7 @@ Framework Analyzer Module
 =========================
 
 Detects programming languages, frameworks, and related technologies across different ecosystems.
-Supports Python, Node.js/TypeScript, Go, Rust, and Ruby frameworks.
+Supports Python, Node.js/TypeScript, Go, Rust, Ruby, and PHP frameworks.
 """
 
 from __future__ import annotations
@@ -90,6 +90,13 @@ class FrameworkAnalyzer(BaseAnalyzer):
             self.analysis["package_manager"] = "bundler"
             content = self._read_file("Gemfile")
             self._detect_ruby_framework(content)
+
+        # PHP detection
+        elif self._exists("composer.json"):
+            self.analysis["language"] = "PHP"
+            self.analysis["package_manager"] = "composer"
+            content = self._read_file("composer.json")
+            self._detect_php_framework(content)
 
     def _detect_python_framework(self, content: str) -> None:
         """Detect Python framework."""
@@ -298,6 +305,43 @@ class FrameworkAnalyzer(BaseAnalyzer):
 
         if "sidekiq" in content.lower():
             self.analysis["task_queue"] = "Sidekiq"
+
+    def _detect_php_framework(self, content: str) -> None:
+        """Detect PHP framework."""
+        # Parse composer.json
+        import json
+
+        from .port_detector import PortDetector
+
+        try:
+            composer_data = json.loads(content)
+        except json.JSONDecodeError:
+            return
+
+        # Get all dependencies
+        require = composer_data.get("require", {})
+        require_dev = composer_data.get("require-dev", {})
+        all_deps = {**require, **require_dev}
+        deps_lower = {k.lower(): k for k in all_deps.keys()}
+
+        # Framework detection
+        frameworks = {
+            "laravel/framework": {"name": "Laravel", "port": 8000},
+            "symfony/symfony": {"name": "Symfony", "port": 8000},
+            "symfony/framework-bundle": {"name": "Symfony", "port": 8000},
+            "codeigniter4/framework": {"name": "CodeIgniter", "port": 8080},
+            "codeigniter/framework": {"name": "CodeIgniter", "port": 8080},
+        }
+
+        port_detector = PortDetector(self.path, self.analysis)
+
+        for key, info in frameworks.items():
+            if key in deps_lower:
+                self.analysis["framework"] = info["name"]
+                self.analysis["type"] = "backend"
+                detected_port = port_detector.detect_port_from_sources(info["port"])
+                self.analysis["default_port"] = detected_port
+                break
 
     def _detect_swift_framework(self) -> None:
         """Detect Swift/iOS framework and dependencies."""

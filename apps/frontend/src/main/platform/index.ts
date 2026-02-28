@@ -22,7 +22,7 @@ export { OS, ShellType } from './types';
 export type { PathConfig, ShellConfig, BinaryDirectories } from './types';
 
 // Re-export from paths.ts for backward compatibility
-export { getWindowsShellPaths, getOllamaExecutablePaths, getOllamaInstallCommand, getWhichCommand } from './paths';
+export { getWindowsShellPaths, getOllamaExecutablePaths, getOllamaInstallCommand, getWhichCommand, isSecurePath } from './paths';
 
 /**
  * Get the current operating system
@@ -283,41 +283,7 @@ export function getNpxCommand(): string {
   return isWindows() ? 'npx.cmd' : 'npx';
 }
 
-/**
- * Check if a path is secure (prevents command injection attacks)
- *
- * Rejects paths with shell metacharacters, directory traversal patterns,
- * or environment variable expansion.
- */
-export function isSecurePath(candidatePath: string): boolean {
-  // Reject empty or whitespace-only strings to maintain cross-platform consistency with backend
-  if (!candidatePath || !candidatePath.trim()) return false;
-
-  // Security validation: reject paths with dangerous patterns
-  const dangerousPatterns = [
-    /[;&|`${}[\]<>!"^]/,        // Shell metacharacters
-    /%[^%]+%/,                   // Windows environment variable expansion
-    /\.\.\//,                    // Unix directory traversal
-    /\.\.\\/,                    // Windows directory traversal
-    // biome-ignore lint/suspicious/noControlCharactersInRegex: Intentionally matching control characters for security validation
-    /[\r\n\x00]/                 // Newlines (command injection), null bytes (path truncation)
-  ];
-
-  for (const pattern of dangerousPatterns) {
-    if (pattern.test(candidatePath)) {
-      return false;
-    }
-  }
-
-  // On Windows, validate executable names additionally
-  if (isWindows()) {
-    const basename = path.basename(candidatePath, getExecutableExtension());
-    // Allow only alphanumeric, dots, hyphens, and underscores in the name
-    return /^[\w.-]+$/.test(basename);
-  }
-
-  return true;
-}
+// isSecurePath is re-exported from paths.ts above
 
 /**
  * Normalize a path for the current platform

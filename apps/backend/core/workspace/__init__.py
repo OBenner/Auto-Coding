@@ -39,12 +39,9 @@ get_workspace_manager = _workspace_module.get_workspace_manager
 find_workspace_for_project = _workspace_module.find_workspace_for_project
 list_workspaces = _workspace_module.list_workspaces
 
-# Import workspace configuration classes
-WorkspaceConfig = _workspace_module.WorkspaceConfig
-WorkspaceManager = _workspace_module.WorkspaceManager
-ProjectConfig = _workspace_module.ProjectConfig
-ProjectState = _workspace_module.ProjectState
-ProjectRelationship = _workspace_module.ProjectRelationship
+# Import workspace configuration classes from their actual modules
+from ..workspace_config import ProjectConfig, ProjectRelationship, WorkspaceConfig
+from ..workspace_manager import ProjectState, WorkspaceManager
 
 # Models and Enums
 # Display Functions

@@ -71,6 +71,8 @@ def _detect_default_branch(project_dir: Path) -> str:
             cwd=project_dir,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=5,
         )
         if result.returncode == 0:
@@ -83,6 +85,8 @@ def _detect_default_branch(project_dir: Path) -> str:
             cwd=project_dir,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=5,
         )
         if result.returncode == 0:
@@ -115,6 +119,8 @@ def _get_changed_files_from_git(
             cwd=worktree_path,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             check=True,
         )
         merge_base = merge_base_result.stdout.strip()
@@ -125,6 +131,8 @@ def _get_changed_files_from_git(
             cwd=worktree_path,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             check=True,
         )
         files = [f.strip() for f in result.stdout.strip().split("\n") if f.strip()]
@@ -143,6 +151,8 @@ def _get_changed_files_from_git(
                 cwd=worktree_path,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 check=True,
             )
             files = [f.strip() for f in result.stdout.strip().split("\n") if f.strip()]
@@ -208,6 +218,8 @@ def _detect_worktree_base_branch(
                 cwd=project_dir,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
             )
             if check.returncode != 0:
                 continue
@@ -218,6 +230,8 @@ def _detect_worktree_base_branch(
                 cwd=project_dir,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
             )
             if merge_base_result.returncode != 0:
                 continue
@@ -231,6 +245,8 @@ def _detect_worktree_base_branch(
                 cwd=project_dir,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
             )
             if ahead_result.returncode == 0:
                 commits_ahead = int(ahead_result.stdout.strip())
@@ -325,21 +341,15 @@ def _detect_parallel_task_conflicts(
 try:
     from debug import (
         debug,
-        debug_detailed,
         debug_error,
         debug_section,
         debug_success,
         debug_verbose,
-        is_debug_enabled,
     )
 except ImportError:
 
     def debug(*args, **kwargs):
         """Fallback debug function when debug module is not available."""
-        pass
-
-    def debug_detailed(*args, **kwargs):
-        """Fallback debug_detailed function when debug module is not available."""
         pass
 
     def debug_verbose(*args, **kwargs):
@@ -357,10 +367,6 @@ except ImportError:
     def debug_section(*args, **kwargs):
         """Fallback debug_section function when debug module is not available."""
         pass
-
-    def is_debug_enabled():
-        """Fallback is_debug_enabled function when debug module is not available."""
-        return False
 
 
 MODULE = "cli.workspace_commands"
@@ -415,6 +421,8 @@ def _generate_and_save_commit_message(project_dir: Path, spec_name: str) -> None
                 cwd=project_dir,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
             )
             if result.returncode == 0:
                 diff_summary = result.stdout.strip()
@@ -425,6 +433,8 @@ def _generate_and_save_commit_message(project_dir: Path, spec_name: str) -> None
                 cwd=project_dir,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
             )
             if result.returncode == 0:
                 files_changed = [
@@ -580,6 +590,8 @@ def _check_git_merge_conflicts(
                 cwd=project_dir,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
             )
             if base_result.returncode == 0:
                 result["base_branch"] = base_result.stdout.strip()
@@ -593,6 +605,8 @@ def _check_git_merge_conflicts(
             cwd=project_dir,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
         )
         if merge_base_result.returncode != 0:
             debug_warning(MODULE, "Could not find merge base")
@@ -606,6 +620,8 @@ def _check_git_merge_conflicts(
             cwd=project_dir,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
         )
         if ahead_result.returncode == 0:
             commits_behind = int(ahead_result.stdout.strip())
@@ -631,6 +647,8 @@ def _check_git_merge_conflicts(
             cwd=project_dir,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
         )
 
         # merge-tree returns exit code 1 if there are conflicts
@@ -669,6 +687,8 @@ def _check_git_merge_conflicts(
                     cwd=project_dir,
                     capture_output=True,
                     text=True,
+                    encoding="utf-8",
+                    errors="replace",
                 )
                 main_files = (
                     set(main_files_result.stdout.strip().split("\n"))
@@ -682,6 +702,8 @@ def _check_git_merge_conflicts(
                     cwd=project_dir,
                     capture_output=True,
                     text=True,
+                    encoding="utf-8",
+                    errors="replace",
                 )
                 spec_files = (
                     set(spec_files_result.stdout.strip().split("\n"))
@@ -1332,7 +1354,9 @@ def handle_merge_analytics_summary_command(project_dir: Path) -> None:
     print(f"       Tokens: {analytics.total_tokens_used:,}")
     print()
 
-    print(f"  {icon(Icons.TIME)} Average Duration: {analytics.average_duration_seconds:.1f}s")
+    print(
+        f"  {icon(Icons.TIME)} Average Duration: {analytics.average_duration_seconds:.1f}s"
+    )
     print()
 
     # Show top conflict patterns
@@ -1432,7 +1456,9 @@ def handle_merge_analytics_export_command(
                         ]
                     )
 
-            print(f"  {icon(Icons.SUCCESS)} Exported {len(operations)} operations to: {output_file}")
+            print(
+                f"  {icon(Icons.SUCCESS)} Exported {len(operations)} operations to: {output_file}"
+            )
             print()
         else:
             print(f"  {icon(Icons.ERROR)} Unknown format: {format}")

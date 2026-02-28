@@ -155,6 +155,10 @@ function buildEnv(frontendDir) {
   // Use --sign flag to enable signing for release builds
   if (!isSigningEnabled()) {
     env.CSC_IDENTITY_AUTO_DISCOVERY = 'false';
+    // Remove CSC_LINK/CSC_KEY_PASSWORD so electron-builder doesn't attempt signing
+    // even when these env vars are set to empty strings (e.g., from unconfigured CI secrets)
+    delete env.CSC_LINK;
+    delete env.CSC_KEY_PASSWORD;
     console.log('[package] Code signing disabled (use --sign to enable)');
   }
 
@@ -232,12 +236,12 @@ function cleanBackendForPackaging(frontendDir) {
         }
         fs.renameSync(fullPath, backupPath);
         movedDirs.push({ original: fullPath, backup: backupPath });
-      } catch (err) {
+      } catch {
         // On Windows, rename may fail on symlinks/junctions - just delete instead
         console.log(`[package] Cannot move ${dir}, removing it instead...`);
         try {
           fs.rmSync(fullPath, { recursive: true, force: true });
-        } catch (rmErr) {
+        } catch (_rmErr) {
           if (isWindows()) {
             // Use PowerShell for reliable removal of symlinks/junctions on Windows
             console.log(`[package] Using PowerShell to remove ${dir}...`);
@@ -369,7 +373,8 @@ async function main() {
 // Run main() only when this file is executed directly (not when imported for testing)
 if (require.main === module) {
   main().catch((err) => {
-    console.error(`[package] Error: ${err.message}`);
+    const safeMsg = String(err.message || '').replace(/[\x00-\x1f\x7f\n\r]/g, ' ').slice(0, 200);
+    console.error('[package] Error: ' + safeMsg);
     process.exitCode = 1;
   });
 }

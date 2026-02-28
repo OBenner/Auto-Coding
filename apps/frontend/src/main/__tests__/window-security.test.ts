@@ -42,7 +42,11 @@ vi.mock("electron", () => {
 
   // Mock process.resourcesPath for icon loading
   if (!process.resourcesPath) {
-    process.resourcesPath = "/tmp/test/resources";
+    Object.defineProperty(process, 'resourcesPath', {
+      value: "/tmp/test/resources",
+      writable: true,
+      configurable: true,
+    });
   }
 
   return {

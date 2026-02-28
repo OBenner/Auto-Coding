@@ -10,19 +10,34 @@ Provides analytics on:
 - Root cause identification effectiveness
 - User correction tracking
 - Improvement trends over time
+- Failure pattern tracking and analysis
 """
 
 from __future__ import annotations
 
 import json
-from collections import Counter, defaultdict
-from datetime import datetime, timezone
+from collections import Counter
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 # Configuration
 TREND_WINDOW_SIZE = 10  # Number of recent iterations to analyze for trends
 MIN_SAMPLES_FOR_TREND = 3  # Minimum iterations needed to calculate trends
+
+_EMPTY_FAILURE_METRICS: dict[str, Any] = {
+    "total_failures": 0,
+    "failure_types": {},
+    "failure_categories": {},
+    "root_causes_identified": 0,
+    "root_cause_rate": 0.0,
+    "recurring_failures": 0,
+    "recurrence_rate": 0.0,
+    "top_failure_files": [],
+    "top_failure_categories": [],
+    "pattern_detection_rate": 0.0,
+    "avg_occurrences_per_failure": 0.0,
+}
 
 
 # =============================================================================
@@ -164,6 +179,127 @@ def get_success_rate(spec_dir: Path, window_size: int | None = None) -> dict[str
         "rejected_iterations": rejected,
         "error_iterations": errors,
         "average_iterations_to_success": round(avg_iterations, 1),
+    }
+
+
+# =============================================================================
+# FAILURE PATTERN TRACKING
+# =============================================================================
+
+
+def get_failure_metrics(spec_dir: Path) -> dict[str, Any]:
+    """
+    Track failure patterns and analysis effectiveness.
+
+    Analyzes:
+    - Failure types and categories
+    - Root cause identification rate
+    - Failure recurrence patterns
+    - Most problematic files/areas
+    - Pattern detection effectiveness
+
+    Args:
+        spec_dir: Spec directory path
+
+    Returns:
+        Dict with failure metrics:
+        {
+            "total_failures": int,
+            "failure_types": dict[str, int],  # Count by type (qa_rejection, build_error, etc.)
+            "failure_categories": dict[str, int],  # Count by category
+            "root_causes_identified": int,
+            "root_cause_rate": float,  # 0.0 - 1.0
+            "recurring_failures": int,
+            "recurrence_rate": float,  # 0.0 - 1.0
+            "top_failure_files": list[dict[str, Any]],  # Top 5 files with most issues
+            "top_failure_categories": list[dict[str, Any]],  # Top 5 categories
+            "pattern_detection_rate": float,  # Issues with detected patterns / total
+            "avg_occurrences_per_failure": float,
+        }
+    """
+    history = _load_qa_iteration_history(spec_dir)
+    metrics = _load_learning_metrics(spec_dir) or {}
+
+    if not history:
+        return dict(_EMPTY_FAILURE_METRICS)
+
+    # Collect all issues across all iterations
+    all_issues: list[dict[str, Any]] = []
+    for record in history:
+        all_issues.extend(record.get("issues", []))
+
+    total_failures = len(all_issues)
+    if total_failures == 0:
+        return dict(_EMPTY_FAILURE_METRICS)
+
+    # Count failure types
+    failure_types: Counter[str] = Counter()
+    for record in history:
+        failure_type = record.get("failure_type", "unknown")
+        issue_count = len(record.get("issues", []))
+        if issue_count > 0:
+            failure_types[failure_type] += issue_count
+
+    # Count failure categories
+    failure_categories: Counter[str] = Counter()
+    for issue in all_issues:
+        category = issue.get("category", "unknown")
+        failure_categories[category] += 1
+
+    # Count root causes identified
+    root_causes_count = metrics.get("root_causes_identified", 0)
+    root_cause_rate = root_causes_count / total_failures if total_failures > 0 else 0.0
+
+    # Count recurring failures (occurrence_count > 1)
+    recurring_failures = sum(
+        1 for issue in all_issues if issue.get("occurrence_count", 1) > 1
+    )
+    recurrence_rate = recurring_failures / total_failures if total_failures > 0 else 0.0
+
+    # Count issues by file
+    file_counts: Counter[str] = Counter()
+    for issue in all_issues:
+        if file := issue.get("file"):
+            file_counts[file] += 1
+
+    # Get top 5 files with most issues
+    top_failure_files = [
+        {"file": file, "count": count} for file, count in file_counts.most_common(5)
+    ]
+
+    # Get top 5 categories
+    top_failure_categories = [
+        {"category": category, "count": count}
+        for category, count in failure_categories.most_common(5)
+    ]
+
+    # Calculate pattern detection rate
+    # (issues with root_cause or suggested_fix / total)
+    issues_with_patterns = sum(
+        1
+        for issue in all_issues
+        if issue.get("root_cause") or issue.get("suggested_fix")
+    )
+    pattern_detection_rate = (
+        issues_with_patterns / total_failures if total_failures > 0 else 0.0
+    )
+
+    # Calculate average occurrences per failure
+    total_occurrences = sum(issue.get("occurrence_count", 1) for issue in all_issues)
+    avg_occurrences = total_occurrences / total_failures if total_failures > 0 else 0.0
+
+    return {
+        "total_failures": total_failures,
+        "failure_types": dict(failure_types),
+        "failure_categories": dict(failure_categories),
+        "root_causes_identified": root_causes_count,
+        "root_cause_rate": round(root_cause_rate, 3),
+        "recurring_failures": recurring_failures,
+        "recurrence_rate": round(recurrence_rate, 3),
+        "top_failure_files": top_failure_files,
+        "top_failure_categories": top_failure_categories,
+        "pattern_detection_rate": round(pattern_detection_rate, 3),
+        "avg_occurrences_per_failure": round(avg_occurrences, 2),
     }
 
 
@@ -372,7 +508,9 @@ def _generate_recommendations(
             "Review failure patterns and update learned patterns in Graphiti"
         )
     elif recurring_trend == "reducing":
-        recommendations.append("✅ Recurring issues are reducing - learning is working!")
+        recommendations.append(
+            "✅ Recurring issues are reducing - learning is working!"
+        )
 
     # Root cause tracking recommendations
     if root_causes_count == 0:
@@ -406,7 +544,8 @@ def get_detailed_metrics(spec_dir: Path) -> dict[str, Any]:
     """
     Get comprehensive metrics for the spec.
 
-    Combines success rates, trends, and learning metrics into a single report.
+    Combines success rates, trends, failure patterns, and learning metrics
+    into a single report.
 
     Args:
         spec_dir: Spec directory path
@@ -416,6 +555,7 @@ def get_detailed_metrics(spec_dir: Path) -> dict[str, Any]:
     """
     success_metrics = get_success_rate(spec_dir)
     trend_metrics = get_improvement_trends(spec_dir)
+    failure_metrics = get_failure_metrics(spec_dir)
     learning_metrics = _load_learning_metrics(spec_dir)
 
     # Get issue breakdown
@@ -425,9 +565,10 @@ def get_detailed_metrics(spec_dir: Path) -> dict[str, Any]:
     return {
         "success_metrics": success_metrics,
         "trend_metrics": trend_metrics,
+        "failure_metrics": failure_metrics,
         "learning_metrics": learning_metrics,
         "issue_breakdown": issue_breakdown,
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generated_at": datetime.now(UTC).isoformat(),
     }
 
 
@@ -505,7 +646,7 @@ def update_learning_metrics(
         if patterns_applied is not None:
             metrics["patterns_applied"] = patterns_applied
 
-        metrics["last_updated"] = datetime.now(timezone.utc).isoformat()
+        metrics["last_updated"] = datetime.now(UTC).isoformat()
 
         with open(plan_file, "w", encoding="utf-8") as f:
             json.dump(plan, f, indent=2)

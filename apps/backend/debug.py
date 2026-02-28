@@ -1,7 +1,7 @@
 """
 Debug module facade.
 
-Provides debug logging utilities for the Auto-Code framework.
+Provides debug logging utilities for the Auto-Claude framework.
 Re-exports from core.debug for clean imports.
 """
 

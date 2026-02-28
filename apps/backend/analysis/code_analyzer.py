@@ -28,7 +28,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-
 # =============================================================================
 # DATA CLASSES
 # =============================================================================
@@ -95,6 +94,8 @@ class AnalysisResult:
         has_main: Whether file has if __name__ == '__main__'
         total_lines: Total lines in file
         edge_cases: List of detected edge case patterns
+        naming_conventions: Detected naming conventions (variable, function, class styles)
+        error_patterns: Detected error handling patterns (exception types, logging, etc.)
     """
 
     file_path: str
@@ -104,6 +105,8 @@ class AnalysisResult:
     has_main: bool = False
     total_lines: int = 0
     edge_cases: list[dict[str, Any]] = field(default_factory=list)
+    naming_conventions: dict[str, Any] = field(default_factory=dict)
+    error_patterns: dict[str, Any] = field(default_factory=dict)
 
 
 # =============================================================================
@@ -194,7 +197,9 @@ class CodeAnalyzer:
 
         # Extract functions and classes
         for node in ast.walk(tree):
-            if isinstance(node, ast.FunctionDef) or isinstance(node, ast.AsyncFunctionDef):
+            if isinstance(node, ast.FunctionDef) or isinstance(
+                node, ast.AsyncFunctionDef
+            ):
                 # Only add top-level functions (not methods)
                 if self._is_top_level(node, tree):
                     func_info = self._extract_function(node)
@@ -206,6 +211,12 @@ class CodeAnalyzer:
 
         # Detect edge cases for test generation
         result.edge_cases = self._detect_edge_cases(tree)
+
+        # Detect naming conventions in this file
+        result.naming_conventions = self._detect_naming_conventions(result)
+
+        # Detect error handling patterns in this file
+        result.error_patterns = self._detect_error_patterns(tree)
 
         return result
 
@@ -270,7 +281,9 @@ class CodeAnalyzer:
         # Extract methods
         methods = []
         for item in node.body:
-            if isinstance(item, ast.FunctionDef) or isinstance(item, ast.AsyncFunctionDef):
+            if isinstance(item, ast.FunctionDef) or isinstance(
+                item, ast.AsyncFunctionDef
+            ):
                 method_info = self._extract_function(item)
                 methods.append(method_info)
 
@@ -290,9 +303,8 @@ class CodeAnalyzer:
             if isinstance(node, ast.Import):
                 for alias in node.names:
                     imports.append(alias.name)
-            elif isinstance(node, ast.ImportFrom):
-                if node.module:
-                    imports.append(node.module)
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                imports.append(node.module)
         return imports
 
     def _has_main_block(self, tree: ast.AST) -> bool:
@@ -320,15 +332,13 @@ class CodeAnalyzer:
                         return False
         return True
 
-    def _estimate_complexity(
-        self, node: ast.FunctionDef | ast.AsyncFunctionDef
-    ) -> int:
+    def _estimate_complexity(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> int:
         """Estimate cyclomatic complexity by counting decision points."""
         complexity = 1  # Base complexity
 
         for child in ast.walk(node):
             # Count decision points
-            if isinstance(child, (ast.If, ast.While, ast.For, ast.ExceptHandler)):
+            if isinstance(child, ast.If | ast.While | ast.For | ast.ExceptHandler):
                 complexity += 1
             elif isinstance(child, ast.BoolOp):
                 # Count and/or operators
@@ -364,12 +374,14 @@ class CodeAnalyzer:
                         elif isinstance(handler.type, ast.Attribute):
                             exc_type = ast.unparse(handler.type)
 
-                    edge_cases.append({
-                        "type": "error_handling",
-                        "pattern": f"try/except {exc_type}",
-                        "lineno": node.lineno,
-                        "description": f"Handles {exc_type} exceptions"
-                    })
+                    edge_cases.append(
+                        {
+                            "type": "error_handling",
+                            "pattern": f"try/except {exc_type}",
+                            "lineno": node.lineno,
+                            "description": f"Handles {exc_type} exceptions",
+                        }
+                    )
 
             # Detect boundary checks and None checks
             elif isinstance(node, ast.Compare):
@@ -377,70 +389,272 @@ class CodeAnalyzer:
 
                 # Check for None comparisons
                 if "None" in code:
-                    edge_cases.append({
-                        "type": "boundary_condition",
-                        "pattern": "none_check",
-                        "lineno": node.lineno,
-                        "description": f"None check: {code}"
-                    })
+                    edge_cases.append(
+                        {
+                            "type": "boundary_condition",
+                            "pattern": "none_check",
+                            "lineno": node.lineno,
+                            "description": f"None check: {code}",
+                        }
+                    )
 
                 # Check for numeric boundary conditions
                 elif any(op in code for op in ["< 0", "> 0", "== 0", "<= 0", ">= 0"]):
-                    edge_cases.append({
-                        "type": "boundary_condition",
-                        "pattern": "numeric_boundary",
-                        "lineno": node.lineno,
-                        "description": f"Numeric boundary: {code}"
-                    })
+                    edge_cases.append(
+                        {
+                            "type": "boundary_condition",
+                            "pattern": "numeric_boundary",
+                            "lineno": node.lineno,
+                            "description": f"Numeric boundary: {code}",
+                        }
+                    )
 
                 # Check for empty/length checks
-                elif "len(" in code and any(op in code for op in ["== 0", "> 0", "< 1"]):
-                    edge_cases.append({
-                        "type": "boundary_condition",
-                        "pattern": "empty_check",
-                        "lineno": node.lineno,
-                        "description": f"Empty check: {code}"
-                    })
+                elif "len(" in code and any(
+                    op in code for op in ["== 0", "> 0", "< 1"]
+                ):
+                    edge_cases.append(
+                        {
+                            "type": "boundary_condition",
+                            "pattern": "empty_check",
+                            "lineno": node.lineno,
+                            "description": f"Empty check: {code}",
+                        }
+                    )
 
             # Detect isinstance type checks
             elif isinstance(node, ast.Call):
                 if isinstance(node.func, ast.Name) and node.func.id == "isinstance":
                     if len(node.args) >= 2:
-                        type_check = ast.unparse(node.args[1]) if len(node.args) > 1 else "unknown"
-                        edge_cases.append({
-                            "type": "type_validation",
-                            "pattern": "isinstance_check",
-                            "lineno": node.lineno,
-                            "description": f"Type check: isinstance(..., {type_check})"
-                        })
+                        type_check = (
+                            ast.unparse(node.args[1])
+                            if len(node.args) > 1
+                            else "unknown"
+                        )
+                        edge_cases.append(
+                            {
+                                "type": "type_validation",
+                                "pattern": "isinstance_check",
+                                "lineno": node.lineno,
+                                "description": f"Type check: isinstance(..., {type_check})",
+                            }
+                        )
 
             # Detect raise statements (explicit errors)
             elif isinstance(node, ast.Raise):
                 exc_type = "Exception"
                 if node.exc:
-                    if isinstance(node.exc, ast.Call) and isinstance(node.exc.func, ast.Name):
+                    if isinstance(node.exc, ast.Call) and isinstance(
+                        node.exc.func, ast.Name
+                    ):
                         exc_type = node.exc.func.id
                     elif isinstance(node.exc, ast.Name):
                         exc_type = node.exc.id
 
-                edge_cases.append({
-                    "type": "error_raising",
-                    "pattern": f"raise {exc_type}",
-                    "lineno": node.lineno,
-                    "description": f"Raises {exc_type}"
-                })
+                edge_cases.append(
+                    {
+                        "type": "error_raising",
+                        "pattern": f"raise {exc_type}",
+                        "lineno": node.lineno,
+                        "description": f"Raises {exc_type}",
+                    }
+                )
 
             # Detect assertions
             elif isinstance(node, ast.Assert):
                 test_code = ast.unparse(node.test)
-                edge_cases.append({
-                    "type": "assertion",
-                    "pattern": "assert",
-                    "lineno": node.lineno,
-                    "description": f"Assertion: {test_code}"
-                })
+                edge_cases.append(
+                    {
+                        "type": "assertion",
+                        "pattern": "assert",
+                        "lineno": node.lineno,
+                        "description": f"Assertion: {test_code}",
+                    }
+                )
 
         return edge_cases
+
+    def _detect_naming_conventions(self, result: AnalysisResult) -> dict[str, Any]:
+        """
+        Detect naming conventions used in the analyzed file.
+
+        Analyzes function, class, and variable names to determine the
+        predominant naming style (snake_case, camelCase, PascalCase, etc.).
+
+        Args:
+            result: AnalysisResult containing extracted functions and classes
+
+        Returns:
+            Dictionary with detected naming conventions:
+            - function_style: Detected function naming style
+            - class_style: Detected class naming style
+            - variable_style: Detected variable naming style
+            - constant_style: Detected constant naming style
+            - private_prefix: How private members are indicated
+            - examples: Sample identifiers
+        """
+        conventions = {
+            "function_style": None,
+            "class_style": None,
+            "variable_style": None,
+            "constant_style": None,
+            "private_prefix": "_",  # Python convention
+            "examples": {},
+        }
+
+        # Collect function names
+        function_names = [
+            f.name for f in result.functions if not f.name.startswith("_")
+        ]
+        if function_names:
+            conventions["function_style"] = self._detect_case_style(function_names)
+            conventions["examples"]["functions"] = function_names[:5]
+
+        # Collect class names
+        class_names = [c.name for c in result.classes if not c.name.startswith("_")]
+        if class_names:
+            conventions["class_style"] = self._detect_case_style(class_names)
+            conventions["examples"]["classes"] = class_names[:5]
+
+        # Analyze variable naming from imports and assignments
+        # This is a simplified approach - full AST traversal would be more complete
+        if result.functions or result.classes:
+            # Default to Python PEP 8 conventions if we have code
+            if not conventions["function_style"]:
+                conventions["function_style"] = "snake_case"
+            if not conventions["class_style"]:
+                conventions["class_style"] = "PascalCase"
+            conventions["variable_style"] = "snake_case"
+            conventions["constant_style"] = "UPPER_SNAKE_CASE"
+
+        return conventions
+
+    def _detect_case_style(self, identifiers: list[str]) -> str | None:
+        """
+        Detect the predominant case style from a list of identifiers.
+
+        Delegates to NamingDetector.detect_case_style for consistency.
+        Strips leading underscores before analysis to handle private members.
+
+        Args:
+            identifiers: List of identifier names to analyze
+
+        Returns:
+            One of: snake_case, camelCase, PascalCase, UPPER_SNAKE_CASE, or None
+        """
+        from analysis.analyzers.naming_detector import NamingDetector
+
+        # Strip leading underscores (private member convention)
+        stripped = [name.lstrip("_") for name in identifiers if name]
+        stripped = [name for name in stripped if name]
+        return NamingDetector.detect_case_style(stripped)
+
+    def _detect_error_patterns(self, tree: ast.AST) -> dict[str, Any]:
+        """
+        Detect error handling patterns in the analyzed file.
+
+        Analyzes try/except blocks, exception types, logging patterns,
+        and error propagation strategies.
+
+        Args:
+            tree: AST tree of the source code
+
+        Returns:
+            Dictionary with detected error patterns:
+            - exception_types: List of exception types caught/raised
+            - custom_exceptions: Custom exception classes defined
+            - has_logging: Whether error logging is used
+            - error_strategy: Whether errors are handled or propagated
+        """
+        patterns = {
+            "exception_types": [],
+            "custom_exceptions": [],
+            "has_logging": False,
+            "error_strategy": "unknown",
+            "try_except_count": 0,
+            "raise_count": 0,
+        }
+
+        try_blocks = 0
+        re_raises = 0
+        handles = 0
+
+        for node in ast.walk(tree):
+            # Detect custom exception classes
+            if isinstance(node, ast.ClassDef):
+                for base in node.bases:
+                    base_name = ""
+                    if isinstance(base, ast.Name):
+                        base_name = base.id
+                    elif isinstance(base, ast.Attribute):
+                        base_name = ast.unparse(base)
+
+                    if "Exception" in base_name or "Error" in base_name:
+                        patterns["custom_exceptions"].append(node.name)
+
+            # Analyze try/except blocks
+            elif isinstance(node, ast.Try):
+                try_blocks += 1
+                for handler in node.handlers:
+                    # Extract exception type
+                    if handler.type:
+                        exc_type = None
+                        if isinstance(handler.type, ast.Name):
+                            exc_type = handler.type.id
+                        elif isinstance(handler.type, ast.Attribute):
+                            exc_type = ast.unparse(handler.type)
+
+                        if exc_type and exc_type not in patterns["exception_types"]:
+                            patterns["exception_types"].append(exc_type)
+
+                    # Check for logging in handler
+                    for child in ast.walk(handler):
+                        if isinstance(child, ast.Call) and isinstance(
+                            child.func, ast.Attribute
+                        ):
+                            attr = child.func.attr
+                            if attr in ["error", "exception", "warning", "critical"]:
+                                patterns["has_logging"] = True
+
+                    # Check if exception is re-raised
+                    has_reraise = any(
+                        isinstance(n, ast.Raise) and n.exc is None
+                        for n in ast.walk(handler)
+                    )
+                    if has_reraise:
+                        re_raises += 1
+                    else:
+                        handles += 1
+
+            # Count raise statements
+            elif isinstance(node, ast.Raise):
+                patterns["raise_count"] += 1
+                # Extract raised exception type
+                if node.exc:
+                    exc_type = None
+                    if isinstance(node.exc, ast.Call):
+                        if isinstance(node.exc.func, ast.Name):
+                            exc_type = node.exc.func.id
+                        elif isinstance(node.exc.func, ast.Attribute):
+                            exc_type = ast.unparse(node.exc.func)
+
+                    if exc_type and exc_type not in patterns["exception_types"]:
+                        patterns["exception_types"].append(exc_type)
+
+        patterns["try_except_count"] = try_blocks
+
+        # Determine error strategy
+        if try_blocks > 0:
+            if re_raises > handles:
+                patterns["error_strategy"] = "propagate"
+            elif handles > 0:
+                patterns["error_strategy"] = "handle"
+            else:
+                patterns["error_strategy"] = "mixed"
+        elif patterns["raise_count"] > 0:
+            patterns["error_strategy"] = "raise_only"
+
+        return patterns
 
     def _result_to_dict(self, result: AnalysisResult) -> dict[str, Any]:
         """Convert AnalysisResult to dictionary."""
@@ -486,4 +700,6 @@ class CodeAnalyzer:
             "has_main": result.has_main,
             "total_lines": result.total_lines,
             "edge_cases": result.edge_cases,
+            "naming_conventions": result.naming_conventions,
+            "error_patterns": result.error_patterns,
         }

@@ -221,6 +221,36 @@ export function useGitHubPRs(
     wasActiveRef.current = isActive;
   }, [isActive, fetchPRs]);
 
+  // Derive open-PR state so the polling interval only restarts when it changes,
+  // not on every fetch cycle (which updates the `prs` array reference).
+  const hasOpenPRs = useMemo(() => prs.some((pr) => pr.state === "OPEN"), [prs]);
+
+  // Adaptive polling: 60s when open PRs exist, 5min when all merged/closed
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  useEffect(() => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+
+    if (!isActive || !isConnected || !hasLoadedRef.current) return;
+
+    const POLL_ACTIVE = 60_000;  // 60s when open PRs exist
+    const POLL_STABLE = 300_000; // 5min when all PRs merged/closed
+    const interval = hasOpenPRs ? POLL_ACTIVE : POLL_STABLE;
+
+    pollRef.current = setInterval(() => {
+      fetchPRs();
+    }, interval);
+
+    return () => {
+      if (pollRef.current) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
+    };
+  }, [isActive, isConnected, hasOpenPRs, fetchPRs]);
+
   // Reset state and selected PR when project changes
   useEffect(() => {
     hasLoadedRef.current = false;

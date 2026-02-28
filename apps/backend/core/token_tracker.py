@@ -22,8 +22,6 @@ Usage:
     get_global_tracker().log_phase("planning", 2000, 500)
 """
 
-import os
-import sys
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
@@ -31,9 +29,7 @@ from typing import Any
 from core.debug import (
     Colors,
     _get_debug_enabled,
-    _get_debug_level,
     _write_log,
-    is_debug_enabled,
 )
 
 

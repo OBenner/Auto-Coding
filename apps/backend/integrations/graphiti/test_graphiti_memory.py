@@ -36,7 +36,7 @@ import asyncio
 import json
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 # Add auto-claude to path
@@ -67,6 +67,7 @@ def apply_ladybug_monkeypatch():
 
     # Try native kuzu as fallback
     try:
+        # Optional: kuzu is optional (fallback if LadybugDB unavailable)
         import kuzu  # noqa: F401
 
         return True
@@ -164,7 +165,7 @@ async def test_save_episode(db_path: str, database: str) -> tuple[str, str]:
         # Create test episode data
         test_data = {
             "type": "test_episode",
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "test_field": "Hello from LadybugDB test!",
             "test_number": 42,
             "embedder": config.embedder_provider,
@@ -187,7 +188,7 @@ async def test_save_episode(db_path: str, database: str) -> tuple[str, str]:
             episode_body=json.dumps(test_data),
             source=EpisodeType.text,
             source_description="Test episode from test_graphiti_memory.py",
-            reference_time=datetime.now(timezone.utc),
+            reference_time=datetime.now(UTC),
             group_id=group_id,
         )
 

@@ -15,11 +15,19 @@ from ui import (
 )
 from worktree import WorktreeManager
 
+__all__ = [
+    "show_build_summary",
+    "print_merge_success",
+    "print_conflict_info",
+    "_print_merge_success",
+    "_print_conflict_info",
+]
+
 
 def show_build_summary(manager: WorktreeManager, spec_name: str) -> None:
     """Show a summary of what was built."""
     summary = manager.get_change_summary(spec_name)
-    files = manager.get_changed_files(spec_name)
+    manager.get_changed_files(spec_name)
 
     total = summary["new_files"] + summary["modified_files"] + summary["deleted_files"]
 

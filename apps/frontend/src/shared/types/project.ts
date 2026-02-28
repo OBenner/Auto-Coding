@@ -483,6 +483,33 @@ export interface CreateProjectFolderResult {
   gitInitialized: boolean;
 }
 
+// Memory Graph Types (used by MemoriesTab and MemoryGraph components)
+export interface GraphNode {
+  id: string;
+  label: string;
+  type: 'episodic' | 'entity';
+  timestamp: string;
+  data: {
+    content?: string;
+    description?: string;
+    summary?: string;
+  };
+}
+
+export interface GraphEdge {
+  id: string;
+  source: string;
+  target: string;
+  type: string;
+}
+
+export interface GraphDataResult {
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+  node_count: number;
+  edge_count: number;
+}
+
 // File Explorer Types
 export interface FileNode {
   path: string;

@@ -28,8 +28,8 @@ from pathlib import Path
 from core.git_executable import run_git
 
 # Import workspace utilities for multi-codebase support
-from core.workspace_config import WorkspaceConfig, ProjectConfig, ProjectRelationship
-from core.workspace_manager import WorkspaceManager, ProjectState
+from core.workspace_config import WorkspaceConfig
+from core.workspace_manager import WorkspaceManager
 from ui import (
     Icons,
     bold,
@@ -51,32 +51,24 @@ try:
         debug_detailed,
         debug_error,
         debug_success,
-        debug_verbose,
         debug_warning,
-        is_debug_enabled,
     )
 except ImportError:
 
     def debug(*args, **kwargs):
-        pass
+        """No-op fallback when debug module is unavailable."""
 
     def debug_detailed(*args, **kwargs):
-        pass
-
-    def debug_verbose(*args, **kwargs):
-        pass
+        """No-op fallback when debug module is unavailable."""
 
     def debug_success(*args, **kwargs):
-        pass
+        """No-op fallback when debug module is unavailable."""
 
     def debug_error(*args, **kwargs):
-        pass
+        """No-op fallback when debug module is unavailable."""
 
     def debug_warning(*args, **kwargs):
-        pass
-
-    def is_debug_enabled():
-        return False
+        """No-op fallback when debug module is unavailable."""
 
 
 # Import merge system
@@ -225,7 +217,12 @@ def merge_existing_build(
 
     try:
         return _do_merge(
-            project_dir, spec_name, worktree_path, no_commit, use_smart_merge, base_branch
+            project_dir,
+            spec_name,
+            worktree_path,
+            no_commit,
+            use_smart_merge,
+            base_branch,
         )
     finally:
         # Always restore stashed changes
@@ -1023,9 +1020,7 @@ def _check_git_conflicts(project_dir: Path, spec_name: str) -> dict:
             debug_warning(MODULE, "Could not find merge base")
             return result
 
-        _merge_base = (
-            merge_base_result.stdout.strip()
-        )  # Reserved for future conflict detection
+        # merge_base_result.stdout.strip() available for future conflict detection
 
         # Get commit hashes
         main_commit_result = run_git(

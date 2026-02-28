@@ -8,9 +8,13 @@ Handles follow-up planner sessions for adding new subtasks to completed specs.
 import logging
 from pathlib import Path
 
+from analysis.prevention_scanner import PreventionScanner
 from core.client import create_client
+from core.providers.config import get_provider_config
+from implementation_plan import ImplementationPlan
 from phase_config import get_phase_model, get_phase_thinking_budget
 from phase_event import ExecutionPhase, emit_phase
+from prompts_pkg.prompts import get_followup_planner_prompt
 from task_logger import (
     LogPhase,
     get_task_logger,
@@ -62,9 +66,6 @@ async def run_followup_planner(
     Returns:
         bool: True if planning completed successfully
     """
-    from implementation_plan import ImplementationPlan
-    from prompts import get_followup_planner_prompt
-
     # Initialize status manager for ccstatusline
     status_manager = StatusManager(project_dir)
     status_manager.set_active(spec_dir.name, BuildState.PLANNING)
@@ -105,13 +106,55 @@ async def run_followup_planner(
     # Generate follow-up planner prompt
     prompt = get_followup_planner_prompt(spec_dir)
 
+    # Run prevention scanner before planning
+    print_status("Running prevention scanner...", "progress")
+    try:
+        scanner = PreventionScanner()
+        scan_result = scanner.scan(
+            project_dir=project_dir,
+            spec_dir=spec_dir,
+        )
+
+        # Log scan summary
+        if task_logger:
+            summary = scanner.format_summary(scan_result)
+            task_logger.log_message(summary, LogPhase.PLANNING)
+
+        if scan_result.should_block:
+            logger.warning("Prevention scanner found blocking issues")
+            print_status(
+                f"⚠️  Critical issues found: {scan_result.summary.get('critical', 0)} critical, "
+                f"{scan_result.summary.get('high', 0)} high",
+                "warning",
+            )
+        elif scan_result.should_warn:
+            logger.info("Prevention scanner found warnings")
+            print_status(
+                f"Note: {scan_result.summary.get('total_issues', 0)} issues detected "
+                f"(see prevention_scan.json)",
+                "info",
+            )
+        else:
+            logger.info("Prevention scanner found no critical issues")
+            print_status("✅ No critical issues detected", "success")
+    except Exception as e:
+        logger.warning(f"Prevention scanner failed: {e}")
+        print_status(f"Prevention scanner warning: {e}", "warning")
+        # Continue with planning even if scanner fails
+
+    print()
     print_status("Running follow-up planner...", "progress")
     print()
 
     try:
         # Run single planning session
         async with client:
-            status, response, usage_metadata = await run_agent_session(
+            (
+                status,
+                response,
+                usage_metadata,
+                _,
+            ) = await run_agent_session(
                 client, prompt, spec_dir, verbose, phase=LogPhase.PLANNING
             )
 
@@ -150,6 +193,14 @@ async def run_followup_planner(
         plan_file = spec_dir / "implementation_plan.json"
         if plan_file.exists():
             plan = ImplementationPlan.load(plan_file)
+
+            # Capture and persist provider configuration
+            provider_config = get_provider_config()
+            if provider_config:
+                plan.provider_config = {
+                    "provider": provider_config.provider,
+                    "model": provider_config.get_model_for_provider(),
+                }
 
             # Check if there are any pending subtasks
             all_subtasks = [c for p in plan.phases for c in p.subtasks]

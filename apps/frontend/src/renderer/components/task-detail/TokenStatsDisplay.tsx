@@ -93,11 +93,11 @@ function PhaseTokenDisplay({ phase, stats, t }: { phase: 'planning' | 'coding' |
                   variant="secondary"
                   className="text-xs font-mono cursor-help hover:bg-secondary/80 transition-colors"
                 >
-                  {formatNumber(stats.totalTokens)}
+                  {formatNumber(stats.total_tokens)}
                 </Badge>
               </TooltipTrigger>
               <TooltipContent side="top">
-                <p className="text-xs font-medium">{t('tasks:tokenStats.tokensUsed', { count: stats.totalTokens })}</p>
+                <p className="text-xs font-medium">{t('tasks:tokenStats.tokensUsed', { count: stats.total_tokens })}</p>
               </TooltipContent>
             </Tooltip>
           </div>
@@ -108,7 +108,7 @@ function PhaseTokenDisplay({ phase, stats, t }: { phase: 'planning' | 'coding' |
                 <span className="text-muted-foreground">{t('tasks:tokenStats.inputTokens')}</span>
               </div>
               <span className="font-mono tabular-nums text-foreground font-medium">
-                {formatNumber(stats.inputTokens)}
+                {formatNumber(stats.input_tokens)}
               </span>
             </div>
             <div className="flex items-center justify-between text-xs">
@@ -117,13 +117,13 @@ function PhaseTokenDisplay({ phase, stats, t }: { phase: 'planning' | 'coding' |
                 <span className="text-muted-foreground">{t('tasks:tokenStats.outputTokens')}</span>
               </div>
               <span className="font-mono tabular-nums text-foreground font-medium">
-                {formatNumber(stats.outputTokens)}
+                {formatNumber(stats.output_tokens)}
               </span>
             </div>
-            {stats.sessionCount > 0 && (
+            {stats.session_count > 0 && (
               <div className="pt-1.5 mt-0.5 border-t border-border/50">
                 <span className="text-[10px] text-muted-foreground">
-                  {t('tasks:tokenStats.sessionCount', { count: stats.sessionCount })}
+                  {t('tasks:tokenStats.sessionCount', { count: stats.session_count })}
                 </span>
               </div>
             )}
@@ -162,13 +162,13 @@ export function TokenStatsDisplay({ task }: TokenStatsDisplayProps) {
               <Tooltip>
                 <TooltipTrigger asChild>
                   <span className="font-mono tabular-nums font-semibold text-foreground cursor-help">
-                    {formatNumber(tokenStats.totalTokens)}
+                    {formatNumber(tokenStats.total_tokens)}
                   </span>
                 </TooltipTrigger>
                 <TooltipContent side="top" className="max-w-xs">
                   <div className="text-xs space-y-1">
-                    <p className="font-medium">{t('tasks:tokenStats.inputTokens')}: {formatNumber(tokenStats.totalInputTokens)}</p>
-                    <p className="font-medium">{t('tasks:tokenStats.outputTokens')}: {formatNumber(tokenStats.totalOutputTokens)}</p>
+                    <p className="font-medium">{t('tasks:tokenStats.inputTokens')}: {formatNumber(tokenStats.total_input_tokens)}</p>
+                    <p className="font-medium">{t('tasks:tokenStats.outputTokens')}: {formatNumber(tokenStats.total_output_tokens)}</p>
                   </div>
                 </TooltipContent>
               </Tooltip>

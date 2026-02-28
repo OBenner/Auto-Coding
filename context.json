@@ -1,64 +1,71 @@
 {
   "files_to_modify": {
     "frontend": [
-      "apps/frontend/src/main/project-store.ts",
-      "apps/frontend/src/main/ipc-handlers/agent-events-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/changelog-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/env-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/insights-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/linear-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/project-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/roadmap-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/terminal-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/context/memory-data-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/context/memory-status-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/context/project-context-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/github/import-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/github/investigation-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/github/issue-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/github/release-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/github/repository-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/gitlab/import-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/gitlab/investigation-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/gitlab/issue-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/gitlab/merge-request-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/gitlab/release-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/gitlab/repository-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/ideation/generation-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/ideation/idea-manager.ts",
-      "apps/frontend/src/main/ipc-handlers/ideation/session-manager.ts",
-      "apps/frontend/src/main/ipc-handlers/ideation/task-converter.ts",
-      "apps/frontend/src/main/ipc-handlers/task/archive-handlers.ts",
-      "apps/frontend/src/main/ipc-handlers/task/crud-handlers.ts",
-      "apps/frontend/src/main/agent/agent-process.ts"
+      "apps/frontend/src/renderer/components/KanbanBoard.tsx",
+      "apps/frontend/src/renderer/hooks/index.ts",
+      "apps/frontend/src/shared/i18n/locales/en/tasks.json",
+      "apps/frontend/src/shared/i18n/locales/fr/tasks.json"
+    ]
+  },
+  "files_to_create": {
+    "frontend": [
+      "apps/frontend/src/renderer/components/KanbanBoard/utils/index.ts",
+      "apps/frontend/src/renderer/hooks/useTaskFiltering.ts"
     ]
   },
   "files_to_reference": [
-    "apps/frontend/src/main/terminal-session-store.ts",
-    "apps/frontend/src/main/agent/agent-queue.ts",
-    "apps/frontend/src/main/ipc-handlers/gitlab/spec-utils.ts"
+    "apps/frontend/src/renderer/components/github-issues/hooks/useIssueFiltering.ts",
+    "apps/frontend/src/renderer/components/gitlab-issues/hooks/useIssueFiltering.ts",
+    "apps/frontend/src/renderer/components/linear-import/hooks/useIssueFiltering.ts",
+    "apps/frontend/src/renderer/components/github-issues/utils/index.ts",
+    "apps/frontend/src/renderer/components/github-issues/components/IssueList.tsx",
+    "apps/frontend/src/renderer/components/github-issues/components/IssueListHeader.tsx"
   ],
   "patterns": {
-    "async_fs_pattern": "Use 'import { promises as fsPromises } from 'fs'' and await fsPromises.readFile/writeFile",
-    "ipc_pattern": "IPC handlers already use async/await, just need to add await before projectStore method calls",
-    "error_handling": "Use try-catch blocks around file operations, fallback to empty data on errors"
+    "hook_pattern": "All useIssueFiltering hooks follow same pattern: useState for searchQuery, useMemo for filtered results, return { searchQuery, setSearchQuery, filteredIssues }",
+    "utility_pattern": "Utility functions in utils/index.ts handle actual filtering logic (filterIssuesBySearch)",
+    "integration_pattern": "Components import hook, destructure filteredResults, use filteredResults in render instead of raw data",
+    "i18n_pattern": "All user-facing text uses translation keys (e.g., t('tasks:search.placeholder'))"
   },
   "existing_implementations": {
-    "description": "TerminalSessionStore already implements async save pattern with write serialization to prevent concurrent writes",
-    "relevant_files": [
-      "apps/frontend/src/main/terminal-session-store.ts",
-      "apps/frontend/src/main/agent/agent-queue.ts"
-    ]
+    "description": "Found 4 identical useIssueFiltering implementations following the same pattern",
+    "github_issues": {
+      "file": "apps/frontend/src/renderer/components/github-issues/hooks/useIssueFiltering.ts",
+      "features": ["searchQuery state", "filteredIssues memo", "onSearchStart/onSearchClear callbacks"],
+      "utility": "apps/frontend/src/renderer/components/github-issues/utils/index.ts"
+    },
+    "gitlab_issues": {
+      "file": "apps/frontend/src/renderer/components/gitlab-issues/hooks/useIssueFiltering.ts",
+      "features": ["searchQuery state", "filteredIssues memo"],
+      "utility": "apps/frontend/src/renderer/components/gitlab-issues/utils/index.ts"
+    },
+    "linear_import": {
+      "file": "apps/frontend/src/renderer/components/linear-import/hooks/useIssueFiltering.ts",
+      "features": ["searchQuery state", "filterState state", "filteredIssues memo", "uniqueStateTypes memo"],
+      "utility": "Inline filtering (no separate utility file)"
+    },
+    "kanban_current": {
+      "file": "apps/frontend/src/renderer/components/KanbanBoard.tsx",
+      "features": ["Inline filteredTasks memo on line 739-744"],
+      "issues": ["No dedicated hook", "No search functionality", "Only filters by archived status"]
+    }
   },
-  "sync_operations_count": {
-    "readFileSync": 9,
-    "writeFileSync": 3,
-    "existsSync": 15,
-    "mkdirSync": 1,
-    "readdirSync": 2
+  "task_type_info": {
+    "file": "apps/frontend/src/shared/types/task.ts",
+    "filterable_fields": {
+      "basic": ["id", "title", "description", "status"],
+      "metadata": ["category", "priority", "complexity", "impact", "sourceType"],
+      "timestamps": ["createdAt", "updatedAt"]
+    },
+    "status_values": ["backlog", "queue", "in_progress", "ai_review", "human_review", "done", "pr_created", "error"],
+    "category_values": ["feature", "bug_fix", "refactoring", "documentation", "security", "performance", "ui_ux", "infrastructure", "testing"],
+    "priority_values": ["low", "medium", "high", "urgent"],
+    "complexity_values": ["trivial", "small", "medium", "large", "complex"],
+    "impact_values": ["low", "medium", "high", "critical"]
   },
-  "affected_handlers": {
-    "count": 28,
-    "pattern": "All handlers already use async/await, just need to add await before projectStore calls"
+  "tech_stack": {
+    "frontend": ["electron", "react", "typescript", "zustand", "i18next", "vitest"],
+    "testing_framework": "vitest + testing-library",
+    "i18n_framework": "react-i18next"
   }
 }

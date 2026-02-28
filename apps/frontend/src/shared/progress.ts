@@ -234,7 +234,7 @@ export function calculateStandardDeviation(timings: HistoricalTiming[]): number 
   if (timings.length === 0) return 0;
 
   const avg = calculateAverageDuration(timings);
-  const squaredDiffs = timings.map(t => Math.pow(t.duration - avg, 2));
+  const squaredDiffs = timings.map(t => (t.duration - avg) ** 2);
   const variance = squaredDiffs.reduce((acc, val) => acc + val, 0) / timings.length;
 
   return Math.sqrt(variance);

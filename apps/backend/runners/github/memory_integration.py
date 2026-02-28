@@ -36,7 +36,7 @@ from __future__ import annotations
 import json
 import sys
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -51,16 +51,12 @@ try:
         GraphitiMemory,
         GroupIdMode,
         get_graphiti_memory,
-        is_graphiti_enabled,
     )
     from memory.graphiti_helpers import is_graphiti_memory_enabled
 
     GRAPHITI_AVAILABLE = True
 except (ImportError, ValueError, SystemError):
     GRAPHITI_AVAILABLE = False
-
-    def is_graphiti_enabled() -> bool:
-        return False
 
     def is_graphiti_memory_enabled() -> bool:
         return False
@@ -205,7 +201,7 @@ class GitHubMemoryIntegration:
             json.dump(
                 {
                     "repo": self.repo,
-                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                    "updated_at": datetime.now(UTC).isoformat(),
                     "insights": self._local_insights[-1000:],  # Keep last 1000
                 },
                 f,
@@ -237,7 +233,7 @@ class GitHubMemoryIntegration:
                 # Initialize
                 await self._graphiti.initialize()
 
-            except Exception as e:
+            except Exception:
                 self._graphiti = None
                 return None
 
@@ -370,7 +366,7 @@ class GitHubMemoryIntegration:
             category: Category (gotcha, pattern, warning, insight)
             severity: Severity level
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         # Store locally
         self._local_insights.append(
@@ -433,7 +429,7 @@ class GitHubMemoryIntegration:
             was_correct: Whether prediction was correct
             notes: Additional notes
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         # Store locally
         self._local_insights.append(
@@ -466,8 +462,8 @@ class GitHubMemoryIntegration:
                         "notes": notes,
                     },
                 )
-            except Exception:
-                pass
+            except (OSError, ValueError, TypeError, RuntimeError):
+                pass  # Memory save is best-effort, non-critical
 
     async def get_codebase_patterns(
         self,
@@ -508,8 +504,8 @@ class GitHubMemoryIntegration:
                                 source="graphiti",
                             )
                         )
-            except Exception:
-                pass
+            except (OSError, ValueError, TypeError, RuntimeError, KeyError):
+                pass  # Memory retrieval is best-effort
 
         # Add local patterns
         for insight in self._local_insights:
@@ -566,8 +562,8 @@ class GitHubMemoryIntegration:
                 if explanations:
                     return "Historical context:\n" + "\n".join(explanations)
 
-        except Exception:
-            pass
+        except (OSError, ValueError, TypeError, RuntimeError, KeyError):
+            pass  # Memory retrieval is best-effort
 
         return None
 
@@ -576,8 +572,8 @@ class GitHubMemoryIntegration:
         if self._graphiti:
             try:
                 await self._graphiti.close()
-            except Exception:
-                pass
+            except (OSError, RuntimeError):
+                pass  # Connection cleanup is best-effort
             self._graphiti = None
 
     def get_summary(self) -> dict[str, Any]:

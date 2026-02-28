@@ -7,7 +7,7 @@ Tools for managing QA status and sign-off in implementation_plan.json.
 
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -52,7 +52,7 @@ def _apply_qa_update(
         "qa_session": qa_session,
         "issues_found": issues,
         "tests_passed": tests_passed,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "ready_for_qa_revalidation": status == "fixes_applied",
     }
 
@@ -65,7 +65,7 @@ def _apply_qa_update(
         plan["status"] = "human_review"
         plan["planStatus"] = "review"
 
-    plan["last_updated"] = datetime.now(timezone.utc).isoformat()
+    plan["last_updated"] = datetime.now(UTC).isoformat()
 
     return qa_session
 
@@ -258,7 +258,11 @@ Ready for QA Revalidation: {ready_for_revalidation}"""
             if issues:
                 result += f"\n\nIssues Found: {len(issues)}"
                 for i, issue in enumerate(issues, 1):
-                    issue_desc = issue.get("description", str(issue))
+                    issue_desc = (
+                        issue.get("description", str(issue))
+                        if isinstance(issue, dict)
+                        else str(issue)
+                    )
                     result += f"\n  {i}. {issue_desc}"
             else:
                 result += "\n\nIssues Found: None"
@@ -273,9 +277,7 @@ Ready for QA Revalidation: {ready_for_revalidation}"""
 
         except Exception as e:
             return {
-                "content": [
-                    {"type": "text", "text": f"Error reading QA status: {e}"}
-                ]
+                "content": [{"type": "text", "text": f"Error reading QA status: {e}"}]
             }
 
     tools.append(get_qa_status)

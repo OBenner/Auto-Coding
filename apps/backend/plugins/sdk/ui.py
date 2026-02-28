@@ -15,15 +15,13 @@ UI plugins can:
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Optional
+from typing import Any
 
 from ..base import PluginBase, PluginMetadata, PluginType
-
-if TYPE_CHECKING:
-    from electron import ipcMain  # type: ignore
 
 logger = logging.getLogger(__name__)
 
@@ -65,9 +63,9 @@ class UIComponentDefinition:
     id: str
     extension_point: UIExtensionPoint
     title: str
-    icon: Optional[str] = None
-    component_path: Optional[str] = None
-    route: Optional[str] = None
+    icon: str | None = None
+    component_path: str | None = None
+    route: str | None = None
     order: int = 100
     props: dict[str, Any] = field(default_factory=dict)
 
@@ -75,7 +73,9 @@ class UIComponentDefinition:
         """Convert to dictionary for serialization."""
         return {
             "id": self.id,
-            "extension_point": self.extension_point.value if isinstance(self.extension_point, UIExtensionPoint) else self.extension_point,
+            "extension_point": self.extension_point.value
+            if isinstance(self.extension_point, UIExtensionPoint)
+            else self.extension_point,
             "title": self.title,
             "icon": self.icon,
             "component_path": self.component_path,
@@ -255,7 +255,7 @@ class UIPlugin(PluginBase):
                 f"UIPlugin requires plugin_type=UI, got {metadata.plugin_type}"
             )
         super().__init__(metadata)
-        self.plugin_dir: Optional[Path] = None
+        self.plugin_dir: Path | None = None
         self._ipc_handlers: dict[str, Callable] = {}
         logger.debug(f"UIPlugin initialized: {metadata.name}")
 

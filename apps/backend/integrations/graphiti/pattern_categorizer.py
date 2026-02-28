@@ -11,23 +11,22 @@ Falls back to generic "uncategorized" if classification fails (never blocks the 
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
 from pathlib import Path
-from typing import Any
 
 logger = logging.getLogger(__name__)
 
 # Check for Claude SDK availability
 try:
-    from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient
+    # Optional: claude_agent_sdk is checked at runtime for availability
+    import claude_agent_sdk  # noqa: F401
 
     SDK_AVAILABLE = True
 except ImportError:
     SDK_AVAILABLE = False
-    ClaudeAgentOptions = None
-    ClaudeSDKClient = None
 
 from core.auth import ensure_claude_code_oauth_token, get_auth_token
 
@@ -38,20 +37,20 @@ DEFAULT_CATEGORIZATION_MODEL = "claude-haiku-4-5-20251001"
 
 # Pattern categories
 PATTERN_CATEGORIES = [
-    "architecture",      # Architectural patterns (MVC, layering, module structure)
-    "testing",          # Testing patterns (mocking, fixtures, test structure)
-    "error-handling",   # Error handling patterns (try-catch, error boundaries, validation)
-    "api-design",       # API design patterns (REST, GraphQL, endpoints, routing)
-    "state-management", # State management patterns (Redux, Context, local state)
-    "security",         # Security patterns (auth, permissions, validation, sanitization)
-    "performance",      # Performance patterns (caching, optimization, lazy loading)
-    "data-access",      # Data access patterns (ORM, queries, repositories)
-    "ui-patterns",      # UI patterns (components, layouts, forms)
-    "integration",      # Integration patterns (third-party APIs, webhooks, events)
-    "deployment",       # Deployment patterns (CI/CD, docker, infrastructure)
-    "logging",          # Logging patterns (structured logging, metrics, monitoring)
-    "configuration",    # Configuration patterns (env vars, feature flags, settings)
-    "uncategorized",    # Fallback category
+    "architecture",  # Architectural patterns (MVC, layering, module structure)
+    "testing",  # Testing patterns (mocking, fixtures, test structure)
+    "error-handling",  # Error handling patterns (try-catch, error boundaries, validation)
+    "api-design",  # API design patterns (REST, GraphQL, endpoints, routing)
+    "state-management",  # State management patterns (Redux, Context, local state)
+    "security",  # Security patterns (auth, permissions, validation, sanitization)
+    "performance",  # Performance patterns (caching, optimization, lazy loading)
+    "data-access",  # Data access patterns (ORM, queries, repositories)
+    "ui-patterns",  # UI patterns (components, layouts, forms)
+    "integration",  # Integration patterns (third-party APIs, webhooks, events)
+    "deployment",  # Deployment patterns (CI/CD, docker, infrastructure)
+    "logging",  # Logging patterns (structured logging, metrics, monitoring)
+    "configuration",  # Configuration patterns (env vars, feature flags, settings)
+    "uncategorized",  # Fallback category
 ]
 
 
@@ -133,9 +132,7 @@ async def run_pattern_categorization(
         return None
 
     if not get_auth_token():
-        logger.warning(
-            "No authentication token found, skipping pattern categorization"
-        )
+        logger.warning("No authentication token found, skipping pattern categorization")
         return None
 
     # Ensure SDK can find the token
@@ -295,9 +292,7 @@ def parse_categorization(response_text: str) -> dict | None:
 # =============================================================================
 
 
-async def categorize_pattern(
-    pattern: str, project_dir: Path | None = None
-) -> dict:
+async def categorize_pattern(pattern: str, project_dir: Path | None = None) -> dict:
     """
     Categorize a code pattern using AI-based classification.
 
@@ -380,8 +375,6 @@ def categorize_pattern_sync(pattern: str, project_dir: Path | None = None) -> di
     Returns:
         Dict with category, confidence, and reasoning
     """
-    import asyncio
-
     try:
         return asyncio.run(categorize_pattern(pattern, project_dir))
     except Exception as e:
@@ -395,7 +388,6 @@ def categorize_pattern_sync(pattern: str, project_dir: Path | None = None) -> di
 
 if __name__ == "__main__":
     import argparse
-    import asyncio
 
     parser = argparse.ArgumentParser(description="Test pattern categorization")
     parser.add_argument(

@@ -15,7 +15,7 @@ global.window.electronAPI = {
   updateProjectEnv: vi.fn().mockResolvedValue({ success: true }),
   checkMcpHealth: vi.fn().mockResolvedValue({ success: true, data: null }),
   testMcpConnection: vi.fn().mockResolvedValue({ success: true, data: null }),
-} as unknown;
+} as unknown as typeof window.electronAPI;
 
 describe('AgentTools - Agent Profile Resolution', () => {
   describe('Profile Selection', () => {

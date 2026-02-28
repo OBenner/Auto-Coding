@@ -15,12 +15,9 @@ if str(_PARENT_DIR) not in sys.path:
 
 from analysis.metrics_tracker import (
     get_detailed_metrics,
-    get_improvement_trends,
-    get_success_rate,
 )
 from ui import (
     Icons,
-    box,
     divider,
     icon,
     info,

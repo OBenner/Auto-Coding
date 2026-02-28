@@ -14,7 +14,7 @@ import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Optional
+from typing import Any
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -115,7 +115,7 @@ class PermissionValidator:
         cls,
         permissions: list[PluginPermission],
         plugin_name: str = "unknown",
-    ) -> "PermissionValidator":
+    ) -> PermissionValidator:
         """
         Create validator from explicit permission list.
 
@@ -274,8 +274,8 @@ class PluginMetadata:
     plugin_type: PluginType
     required_permissions: list[PluginPermission] = field(default_factory=list)
     dependencies: list[str] = field(default_factory=list)
-    homepage: Optional[str] = None
-    license: Optional[str] = None
+    homepage: str | None = None
+    license: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Convert metadata to dictionary for serialization."""
@@ -284,7 +284,9 @@ class PluginMetadata:
             "version": self.version,
             "author": self.author,
             "description": self.description,
-            "plugin_type": self.plugin_type.value if isinstance(self.plugin_type, PluginType) else self.plugin_type,
+            "plugin_type": self.plugin_type.value
+            if isinstance(self.plugin_type, PluginType)
+            else self.plugin_type,
             "required_permissions": [
                 p.value if isinstance(p, PluginPermission) else p
                 for p in self.required_permissions
@@ -295,7 +297,7 @@ class PluginMetadata:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "PluginMetadata":
+    def from_dict(cls, data: dict[str, Any]) -> PluginMetadata:
         """Create metadata from dictionary (loaded from plugin.json)."""
         return cls(
             name=data["name"],

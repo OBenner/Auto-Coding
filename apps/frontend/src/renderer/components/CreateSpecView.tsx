@@ -21,7 +21,6 @@
  * ```
  */
 import { useState, useEffect } from 'react';
-import { useTranslation } from 'react-i18next';
 import {
   CheckCircle2,
   XCircle,
@@ -33,7 +32,7 @@ import {
   ChevronUp,
   Info
 } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
+import { Card, CardContent, CardHeader } from './ui/card';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Textarea } from './ui/textarea';
@@ -347,7 +346,6 @@ export function CreateSpecView({
   onPatternModified,
   className
 }: CreateSpecViewProps) {
-  const { t } = useTranslation(['tasks', 'common']);
   const [patterns, setPatterns] = useState<PatternWithAction[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

@@ -250,7 +250,7 @@ export function registerProjectHandlers(
     async (): Promise<IPCResult<Project[]>> => {
       // Validate that .auto-claude folders still exist for all projects
       // If a folder was deleted, reset autoBuildPath so UI prompts for reinitialization
-      const resetIds = projectStore.validateProjects();
+      const resetIds = await projectStore.validateProjects();
       if (resetIds.length > 0) {
         console.warn('[IPC] PROJECT_LIST: Detected missing .auto-claude folders for', resetIds.length, 'project(s)');
       }

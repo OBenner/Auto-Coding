@@ -25,6 +25,9 @@
     "showMetadata": "Show metadata",
     "hideMetadata": "Hide metadata"
   },
+  "taskDetail": {
+    "viewSessionReplay": "View Session Replay"
+  },
   "labels": {
     "running": "Running",
     "aiReview": "AI Review",
@@ -34,7 +37,8 @@
     "incomplete": "Incomplete",
     "recovering": "Recovering...",
     "needsRecovery": "Needs Recovery",
-    "needsResume": "Needs Resume"
+    "needsResume": "Needs Resume",
+    "moreInfo": "More"
   },
   "reviewReason": {
     "completed": "Completed",
@@ -109,7 +113,10 @@
     "lockColumn": "Lock column width",
     "unlockColumn": "Unlock column width",
     "columnLocked": "Column width is locked",
-    "expandAll": "Expand all columns"
+    "expandAll": "Expand all columns",
+    "dragDisabledAutoSort": "Drag-and-drop disabled when auto-sort is active",
+    "searchPlaceholder": "Search tasks...",
+    "clearFilters": "Clear Filters"
   },
   "queue": {
     "limitReached": "Parallel task limit reached ({{current}}/{{max}}). Task moved to queue.",
@@ -209,7 +216,8 @@
   },
   "metadata": {
     "severity": "severity",
-    "pullRequest": "Pull Request"
+    "pullRequest": "Pull Request",
+    "additionalInfo": "Additional Information"
   },
   "images": {
     "removeImageAriaLabel": "Remove image {{filename}}",
@@ -281,7 +289,16 @@
     },
     "errors": {
       "createFailed": "Failed to create task. Please try again."
-    }
+    },
+    "customTemplate": "Custom Template",
+    "selected": "Selected",
+    "agentModels": "Agent Models",
+    "agentModelsConfigured": "{{count}} configured",
+    "agentModelsDescription": "Configure which model to use for specific agent types. Leave empty to use defaults.",
+    "coderAgent": "Coder Agent",
+    "plannerAgent": "Planner Agent",
+    "qaReviewerAgent": "QA Reviewer Agent",
+    "useDefault": "Use default"
   },
   "feedback": {
     "dragDropHint": "Drag & drop images or paste screenshots",
@@ -357,6 +374,43 @@
           "critical": "Critical Impact"
         }
       }
+    },
+    "provider": {
+      "label": "AI Provider",
+      "helpText": "Select the AI provider for this task. Different providers offer various models and capabilities.",
+      "claude": "Claude (Anthropic)",
+      "claudeDescription": "Official Anthropic API with Claude models",
+      "litellm": "LiteLLM",
+      "litellmDescription": "Unified interface for multiple LLM providers",
+      "openrouter": "OpenRouter",
+      "openrouterDescription": "Access to multiple LLM models through one API",
+      "zhipuai": "GLM (Zhipu AI)",
+      "zhipuaiDescription": "Chinese language models with strong multilingual support"
+    },
+    "model": {
+      "label": "Model",
+      "helpText": "Select the specific model to use for this task. Available models depend on the selected provider.",
+      "selectModel": "Select a model",
+      "claude": {
+        "opus": "Claude Opus 4.5 (Most Capable)",
+        "sonnet": "Claude Sonnet 4.5 (Balanced)",
+        "haiku": "Claude Haiku 4.5 (Fast)"
+      },
+      "litellm": {
+        "opus": "GPT-4o / Llama 405B (Most Capable)",
+        "sonnet": "GPT-4 Turbo / Llama 70B (Balanced)",
+        "haiku": "GPT-4o Mini / Llama 8B (Fast)"
+      },
+      "openrouter": {
+        "opus": "Claude Opus 4 / GPT-4o / O1 Preview",
+        "sonnet": "Claude Sonnet 4 / GPT-4 Turbo / Gemini 2.0",
+        "haiku": "Claude Haiku 4 / GPT-4o Mini / Mistral Small"
+      },
+      "zhipuai": {
+        "opus": "GLM-4 Plus (Most Capable)",
+        "sonnet": "GLM-4 (Balanced)",
+        "haiku": "GLM-4 Flash / Air (Fast)"
+      }
     }
   },
   "subtasks": {
@@ -387,5 +441,33 @@
   "referenceImages": {
     "title": "Reference Images (optional)",
     "description": "Add visual references like screenshots or designs to help the AI understand your requirements."
+  },
+  "overview": {
+    "implementationPlan": "Implementation Plan",
+    "phaseNumber": "Phase {{number}}",
+    "subtasksCompleted": "subtasks completed",
+    "verification": "Verification",
+    "qaReport": "QA Report",
+    "qaEscalation": "QA Escalation",
+    "totalIterations": "Total Iterations",
+    "totalIssues": "Total Issues",
+    "uniqueIssues": "Unique Issues",
+    "fixSuccessRate": "Fix Success Rate",
+    "recurringIssues": "Recurring Issues",
+    "commonIssues": "Common Issues",
+    "noDataAvailable": "No overview data available yet"
+  },
+  "merge": {
+    "progress": "Merging files...",
+    "analyzing": "Analyzing changes...",
+    "fileProgress": "{{current}} / {{total}} files",
+    "currentFile": "Processing: {{file}}",
+    "conflicts": "{{count}} conflict(s) detected",
+    "complete": "Merge complete",
+    "autoResolved": "{{count}} file(s) auto-resolved"
+  },
+  "markDoneFailed": "Failed to mark as done",
+  "prPolling": {
+    "autoRefreshing": "Auto-refreshing"
   }
 }

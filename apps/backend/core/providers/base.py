@@ -13,11 +13,12 @@ This abstraction enables:
 
 import logging
 from abc import ABC, abstractmethod
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, AsyncIterator, Optional
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from core.providers.config import ProviderConfig
+    pass
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +30,7 @@ class SessionConfig:
     Attributes:
         name: Session name/identifier
         system_prompt: System prompt for the agent
+        provider: Provider name (e.g., 'claude', 'litellm', 'openrouter', 'zhipuai')
         model: Model identifier (provider-specific)
         max_tokens: Maximum tokens for responses
         temperature: Temperature for response generation
@@ -40,13 +42,14 @@ class SessionConfig:
 
     name: str
     system_prompt: str = ""
-    model: Optional[str] = None
-    max_tokens: Optional[int] = None
-    temperature: Optional[float] = None
-    tools: Optional[list[str]] = None
-    working_directory: Optional[str] = None
-    allowed_commands: Optional[list[str]] = None
-    extra: Optional[dict[str, Any]] = None
+    provider: str | None = None
+    model: str | None = None
+    max_tokens: int | None = None
+    temperature: float | None = None
+    tools: list[str] | None = None
+    working_directory: str | None = None
+    allowed_commands: list[str] | None = None
+    extra: dict[str, Any] | None = None
 
 
 class AgentSession:
@@ -179,13 +182,15 @@ class AIEngineProvider(ABC):
         """
         return self.validate_config()
 
-    def close(self) -> None:
+    # Abstract base class: optional cleanup hook with default no-op.
+    # Not marked @abstractmethod since cleanup is optional.
+    def close(self) -> None:  # noqa: B027
         """Clean up provider resources.
 
         Called when provider is no longer needed.
         Default implementation does nothing.
+        Subclasses should override if they need cleanup.
         """
-        pass
 
     def __repr__(self) -> str:
         """Return string representation of provider."""

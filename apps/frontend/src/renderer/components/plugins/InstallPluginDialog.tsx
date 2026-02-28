@@ -143,10 +143,10 @@ export function InstallPluginDialog({
       // Call IPC to install plugin
       const result = await window.electronAPI.installPlugin(source);
 
-      if (result.success && result.plugin) {
+      if (result.success && result.data?.plugin) {
         toast({
           title: t('plugins:toast.installSuccess', 'Plugin installed successfully'),
-          description: `${result.plugin.name} v${result.plugin.version}`,
+          description: `${result.data.plugin.name} v${result.data.plugin.version}`,
         });
         onOpenChange(false);
         onPluginInstalled?.();
