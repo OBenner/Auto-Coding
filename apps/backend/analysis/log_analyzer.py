@@ -236,6 +236,7 @@ def extract_relevant_lines(
 
     # Default error patterns if none provided
     compiled_patterns = None
+    error_keywords: list[str] = []
     if not error_pattern:
         error_keywords = [
             "error",
