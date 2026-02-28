@@ -18,7 +18,6 @@ export * from './integrations';
 export * from './app-update';
 export * from './cli';
 export * from './merge-analytics';
-export * from './health';
 export * from './session-context';
 export * from './productivity-analytics';
 export * from './template';

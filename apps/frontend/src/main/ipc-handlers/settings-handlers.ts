@@ -759,4 +759,286 @@ export function registerSettingsHandlers(
       }
     }
   );
+
+  // ============================================
+  // AI Provider Configuration (Backend .env sync)
+  // ============================================
+
+  /**
+   * Get AI provider configuration from backend .env file
+   */
+  ipcMain.handle(
+    IPC_CHANNELS.PROVIDER_CONFIG_GET,
+    async (): Promise<IPCResult<import('../../shared/types').AIProviderConfig>> => {
+      try {
+        const { sourcePath, envPath } = getSourceEnvPath();
+
+        if (!sourcePath || !envPath) {
+          return {
+            success: false,
+            error: 'Auto-build source path not configured. Please set it in Settings.'
+          };
+        }
+
+        // Read .env file if it exists
+        const config: import('../../shared/types').AIProviderConfig = {
+          provider: 'claude' // default
+        };
+
+        if (existsSync(envPath)) {
+          const content = readFileSync(envPath, 'utf-8');
+          const vars = parseEnvFile(content);
+
+          // Parse provider config from env vars
+          config.provider = (vars['AI_ENGINE_PROVIDER'] || 'claude') as import('../../shared/types').AIEngineProvider;
+
+          // Claude settings
+          config.anthropicApiKey = vars['ANTHROPIC_API_KEY'];
+          config.claudeModel = vars['CLAUDE_MODEL'];
+
+          // OpenAI settings
+          config.openaiApiKey = vars['OPENAI_API_KEY'];
+          config.openaiModel = vars['OPENAI_MODEL'];
+          config.openaiBaseUrl = vars['OPENAI_BASE_URL'];
+
+          // Google Gemini settings
+          config.googleApiKey = vars['GOOGLE_API_KEY'];
+          config.googleModel = vars['GOOGLE_MODEL'];
+
+          // LiteLLM settings
+          config.litellmModel = vars['LITELLM_MODEL'];
+          config.litellmApiBase = vars['LITELLM_API_BASE'];
+          config.litellmApiKey = vars['LITELLM_API_KEY'];
+
+          // OpenRouter settings
+          config.openrouterApiKey = vars['OPENROUTER_API_KEY'];
+          config.openrouterModel = vars['OPENROUTER_MODEL'];
+          config.openrouterBaseUrl = vars['OPENROUTER_BASE_URL'];
+
+          // Ollama settings
+          config.ollamaModel = vars['OLLAMA_MODEL'];
+          config.ollamaBaseUrl = vars['OLLAMA_BASE_URL'];
+        }
+
+        return {
+          success: true,
+          data: config
+        };
+      } catch (error) {
+        console.error('[PROVIDER_CONFIG_GET] Error:', error);
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Failed to get provider config'
+        };
+      }
+    }
+  );
+
+  /**
+   * Update AI provider configuration in backend .env file
+   */
+  ipcMain.handle(
+    IPC_CHANNELS.PROVIDER_CONFIG_UPDATE,
+    async (_, config: Partial<import('../../shared/types').AIProviderConfig>): Promise<IPCResult> => {
+      try {
+        const { sourcePath, envPath } = getSourceEnvPath();
+
+        if (!sourcePath || !envPath) {
+          return {
+            success: false,
+            error: 'Auto-build source path not configured. Please set it in Settings.'
+          };
+        }
+
+        // Read existing .env content (use try/catch to avoid TOCTOU race)
+        let existingVars: Record<string, string> = {};
+        try {
+          const content = readFileSync(envPath, 'utf-8');
+          existingVars = parseEnvFile(content);
+        } catch {
+          // File doesn't exist yet, start with empty vars
+        }
+
+        // Update provider config vars
+        if (config.provider !== undefined) {
+          existingVars['AI_ENGINE_PROVIDER'] = config.provider;
+        }
+
+        // Claude settings
+        if (config.anthropicApiKey !== undefined) {
+          existingVars['ANTHROPIC_API_KEY'] = config.anthropicApiKey;
+        }
+        if (config.claudeModel !== undefined) {
+          existingVars['CLAUDE_MODEL'] = config.claudeModel;
+        }
+
+        // OpenAI settings
+        if (config.openaiApiKey !== undefined) {
+          existingVars['OPENAI_API_KEY'] = config.openaiApiKey;
+        }
+        if (config.openaiModel !== undefined) {
+          existingVars['OPENAI_MODEL'] = config.openaiModel;
+        }
+        if (config.openaiBaseUrl !== undefined) {
+          existingVars['OPENAI_BASE_URL'] = config.openaiBaseUrl;
+        }
+
+        // Google Gemini settings
+        if (config.googleApiKey !== undefined) {
+          existingVars['GOOGLE_API_KEY'] = config.googleApiKey;
+        }
+        if (config.googleModel !== undefined) {
+          existingVars['GOOGLE_MODEL'] = config.googleModel;
+        }
+
+        // LiteLLM settings
+        if (config.litellmModel !== undefined) {
+          existingVars['LITELLM_MODEL'] = config.litellmModel;
+        }
+        if (config.litellmApiBase !== undefined) {
+          existingVars['LITELLM_API_BASE'] = config.litellmApiBase;
+        }
+        if (config.litellmApiKey !== undefined) {
+          existingVars['LITELLM_API_KEY'] = config.litellmApiKey;
+        }
+
+        // OpenRouter settings
+        if (config.openrouterApiKey !== undefined) {
+          existingVars['OPENROUTER_API_KEY'] = config.openrouterApiKey;
+        }
+        if (config.openrouterModel !== undefined) {
+          existingVars['OPENROUTER_MODEL'] = config.openrouterModel;
+        }
+        if (config.openrouterBaseUrl !== undefined) {
+          existingVars['OPENROUTER_BASE_URL'] = config.openrouterBaseUrl;
+        }
+
+        // Ollama settings
+        if (config.ollamaModel !== undefined) {
+          existingVars['OLLAMA_MODEL'] = config.ollamaModel;
+        }
+        if (config.ollamaBaseUrl !== undefined) {
+          existingVars['OLLAMA_BASE_URL'] = config.ollamaBaseUrl;
+        }
+
+        // Write back to .env file
+        const newContent = Object.entries(existingVars)
+          .map(([key, value]) => `${key}=${value}`)
+          .join('\n');
+
+        writeFileSync(envPath, newContent, 'utf-8');
+
+        return {
+          success: true
+        };
+      } catch (error) {
+        console.error('[PROVIDER_CONFIG_UPDATE] Error:', error);
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Failed to update provider config'
+        };
+      }
+    }
+  );
+
+  /**
+   * Validate AI provider configuration
+   */
+  ipcMain.handle(
+    IPC_CHANNELS.PROVIDER_CONFIG_VALIDATE,
+    async (): Promise<IPCResult<import('../../shared/types').ProviderConfigValidation>> => {
+      try {
+        const { sourcePath, envPath } = getSourceEnvPath();
+
+        if (!sourcePath || !envPath) {
+          return {
+            success: false,
+            error: 'Auto-build source path not configured. Please set it in Settings.'
+          };
+        }
+
+        const errors: string[] = [];
+        const availableProviders: import('../../shared/types').AIEngineProvider[] = [];
+
+        // Read .env file if it exists
+        if (existsSync(envPath)) {
+          const content = readFileSync(envPath, 'utf-8');
+          const vars = parseEnvFile(content);
+
+          const provider = (vars['AI_ENGINE_PROVIDER'] || 'claude') as import('../../shared/types').AIEngineProvider;
+
+          // Check which providers have credentials configured
+          if (vars['ANTHROPIC_API_KEY']) {
+            availableProviders.push('claude');
+          }
+          if (vars['OPENAI_API_KEY']) {
+            availableProviders.push('openai');
+          }
+          if (vars['GOOGLE_API_KEY']) {
+            availableProviders.push('google');
+          }
+          if (vars['LITELLM_MODEL']) {
+            availableProviders.push('litellm');
+          }
+          if (vars['OPENROUTER_API_KEY']) {
+            availableProviders.push('openrouter');
+          }
+          if (vars['OLLAMA_MODEL']) {
+            availableProviders.push('ollama');
+          }
+
+          // Validate selected provider has required credentials
+          switch (provider) {
+            case 'claude':
+              if (!vars['ANTHROPIC_API_KEY']) {
+                errors.push('Claude provider requires ANTHROPIC_API_KEY environment variable');
+              }
+              break;
+            case 'openai':
+              if (!vars['OPENAI_API_KEY']) {
+                errors.push('OpenAI provider requires OPENAI_API_KEY environment variable');
+              }
+              break;
+            case 'google':
+              if (!vars['GOOGLE_API_KEY']) {
+                errors.push('Google provider requires GOOGLE_API_KEY environment variable');
+              }
+              break;
+            case 'litellm':
+              if (!vars['LITELLM_MODEL']) {
+                errors.push('LiteLLM provider requires LITELLM_MODEL environment variable');
+              }
+              break;
+            case 'openrouter':
+              if (!vars['OPENROUTER_API_KEY']) {
+                errors.push('OpenRouter provider requires OPENROUTER_API_KEY environment variable');
+              }
+              break;
+            case 'ollama':
+              if (!vars['OLLAMA_MODEL']) {
+                errors.push('Ollama provider requires OLLAMA_MODEL environment variable');
+              }
+              break;
+          }
+        } else {
+          errors.push('.env file does not exist in backend directory');
+        }
+
+        return {
+          success: true,
+          data: {
+            isValid: errors.length === 0,
+            errors,
+            availableProviders
+          }
+        };
+      } catch (error) {
+        console.error('[PROVIDER_CONFIG_VALIDATE] Error:', error);
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Failed to validate provider config'
+        };
+      }
+    }
+  );
 }

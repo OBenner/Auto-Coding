@@ -7,17 +7,27 @@ Follows the same patterns as integrations/graphiti/config.py for consistency.
 
 Supported Providers:
 - claude: Claude Agent SDK (default, recommended) - Full agentic capabilities
+- openai: OpenAI direct API - GPT-4, GPT-4o, o1, o3 models
+- google: Google Gemini API - Gemini 2.0, Gemini 1.5 models
 - litellm: LiteLLM unified API - 100+ LLMs via single interface
 - openrouter: OpenRouter cloud routing - 400+ models with pay-per-use
-- openai: OpenAI API direct - GPT-5.2, o3, o4-mini models
-- ollama: Ollama local models - Run LLMs locally
+- ollama: Ollama local models - Privacy-first local inference
 
 Environment Variables:
     # Core
-    AI_ENGINE_PROVIDER: Provider selection (claude|litellm|openrouter|openai|ollama, default: claude)
+    AI_ENGINE_PROVIDER: Provider selection (claude|openai|google|litellm|openrouter|ollama, default: claude)
 
     # Claude Agent SDK (default)
     ANTHROPIC_API_KEY: Required for Claude provider
+
+    # OpenAI
+    OPENAI_API_KEY: Required for OpenAI provider
+    OPENAI_MODEL: Model identifier (default: gpt-4o)
+    OPENAI_BASE_URL: Optional custom API base URL
+
+    # Google Gemini
+    GOOGLE_API_KEY: Required for Google provider
+    GOOGLE_MODEL: Model identifier (default: gemini-2.0-flash)
 
     # LiteLLM
     LITELLM_MODEL: Model identifier (e.g., gpt-4, claude-3-opus)
@@ -28,11 +38,6 @@ Environment Variables:
     OPENROUTER_API_KEY: Required for OpenRouter provider
     OPENROUTER_MODEL: Model identifier (default: anthropic/claude-sonnet-4)
     OPENROUTER_BASE_URL: API base URL (default: https://openrouter.ai/api/v1)
-
-    # OpenAI
-    OPENAI_API_KEY: Required for OpenAI provider
-    OPENAI_MODEL: Model identifier (default: gpt-4o)
-    OPENAI_BASE_URL: Optional custom API base URL
 
     # Ollama
     OLLAMA_MODEL: Model identifier (e.g., llama3, deepseek-r1, codellama)
@@ -49,9 +54,10 @@ class AIEngineProvider(str, Enum):
     """Supported AI engine providers."""
 
     CLAUDE = "claude"
+    OPENAI = "openai"
+    GOOGLE = "google"
     LITELLM = "litellm"
     OPENROUTER = "openrouter"
-    OPENAI = "openai"
     OLLAMA = "ollama"
 
 
@@ -78,6 +84,15 @@ class ProviderConfig:
     anthropic_api_key: str = ""
     claude_model: str = "claude-sonnet-4-5-20250929"
 
+    # OpenAI settings
+    openai_api_key: str = ""
+    openai_model: str = DEFAULT_OPENAI_MODEL
+    openai_base_url: str = ""
+
+    # Google Gemini settings
+    google_api_key: str = ""
+    google_model: str = "gemini-2.0-flash"
+
     # LiteLLM settings
     litellm_model: str = ""
     litellm_api_base: str = ""
@@ -87,11 +102,6 @@ class ProviderConfig:
     openrouter_api_key: str = ""
     openrouter_model: str = DEFAULT_OPENROUTER_MODEL
     openrouter_base_url: str = DEFAULT_OPENROUTER_BASE_URL
-
-    # OpenAI settings
-    openai_api_key: str = ""
-    openai_model: str = DEFAULT_OPENAI_MODEL
-    openai_base_url: str = ""
 
     # Ollama settings
     ollama_model: str = ""
@@ -114,6 +124,15 @@ class ProviderConfig:
         anthropic_api_key = os.environ.get("ANTHROPIC_API_KEY", "")
         claude_model = os.environ.get("CLAUDE_MODEL", "claude-sonnet-4-5-20250929")
 
+        # OpenAI settings
+        openai_api_key = os.environ.get("OPENAI_API_KEY", "")
+        openai_model = os.environ.get("OPENAI_MODEL", DEFAULT_OPENAI_MODEL)
+        openai_base_url = os.environ.get("OPENAI_BASE_URL", "")
+
+        # Google Gemini settings
+        google_api_key = os.environ.get("GOOGLE_API_KEY", "")
+        google_model = os.environ.get("GOOGLE_MODEL", "gemini-2.0-flash")
+
         # LiteLLM settings
         litellm_model = os.environ.get("LITELLM_MODEL", "")
         litellm_api_base = os.environ.get("LITELLM_API_BASE", "")
@@ -126,11 +145,6 @@ class ProviderConfig:
             "OPENROUTER_BASE_URL", DEFAULT_OPENROUTER_BASE_URL
         )
 
-        # OpenAI settings
-        openai_api_key = os.environ.get("OPENAI_API_KEY", "")
-        openai_model = os.environ.get("OPENAI_MODEL", DEFAULT_OPENAI_MODEL)
-        openai_base_url = os.environ.get("OPENAI_BASE_URL", "")
-
         # Ollama settings
         ollama_model = os.environ.get("OLLAMA_MODEL", "")
         ollama_base_url = os.environ.get("OLLAMA_BASE_URL", DEFAULT_OLLAMA_BASE_URL)
@@ -140,15 +154,17 @@ class ProviderConfig:
             provider=provider,
             anthropic_api_key=anthropic_api_key,
             claude_model=claude_model,
+            openai_api_key=openai_api_key,
+            openai_model=openai_model,
+            openai_base_url=openai_base_url,
+            google_api_key=google_api_key,
+            google_model=google_model,
             litellm_model=litellm_model,
             litellm_api_base=litellm_api_base,
             litellm_api_key=litellm_api_key,
             openrouter_api_key=openrouter_api_key,
             openrouter_model=openrouter_model,
             openrouter_base_url=openrouter_base_url,
-            openai_api_key=openai_api_key,
-            openai_model=openai_model,
-            openai_base_url=openai_base_url,
             ollama_model=ollama_model,
             ollama_base_url=ollama_base_url,
             ollama_api_key=ollama_api_key,
@@ -162,13 +178,15 @@ class ProviderConfig:
         """
         if self.provider == AIEngineProvider.CLAUDE.value:
             return bool(self.anthropic_api_key)
+        elif self.provider == AIEngineProvider.OPENAI.value:
+            return bool(self.openai_api_key)
+        elif self.provider == AIEngineProvider.GOOGLE.value:
+            return bool(self.google_api_key)
         elif self.provider == AIEngineProvider.LITELLM.value:
             # LiteLLM can work with various providers, model is required
             return bool(self.litellm_model)
         elif self.provider == AIEngineProvider.OPENROUTER.value:
             return bool(self.openrouter_api_key)
-        elif self.provider == AIEngineProvider.OPENAI.value:
-            return bool(self.openai_api_key)
         elif self.provider == AIEngineProvider.OLLAMA.value:
             return bool(self.ollama_model)
         return False
@@ -182,6 +200,16 @@ class ProviderConfig:
                 errors.append(
                     "Claude provider requires ANTHROPIC_API_KEY environment variable"
                 )
+        elif self.provider == AIEngineProvider.OPENAI.value:
+            if not self.openai_api_key:
+                errors.append(
+                    "OpenAI provider requires OPENAI_API_KEY environment variable"
+                )
+        elif self.provider == AIEngineProvider.GOOGLE.value:
+            if not self.google_api_key:
+                errors.append(
+                    "Google provider requires GOOGLE_API_KEY environment variable"
+                )
         elif self.provider == AIEngineProvider.LITELLM.value:
             if not self.litellm_model:
                 errors.append(
@@ -191,11 +219,6 @@ class ProviderConfig:
             if not self.openrouter_api_key:
                 errors.append(
                     "OpenRouter provider requires OPENROUTER_API_KEY environment variable"
-                )
-        elif self.provider == AIEngineProvider.OPENAI.value:
-            if not self.openai_api_key:
-                errors.append(
-                    "OpenAI provider requires OPENAI_API_KEY environment variable"
                 )
         elif self.provider == AIEngineProvider.OLLAMA.value:
             if not self.ollama_model:
@@ -211,12 +234,14 @@ class ProviderConfig:
         """Get a summary of configured provider."""
         if self.provider == AIEngineProvider.CLAUDE.value:
             return f"Claude Agent SDK ({self.claude_model})"
+        elif self.provider == AIEngineProvider.OPENAI.value:
+            return f"OpenAI ({self.openai_model})"
+        elif self.provider == AIEngineProvider.GOOGLE.value:
+            return f"Google Gemini ({self.google_model})"
         elif self.provider == AIEngineProvider.LITELLM.value:
             return f"LiteLLM ({self.litellm_model or 'no model configured'})"
         elif self.provider == AIEngineProvider.OPENROUTER.value:
             return f"OpenRouter ({self.openrouter_model})"
-        elif self.provider == AIEngineProvider.OPENAI.value:
-            return f"OpenAI ({self.openai_model})"
         elif self.provider == AIEngineProvider.OLLAMA.value:
             return f"Ollama ({self.ollama_model or 'no model configured'})"
         return f"Unknown ({self.provider})"
@@ -225,12 +250,14 @@ class ProviderConfig:
         """Get the configured model for the current provider."""
         if self.provider == AIEngineProvider.CLAUDE.value:
             return self.claude_model
+        elif self.provider == AIEngineProvider.OPENAI.value:
+            return self.openai_model
+        elif self.provider == AIEngineProvider.GOOGLE.value:
+            return self.google_model
         elif self.provider == AIEngineProvider.LITELLM.value:
             return self.litellm_model or None
         elif self.provider == AIEngineProvider.OPENROUTER.value:
             return self.openrouter_model
-        elif self.provider == AIEngineProvider.OPENAI.value:
-            return self.openai_model
         elif self.provider == AIEngineProvider.OLLAMA.value:
             return self.ollama_model or None
         return None
@@ -260,14 +287,17 @@ def get_available_providers() -> list[str]:
     if config.anthropic_api_key:
         available.append(AIEngineProvider.CLAUDE.value)
 
+    if config.openai_api_key:
+        available.append(AIEngineProvider.OPENAI.value)
+
+    if config.google_api_key:
+        available.append(AIEngineProvider.GOOGLE.value)
+
     if config.litellm_model:
         available.append(AIEngineProvider.LITELLM.value)
 
     if config.openrouter_api_key:
         available.append(AIEngineProvider.OPENROUTER.value)
-
-    if config.openai_api_key:
-        available.append(AIEngineProvider.OPENAI.value)
 
     if config.ollama_model:
         available.append(AIEngineProvider.OLLAMA.value)

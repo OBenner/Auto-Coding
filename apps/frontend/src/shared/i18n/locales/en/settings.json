@@ -21,6 +21,14 @@
       "title": "Developer Tools",
       "description": "IDE and terminal preferences"
     },
+    "provider": {
+      "title": "AI Provider",
+      "description": "Select your AI provider and models"
+    },
+    "cost": {
+      "title": "Cost Comparison",
+      "description": "Compare model pricing across providers"
+    },
     "agent": {
       "title": "Agent Settings",
       "description": "Default model and framework"
@@ -181,6 +189,33 @@
     "searchPlaceholder": "Search models...",
     "noResults": "No models match your search",
     "discoveryNotAvailable": "Model discovery not available. Enter model name manually."
+  },
+  "costComparison": {
+    "title": "Cost Comparison",
+    "description": "Compare pricing across AI models and providers",
+    "providers": {
+      "anthropic": "Anthropic (Claude)",
+      "openai": "OpenAI",
+      "google": "Google Gemini",
+      "ollama": "Ollama (Local)"
+    },
+    "input": "Input",
+    "output": "Output",
+    "model": "model",
+    "models": "models",
+    "free": "FREE",
+    "cheapest": "Cheapest",
+    "localFree": "Local",
+    "infoTitle": "Pricing Information",
+    "infoDescription": "All prices shown are per 1 million tokens (USD). Local models via Ollama are free.",
+    "notesTitle": "Important Notes",
+    "note1": "Prices are per 1M tokens and may vary by provider",
+    "note2": "Local models (Ollama) run on your machine and have no API costs",
+    "note3": "Actual costs depend on input and output token usage",
+    "modelNames": {
+      "claude": "Claude {{family}} {{size}}",
+      "gemini": "Gemini {{name}}"
+    }
   },
   "language": {
     "label": "Interface Language",
@@ -380,6 +415,27 @@
       "integrationDescription": "Configure persistent cross-session memory for agents",
       "syncDescription": "Configure persistent memory"
     }
+  },
+  "provider": {
+    "title": "AI Provider",
+    "description": "Select your AI provider and available models",
+    "selectProvider": "Select Provider",
+    "selectProviderPlaceholder": "Choose an AI provider",
+    "availableProviders": "Available Providers",
+    "selectedProvider": "Selected Provider",
+    "name": "Name",
+    "endpoint": "Endpoint",
+    "model": "model",
+    "models": "models",
+    "modelsAvailable": "Models available",
+    "autoDiscovery": "Auto-discovery",
+    "showModels": "Show available models",
+    "hideModels": "Hide models",
+    "fallbackModel": "Fallback Model",
+    "fallbackModelDescription": "Model to use if primary model is unavailable",
+    "selectFallbackModel": "Select fallback model",
+    "noFallback": "No fallback (use provider default)",
+    "fallbackInfo": "If your primary model becomes unavailable, the system will automatically fall back to this model."
   },
   "agentProfile": {
     "label": "Agent Profile",
