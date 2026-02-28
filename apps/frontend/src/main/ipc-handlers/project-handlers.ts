@@ -541,8 +541,8 @@ export function registerProjectHandlers(
           return { success: false, error: 'Invalid spec ID' };
         }
 
-        // Build path to cost_report.json
-        const specsDir = getSpecsDir(project.autoBuildPath);
+        // Build path to cost_report.json - resolve against project root
+        const specsDir = path.resolve(project.path, getSpecsDir(project.autoBuildPath));
         const costReportPath = path.join(specsDir, specId, 'cost_report.json');
 
         // Ensure resolved path is within specs directory

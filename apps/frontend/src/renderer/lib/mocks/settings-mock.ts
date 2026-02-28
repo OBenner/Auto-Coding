@@ -33,12 +33,33 @@ export const settingsMock = {
   // AI Provider Configuration (mock - no backend in browser mode)
   getProviderConfig: async () => ({
     success: true,
-    data: { provider: 'claude' as const }
+    data: {
+      provider: 'claude' as const,
+      anthropicApiKey: undefined,
+      claudeModel: undefined,
+      openaiApiKey: undefined,
+      googleApiKey: undefined,
+      openrouterApiKey: undefined,
+      plannerModel: undefined,
+      coderModel: undefined,
+      qaModel: undefined,
+    }
   }),
   updateProviderConfig: async () => ({ success: true }),
   validateProviderConfig: async () => ({
     success: true,
-    data: { isValid: true, errors: [], availableProviders: ['claude' as const] }
+    data: {
+      isValid: true,
+      errors: [],
+      availableProviders: [
+        'claude' as const,
+        'openai' as const,
+        'google' as const,
+        'litellm' as const,
+        'openrouter' as const,
+        'ollama' as const
+      ]
+    }
   }),
 
   // App Info

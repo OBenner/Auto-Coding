@@ -19,11 +19,9 @@ import type {
   AppUpdateAvailableEvent,
   AppUpdateProgress,
   AppUpdateInfo,
-  NotificationSettings
+  NotificationSettings,
+  AIEngineProvider
 } from '../../../shared/types';
-
-// AI Engine Provider types
-export type AIEngineProvider = 'claude' | 'litellm' | 'openrouter';
 
 // Available AI engine providers
 const AI_ENGINE_PROVIDERS: { value: AIEngineProvider; labelKey: string; descriptionKey: string }[] = [

@@ -49,6 +49,7 @@ def test_env_ollama(temp_git_repo: Path):
 @pytest.fixture
 def mock_ollama_api():
     """Mock Ollama API responses for testing without actual Ollama instance."""
+    pytest.importorskip("litellm", reason="litellm not installed")
     with patch("litellm.completion") as mock_completion:
         # Mock successful Ollama llama3 response
         mock_response = Mock()
@@ -84,21 +85,16 @@ def create_ollama_env_config(
 
     Prefers monkeypatch.setenv to avoid writing to disk.
     """
-    if monkeypatch:
-        monkeypatch.setenv("AI_ENGINE_PROVIDER", "litellm")
-        monkeypatch.setenv("LITELLM_MODEL", "ollama/llama3")
-        monkeypatch.setenv("OLLAMA_API_BASE", "http://localhost:11434")
-        return spec_dir.parent.parent.parent / ".env"
+    # Prefer monkeypatch to avoid writing secrets/config to disk.
+    # All callers should pass monkeypatch; the parameter is kept
+    # non-optional so tests fail loudly if it is accidentally omitted.
+    if not monkeypatch:
+        raise ValueError("monkeypatch is required – do not write .env files in tests")
 
-    env_file = spec_dir.parent.parent.parent / ".env"
-    env_content = """# Ollama Provider Configuration (Local, Zero Cost)
-AI_ENGINE_PROVIDER=litellm
-LITELLM_MODEL=ollama/llama3
-# Ollama typically runs on http://localhost:11434 by default
-OLLAMA_API_BASE=http://localhost:11434
-"""
-    env_file.write_text(env_content)
-    return env_file
+    monkeypatch.setenv("AI_ENGINE_PROVIDER", "litellm")
+    monkeypatch.setenv("LITELLM_MODEL", "ollama/llama3")
+    monkeypatch.setenv("OLLAMA_API_BASE", "http://localhost:11434")
+    return spec_dir.parent.parent.parent / ".env"
 
 
 def create_simple_spec(spec_dir: Path) -> Path:
@@ -328,6 +324,11 @@ class TestOllamaProviderFactory:
         # Verify configuration
         assert config.provider == "litellm"
         assert config.get_model_for_provider() == "ollama/llama3"
+
+        # Verify the factory can actually instantiate the provider
+        provider = create_engine_provider(config)
+        assert provider is not None, "create_engine_provider should return a provider"
+        assert provider.name == "litellm", f"Provider name should be 'litellm', got {provider.name!r}"
 
 
 # =============================================================================

@@ -607,8 +607,8 @@ def get_provider_for_agent(agent_type: str) -> str:
 
     Priority:
     1. Environment variable AGENT_PROVIDER_<agent_type> (if set)
-    2. AGENT_DEFAULT_PROVIDERS mapping (if agent_type has a default)
-    3. Global AI_ENGINE_PROVIDER environment variable
+    2. Global AI_ENGINE_PROVIDER environment variable (if set)
+    3. AGENT_DEFAULT_PROVIDERS mapping (if agent_type has a default)
     4. Default to 'claude'
 
     Args:
@@ -623,14 +623,14 @@ def get_provider_for_agent(agent_type: str) -> str:
     if env_provider:
         return env_provider
 
-    # 2. Check agent default providers mapping
-    default_provider = AGENT_DEFAULT_PROVIDERS.get(agent_type)
-    if default_provider:
-        return default_provider
-
-    # 3. Fall back to global provider configuration
+    # 2. Global AI_ENGINE_PROVIDER env var overrides the hardcoded defaults
     global_provider = os.environ.get("AI_ENGINE_PROVIDER")
     if global_provider:
         return global_provider
+
+    # 3. Check agent default providers mapping
+    default_provider = AGENT_DEFAULT_PROVIDERS.get(agent_type)
+    if default_provider:
+        return default_provider
 
     return "claude"

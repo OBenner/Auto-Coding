@@ -65,22 +65,26 @@ This will print a detailed manual test procedure including:
 ## Test Coverage
 
 ### Provider Configuration Tests
+
 - `TestOpenAIProviderConfiguration`
   - Provider config loaded from environment
   - API key validation
 
 ### Cost Tracking Tests
+
 - `TestOpenAICostTracking`
   - GPT-4 pricing definitions
   - Cost calculation accuracy
   - Multi-model cost tracking
 
 ### Provider Factory Tests
+
 - `TestOpenAIProviderFactory`
   - LiteLLM provider creation
   - Configuration validation
 
 ### E2E Integration Tests
+
 - `TestE2EOpenAIIntegration`
   - Full workflow with mocked API
   - Optional live API integration

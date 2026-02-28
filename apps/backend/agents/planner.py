@@ -60,18 +60,12 @@ def create_planner_session(
     Raises:
         ProviderError: If provider creation or session creation fails
     """
-    # Create provider from environment configuration
-    config = ProviderConfig.from_env()
+    # Create provider from environment configuration (with per-agent overrides)
+    config = ProviderConfig.from_env(agent_type="planner")
     provider = create_engine_provider(config)
 
-    # For Claude provider, create session with provider-specific parameters
+    # For Claude provider, pass provider-specific kwargs
     if provider.name == "claude":
-        from core.providers.adapters.claude import ClaudeAgentProvider
-
-        if not isinstance(provider, ClaudeAgentProvider):
-            raise TypeError(f"Expected ClaudeAgentProvider, got {type(provider)}")
-
-        # Create session using provider's create_session method
         session = provider.create_session(
             config=SessionConfig(
                 name="planner-session",
@@ -82,13 +76,15 @@ def create_planner_session(
             agent_type="planner",
             max_thinking_tokens=max_thinking_tokens,
         )
-        return session
     else:
-        # For other providers, implement their session creation
-        # TODO: Add support for LiteLLM and OpenRouter providers
-        raise NotImplementedError(
-            f"Provider {provider.name} not yet implemented for planner agent"
+        session = provider.create_session(
+            SessionConfig(
+                name="planner-session",
+                model=model,
+            )
         )
+
+    return session
 
 
 async def run_followup_planner(

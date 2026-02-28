@@ -193,6 +193,8 @@ class ProviderConfig:
                 litellm_model = agent_model
             elif provider == AIEngineProvider.OPENROUTER.value:
                 openrouter_model = agent_model
+            elif provider == AIEngineProvider.ZHIPUAI.value:
+                zhipuai_model = agent_model
             elif provider == AIEngineProvider.OLLAMA.value:
                 ollama_model = agent_model
 

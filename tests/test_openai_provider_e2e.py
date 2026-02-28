@@ -49,6 +49,7 @@ def test_env_openai(temp_git_repo: Path):
 @pytest.fixture
 def mock_openai_api():
     """Mock OpenAI API responses for testing without actual API calls."""
+    pytest.importorskip("litellm", reason="litellm not installed")
     with patch("litellm.completion") as mock_completion:
         # Mock successful GPT-4 response
         mock_response = Mock()
@@ -86,20 +87,16 @@ def create_openai_env_config(
     Prefers monkeypatch.setenv to avoid writing secrets to disk.
     Falls back to writing a .env file if monkeypatch is not provided.
     """
-    if monkeypatch:
-        monkeypatch.setenv("AI_ENGINE_PROVIDER", "litellm")
-        monkeypatch.setenv("LITELLM_MODEL", "gpt-4")
-        monkeypatch.setenv("OPENAI_API_KEY", openai_api_key)
-        return spec_dir.parent.parent.parent / ".env"
+    # Prefer monkeypatch to avoid writing secrets/config to disk.
+    # All callers should pass monkeypatch; the parameter is kept
+    # non-optional so tests fail loudly if it is accidentally omitted.
+    if not monkeypatch:
+        raise ValueError("monkeypatch is required – do not write .env files in tests")
 
-    env_file = spec_dir.parent.parent.parent / ".env"
-    env_content = f"""# OpenAI Provider Configuration
-AI_ENGINE_PROVIDER=litellm
-LITELLM_MODEL=gpt-4
-OPENAI_API_KEY={openai_api_key}
-"""
-    env_file.write_text(env_content)
-    return env_file
+    monkeypatch.setenv("AI_ENGINE_PROVIDER", "litellm")
+    monkeypatch.setenv("LITELLM_MODEL", "gpt-4")
+    monkeypatch.setenv("OPENAI_API_KEY", openai_api_key)
+    return spec_dir.parent.parent.parent / ".env"
 
 
 def create_simple_spec(spec_dir: Path) -> Path:
@@ -298,10 +295,13 @@ class TestOpenAIProviderFactory:
         # Create provider config
         config = ProviderConfig.from_env()
 
-        # Create provider (this will use the factory)
-        # Note: Actual provider creation may require additional setup
         assert config.provider == "litellm"
         assert config.get_model_for_provider() == "gpt-4"
+
+        # Verify the factory can actually instantiate the provider
+        provider = create_engine_provider(config)
+        assert provider is not None, "create_engine_provider should return a provider"
+        assert provider.name == "litellm", f"Provider name should be 'litellm', got {provider.name!r}"
 
 
 # =============================================================================

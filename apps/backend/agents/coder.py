@@ -865,43 +865,13 @@ async def run_autonomous_agent(
 
         phase_thinking_budget = get_phase_thinking_budget(spec_dir, current_phase)
 
-        # Create provider using factory pattern for multi-provider support
-        # The provider is selected via AI_ENGINE_PROVIDER env var (default: claude)
-        provider_config = ProviderConfig.from_env()
-        provider = create_engine_provider(provider_config)
-
-        # Create session with phase-specific model and thinking
         # Use appropriate agent_type for correct tool permissions and thinking budget
         agent_type_for_session = "planner" if first_run else "coder"
-        from core.providers.base import SessionConfig
 
-        session_config = SessionConfig(
-            name=f"{agent_type_for_session}-session-{iteration}",
-            model=phase_model,
-            extra={
-                "agent_type": agent_type_for_session,
-                "max_thinking_tokens": phase_thinking_budget,
-            },
-        )
-
-        # Only pass Claude-specific kwargs to Claude provider
-        if provider.name == "claude":
-            session = provider.create_session(
-                session_config,
-                project_dir=project_dir,
-                spec_dir=spec_dir,
-                agent_type=agent_type_for_session,
-                max_thinking_tokens=phase_thinking_budget,
-            )
-        else:
-            session = provider.create_session(session_config)
-
-        if not hasattr(session, "client"):
-            raise AttributeError(
-                f"Provider {provider.name} session missing 'client' attribute"
-            )
-
-        client = session.client
+        # Defer provider/session creation until we know process isolation is not used.
+        # When process isolation is enabled the subprocess creates its own client,
+        # so building one here would be wasted work.
+        client = None
 
         # Generate appropriate prompt
         if first_run:
@@ -1103,6 +1073,40 @@ async def run_autonomous_agent(
                 limits=None,  # Use default ResourceLimits
             )
         else:
+            # Create provider/session now (deferred to avoid wasted work when
+            # process isolation is enabled).
+            provider_config = ProviderConfig.from_env(agent_type=agent_type_for_session)
+            provider = create_engine_provider(provider_config)
+
+            from core.providers.base import SessionConfig
+
+            session_config = SessionConfig(
+                name=f"{agent_type_for_session}-session-{iteration}",
+                model=phase_model,
+                extra={
+                    "agent_type": agent_type_for_session,
+                    "max_thinking_tokens": phase_thinking_budget,
+                },
+            )
+
+            if provider.name == "claude":
+                session = provider.create_session(
+                    session_config,
+                    project_dir=project_dir,
+                    spec_dir=spec_dir,
+                    agent_type=agent_type_for_session,
+                    max_thinking_tokens=phase_thinking_budget,
+                )
+            else:
+                session = provider.create_session(session_config)
+
+            if not hasattr(session, "client"):
+                raise AttributeError(
+                    f"Provider {provider.name} session missing 'client' attribute"
+                )
+
+            client = session.client
+
             # Run in current process (legacy mode)
             async with client:
                 (

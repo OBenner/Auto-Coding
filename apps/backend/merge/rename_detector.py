@@ -15,6 +15,15 @@ import ast
 import itertools
 from typing import Any
 
+# Build constant types tuple once at module level.
+# ast.Num/ast.Str/ast.Bytes were removed in Python 3.14; use ast.Constant
+# plus any legacy types still present in the running interpreter.
+_CONSTANT_TYPES: tuple[type, ...] = (ast.Constant,)
+for _legacy_name in ("Num", "Str", "Bytes"):
+    if hasattr(ast, _legacy_name):
+        _CONSTANT_TYPES = (*_CONSTANT_TYPES, getattr(ast, _legacy_name))
+del _legacy_name
+
 
 def detect_rename(code_before: str, code_after: str) -> bool:
     """
@@ -77,12 +86,7 @@ def _compare_ast_nodes(
         return isinstance(node2, ast.Name)
 
     # For Constant nodes, compare values
-    # (ast.Num/ast.Str/ast.Bytes were removed in Python 3.14; use ast.Constant)
-    _constant_types = (ast.Constant,)
-    for _legacy in ("Num", "Str", "Bytes"):
-        if hasattr(ast, _legacy):
-            _constant_types = (*_constant_types, getattr(ast, _legacy))
-    if isinstance(node1, _constant_types):
+    if isinstance(node1, _CONSTANT_TYPES):
         val1 = (
             node1.value
             if isinstance(node1, ast.Constant)

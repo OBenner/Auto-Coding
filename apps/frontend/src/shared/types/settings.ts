@@ -442,6 +442,10 @@ export interface AIProviderConfig {
   openrouterBaseUrl?: string;
   ollamaModel?: string;
   ollamaBaseUrl?: string;
+  // Per-agent model overrides
+  plannerModel?: string;
+  coderModel?: string;
+  qaModel?: string;
 }
 
 export interface ProviderConfigValidation {

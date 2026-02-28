@@ -83,31 +83,19 @@ def create_multi_provider_env_config(
 
     Prefers monkeypatch.setenv to avoid writing secrets to disk.
     """
-    if monkeypatch:
-        monkeypatch.setenv("AGENT_PROVIDER_PLANNER", "claude")
-        monkeypatch.setenv("AGENT_MODEL_PLANNER", "claude-opus-4-20250514")
-        monkeypatch.setenv("AGENT_PROVIDER_CODER", "litellm")
-        monkeypatch.setenv("AGENT_MODEL_CODER", "gpt-4")
-        monkeypatch.setenv("OPENAI_API_KEY", "test-key-123")
-        monkeypatch.setenv("AI_ENGINE_PROVIDER", "claude")
-        return spec_dir.parent.parent.parent / ".env"
+    # Prefer monkeypatch to avoid writing secrets/config to disk.
+    # All callers should pass monkeypatch; the parameter is kept
+    # non-optional so tests fail loudly if it is accidentally omitted.
+    if not monkeypatch:
+        raise ValueError("monkeypatch is required – do not write .env files in tests")
 
-    env_file = spec_dir.parent.parent.parent / ".env"
-    env_content = """# Per-Agent Provider Configuration
-# Planner uses Claude Opus
-AGENT_PROVIDER_PLANNER=claude
-AGENT_MODEL_PLANNER=claude-opus-4-20250514
-
-# Coder uses OpenAI GPT-4
-AGENT_PROVIDER_CODER=litellm
-AGENT_MODEL_CODER=gpt-4
-OPENAI_API_KEY=test-key-123
-
-# Default provider (for other agents)
-AI_ENGINE_PROVIDER=claude
-"""
-    env_file.write_text(env_content)
-    return env_file
+    monkeypatch.setenv("AGENT_PROVIDER_PLANNER", "claude")
+    monkeypatch.setenv("AGENT_MODEL_PLANNER", "claude-opus-4-20250514")
+    monkeypatch.setenv("AGENT_PROVIDER_CODER", "litellm")
+    monkeypatch.setenv("AGENT_MODEL_CODER", "gpt-4")
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key-123")
+    monkeypatch.setenv("AI_ENGINE_PROVIDER", "claude")
+    return spec_dir.parent.parent.parent / ".env"
 
 
 def create_simple_spec(spec_dir: Path) -> Path:
@@ -313,6 +301,7 @@ class TestMultiProviderFactory:
     def test_create_claude_provider_for_planner(self, test_env_multi_provider, monkeypatch):
         """Test creating Claude provider for planner agent."""
         from core.providers.config import ProviderConfig
+        from core.providers.factory import create_engine_provider
 
         temp_dir, spec_dir, project_dir = test_env_multi_provider
 
@@ -327,9 +316,15 @@ class TestMultiProviderFactory:
         assert config.provider == "claude"
         assert config.get_model_for_provider() == "claude-opus-4-20250514"
 
+        # Verify the factory can actually instantiate the provider
+        provider = create_engine_provider(config)
+        assert provider is not None, "create_engine_provider should return a provider"
+        assert provider.name == "claude", f"Provider name should be 'claude', got {provider.name!r}"
+
     def test_create_litellm_provider_for_coder(self, test_env_multi_provider, monkeypatch):
         """Test creating LiteLLM provider for coder agent."""
         from core.providers.config import ProviderConfig
+        from core.providers.factory import create_engine_provider
 
         temp_dir, spec_dir, project_dir = test_env_multi_provider
 
@@ -343,6 +338,11 @@ class TestMultiProviderFactory:
 
         assert config.provider == "litellm"
         assert config.get_model_for_provider() == "gpt-4"
+
+        # Verify the factory can actually instantiate the provider
+        provider = create_engine_provider(config)
+        assert provider is not None, "create_engine_provider should return a provider"
+        assert provider.name == "litellm", f"Provider name should be 'litellm', got {provider.name!r}"
 
 
 # =============================================================================

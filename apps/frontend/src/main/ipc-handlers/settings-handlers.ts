@@ -14,7 +14,8 @@ import type {
   IPCResult,
   SourceEnvConfig,
   SourceEnvCheckResult,
-  ProviderSettings
+  ProviderSettings,
+  AIEngineProvider
 } from '../../shared/types';
 import { AgentManager } from '../agent';
 import type { BrowserWindow } from 'electron';
@@ -517,7 +518,7 @@ export function registerSettingsHandlers(
 
         // Map env vars to ProviderSettings
         const providerSettings: ProviderSettings = {
-          provider: (envVars['AI_ENGINE_PROVIDER'] as 'claude' | 'litellm' | 'openrouter') || 'claude',
+          provider: (envVars['AI_ENGINE_PROVIDER'] as AIEngineProvider) || 'claude',
           openaiApiKey: envVars['OPENAI_API_KEY'] || '',
           googleApiKey: envVars['GOOGLE_API_KEY'] || '',
           openrouterApiKey: envVars['OPENROUTER_API_KEY'] || '',
@@ -1082,8 +1083,10 @@ export function registerSettingsHandlers(
               } else {
                 return { success: false, error: result.error || 'Failed to detect Ollama models' };
               }
-            } catch {
-              return { success: true, data: { models: [] } };
+            } catch (err) {
+              const message = err instanceof Error ? err.message : 'Unknown error detecting Ollama models';
+              console.error('[SETTINGS_GET_AVAILABLE_MODELS] Ollama detection error:', message);
+              return { success: false, error: message };
             }
             break;
 

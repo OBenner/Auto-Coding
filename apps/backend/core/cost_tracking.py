@@ -453,9 +453,10 @@ class CostTracker:
         # Get pricing for model (fallback to default if not found)
         if model not in MODEL_PRICING:
             logger.warning(
-                f"Model '{model}' not found in pricing database. "
-                f"Using default pricing (Claude Sonnet rates). "
-                f"Consider adding this model to MODEL_PRICING in cost_tracking.py"
+                "Model '%s' not found in pricing database. "
+                "Using default pricing (Claude Sonnet rates). "
+                "Consider adding this model to MODEL_PRICING in cost_tracking.py",
+                model,
             )
             pricing = MODEL_PRICING["default"]
         else:
@@ -468,9 +469,11 @@ class CostTracker:
         total_cost = input_cost + output_cost
 
         logger.debug(
-            f"Cost calculation: model={model}, "
-            f"input_tokens={input_tokens}, output_tokens={output_tokens}, "
-            f"cost=${total_cost:.6f}"
+            "Cost calculation: model=%s, input_tokens=%d, output_tokens=%d, cost=$%.6f",
+            model,
+            input_tokens,
+            output_tokens,
+            total_cost,
         )
 
         return total_cost

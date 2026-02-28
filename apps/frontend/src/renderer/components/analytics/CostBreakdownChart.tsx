@@ -178,7 +178,7 @@ export const CostBreakdownChart: React.FC<CostBreakdownChartProps> = ({
               {/* Model breakdown (if multiple models) */}
               {providerCost.modelBreakdown.length > 1 && (
                 <div className="pl-8 space-y-1 mt-2">
-                  {providerCost.modelBreakdown
+                  {[...providerCost.modelBreakdown]
                     .sort((a, b) => b.cost - a.cost)
                     .map((model) => {
                       const modelPercentage = providerCost.cost > 0
@@ -194,7 +194,7 @@ export const CostBreakdownChart: React.FC<CostBreakdownChartProps> = ({
                           </span>
                           <div className="flex items-center gap-2">
                             <span className="text-muted-foreground/70">
-                              {formatTokens(model.inputTokens + model.outputTokens)} tokens
+                              {formatTokens(model.inputTokens + model.outputTokens)} {t('common:cost.tokens')}
                             </span>
                             <span className="text-muted-foreground">
                               {modelPercentage.toFixed(0)}%
@@ -216,7 +216,7 @@ export const CostBreakdownChart: React.FC<CostBreakdownChartProps> = ({
                     providerCost.modelBreakdown[0].inputTokens +
                       providerCost.modelBreakdown[0].outputTokens
                   )}{' '}
-                  tokens
+                  {t('common:cost.tokens')}
                 </div>
               )}
             </div>

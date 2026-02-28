@@ -740,17 +740,12 @@ def create_qa_fixer_session(
         AgentSession with a .client property containing the SDK client
 
     Raises:
-        NotImplementedError: If provider is not yet supported
+        ProviderError: If provider creation or session creation fails
     """
-    config = ProviderConfig.from_env()
+    config = ProviderConfig.from_env(agent_type="qa_fixer")
     provider = create_engine_provider(config)
 
     if provider.name == "claude":
-        from core.providers.adapters.claude import ClaudeAgentProvider
-
-        if not isinstance(provider, ClaudeAgentProvider):
-            raise TypeError(f"Expected ClaudeAgentProvider, got {type(provider)}")
-
         session = provider.create_session(
             config=SessionConfig(
                 name="qa-fixer-session",
@@ -761,11 +756,15 @@ def create_qa_fixer_session(
             agent_type="qa_fixer",
             max_thinking_tokens=max_thinking_tokens,
         )
-        return session
     else:
-        raise NotImplementedError(
-            f"Provider {provider.name} not yet implemented for QA fixer agent"
+        session = provider.create_session(
+            SessionConfig(
+                name="qa-fixer-session",
+                model=model,
+            )
         )
+
+    return session
 
 
 async def run_qa_fixer(

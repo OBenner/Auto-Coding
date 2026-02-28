@@ -14,15 +14,14 @@ Usage:
 """
 
 import logging
+from pathlib import Path
 from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from pathlib import Path
-
-    from core.providers.base import AIEngineProvider
 
 from core.providers.config import ProviderConfig
 from core.providers.exceptions import ProviderError, ProviderNotInstalled
+
+if TYPE_CHECKING:
+    from core.providers.base import AgentSession, AIEngineProvider
 
 logger = logging.getLogger(__name__)
 
@@ -262,7 +261,7 @@ def create_agent_session(
     spec_dir: "Path",
     model: str | None = None,
     max_thinking_tokens: int | None = None,
-):
+) -> "AgentSession":
     """
     Shared factory for creating agent sessions across all agent types.
 
@@ -280,10 +279,9 @@ def create_agent_session(
         AgentSession with a .client property containing the SDK client
 
     Raises:
-        NotImplementedError: If provider is not yet supported
+        AttributeError: If the session object lacks a ``client`` attribute
+        ProviderError: If provider creation or session creation fails
     """
-    from pathlib import Path as _Path
-
     from core.providers.base import SessionConfig
 
     config = ProviderConfig.from_env(agent_type=agent_type)
@@ -295,8 +293,8 @@ def create_agent_session(
                 name=f"{agent_type}-session",
                 model=model,
             ),
-            project_dir=_Path(project_dir),
-            spec_dir=_Path(spec_dir),
+            project_dir=Path(project_dir),
+            spec_dir=Path(spec_dir),
             agent_type=agent_type,
             max_thinking_tokens=max_thinking_tokens,
         )
