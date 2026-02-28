@@ -83,7 +83,6 @@ class TestConnectionRequest(BaseModel):
     """Request to test a webhook connection."""
 
     webhook_id: str = Field(description="ID of webhook to test")
-    project_dir: str = Field(description="Project directory containing webhook config")
 
 
 class TestConnectionResponse(BaseModel):
@@ -418,36 +417,8 @@ def create_webhook_server(
             )
 
         try:
-            # Validate project_dir to prevent path traversal attacks
-            raw_project_dir = request.project_dir
-
-            # Treat project_dir as a path relative to the configured spec_dir root.
-            # This prevents directory traversal and absolute-path abuse.
-            base_root = spec_dir if isinstance(spec_dir, Path) else Path(spec_dir)
-            candidate_dir = (base_root / raw_project_dir).resolve()
-            try:
-                # Ensure the resolved path is within the allowed root
-                candidate_dir.relative_to(base_root)
-            except ValueError:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Invalid project directory",
-                )
-
-            project_dir = candidate_dir
-            if not project_dir.is_dir():
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Invalid project directory",
-                )
-            # Restrict to directories containing .auto-claude marker
-            auto_claude_marker = project_dir / ".auto-claude"
-            if not auto_claude_marker.is_dir():
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Invalid project directory",
-                )
-            test_storage = WebhookStorage(spec_dir=project_dir)
+            # Use the server's configured spec_dir (no user-controlled paths)
+            test_storage = WebhookStorage(spec_dir=spec_dir)
 
             config = test_storage.get_config(request.webhook_id)
             if not config:
@@ -468,7 +439,7 @@ def create_webhook_server(
             # Send test webhook (temporarily enable if disabled for testing)
             original_enabled = config.enabled
             config.enabled = True
-            sender = OutgoingWebhookSender(spec_dir=project_dir)
+            sender = OutgoingWebhookSender(spec_dir=spec_dir)
             try:
                 result = await sender.send_webhook(config, test_event)
             finally:
