@@ -4,6 +4,7 @@
 
 import type { ThinkingLevel, PhaseModelConfig, PhaseThinkingConfig } from './settings';
 import type { ExecutionPhase as ExecutionPhaseType, CompletablePhase } from '../constants/phase-protocol';
+import type { AIProvider } from './common';
 
 export type TaskStatus = 'backlog' | 'queue' | 'in_progress' | 'ai_review' | 'human_review' | 'done' | 'pr_created' | 'error';
 
@@ -225,6 +226,8 @@ export interface TaskDraft {
   referencedFiles: ReferencedFile[];
   requireReviewBeforeCoding?: boolean;
   agentModels?: Record<string, string>;  // Agent-specific model overrides
+  provider?: AIProvider;  // AI provider selection
+  providerModel?: string;  // Provider-specific model ID
   customTemplateId?: string;  // Custom agent template ID
   savedAt: Date;
 }
@@ -314,6 +317,10 @@ export interface TaskMetadata {
 
   // Multi-model agent orchestration
   agentModels?: Record<string, string>;  // Agent-specific model overrides (e.g., { coder: 'haiku', planner: 'sonnet' })
+
+  // Provider selection
+  provider?: AIProvider;  // AI engine provider (claude, litellm, openrouter, zhipuai)
+  providerModel?: string;  // Provider-specific model ID
 
   // Archive status
   archivedAt?: string;  // ISO date when task was archived

@@ -721,6 +721,7 @@ def create_client(
     max_thinking_tokens: int | None = None,
     output_format: dict | None = None,
     agents: dict | None = None,
+    session_config: Any | None = None,
     custom_template: AgentTemplate | None = None,
 ) -> ClaudeSDKClient:
     """
@@ -752,6 +753,9 @@ def create_client(
                Format: {"agent-name": {"description": "...", "prompt": "...",
                         "tools": [...], "model": "inherit"}}
                See: https://platform.claude.com/docs/en/agent-sdk/subagents
+        session_config: Optional SessionConfig with provider/model overrides.
+                       If provided, checks for provider override before using defaults.
+                       Used for runtime provider selection (e.g., --provider zhipuai).
         custom_template: Optional custom agent template with user-defined prompts,
                         tools, and MCP server configuration. When provided, overrides
                         default agent_type configuration from AGENT_CONFIGS.
@@ -802,6 +806,32 @@ def create_client(
 
     # Ensure SDK can access it via its expected env var
     os.environ["CLAUDE_CODE_OAUTH_TOKEN"] = oauth_token
+
+    # Check for provider override from SessionConfig
+    # This enables runtime provider selection (e.g., --provider zhipuai)
+    # When provider override is present, the caller should use the provider
+    # abstraction layer instead of this Claude SDK client
+    if session_config is not None:
+        if hasattr(session_config, "provider") and session_config.provider:
+            if session_config.provider != "claude":
+                raise ValueError(
+                    f"SessionConfig provider override detected: {session_config.provider}. "
+                    f"create_client() only creates Claude SDK clients. "
+                    f"For alternative providers, use create_engine_provider() instead."
+                )
+
+    # Apply model override from SessionConfig if present
+    if (
+        session_config is not None
+        and hasattr(session_config, "model")
+        and session_config.model
+    ):
+        if session_config.model != model:
+            logger.info(
+                f"SessionConfig model override: {session_config.model} "
+                f"(parameter model: {model})"
+            )
+            model = session_config.model
 
     # Collect env vars to pass to SDK (ANTHROPIC_BASE_URL, etc.)
     sdk_env = get_sdk_env_vars()
