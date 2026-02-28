@@ -146,13 +146,11 @@ class ZhipuAISession(AgentSession):
         if self._client is None:
             self._client = ZhipuAiClient(api_key=self._api_key)
 
-        # Add user message to history
-        self.add_user_message(message)
-
-        # Build completion kwargs
+        # Build completion kwargs (add user message only after successful completion
+        # to avoid corrupting history on failure)
         completion_kwargs: dict[str, Any] = {
             "model": self._model,
-            "messages": self._messages,
+            "messages": self._messages + [{"role": "user", "content": message}],
             "stream": stream,
         }
 
@@ -176,8 +174,9 @@ class ZhipuAISession(AgentSession):
                             full_response += delta.content
                             yield delta.content
 
-                # Add assistant response to history
+                # Add both messages to history only after successful completion
                 if full_response:
+                    self.add_user_message(message)
                     self.add_assistant_message(full_response)
             else:
                 # Non-streaming completion
@@ -187,6 +186,7 @@ class ZhipuAISession(AgentSession):
                 if hasattr(response, "choices") and response.choices:
                     content = response.choices[0].message.content
                     if content:
+                        self.add_user_message(message)
                         self.add_assistant_message(content)
                         yield content
 

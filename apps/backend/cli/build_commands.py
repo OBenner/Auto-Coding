@@ -112,6 +112,17 @@ def handle_build_command(
             sys.exit(1)
         os.environ["AI_ENGINE_PROVIDER"] = provider
         debug("run.py", f"Provider set from CLI: {provider}")
+        # Map CLI --model to provider-specific env var for consistent display
+        if model:
+            model_env_map = {
+                "claude": "CLAUDE_MODEL",
+                "litellm": "LITELLM_MODEL",
+                "openrouter": "OPENROUTER_MODEL",
+                "zhipuai": "ZHIPUAI_MODEL",
+            }
+            env_key = model_env_map.get(provider)
+            if env_key:
+                os.environ[env_key] = model
 
     # Get the resolved model for the planning phase (first phase of build)
     # This respects task_metadata.json phase configuration from the UI
@@ -127,7 +138,9 @@ def handle_build_command(
     from core.providers.config import get_provider_config
 
     provider_config = get_provider_config()
-    provider_display = provider_config.get_provider_summary()
+    provider_display = (
+        provider_config.get_provider_summary() if provider_config else "unknown"
+    )
 
     # Show provider and model information
     print(f"Provider: {provider_display}")

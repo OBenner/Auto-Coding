@@ -676,16 +676,16 @@ class TestTaskRestartWorkflow:
         plan_file = spec_dir / "implementation_plan.json"
         plan_file.write_text(json.dumps(plan, indent=2))
 
-        # When restarting from a specific subtask in a blocked phase,
-        # it will return that subtask since restart_from explicitly
-        # requests starting from that point
+        # When restarting from a subtask in a blocked phase (unmet dependencies),
+        # the restart should fall back to normal flow and return the first
+        # available subtask with satisfied dependencies
         next_subtask = get_next_subtask(spec_dir, restart_from="subtask-2-1")
 
-        # Should return subtask-2-1 (explicit restart request)
+        # Should fall back to subtask-1-1 (phase-2 depends on phase-1 which is incomplete)
         assert next_subtask is not None
-        assert next_subtask["id"] == "subtask-2-1"
+        assert next_subtask["id"] == "subtask-1-1"
 
-        # However, normal flow (without restart_from) should respect dependencies
+        # Normal flow (without restart_from) should also respect dependencies
         next_subtask_normal = get_next_subtask(spec_dir, restart_from=None)
         assert next_subtask_normal is not None
         assert next_subtask_normal["id"] == "subtask-1-1"

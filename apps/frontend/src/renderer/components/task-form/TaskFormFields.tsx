@@ -43,8 +43,8 @@ import type {
 } from '../../../shared/types';
 import type { PhaseModelConfig, PhaseThinkingConfig } from '../../../shared/types/settings';
 
-// Provider-specific model mappings
-const PROVIDER_MODELS: Record<AIProvider, Array<{ value: string; label: string; tier?: string }>> = {
+// Provider-specific model mappings (exported for use by TaskCreationWizard and others)
+export const PROVIDER_MODELS: Record<AIProvider, Array<{ value: string; label: string; tier?: string }>> = {
   claude: [
     { value: 'claude-opus-4-5-20251101', label: 'Claude Opus 4.5', tier: 'opus' },
     { value: 'claude-sonnet-4-5-20250929', label: 'Claude Sonnet 4.5', tier: 'sonnet' },
@@ -201,6 +201,14 @@ export function TaskFormFields({
     }
     prevImagesLengthRef.current = images.length;
   }, [images.length]);
+
+  // Guard against stale providerModel when provider changes
+  useEffect(() => {
+    const models = PROVIDER_MODELS[provider] ?? [];
+    if (!models.some((m) => m.value === providerModel)) {
+      onProviderModelChange(models[0]?.value ?? '');
+    }
+  }, [provider, providerModel, onProviderModelChange]);
 
   // Use the shared image upload hook with translated error messages
   const {

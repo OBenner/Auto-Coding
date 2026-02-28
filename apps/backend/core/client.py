@@ -813,13 +813,14 @@ def create_client(
     # abstraction layer instead of this Claude SDK client
     if session_config is not None:
         if hasattr(session_config, "provider") and session_config.provider:
-            logger.info(
-                f"SessionConfig provider override detected: {session_config.provider}. "
-                f"Note: create_client() creates Claude SDK clients. "
-                f"For alternative providers, use create_engine_provider() instead."
-            )
+            if session_config.provider != "claude":
+                logger.warning(
+                    f"SessionConfig provider override detected: {session_config.provider}. "
+                    f"create_client() only creates Claude SDK clients. "
+                    f"For alternative providers, use create_engine_provider() instead."
+                )
 
-    # Log model override from SessionConfig if present
+    # Apply model override from SessionConfig if present
     if (
         session_config is not None
         and hasattr(session_config, "model")
@@ -830,6 +831,7 @@ def create_client(
                 f"SessionConfig model override: {session_config.model} "
                 f"(parameter model: {model})"
             )
+            model = session_config.model
 
     # Collect env vars to pass to SDK (ANTHROPIC_BASE_URL, etc.)
     sdk_env = get_sdk_env_vars()

@@ -488,6 +488,29 @@ def get_current_phase(spec_dir: Path) -> dict | None:
         return None
 
 
+def _build_phase_completion_map(
+    phases: list[dict], stuck_subtask_ids: set[str]
+) -> dict[str, bool]:
+    """Return map of phase_id -> completion status.
+
+    A phase is complete if all its subtasks/chunks have status == 'completed'
+    or are in the stuck list (treated as resolved for dependency purposes).
+    """
+    phase_complete: dict[str, bool] = {}
+    for i, phase in enumerate(phases):
+        phase_id_value = phase.get("id")
+        phase_id_raw = (
+            phase_id_value if phase_id_value is not None else phase.get("phase")
+        )
+        phase_id_key = str(phase_id_raw) if phase_id_raw is not None else f"unknown:{i}"
+        subtasks_list = phase.get("subtasks", phase.get("chunks", []))
+        phase_complete[phase_id_key] = all(
+            s.get("status") == "completed" or s.get("id") in stuck_subtask_ids
+            for s in subtasks_list
+        )
+    return phase_complete
+
+
 def get_next_subtask(spec_dir: Path, restart_from: str | None = None) -> dict | None:
     """
     Find the next subtask to work on, respecting phase dependencies.
@@ -542,89 +565,90 @@ def get_next_subtask(spec_dir: Path, restart_from: str | None = None) -> dict | 
 
             # If restart point found, skip to next pending subtask
             if restart_phase_index is not None:
-                # First, check if the restart subtask itself is completed
-                # If so, we need to find the next pending subtask
                 current_phase = phases[restart_phase_index]
-                subtasks = current_phase.get(
-                    "subtasks", current_phase.get("chunks", [])
+
+                # Ensure restart phase dependencies are satisfied
+                phase_complete = _build_phase_completion_map(phases, stuck_subtask_ids)
+                depends_on_raw = current_phase.get("depends_on", [])
+                if isinstance(depends_on_raw, list):
+                    depends_on = [str(d) for d in depends_on_raw if d is not None]
+                elif depends_on_raw is None:
+                    depends_on = []
+                else:
+                    depends_on = [str(depends_on_raw)]
+
+                deps_satisfied = all(
+                    phase_complete.get(dep, False) for dep in depends_on
                 )
 
-                # Start from the restart subtask and look for the next pending one
-                for i in range(restart_subtask_index, len(subtasks)):
-                    subtask = subtasks[i]
-                    status = subtask.get("status", "pending")
-                    if status != "completed":
-                        # Found next non-completed subtask
-                        subtask_out, _changed = normalize_subtask_aliases(subtask)
-                        return {
-                            **subtask_out,
-                            "phase_id": restart_phase_id,
-                            "phase_name": restart_phase_name,
-                            "phase_num": restart_phase_num,
-                        }
-
-                # If all subtasks in this phase are complete, check subsequent phases
-                # Build phase completion map first
-                phase_complete: dict[str, bool] = {}
-                for i, phase in enumerate(phases):
-                    phase_id_value = phase.get("id")
-                    phase_id_raw = (
-                        phase_id_value
-                        if phase_id_value is not None
-                        else phase.get("phase")
+                if not deps_satisfied:
+                    logging.getLogger(__name__).warning(
+                        "restart_from subtask '%s' is in a phase with unmet "
+                        "dependencies; falling back to normal flow",
+                        restart_from,
                     )
-                    phase_id_key = (
-                        str(phase_id_raw)
-                        if phase_id_raw is not None
-                        else f"unknown:{i}"
-                    )
-                    subtasks_list = phase.get("subtasks", phase.get("chunks", []))
-                    # Stuck subtasks count as "resolved" for phase dependency purposes.
-                    # This prevents one stuck subtask from blocking all downstream phases.
-                    phase_complete[phase_id_key] = all(
-                        s.get("status") == "completed"
-                        or s.get("id") in stuck_subtask_ids
-                        for s in subtasks_list
+                    # Fall through to normal flow below
+                else:
+                    subtasks = current_phase.get(
+                        "subtasks", current_phase.get("chunks", [])
                     )
 
-                # Look for next phase with pending subtasks
-                for phase_idx in range(restart_phase_index + 1, len(phases)):
-                    phase = phases[phase_idx]
-                    phase_id_value = phase.get("id")
-                    phase_id = (
-                        phase_id_value
-                        if phase_id_value is not None
-                        else phase.get("phase")
-                    )
-                    depends_on_raw = phase.get("depends_on", [])
-                    if isinstance(depends_on_raw, list):
-                        depends_on = [str(d) for d in depends_on_raw if d is not None]
-                    elif depends_on_raw is None:
-                        depends_on = []
-                    else:
-                        depends_on = [str(depends_on_raw)]
-
-                    # Check if dependencies are satisfied
-                    deps_satisfied = all(
-                        phase_complete.get(dep, False) for dep in depends_on
-                    )
-                    if not deps_satisfied:
-                        continue
-
-                    # Find first pending subtask in this phase
-                    for subtask in phase.get("subtasks", phase.get("chunks", [])):
+                    # Start from the restart subtask and look for the next pending one
+                    for i in range(restart_subtask_index, len(subtasks)):
+                        subtask = subtasks[i]
                         status = subtask.get("status", "pending")
                         if status != "completed":
+                            # Found next non-completed subtask
                             subtask_out, _changed = normalize_subtask_aliases(subtask)
                             return {
                                 **subtask_out,
-                                "phase_id": phase_id,
-                                "phase_name": phase.get("name"),
-                                "phase_num": phase.get("phase"),
+                                "phase_id": restart_phase_id,
+                                "phase_name": restart_phase_name,
+                                "phase_num": restart_phase_num,
                             }
 
-                # All subsequent subtasks are complete
-                return None
+                    # If all subtasks in this phase are complete, check subsequent phases
+                    for phase_idx in range(restart_phase_index + 1, len(phases)):
+                        phase = phases[phase_idx]
+                        phase_id_value = phase.get("id")
+                        phase_id = (
+                            phase_id_value
+                            if phase_id_value is not None
+                            else phase.get("phase")
+                        )
+                        depends_on_raw = phase.get("depends_on", [])
+                        if isinstance(depends_on_raw, list):
+                            depends_on = [
+                                str(d) for d in depends_on_raw if d is not None
+                            ]
+                        elif depends_on_raw is None:
+                            depends_on = []
+                        else:
+                            depends_on = [str(depends_on_raw)]
+
+                        # Check if dependencies are satisfied
+                        deps_satisfied = all(
+                            phase_complete.get(dep, False) for dep in depends_on
+                        )
+                        if not deps_satisfied:
+                            continue
+
+                        # Find first pending subtask in this phase
+                        for subtask in phase.get("subtasks", phase.get("chunks", [])):
+                            status = subtask.get("status", "pending")
+                            if status != "completed":
+                                subtask_out, _changed = normalize_subtask_aliases(
+                                    subtask
+                                )
+                                return {
+                                    **subtask_out,
+                                    "phase_id": phase_id,
+                                    "phase_name": phase.get("name"),
+                                    "phase_num": phase.get("phase"),
+                                }
+
+                    # All subsequent subtasks are complete
+                    return None
             # If restart_from subtask not found, log warning and fall through to normal flow
             logging.getLogger(__name__).warning(
                 f"restart_from subtask '{restart_from}' not found in plan, "
@@ -632,22 +656,7 @@ def get_next_subtask(spec_dir: Path, restart_from: str | None = None) -> dict | 
             )
 
         # Build a map of phase completion
-        phase_complete: dict[str, bool] = {}
-        for i, phase in enumerate(phases):
-            phase_id_value = phase.get("id")
-            phase_id_raw = (
-                phase_id_value if phase_id_value is not None else phase.get("phase")
-            )
-            phase_id_key = (
-                str(phase_id_raw) if phase_id_raw is not None else f"unknown:{i}"
-            )
-            subtasks = phase.get("subtasks", phase.get("chunks", []))
-            # Stuck subtasks count as "resolved" for phase dependency purposes.
-            # This prevents one stuck subtask from blocking all downstream phases.
-            phase_complete[phase_id_key] = all(
-                s.get("status") == "completed" or s.get("id") in stuck_subtask_ids
-                for s in subtasks
-            )
+        phase_complete = _build_phase_completion_map(phases, stuck_subtask_ids)
 
         # Find next available subtask
         for phase in phases:

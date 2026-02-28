@@ -253,31 +253,32 @@ class TestZhipuAISession:
             api_key="test-key",
         )
 
-        # Mock the import to raise ImportError
-        import builtins
+        # Remove cached zai module and patch sys.modules to simulate missing SDK
+        import sys
 
-        original_import = builtins.__import__
+        saved_modules = {
+            k: sys.modules.pop(k)
+            for k in list(sys.modules)
+            if k == "zai" or k.startswith("zai.")
+        }
+        try:
+            with patch.dict("sys.modules", {"zai": None}):
 
-        def mock_import(name, *args, **kwargs):
-            if name == "zai":
-                raise ImportError("No module named 'zai'")
-            return original_import(name, *args, **kwargs)
+                async def complete():
+                    async for _ in session.complete("Hello"):
+                        pass
 
-        with patch("builtins.__import__", side_effect=mock_import):
-
-            async def complete():
-                async for _ in session.complete("Hello"):
-                    pass
-
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            try:
-                with pytest.raises(ProviderNotInstalled) as exc_info:
-                    loop.run_until_complete(complete())
-                assert "zai-sdk" in str(exc_info.value)
-            finally:
-                loop.close()
-                asyncio.set_event_loop(None)
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    with pytest.raises(ProviderNotInstalled) as exc_info:
+                        loop.run_until_complete(complete())
+                    assert "zai-sdk" in str(exc_info.value)
+                finally:
+                    loop.close()
+                    asyncio.set_event_loop(None)
+        finally:
+            sys.modules.update(saved_modules)
 
 
 # =============================================================================
@@ -459,13 +460,21 @@ class TestZhipuAIProviderCreateSession:
 
         session_config = SessionConfig(name="test-session")
 
-        # Mock import to fail
-        with patch(
-            "builtins.__import__", side_effect=ImportError("No module named 'zai'")
-        ):
-            with pytest.raises(ProviderNotInstalled) as exc_info:
-                provider.create_session(session_config)
-            assert "zai-sdk" in str(exc_info.value)
+        # Simulate missing SDK via sys.modules patching
+        import sys
+
+        saved_modules = {
+            k: sys.modules.pop(k)
+            for k in list(sys.modules)
+            if k == "zai" or k.startswith("zai.")
+        }
+        try:
+            with patch.dict("sys.modules", {"zai": None}):
+                with pytest.raises(ProviderNotInstalled) as exc_info:
+                    provider.create_session(session_config)
+                assert "zai-sdk" in str(exc_info.value)
+        finally:
+            sys.modules.update(saved_modules)
 
     def test_create_session_success(self):
         """Tests create_session succeeds with valid params."""
@@ -814,28 +823,16 @@ class TestZhipuAIProviderHealthCheck:
         )
         provider = ZhipuAIProvider(config)
 
-        # Temporarily remove 'zai' from sys.modules to simulate it not being installed
+        # Simulate missing SDK via scoped sys.modules patching
         import sys
 
-        original_import = (
-            __builtins__["__import__"]
-            if isinstance(__builtins__, dict)
-            else __builtins__.__import__
-        )
-
-        def selective_import(name, *args, **kwargs):
-            if name == "zai" or name.startswith("zai."):
-                raise ImportError(f"No module named '{name}'")
-            return original_import(name, *args, **kwargs)
-
-        # Remove any cached 'zai' modules
         saved_modules = {
             k: sys.modules.pop(k)
             for k in list(sys.modules)
             if k == "zai" or k.startswith("zai.")
         }
         try:
-            with patch("builtins.__import__", side_effect=selective_import):
+            with patch.dict("sys.modules", {"zai": None}):
                 result = provider.health_check()
                 assert result is False
         finally:

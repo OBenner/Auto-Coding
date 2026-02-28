@@ -239,6 +239,9 @@ class TestProviderSelectionBehavior:
 
                             mock_workspace.return_value = WorkspaceMode.DIRECT
 
+                            # Ensure we start from a clean env
+                            os.environ.pop("AI_ENGINE_PROVIDER", None)
+
                             with patch("agents.sync_spec_to_source"):
                                 handle_build_command(
                                     project_dir=project_dir,
@@ -254,9 +257,8 @@ class TestProviderSelectionBehavior:
                                     force_bypass_approval=True,
                                 )
 
-                            # Verify environment variable was set
-                            # Note: It gets reset after the function, so we check the side effect
-                            # by checking if it was called during execution
+                            # Verify provider env var was set as side effect
+                            assert os.environ.get("AI_ENGINE_PROVIDER") == "zhipuai"
 
     def test_provider_none_does_not_override_environment(self, temp_dir):
         """Tests provider=None does not override existing environment variable."""
