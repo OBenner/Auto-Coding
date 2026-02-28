@@ -10,7 +10,10 @@ from __future__ import annotations
 
 import json
 import logging
-from dataclasses import dataclass
+import os
+import tempfile
+import threading
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from .models import WebhookConfig, WebhookLog
@@ -30,6 +33,9 @@ class WebhookStorage:
     spec_dir: Path
     config_file: str = "webhook_configs.json"
     log_file: str = "webhook_logs.json"
+    _lock: threading.Lock = field(
+        default_factory=threading.Lock, init=False, repr=False
+    )
 
     def get_config_path(self) -> Path:
         """Get path to webhook configs file."""
@@ -59,13 +65,26 @@ class WebhookStorage:
             return []
 
     def save_configs(self, configs: list[WebhookConfig]) -> None:
-        """Save webhook configurations to disk."""
+        """Save webhook configurations to disk with restricted permissions."""
         config_path = self.get_config_path()
         config_path.parent.mkdir(parents=True, exist_ok=True)
 
-        with open(config_path, "w", encoding="utf-8") as f:
-            data = [cfg.to_dict() for cfg in configs]
-            json.dump(data, f, indent=2)
+        data = [cfg.to_dict() for cfg in configs]
+
+        # Write with restricted permissions (owner-only read/write)
+        try:
+            fd, tmp_path = tempfile.mkstemp(dir=str(config_path.parent), suffix=".tmp")
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2)
+            Path(tmp_path).replace(config_path)
+            # Restrict file permissions (best-effort on Windows)
+            try:
+                os.chmod(config_path, 0o600)
+            except OSError:
+                pass
+        except OSError:
+            with open(config_path, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2)
 
     def load_logs(
         self, webhook_id: str | None = None, limit: int = 100
@@ -106,25 +125,34 @@ class WebhookStorage:
             return []
 
     def save_log(self, log: WebhookLog) -> None:
-        """Append a webhook log entry to disk."""
+        """Append a webhook log entry to disk (thread-safe with atomic write)."""
         log_path = self.get_log_path()
         log_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # Load existing logs
-        logs = []
-        if log_path.exists():
+        with self._lock:
+            # Load existing logs
+            logs = []
+            if log_path.exists():
+                try:
+                    with open(log_path, encoding="utf-8") as f:
+                        logs = json.load(f)
+                except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+                    logs = []
+
+            # Append new log
+            logs.append(log.to_dict())
+
+            # Atomic write: write to temp file then replace
             try:
-                with open(log_path, encoding="utf-8") as f:
-                    logs = json.load(f)
-            except (OSError, json.JSONDecodeError, UnicodeDecodeError):
-                logs = []
-
-        # Append new log
-        logs.append(log.to_dict())
-
-        # Save
-        with open(log_path, "w", encoding="utf-8") as f:
-            json.dump(logs, f, indent=2)
+                fd, tmp_path = tempfile.mkstemp(dir=str(log_path.parent), suffix=".tmp")
+                with os.fdopen(fd, "w", encoding="utf-8") as f:
+                    json.dump(logs, f, indent=2)
+                # Atomic replace (on POSIX; on Windows this is as safe as possible)
+                Path(tmp_path).replace(log_path)
+            except OSError:
+                # Fallback to direct write if atomic replace fails
+                with open(log_path, "w", encoding="utf-8") as f:
+                    json.dump(logs, f, indent=2)
 
     def get_config(self, webhook_id: str) -> WebhookConfig | None:
         """Get a specific webhook configuration by ID."""

@@ -184,9 +184,9 @@ class WebhookConfig(BaseModel):
     )
 
     # Payload template
-    payload_template: dict[str, Any] | str | None = Field(
+    payload_template: dict[str, Any] | list[str] | str | None = Field(
         default=None,
-        description="Custom payload template (JSON dict or Jinja2 template string)",
+        description="Custom payload template (JSON dict, list of field names, or Jinja2 template string)",
     )
 
     # Status

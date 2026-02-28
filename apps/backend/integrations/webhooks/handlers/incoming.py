@@ -197,7 +197,11 @@ class IncomingWebhookHandler(ABC):
 
             # Extract event data
             event_data = self.extract_event_data(payload)
-            logger.info(f"Extracted event data: {event_data}")
+            logger.info(
+                f"Extracted event: integration={event_data.get('integration')}, "
+                f"event_type={event_data.get('event_type')}, "
+                f"webhook_id={webhook_config.id}"
+            )
 
             # Determine action
             action = self.determine_action(payload)

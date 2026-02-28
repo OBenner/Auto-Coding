@@ -235,8 +235,8 @@ class OutgoingWebhookSender:
         """
         retry_config = webhook_config.retry_config
         last_log_entry = None
-        # Always make at least one attempt (attempt 0 is the initial request)
-        total_attempts = max(retry_config.max_retries, 1)
+        # total_attempts = initial request (1) + max_retries
+        total_attempts = retry_config.max_retries + 1
 
         for attempt in range(1, total_attempts + 1):
             # Create log entry for this attempt
@@ -262,7 +262,7 @@ class OutgoingWebhookSender:
 
                 # Send request
                 logger.info(
-                    f"Sending webhook {webhook_config.id} (attempt {attempt}/{retry_config.max_retries})"
+                    f"Sending webhook {webhook_config.id} (attempt {attempt}/{total_attempts})"
                 )
 
                 response = await self.client.post(
@@ -296,7 +296,7 @@ class OutgoingWebhookSender:
                 # Check if we should retry
                 if response.status_code in retry_config.retry_on_status_codes:
                     # Retryable status code
-                    if attempt < retry_config.max_retries:
+                    if attempt < total_attempts:
                         # Will retry
                         log_entry.mark_completed(
                             WebhookDeliveryStatus.RETRYING,
@@ -361,7 +361,7 @@ class OutgoingWebhookSender:
                 log_entry.error_type = "timeout"
                 log_entry.error_message = str(e)
 
-                if attempt < retry_config.max_retries:
+                if attempt < total_attempts:
                     log_entry.status = WebhookDeliveryStatus.RETRYING
                     self.storage.save_log(log_entry)
                     last_log_entry = log_entry
@@ -372,7 +372,7 @@ class OutgoingWebhookSender:
 
                     logger.warning(
                         f"Webhook {webhook_config.id} timed out, retrying in {delay}s "
-                        f"(attempt {attempt}/{retry_config.max_retries})"
+                        f"(attempt {attempt}/{total_attempts})"
                     )
 
                     await asyncio.sleep(delay)
@@ -400,7 +400,7 @@ class OutgoingWebhookSender:
                 log_entry.error_type = "network_error"
                 log_entry.error_message = str(e)
 
-                if attempt < retry_config.max_retries:
+                if attempt < total_attempts:
                     log_entry.status = WebhookDeliveryStatus.RETRYING
                     self.storage.save_log(log_entry)
                     last_log_entry = log_entry
@@ -411,7 +411,7 @@ class OutgoingWebhookSender:
 
                     logger.warning(
                         f"Webhook {webhook_config.id} network error, retrying in {delay}s "
-                        f"(attempt {attempt}/{retry_config.max_retries})"
+                        f"(attempt {attempt}/{total_attempts})"
                     )
 
                     await asyncio.sleep(delay)
@@ -845,10 +845,14 @@ class OutgoingWebhookSender:
         Returns:
             Sanitized headers safe for logging
         """
+        sensitive_headers = {"authorization", "x-api-key", "x-auth-token", "cookie"}
         sanitized = {}
         for key, value in headers.items():
             key_lower = key.lower()
-            if key_lower in ["authorization", "x-api-key", "x-auth-token"]:
+            if key_lower in sensitive_headers or any(
+                s in key_lower
+                for s in ("token", "secret", "password", "api_key", "apikey")
+            ):
                 sanitized[key] = "***REDACTED***"
             else:
                 sanitized[key] = value

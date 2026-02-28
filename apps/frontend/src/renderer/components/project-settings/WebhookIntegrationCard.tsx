@@ -1,4 +1,5 @@
-import { CheckCircle2, Settings, Plug } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { CheckCircle2, Settings } from 'lucide-react';
 import { StatusBadge } from './StatusBadge';
 import { Button } from '../ui/button';
 import type { WebhookIntegrationStatus } from '../../../shared/types';
@@ -9,9 +10,6 @@ interface WebhookIntegrationCardProps {
   disabled?: boolean;
 }
 
-/**
- * Integration icon mapping
- */
 const INTEGRATION_ICONS: Record<string, React.ReactNode> = {
   slack: '💬',
   discord: '🎮',
@@ -22,50 +20,27 @@ const INTEGRATION_ICONS: Record<string, React.ReactNode> = {
   generic: '🔗',
 };
 
-/**
- * Integration name display mapping
- */
-const INTEGRATION_NAMES: Record<string, string> = {
-  slack: 'Slack',
-  discord: 'Discord',
-  teams: 'Microsoft Teams',
-  jira: 'Jira',
-  github: 'GitHub',
-  gitlab: 'GitLab',
-  generic: 'Generic Webhook',
-};
-
-/**
- * Card component for displaying individual webhook integration status and configuration
- *
- * Used in WebhooksSection to show each integration (Slack, Discord, Teams, Jira, GitHub, GitLab, Generic)
- * with its connection status, enabled state, and configuration button.
- *
- * Features:
- * - Displays integration icon and name
- * - Shows connection status (Connected/Not configured)
- * - Shows enabled/disabled badge
- * - Configure/Setup button with appropriate label
- * - Visual feedback for connection state
- * - Hover effects for better UX
- *
- * @example
- * ```tsx
- * <WebhookIntegrationCard
- *   status={slackStatus}
- *   onConfigure={() => handleConfigure('slack')}
- * />
- * ```
- */
 export function WebhookIntegrationCard({
   status,
   onConfigure,
   disabled = false,
 }: WebhookIntegrationCardProps) {
-  const integrationName = INTEGRATION_NAMES[status.integration] || status.integration;
-  const icon = INTEGRATION_ICONS[status.integration] || '🔌';
+  const { t } = useTranslation(['settings']);
 
-  const buttonLabel = status.connected ? 'Configure' : 'Setup';
+  const integrationName = t(`settings:webhooks.integrations.${status.integration}`, {
+    defaultValue: status.integration,
+  });
+  const icon = INTEGRATION_ICONS[status.integration] || '🔗';
+  const buttonLabel = status.connected
+    ? t('settings:webhooks.actions.configure')
+    : t('settings:webhooks.actions.setup');
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onConfigure();
+    }
+  };
 
   return (
     <div
@@ -75,47 +50,48 @@ export function WebhookIntegrationCard({
       onClick={!disabled ? onConfigure : undefined}
       role="button"
       tabIndex={!disabled ? 0 : undefined}
-      onKeyDown={!disabled ? (e) => e.key === 'Enter' && onConfigure() : undefined}
-      aria-label={`Configure ${integrationName} integration`}
+      onKeyDown={!disabled ? handleKeyDown : undefined}
+      aria-label={t('settings:webhooks.actions.configureAriaLabel', {
+        integration: integrationName,
+      })}
     >
-      {/* Integration Info */}
       <div className="flex items-center gap-3">
-        {/* Icon */}
         <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-muted text-lg">
           {icon}
         </div>
 
-        {/* Name and Status */}
         <div className="flex flex-col">
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium text-foreground">{integrationName}</span>
             {status.connected && (
-              <CheckCircle2 className="h-3.5 w-3.5 text-success" aria-label="Connected" />
+              <CheckCircle2
+                className="h-3.5 w-3.5 text-success"
+                aria-label={t('settings:webhooks.status.connected')}
+              />
             )}
           </div>
           {status.connected ? (
             <span className="text-xs text-success flex items-center gap-1">
-              Connected
+              {t('settings:webhooks.status.connected')}
             </span>
           ) : (
-            <span className="text-xs text-muted-foreground">Not configured</span>
+            <span className="text-xs text-muted-foreground">
+              {t('settings:webhooks.status.notConfigured')}
+            </span>
           )}
           {status.error && (
             <span className="text-xs text-warning" title={status.error}>
-              Configuration error
+              {t('settings:webhooks.status.configError')}
             </span>
           )}
         </div>
       </div>
 
-      {/* Actions */}
       <div className="flex items-center gap-2">
-        {/* Enabled Badge */}
         {status.enabled && (
-          <StatusBadge status="success" label="Active" />
+          <StatusBadge status="success" label={t('settings:webhooks.status.active')} />
         )}
 
-        {/* Configure Button */}
         <Button
           size="sm"
           variant="outline"

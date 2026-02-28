@@ -966,14 +966,19 @@ def _send_webhooks_async(
                 exc_info=True,
             )
 
-    # Run in new event loop to avoid conflicts
-    try:
-        asyncio.run(_send_all())
-    except Exception as e:
-        # Log but don't raise - webhook failures shouldn't break builds
-        logger.error(
-            f"Failed to send webhooks for event {event_type}: {e}", exc_info=True
-        )
+    # Run in a background thread to avoid conflicts with existing event loops
+    import threading
+
+    def _run_in_thread() -> None:
+        try:
+            asyncio.run(_send_all())
+        except Exception as e:
+            logger.error(
+                f"Failed to send webhooks for event {event_type}: {e}", exc_info=True
+            )
+
+    thread = threading.Thread(target=_run_in_thread, daemon=True)
+    thread.start()
 
 
 def _notify_build_started_impl(

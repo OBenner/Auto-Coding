@@ -375,9 +375,9 @@ def verify_basic_auth(
         return False
 
     try:
-        # Decode base64 credentials
+        # Decode base64 credentials (validate=True rejects malformed input)
         encoded_credentials = auth_header[6:]  # Remove "Basic "
-        decoded_bytes = b64decode(encoded_credentials)
+        decoded_bytes = b64decode(encoded_credentials, validate=True)
         decoded_str = decoded_bytes.decode("utf-8")
 
         # Split username and password

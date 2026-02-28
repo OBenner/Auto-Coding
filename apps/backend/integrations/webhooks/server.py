@@ -39,7 +39,14 @@ from .auth import (
     verify_webhook_signature,
 )
 from .handlers.outgoing import OutgoingWebhookSender
-from .models import WebhookConfig, WebhookEvent, WebhookLog, WebhookType
+from .models import (
+    WebhookConfig,
+    WebhookDeliveryStatus,
+    WebhookEvent,
+    WebhookEventType,
+    WebhookLog,
+    WebhookType,
+)
 from .storage import WebhookStorage
 
 logger = logging.getLogger(__name__)
@@ -272,8 +279,6 @@ def create_webhook_server(
             event_type_str = "custom"
 
         # Map to WebhookEventType, falling back to CUSTOM
-        from .models import WebhookEventType
-
         try:
             resolved_event_type = WebhookEventType(event_type_str)
         except ValueError:
@@ -301,7 +306,7 @@ def create_webhook_server(
 
         if not auth_success:
             webhook_log.mark_completed(
-                status=webhook_log.Status.FAILED,  # type: ignore
+                status=WebhookDeliveryStatus.FAILED,
                 error_message="Authentication failed",
             )
             storage.save_log(webhook_log)
@@ -317,7 +322,7 @@ def create_webhook_server(
             webhook_log.request_body = payload
         except Exception:
             webhook_log.mark_completed(
-                status=webhook_log.Status.FAILED,  # type: ignore
+                status=WebhookDeliveryStatus.FAILED,
                 error_message="Failed to parse JSON payload",
             )
             storage.save_log(webhook_log)
@@ -341,8 +346,8 @@ def create_webhook_server(
 
             # Mark as successful
             webhook_log.mark_completed(
-                status=webhook_log.Status.SUCCESS,  # type: ignore
-                response_status_code=200,
+                status=WebhookDeliveryStatus.SUCCESS,
+                status_code=200,
             )
             storage.save_log(webhook_log)
 
@@ -364,7 +369,7 @@ def create_webhook_server(
             logger.error(f"Error processing webhook {webhook_config.id}: {e}")
 
             webhook_log.mark_completed(
-                status=webhook_log.Status.FAILED,  # type: ignore
+                status=WebhookDeliveryStatus.FAILED,
                 error_message=str(e),
             )
             storage.save_log(webhook_log)
@@ -420,9 +425,9 @@ def create_webhook_server(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Invalid project directory",
                 )
-            storage = WebhookStorage(spec_dir=project_dir)
+            test_storage = WebhookStorage(spec_dir=project_dir)
 
-            config = storage.load_config(request.webhook_id)
+            config = test_storage.get_config(request.webhook_id)
             if not config:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
@@ -430,15 +435,23 @@ def create_webhook_server(
                 )
 
             # Create test event
-            test_event = WebhookEvent.build_started(
-                spec_id="test-connection",
-                spec_name="Test Webhook Connection",
-                message="This is a test webhook notification from Auto Claude",
+            test_event = WebhookEvent(
+                type=WebhookEventType.CUSTOM,
+                data={
+                    "test": True,
+                    "message": "This is a test webhook notification from Auto Claude",
+                },
             )
 
-            # Send test webhook
-            sender = OutgoingWebhookSender()
-            result = await sender.send(config, test_event)
+            # Send test webhook (temporarily enable if disabled for testing)
+            original_enabled = config.enabled
+            config.enabled = True
+            sender = OutgoingWebhookSender(spec_dir=project_dir)
+            try:
+                result = await sender.send_webhook(config, test_event)
+            finally:
+                config.enabled = original_enabled
+                await sender.close()
 
             if result.success:
                 return JSONResponse(

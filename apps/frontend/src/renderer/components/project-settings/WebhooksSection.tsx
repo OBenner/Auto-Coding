@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { Webhook, Info } from 'lucide-react';
 import { CollapsibleSection } from './CollapsibleSection';
 import { StatusBadge } from './StatusBadge';
@@ -5,7 +6,7 @@ import { Button } from '../ui/button';
 import { Label } from '../ui/label';
 import { Switch } from '../ui/switch';
 import { Separator } from '../ui/separator';
-import type { WebhookConfig, WebhookIntegrationStatus } from '../../../shared/types';
+import type { WebhookIntegrationStatus } from '../../../shared/types';
 
 interface WebhooksSectionProps {
   isExpanded: boolean;
@@ -24,16 +25,22 @@ export function WebhooksSection({
   integrationStatuses,
   onConfigureIntegration,
 }: WebhooksSectionProps) {
+  const { t } = useTranslation(['settings']);
+
   const badge = webhooksEnabled ? (
-    <StatusBadge status="success" label="Enabled" />
+    <StatusBadge status="success" label={t('settings:webhooks.status.enabled')} />
   ) : null;
 
   // Count enabled integrations
   const enabledCount = integrationStatuses.filter((s) => s.enabled).length;
 
+  const getIntegrationName = (integration: string): string => {
+    return t(`settings:webhooks.integrations.${integration}`, { defaultValue: integration });
+  };
+
   return (
     <CollapsibleSection
-      title="Webhooks & Integrations"
+      title={t('settings:webhooks.title')}
       icon={<Webhook className="h-4 w-4" />}
       isExpanded={isExpanded}
       onToggle={onToggle}
@@ -41,9 +48,11 @@ export function WebhooksSection({
     >
       <div className="flex items-center justify-between">
         <div className="space-y-0.5">
-          <Label className="font-normal text-foreground">Enable Webhooks</Label>
+          <Label className="font-normal text-foreground">
+            {t('settings:webhooks.enableWebhooks')}
+          </Label>
           <p className="text-xs text-muted-foreground">
-            Trigger builds from external events and send notifications
+            {t('settings:webhooks.enableDescription')}
           </p>
         </div>
         <Switch
@@ -59,14 +68,15 @@ export function WebhooksSection({
             <div className="flex items-start gap-3">
               <Info className="h-5 w-5 text-info mt-0.5" />
               <div className="flex-1">
-                <p className="text-sm font-medium text-foreground">Webhook Integrations</p>
+                <p className="text-sm font-medium text-foreground">
+                  {t('settings:webhooks.integrationOverviewTitle')}
+                </p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Configure outgoing webhooks to send build notifications to Slack, Discord, Teams,
-                  or Jira. Set up incoming webhooks to trigger builds from GitHub or GitLab events.
+                  {t('settings:webhooks.integrationOverviewDescription')}
                 </p>
                 {enabledCount > 0 && (
                   <p className="text-xs text-info mt-2">
-                    {enabledCount} integration{enabledCount > 1 ? 's' : ''} configured
+                    {t('settings:webhooks.integrationsConfigured', { count: enabledCount })}
                   </p>
                 )}
               </div>
@@ -77,9 +87,11 @@ export function WebhooksSection({
 
           {/* Outgoing Integrations */}
           <div className="space-y-2">
-            <Label className="text-sm font-medium text-foreground">Outgoing Notifications</Label>
+            <Label className="text-sm font-medium text-foreground">
+              {t('settings:webhooks.outgoingTitle')}
+            </Label>
             <p className="text-xs text-muted-foreground">
-              Send build status updates to external services
+              {t('settings:webhooks.outgoingDescription')}
             </p>
 
             <div className="space-y-2">
@@ -93,25 +105,34 @@ export function WebhooksSection({
                     <div className="flex items-center gap-3">
                       <div className="flex flex-col">
                         <span className="text-sm font-medium text-foreground capitalize">
-                          {status.integration === 'teams' ? 'Microsoft Teams' : status.integration}
+                          {getIntegrationName(status.integration)}
                         </span>
                         {status.connected ? (
-                          <span className="text-xs text-success">Connected</span>
+                          <span className="text-xs text-success">
+                            {t('settings:webhooks.status.connected')}
+                          </span>
                         ) : (
-                          <span className="text-xs text-muted-foreground">Not configured</span>
+                          <span className="text-xs text-muted-foreground">
+                            {t('settings:webhooks.status.notConfigured')}
+                          </span>
                         )}
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
                       {status.enabled && (
-                        <StatusBadge status="success" label="Active" />
+                        <StatusBadge
+                          status="success"
+                          label={t('settings:webhooks.status.active')}
+                        />
                       )}
                       <Button
                         size="sm"
                         variant="outline"
                         onClick={() => onConfigureIntegration(status.integration)}
                       >
-                        {status.connected ? 'Configure' : 'Setup'}
+                        {status.connected
+                          ? t('settings:webhooks.actions.configure')
+                          : t('settings:webhooks.actions.setup')}
                       </Button>
                     </div>
                   </div>
@@ -123,9 +144,11 @@ export function WebhooksSection({
 
           {/* Incoming Integrations */}
           <div className="space-y-2">
-            <Label className="text-sm font-medium text-foreground">Incoming Webhooks</Label>
+            <Label className="text-sm font-medium text-foreground">
+              {t('settings:webhooks.incomingTitle')}
+            </Label>
             <p className="text-xs text-muted-foreground">
-              Trigger builds from external events
+              {t('settings:webhooks.incomingDescription')}
             </p>
 
             <div className="space-y-2">
@@ -139,25 +162,34 @@ export function WebhooksSection({
                     <div className="flex items-center gap-3">
                       <div className="flex flex-col">
                         <span className="text-sm font-medium text-foreground capitalize">
-                          {status.integration === 'generic' ? 'Generic Webhook' : status.integration}
+                          {getIntegrationName(status.integration)}
                         </span>
                         {status.connected ? (
-                          <span className="text-xs text-success">Active</span>
+                          <span className="text-xs text-success">
+                            {t('settings:webhooks.status.active')}
+                          </span>
                         ) : (
-                          <span className="text-xs text-muted-foreground">Not configured</span>
+                          <span className="text-xs text-muted-foreground">
+                            {t('settings:webhooks.status.notConfigured')}
+                          </span>
                         )}
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
                       {status.enabled && (
-                        <StatusBadge status="success" label="Active" />
+                        <StatusBadge
+                          status="success"
+                          label={t('settings:webhooks.status.active')}
+                        />
                       )}
                       <Button
                         size="sm"
                         variant="outline"
                         onClick={() => onConfigureIntegration(status.integration)}
                       >
-                        {status.connected ? 'Configure' : 'Setup'}
+                        {status.connected
+                          ? t('settings:webhooks.actions.configure')
+                          : t('settings:webhooks.actions.setup')}
                       </Button>
                     </div>
                   </div>
@@ -170,8 +202,7 @@ export function WebhooksSection({
           {/* Webhook Logs Link */}
           <div className="rounded-lg border border-muted-foreground/20 bg-muted/30 p-3">
             <p className="text-xs text-muted-foreground">
-              View detailed webhook delivery logs and troubleshooting information in the Webhook
-              Logs viewer.
+              {t('settings:webhooks.logsHint')}
             </p>
           </div>
         </>
