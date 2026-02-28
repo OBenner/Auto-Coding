@@ -888,13 +888,10 @@ class GenericWebhookHandler(IncomingWebhookHandler):
 
                 # Pattern to match: ['key'] or ["key"] or [0] or .key
                 # Split into tokens: base name + list of [brackets] + dotted keys
+                # Matches: unquoted text | ['key'] | ["key"] | [0]
                 tokens = re.findall(
-                    r"""([^\.\[\]]+)  # Unquoted (like 'repo' or 'name')
-                        |\['([^']*)'\]  # ['key'] style
-                        |\["([^"]*)"\]  # ["key"] style
-                        |\[(\d+)\]      # [0] style""",
+                    r"([^.\[\]]+)|\['([^']*)'\]|\[\"([^\"]*)\"\]|\[(\d+)\]",
                     path,
-                    re.VERBOSE,
                 )
 
                 value = data

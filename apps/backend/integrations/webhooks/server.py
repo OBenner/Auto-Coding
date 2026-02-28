@@ -52,16 +52,21 @@ from .storage import WebhookStorage
 logger = logging.getLogger(__name__)
 
 
+def _sanitize_log_value(value: str, max_length: int = 100) -> str:
+    """Sanitize user-provided value for safe logging (prevent log injection)."""
+    sanitized = value.replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t")
+    if len(sanitized) > max_length:
+        sanitized = sanitized[:max_length] + "..."
+    return sanitized
+
+
 # =============================================================================
 # Request/Response Models
 # =============================================================================
 
 
 class WebhookRequestBody(BaseModel):
-    """Incoming webhook request body."""
-
-    """Any JSON data from webhook sender"""
-    pass
+    """Incoming webhook request body. Any JSON data from webhook sender."""
 
 
 class WebhookResponse(BaseModel):
@@ -253,10 +258,13 @@ def create_webhook_server(
                 break
 
         if not webhook_config:
-            logger.warning(f"No webhook config found for path: /{webhook_path}")
+            logger.warning(
+                "No webhook config found for path: /%s",
+                _sanitize_log_value(webhook_path),
+            )
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"No webhook configured for path: /{webhook_path}",
+                detail="No webhook configured for the requested path",
             )
 
         # Check if webhook is enabled
@@ -412,13 +420,19 @@ def create_webhook_server(
         """
         try:
             # Validate project_dir to prevent path traversal attacks
-            project_dir = Path(request.project_dir).resolve()
+            raw_project_dir = request.project_dir
+            if ".." in raw_project_dir:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid project directory",
+                )
+            project_dir = Path(raw_project_dir).resolve()
             if not project_dir.is_dir():
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Invalid project directory",
                 )
-            # Restrict to directories containing .auto-claude
+            # Restrict to directories containing .auto-claude marker
             auto_claude_marker = project_dir / ".auto-claude"
             if not auto_claude_marker.is_dir():
                 raise HTTPException(
@@ -431,7 +445,7 @@ def create_webhook_server(
             if not config:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Webhook {request.webhook_id} not found",
+                    detail="Webhook not found",
                 )
 
             # Create test event
@@ -482,7 +496,11 @@ def create_webhook_server(
         except HTTPException:
             raise
         except Exception as e:
-            logger.error(f"Error testing webhook {request.webhook_id}: {e}")
+            logger.error(
+                "Error testing webhook %s: %s",
+                _sanitize_log_value(request.webhook_id),
+                e,
+            )
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="An internal error occurred while testing the webhook",

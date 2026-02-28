@@ -450,7 +450,7 @@ def prepare_auth_headers(config: WebhookConfig) -> dict[str, str]:
         # Add API key to custom header
         if auth_config.api_key and auth_config.api_key_header:
             headers[auth_config.api_key_header] = auth_config.api_key
-            logger.debug(f"Added API key header: {auth_config.api_key_header}")
+            logger.debug("Added API key to custom header")
 
     elif auth_config.auth_type == "bearer_token":
         # Add bearer token to Authorization header
