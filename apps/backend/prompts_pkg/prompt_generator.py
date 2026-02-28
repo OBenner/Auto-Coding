@@ -24,6 +24,9 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
+from context.compressor import ContextCompressor
+from context.token_estimator import TokenEstimator
+
 
 def get_relative_spec_path(spec_dir: Path, project_dir: Path) -> str:
     """
@@ -94,6 +97,7 @@ def generate_subtask_prompt(
     phase: dict,
     attempt_count: int = 0,
     recovery_hints: list[str] | None = None,
+    pattern_suggestions: str | None = None,
 ) -> str:
     """
     Generate a minimal, focused prompt for implementing a single subtask.
@@ -105,6 +109,8 @@ def generate_subtask_prompt(
         phase: The phase containing this subtask
         attempt_count: Number of previous attempts (for retry context)
         recovery_hints: Hints from previous failed attempts
+        pattern_suggestions: Relevant code patterns from Graphiti memory
+            (retrieved via get_pattern_suggestions from memory_manager)
 
     Returns:
         A focused prompt string (~100 lines instead of 900)
@@ -171,6 +177,16 @@ You MUST use a DIFFERENT approach than previous attempts.
         sections.append("**Pattern Files (study these first):**")
         for f in patterns_from:
             sections.append(f"- `{f}`")
+        sections.append("")
+
+    # Pattern suggestions from Graphiti memory (truncate to avoid bloating prompt)
+    if pattern_suggestions:
+        max_pattern_chars = 2000
+        if len(pattern_suggestions) > max_pattern_chars:
+            pattern_suggestions = (
+                pattern_suggestions[:max_pattern_chars] + "\n...(truncated)"
+            )
+        sections.append(pattern_suggestions)
         sections.append("")
 
     # Verification
@@ -323,13 +339,17 @@ def load_subtask_context(
     max_file_lines: int = 200,
 ) -> dict:
     """
-    Load minimal context needed for a subtask.
+    Load minimal context needed for a subtask with smart compression.
+
+    Uses ContextCompressor to intelligently compress large files instead of
+    simple line truncation, preserving important information while reducing
+    token usage.
 
     Args:
         spec_dir: Spec directory
         project_dir: Project root
         subtask: The subtask being implemented
-        max_file_lines: Maximum lines to include per file
+        max_file_lines: Approximate maximum lines (converted to token threshold)
 
     Returns:
         Dict with file contents and relevant context
@@ -340,39 +360,69 @@ def load_subtask_context(
         "spec_excerpt": None,
     }
 
-    # Load pattern files (truncated)
+    # Initialize compressor and token estimator
+    # Convert max_file_lines to approximate token threshold
+    # Average: ~10-15 tokens per line of code, so use 12.5 as middle ground
+    token_threshold = max_file_lines * 12
+    compressor = ContextCompressor(
+        compression_threshold=token_threshold,
+        target_ratio=0.5,  # Target 50% of original for subtask context
+        token_estimator=TokenEstimator(),
+    )
+
+    # Load pattern files with smart compression
     for pattern_path in subtask.get("patterns_from", []):
         full_path = project_dir / pattern_path
         if full_path.exists():
             try:
-                lines = full_path.read_text(encoding="utf-8").split("\n")
-                if len(lines) > max_file_lines:
-                    content = "\n".join(lines[:max_file_lines])
-                    content += (
-                        f"\n\n... (truncated, {len(lines) - max_file_lines} more lines)"
-                    )
-                else:
-                    content = "\n".join(lines)
+                # Use smart compression instead of simple truncation
+                result = compressor.compress_file(full_path, strategy="auto")
+                content = result.compressed_content
+
+                # Add compression metadata if applied
+                if result.method != "none":
+                    content += f"\n\n... (compressed from {result.original_tokens} to {result.compressed_tokens} tokens using {result.method})"
+
                 context["patterns"][pattern_path] = content
             except Exception:
-                context["patterns"][pattern_path] = "(Could not read file)"
+                # Fallback to simple truncation if compression fails
+                try:
+                    lines = full_path.read_text(encoding="utf-8").split("\n")
+                    if len(lines) > max_file_lines:
+                        content = "\n".join(lines[:max_file_lines])
+                        content += f"\n\n... (truncated, {len(lines) - max_file_lines} more lines)"
+                    else:
+                        content = "\n".join(lines)
+                    context["patterns"][pattern_path] = content
+                except Exception:
+                    context["patterns"][pattern_path] = "(Could not read file)"
 
-    # Load files to modify (truncated)
+    # Load files to modify with smart compression
     for file_path in subtask.get("files_to_modify", []):
         full_path = project_dir / file_path
         if full_path.exists():
             try:
-                lines = full_path.read_text(encoding="utf-8").split("\n")
-                if len(lines) > max_file_lines:
-                    content = "\n".join(lines[:max_file_lines])
-                    content += (
-                        f"\n\n... (truncated, {len(lines) - max_file_lines} more lines)"
-                    )
-                else:
-                    content = "\n".join(lines)
+                # Use smart compression instead of simple truncation
+                result = compressor.compress_file(full_path, strategy="auto")
+                content = result.compressed_content
+
+                # Add compression metadata if applied
+                if result.method != "none":
+                    content += f"\n\n... (compressed from {result.original_tokens} to {result.compressed_tokens} tokens using {result.method})"
+
                 context["files_to_modify"][file_path] = content
             except Exception:
-                context["files_to_modify"][file_path] = "(Could not read file)"
+                # Fallback to simple truncation if compression fails
+                try:
+                    lines = full_path.read_text(encoding="utf-8").split("\n")
+                    if len(lines) > max_file_lines:
+                        content = "\n".join(lines[:max_file_lines])
+                        content += f"\n\n... (truncated, {len(lines) - max_file_lines} more lines)"
+                    else:
+                        content = "\n".join(lines)
+                    context["files_to_modify"][file_path] = content
+                except Exception:
+                    context["files_to_modify"][file_path] = "(Could not read file)"
 
     return context
 
@@ -416,6 +466,8 @@ def format_context_for_prompt(context: dict) -> str:
             - patterns: Dict of reference file paths to contents
             - files_to_modify: Dict of file paths to current contents
             - pattern_suggestions: Pre-formatted string of pattern suggestions from Graphiti
+            - selection_reasoning: List of strings explaining why files were selected
+            - token_summary: Dict with token usage statistics (optional)
 
     Returns:
         Formatted string to append to prompt
@@ -426,6 +478,27 @@ def format_context_for_prompt(context: dict) -> str:
     if context.get("pattern_suggestions"):
         sections.append(context["pattern_suggestions"])
         sections.append("")  # Add spacing after pattern suggestions
+
+    # Add selection reasoning for transparency
+    if context.get("selection_reasoning"):
+        sections.append("## Context Selection Reasoning\n")
+        sections.append("The following files were selected for this task based on:\n")
+        for reason in context["selection_reasoning"]:
+            sections.append(f"- {reason}")
+        sections.append("")  # Add spacing after reasoning
+
+    # Add token summary if available
+    if context.get("token_summary"):
+        summary = context["token_summary"]
+        sections.append("## Token Usage Summary\n")
+        sections.append(
+            f"- **Total Estimated Tokens:** {summary.get('total_tokens', 'N/A')}"
+        )
+        sections.append(f"- **Files Included:** {summary.get('file_count', 'N/A')}")
+        sections.append(
+            f"- **Compression Applied:** {summary.get('compression_method', 'None')}"
+        )
+        sections.append("")  # Add spacing after token summary
 
     if context.get("patterns"):
         sections.append("## Reference Files (Patterns to Follow)\n")

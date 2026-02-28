@@ -138,7 +138,9 @@ class AgentRunner:
 
         # Determine agent type from prompt file for correct tool permissions
         # This ensures spec_critic gets access to actor-critic-thinking tool
-        agent_type = PROMPT_TO_AGENT_TYPE.get(prompt_file, "coder")
+        # Normalize path to just the filename for consistent lookup
+        prompt_filename = Path(prompt_file).name
+        agent_type = PROMPT_TO_AGENT_TYPE.get(prompt_filename, "coder")
         debug_detailed(
             "agent_runner",
             "Determined agent type from prompt file",
@@ -216,6 +218,20 @@ class AgentRunner:
                                 else:
                                     print(f"\n[Tool: {tool_name}]", flush=True)
                                 current_tool = tool_name
+
+                    elif msg_type == "SystemMessage":
+                        # Handle system messages (rate_limit_event, etc.)
+                        subtype = getattr(msg, "subtype", "unknown")
+                        debug_detailed(
+                            "agent_runner",
+                            f"System message: {subtype}",
+                        )
+                        if subtype == "rate_limit_event":
+                            debug(
+                                "agent_runner",
+                                "Rate limit event received, continuing...",
+                            )
+                        continue
 
                     elif msg_type == "UserMessage" and hasattr(msg, "content"):
                         for block in msg.content:

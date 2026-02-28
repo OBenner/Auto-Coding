@@ -62,6 +62,10 @@ const browserMockAPI: ElectronAPI = {
     success: true
   }),
 
+  saveCompetitorAnalysis: async () => ({
+    success: true
+  }),
+
   generateRoadmap: (_projectId: string, _enableCompetitorAnalysis?: boolean, _refreshCompetitorAnalysis?: boolean) => {
     console.warn('[Browser Mock] generateRoadmap called');
   },
@@ -357,6 +361,59 @@ const browserMockAPI: ElectronAPI = {
     data: []
   }),
 
+  // Custom Agent Template Operations
+  listCustomTemplates: async () => ({
+    success: true,
+    data: []
+  }),
+  saveCustomTemplate: async (template: Omit<import('../../shared/types/template').CustomTemplate, 'id' | 'createdAt' | 'updatedAt'>) => ({
+    success: true,
+    data: {
+      id: `custom-template-${Date.now()}`,
+      ...template,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    }
+  }),
+  updateCustomTemplate: async (template: import('../../shared/types/template').CustomTemplate) => ({
+    success: true,
+    data: {
+      ...template,
+      updatedAt: new Date()
+    }
+  }),
+  deleteCustomTemplate: async (_templateId: string) => ({
+    success: true
+  }),
+  exportCustomTemplate: async (_templateId: string) => ({
+    success: true,
+    data: '{"mock": "template"}'
+  }),
+  importCustomTemplate: async (_jsonData: string) => ({
+    success: true,
+    data: {
+      id: `custom-template-${Date.now()}`,
+      name: 'Imported Template',
+      description: 'Imported from JSON',
+      category: 'other' as const,
+      parameters: {},
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      isPublic: false
+    }
+  }),
+  testCustomTemplate: async (_templateId: string, _testInput: string) => ({
+    success: true,
+    data: {
+      title: 'Test Result',
+      description: 'Template test result',
+      rationale: 'Test rationale',
+      user_stories: [],
+      acceptance_criteria: [],
+      technical_details: 'Test details'
+    }
+  }),
+
   // Queue Routing API (rate limit recovery)
   queue: {
     getRunningTasksByProfile: async () => ({ success: true, data: { byProfile: {}, totalRunning: 0 } }),
@@ -367,6 +424,16 @@ const browserMockAPI: ElectronAPI = {
     onQueueProfileSwapped: () => () => {},
     onQueueSessionCaptured: () => () => {},
     onQueueBlockedNoProfiles: () => () => {}
+  },
+
+  // Pattern learning API (codebase patterns)
+  pattern: {
+    listPatterns: async () => ({ success: true, data: [] }),
+    getPatternCategories: async () => ({ success: true, data: ['naming-conventions' as const, 'error-handling' as const, 'code-organization' as const] }),
+    getPatternDetails: async () => ({ success: true, data: { index: 1, id: '1', text: 'Mock pattern', category: 'naming-conventions', confidence: 'high' as const, reasoning: 'Mock reasoning' } }),
+    approvePattern: async () => ({ success: true, data: undefined }),
+    overridePattern: async () => ({ success: true, data: undefined }),
+    deletePattern: async () => ({ success: true, data: undefined })
   },
 
   // Session Replay API
@@ -534,6 +601,60 @@ const browserMockAPI: ElectronAPI = {
   getConflictPatterns: async () => ({ success: true, data: [] }),
   exportMergeAnalytics: async () => ({ success: true, data: { path: '/mock/export' } }),
 
+  // Project health operations
+  getProjectHealth: async () => ({
+    success: true,
+    data: {
+      overall_score: 85,
+      status: 'good' as const,
+      test_coverage: {
+        percentage: 75,
+        covered_lines: 1500,
+        total_lines: 2000,
+        test_count: 120,
+        trend: 'stable' as const
+      },
+      code_quality: {
+        complexity_score: 15,
+        duplication_percentage: 5,
+        maintainability_index: 80,
+        issues_count: 3
+      },
+      security: {
+        vulnerability_count: 2,
+        critical_count: 0,
+        high_count: 1,
+        medium_count: 1,
+        low_count: 0,
+        scan_date: new Date().toISOString()
+      },
+      dependencies: {
+        total_dependencies: 50,
+        outdated_count: 5,
+        major_updates_available: 1,
+        minor_updates_available: 2,
+        patch_updates_available: 2,
+        freshness_score: 85
+      },
+      agent_activity: {
+        total_iterations: 25,
+        success_rate: 88,
+        average_fix_time: 12.5,
+        recent_activity: []
+      },
+      generated_at: new Date().toISOString()
+    }
+  }),
+  getHealthSummary: async () => ({
+    success: true,
+    data: {
+      overall_score: 85,
+      status: 'good' as const,
+      critical_issues: [],
+      recommendations: ['Consider updating outdated dependencies']
+    }
+  }),
+
   // Memory graph operations
   getGraphData: async () => ({ success: true, data: { nodes: [], edges: [], node_count: 0, edge_count: 0 } }),
   deleteMemory: async () => ({ success: true, data: { success: true } }),
@@ -594,6 +715,10 @@ const browserMockAPI: ElectronAPI = {
     _projectId?: string,
     _filter?: import('../../shared/types').ProductivityAnalyticsFilter
   ) => ({ success: true as const, data: [] as import('../../shared/types').ProductivityTrendPoint[] }),
+  getFailureMetrics: async (_projectId?: string) => ({
+    success: true as const,
+    data: { total_failures: 0 } as import('../../shared/types').FailureMetrics
+  }),
   exportProductivityAnalytics: async () => ({ success: true as const, data: '/mock/export/productivity' })
 };
 

@@ -45,7 +45,7 @@ Understand:
 
 If the `actor_critic_thinking` tool is available, use it for structured dual-perspective analysis:
 
-```
+```text
 # Actor-Critic Multi-Round Dialogue Pattern
 
 Tool: mcp__aquarius-wing__actor-critic-thinking__actor_critic_thinking
@@ -199,8 +199,9 @@ sed -i 's/graphiti-core real_ladybug/graphiti-core\nreal_ladybug/g' spec.md
 
 ## PHASE 4: CREATE CRITIQUE REPORT
 
-```bash
-cat > critique_report.json << 'EOF'
+Use the **Write** tool to create `critique_report.json` with the following structure:
+
+```json
 {
   "critique_completed": true,
   "issues_found": [
@@ -222,13 +223,11 @@ cat > critique_report.json << 'EOF'
   ],
   "created_at": "[ISO timestamp]"
 }
-EOF
 ```
 
-If NO issues found:
+If NO issues found, use this structure instead:
 
-```bash
-cat > critique_report.json << 'EOF'
+```json
 {
   "critique_completed": true,
   "issues_found": [],
@@ -239,8 +238,9 @@ cat > critique_report.json << 'EOF'
   "recommendations": [],
   "created_at": "[ISO timestamp]"
 }
-EOF
 ```
+
+**IMPORTANT**: Use the Write tool to create this file. Do NOT use `cat >`, heredoc (`<< EOF`), or bash redirection — these hang on Windows.
 
 ---
 

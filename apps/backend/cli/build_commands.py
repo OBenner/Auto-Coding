@@ -48,6 +48,9 @@ from .input_handlers import (
     read_multiline_input,
 )
 
+# Pattern management commands are available in pattern_commands.py
+# Run: python apps/backend/cli/pattern_commands.py --help
+
 
 def handle_build_command(
     project_dir: Path,
@@ -441,7 +444,7 @@ def _handle_build_interrupt(
         if choice == "skip":
             print()
             print_status("Resuming build...", "info")
-            status_manager.update(state=BuildState.RUNNING)
+            status_manager.update(state=BuildState.BUILDING)
             asyncio.run(
                 run_autonomous_agent(
                     project_dir=working_dir,

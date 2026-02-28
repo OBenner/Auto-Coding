@@ -1,0 +1,104 @@
+{
+  "common": {
+    "confirm": "Confirmer",
+    "cancel": "Annuler",
+    "close": "Fermer",
+    "ok": "OK",
+    "yes": "Oui",
+    "no": "Non",
+    "delete": "Supprimer",
+    "save": "Enregistrer",
+    "continue": "Continuer"
+  },
+  "confirmDelete": {
+    "title": "Confirmer la suppression",
+    "message": "Êtes-vous sûr de vouloir supprimer cet élément ?",
+    "description": "Cette action ne peut pas être annulée.",
+    "confirm": "Supprimer",
+    "cancel": "Annuler"
+  },
+  "confirmCancel": {
+    "title": "Annuler la tâche",
+    "message": "Êtes-vous sûr de vouloir annuler cette tâche ?",
+    "description": "La tâche sera arrêtée et ne pourra pas être reprise.",
+    "confirm": "Annuler la tâche",
+    "cancel": "Continuer l'exécution"
+  },
+  "taskDelete": {
+    "title": "Supprimer la tâche",
+    "message": "Êtes-vous sûr de vouloir supprimer la tâche « {{taskName}} » ?",
+    "description": "Cela supprimera définitivement la tâche et toutes les données associées.",
+    "confirm": "Supprimer la tâche",
+    "cancel": "Annuler"
+  },
+  "specDelete": {
+    "title": "Supprimer la spécification",
+    "message": "Êtes-vous sûr de vouloir supprimer la spécification « {{specName}} » ?",
+    "description": "Cela supprimera définitivement la spécification et toutes les tâches associées.",
+    "confirm": "Supprimer la spécification",
+    "cancel": "Annuler"
+  },
+  "unsavedChanges": {
+    "title": "Modifications non enregistrées",
+    "message": "Vous avez des modifications non enregistrées qui seront perdues.",
+    "description": "Voulez-vous enregistrer vos modifications avant de quitter ?",
+    "save": "Enregistrer les modifications",
+    "discard": "Ignorer les modifications",
+    "cancel": "Rester sur la page"
+  },
+  "error": {
+    "title": "Erreur",
+    "message": "Une erreur s'est produite",
+    "description": "Veuillez réessayer ou contacter le support si le problème persiste.",
+    "close": "Fermer",
+    "retry": "Réessayer"
+  },
+  "success": {
+    "title": "Succès",
+    "message": "Opération terminée avec succès",
+    "close": "Fermer"
+  },
+  "createSpec": {
+    "title": "Créer une nouvelle spécification",
+    "description": "Remplissez les détails pour créer une nouvelle spécification",
+    "taskDescription": "Description de la tâche",
+    "taskDescriptionPlaceholder": "Décrivez ce que vous voulez construire...",
+    "complexity": "Niveau de complexité",
+    "complexitySimple": "Simple - Corrections rapides ou petits changements",
+    "complexityStandard": "Standard - Nouvelles fonctionnalités ou changements modérés",
+    "complexityComplex": "Complexe - Grandes fonctionnalités ou changements architecturaux",
+    "attachments": "Pièces jointes (optionnel)",
+    "attachmentsDescription": "Téléchargez des fichiers ou de la documentation pertinents",
+    "create": "Créer la spécification",
+    "cancel": "Annuler",
+    "creating": "Création...",
+    "success": "Spécification créée avec succès",
+    "error": "Échec de la création de la spécification"
+  },
+  "authentication": {
+    "title": "Authentification requise",
+    "message": "Veuillez vous authentifier pour continuer",
+    "description": "Entrez votre jeton d'accès pour vous authentifier auprès du backend",
+    "tokenPlaceholder": "Entrez votre jeton d'accès",
+    "verify": "Vérifier le jeton",
+    "cancel": "Annuler",
+    "verifying": "Vérification...",
+    "success": "Authentification réussie",
+    "error": "Échec de l'authentification"
+  },
+  "connectionError": {
+    "title": "Erreur de connexion",
+    "message": "Échec de la connexion au backend",
+    "description": "Veuillez vérifier vos paramètres d'API et réessayer",
+    "settings": "Ouvrir les paramètres",
+    "retry": "Réessayer",
+    "cancel": "Annuler"
+  },
+  "websocketDisconnected": {
+    "title": "WebSocket déconnecté",
+    "message": "Les mises à jour en temps réel sont temporairement indisponibles",
+    "description": "La connexion se reconnectera automatiquement",
+    "reconnect": "Reconnecter maintenant",
+    "dismiss": "Ignorer"
+  }
+}

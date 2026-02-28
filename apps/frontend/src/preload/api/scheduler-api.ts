@@ -14,7 +14,6 @@ import type {
   SchedulePriority,
   SchedulerStatus,
   ScheduleBuildOptions,
-  QueueItem
 } from '../../shared/types';
 
 export interface SchedulerAPI {

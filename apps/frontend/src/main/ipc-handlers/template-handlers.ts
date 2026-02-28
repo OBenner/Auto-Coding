@@ -28,7 +28,7 @@ function getBackendDir(): string {
 /**
  * Helper to get Python executable path and environment
  */
-async function getPythonEnv(projectPath: string): Promise<{ pythonPath: string; env: Record<string, string> }> {
+async function getPythonEnv(_projectPath: string): Promise<{ pythonPath: string; env: Record<string, string> }> {
   const env = await getRunnerEnv();
 
   // Get Python path - check if there's a configured venv Python
@@ -571,6 +571,513 @@ print(json.dumps(suggestions))
         return { success: true, data: suggestions };
       } catch (error) {
         debugError('[TEMPLATE_SUGGEST] Error:', error);
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        };
+      }
+    }
+  );
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Custom Template CRUD Operations
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Get the custom templates storage file path
+   */
+  function getCustomTemplatesPath(): string {
+    const { app } = require('electron');
+    const userDataPath = app.getPath('userData');
+    return path.join(userDataPath, 'custom-templates.json');
+  }
+
+  // Serializes concurrent writes to custom-templates.json
+  let templateWriteLock: Promise<void> = Promise.resolve();
+
+  async function withTemplateLock<T>(fn: () => Promise<T>): Promise<T> {
+    let resolve!: () => void;
+    const next = new Promise<void>(r => { resolve = r; });
+    const current = templateWriteLock;
+    templateWriteLock = next;
+    await current;
+    try {
+      return await fn();
+    } finally {
+      resolve();
+    }
+  }
+
+  /**
+   * Load custom templates from storage
+   */
+  async function loadCustomTemplates(): Promise<import('../../shared/types/template').CustomTemplate[]> {
+    const templatesPath = getCustomTemplatesPath();
+
+    try {
+      const content = await fsPromises.readFile(templatesPath, 'utf-8');
+      const raw = JSON.parse(content);
+
+      if (!Array.isArray(raw)) {
+        // File contains valid JSON but has wrong structure — back it up before resetting
+        const backupPath = `${templatesPath}.corrupt.${Date.now()}`;
+        debugError('[loadCustomTemplates] Templates file is not an array, backing up and resetting');
+        try {
+          await fsPromises.copyFile(templatesPath, backupPath);
+          debugError('[loadCustomTemplates] Malformed file backed up to:', backupPath);
+        } catch {
+          // Ignore backup errors — we still reset to a clean state below
+        }
+        return [];
+      }
+
+      // Convert date strings back to Date objects with validation
+      return raw.map((t: import('../../shared/types/template').CustomTemplate) => {
+        const createdAt = t.createdAt ? new Date(t.createdAt) : undefined;
+        const updatedAt = t.updatedAt ? new Date(t.updatedAt) : undefined;
+
+        return {
+          ...t,
+          createdAt: (createdAt && !isNaN(createdAt.getTime())) ? createdAt : new Date(),
+          updatedAt: (updatedAt && !isNaN(updatedAt.getTime())) ? updatedAt : new Date()
+        };
+      });
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        return [];
+      }
+      // Parse error or other read error - backup the corrupted file
+      const backupPath = `${templatesPath}.corrupt.${Date.now()}`;
+      debugError('[loadCustomTemplates] Failed to read/parse templates file, creating backup:', error);
+      try {
+        await fsPromises.copyFile(templatesPath, backupPath);
+        debugError('[loadCustomTemplates] Corrupted file backed up to:', backupPath);
+      } catch {
+        // Ignore backup errors
+      }
+      return [];
+    }
+  }
+
+  /**
+   * Save custom templates to storage
+   */
+  async function saveCustomTemplatesToFile(
+    templates: import('../../shared/types/template').CustomTemplate[]
+  ): Promise<void> {
+    const templatesPath = getCustomTemplatesPath();
+    const tmpPath = templatesPath + '.tmp';
+    await fsPromises.writeFile(tmpPath, JSON.stringify(templates, null, 2), 'utf-8');
+    await fsPromises.rename(tmpPath, templatesPath);
+  }
+
+  /**
+   * Generate a unique ID for a new template
+   */
+  function generateTemplateId(): string {
+    return `custom-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+  }
+
+  /**
+   * Validate a custom template
+   */
+  function validateCustomTemplate(
+    template: import('../../shared/types/template').CustomTemplate
+  ): string[] {
+    const errors: string[] = [];
+
+    // Check required fields
+    if (!template.name || template.name.trim() === '') {
+      errors.push('Template name is required');
+    }
+
+    if (!template.description || template.description.trim() === '') {
+      errors.push('Template description is required');
+    }
+
+    if (!template.category) {
+      errors.push('Template category is required');
+    }
+
+    // Validate parameters if present
+    if (template.parameters) {
+      for (const [paramName, paramConfig] of Object.entries(template.parameters)) {
+        if (!paramConfig) continue;
+        if (!paramConfig.type || !['str', 'int', 'float', 'bool', 'list', 'dict'].includes(paramConfig.type)) {
+          errors.push(`Parameter '${paramName}' has invalid type: ${paramConfig.type}`);
+        }
+        if (!paramConfig.description) {
+          errors.push(`Parameter '${paramName}' is missing description`);
+        }
+      }
+    }
+
+    return errors;
+  }
+
+  /**
+   * List all custom templates
+   */
+  ipcMain.handle(
+    IPC_CHANNELS.TEMPLATE_CUSTOM_LIST,
+    async (): Promise<IPCResult<import('../../shared/types/template').CustomTemplate[]>> => {
+      try {
+        debugLog('[TEMPLATE_CUSTOM_LIST] Loading custom templates');
+
+        const templates = await loadCustomTemplates();
+
+        debugLog('[TEMPLATE_CUSTOM_LIST] Returning', templates.length, 'custom templates');
+        return { success: true, data: templates };
+      } catch (error) {
+        debugError('[TEMPLATE_CUSTOM_LIST] Error:', error);
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        };
+      }
+    }
+  );
+
+  /**
+   * Save a new custom template
+   */
+  ipcMain.handle(
+    IPC_CHANNELS.TEMPLATE_CUSTOM_SAVE,
+    async (
+      _,
+      template: Omit<import('../../shared/types/template').CustomTemplate, 'id' | 'createdAt' | 'updatedAt'>
+    ): Promise<IPCResult<import('../../shared/types/template').CustomTemplate & { validationErrors?: string[] }>> => {
+      try {
+        debugLog('[TEMPLATE_CUSTOM_SAVE] Saving custom template:', template.name);
+
+        // Validate template
+        const validationErrors = validateCustomTemplate(template as import('../../shared/types/template').CustomTemplate);
+
+        if (validationErrors.length > 0) {
+          debugLog('[TEMPLATE_CUSTOM_SAVE] Validation errors:', validationErrors);
+          return {
+            success: false,
+            error: 'Template validation failed',
+            data: {
+              ...(template as any),
+              validationErrors
+            }
+          };
+        }
+
+        return await withTemplateLock(async () => {
+          const templates = await loadCustomTemplates();
+
+          // Check for duplicate names
+          const duplicate = templates.find(t => t.name.normalize('NFC').trim().toLowerCase() === template.name.normalize('NFC').trim().toLowerCase());
+          if (duplicate) {
+            return {
+              success: false,
+              error: `A template with the name "${template.name}" already exists`,
+              data: {
+                ...(template as any),
+                validationErrors: [`Duplicate template name: ${template.name}`]
+              }
+            };
+          }
+
+          const now = new Date();
+          const newTemplate: import('../../shared/types/template').CustomTemplate = {
+            ...template,
+            id: generateTemplateId(),
+            createdAt: now,
+            updatedAt: now
+          };
+
+          templates.push(newTemplate);
+          await saveCustomTemplatesToFile(templates);
+
+          debugLog('[TEMPLATE_CUSTOM_SAVE] Template saved:', newTemplate.id);
+          return { success: true, data: newTemplate };
+        });
+      } catch (error) {
+        debugError('[TEMPLATE_CUSTOM_SAVE] Error:', error);
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        };
+      }
+    }
+  );
+
+  /**
+   * Update an existing custom template
+   */
+  ipcMain.handle(
+    IPC_CHANNELS.TEMPLATE_CUSTOM_UPDATE,
+    async (
+      _,
+      template: import('../../shared/types/template').CustomTemplate
+    ): Promise<IPCResult<import('../../shared/types/template').CustomTemplate & { validationErrors?: string[] }>> => {
+      try {
+        debugLog('[TEMPLATE_CUSTOM_UPDATE] Updating custom template:', template.id);
+
+        // Validate template
+        const validationErrors = validateCustomTemplate(template);
+
+        if (validationErrors.length > 0) {
+          debugLog('[TEMPLATE_CUSTOM_UPDATE] Validation errors:', validationErrors);
+          return {
+            success: false,
+            error: 'Template validation failed',
+            data: {
+              ...template,
+              validationErrors
+            }
+          };
+        }
+
+        return await withTemplateLock(async () => {
+          const templates = await loadCustomTemplates();
+
+          // Find the template index
+          const index = templates.findIndex(t => t.id === template.id);
+
+          if (index === -1) {
+            return {
+              success: false,
+              error: `Template not found: ${template.id}`,
+              data: {
+                ...template,
+                validationErrors: ['Template ID not found']
+              }
+            };
+          }
+
+          // Check for duplicate names (exclude current template)
+          const duplicate = templates.find(
+            t => t.id !== template.id && t.name.normalize('NFC').trim().toLowerCase() === template.name.normalize('NFC').trim().toLowerCase()
+          );
+          if (duplicate) {
+            return {
+              success: false,
+              error: `A template with the name "${template.name}" already exists`,
+              data: {
+                ...template,
+                validationErrors: [`Duplicate template name: ${template.name}`]
+              }
+            };
+          }
+
+          // Update the template
+          templates[index] = {
+            ...template,
+            updatedAt: new Date()
+          };
+
+          await saveCustomTemplatesToFile(templates);
+
+          debugLog('[TEMPLATE_CUSTOM_UPDATE] Template updated:', template.id);
+          return { success: true, data: templates[index] };
+        });
+      } catch (error) {
+        debugError('[TEMPLATE_CUSTOM_UPDATE] Error:', error);
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        };
+      }
+    }
+  );
+
+  /**
+   * Delete a custom template
+   */
+  ipcMain.handle(
+    IPC_CHANNELS.TEMPLATE_CUSTOM_DELETE,
+    async (_, templateId: string): Promise<IPCResult<void>> => {
+      try {
+        debugLog('[TEMPLATE_CUSTOM_DELETE] Deleting template:', templateId);
+
+        return await withTemplateLock(async () => {
+          const templates = await loadCustomTemplates();
+
+          // Filter out the template
+          const filteredTemplates = templates.filter(t => t.id !== templateId);
+
+          if (filteredTemplates.length === templates.length) {
+            return {
+              success: false,
+              error: `Template not found: ${templateId}`
+            };
+          }
+
+          await saveCustomTemplatesToFile(filteredTemplates);
+
+          debugLog('[TEMPLATE_CUSTOM_DELETE] Template deleted:', templateId);
+          return { success: true, data: undefined };
+        });
+      } catch (error) {
+        debugError('[TEMPLATE_CUSTOM_DELETE] Error:', error);
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        };
+      }
+    }
+  );
+
+  /**
+   * Export a custom template to JSON string
+   */
+  ipcMain.handle(
+    IPC_CHANNELS.TEMPLATE_CUSTOM_EXPORT,
+    async (_, templateId: string): Promise<IPCResult<string>> => {
+      try {
+        debugLog('[TEMPLATE_CUSTOM_EXPORT] Exporting template:', templateId);
+
+        const templates = await loadCustomTemplates();
+        const template = templates.find(t => t.id === templateId);
+
+        if (!template) {
+          return {
+            success: false,
+            error: `Template not found: ${templateId}`
+          };
+        }
+
+        // Export as JSON string (for file download)
+        const json = JSON.stringify(template, null, 2);
+
+        debugLog('[TEMPLATE_CUSTOM_EXPORT] Template exported:', templateId);
+        return { success: true, data: json };
+      } catch (error) {
+        debugError('[TEMPLATE_CUSTOM_EXPORT] Error:', error);
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        };
+      }
+    }
+  );
+
+  /**
+   * Import a custom template from JSON string
+   */
+  ipcMain.handle(
+    IPC_CHANNELS.TEMPLATE_CUSTOM_IMPORT,
+    async (
+      _,
+      jsonData: string
+    ): Promise<IPCResult<import('../../shared/types/template').CustomTemplate & { validationErrors?: string[] }>> => {
+      try {
+        debugLog('[TEMPLATE_CUSTOM_IMPORT] Importing template from JSON');
+
+        // Validate payload size
+        if (typeof jsonData !== 'string' || jsonData.length > 256 * 1024) {
+          return {
+            success: false,
+            error: 'Invalid or oversized payload (max 256 KB)'
+          };
+        }
+
+        // Parse JSON
+        const template = JSON.parse(jsonData) as import('../../shared/types/template').CustomTemplate;
+
+        // Validate required fields
+        const validationErrors = validateCustomTemplate(template);
+
+        if (validationErrors.length > 0) {
+          debugLog('[TEMPLATE_CUSTOM_IMPORT] Validation errors:', validationErrors);
+          return {
+            success: false,
+            error: 'Template validation failed',
+            data: {
+              ...template,
+              validationErrors
+            }
+          };
+        }
+
+        return await withTemplateLock(async () => {
+          const templates = await loadCustomTemplates();
+
+          // Check for duplicate names
+          const duplicate = templates.find(t => t.name.normalize('NFC').trim().toLowerCase() === template.name.normalize('NFC').trim().toLowerCase());
+          if (duplicate) {
+            return {
+              success: false,
+              error: `A template with the name "${template.name}" already exists`,
+              data: {
+                ...template,
+                validationErrors: [`Duplicate template name: ${template.name}`]
+              }
+            };
+          }
+
+          // Generate new ID and dates
+          const now = new Date();
+          const newTemplate: import('../../shared/types/template').CustomTemplate = {
+            ...template,
+            id: generateTemplateId(),
+            createdAt: now,
+            updatedAt: now
+          };
+
+          templates.push(newTemplate);
+          await saveCustomTemplatesToFile(templates);
+
+          debugLog('[TEMPLATE_CUSTOM_IMPORT] Template imported:', newTemplate.id);
+          return { success: true, data: newTemplate };
+        });
+      } catch (error) {
+        debugError('[TEMPLATE_CUSTOM_IMPORT] Error:', error);
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Failed to parse template JSON'
+        };
+      }
+    }
+  );
+
+  /**
+   * Test a custom template by generating a preview spec
+   */
+  ipcMain.handle(
+    IPC_CHANNELS.TEMPLATE_CUSTOM_TEST,
+    async (
+      _,
+      templateId: string,
+      _testInput: string
+    ): Promise<IPCResult<GeneratedSpec>> => {
+      try {
+        debugLog('[TEMPLATE_CUSTOM_TEST] Testing template:', templateId);
+
+        const templates = await loadCustomTemplates();
+        const template = templates.find(t => t.id === templateId);
+
+        if (!template) {
+          return {
+            success: false,
+            error: `Template not found: ${templateId}`
+          };
+        }
+
+        // For custom templates, we'll generate a simple preview
+        // In a real implementation, this would call the backend to render the template
+        const tagsStr = template.tags?.join(', ') || 'none';
+        const parametersStr = Object.keys(template.parameters || {}).length > 0
+          ? JSON.stringify(template.parameters, null, 2)
+          : 'No parameters defined';
+
+        const preview: GeneratedSpec = {
+          title: template.name,
+          description: template.description,
+          rationale: `Custom agent template: ${template.name}\n\n**Category:** ${template.category}\n**Tags:** ${tagsStr}\n**Author:** ${template.author || 'Unknown'}`,
+          user_stories: [], // Would be populated from template examples
+          acceptance_criteria: [], // Would be populated from template
+          technical_details: `**Parameters:**\n${parametersStr}`
+        };
+
+        debugLog('[TEMPLATE_CUSTOM_TEST] Preview generated');
+        return { success: true, data: preview };
+      } catch (error) {
+        debugError('[TEMPLATE_CUSTOM_TEST] Error:', error);
         return {
           success: false,
           error: error instanceof Error ? error.message : 'Unknown error'

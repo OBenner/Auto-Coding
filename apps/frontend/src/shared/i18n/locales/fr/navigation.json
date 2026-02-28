@@ -22,7 +22,9 @@
     "agentTools": "Aperçu MCP",
     "analytics": "Analytique",
     "mergeAnalytics": "Analyse des fusions",
-    "sessions": "Relecture de session"
+    "projectHealth": "Santé du Projet",
+    "sessions": "Relecture de session",
+    "feedback": "Retour d'information"
   },
   "actions": {
     "settings": "Paramètres",

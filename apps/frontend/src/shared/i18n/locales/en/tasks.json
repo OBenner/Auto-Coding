@@ -37,7 +37,8 @@
     "incomplete": "Incomplete",
     "recovering": "Recovering...",
     "needsRecovery": "Needs Recovery",
-    "needsResume": "Needs Resume"
+    "needsResume": "Needs Resume",
+    "moreInfo": "More"
   },
   "reviewReason": {
     "completed": "Completed",
@@ -113,6 +114,7 @@
     "unlockColumn": "Unlock column width",
     "columnLocked": "Column width is locked",
     "expandAll": "Expand all columns",
+    "dragDisabledAutoSort": "Drag-and-drop disabled when auto-sort is active",
     "searchPlaceholder": "Search tasks...",
     "clearFilters": "Clear Filters"
   },
@@ -214,7 +216,8 @@
   },
   "metadata": {
     "severity": "severity",
-    "pullRequest": "Pull Request"
+    "pullRequest": "Pull Request",
+    "additionalInfo": "Additional Information"
   },
   "images": {
     "removeImageAriaLabel": "Remove image {{filename}}",
@@ -417,6 +420,7 @@
     "complete": "Merge complete",
     "autoResolved": "{{count}} file(s) auto-resolved"
   },
+  "markDoneFailed": "Failed to mark as done",
   "prPolling": {
     "autoRefreshing": "Auto-refreshing"
   }

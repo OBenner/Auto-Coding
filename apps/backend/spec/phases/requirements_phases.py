@@ -204,6 +204,10 @@ class RequirementsPhaseMixin:
 
         errors = []
         for attempt in range(MAX_RETRIES):
+            # Clean up stale research file before retry so Write tool works
+            if attempt > 0 and research_file.exists():
+                research_file.unlink()
+
             self.ui.print_status(
                 f"Running research agent (attempt {attempt + 1})...", "progress"
             )

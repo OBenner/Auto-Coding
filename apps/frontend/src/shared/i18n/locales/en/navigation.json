@@ -22,7 +22,9 @@
     "agentTools": "MCP Overview",
     "analytics": "Analytics",
     "mergeAnalytics": "Merge Analytics",
-    "sessions": "Session Replay"
+    "projectHealth": "Project Health",
+    "sessions": "Session Replay",
+    "feedback": "Feedback"
   },
   "actions": {
     "settings": "Settings",

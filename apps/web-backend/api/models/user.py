@@ -5,15 +5,13 @@ SQLAlchemy ORM model for the users table. Handles user registration,
 authentication, and profile management.
 """
 
-from datetime import datetime, UTC
-
-from pydantic import BaseModel, EmailStr, Field, ConfigDict
-from sqlalchemy import Boolean, Column, DateTime, Integer, String
-from sqlalchemy.orm import relationship
-from passlib.context import CryptContext
+from datetime import UTC, datetime
 
 from core.database import Base
-
+from passlib.context import CryptContext
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from sqlalchemy import Boolean, Column, DateTime, Integer, String
+from sqlalchemy.orm import relationship
 
 # Password hashing context
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -42,10 +40,17 @@ class User(Base):
 
     # Timestamps
     created_at = Column(DateTime, default=lambda: datetime.now(UTC), nullable=False)
-    updated_at = Column(DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC), nullable=False)
+    updated_at = Column(
+        DateTime,
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
+        nullable=False,
+    )
 
     # Relationships
-    repositories = relationship("GitRepository", back_populates="user", cascade="all, delete-orphan")
+    repositories = relationship(
+        "GitRepository", back_populates="user", cascade="all, delete-orphan"
+    )
 
     def set_password(self, password: str) -> None:
         """
@@ -80,7 +85,9 @@ class UserRegisterRequest(BaseModel):
     """Request model for user registration"""
 
     email: EmailStr = Field(..., description="User email address")
-    password: str = Field(..., min_length=8, description="User password (min 8 characters)")
+    password: str = Field(
+        ..., min_length=8, description="User password (min 8 characters)"
+    )
 
 
 class UserLoginRequest(BaseModel):

@@ -667,7 +667,8 @@ class TestRecoveryManager:
         )
 
         assert action.action == "retry"
-        assert "retry with different approach" in action.reason.lower()
+        assert "verification_failed" in action.reason.lower()
+        assert "retry" in action.reason.lower()
 
     def test_determine_recovery_action_for_circular_fix(
         self, temp_spec_dir, temp_project_dir

@@ -19,7 +19,9 @@ import type {
   MergeAnalytics,
   ConflictPattern,
   MergeAnalyticsFilter,
-  MergeAnalyticsExportOptions
+  MergeAnalyticsExportOptions,
+  ProjectHealth,
+  ProjectHealthSummary
 } from '../../shared/types';
 
 export interface TaskAPI {
@@ -52,7 +54,7 @@ export interface TaskAPI {
   updateTaskStatus: (
     taskId: string,
     status: TaskStatus,
-    options?: { forceCleanup?: boolean }
+    options?: { forceCleanup?: boolean; keepWorktree?: boolean }
   ) => Promise<IPCResult & { worktreeExists?: boolean; worktreePath?: string }>;
   recoverStuckTask: (
     taskId: string,
@@ -108,6 +110,10 @@ export interface TaskAPI {
   getConflictPatterns: (projectId: string, limit?: number) => Promise<IPCResult<ConflictPattern[]>>;
   exportMergeAnalytics: (projectId: string, options: MergeAnalyticsExportOptions) => Promise<IPCResult<{ path: string }>>;
 
+  // Project Health
+  getProjectHealth: (projectId: string) => Promise<IPCResult<ProjectHealth>>;
+  getHealthSummary: (projectId: string) => Promise<IPCResult<ProjectHealthSummary>>;
+
   // Scheduler API (available as a separate property)
   scheduler?: import('./scheduler-api').SchedulerAPI;
 }
@@ -158,7 +164,7 @@ export const createTaskAPI = (): TaskAPI => ({
   updateTaskStatus: (
     taskId: string,
     status: TaskStatus,
-    options?: { forceCleanup?: boolean }
+    options?: { forceCleanup?: boolean; keepWorktree?: boolean }
   ): Promise<IPCResult & { worktreeExists?: boolean; worktreePath?: string }> =>
     ipcRenderer.invoke(IPC_CHANNELS.TASK_UPDATE_STATUS, taskId, status, options),
 
@@ -370,5 +376,12 @@ export const createTaskAPI = (): TaskAPI => ({
     ipcRenderer.invoke(IPC_CHANNELS.MERGE_ANALYTICS_GET_PATTERNS, projectId, limit),
 
   exportMergeAnalytics: (projectId: string, options: MergeAnalyticsExportOptions): Promise<IPCResult<{ path: string }>> =>
-    ipcRenderer.invoke(IPC_CHANNELS.MERGE_ANALYTICS_EXPORT, projectId, options)
+    ipcRenderer.invoke(IPC_CHANNELS.MERGE_ANALYTICS_EXPORT, projectId, options),
+
+  // Project Health
+  getProjectHealth: (projectId: string): Promise<IPCResult<ProjectHealth>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.HEALTH_GET_PROJECT_HEALTH, projectId),
+
+  getHealthSummary: (projectId: string): Promise<IPCResult<ProjectHealthSummary>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.HEALTH_GET_SUMMARY, projectId)
 });

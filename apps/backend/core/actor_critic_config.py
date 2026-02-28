@@ -18,14 +18,13 @@ Dependencies:
 Usage:
     from core.actor_critic_config import validate_actor_critic_config
 
-    # Validate configuration (raises SystemExit if invalid)
+    # Validate configuration (raises RuntimeError if invalid)
     validate_actor_critic_config()
 """
 
 import os
 import shutil
 from dataclasses import dataclass
-from typing import Optional
 
 
 @dataclass
@@ -151,7 +150,9 @@ def get_actor_critic_status() -> dict:
         return status
 
     if not npx_available:
-        status["reason"] = "npx command not found. Install Node.js/npm to use Actor-Critic MCP."
+        status["reason"] = (
+            "npx command not found. Install Node.js/npm to use Actor-Critic MCP."
+        )
         return status
 
     status["available"] = True
@@ -163,15 +164,15 @@ def validate_actor_critic_config() -> None:
     Validate Actor-Critic MCP configuration from environment.
 
     This function is designed to be called at application startup to validate
-    the Actor-Critic MCP configuration. It will raise SystemExit if the
+    the Actor-Critic MCP configuration. It will raise RuntimeError if the
     configuration is invalid when the feature is enabled.
 
     Raises:
-        SystemExit: If configuration is invalid when ACTOR_CRITIC_MCP_ENABLED is true
+        RuntimeError: If configuration is invalid when ACTOR_CRITIC_MCP_ENABLED is true
 
     Example:
         >>> from core.actor_critic_config import validate_actor_critic_config
-        >>> validate_actor_critic_config()  # Raises SystemExit if invalid
+        >>> validate_actor_critic_config()  # Raises RuntimeError if invalid
     """
     config = ActorCriticConfig.from_env()
 
@@ -182,9 +183,10 @@ def validate_actor_critic_config() -> None:
     # Validate configuration when enabled
     errors = config.get_validation_errors()
     if errors:
-        error_msg = "Actor-Critic MCP configuration validation failed:\n" + "\n".join(f"  - {e}" for e in errors)
-        print(f"ERROR: {error_msg}")
-        raise SystemExit(1)
+        error_msg = "Actor-Critic MCP configuration validation failed:\n" + "\n".join(
+            f"  - {e}" for e in errors
+        )
+        raise RuntimeError(error_msg)
 
     # Configuration is valid
     print(f"Actor-Critic MCP configuration validated: {config.get_status_summary()}")

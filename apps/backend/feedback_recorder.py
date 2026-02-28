@@ -9,6 +9,7 @@ This script is called by the frontend when users provide feedback on agent outpu
 Usage:
     python feedback_recorder.py --feedback-type accepted --agent-type planner --task-description "Add login feature"
     python feedback_recorder.py --feedback-type modified --agent-type coder --task-description "Fix button" --context '{"issue": "too verbose"}'
+    python feedback_recorder.py --feedback-type accepted --agent-type planner --task-description "Test" --rating 5
 
 The script calls save_feedback() from memory_manager to update the user's preference profile.
 """
@@ -55,6 +56,12 @@ def parse_args():
         "--project-dir",
         default=None,
         help="Project directory path (optional, inferred from current directory if not provided)",
+    )
+    parser.add_argument(
+        "--rating",
+        type=int,
+        default=None,
+        help="Optional rating (1-5 for stars, or 0/1 for thumbs down/up)",
     )
 
     return parser.parse_args()
@@ -147,6 +154,7 @@ async def record_feedback(args):
             task_description=args.task_description,
             agent_type=args.agent_type,
             context=context,
+            rating=args.rating,
         )
 
         if result:

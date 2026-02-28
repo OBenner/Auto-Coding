@@ -188,6 +188,7 @@ export const IPC_CHANNELS = {
   ROADMAP_STOP: 'roadmap:stop',
   ROADMAP_UPDATE_FEATURE: 'roadmap:updateFeature',
   ROADMAP_CONVERT_TO_SPEC: 'roadmap:convertToSpec',
+  COMPETITOR_ANALYSIS_SAVE: 'roadmap:competitorAnalysisSave',
 
   // Roadmap events (main -> renderer)
   ROADMAP_PROGRESS: 'roadmap:progress',
@@ -460,15 +461,28 @@ export const IPC_CHANNELS = {
   GITHUB_TRIAGE_COMPLETE: 'github:triage:complete',
   GITHUB_TRIAGE_ERROR: 'github:triage:error',
 
+  // GitHub Code Review operations
+  GITHUB_CODE_REVIEW_TRIGGER: 'github:code-review:trigger',
+
+  // GitHub Code Review events (main -> renderer)
+  GITHUB_CODE_REVIEW_PROGRESS: 'github:code-review:progress',
+  GITHUB_CODE_REVIEW_COMPLETE: 'github:code-review:complete',
+  GITHUB_CODE_REVIEW_ERROR: 'github:code-review:error',
+
   // Merge Analytics operations
   MERGE_ANALYTICS_GET_HISTORY: 'mergeAnalytics:getHistory',
   MERGE_ANALYTICS_GET_SUMMARY: 'mergeAnalytics:getSummary',
   MERGE_ANALYTICS_GET_PATTERNS: 'mergeAnalytics:getPatterns',
   MERGE_ANALYTICS_EXPORT: 'mergeAnalytics:export',
 
+  // Project Health operations
+  HEALTH_GET_PROJECT_HEALTH: 'health:getProjectHealth',
+  HEALTH_GET_SUMMARY: 'health:getSummary',
+
   // Productivity Analytics operations
   PRODUCTIVITY_ANALYTICS_GET_SUMMARY: 'productivityAnalytics:getSummary',
   PRODUCTIVITY_ANALYTICS_GET_TRENDS: 'productivityAnalytics:getTrends',
+  PRODUCTIVITY_ANALYTICS_GET_FAILURE_METRICS: 'productivityAnalytics:getFailureMetrics',
   PRODUCTIVITY_ANALYTICS_EXPORT: 'productivityAnalytics:export',
 
   // Memory Infrastructure status (LadybugDB - no Docker required)
@@ -524,6 +538,10 @@ export const IPC_CHANNELS = {
   INSIGHTS_NEW_SESSION: 'insights:newSession',
   INSIGHTS_SWITCH_SESSION: 'insights:switchSession',
   INSIGHTS_DELETE_SESSION: 'insights:deleteSession',
+  INSIGHTS_DELETE_SESSIONS: 'insights:deleteSessions',
+  INSIGHTS_ARCHIVE_SESSION: 'insights:archiveSession',
+  INSIGHTS_ARCHIVE_SESSIONS: 'insights:archiveSessions',
+  INSIGHTS_UNARCHIVE_SESSION: 'insights:unarchiveSession',
   INSIGHTS_RENAME_SESSION: 'insights:renameSession',
   INSIGHTS_UPDATE_MODEL_CONFIG: 'insights:updateModelConfig',
 
@@ -623,6 +641,24 @@ export const IPC_CHANNELS = {
   TEMPLATE_PREVIEW: 'template:preview',
   TEMPLATE_CREATE_SPEC: 'template:createSpec',
   TEMPLATE_SUGGEST: 'template:suggest',
+
+  // Pattern operations (codebase pattern learning)
+  PATTERN_LIST: 'pattern:list',
+  PATTERN_GET_CATEGORIES: 'pattern:getCategories',
+  PATTERN_GET_DETAILS: 'pattern:getDetails',
+  PATTERN_APPROVE: 'pattern:approve',
+  PATTERN_OVERRIDE: 'pattern:override',
+  PATTERN_DELETE: 'pattern:delete',
+
+  // Custom template operations (user-created)
+  TEMPLATE_CUSTOM_LIST: 'template:custom:list',
+  TEMPLATE_CUSTOM_SAVE: 'template:custom:save',
+  TEMPLATE_CUSTOM_UPDATE: 'template:custom:update',
+  TEMPLATE_CUSTOM_DELETE: 'template:custom:delete',
+  TEMPLATE_CUSTOM_EXPORT: 'template:custom:export',
+  TEMPLATE_CUSTOM_IMPORT: 'template:custom:import',
+  TEMPLATE_CUSTOM_TEST: 'template:custom:test',
+
 
   // Session Replay operations
   SESSION_REPLAY_LIST: 'sessionReplay:list',

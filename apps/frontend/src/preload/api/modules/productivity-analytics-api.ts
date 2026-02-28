@@ -4,6 +4,7 @@ import type {
   ProductivityTrendPoint,
   ProductivityAnalyticsExportOptions,
   ProductivityAnalyticsFilter,
+  FailureMetrics,
   IPCResult
 } from '../../../shared/types';
 import { invokeIpc } from './ipc-utils';
@@ -14,6 +15,7 @@ import { invokeIpc } from './ipc-utils';
 export interface ProductivityAnalyticsAPI {
   getProductivitySummary: (projectId: string, filter?: ProductivityAnalyticsFilter) => Promise<IPCResult<ProductivitySummary>>;
   getProductivityTrends: (projectId: string, filter?: ProductivityAnalyticsFilter) => Promise<IPCResult<ProductivityTrendPoint[]>>;
+  getFailureMetrics: (projectId: string) => Promise<IPCResult<FailureMetrics>>;
   exportProductivityAnalytics: (projectId: string, options: ProductivityAnalyticsExportOptions) => Promise<IPCResult<string>>;
 }
 
@@ -31,6 +33,10 @@ export const createProductivityAnalyticsAPI = (): ProductivityAnalyticsAPI => ({
     const windowDays = filter?.window_days || 30;
     const granularity = filter?.granularity || 'daily';
     return invokeIpc(IPC_CHANNELS.PRODUCTIVITY_ANALYTICS_GET_TRENDS, projectId, windowDays, granularity);
+  },
+
+  getFailureMetrics: (projectId: string): Promise<IPCResult<FailureMetrics>> => {
+    return invokeIpc(IPC_CHANNELS.PRODUCTIVITY_ANALYTICS_GET_FAILURE_METRICS, projectId);
   },
 
   exportProductivityAnalytics: (projectId: string, options: ProductivityAnalyticsExportOptions): Promise<IPCResult<string>> => {

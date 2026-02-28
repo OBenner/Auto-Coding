@@ -146,10 +146,22 @@ function setupTestProject(): void {
   mkdirSync(path.join(TEST_PROJECT_PATH, "auto-claude", "specs"), { recursive: true });
 }
 
-// Cleanup test directories
-function cleanupTestDirs(): void {
-  if (existsSync(TEST_DIR)) {
-    rmSync(TEST_DIR, { recursive: true, force: true });
+// Cleanup test directories with retry for Windows ENOTEMPTY errors
+async function cleanupTestDirs(): Promise<void> {
+  if (!existsSync(TEST_DIR)) return;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      rmSync(TEST_DIR, { recursive: true, force: true });
+      return;
+    } catch (err: unknown) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if ((code === "ENOTEMPTY" || code === "EPERM") && attempt < 2) {
+        // Windows may hold file locks briefly; wait and retry
+        await new Promise((resolve) => setTimeout(resolve, 200));
+        continue;
+      }
+      throw err;
+    }
   }
 }
 
@@ -183,7 +195,7 @@ describe("IPC Handlers", { timeout: 15000 }, () => {
   };
 
   beforeEach(async () => {
-    cleanupTestDirs();
+    await cleanupTestDirs();
     setupTestProject();
     mkdirSync(path.join(TEST_DIR, "userData", "store"), { recursive: true });
 
@@ -243,8 +255,8 @@ describe("IPC Handlers", { timeout: 15000 }, () => {
     vi.resetModules();
   });
 
-  afterEach(() => {
-    cleanupTestDirs();
+  afterEach(async () => {
+    await cleanupTestDirs();
     vi.clearAllMocks();
   });
 
@@ -300,12 +312,13 @@ describe("IPC Handlers", { timeout: 15000 }, () => {
       writeFileSync(storeFile, JSON.stringify({ projects: [], settings: {} }));
 
       // Wait for ProjectStore's async initialization to complete (reads the file above).
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      // Use a longer delay to avoid race conditions on slower CI runners.
+      await new Promise((resolve) => setTimeout(resolve, 1000));
 
       // Add project twice
       const result1 = await ipcMain.invokeHandler("project:add", {}, TEST_PROJECT_PATH);
       // Wait for the fire-and-forget saveAsync to flush
-      await new Promise((resolve) => setTimeout(resolve, 200));
+      await new Promise((resolve) => setTimeout(resolve, 500));
       const result2 = await ipcMain.invokeHandler("project:add", {}, TEST_PROJECT_PATH);
 
       const data1 = (result1 as { data: { id: string } }).data;
