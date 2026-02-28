@@ -30,6 +30,9 @@ Usage:
 from __future__ import annotations
 
 import json
+import os
+import tempfile
+from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
@@ -126,9 +129,7 @@ class ProjectConfig:
             name=data["name"],
             path=data["path"],
             enabled=data.get("enabled", True),
-            relationship=ProjectRelationship(
-                data.get("relationship", "independent")
-            ),
+            relationship=ProjectRelationship(data.get("relationship", "independent")),
             dependencies=data.get("dependencies", []),
             description=data.get("description"),
             tags=data.get("tags", []),
@@ -283,11 +284,11 @@ class WorkspaceConfig:
                     in_degree[project.name] += 1
 
         # Start with projects that have no dependencies
-        queue = [name for name, degree in in_degree.items() if degree == 0]
+        queue = deque(name for name, degree in in_degree.items() if degree == 0)
         result = []
 
         while queue:
-            current = queue.pop(0)
+            current = queue.popleft()
             result.append(current)
 
             # Reduce in-degree for dependents
@@ -311,10 +312,18 @@ class WorkspaceConfig:
             project: Project configuration to add
 
         Raises:
-            ValueError: If project name already exists
+            ValueError: If project name already exists or dependencies are invalid
         """
         if self.get_project(project.name):
             raise ValueError(f"Project '{project.name}' already exists")
+
+        # Validate dependencies reference existing projects
+        existing_names = {p.name for p in self.projects}
+        for dep in project.dependencies:
+            if dep not in existing_names:
+                raise ValueError(
+                    f"Project '{project.name}' depends on unknown project '{dep}'"
+                )
 
         self.projects.append(project)
         self.updated_at = datetime.now(timezone.utc).isoformat()
@@ -341,8 +350,7 @@ class WorkspaceConfig:
         if dependents:
             dep_names = [p.name for p in dependents]
             raise ValueError(
-                f"Cannot remove project '{name}': "
-                f"projects {dep_names} depend on it"
+                f"Cannot remove project '{name}': projects {dep_names} depend on it"
             )
 
         self.projects.remove(project)
@@ -383,14 +391,22 @@ class WorkspaceConfig:
 
     def save(self, path: Path | str) -> None:
         """
-        Save workspace configuration to file.
+        Save workspace configuration to file using atomic write.
 
         Args:
             path: File path to save to
         """
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(self.to_json())
+        content = self.to_json()
+        fd, tmp_path = tempfile.mkstemp(dir=str(path.parent), suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                f.write(content)
+            Path(tmp_path).replace(path)
+        except BaseException:
+            Path(tmp_path).unlink(missing_ok=True)
+            raise
 
     @classmethod
     def load(cls, path: Path | str) -> WorkspaceConfig:

@@ -30,7 +30,10 @@ from agents import (
     get_graphiti_context,
     # Utility functions
     get_latest_commit,
+    get_workspace_project_dirs,
     load_implementation_plan,
+    # Workspace
+    load_workspace_context,
     post_session_processing,
     # Session management
     run_agent_session,
@@ -40,9 +43,6 @@ from agents import (
     save_session_memory,
     save_session_to_graphiti,
     sync_spec_to_source,
-    # Workspace
-    load_workspace_context,
-    get_workspace_project_dirs,
 )
 
 # Ensure all exports are available at module level

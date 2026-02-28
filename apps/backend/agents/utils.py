@@ -112,11 +112,7 @@ def get_workspace_project_dirs(workspace_context: dict | None) -> list[Path]:
         return []
 
     projects = workspace_context.get("projects", [])
-    return [
-        Path(proj["path"])
-        for proj in projects
-        if proj.get("enabled", True)
-    ]
+    return [Path(proj["path"]) for proj in projects if proj.get("enabled", True)]
 
 
 def sync_spec_to_source(spec_dir: Path, source_spec_dir: Path | None) -> bool:

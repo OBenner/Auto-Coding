@@ -38,6 +38,8 @@ Usage:
 from __future__ import annotations
 
 import json
+import os
+import tempfile
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -192,8 +194,9 @@ class WorkspaceManager:
         """
         base_dir = base_dir or Path(".auto-claude/workspaces")
         workspace_dir = base_dir / name
+        config_file = workspace_dir / "workspace.json"
 
-        if workspace_dir.exists():
+        if config_file.exists():
             raise ValueError(f"Workspace '{name}' already exists at {workspace_dir}")
 
         config = WorkspaceConfig(
@@ -232,7 +235,7 @@ class WorkspaceManager:
             )
 
         config = WorkspaceConfig.load(config_file)
-        base_dir = workspace_dir.parent
+        base_dir = config.base_dir or workspace_dir.parent
 
         manager = cls(config, base_dir)
 
@@ -299,9 +302,7 @@ class WorkspaceManager:
             List of ProjectState objects for enabled projects
         """
         return [
-            state
-            for state in self._project_states.values()
-            if state.config.enabled
+            state for state in self._project_states.values() if state.config.enabled
         ]
 
     def add_project(
@@ -428,7 +429,7 @@ class WorkspaceManager:
         self._save_state()
 
     def _save_state(self) -> None:
-        """Save workspace state to disk."""
+        """Save workspace state to disk using atomic write."""
         state = {
             "workspace": self.config.name,
             "last_saved": datetime.now(timezone.utc).isoformat(),
@@ -438,7 +439,16 @@ class WorkspaceManager:
             },
         }
 
-        self.state_file.write_text(json.dumps(state, indent=2))
+        content = json.dumps(state, indent=2)
+        # Atomic write: write to temp file then rename
+        fd, tmp_path = tempfile.mkstemp(dir=str(self.state_file.parent), suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                f.write(content)
+            Path(tmp_path).replace(self.state_file)
+        except BaseException:
+            Path(tmp_path).unlink(missing_ok=True)
+            raise
 
     def _load_state(self) -> None:
         """Load workspace state from disk."""
@@ -481,7 +491,9 @@ class WorkspaceManager:
         # Check if project directories exist
         for project in self.config.projects:
             if not Path(project.path).exists():
-                errors.append(f"Project '{project.name}' path does not exist: {project.path}")
+                errors.append(
+                    f"Project '{project.name}' path does not exist: {project.path}"
+                )
 
         # Check for circular dependencies
         try:
@@ -492,7 +504,9 @@ class WorkspaceManager:
         # Check if state directories are accessible
         for name, state in self._project_states.items():
             if not state.state_dir.exists():
-                errors.append(f"State directory missing for project '{name}': {state.state_dir}")
+                errors.append(
+                    f"State directory missing for project '{name}': {state.state_dir}"
+                )
 
         return errors
 

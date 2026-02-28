@@ -272,6 +272,16 @@ export class WorkspaceStore {
       throw new Error(`Workspace '${name}' already exists`);
     }
 
+    // Clear pending deletion flag so the new workspace is not silently lost
+    if (this.pendingDelete.has(name)) {
+      this.pendingDelete.delete(name);
+      const timer = this.pendingDeleteTimers.get(name);
+      if (timer) {
+        clearTimeout(timer);
+        this.pendingDeleteTimers.delete(name);
+      }
+    }
+
     const now = new Date().toISOString();
     const workspace: Workspace = {
       name,
@@ -309,6 +319,7 @@ export class WorkspaceStore {
     // Add project with defaults
     const newProject: WorkspaceProject = {
       ...project,
+      relationship: project.relationship ?? 'independent',
       enabled: project.enabled ?? true,
       dependencies: project.dependencies ?? [],
       tags: project.tags ?? [],
@@ -358,6 +369,17 @@ export class WorkspaceStore {
     const project = workspace.projects.find(p => p.name === projectName);
     if (!project) {
       throw new Error(`Project '${projectName}' not found in workspace '${workspaceName}'`);
+    }
+
+    // Prevent name changes that would break dependency references
+    if (updates.name && updates.name !== projectName) {
+      const dependents = workspace.projects.filter(p => p.dependencies.includes(projectName));
+      if (dependents.length > 0) {
+        const depNames = dependents.map(p => p.name).join(', ');
+        throw new Error(
+          `Cannot rename project '${projectName}': projects [${depNames}] depend on it`
+        );
+      }
     }
 
     // Apply updates

@@ -2193,25 +2193,15 @@ def get_workspace_config(
     search_paths = []
 
     if workspace_name:
-        # Search for specific workspace
-        search_paths.extend(
-            [
-                project_dir / ".auto-claude" / "workspaces" / workspace_name,
-                Path(".auto-claude") / "workspaces" / workspace_name,
-            ]
+        # Search for specific workspace under project_dir
+        search_paths.append(
+            project_dir / ".auto-claude" / "workspaces" / workspace_name,
         )
     else:
         # Search for default workspace (first one found)
         workspaces_dir = project_dir / ".auto-claude" / "workspaces"
         if workspaces_dir.exists():
             for workspace_dir in workspaces_dir.iterdir():
-                if workspace_dir.is_dir():
-                    search_paths.append(workspace_dir)
-
-        # Also check global workspaces
-        global_workspaces_dir = Path(".auto-claude") / "workspaces"
-        if global_workspaces_dir.exists():
-            for workspace_dir in global_workspaces_dir.iterdir():
                 if workspace_dir.is_dir():
                     search_paths.append(workspace_dir)
 
@@ -2257,25 +2247,15 @@ def get_workspace_manager(
     search_paths = []
 
     if workspace_name:
-        # Search for specific workspace
-        search_paths.extend(
-            [
-                project_dir / ".auto-claude" / "workspaces" / workspace_name,
-                Path(".auto-claude") / "workspaces" / workspace_name,
-            ]
+        # Search for specific workspace under project_dir
+        search_paths.append(
+            project_dir / ".auto-claude" / "workspaces" / workspace_name,
         )
     else:
         # Search for default workspace (first one found)
         workspaces_dir = project_dir / ".auto-claude" / "workspaces"
         if workspaces_dir.exists():
             for workspace_dir in workspaces_dir.iterdir():
-                if workspace_dir.is_dir():
-                    search_paths.append(workspace_dir)
-
-        # Also check global workspaces
-        global_workspaces_dir = Path(".auto-claude") / "workspaces"
-        if global_workspaces_dir.exists():
-            for workspace_dir in global_workspaces_dir.iterdir():
                 if workspace_dir.is_dir():
                     search_paths.append(workspace_dir)
 

@@ -285,7 +285,7 @@ Examples:
     # Detect and load workspace for multi-project support
     workspace_manager = None
     workspace_context = None
-    if args.workspace or project_dir:
+    if args.workspace:
         try:
             workspace_manager = get_workspace_manager(
                 project_dir, workspace_name=args.workspace

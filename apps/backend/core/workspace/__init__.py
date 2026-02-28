@@ -17,13 +17,21 @@ Public API exported from sub-modules.
 """
 
 import importlib.util
-import sys
 from pathlib import Path
 
 # Import merge functions from workspace.py (which coexists with this package)
 # We use importlib to explicitly load workspace.py since Python prefers the package
 _workspace_file = Path(__file__).parent.parent / "workspace.py"
+if not _workspace_file.exists():
+    raise ImportError(
+        f"workspace.py not found at {_workspace_file}. "
+        "The core.workspace package requires workspace.py to coexist."
+    )
+
 _spec = importlib.util.spec_from_file_location("workspace_module", _workspace_file)
+if _spec is None or _spec.loader is None:
+    raise ImportError(f"Failed to create module spec for {_workspace_file}")
+
 _workspace_module = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_workspace_module)
 merge_existing_build = _workspace_module.merge_existing_build
