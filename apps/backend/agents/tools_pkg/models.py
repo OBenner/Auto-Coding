@@ -163,10 +163,10 @@ AGENT_CONFIGS = {
     },
     "spec_critic": {
         "tools": BASE_READ_TOOLS,
-        "mcp_servers": [],  # Self-critique, no external tools
+        "mcp_servers": [],  # No required MCP; actor-critic-thinking added dynamically when enabled
         "auto_claude_tools": [],
         "thinking_default": "ultrathink",
-        "actor-critic-thinking": True,
+        "actor-critic-thinking": True,  # Enables actor-critic MCP server when available
     },
     "spec_discovery": {
         "tools": BASE_READ_TOOLS + WEB_TOOLS,

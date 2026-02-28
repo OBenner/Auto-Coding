@@ -351,22 +351,22 @@ When analyzing, think through:
 
 **Actor-Critic Thinking Pattern (if tool available):**
 
-> "I'll use the actor_critic_thinking tool to analyze this spec from multiple perspectives.
+> "I'll use the mcp__actor-critic-thinking__actor_critic_thinking tool to analyze this spec from multiple perspectives.
 >
 > **Round 1 (Actor)** - As a creative advocate, I'll identify the spec's strengths:
-> [Use actor_critic_thinking with role='actor', thoughtNumber=1, totalThoughts=5]
+> [Use mcp__actor-critic-thinking__actor_critic_thinking with role='actor', thoughtNumber=1, totalThoughts=5]
 >
 > **Round 2 (Critic)** - As an analytical evaluator, I'll identify weaknesses:
-> [Use actor_critic_thinking with role='critic', thoughtNumber=2, totalThoughts=5]
+> [Use mcp__actor-critic-thinking__actor_critic_thinking with role='critic', thoughtNumber=2, totalThoughts=5]
 >
 > **Round 3 (Actor)** - Responding to the critic's concerns:
-> [Use actor_critic_thinking with role='actor', thoughtNumber=3, totalThoughts=5, nextRoundNeeded=true]
+> [Use mcp__actor-critic-thinking__actor_critic_thinking with role='actor', thoughtNumber=3, totalThoughts=5, nextRoundNeeded=true]
 >
 > **Round 4 (Critic)** - Evaluating remaining concerns:
-> [Use actor_critic_thinking with role='critic', thoughtNumber=4, totalThoughts=5, nextRoundNeeded=false]
+> [Use mcp__actor-critic-thinking__actor_critic_thinking with role='critic', thoughtNumber=4, totalThoughts=5, nextRoundNeeded=false]
 >
 > **Round 5 (Actor)** - Final synthesis with balanced recommendations:
-> [Use actor_critic_thinking with role='actor', thoughtNumber=5, totalThoughts=5]
+> [Use mcp__actor-critic-thinking__actor_critic_thinking with role='actor', thoughtNumber=5, totalThoughts=5]
 >
 > After multi-round analysis, I've identified [N] issues requiring fixes."
 

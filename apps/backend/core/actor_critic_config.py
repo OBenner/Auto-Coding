@@ -24,8 +24,9 @@ Usage:
 
 import logging
 import os
-import shutil
 from dataclasses import dataclass
+
+from core.platform import find_executable
 
 logger = logging.getLogger(__name__)
 
@@ -75,10 +76,13 @@ class ActorCriticConfig:
     def _check_npx_available(self) -> bool:
         """Check if npx command is available on the system.
 
+        Uses the centralized platform find_executable() for cross-platform
+        discovery (handles .cmd/.bat extensions on Windows, etc.).
+
         Returns:
-            bool: True if npx is found in PATH
+            bool: True if npx is found
         """
-        return shutil.which("npx") is not None
+        return find_executable("npx") is not None
 
     def get_validation_errors(self) -> list[str]:
         """Get list of validation errors for current configuration.
