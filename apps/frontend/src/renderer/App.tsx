@@ -48,6 +48,7 @@ import { QueueView } from './components/Scheduler/QueueView';
 import { Worktrees } from './components/Worktrees';
 import { SessionList } from './components/session-replay/SessionList';
 import { AgentTools } from './components/AgentTools';
+import { ProjectHealth } from './components/ProjectHealth';
 import { ProductivityDashboard } from './components/analytics/ProductivityDashboard';
 import { MergeAnalyticsDashboard } from './components/merge-analytics/MergeAnalyticsDashboard';
 import { FeedbackDashboard } from './components/FeedbackDashboard';
@@ -1088,6 +1089,9 @@ export function App() {
                   <Worktrees projectId={activeProjectId || selectedProjectId!} />
                 )}
                 {activeView === 'agent-tools' && <AgentTools />}
+                {activeView === 'projectHealth' && (activeProjectId || selectedProjectId) && (
+                  <ProjectHealth projectId={activeProjectId || selectedProjectId!} />
+                )}
                 {activeView === 'sessions' && (
                   <SessionList
                     projectId={activeProjectId || selectedProjectId!}

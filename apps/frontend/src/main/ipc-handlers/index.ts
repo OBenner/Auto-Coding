@@ -39,6 +39,7 @@ import { registerTerminalWorktreeIpcHandlers } from './terminal';
 import { registerMergeAnalyticsHandlers } from './merge-analytics-handlers';
 import { registerAnalyticsHandlers } from './analytics-handlers';
 import { registerTokenStatsHandlers } from './token-stats-handler';
+import { registerHealthHandlers } from './health-handlers';
 import { registerTemplateHandlers } from './template-handlers';
 import { registerPatternHandlers } from './pattern-handlers';
 import { registerSessionReplayHandlers } from './session-replay-handlers';
@@ -147,6 +148,9 @@ export function setupIpcHandlers(
   // Token statistics handlers
   registerTokenStatsHandlers();
 
+  // Health dashboard handlers
+  registerHealthHandlers();
+
   // Template library handlers
   registerTemplateHandlers();
 
@@ -194,6 +198,7 @@ export {
   registerMergeAnalyticsHandlers,
   registerAnalyticsHandlers,
   registerTokenStatsHandlers,
+  registerHealthHandlers,
   registerTemplateHandlers,
   registerPatternHandlers,
   registerSessionReplayHandlers,

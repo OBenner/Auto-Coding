@@ -475,6 +475,10 @@ export const IPC_CHANNELS = {
   MERGE_ANALYTICS_GET_PATTERNS: 'mergeAnalytics:getPatterns',
   MERGE_ANALYTICS_EXPORT: 'mergeAnalytics:export',
 
+  // Project Health operations
+  HEALTH_GET_PROJECT_HEALTH: 'health:getProjectHealth',
+  HEALTH_GET_SUMMARY: 'health:getSummary',
+
   // Productivity Analytics operations
   PRODUCTIVITY_ANALYTICS_GET_SUMMARY: 'productivityAnalytics:getSummary',
   PRODUCTIVITY_ANALYTICS_GET_TRENDS: 'productivityAnalytics:getTrends',

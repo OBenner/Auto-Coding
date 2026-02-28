@@ -56,6 +56,10 @@ import type {
   MergeAnalyticsExportOptions
 } from './merge-analytics';
 import type {
+  ProjectHealth,
+  ProjectHealthSummary
+} from './health';
+import type {
   ProductivitySummary,
   ProductivityTrendPoint,
   ProductivityAnalyticsFilter,
@@ -215,6 +219,10 @@ export interface ElectronAPI {
   getMergeSummary: (projectId: string, filter?: MergeAnalyticsFilter) => Promise<IPCResult<MergeAnalytics>>;
   getConflictPatterns: (projectId: string, limit?: number) => Promise<IPCResult<ConflictPattern[]>>;
   exportMergeAnalytics: (projectId: string, options: MergeAnalyticsExportOptions) => Promise<IPCResult<{ path: string }>>;
+
+  // Project health operations
+  getProjectHealth: (projectId: string) => Promise<IPCResult<ProjectHealth>>;
+  getHealthSummary: (projectId: string) => Promise<IPCResult<ProjectHealthSummary>>;
 
   // Event listeners
   onTaskProgress: (callback: (taskId: string, plan: ImplementationPlan) => void) => () => void;
