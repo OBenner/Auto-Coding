@@ -6,6 +6,7 @@ CLI commands for building specs and handling the main build flow.
 """
 
 import asyncio
+import os
 import sys
 from pathlib import Path
 
@@ -56,6 +57,7 @@ def handle_build_command(
     project_dir: Path,
     spec_dir: Path,
     model: str,
+    provider: str | None,
     max_iterations: int | None,
     verbose: bool,
     force_isolated: bool,
@@ -64,6 +66,7 @@ def handle_build_command(
     skip_qa: bool,
     force_bypass_approval: bool,
     base_branch: str | None = None,
+    restart_from: str | None = None,
 ) -> None:
     """
     Handle the main build command.
@@ -72,6 +75,7 @@ def handle_build_command(
         project_dir: Project root directory
         spec_dir: Spec directory path
         model: Model to use (used as default; may be overridden by task_metadata.json)
+        provider: AI provider to use (claude, litellm, openrouter, zhipuai)
         max_iterations: Maximum number of iterations (None for unlimited)
         verbose: Enable verbose output
         force_isolated: Force isolated workspace mode
@@ -80,6 +84,7 @@ def handle_build_command(
         skip_qa: Skip automatic QA validation
         force_bypass_approval: Force bypass approval check
         base_branch: Base branch for worktree creation (default: current branch)
+        restart_from: Subtask ID to restart from (None for normal execution)
     """
     # Lazy imports to avoid loading heavy modules
     from agents import run_autonomous_agent, sync_spec_to_source
@@ -95,6 +100,30 @@ def handle_build_command(
 
     from .utils import print_banner, validate_environment
 
+    # Set provider from CLI argument if provided
+    if provider:
+        from core.providers.config import AIEngineProvider
+
+        valid_providers = [p.value for p in AIEngineProvider]
+        if provider not in valid_providers:
+            print(
+                f"\nError: Invalid provider '{provider}'. Must be one of: {', '.join(valid_providers)}"
+            )
+            sys.exit(1)
+        os.environ["AI_ENGINE_PROVIDER"] = provider
+        debug("run.py", f"Provider set from CLI: {provider}")
+        # Map CLI --model to provider-specific env var for consistent display
+        if model:
+            model_env_map = {
+                "claude": "CLAUDE_MODEL",
+                "litellm": "LITELLM_MODEL",
+                "openrouter": "OPENROUTER_MODEL",
+                "zhipuai": "ZHIPUAI_MODEL",
+            }
+            env_key = model_env_map.get(provider)
+            if env_key:
+                os.environ[env_key] = model
+
     # Get the resolved model for the planning phase (first phase of build)
     # This respects task_metadata.json phase configuration from the UI
     planning_model = get_phase_model(spec_dir, "planning", model)
@@ -104,6 +133,17 @@ def handle_build_command(
     print_banner()
     print(f"\nProject directory: {project_dir}")
     print(f"Spec: {spec_dir.name}")
+
+    # Get current provider for display
+    from core.providers.config import get_provider_config
+
+    provider_config = get_provider_config()
+    provider_display = (
+        provider_config.get_provider_summary() if provider_config else "unknown"
+    )
+
+    # Show provider and model information
+    print(f"Provider: {provider_display}")
     # Show phase-specific models if they differ
     if planning_model != coding_model or coding_model != qa_model:
         print(
@@ -243,6 +283,7 @@ def handle_build_command(
                 max_iterations=max_iterations,
                 verbose=verbose,
                 source_spec_dir=source_spec_dir,  # For syncing progress back to main project
+                restart_from=restart_from,  # Restart from specific subtask if specified
             )
         )
         debug_success("run.py", "Agent execution completed")

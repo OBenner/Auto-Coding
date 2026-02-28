@@ -573,6 +573,7 @@ async def run_autonomous_agent(
     max_iterations: int | None = None,
     verbose: bool = False,
     source_spec_dir: Path | None = None,
+    restart_from: str | None = None,
 ) -> None:
     """
     Run the autonomous agent loop with automatic memory management.
@@ -587,6 +588,7 @@ async def run_autonomous_agent(
         max_iterations: Maximum number of iterations (None for unlimited)
         verbose: Whether to show detailed output
         source_spec_dir: Original spec directory in main project (for syncing from worktree)
+        restart_from: Subtask ID to restart from (None for normal execution)
     """
     # Set environment variable for security hooks to find the correct project directory
     # This is needed because os.getcwd() may return the wrong directory in worktree mode
@@ -631,6 +633,41 @@ async def run_autonomous_agent(
     from prompts_pkg.prompts import is_first_run
 
     first_run = is_first_run(spec_dir)
+
+    # Restore provider config if restarting
+    if restart_from:
+        try:
+            from core.providers.config import get_provider_config
+            from implementation_plan import ImplementationPlan
+
+            plan_file = spec_dir / "implementation_plan.json"
+            if plan_file.exists():
+                plan = ImplementationPlan.load(plan_file)
+                if plan.provider_config:
+                    # Restore provider and model from saved config
+                    provider_config = get_provider_config()
+                    saved_provider = plan.provider_config.get("provider")
+                    saved_model = plan.provider_config.get("model")
+
+                    if saved_provider:
+                        os.environ["AI_ENGINE_PROVIDER"] = saved_provider
+                        logger.info(f"Restored provider from config: {saved_provider}")
+                    if saved_model:
+                        # Restore model via provider-specific env var
+                        model_env_map = {
+                            "claude": "CLAUDE_MODEL",
+                            "litellm": "LITELLM_MODEL",
+                            "openrouter": "OPENROUTER_MODEL",
+                            "zhipuai": "ZHIPUAI_MODEL",
+                        }
+                        env_key = model_env_map.get(
+                            saved_provider or provider_config.provider
+                        )
+                        if env_key:
+                            os.environ[env_key] = saved_model
+                        logger.info(f"Restored model from config: {saved_model}")
+        except Exception as e:
+            logger.warning(f"Failed to restore provider config: {e}")
 
     # Track which phase we're in for logging
     current_log_phase = LogPhase.CODING
@@ -723,6 +760,10 @@ async def run_autonomous_agent(
     while True:
         iteration += 1
 
+        # Clear restart_from after first iteration to continue normally
+        if iteration > 1 and restart_from:
+            restart_from = None
+
         # Check for human intervention (PAUSE file)
         pause_file = spec_dir / HUMAN_INTERVENTION_FILE
         if pause_file.exists():
@@ -747,7 +788,7 @@ async def run_autonomous_agent(
             break
 
         # Get the next subtask to work on (planner sessions shouldn't bind to a subtask)
-        next_subtask = None if first_run else get_next_subtask(spec_dir)
+        next_subtask = None if first_run else get_next_subtask(spec_dir, restart_from)
         subtask_id = next_subtask.get("id") if next_subtask else None
 
         # Update status for this session
@@ -922,7 +963,7 @@ async def run_autonomous_agent(
                     for retry_attempt in range(3):
                         delay = (retry_attempt + 1) * 2  # 2s, 4s, 6s
                         await asyncio.sleep(delay)
-                        next_subtask = get_next_subtask(spec_dir)
+                        next_subtask = get_next_subtask(spec_dir, restart_from)
                         if next_subtask:
                             # Update subtask_id after successful retry
                             subtask_id = next_subtask.get("id")
@@ -1094,6 +1135,27 @@ async def run_autonomous_agent(
         if is_planning_phase and status != "error":
             valid, errors = _validate_and_fix_implementation_plan()
             if valid:
+                # Persist provider configuration to implementation plan
+                try:
+                    from core.providers.config import get_provider_config
+                    from implementation_plan import ImplementationPlan
+
+                    plan_file = spec_dir / "implementation_plan.json"
+                    if plan_file.exists():
+                        plan = ImplementationPlan.load(plan_file)
+                        provider_config = get_provider_config()
+                        if provider_config and not plan.provider_config:
+                            plan.provider_config = {
+                                "provider": provider_config.provider,
+                                "model": provider_config.get_model_for_provider(),
+                            }
+                            await plan.async_save(plan_file)
+                            logger.debug(
+                                "Provider config persisted to implementation_plan.json"
+                            )
+                except Exception as e:
+                    logger.warning(f"Failed to persist provider config to plan: {e}")
+
                 # Validate file paths in the newly created plan
                 path_issues = _validate_plan_file_paths(spec_dir, project_dir)
                 if (
@@ -1370,7 +1432,7 @@ async def run_autonomous_agent(
             )
 
             # Show next subtask info
-            next_subtask = get_next_subtask(spec_dir)
+            next_subtask = get_next_subtask(spec_dir, restart_from)
             if next_subtask:
                 subtask_id = next_subtask.get("id")
                 print(

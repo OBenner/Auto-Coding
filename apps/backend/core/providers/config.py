@@ -11,11 +11,12 @@ Supported Providers:
 - google: Google Gemini API - Gemini 2.0, Gemini 1.5 models
 - litellm: LiteLLM unified API - 100+ LLMs via single interface
 - openrouter: OpenRouter cloud routing - 400+ models with pay-per-use
+- zhipuai: Zhipu AI GLM models - Chinese language models (e.g., glm-4, glm-4-flash)
 - ollama: Ollama local models - Privacy-first local inference
 
 Environment Variables:
     # Core
-    AI_ENGINE_PROVIDER: Provider selection (claude|openai|google|litellm|openrouter|ollama, default: claude)
+    AI_ENGINE_PROVIDER: Provider selection (claude|openai|google|litellm|openrouter|zhipuai|ollama, default: claude)
 
     # Claude Agent SDK (default)
     ANTHROPIC_API_KEY: Required for Claude provider
@@ -39,6 +40,10 @@ Environment Variables:
     OPENROUTER_MODEL: Model identifier (default: anthropic/claude-sonnet-4)
     OPENROUTER_BASE_URL: API base URL (default: https://openrouter.ai/api/v1)
 
+    # Zhipu AI (GLM)
+    ZHIPUAI_API_KEY: Required for ZhipuAI provider
+    ZHIPUAI_MODEL: Model identifier (default: glm-4-flash)
+
     # Ollama
     OLLAMA_MODEL: Model identifier (e.g., llama3, deepseek-r1, codellama)
     OLLAMA_BASE_URL: API base URL (default: http://localhost:11434)
@@ -58,6 +63,7 @@ class AIEngineProvider(str, Enum):
     GOOGLE = "google"
     LITELLM = "litellm"
     OPENROUTER = "openrouter"
+    ZHIPUAI = "zhipuai"
     OLLAMA = "ollama"
 
 
@@ -65,6 +71,7 @@ class AIEngineProvider(str, Enum):
 DEFAULT_PROVIDER = "claude"
 DEFAULT_OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 DEFAULT_OPENROUTER_MODEL = "anthropic/claude-sonnet-4"
+DEFAULT_ZHIPUAI_MODEL = "glm-4-flash"
 DEFAULT_OPENAI_MODEL = "gpt-4o"
 DEFAULT_OLLAMA_BASE_URL = "http://localhost:11434"
 
@@ -102,6 +109,10 @@ class ProviderConfig:
     openrouter_api_key: str = ""
     openrouter_model: str = DEFAULT_OPENROUTER_MODEL
     openrouter_base_url: str = DEFAULT_OPENROUTER_BASE_URL
+
+    # Zhipu AI settings
+    zhipuai_api_key: str = ""
+    zhipuai_model: str = DEFAULT_ZHIPUAI_MODEL
 
     # Ollama settings
     ollama_model: str = ""
@@ -161,6 +172,10 @@ class ProviderConfig:
             "OPENROUTER_BASE_URL", DEFAULT_OPENROUTER_BASE_URL
         )
 
+        # Zhipu AI settings
+        zhipuai_api_key = os.environ.get("ZHIPUAI_API_KEY", "")
+        zhipuai_model = os.environ.get("ZHIPUAI_MODEL", DEFAULT_ZHIPUAI_MODEL)
+
         # Ollama settings
         ollama_model = os.environ.get("OLLAMA_MODEL", "")
         ollama_base_url = os.environ.get("OLLAMA_BASE_URL", DEFAULT_OLLAMA_BASE_URL)
@@ -196,6 +211,8 @@ class ProviderConfig:
             openrouter_api_key=openrouter_api_key,
             openrouter_model=openrouter_model,
             openrouter_base_url=openrouter_base_url,
+            zhipuai_api_key=zhipuai_api_key,
+            zhipuai_model=zhipuai_model,
             ollama_model=ollama_model,
             ollama_base_url=ollama_base_url,
             ollama_api_key=ollama_api_key,
@@ -218,6 +235,8 @@ class ProviderConfig:
             return bool(self.litellm_model)
         elif self.provider == AIEngineProvider.OPENROUTER.value:
             return bool(self.openrouter_api_key)
+        elif self.provider == AIEngineProvider.ZHIPUAI.value:
+            return bool(self.zhipuai_api_key)
         elif self.provider == AIEngineProvider.OLLAMA.value:
             return bool(self.ollama_model)
         return False
@@ -251,6 +270,11 @@ class ProviderConfig:
                 errors.append(
                     "OpenRouter provider requires OPENROUTER_API_KEY environment variable"
                 )
+        elif self.provider == AIEngineProvider.ZHIPUAI.value:
+            if not self.zhipuai_api_key:
+                errors.append(
+                    "ZhipuAI provider requires ZHIPUAI_API_KEY environment variable"
+                )
         elif self.provider == AIEngineProvider.OLLAMA.value:
             if not self.ollama_model:
                 errors.append(
@@ -273,6 +297,8 @@ class ProviderConfig:
             return f"LiteLLM ({self.litellm_model or 'no model configured'})"
         elif self.provider == AIEngineProvider.OPENROUTER.value:
             return f"OpenRouter ({self.openrouter_model})"
+        elif self.provider == AIEngineProvider.ZHIPUAI.value:
+            return f"ZhipuAI ({self.zhipuai_model})"
         elif self.provider == AIEngineProvider.OLLAMA.value:
             return f"Ollama ({self.ollama_model or 'no model configured'})"
         return f"Unknown ({self.provider})"
@@ -289,6 +315,8 @@ class ProviderConfig:
             return self.litellm_model or None
         elif self.provider == AIEngineProvider.OPENROUTER.value:
             return self.openrouter_model
+        elif self.provider == AIEngineProvider.ZHIPUAI.value:
+            return self.zhipuai_model
         elif self.provider == AIEngineProvider.OLLAMA.value:
             return self.ollama_model or None
         return None
@@ -329,6 +357,9 @@ def get_available_providers() -> list[str]:
 
     if config.openrouter_api_key:
         available.append(AIEngineProvider.OPENROUTER.value)
+
+    if config.zhipuai_api_key:
+        available.append(AIEngineProvider.ZHIPUAI.value)
 
     if config.ollama_model:
         available.append(AIEngineProvider.OLLAMA.value)

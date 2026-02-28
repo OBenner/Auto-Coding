@@ -11,7 +11,7 @@ from pathlib import Path
 from analysis.prevention_scanner import PreventionScanner
 from core.providers import create_engine_provider
 from core.providers.base import SessionConfig
-from core.providers.config import ProviderConfig
+from core.providers.config import ProviderConfig, get_provider_config
 from implementation_plan import ImplementationPlan
 from phase_config import get_phase_model, get_phase_thinking_budget
 from phase_event import ExecutionPhase, emit_phase
@@ -253,6 +253,14 @@ async def run_followup_planner(
         plan_file = spec_dir / "implementation_plan.json"
         if plan_file.exists():
             plan = ImplementationPlan.load(plan_file)
+
+            # Capture and persist provider configuration
+            provider_config = get_provider_config()
+            if provider_config:
+                plan.provider_config = {
+                    "provider": provider_config.provider,
+                    "model": provider_config.get_model_for_provider(),
+                }
 
             # Check if there are any pending subtasks
             all_subtasks = [c for p in plan.phases for c in p.subtasks]
