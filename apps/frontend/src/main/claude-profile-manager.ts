@@ -803,9 +803,11 @@ export async function initializeClaudeProfileManager(): Promise<ClaudeProfileMan
 
   // If initialization is in progress, wait for it (promise caching)
   if (!initPromise) {
-    initPromise = profileManager.initialize()
+    // Store reference to manager (guaranteed non-null at this point)
+    const manager = profileManager;
+    initPromise = manager.initialize()
       .then(() => {
-        return profileManager!;
+        return manager;
       })
       .catch((error) => {
         // Reset cached promise on failure so retries can succeed

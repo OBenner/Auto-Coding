@@ -18,7 +18,7 @@ import * as path from 'path';
 import * as os from 'os';
 import { isLinux } from './platform';
 
-const APP_NAME = 'auto-claude';
+const APP_NAME = 'auto-code';
 
 /**
  * Get the XDG config home directory

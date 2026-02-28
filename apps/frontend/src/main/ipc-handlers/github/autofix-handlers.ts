@@ -295,7 +295,7 @@ async function checkNewIssues(
     throw new Error(validation.error);
   }
 
-  const backendPath = validation.backendPath!;
+  const backendPath = validation.backendPath as string;
   const args = buildRunnerArgs(getRunnerPath(backendPath), project.path, 'check-new');
   const subprocessEnv = await getRunnerEnv();
 
@@ -639,7 +639,7 @@ export function registerAutoFixHandlers(
             throw new Error(validation.error);
           }
 
-          const backendPath = validation.backendPath!;
+          const backendPath = validation.backendPath as string;
           const additionalArgs = issueNumbers && issueNumbers.length > 0 ? issueNumbers.map(n => n.toString()) : [];
           const args = buildRunnerArgs(getRunnerPath(backendPath), project.path, 'batch-issues', additionalArgs);
           const subprocessEnv = await getRunnerEnv();
@@ -683,7 +683,7 @@ export function registerAutoFixHandlers(
             throw new Error(result.error ?? 'Failed to batch issues');
           }
 
-          sendComplete(result.data!);
+          sendComplete(result.data as NonNullable<typeof result.data>);
         });
       } catch (error) {
         debugLog('Batch auto-fix failed', { error: error instanceof Error ? error.message : error });
@@ -756,7 +756,7 @@ export function registerAutoFixHandlers(
             throw new Error(validation.error);
           }
 
-          const backendPath = validation.backendPath!;
+          const backendPath = validation.backendPath as string;
           const additionalArgs = ['--json'];
           if (maxIssues) {
             additionalArgs.push('--max-issues', maxIssues.toString());
@@ -794,7 +794,7 @@ export function registerAutoFixHandlers(
             throw new Error(result.error ?? 'Failed to analyze issues');
           }
 
-          sendComplete(result.data!);
+          sendComplete(result.data as NonNullable<typeof result.data>);
         });
       } catch (error) {
         debugLog('Analyze preview failed', { error: error instanceof Error ? error.message : error });
@@ -858,7 +858,7 @@ export function registerAutoFixHandlers(
             throw new Error(validation.error);
           }
 
-          const backendPath = validation.backendPath!;
+          const backendPath = validation.backendPath as string;
           const { execFileSync } = await import('child_process');
           // Use execFileSync with arguments array to prevent command injection
           execFileSync(

@@ -228,7 +228,7 @@ async function runTriage(
     throw new Error(validation.error);
   }
 
-  const backendPath = validation.backendPath!;
+  const backendPath = validation.backendPath as string;
 
   const { sendProgress } = createIPCCommunicators<TriageProgress, TriageResult[]>(
     mainWindow,
@@ -293,7 +293,7 @@ async function runTriage(
     throw new Error(result.error ?? 'Triage failed');
   }
 
-  return result.data!;
+  return result.data as TriageResult[];
 }
 
 /**

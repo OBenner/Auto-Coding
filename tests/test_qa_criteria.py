@@ -16,9 +16,8 @@ the Claude SDK which is not available in the test environment.
 import json
 import sys
 import tempfile
-from datetime import datetime, timezone
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -75,6 +74,7 @@ sys.modules['ui'] = mock_ui
 mock_progress = MagicMock()
 mock_progress.count_subtasks = MagicMock(return_value=(3, 3))
 mock_progress.is_build_complete = MagicMock(return_value=True)
+mock_progress.is_build_ready_for_qa = MagicMock(return_value=True)
 sys.modules['progress'] = mock_progress
 
 # Mock task_logger
@@ -116,6 +116,10 @@ from qa.criteria import (
     should_run_fixes,
     print_qa_status,
 )
+
+# Ensure qa.criteria uses mocked is_build_ready_for_qa even when progress was already imported
+import qa.criteria as _qa_criteria_mod
+_qa_criteria_mod.is_build_ready_for_qa = mock_progress.is_build_ready_for_qa
 
 # Mock the qa.report import inside print_qa_status
 mock_report = MagicMock()
@@ -524,57 +528,65 @@ class TestShouldRunQA:
 
     def test_should_run_qa_build_not_complete(self, spec_dir: Path):
         """Returns False when build not complete."""
-        # Set up mock to return build not complete
-        mock_progress.is_build_complete.return_value = False
+        mock_progress.is_build_ready_for_qa.return_value = False
+
 
         plan = {"feature": "Test", "phases": []}
         save_implementation_plan(spec_dir, plan)
 
-        result = should_run_qa(spec_dir)
+        with patch('qa.criteria.is_build_ready_for_qa', return_value=False):
+            result = should_run_qa(spec_dir)
         assert result is False
 
         # Reset mock
-        mock_progress.is_build_complete.return_value = True
+        mock_progress.is_build_ready_for_qa.return_value = True
 
     def test_should_run_qa_already_approved(self, spec_dir: Path, qa_signoff_approved: dict):
         """Returns False when already approved."""
-        mock_progress.is_build_complete.return_value = True
+        mock_progress.is_build_ready_for_qa.return_value = True
+
 
         plan = {"feature": "Test", "qa_signoff": qa_signoff_approved}
         save_implementation_plan(spec_dir, plan)
 
-        result = should_run_qa(spec_dir)
+        with patch('qa.criteria.is_build_ready_for_qa', return_value=True):
+            result = should_run_qa(spec_dir)
         assert result is False
 
     def test_should_run_qa_build_complete_not_approved(self, spec_dir: Path):
         """Returns True when build complete but not approved."""
-        mock_progress.is_build_complete.return_value = True
+        mock_progress.is_build_ready_for_qa.return_value = True
+
 
         plan = {"feature": "Test", "phases": []}
         save_implementation_plan(spec_dir, plan)
 
-        result = should_run_qa(spec_dir)
+        with patch('qa.criteria.is_build_ready_for_qa', return_value=True):
+            result = should_run_qa(spec_dir)
         assert result is True
 
     def test_should_run_qa_rejected_status(self, spec_dir: Path, qa_signoff_rejected: dict):
         """Returns True when rejected (needs re-review after fixes)."""
-        mock_progress.is_build_complete.return_value = True
+        mock_progress.is_build_ready_for_qa.return_value = True
+
 
         plan = {"feature": "Test", "qa_signoff": qa_signoff_rejected}
         save_implementation_plan(spec_dir, plan)
 
-        result = should_run_qa(spec_dir)
+        with patch('qa.criteria.is_build_ready_for_qa', return_value=True):
+            result = should_run_qa(spec_dir)
         assert result is True
 
     def test_should_run_qa_no_plan(self, spec_dir: Path):
         """Returns False when no plan exists (build not complete)."""
-        mock_progress.is_build_complete.return_value = False
+        mock_progress.is_build_ready_for_qa.return_value = False
 
-        result = should_run_qa(spec_dir)
+        with patch('qa.criteria.is_build_ready_for_qa', return_value=False):
+            result = should_run_qa(spec_dir)
         assert result is False
 
         # Reset mock
-        mock_progress.is_build_complete.return_value = True
+        mock_progress.is_build_ready_for_qa.return_value = True
 
 
 class TestShouldRunFixes:
@@ -897,9 +909,16 @@ class TestQAStateMachine:
 class TestQAIntegration:
     """Integration tests for QA criteria logic."""
 
+    @pytest.fixture(autouse=True)
+    def patch_is_build_ready_for_qa(self):
+        """Patch is_build_ready_for_qa directly to avoid module-level mock fragility."""
+        with patch('qa.criteria.is_build_ready_for_qa', return_value=True):
+            yield
+
     def test_full_qa_workflow_approved_first_try(self, spec_dir: Path):
         """Full workflow where QA approves on first try."""
-        mock_progress.is_build_complete.return_value = True
+        mock_progress.is_build_ready_for_qa.return_value = True
+
 
         # Build complete
         plan = {"feature": "Test Feature", "phases": []}
@@ -923,7 +942,8 @@ class TestQAIntegration:
 
     def test_full_qa_workflow_with_fixes(self, spec_dir: Path):
         """Full workflow with reject-fix-approve cycle."""
-        mock_progress.is_build_complete.return_value = True
+        mock_progress.is_build_ready_for_qa.return_value = True
+
 
         # Build complete
         plan = {"feature": "Test Feature", "phases": []}
@@ -963,7 +983,8 @@ class TestQAIntegration:
 
     def test_qa_workflow_max_iterations(self, spec_dir: Path):
         """Test behavior when max iterations are reached."""
-        mock_progress.is_build_complete.return_value = True
+        mock_progress.is_build_ready_for_qa.return_value = True
+
 
         plan = {
             "feature": "Test",

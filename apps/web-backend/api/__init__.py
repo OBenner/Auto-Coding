@@ -1,1 +1,1 @@
-"""API module for Auto Claude Web Backend"""
+"""API module for Auto Code Web Backend"""

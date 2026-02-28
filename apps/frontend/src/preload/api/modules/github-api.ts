@@ -162,7 +162,7 @@ export interface GitHubAPI {
     fetchAll?: boolean
   ) => Promise<IPCResult<PaginatedIssuesResult>>;
   getGitHubIssue: (projectId: string, issueNumber: number) => Promise<IPCResult<GitHubIssue>>;
-  getIssueComments: (projectId: string, issueNumber: number) => Promise<IPCResult<any[]>>;
+  getIssueComments: (projectId: string, issueNumber: number) => Promise<IPCResult<unknown[]>>;
   checkGitHubConnection: (projectId: string) => Promise<IPCResult<GitHubSyncStatus>>;
   investigateGitHubIssue: (projectId: string, issueNumber: number, selectedCommentIds?: number[]) => void;
   importGitHubIssues: (projectId: string, issueNumbers: number[]) => Promise<IPCResult<GitHubImportResult>>;
@@ -363,6 +363,10 @@ export interface PRReviewFinding {
   endLine?: number;
   suggestedFix?: string;
   fixable: boolean;
+  validationStatus?: 'confirmed_valid' | 'dismissed_false_positive' | 'needs_human_review' | null;
+  validationExplanation?: string;
+  sourceAgents?: string[];
+  crossValidated?: boolean;
 }
 
 /**
@@ -522,7 +526,7 @@ export const createGitHubAPI = (): GitHubAPI => ({
   getGitHubIssue: (projectId: string, issueNumber: number): Promise<IPCResult<GitHubIssue>> =>
     invokeIpc(IPC_CHANNELS.GITHUB_GET_ISSUE, projectId, issueNumber),
 
-  getIssueComments: (projectId: string, issueNumber: number): Promise<IPCResult<any[]>> =>
+  getIssueComments: (projectId: string, issueNumber: number): Promise<IPCResult<unknown[]>> =>
     invokeIpc(IPC_CHANNELS.GITHUB_GET_ISSUE_COMMENTS, projectId, issueNumber),
 
   checkGitHubConnection: (projectId: string): Promise<IPCResult<GitHubSyncStatus>> =>

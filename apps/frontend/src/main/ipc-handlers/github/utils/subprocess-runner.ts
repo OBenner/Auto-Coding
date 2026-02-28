@@ -9,18 +9,15 @@ import { spawn, exec, execFile } from 'child_process';
 import type { ChildProcess } from 'child_process';
 import { promisify } from 'util';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import fs from 'fs';
-
-// ESM-compatible __dirname
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 import type { Project } from '../../../../shared/types';
 import type { AuthFailureInfo } from '../../../../shared/types/terminal';
 import { parsePythonCommand } from '../../../python-detector';
 import { detectAuthFailure } from '../../../rate-limit-detector';
 import { getClaudeProfileManager } from '../../../claude-profile-manager';
 import { isWindows, isMacOS } from '../../../platform';
+import { getEffectiveSourcePath } from '../../../updater/path-resolver';
+import { pythonEnvManager, getConfiguredPythonPath } from '../../../python-env-manager';
 
 const execAsync = promisify(exec);
 
@@ -39,8 +36,9 @@ function createFallbackRunnerEnv(): Record<string, string> {
   const fallbackEnv: Record<string, string> = {};
 
   for (const key of safeEnvVars) {
-    if (process.env[key]) {
-      fallbackEnv[key] = process.env[key]!;
+    const value = process.env[key];
+    if (value) {
+      fallbackEnv[key] = value;
     }
   }
 
@@ -310,10 +308,20 @@ export function runPythonSubprocess<T = unknown>(
 }
 
 /**
- * Get the Python path for a project's backend
- * Cross-platform: uses Scripts/python.exe on Windows, bin/python on Unix
+ * Get the Python path for running GitHub runners.
+ *
+ * Prefers the managed Python environment (bundled app venv) when ready,
+ * falls back to project-local .venv for development repos.
  */
 export function getPythonPath(backendPath: string): string {
+  // Use managed env when it's fully set up (has dependencies installed)
+  if (pythonEnvManager.isEnvReady()) {
+    const managed = getConfiguredPythonPath();
+    if (fs.existsSync(managed)) {
+      return managed;
+    }
+  }
+  // Fallback to venv in backend path (dev mode)
   return isWindows()
     ? path.join(backendPath, '.venv', 'Scripts', 'python.exe')
     : path.join(backendPath, '.venv', 'bin', 'python');
@@ -329,42 +337,24 @@ export function getRunnerPath(backendPath: string): string {
 /**
  * Get the auto-claude backend path for a project
  *
- * Auto-detects the backend location using multiple strategies:
- * 1. Development repo structure (apps/backend)
- * 2. Electron app bundle location
- * 3. Current working directory
+ * Uses getEffectiveSourcePath() which handles:
+ * 1. User settings (autoBuildPath)
+ * 2. userData override (backend-source) for user-updated backend
+ * 3. Bundled backend (process.resourcesPath/backend)
+ * 4. Development paths
+ * Falls back to project.path/apps/backend for development repos.
  */
 export function getBackendPath(project: Project): string | null {
-  // Import app module for production path detection
-  let app: any;
-  try {
-    app = require('electron').app;
-  } catch {
-    // Electron not available in tests
+  // Use shared path resolver which handles bundled, userData override, and dev paths
+  const effectivePath = getEffectiveSourcePath();
+  if (fs.existsSync(effectivePath) && fs.existsSync(path.join(effectivePath, 'runners', 'github', 'runner.py'))) {
+    return effectivePath;
   }
 
-  // Check if this is a development repo (has apps/backend structure)
+  // Fallback: check project path for development repo structure
   const appsBackendPath = path.join(project.path, 'apps', 'backend');
   if (fs.existsSync(path.join(appsBackendPath, 'runners', 'github', 'runner.py'))) {
     return appsBackendPath;
-  }
-
-  // Auto-detect from app location (same logic as agent-process.ts)
-  const possiblePaths = [
-    // Dev mode: from dist/main -> ../../backend (apps/frontend/out/main -> apps/backend)
-    path.resolve(__dirname, '..', '..', '..', '..', '..', 'backend'),
-    // Alternative: from app root -> apps/backend
-    app ? path.resolve(app.getAppPath(), '..', 'backend') : null,
-    // If running from repo root with apps structure
-    path.resolve(process.cwd(), 'apps', 'backend'),
-  ].filter((p): p is string => p !== null);
-
-  for (const backendPath of possiblePaths) {
-    // Check for runner.py as marker
-    const runnerPath = path.join(backendPath, 'runners', 'github', 'runner.py');
-    if (fs.existsSync(runnerPath)) {
-      return backendPath;
-    }
   }
 
   return null;
@@ -464,10 +454,11 @@ export async function validateGitHubModule(project: Project): Promise<GitHubModu
   try {
     await execAsync('gh auth status 2>&1');
     result.ghAuthenticated = true;
-  } catch (error: any) {
+  } catch (error: unknown) {
     // gh auth status returns non-zero when not authenticated
     // Check the output to determine if it's an auth issue
-    const output = error.stdout || error.stderr || '';
+    const execError = error as { stdout?: string; stderr?: string };
+    const output = execError.stdout || execError.stderr || '';
     if (output.includes('not logged in') || output.includes('not authenticated')) {
       result.ghAuthenticated = false;
       result.error = 'GitHub CLI is not authenticated. Run:\n  gh auth login';

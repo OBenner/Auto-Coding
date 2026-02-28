@@ -8,11 +8,22 @@ import {
   AlertTriangle,
   Sparkles,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Trash2
 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Card, CardContent } from '../ui/card';
 import { Badge } from '../ui/badge';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle
+} from '../ui/alert-dialog';
 import type { MemoryEpisode } from '../../../shared/types';
 import { memoryTypeIcons, memoryTypeColors, memoryTypeLabels } from './constants';
 import { formatDate } from './utils';
@@ -20,6 +31,7 @@ import { PRReviewCard } from './PRReviewCard';
 
 interface MemoryCardProps {
   memory: MemoryEpisode;
+  onDelete?: (memoryId: string) => void;
 }
 
 interface ParsedSessionInsight {
@@ -106,8 +118,9 @@ function isPRReviewMemory(memory: MemoryEpisode): boolean {
   }
 }
 
-export function MemoryCard({ memory }: MemoryCardProps) {
+export function MemoryCard({ memory, onDelete }: MemoryCardProps) {
   const [expanded, setExpanded] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const parsed = useMemo(() => parseMemoryContent(memory.content), [memory.content]);
 
   // Determine if there's meaningful content to show (must be called before early return)
@@ -128,7 +141,7 @@ export function MemoryCard({ memory }: MemoryCardProps) {
 
   // Delegate PR reviews to specialized component
   if (isPRReviewMemory(memory)) {
-    return <PRReviewCard memory={memory} />;
+    return <PRReviewCard memory={memory} onDelete={onDelete} />;
   }
 
   const Icon = memoryTypeIcons[memory.type] || memoryTypeIcons.session_insight;
@@ -176,26 +189,38 @@ export function MemoryCard({ memory }: MemoryCardProps) {
               </div>
             </div>
           </div>
-          {hasContent && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setExpanded(!expanded)}
-              className="shrink-0 gap-1"
-            >
-              {expanded ? (
-                <>
-                  <ChevronUp className="h-4 w-4" />
-                  Collapse
-                </>
-              ) : (
-                <>
-                  <ChevronDown className="h-4 w-4" />
-                  Expand
-                </>
-              )}
-            </Button>
-          )}
+          <div className="flex items-center gap-1 shrink-0">
+            {onDelete && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowDeleteConfirm(true)}
+                className="text-destructive hover:text-destructive"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            )}
+            {hasContent && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setExpanded(!expanded)}
+                className="gap-1"
+              >
+                {expanded ? (
+                  <>
+                    <ChevronUp className="h-4 w-4" />
+                    Collapse
+                  </>
+                ) : (
+                  <>
+                    <ChevronDown className="h-4 w-4" />
+                    Expand
+                  </>
+                )}
+              </Button>
+            )}
+          </div>
         </div>
 
         {/* Expanded Content */}
@@ -207,6 +232,7 @@ export function MemoryCard({ memory }: MemoryCardProps) {
                 <SectionHeader icon={CheckCircle2} title="What Worked" count={parsed.what_worked.length} />
                 <ul className="space-y-0.5">
                   {parsed.what_worked.map((item, idx) => (
+                    /* biome-ignore lint/suspicious/noArrayIndexKey: String items without unique IDs */
                     <ListItem key={idx} variant="success">{item}</ListItem>
                   ))}
                 </ul>
@@ -219,6 +245,7 @@ export function MemoryCard({ memory }: MemoryCardProps) {
                 <SectionHeader icon={XCircle} title="What Failed" count={parsed.what_failed.length} />
                 <ul className="space-y-0.5">
                   {parsed.what_failed.map((item, idx) => (
+                    /* biome-ignore lint/suspicious/noArrayIndexKey: String items without unique IDs */
                     <ListItem key={idx} variant="error">{item}</ListItem>
                   ))}
                 </ul>
@@ -261,9 +288,11 @@ export function MemoryCard({ memory }: MemoryCardProps) {
                 />
                 <ul className="space-y-0.5">
                   {parsed.recommendations_for_next_session?.map((item, idx) => (
+                    /* biome-ignore lint/suspicious/noArrayIndexKey: String items without unique IDs */
                     <ListItem key={`rec-${idx}`}>{item}</ListItem>
                   ))}
                   {parsed.discoveries?.recommendations?.map((item, idx) => (
+                    /* biome-ignore lint/suspicious/noArrayIndexKey: String items without unique IDs */
                     <ListItem key={`disc-rec-${idx}`}>{item}</ListItem>
                   ))}
                 </ul>
@@ -278,6 +307,7 @@ export function MemoryCard({ memory }: MemoryCardProps) {
                   {parsed.discoveries.patterns_discovered.map((pattern, idx) => {
                     const text = typeof pattern === 'string' ? pattern : pattern.pattern;
                     return text ? (
+                      /* biome-ignore lint/suspicious/noArrayIndexKey: Pattern items without unique IDs */
                       <Badge key={idx} variant="secondary" className="text-xs">
                         {text}
                       </Badge>
@@ -295,6 +325,7 @@ export function MemoryCard({ memory }: MemoryCardProps) {
                   {parsed.discoveries.gotchas_discovered.map((gotcha, idx) => {
                     const text = typeof gotcha === 'string' ? gotcha : gotcha.gotcha;
                     return text ? (
+                      /* biome-ignore lint/suspicious/noArrayIndexKey: Gotcha items without unique IDs */
                       <ListItem key={idx} variant="error">{text}</ListItem>
                     ) : null;
                   })}
@@ -308,6 +339,7 @@ export function MemoryCard({ memory }: MemoryCardProps) {
                 <SectionHeader icon={FileCode} title="Changed Files" count={parsed.discoveries.changed_files.length} />
                 <div className="flex flex-wrap gap-1.5 pl-4">
                   {parsed.discoveries.changed_files.map((file, idx) => (
+                    /* biome-ignore lint/suspicious/noArrayIndexKey: String items without unique IDs */
                     <Badge key={idx} variant="outline" className="text-xs font-mono">
                       {file}
                     </Badge>
@@ -322,6 +354,7 @@ export function MemoryCard({ memory }: MemoryCardProps) {
                 <SectionHeader icon={FileCode} title="File Insights" count={parsed.discoveries.file_insights.length} />
                 <div className="space-y-2 pl-4">
                   {parsed.discoveries.file_insights.map((insight, idx) => (
+                    /* biome-ignore lint/suspicious/noArrayIndexKey: Insight items without unique IDs */
                     <div key={idx} className="text-sm">
                       {insight.path && (
                         <Badge variant="outline" className="text-xs font-mono mb-1">
@@ -346,6 +379,7 @@ export function MemoryCard({ memory }: MemoryCardProps) {
                 <SectionHeader icon={CheckCircle2} title="Subtasks Completed" count={parsed.subtasks_completed.length} />
                 <div className="flex flex-wrap gap-1.5 pl-4">
                   {parsed.subtasks_completed.map((task, idx) => (
+                    /* biome-ignore lint/suspicious/noArrayIndexKey: String items without unique IDs */
                     <Badge key={idx} variant="secondary" className="text-xs font-mono">
                       {task}
                     </Badge>
@@ -363,6 +397,30 @@ export function MemoryCard({ memory }: MemoryCardProps) {
           </pre>
         )}
       </CardContent>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Memory</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this memory? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                onDelete?.(memory.id);
+                setShowDeleteConfirm(false);
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 }

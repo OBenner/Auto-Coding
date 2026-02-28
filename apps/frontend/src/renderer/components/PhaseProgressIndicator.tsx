@@ -20,6 +20,7 @@ const PHASE_COLORS: Record<ExecutionPhase, { color: string; bgColor: string }> =
   idle: { color: 'bg-muted-foreground', bgColor: 'bg-muted' },
   planning: { color: 'bg-amber-500', bgColor: 'bg-amber-500/20' },
   coding: { color: 'bg-info', bgColor: 'bg-info/20' },
+  test_generation: { color: 'bg-cyan-500', bgColor: 'bg-cyan-500/20' },
   qa_review: { color: 'bg-purple-500', bgColor: 'bg-purple-500/20' },
   qa_fixing: { color: 'bg-orange-500', bgColor: 'bg-orange-500/20' },
   complete: { color: 'bg-success', bgColor: 'bg-success/20' },
@@ -31,6 +32,7 @@ const PHASE_LABEL_KEYS: Record<ExecutionPhase, string> = {
   idle: 'execution.phases.idle',
   planning: 'execution.phases.planning',
   coding: 'execution.phases.coding',
+  test_generation: 'execution.phases.testGeneration',
   qa_review: 'execution.phases.reviewing',
   qa_fixing: 'execution.phases.fixing',
   complete: 'execution.phases.complete',
@@ -144,7 +146,7 @@ export const PhaseProgressIndicator = memo(function PhaseProgressIndicator({
               {activeEntries} {activeEntries === 1 ? t('execution.labels.entry') : t('execution.labels.entries')}
             </span>
           ) : isRunning && isIndeterminatePhase && (phaseProgress ?? 0) > 0 ? (
-            `${Math.round(Math.min(phaseProgress!, 100))}%`
+            `${Math.round(Math.min(phaseProgress as number, 100))}%`
           ) : (
             '—'
           )}
@@ -313,7 +315,7 @@ const PhaseStepsIndicator = memo(function PhaseStepsIndicator({
               transition={shouldAnimate ? { duration: 1.5, repeat: Infinity, ease: 'easeInOut' } : undefined}
             >
               {state === 'complete' && (
-                <svg className="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
                 </svg>
               )}

@@ -1,1 +1,1 @@
-"""Core modules for Auto Claude Web Backend"""
+"""Core modules for Auto Code Web Backend"""

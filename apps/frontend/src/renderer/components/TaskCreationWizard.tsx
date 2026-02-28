@@ -40,6 +40,7 @@ import {
   AVAILABLE_MODELS
 } from '../../shared/constants';
 import { useSettingsStore } from '../stores/settings-store';
+import { CustomTemplateSelector } from './templates/CustomTemplateSelector';
 
 interface TaskCreationWizardProps {
   projectId: string;
@@ -59,7 +60,7 @@ export function TaskCreationWizard({
   const { settings } = useSettingsStore();
   const selectedProfile = DEFAULT_AGENT_PROFILES.find(
     p => p.id === settings.selectedAgentProfile
-  ) || DEFAULT_AGENT_PROFILES.find(p => p.id === 'auto')!;
+  ) ?? DEFAULT_AGENT_PROFILES.find(p => p.id === 'auto') ?? DEFAULT_AGENT_PROFILES[0];
 
   // Form state
   const [title, setTitle] = useState('');
@@ -129,6 +130,10 @@ export function TaskCreationWizard({
   const [showAgentModels, setShowAgentModels] = useState(false);
   const [agentModels, setAgentModels] = useState<Record<string, string>>({});
 
+  // Custom Template selection
+  const [showCustomTemplate, setShowCustomTemplate] = useState(false);
+  const [selectedCustomTemplateId, setSelectedCustomTemplateId] = useState<string>('');
+
   // Draft state
   const [isDraftRestored, setIsDraftRestored] = useState(false);
 
@@ -168,6 +173,7 @@ export function TaskCreationWizard({
         setReferencedFiles(draft.referencedFiles ?? []);
         setRequireReviewBeforeCoding(draft.requireReviewBeforeCoding ?? false);
         setAgentModels(draft.agentModels || {});
+        setSelectedCustomTemplateId(draft.customTemplateId || '');
         setIsDraftRestored(true);
 
         if (draft.category || draft.priority || draft.complexity || draft.impact) {
@@ -194,6 +200,7 @@ export function TaskCreationWizard({
         setReferencedFiles([]);
         setRequireReviewBeforeCoding(false);
         setAgentModels({});
+        setSelectedCustomTemplateId('');
         setBaseBranch(PROJECT_DEFAULT_BRANCH);
         setUseWorktree(true);
         setIsDraftRestored(false);
@@ -201,6 +208,7 @@ export function TaskCreationWizard({
         setShowFileExplorer(false);
         setShowGitOptions(false);
         setShowAgentModels(false);
+        setShowCustomTemplate(false);
       }
     }
   }, [open, projectId, settings.selectedAgentProfile, settings.customPhaseModels, settings.customPhaseThinking, selectedProfile.model, selectedProfile.thinkingLevel, selectedProfile.phaseModels, selectedProfile.phaseThinking]);
@@ -271,8 +279,9 @@ export function TaskCreationWizard({
     referencedFiles,
     requireReviewBeforeCoding,
     agentModels,
+    customTemplateId: selectedCustomTemplateId,
     savedAt: new Date()
-  }), [projectId, title, description, category, priority, complexity, impact, profileId, model, thinkingLevel, phaseModels, phaseThinking, images, referencedFiles, requireReviewBeforeCoding, agentModels]);
+  }), [projectId, title, description, category, priority, complexity, impact, profileId, model, thinkingLevel, phaseModels, phaseThinking, images, referencedFiles, requireReviewBeforeCoding, agentModels, selectedCustomTemplateId]);
 
   /**
    * Detect @ mention being typed and show autocomplete
@@ -443,6 +452,8 @@ export function TaskCreationWizard({
       if (requireReviewBeforeCoding) metadata.requireReviewBeforeCoding = true;
       // Include agent models if configured
       if (Object.keys(agentModels).length > 0) metadata.agentModels = agentModels;
+      // Include custom template if selected
+      if (selectedCustomTemplateId) metadata.customTemplateId = selectedCustomTemplateId;
       // Always include baseBranch - resolve PROJECT_DEFAULT_BRANCH to actual branch name
       // This ensures the backend always knows which branch to use for worktree creation
       if (baseBranch === PROJECT_DEFAULT_BRANCH) {
@@ -485,6 +496,7 @@ export function TaskCreationWizard({
     setReferencedFiles([]);
     setRequireReviewBeforeCoding(false);
     setAgentModels({});
+    setSelectedCustomTemplateId('');
     setBaseBranch(PROJECT_DEFAULT_BRANCH);
     setUseWorktree(true);
     setError(null);
@@ -492,6 +504,7 @@ export function TaskCreationWizard({
     setShowFileExplorer(false);
     setShowGitOptions(false);
     setShowAgentModels(false);
+    setShowCustomTemplate(false);
     setIsDraftRestored(false);
   };
 
@@ -529,10 +542,11 @@ export function TaskCreationWizard({
       }}
     >
       {description.split(/(@[\w\-./\\]+\.\w+)/g).map((part, i) => {
+        const key = `${i}-${part.slice(0, 20)}`;
         if (part.match(/^@[\w\-./\\]+\.\w+$/)) {
           return (
             <span
-              key={i}
+              key={key}
               className="bg-info/20 text-info-foreground rounded px-0.5"
               style={{ color: 'hsl(var(--info))' }}
             >
@@ -540,7 +554,7 @@ export function TaskCreationWizard({
             </span>
           );
         }
-        return <span key={i}>{part}</span>;
+        return <span key={key}>{part}</span>;
       })}
     </div>
   );
@@ -739,6 +753,51 @@ export function TaskCreationWizard({
                 {t('tasks:wizard.gitOptions.helpText')}
               </p>
             </div>
+          </div>
+        )}
+
+        {/* Custom Template Toggle - for custom agent templates */}
+        <button
+          type="button"
+          onClick={() => setShowCustomTemplate(!showCustomTemplate)}
+          className={cn(
+            'flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors',
+            'w-full justify-between py-2 px-3 rounded-md hover:bg-muted/50'
+          )}
+          disabled={isCreating}
+          aria-expanded={showCustomTemplate}
+          aria-controls="custom-template-section"
+        >
+          <span className="flex items-center gap-2">
+            <Brain className="h-4 w-4" />
+            Custom Template
+            {selectedCustomTemplateId && (
+              <span className="text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded">
+                Selected
+              </span>
+            )}
+          </span>
+          {showCustomTemplate ? (
+            <ChevronUp className="h-4 w-4" />
+          ) : (
+            <ChevronDown className="h-4 w-4" />
+          )}
+        </button>
+
+        {/* Custom Template Selector */}
+        {showCustomTemplate && (
+          <div id="custom-template-section" className="space-y-4 p-4 rounded-lg border border-border bg-muted/30">
+            <CustomTemplateSelector
+              selectedTemplateId={selectedCustomTemplateId}
+              onTemplateChange={(template) => {
+                if (template) {
+                  setSelectedCustomTemplateId(template.id);
+                } else {
+                  setSelectedCustomTemplateId('');
+                }
+              }}
+              disabled={isCreating}
+            />
           </div>
         )}
 

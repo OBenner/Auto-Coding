@@ -56,6 +56,7 @@ export function Context({ projectId }: ContextProps) {
         {/* Memories Tab */}
         <TabsContent value="memories" className="flex-1 overflow-hidden m-0">
           <MemoriesTab
+            projectId={projectId}
             memoryStatus={memoryStatus}
             memoryState={memoryState}
             recentMemories={recentMemories}

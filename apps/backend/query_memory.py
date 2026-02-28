@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Memory Query CLI for auto-claude-ui.
+Memory Query CLI for auto-code-ui.
 
 Provides a subprocess interface for querying the LadybugDB/Graphiti memory database.
 Called from Node.js (Electron main process) via child_process.spawn().
@@ -11,6 +11,9 @@ Usage:
     python query_memory.py search <db-path> <database> <query> [--limit N]
     python query_memory.py semantic-search <db-path> <database> <query> [--limit N]
     python query_memory.py get-entities <db-path> <database> [--limit N]
+    python query_memory.py get-graph-data <db-path> <database> [--limit N]
+    python query_memory.py delete-memory <db-path> <database> --id <uuid>
+    python query_memory.py export-memories <db-path> <database> --output <file>
 
 Output:
     JSON to stdout with structure: {"success": bool, "data": ..., "error": ...}
@@ -42,6 +45,7 @@ def apply_monkeypatch():
 
     # Try native kuzu as fallback
     try:
+        # Optional: kuzu is optional (fallback if LadybugDB unavailable)
         import kuzu  # noqa: F401
 
         return "kuzu"
@@ -322,7 +326,7 @@ def cmd_semantic_search(args):
     try:
         result = asyncio.run(_async_semantic_search(args))
         if result.get("success"):
-            output_json(True, data=result.get("data"))
+            return output_json(True, data=result.get("data"))
         else:
             # Semantic search failed, fall back to keyword search
             return cmd_search(args)
@@ -509,6 +513,146 @@ def cmd_get_entities(args):
             output_error(f"Query failed: {e}")
 
 
+def cmd_get_graph_data(args):
+    """Get graph data (nodes and edges) for visualization."""
+    if not apply_monkeypatch():
+        output_error("Neither kuzu nor LadybugDB is installed")
+        return
+
+    conn, error = get_db_connection(args.db_path, args.database)
+    if not conn:
+        output_error(error or "Failed to connect to database")
+        return
+
+    try:
+        limit = args.limit or 50
+
+        # Query episodic nodes
+        episodic_query = """
+            MATCH (e:Episodic)
+            RETURN e.uuid as uuid, e.name as name, e.created_at as created_at,
+                   e.content as content, e.source_description as description
+            ORDER BY e.created_at DESC
+            LIMIT $limit
+        """
+
+        # Query entity nodes
+        entity_query = """
+            MATCH (n:Entity)
+            RETURN n.uuid as uuid, n.name as name, n.created_at as created_at,
+                   n.summary as summary
+            ORDER BY n.created_at DESC
+            LIMIT $limit
+        """
+
+        # Query edges (relationships)
+        # Note: Different relationship types may have different properties
+        # We'll query for common fields and handle missing ones gracefully
+        edge_query = """
+            MATCH (a)-[r]->(b)
+            RETURN id(r) as id, a.uuid as source, b.uuid as target
+            LIMIT $limit
+        """
+
+        nodes = []
+        edges = []
+
+        # Get episodic nodes
+        try:
+            result = conn.execute(episodic_query, parameters={"limit": limit})
+            while result.has_next():
+                row = result.get_next()
+                uuid_val = serialize_value(row[0]) if len(row) > 0 else None
+                name_val = serialize_value(row[1]) if len(row) > 1 else ""
+                created_at_val = serialize_value(row[2]) if len(row) > 2 else None
+                content_val = serialize_value(row[3]) if len(row) > 3 else ""
+                description_val = serialize_value(row[4]) if len(row) > 4 else ""
+
+                if uuid_val:
+                    nodes.append(
+                        {
+                            "id": uuid_val,
+                            "label": name_val or "Episodic",
+                            "type": "episodic",
+                            "timestamp": created_at_val or datetime.now().isoformat(),
+                            "data": {
+                                "content": content_val or "",
+                                "description": description_val or "",
+                            },
+                        }
+                    )
+        except Exception as e:
+            # Episodic table might not exist
+            if "Episodic" not in str(e) or (
+                "not exist" not in str(e).lower() and "cannot" not in str(e).lower()
+            ):
+                sys.stderr.write(f"Warning: Failed to query Episodic nodes: {e}\n")
+
+        # Get entity nodes
+        try:
+            result = conn.execute(entity_query, parameters={"limit": limit})
+            while result.has_next():
+                row = result.get_next()
+                uuid_val = serialize_value(row[0]) if len(row) > 0 else None
+                name_val = serialize_value(row[1]) if len(row) > 1 else ""
+                created_at_val = serialize_value(row[2]) if len(row) > 2 else None
+                summary_val = serialize_value(row[3]) if len(row) > 3 else ""
+
+                if uuid_val:
+                    nodes.append(
+                        {
+                            "id": uuid_val,
+                            "label": name_val or "Entity",
+                            "type": "entity",
+                            "timestamp": created_at_val or datetime.now().isoformat(),
+                            "data": {
+                                "summary": summary_val or "",
+                            },
+                        }
+                    )
+        except Exception as e:
+            # Entity table might not exist
+            if "Entity" not in str(e) or (
+                "not exist" not in str(e).lower() and "cannot" not in str(e).lower()
+            ):
+                sys.stderr.write(f"Warning: Failed to query Entity nodes: {e}\n")
+
+        # Get edges
+        try:
+            result = conn.execute(edge_query, parameters={"limit": limit})
+            while result.has_next():
+                row = result.get_next()
+                id_val = serialize_value(row[0]) if len(row) > 0 else None
+                source_val = serialize_value(row[1]) if len(row) > 1 else None
+                target_val = serialize_value(row[2]) if len(row) > 2 else None
+
+                if id_val and source_val and target_val:
+                    edges.append(
+                        {
+                            "id": str(id_val),
+                            "source": source_val,
+                            "target": target_val,
+                            "type": "relates_to",
+                        }
+                    )
+        except Exception as e:
+            # No edges or relationship tables might not exist
+            sys.stderr.write(f"Warning: Failed to query edges: {e}\n")
+
+        output_json(
+            True,
+            data={
+                "nodes": nodes,
+                "edges": edges,
+                "node_count": len(nodes),
+                "edge_count": len(edges),
+            },
+        )
+
+    except Exception as e:
+        output_error(f"Failed to get graph data: {e}")
+
+
 def cmd_add_episode(args):
     """
     Add a new episode to the memory database.
@@ -621,6 +765,203 @@ def cmd_add_episode(args):
         output_error(f"Failed to add episode: {e}")
 
 
+def cmd_delete_memory(args):
+    """
+    Delete an episode from the memory database by UUID.
+
+    Args:
+        args.db_path: Path to database directory
+        args.database: Database name
+        args.id: Episode UUID to delete
+    """
+    if not apply_monkeypatch():
+        output_error("Neither kuzu nor LadybugDB is installed")
+        return
+
+    conn, error = get_db_connection(args.db_path, args.database)
+    if not conn:
+        output_error(error or "Failed to connect to database")
+        return
+
+    try:
+        episode_id = args.id
+
+        # First, check if the episode exists
+        check_query = """
+            MATCH (e:Episodic {uuid: $id})
+            RETURN e.uuid as uuid, e.name as name
+        """
+
+        result = conn.execute(check_query, parameters={"id": episode_id})
+
+        # Check if episode was found
+        found = False
+        episode_name = None
+        if result.has_next():
+            row = result.get_next()
+            found = True
+            episode_name = serialize_value(row[1]) if len(row) > 1 else None
+
+        if not found:
+            output_error(f"Episode not found with ID: {episode_id}")
+            return
+
+        # Delete the episode
+        delete_query = """
+            MATCH (e:Episodic {uuid: $id})
+            DELETE e
+        """
+
+        conn.execute(delete_query, parameters={"id": episode_id})
+
+        output_json(
+            True,
+            data={
+                "id": episode_id,
+                "name": episode_name or "",
+                "message": "Episode deleted successfully",
+            },
+        )
+
+    except Exception as e:
+        if "Episodic" in str(e) and (
+            "not exist" in str(e).lower() or "cannot" in str(e).lower()
+        ):
+            output_error("Episodic table does not exist")
+        else:
+            output_error(f"Delete failed: {e}")
+
+
+def cmd_export_memories(args):
+    """
+    Export all memories to a JSON file.
+
+    Args:
+        args.db_path: Path to database directory
+        args.database: Database name
+        args.output: Output file path
+    """
+    if not apply_monkeypatch():
+        output_error("Neither kuzu nor LadybugDB is installed")
+        return
+
+    conn, error = get_db_connection(args.db_path, args.database)
+    if not conn:
+        output_error(error or "Failed to connect to database")
+        return
+
+    try:
+        # Query all episodic memories
+        episodic_query = """
+            MATCH (e:Episodic)
+            RETURN e.uuid as uuid, e.name as name, e.created_at as created_at,
+                   e.content as content, e.source_description as description,
+                   e.group_id as group_id
+            ORDER BY e.created_at DESC
+        """
+
+        # Query all entities
+        entity_query = """
+            MATCH (n:Entity)
+            RETURN n.uuid as uuid, n.name as name, n.created_at as created_at,
+                   n.summary as summary
+            ORDER BY n.created_at DESC
+        """
+
+        memories = []
+        entities = []
+
+        # Get episodic memories
+        try:
+            result = conn.execute(episodic_query)
+            while result.has_next():
+                row = result.get_next()
+                uuid_val = serialize_value(row[0]) if len(row) > 0 else None
+                name_val = serialize_value(row[1]) if len(row) > 1 else ""
+                created_at_val = serialize_value(row[2]) if len(row) > 2 else None
+                content_val = serialize_value(row[3]) if len(row) > 3 else ""
+                description_val = serialize_value(row[4]) if len(row) > 4 else ""
+                group_id_val = serialize_value(row[5]) if len(row) > 5 else ""
+
+                memory = {
+                    "id": uuid_val or name_val or "unknown",
+                    "name": name_val or "",
+                    "type": infer_episode_type(name_val or "", content_val or ""),
+                    "timestamp": created_at_val or datetime.now().isoformat(),
+                    "content": content_val or description_val or name_val or "",
+                    "description": description_val or "",
+                    "group_id": group_id_val or "",
+                }
+
+                session_num = extract_session_number(name_val or "")
+                if session_num:
+                    memory["session_number"] = session_num
+
+                memories.append(memory)
+        except Exception as e:
+            if "Episodic" not in str(e) or (
+                "not exist" not in str(e).lower() and "cannot" not in str(e).lower()
+            ):
+                output_error(f"Failed to query episodic memories: {e}")
+                return
+
+        # Get entities
+        try:
+            result = conn.execute(entity_query)
+            while result.has_next():
+                row = result.get_next()
+                uuid_val = serialize_value(row[0]) if len(row) > 0 else None
+                name_val = serialize_value(row[1]) if len(row) > 1 else ""
+                created_at_val = serialize_value(row[2]) if len(row) > 2 else None
+                summary_val = serialize_value(row[3]) if len(row) > 3 else ""
+
+                if summary_val:
+                    entity = {
+                        "id": uuid_val or name_val or "unknown",
+                        "name": name_val or "",
+                        "type": infer_entity_type(name_val or ""),
+                        "timestamp": created_at_val or datetime.now().isoformat(),
+                        "content": summary_val or "",
+                    }
+                    entities.append(entity)
+        except Exception as e:
+            if "Entity" not in str(e) or (
+                "not exist" not in str(e).lower() and "cannot" not in str(e).lower()
+            ):
+                output_error(f"Failed to query entities: {e}")
+                return
+
+        # Prepare export data
+        export_data = {
+            "exported_at": datetime.now().isoformat(),
+            "database": args.database,
+            "memories": memories,
+            "entities": entities,
+            "total_count": len(memories) + len(entities),
+        }
+
+        # Write to output file
+        output_path = Path(args.output)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+
+        with open(output_path, "w", encoding="utf-8") as f:
+            json.dump(export_data, f, indent=2, default=str)
+
+        output_json(
+            True,
+            data={
+                "output_file": str(output_path),
+                "memories_count": len(memories),
+                "entities_count": len(entities),
+                "total_count": len(memories) + len(entities),
+                "message": "Memories exported successfully",
+            },
+        )
+
+    except Exception as e:
+        output_error(f"Export failed: {e}")
+
+
 def infer_episode_type(name: str, content: str = "") -> str:
     """Infer the episode type from its name and content."""
     name_lower = (name or "").lower()
@@ -667,7 +1008,7 @@ def extract_session_number(name: str) -> int | None:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Query LadybugDB memory database for auto-claude-ui"
+        description="Query LadybugDB memory database for auto-code-ui"
     )
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
@@ -713,6 +1054,16 @@ def main():
         "--limit", type=int, default=20, help="Maximum results"
     )
 
+    # get-graph-data command
+    graph_parser = subparsers.add_parser(
+        "get-graph-data", help="Get graph data (nodes and edges) for visualization"
+    )
+    graph_parser.add_argument("db_path", help="Path to database directory")
+    graph_parser.add_argument("database", help="Database name")
+    graph_parser.add_argument(
+        "--limit", type=int, default=50, help="Maximum nodes/edges"
+    )
+
     # add-episode command (for saving memories from Electron app)
     add_parser = subparsers.add_parser(
         "add-episode",
@@ -734,6 +1085,24 @@ def main():
         "--group-id", dest="group_id", help="Optional group ID for namespacing"
     )
 
+    # delete-memory command
+    delete_parser = subparsers.add_parser(
+        "delete-memory",
+        help="Delete an episode from the memory database by UUID",
+    )
+    delete_parser.add_argument("db_path", help="Path to database directory")
+    delete_parser.add_argument("database", help="Database name")
+    delete_parser.add_argument("--id", required=True, help="Episode UUID to delete")
+
+    # export-memories command
+    export_parser = subparsers.add_parser(
+        "export-memories",
+        help="Export all memories to a JSON file",
+    )
+    export_parser.add_argument("db_path", help="Path to database directory")
+    export_parser.add_argument("database", help="Database name")
+    export_parser.add_argument("--output", required=True, help="Output JSON file path")
+
     args = parser.parse_args()
 
     if not args.command:
@@ -748,7 +1117,10 @@ def main():
         "search": cmd_search,
         "semantic-search": cmd_semantic_search,
         "get-entities": cmd_get_entities,
+        "get-graph-data": cmd_get_graph_data,
         "add-episode": cmd_add_episode,
+        "delete-memory": cmd_delete_memory,
+        "export-memories": cmd_export_memories,
     }
 
     handler = commands.get(args.command)

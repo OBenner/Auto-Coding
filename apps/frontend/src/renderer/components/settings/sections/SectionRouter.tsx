@@ -52,8 +52,8 @@ export function SectionRouter({
   isCheckingVersion,
   isUpdating,
   envConfig,
-  isLoadingEnv,
-  envError,
+  isLoadingEnv: _isLoadingEnv,
+  envError: _envError,
   updateEnvConfig,
   showLinearKey,
   setShowLinearKey,
@@ -188,7 +188,7 @@ export function SectionRouter({
               showOpenAIKey={showOpenAIKey}
               setShowOpenAIKey={setShowOpenAIKey}
               expanded={true}
-              onToggle={() => {}}
+              onToggle={() => undefined}
             />
           </InitializationGuard>
         </SettingsSection>

@@ -1,6 +1,6 @@
-# Auto Claude UI - Frontend
+# Auto Code UI - Frontend
 
-A modern Electron + React desktop application for the Auto Claude autonomous coding framework.
+A modern Electron + React desktop application for the Auto Code autonomous coding framework.
 
 ## Prerequisites
 

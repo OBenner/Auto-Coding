@@ -1,0 +1,193 @@
+---
+title: Auto-Code Agent Pipeline
+---
+flowchart TB
+    subgraph UserInput["🎯 User Input"]
+        U1["User provides task description"]
+        U2["Complexity assessment<br/>(AI-driven or manual)"]
+    end
+
+    subgraph SpecCreation["📝 Spec Creation Pipeline (spec_runner.py)"]
+        direction TB
+
+        subgraph SimpleFlow["SIMPLE (3 phases)"]
+            S1["Discovery Agent<br/>(spec_gatherer)<br/>Collect requirements"]
+            S2["Quick Spec Agent<br/>(spec_quick)<br/>Generate minimal spec"]
+            S3["Validation Agent<br/>(validation_fixer)<br/>Validate spec structure"]
+        end
+
+        subgraph StandardFlow["STANDARD (6-7 phases)"]
+            ST1["Discovery Agent<br/>(spec_gatherer)<br/>Collect requirements"]
+            ST2["Requirements Structuring<br/>Parse & organize requirements"]
+            ST3["Context Discovery<br/>Analyze codebase<br/>Detect patterns"]
+            ST4["Research Agent<br/>(spec_researcher)<br/>(Optional)<br/>Validate integrations"]
+            ST5["Spec Writer<br/>(spec_writer)<br/>Create spec.md"]
+            ST6["Planning<br/>Generate implementation plan"]
+            ST7["Validation Agent<br/>(validation_fixer)<br/>Validate completeness"]
+        end
+
+        subgraph ComplexFlow["COMPLEX (8 phases)"]
+            C1["Discovery Agent<br/>(spec_gatherer)<br/>Collect detailed requirements"]
+            C2["Requirements Structuring<br/>Parse & organize requirements"]
+            C3["Research Agent<br/>(spec_researcher)<br/>Validate external integrations"]
+            C4["Context Discovery<br/>Deep codebase analysis<br/>Architecture patterns"]
+            C5["Spec Writer<br/>(spec_writer)<br/>Create comprehensive spec.md"]
+            C6["Self-Critique<br/>(spec_critic)<br/>Ultrathink review<br/>Identify gaps"]
+            C7["Planning<br/>Generate implementation plan"]
+            C8["Validation Agent<br/>(validation_fixer)<br/>Validate completeness"]
+        end
+    end
+
+    subgraph SpecOutput["📋 Spec Artifacts"]
+        direction LR
+        SO1["spec.md<br/>Feature specification"]
+        SO2["requirements.json<br/>Structured requirements"]
+        SO3["context.json<br/>Codebase context"]
+        SO4["implementation_plan.json<br/>Subtask-based plan"]
+    end
+
+    subgraph Implementation["🔨 Implementation Pipeline (run.py)"]
+        direction TB
+
+        I1["Planner Agent<br/>(agents/planner.py)<br/><br/>• Parse spec & context<br/>• Create subtask-based plan<br/>• Define verification steps"]
+
+        I2["Coder Agent<br/>(agents/coder.py)<br/><br/>• Implement subtasks<br/>• Follow patterns<br/>• Can spawn subagents<br/>• Update progress"]
+
+        I2R["Coder Recovery<br/>(coder_recovery)<br/><br/>• Detect stuck state<br/>• Analyze blockers<br/>• Try different approach"]
+
+        I3["QA Reviewer<br/>(agents/qa_reviewer.py)<br/><br/>• Validate acceptance criteria<br/>• Run E2E tests (Electron MCP)<br/>• Generate qa_report.md"]
+
+        I4{"QA Decision"}
+
+        I5["QA Fixer<br/>(agents/qa_fixer.py)<br/><br/>• Read QA_FIX_REQUEST.md<br/>• Fix reported issues<br/>• Re-run E2E tests<br/>• Verify fixes"]
+    end
+
+    subgraph Workspace["🗂️ Workspace Isolation"]
+        direction LR
+        W1["Git Worktree<br/>(.auto-claude/worktrees/<br/>{spec-name}/)<br/><br/>• Isolated branch<br/>• auto-claude/{spec-name}<br/>• No automatic push"]
+        W2["Main Branch<br/>(user's branch)<br/><br/>• Protected<br/>• Merge after approval"]
+    end
+
+    subgraph Memory["🧠 Memory System (Graphiti)"]
+        direction LR
+        M1["GraphitiMemory<br/><br/>• Session insights<br/>• Codebase discoveries<br/>• Patterns & gotchas<br/>• Task outcomes"]
+        M2["MemoryManager<br/>(agents/memory_manager.py)<br/><br/>• Context retrieval<br/>• Cross-session learning"]
+        M3["LadybugDB<br/>(Embedded graph DB)<br/><br/>• Semantic search<br/>• Graph queries"]
+    end
+
+    subgraph ParallelWork["⚡ Parallel Execution"]
+        P1["Subagent Spawning<br/>(Coder decides)<br/><br/>• Independent subtasks<br/>• Parallel implementation<br/>• No branch conflicts"]
+    end
+
+    subgraph Completion["✅ Completion"]
+        COMP1["Review Changes<br/>(--review)<br/>Test in worktree"]
+        COMP2["Merge to Main<br/>(--merge)<br/>Apply to project"]
+        COMP3["User Push<br/>Push to remote when ready"]
+    end
+
+    subgraph LinearIntegration["📊 Optional: Linear Integration"]
+        L1["Linear Updater<br/>(linear_updater.py)<br/><br/>• Sync progress<br/>• Update issue status<br/>• Link commits"]
+    end
+
+    %% User Input Flow
+    U1 --> U2
+    U2 -->|"Simple task"| S1
+    U2 -->|"Standard task"| ST1
+    U2 -->|"Complex task"| C1
+
+    %% Simple Flow
+    S1 --> S2 --> S3
+
+    %% Standard Flow
+    ST1 --> ST2 --> ST3
+    ST3 --> ST4
+    ST4 --> ST5 --> ST6 --> ST7
+
+    %% Complex Flow
+    C1 --> C2 --> C3 --> C4 --> C5
+    C5 --> C6 --> C7 --> C8
+
+    %% Spec Output
+    S3 --> SO1 & SO2 & SO3 & SO4
+    ST7 --> SO1 & SO2 & SO3 & SO4
+    C8 --> SO1 & SO2 & SO3 & SO4
+
+    %% Implementation Flow
+    SO4 --> I1
+    I1 --> I2
+    I2 -.->|"Stuck/Failed"| I2R
+    I2R --> I2
+    I2 --> I3
+    I3 --> I4
+    I4 -->|"Issues found"| I5
+    I5 --> I3
+    I4 -->|"Approved"| COMP1
+
+    %% Workspace
+    I1 & I2 & I3 & I5 --> W1
+    W1 -.->|"After approval"| W2
+
+    %% Memory Integration
+    I1 & I2 & I3 & I5 <--> M2
+    M2 <--> M1
+    M1 <--> M3
+
+    %% Parallel Work
+    I2 -.->|"Spawns when needed"| P1
+    P1 -.-> I2
+
+    %% Completion Flow
+    COMP1 --> COMP2
+    COMP2 --> W2
+    COMP2 --> COMP3
+
+    %% Linear Integration
+    I2 & I3 & I5 -.->|"Optional"| L1
+
+    %% Styling
+    style UserInput fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    style SpecCreation fill:#f3e5f5,stroke:#7b1fa2,stroke-width:3px
+    style SimpleFlow fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    style StandardFlow fill:#e8f5e9,stroke:#388e3c,stroke-width:2px
+    style ComplexFlow fill:#fce4ec,stroke:#c2185b,stroke-width:2px
+    style SpecOutput fill:#fff9c4,stroke:#f9a825,stroke-width:2px
+    style Implementation fill:#e1f5ff,stroke:#0277bd,stroke-width:3px
+    style Workspace fill:#ede7f6,stroke:#512da8,stroke-width:2px
+    style Memory fill:#e0f2f1,stroke:#00796b,stroke-width:2px
+    style ParallelWork fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    style Completion fill:#c8e6c9,stroke:#2e7d32,stroke-width:2px
+    style LinearIntegration fill:#e8eaf6,stroke:#3f51b5,stroke-width:2px
+
+    %% Highlight key agents
+    style I1 fill:#64b5f6,stroke:#0d47a1,stroke-width:3px,color:#000
+    style I2 fill:#81c784,stroke:#1b5e20,stroke-width:3px,color:#000
+    style I3 fill:#ffb74d,stroke:#e65100,stroke-width:3px,color:#000
+    style I5 fill:#ef5350,stroke:#b71c1c,stroke-width:3px,color:#fff
+
+    %% Highlight spec agents
+    style S2 fill:#ffb74d,stroke:#e65100,stroke-width:2px
+    style ST5 fill:#81c784,stroke:#1b5e20,stroke-width:2px
+    style C5 fill:#ba68c8,stroke:#4a148c,stroke-width:2px
+
+    %% Highlight outputs
+    style SO1 fill:#ffecb3,stroke:#f57c00,stroke-width:2px
+    style SO2 fill:#ffecb3,stroke:#f57c00,stroke-width:2px
+    style SO3 fill:#ffecb3,stroke:#f57c00,stroke-width:2px
+    style SO4 fill:#ffecb3,stroke:#f57c00,stroke-width:2px
+
+    %% Memory components
+    style M1 fill:#4db6ac,stroke:#004d40,stroke-width:2px,color:#fff
+    style M2 fill:#80cbc4,stroke:#00695c,stroke-width:2px
+    style M3 fill:#26a69a,stroke:#004d40,stroke-width:2px,color:#fff
+
+    %% Workspace components
+    style W1 fill:#ce93d8,stroke:#6a1b9a,stroke-width:2px
+    style W2 fill:#ba68c8,stroke:#4a148c,stroke-width:3px,color:#fff
+
+    %% Decision node
+    style I4 fill:#fff176,stroke:#f57f17,stroke-width:3px
+
+    %% Completion
+    style COMP1 fill:#a5d6a7,stroke:#2e7d32,stroke-width:2px
+    style COMP2 fill:#81c784,stroke:#1b5e20,stroke-width:3px
+    style COMP3 fill:#66bb6a,stroke:#1b5e20,stroke-width:2px

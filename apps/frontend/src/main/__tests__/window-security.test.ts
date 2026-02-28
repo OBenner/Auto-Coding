@@ -42,7 +42,11 @@ vi.mock("electron", () => {
 
   // Mock process.resourcesPath for icon loading
   if (!process.resourcesPath) {
-    process.resourcesPath = "/tmp/test/resources";
+    Object.defineProperty(process, 'resourcesPath', {
+      value: "/tmp/test/resources",
+      writable: true,
+      configurable: true,
+    });
   }
 
   return {
@@ -55,7 +59,7 @@ vi.mock("electron", () => {
       whenReady: vi.fn(() => Promise.resolve()),
       quit: vi.fn(),
       setName: vi.fn(),
-      getName: vi.fn(() => "Auto Claude"),
+      getName: vi.fn(() => "Auto Code"),
       dock: {
         setIcon: vi.fn(),
       },
@@ -232,13 +236,13 @@ describe("BrowserWindow Security Configuration", () => {
     // Verify options were captured
     expect(capturedOptions).not.toBeNull();
     expect(capturedOptions).toBeDefined();
-    expect(capturedOptions!.webPreferences).toBeDefined();
+    expect(capturedOptions?.webPreferences).toBeDefined();
 
     // Verify security settings
-    const webPreferences = capturedOptions!.webPreferences!;
-    expect(webPreferences.sandbox).toBe(true);
-    expect(webPreferences.contextIsolation).toBe(true);
-    expect(webPreferences.nodeIntegration).toBe(false);
+    const webPreferences = capturedOptions?.webPreferences;
+    expect(webPreferences?.sandbox).toBe(true);
+    expect(webPreferences?.contextIsolation).toBe(true);
+    expect(webPreferences?.nodeIntegration).toBe(false);
   });
 
   it("should have preload script configured", async () => {
@@ -252,10 +256,10 @@ describe("BrowserWindow Security Configuration", () => {
     ).getCapturedOptions() as { webPreferences?: Record<string, unknown> } | null;
 
     expect(capturedOptions).not.toBeNull();
-    expect(capturedOptions!.webPreferences).toBeDefined();
-    expect(capturedOptions!.webPreferences!.preload).toBeDefined();
-    expect(typeof capturedOptions!.webPreferences!.preload).toBe("string");
-    expect(capturedOptions!.webPreferences!.preload).toContain("preload");
+    expect(capturedOptions?.webPreferences).toBeDefined();
+    expect(capturedOptions?.webPreferences?.preload).toBeDefined();
+    expect(typeof capturedOptions?.webPreferences?.preload).toBe("string");
+    expect(capturedOptions?.webPreferences?.preload).toContain("preload");
   });
 
   it("should have all critical security settings in webPreferences", async () => {
@@ -269,7 +273,7 @@ describe("BrowserWindow Security Configuration", () => {
     ).getCapturedOptions() as { webPreferences?: Record<string, unknown> } | null;
 
     expect(capturedOptions).not.toBeNull();
-    const webPreferences = capturedOptions!.webPreferences!;
+    const webPreferences = capturedOptions?.webPreferences;
 
     // Verify all security-related settings are present and correct
     expect(webPreferences).toMatchObject({

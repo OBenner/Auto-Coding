@@ -37,7 +37,7 @@ interface QueueSettingsModalProps {
 export function QueueSettingsModal({
   open,
   onOpenChange,
-  projectId,
+  projectId: _projectId,
   currentMaxParallel = 3,
   onSave
 }: QueueSettingsModalProps) {

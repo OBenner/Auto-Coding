@@ -6,7 +6,7 @@
  * Unit tests for useVirtualizedLogs hook
  * Tests flattenLogs function and visible items computation
  */
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import {
   flattenLogs,

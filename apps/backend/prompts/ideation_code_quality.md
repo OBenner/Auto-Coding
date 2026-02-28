@@ -129,6 +129,91 @@ Identify code quality issues across these categories:
    - Check for circular imports
    - Review folder organization
 
+### Research Refactoring Best Practices (Using WebSearch)
+
+**WebSearch should be used AFTER local code analysis to validate refactoring approaches and discover proven patterns.**
+
+After identifying code quality issues locally, use web search to research best practices and refactoring techniques. This helps validate your approach and discover proven solutions.
+
+#### Step 1: Search for Refactoring Best Practices
+
+When you identify a code quality issue, search for established refactoring patterns:
+
+```
+Tool: WebSearch
+Query: "[code smell type] refactoring best practices [language/framework] 2026"
+```
+
+**Example searches:**
+- `"large file refactoring best practices TypeScript 2026"` - For splitting large files
+- `"code duplication elimination patterns React 2026"` - For DRY improvements
+- `"high complexity function refactoring JavaScript 2026"` - For simplifying complex code
+- `"circular dependency resolution TypeScript 2026"` - For dependency issues
+- `"naming conventions best practices [language] 2026"` - For naming consistency
+- `"module organization patterns Node.js 2026"` - For file structure improvements
+
+**What to verify:**
+1. **Standard approaches** - What are the established refactoring patterns?
+2. **Incremental steps** - How to refactor safely without breaking changes?
+3. **Testing strategies** - How to ensure refactoring doesn't introduce bugs?
+4. **Code organization** - What are common folder/module structures?
+5. **Migration paths** - How to transition from old to new structure?
+
+#### Step 2: Search for Refactoring Examples
+
+Find real-world examples to understand the refactoring process:
+
+```
+Tool: WebSearch
+Query: "[refactoring pattern] example implementation 2026"
+```
+
+**Example searches:**
+- `"extract function refactoring TypeScript example 2026"` - See extraction patterns
+- `"split large component React example 2026"` - Learn component splitting
+- `"dependency injection refactoring JavaScript example 2026"` - See DI patterns
+- `"feature folder structure example TypeScript 2026"` - Understand organization
+- `"barrel exports pattern TypeScript example 2026"` - Learn export patterns
+- `"utility function extraction example JavaScript 2026"` - See abstraction patterns
+
+**What to extract:**
+1. **Before/after code** - How does the code change?
+2. **Refactoring steps** - What's the sequence of changes?
+3. **Testing approach** - How is the refactoring validated?
+4. **File structure** - How are files organized after refactoring?
+5. **Import patterns** - How do imports change?
+
+#### Step 3: Search for Common Pitfalls
+
+Research problems others encountered during similar refactorings:
+
+```
+Tool: WebSearch
+Query: "[refactoring type] common mistakes pitfalls 2026"
+```
+
+**Example searches:**
+- `"large file refactoring common mistakes TypeScript 2026"` - Avoid pitfalls
+- `"code extraction breaking changes issues 2026"` - Learn what breaks
+- `"module reorganization circular dependency issues 2026"` - Handle dependencies
+- `"refactoring without tests risks 2026"` - Understand testing importance
+- `"TypeScript refactoring type errors 2026"` - Handle type issues
+- `"React component split state management issues 2026"` - Handle state correctly
+
+**What to document:**
+1. **Breaking changes** - What causes breaks during refactoring?
+2. **Test coverage** - Why is testing critical before refactoring?
+3. **Rollback strategies** - How to undo problematic refactorings?
+4. **Gradual migration** - How to refactor incrementally?
+5. **Team coordination** - How to avoid conflicts during large refactorings?
+
+**Integration into analysis:**
+- Use search results to validate your refactoring suggestions
+- Include proven patterns in your `bestPractice` field
+- Document known pitfalls in your `prerequisites` field
+- Reference authoritative sources in your rationale
+- Suggest testing strategies based on research
+
 ## Output Format
 
 Write your findings to `{output_dir}/code_quality_ideas.json`:

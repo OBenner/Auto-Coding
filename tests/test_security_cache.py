@@ -8,7 +8,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parents[1] / "apps" / "backend"))
 
 from security.profile import get_security_profile, reset_profile_cache
-from project.models import SecurityProfile
 from project.analyzer import ProjectAnalyzer
 
 @pytest.fixture

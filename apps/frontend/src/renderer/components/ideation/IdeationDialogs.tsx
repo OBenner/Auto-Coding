@@ -127,6 +127,9 @@ export function IdeationDialogs({
               </div>
             ) : (
               availableTypesToAdd.map((type) => (
+                // biome-ignore lint/a11y/noNoninteractiveElementInteractions: Clickable card for selection
+                // biome-ignore lint/a11y/noStaticElementInteractions: Clickable card for selection
+                // biome-ignore lint/a11y/useKeyWithClickEvents: This is a simple selection card
                 <div
                   key={type}
                   className={`flex items-center justify-between p-3 rounded-lg cursor-pointer transition-colors ${

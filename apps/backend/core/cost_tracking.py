@@ -46,7 +46,7 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -373,11 +373,10 @@ class CostTracker:
             return
 
         try:
-            with open(self._report_file, "r", encoding="utf-8") as f:
+            with open(self._report_file, encoding="utf-8") as f:
                 data = json.load(f)
                 self.records = [
-                    UsageRecord.from_dict(record)
-                    for record in data.get("records", [])
+                    UsageRecord.from_dict(record) for record in data.get("records", [])
                 ]
         except (json.JSONDecodeError, KeyError, TypeError):
             # If file is corrupted, start fresh
@@ -392,7 +391,7 @@ class CostTracker:
             "spec_dir": str(self.spec_dir),
             "total_cost": self.get_total_cost(),
             "records": [record.to_dict() for record in self.records],
-            "last_updated": datetime.utcnow().isoformat() + "Z",
+            "last_updated": datetime.now(UTC).isoformat() + "Z",
         }
 
         with open(self._report_file, "w", encoding="utf-8") as f:
@@ -478,7 +477,7 @@ class CostTracker:
             input_tokens=input_tokens,
             output_tokens=output_tokens,
             cost=cost,
-            timestamp=datetime.utcnow().isoformat() + "Z",
+            timestamp=datetime.now(UTC).isoformat() + "Z",
         )
 
         self.records.append(record)
@@ -543,26 +542,35 @@ class CostTracker:
             percentage = (cost / total * 100) if total > 0 else 0
             lines.append(f"  {agent:20s} ${cost:7.4f} ({percentage:5.1f}%)")
 
-        lines.extend([
-            "",
-            "Cost by Model:",
-            "-" * 60,
-        ])
+        lines.extend(
+            [
+                "",
+                "Cost by Model:",
+                "-" * 60,
+            ]
+        )
 
         for model, cost in sorted(by_model.items(), key=lambda x: x[1], reverse=True):
             percentage = (cost / total * 100) if total > 0 else 0
             # Shorten model name for display
-            model_short = model.replace("claude-", "").replace("-20250929", "").replace("-20251001", "").replace("-20251101", "")
+            model_short = (
+                model.replace("claude-", "")
+                .replace("-20250929", "")
+                .replace("-20251001", "")
+                .replace("-20251101", "")
+            )
             lines.append(f"  {model_short:20s} ${cost:7.4f} ({percentage:5.1f}%)")
 
-        lines.extend([
-            "",
-            "Token Usage:",
-            "-" * 60,
-            f"  Input Tokens:  {tokens['input_tokens']:,}",
-            f"  Output Tokens: {tokens['output_tokens']:,}",
-            f"  Total Tokens:  {tokens['total_tokens']:,}",
-            "=" * 60,
-        ])
+        lines.extend(
+            [
+                "",
+                "Token Usage:",
+                "-" * 60,
+                f"  Input Tokens:  {tokens['input_tokens']:,}",
+                f"  Output Tokens: {tokens['output_tokens']:,}",
+                f"  Total Tokens:  {tokens['total_tokens']:,}",
+                "=" * 60,
+            ]
+        )
 
         return "\n".join(lines)

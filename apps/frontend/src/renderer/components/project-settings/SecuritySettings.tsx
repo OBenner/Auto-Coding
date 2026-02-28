@@ -334,6 +334,7 @@ export function SecuritySettings({
   return (
     <section className="space-y-3">
       <button
+        type="button"
         onClick={onToggle}
         className="w-full flex items-center justify-between text-sm font-semibold text-foreground hover:text-foreground/80"
       >

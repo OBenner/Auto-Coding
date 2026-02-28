@@ -2,6 +2,7 @@
   "refreshTasks": "Actualiser les tâches",
   "status": {
     "backlog": "Backlog",
+    "queue": "File d'attente",
     "todo": "À faire",
     "in_progress": "En cours",
     "review": "Révision",
@@ -24,6 +25,9 @@
     "showMetadata": "Afficher les métadonnées",
     "hideMetadata": "Masquer les métadonnées"
   },
+  "taskDetail": {
+    "viewSessionReplay": "Voir la relecture de session"
+  },
   "labels": {
     "running": "En cours",
     "aiReview": "Révision IA",
@@ -33,7 +37,8 @@
     "incomplete": "Incomplet",
     "recovering": "Récupération...",
     "needsRecovery": "Récupération requise",
-    "needsResume": "Reprise requise"
+    "needsResume": "Reprise requise",
+    "moreInfo": "Plus"
   },
   "reviewReason": {
     "completed": "Terminé",
@@ -108,7 +113,10 @@
     "lockColumn": "Verrouiller la largeur de la colonne",
     "unlockColumn": "Déverrouiller la largeur de la colonne",
     "columnLocked": "La largeur de la colonne est verrouillée",
-    "expandAll": "Développer toutes les colonnes"
+    "expandAll": "Développer toutes les colonnes",
+    "dragDisabledAutoSort": "Glisser-déposer désactivé lorsque le tri automatique est actif",
+    "searchPlaceholder": "Rechercher des tâches...",
+    "clearFilters": "Effacer les filtres"
   },
   "queue": {
     "limitReached": "Limite de tâches parallèles atteinte ({{current}}/{{max}}). Tâche déplacée vers la file d'attente.",
@@ -149,7 +157,49 @@
       "plan": "Plan",
       "code": "Code",
       "qa": "QA"
+    },
+    "resources": {
+      "cpu": "CPU",
+      "memory": "Mémoire",
+      "elapsed": "Écoulé"
+    },
+    "time": {
+      "elapsed": "Écoulé",
+      "remaining": "Temps restant est.",
+      "subtask": "Sous-tâche",
+      "about": "Environ",
+      "roughly": "Approximativement",
+      "unknown": "Inconnu",
+      "lessThanMinute": "Moins de 1 minute",
+      "minute": "{{count}} minute",
+      "minute_plural": "{{count}} minutes",
+      "hour": "{{count}} heure",
+      "hour_plural": "{{count}} heures",
+      "day": "{{count}} jour",
+      "day_plural": "{{count}} jours"
+    },
+    "confidence": {
+      "high": "Confiance élevée",
+      "medium": "Confiance moyenne",
+      "low": "Confiance faible",
+      "samples": "{{count}} échantillons"
     }
+  },
+  "logs": {
+    "search": {
+      "placeholder": "Rechercher dans les journaux...",
+      "showing": "Affichage de {{filtered}} sur {{total}} éléments",
+      "noResults": "Aucun journal correspondant",
+      "noResultsHint": "Essayez d'ajuster votre recherche ou filtre"
+    },
+    "filters": {
+      "all": "Tous",
+      "errors": "Erreurs",
+      "tools": "Outils",
+      "info": "Info"
+    },
+    "empty": "Aucun journal pour le moment",
+    "emptyHint": "Les journaux apparaîtront ici lorsque la tâche s'exécutera"
   },
   "files": {
     "title": "Fichiers",
@@ -166,7 +216,8 @@
   },
   "metadata": {
     "severity": "sévérité",
-    "pullRequest": "Pull Request"
+    "pullRequest": "Pull Request",
+    "additionalInfo": "Informations supplémentaires"
   },
   "images": {
     "removeImageAriaLabel": "Supprimer l'image {{filename}}",
@@ -174,7 +225,11 @@
   },
   "notifications": {
     "backgroundTaskTitle": "La tâche continue en arrière-plan",
-    "backgroundTaskDescription": "La tâche est toujours en cours. Vous pouvez rouvrir cette boîte de dialogue pour suivre la progression."
+    "backgroundTaskDescription": "La tâche est toujours en cours. Vous pouvez rouvrir cette boîte de dialogue pour suivre la progression.",
+    "taskComplete": "Tâche terminée",
+    "taskCompleteDescription": "Votre tâche s'est terminée avec succès et est prête pour révision.",
+    "taskFailed": "Tâche échouée",
+    "taskFailedDescription": "Votre tâche a rencontré un problème et nécessite votre attention."
   },
   "ariaLabels": {
     "taskCard": "Carte de tâche : {{title}}",
@@ -340,5 +395,33 @@
   "referenceImages": {
     "title": "Images de référence (facultatif)",
     "description": "Ajoutez des références visuelles comme des captures d'écran ou des conceptions pour aider l'IA à comprendre vos exigences."
+  },
+  "overview": {
+    "implementationPlan": "Plan d'implémentation",
+    "phaseNumber": "Phase {{number}}",
+    "subtasksCompleted": "sous-tâches terminées",
+    "verification": "Vérification",
+    "qaReport": "Rapport QA",
+    "qaEscalation": "Escalade QA",
+    "totalIterations": "Itérations totales",
+    "totalIssues": "Problèmes totaux",
+    "uniqueIssues": "Problèmes uniques",
+    "fixSuccessRate": "Taux de réussite des corrections",
+    "recurringIssues": "Problèmes récurrents",
+    "commonIssues": "Problèmes courants",
+    "noDataAvailable": "Aucune donnée de vue d'ensemble disponible"
+  },
+  "merge": {
+    "progress": "Fusion des fichiers...",
+    "analyzing": "Analyse des modifications...",
+    "fileProgress": "{{current}} / {{total}} fichiers",
+    "currentFile": "Traitement : {{file}}",
+    "conflicts": "{{count}} conflit(s) détecté(s)",
+    "complete": "Fusion terminée",
+    "autoResolved": "{{count}} fichier(s) résolu(s) automatiquement"
+  },
+  "markDoneFailed": "Impossible de marquer comme terminé",
+  "prPolling": {
+    "autoRefreshing": "Actualisation automatique"
   }
 }

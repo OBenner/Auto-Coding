@@ -1,0 +1,14 @@
+{
+  "name": "custom-integration",
+  "version": "1.0.0",
+  "author": "Auto-Coding Team",
+  "description": "Example integration plugin that demonstrates MCP tool creation, config management, and state persistence using a mock file-based task manager",
+  "plugin_type": "integration",
+  "required_permissions": [
+    "read_files",
+    "write_files"
+  ],
+  "dependencies": [],
+  "homepage": "https://github.com/OBenner/Auto-Coding/tree/main/examples/plugins/custom-integration",
+  "license": "MIT"
+}

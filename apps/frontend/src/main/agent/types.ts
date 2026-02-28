@@ -17,13 +17,18 @@ export interface AgentProcess {
 }
 
 export interface ExecutionProgressData {
-  phase: 'idle' | 'planning' | 'coding' | 'qa_review' | 'qa_fixing' | 'complete' | 'failed';
+  phase: 'idle' | 'planning' | 'coding' | 'test_generation' | 'qa_review' | 'qa_fixing' | 'complete' | 'failed';
   phaseProgress: number;
   overallProgress: number;
   currentSubtask?: string;
   message?: string;
   // FIX (ACS-203): Track completed phases to prevent phase overlaps
   completedPhases?: CompletablePhase[];
+  // Resource usage metrics (from backend resource_tracker.py via phase events)
+  cpu_percent?: number;
+  memory_mb?: number;
+  memory_percent?: number;
+  elapsed_seconds?: number;
 }
 
 export type ProcessType = 'spec-creation' | 'task-execution' | 'qa-process';

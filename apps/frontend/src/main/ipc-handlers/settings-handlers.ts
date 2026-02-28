@@ -22,6 +22,7 @@ import { setUpdateChannel, setUpdateChannelWithDowngradeCheck } from '../app-upd
 import { getSettingsPath, readSettingsFile } from '../settings-utils';
 import { configureTools, getToolPath, getToolInfo, isPathFromWrongPlatform, preWarmToolCache } from '../cli-tool-manager';
 import { parseEnvFile } from './utils';
+import { getCurrentOS, isMacOS, isWindows } from '../platform';
 import { projectStore } from '../project-store';
 
 const settingsPath = getSettingsPath();
@@ -63,7 +64,7 @@ const detectAutoBuildSourcePath = (): string | null => {
   const debug = process.env.DEBUG === '1' || process.env.DEBUG === 'true';
 
   if (debug) {
-    console.warn('[detectAutoBuildSourcePath] Platform:', process.platform);
+    console.warn('[detectAutoBuildSourcePath] Platform:', getCurrentOS());
     console.warn('[detectAutoBuildSourcePath] Is dev:', is.dev);
     console.warn('[detectAutoBuildSourcePath] __dirname:', __dirname);
     console.warn('[detectAutoBuildSourcePath] app.getAppPath():', app.getAppPath());
@@ -87,7 +88,7 @@ const detectAutoBuildSourcePath = (): string | null => {
     }
   }
 
-  console.warn('[detectAutoBuildSourcePath] Could not auto-detect Auto Claude source path. Please configure manually in settings.');
+  console.warn('[detectAutoBuildSourcePath] Could not auto-detect Auto Code source path. Please configure manually in settings.');
   console.warn('[detectAutoBuildSourcePath] Set DEBUG=1 environment variable for detailed path checking.');
   return null;
 };
@@ -233,7 +234,7 @@ export function registerSettingsHandlers(
       // Migration: Clear CLI tool paths that are from a different platform
       // Fixes issue where Windows paths persisted on macOS (and vice versa)
       // when settings were synced/transferred between platforms
-      // See: https://github.com/AndyMik90/Auto-Claude/issues/XXX
+      // See: https://github.com/OBenner/Auto-Coding/issues/XXX
       const pathFields = ['pythonPath', 'gitPath', 'githubCLIPath', 'claudePath', 'autoBuildPath'] as const;
       for (const field of pathFields) {
         const pathValue = settings[field];
@@ -714,12 +715,10 @@ export function registerSettingsHandlers(
           };
         }
 
-        const platform = process.platform;
-
-        if (platform === 'darwin') {
+        if (isMacOS()) {
           // macOS: Use execFileSync with argument array to prevent injection
           execFileSync('open', ['-a', 'Terminal', resolvedPath], { stdio: 'ignore' });
-        } else if (platform === 'win32') {
+        } else if (isWindows()) {
           // Windows: Use cmd.exe directly with argument array
           // /C tells cmd to execute the command and terminate
           // /K keeps the window open after executing cd
@@ -748,6 +747,7 @@ export function registerSettingsHandlers(
               opened = true;
               break;
             } catch {
+              // Try next terminal
             }
           }
 
@@ -911,8 +911,8 @@ export function registerSettingsHandlers(
 
         // Generate content
         const lines: string[] = [
-          '# Auto Claude Framework Environment Variables',
-          '# Managed by Auto Claude UI',
+          '# Auto Code Framework Environment Variables',
+          '# Managed by Auto Code UI',
           '',
           '# Claude Code OAuth Token (REQUIRED)',
           `CLAUDE_CODE_OAUTH_TOKEN=${existingVars['CLAUDE_CODE_OAUTH_TOKEN'] || ''}`,
@@ -1009,12 +1009,10 @@ export function registerSettingsHandlers(
     IPC_CHANNELS.SETTINGS_GET_AVAILABLE_MODELS,
     async (_, provider: string): Promise<IPCResult<{ models: string[] }>> => {
       try {
-        // Return available models based on provider type
         let models: string[] = [];
 
         switch (provider) {
           case 'claude':
-            // Claude models (via Anthropic API)
             models = [
               'claude-sonnet-4-5-20250929',
               'claude-opus-4-20250514',
@@ -1026,80 +1024,42 @@ export function registerSettingsHandlers(
             break;
 
           case 'litellm':
-            // LiteLLM supports multiple providers
             models = [
-              // OpenAI
-              'gpt-4',
-              'gpt-4-turbo',
-              'gpt-4o',
-              'gpt-4o-mini',
-              'gpt-3.5-turbo',
-              // Anthropic
-              'anthropic/claude-3-opus-20240229',
-              'anthropic/claude-3-sonnet-20240229',
-              'anthropic/claude-3-haiku-20240307',
-              // Google
-              'gemini/gemini-pro',
-              'gemini/gemini-1.5-pro',
-              'gemini/gemini-1.5-flash',
-              'gemini/gemini-2.0-flash',
-              // Ollama
-              'ollama/llama3',
-              'ollama/llama3.1',
-              'ollama/llama3.2',
-              'ollama/mistral',
-              'ollama/mixtral',
-              'ollama/codellama',
-              'ollama/qwen',
-              'ollama/qwen2',
-              'ollama/gemma',
-              'ollama/gemma2'
+              'gpt-4', 'gpt-4-turbo', 'gpt-4o', 'gpt-4o-mini', 'gpt-3.5-turbo',
+              'anthropic/claude-3-opus-20240229', 'anthropic/claude-3-sonnet-20240229', 'anthropic/claude-3-haiku-20240307',
+              'gemini/gemini-pro', 'gemini/gemini-1.5-pro', 'gemini/gemini-1.5-flash', 'gemini/gemini-2.0-flash',
+              'ollama/llama3', 'ollama/llama3.1', 'ollama/llama3.2', 'ollama/mistral', 'ollama/mixtral',
+              'ollama/codellama', 'ollama/qwen', 'ollama/qwen2', 'ollama/gemma', 'ollama/gemma2'
             ];
             break;
 
           case 'openrouter':
-            // OpenRouter aggregates many providers
             models = [
-              'anthropic/claude-3.5-sonnet',
-              'anthropic/claude-3-opus',
-              'openai/gpt-4-turbo',
-              'openai/gpt-4o',
+              'anthropic/claude-3.5-sonnet', 'anthropic/claude-3-opus',
+              'openai/gpt-4-turbo', 'openai/gpt-4o',
               'google/gemini-pro-1.5',
-              'meta-llama/llama-3.1-405b-instruct',
-              'meta-llama/llama-3.1-70b-instruct',
+              'meta-llama/llama-3.1-405b-instruct', 'meta-llama/llama-3.1-70b-instruct',
               'mistralai/mixtral-8x7b-instruct'
             ];
             break;
 
           case 'ollama':
-            // For Ollama, call the Python detector script to get live models
             try {
               const { sourcePath } = getSourceEnvPath();
               if (!sourcePath) {
-                return {
-                  success: false,
-                  error: 'Auto-build source path not configured. Cannot detect Ollama models.'
-                };
+                return { success: false, error: 'Auto-build source path not configured. Cannot detect Ollama models.' };
               }
 
               const scriptPath = path.join(sourcePath, 'ollama_model_detector.py');
               if (!existsSync(scriptPath)) {
-                return {
-                  success: false,
-                  error: 'Ollama model detector script not found'
-                };
+                return { success: false, error: 'Ollama model detector script not found' };
               }
 
-              // Get Python path using cli-tool-manager
               const pythonPath = getToolPath('python');
               if (!pythonPath) {
-                return {
-                  success: false,
-                  error: 'Python not found. Please install Python 3.10 or higher.'
-                };
+                return { success: false, error: 'Python not found. Please install Python 3.10 or higher.' };
               }
 
-              // Call ollama_model_detector.py list-models
               const output = execFileSync(pythonPath, [scriptPath, 'list-models'], {
                 encoding: 'utf-8',
                 timeout: 5000
@@ -1107,27 +1067,17 @@ export function registerSettingsHandlers(
 
               const result = JSON.parse(output);
               if (result.success && result.data && result.data.models) {
-                models = result.data.models.map((m: any) => m.name);
+                models = result.data.models.map((m: { name: string }) => m.name);
               } else {
-                return {
-                  success: false,
-                  error: result.error || 'Failed to detect Ollama models'
-                };
+                return { success: false, error: result.error || 'Failed to detect Ollama models' };
               }
-            } catch (error) {
-              // If Ollama detection fails, return empty list (Ollama might not be installed)
-              return {
-                success: true,
-                data: { models: [] }
-              };
+            } catch {
+              return { success: true, data: { models: [] } };
             }
             break;
 
           default:
-            return {
-              success: false,
-              error: `Unknown provider: ${provider}`
-            };
+            return { success: false, error: `Unknown provider: ${provider}` };
         }
 
         return {
@@ -1139,6 +1089,194 @@ export function registerSettingsHandlers(
         return {
           success: false,
           error: error instanceof Error ? error.message : 'Failed to get available models'
+        };
+      }
+    }
+  );
+
+  // ============================================
+  // AI Provider Configuration (Backend .env sync)
+  // ============================================
+
+  /**
+   * Get AI provider configuration from backend .env file
+   */
+  ipcMain.handle(
+    IPC_CHANNELS.PROVIDER_CONFIG_GET,
+    async (): Promise<IPCResult<import('../../shared/types').AIProviderConfig>> => {
+      try {
+        const { sourcePath, envPath } = getSourceEnvPath();
+
+        if (!sourcePath || !envPath) {
+          return {
+            success: false,
+            error: 'Auto-build source path not configured. Please set it in Settings.'
+          };
+        }
+
+        const config: import('../../shared/types').AIProviderConfig = {
+          provider: 'claude'
+        };
+
+        if (existsSync(envPath)) {
+          const content = readFileSync(envPath, 'utf-8');
+          const vars = parseEnvFile(content);
+
+          config.provider = (vars['AI_ENGINE_PROVIDER'] || 'claude') as import('../../shared/types').AIEngineProvider;
+          config.anthropicApiKey = vars['ANTHROPIC_API_KEY'];
+          config.claudeModel = vars['CLAUDE_MODEL'];
+          config.openaiApiKey = vars['OPENAI_API_KEY'];
+          config.openaiModel = vars['OPENAI_MODEL'];
+          config.openaiBaseUrl = vars['OPENAI_BASE_URL'];
+          config.googleApiKey = vars['GOOGLE_API_KEY'];
+          config.googleModel = vars['GOOGLE_MODEL'];
+          config.litellmModel = vars['LITELLM_MODEL'];
+          config.litellmApiBase = vars['LITELLM_API_BASE'];
+          config.litellmApiKey = vars['LITELLM_API_KEY'];
+          config.openrouterApiKey = vars['OPENROUTER_API_KEY'];
+          config.openrouterModel = vars['OPENROUTER_MODEL'];
+          config.openrouterBaseUrl = vars['OPENROUTER_BASE_URL'];
+          config.ollamaModel = vars['OLLAMA_MODEL'];
+          config.ollamaBaseUrl = vars['OLLAMA_BASE_URL'];
+        }
+
+        return {
+          success: true,
+          data: config
+        };
+      } catch (error) {
+        console.error('[PROVIDER_CONFIG_GET] Error:', error);
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Failed to get provider config'
+        };
+      }
+    }
+  );
+
+  /**
+   * Update AI provider configuration in backend .env file
+   */
+  ipcMain.handle(
+    IPC_CHANNELS.PROVIDER_CONFIG_UPDATE,
+    async (_, config: Partial<import('../../shared/types').AIProviderConfig>): Promise<IPCResult> => {
+      try {
+        const { sourcePath, envPath } = getSourceEnvPath();
+
+        if (!sourcePath || !envPath) {
+          return {
+            success: false,
+            error: 'Auto-build source path not configured. Please set it in Settings.'
+          };
+        }
+
+        let existingVars: Record<string, string> = {};
+        try {
+          const content = readFileSync(envPath, 'utf-8');
+          existingVars = parseEnvFile(content);
+        } catch {
+          // File doesn't exist yet, start with empty vars
+        }
+
+        if (config.provider !== undefined) existingVars['AI_ENGINE_PROVIDER'] = config.provider;
+        if (config.anthropicApiKey !== undefined) existingVars['ANTHROPIC_API_KEY'] = config.anthropicApiKey;
+        if (config.claudeModel !== undefined) existingVars['CLAUDE_MODEL'] = config.claudeModel;
+        if (config.openaiApiKey !== undefined) existingVars['OPENAI_API_KEY'] = config.openaiApiKey;
+        if (config.openaiModel !== undefined) existingVars['OPENAI_MODEL'] = config.openaiModel;
+        if (config.openaiBaseUrl !== undefined) existingVars['OPENAI_BASE_URL'] = config.openaiBaseUrl;
+        if (config.googleApiKey !== undefined) existingVars['GOOGLE_API_KEY'] = config.googleApiKey;
+        if (config.googleModel !== undefined) existingVars['GOOGLE_MODEL'] = config.googleModel;
+        if (config.litellmModel !== undefined) existingVars['LITELLM_MODEL'] = config.litellmModel;
+        if (config.litellmApiBase !== undefined) existingVars['LITELLM_API_BASE'] = config.litellmApiBase;
+        if (config.litellmApiKey !== undefined) existingVars['LITELLM_API_KEY'] = config.litellmApiKey;
+        if (config.openrouterApiKey !== undefined) existingVars['OPENROUTER_API_KEY'] = config.openrouterApiKey;
+        if (config.openrouterModel !== undefined) existingVars['OPENROUTER_MODEL'] = config.openrouterModel;
+        if (config.openrouterBaseUrl !== undefined) existingVars['OPENROUTER_BASE_URL'] = config.openrouterBaseUrl;
+        if (config.ollamaModel !== undefined) existingVars['OLLAMA_MODEL'] = config.ollamaModel;
+        if (config.ollamaBaseUrl !== undefined) existingVars['OLLAMA_BASE_URL'] = config.ollamaBaseUrl;
+
+        const newContent = Object.entries(existingVars)
+          .map(([key, value]) => `${key}=${value}`)
+          .join('\n');
+
+        writeFileSync(envPath, newContent, 'utf-8');
+
+        return { success: true };
+      } catch (error) {
+        console.error('[PROVIDER_CONFIG_UPDATE] Error:', error);
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Failed to update provider config'
+        };
+      }
+    }
+  );
+
+  /**
+   * Validate AI provider configuration
+   */
+  ipcMain.handle(
+    IPC_CHANNELS.PROVIDER_CONFIG_VALIDATE,
+    async (): Promise<IPCResult<import('../../shared/types').ProviderConfigValidation>> => {
+      try {
+        const { sourcePath, envPath } = getSourceEnvPath();
+
+        if (!sourcePath || !envPath) {
+          return {
+            success: false,
+            error: 'Auto-build source path not configured. Please set it in Settings.'
+          };
+        }
+
+        const errors: string[] = [];
+        const availableProviders: import('../../shared/types').AIEngineProvider[] = [];
+
+        if (existsSync(envPath)) {
+          const content = readFileSync(envPath, 'utf-8');
+          const vars = parseEnvFile(content);
+
+          const provider = (vars['AI_ENGINE_PROVIDER'] || 'claude') as import('../../shared/types').AIEngineProvider;
+
+          if (vars['ANTHROPIC_API_KEY']) availableProviders.push('claude');
+          if (vars['OPENAI_API_KEY']) availableProviders.push('openai');
+          if (vars['GOOGLE_API_KEY']) availableProviders.push('google');
+          if (vars['LITELLM_MODEL']) availableProviders.push('litellm');
+          if (vars['OPENROUTER_API_KEY']) availableProviders.push('openrouter');
+          if (vars['OLLAMA_MODEL']) availableProviders.push('ollama');
+
+          switch (provider) {
+            case 'claude':
+              if (!vars['ANTHROPIC_API_KEY']) errors.push('Claude provider requires ANTHROPIC_API_KEY environment variable');
+              break;
+            case 'openai':
+              if (!vars['OPENAI_API_KEY']) errors.push('OpenAI provider requires OPENAI_API_KEY environment variable');
+              break;
+            case 'google':
+              if (!vars['GOOGLE_API_KEY']) errors.push('Google provider requires GOOGLE_API_KEY environment variable');
+              break;
+            case 'litellm':
+              if (!vars['LITELLM_MODEL']) errors.push('LiteLLM provider requires LITELLM_MODEL environment variable');
+              break;
+            case 'openrouter':
+              if (!vars['OPENROUTER_API_KEY']) errors.push('OpenRouter provider requires OPENROUTER_API_KEY environment variable');
+              break;
+            case 'ollama':
+              if (!vars['OLLAMA_MODEL']) errors.push('Ollama provider requires OLLAMA_MODEL environment variable');
+              break;
+          }
+        } else {
+          errors.push('.env file does not exist in backend directory');
+        }
+
+        return {
+          success: true,
+          data: { isValid: errors.length === 0, errors, availableProviders }
+        };
+      } catch (error) {
+        console.error('[PROVIDER_CONFIG_VALIDATE] Error:', error);
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Failed to validate provider config'
         };
       }
     }

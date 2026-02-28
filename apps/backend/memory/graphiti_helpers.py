@@ -17,7 +17,7 @@ from core.sentry import capture_exception
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
-    from graphiti_memory import GraphitiMemory
+    from integrations.graphiti.queries_pkg.graphiti import GraphitiMemory
 
 
 def is_graphiti_memory_enabled() -> bool:
@@ -32,7 +32,7 @@ def is_graphiti_memory_enabled() -> bool:
     See graphiti_config.py for detailed provider requirements.
     """
     try:
-        from graphiti_config import is_graphiti_enabled
+        from integrations.graphiti.config import is_graphiti_enabled
 
         return is_graphiti_enabled()
     except ImportError:
@@ -60,7 +60,8 @@ async def get_graphiti_memory(
         return None
 
     try:
-        from graphiti_memory import GraphitiMemory, GroupIdMode
+        from integrations.graphiti.queries_pkg.graphiti import GraphitiMemory
+        from integrations.graphiti.queries_pkg.schema import GroupIdMode
 
         if project_dir is None:
             project_dir = spec_dir.parent.parent

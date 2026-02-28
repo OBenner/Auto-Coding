@@ -76,6 +76,7 @@ export function DocumentationGapDetails({ idea }: DocumentationGapDetailsProps) 
           </h3>
           <ul className="space-y-1">
             {idea.affectedAreas.map((area, i) => (
+              /* biome-ignore lint/suspicious/noArrayIndexKey: String items without unique IDs */
               <li key={i} className="text-sm font-mono text-muted-foreground">
                 {area}
               </li>

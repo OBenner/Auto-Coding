@@ -11,7 +11,7 @@ const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 
-const GITHUB_REPO = 'AndyMik90/Auto-Claude';
+const GITHUB_REPO = 'OBenner/Auto-Coding';
 
 /**
  * Get the Electron ABI version for the installed Electron
@@ -60,7 +60,7 @@ function getLatestRelease() {
       hostname: 'api.github.com',
       path: `/repos/${GITHUB_REPO}/releases/latest`,
       headers: {
-        'User-Agent': 'Auto-Claude-Installer',
+        'User-Agent': 'Auto-Code-Installer',
         Accept: 'application/vnd.github.v3+json',
       },
     };
@@ -104,7 +104,7 @@ function downloadFile(url, destPath) {
 
     const request = (url) => {
       https
-        .get(url, { headers: { 'User-Agent': 'Auto-Claude-Installer' } }, (res) => {
+        .get(url, { headers: { 'User-Agent': 'Auto-Code-Installer' } }, (res) => {
           if (res.statusCode === 302 || res.statusCode === 301) {
             // Follow redirect
             request(res.headers.location);
@@ -173,7 +173,7 @@ async function downloadPrebuilds() {
   try {
     release = await getLatestRelease();
   } catch (err) {
-    console.log(`[prebuilds] Could not fetch releases: ${err.message}`);
+    console.log(`[prebuilds] Could not fetch releases: ${String(err.message).replace(/[\x00-\x1f\x7f]/g, '').slice(0, 200)}`);
     return { success: false, reason: 'fetch-failed' };
   }
 
@@ -236,7 +236,8 @@ async function downloadPrebuilds() {
     if (fs.existsSync(tempDir)) {
       fs.rmSync(tempDir, { recursive: true, force: true });
     }
-    console.log(`[prebuilds] Download/extract failed: ${err.message}`);
+    const _safeMsg = String(err.message || '').replace(/\n|\r/g, ' ').replace(/[\x00-\x1f\x7f]/g, '').slice(0, 200);
+    console.log('[prebuilds] Download/extract failed: ' + _safeMsg);
     return { success: false, reason: 'install-failed', error: err.message };
   }
 }

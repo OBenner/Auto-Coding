@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Ollama Model Detector for auto-claude-ui.
+Ollama Model Detector for auto-code-ui.
 
 Queries the Ollama API to detect available models, specifically focusing on
 embedding models for semantic search functionality.
@@ -177,7 +177,7 @@ def fetch_ollama_api(base_url: str, endpoint: str, timeout: int = 5) -> dict | N
 
         with urllib.request.urlopen(req, timeout=timeout) as response:
             return json.loads(response.read().decode())
-    except urllib.error.URLError as e:
+    except urllib.error.URLError:
         return None
     except json.JSONDecodeError:
         return None
@@ -527,7 +527,7 @@ def cmd_pull_model(args) -> None:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Detect and list Ollama models for auto-claude-ui"
+        description="Detect and list Ollama models for auto-code-ui"
     )
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 

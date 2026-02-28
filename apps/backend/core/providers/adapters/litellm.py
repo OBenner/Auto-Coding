@@ -27,8 +27,8 @@ Provider-specific keys are also supported:
 
 import logging
 import uuid
-from pathlib import Path
-from typing import TYPE_CHECKING, Any, AsyncIterator, Optional
+from collections.abc import AsyncIterator
+from typing import TYPE_CHECKING, Any
 
 from core.providers.base import AgentSession, AIEngineProvider, SessionConfig
 from core.providers.exceptions import (
@@ -86,10 +86,10 @@ class LiteLLMSession(AgentSession):
         session_id: str,
         model: str,
         system_prompt: str = "",
-        api_base: Optional[str] = None,
-        api_key: Optional[str] = None,
-        temperature: Optional[float] = None,
-        max_tokens: Optional[int] = None,
+        api_base: str | None = None,
+        api_key: str | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
     ):
         """Initialize LiteLLM session.
 
@@ -269,7 +269,7 @@ class LiteLLMProvider(AIEngineProvider):
             config: Provider configuration with credentials
         """
         self._config = config
-        self._active_session: Optional[LiteLLMSession] = None
+        self._active_session: LiteLLMSession | None = None
         self._validation_errors: list[str] = []
 
     @property
@@ -305,6 +305,7 @@ class LiteLLMProvider(AIEngineProvider):
 
         # Verify litellm is installed
         try:
+            # Optional: litellm is an optional runtime dependency
             import litellm  # noqa: F401
         except ImportError as e:
             raise ProviderNotInstalled(
@@ -416,6 +417,7 @@ class LiteLLMProvider(AIEngineProvider):
 
         # Check if litellm is installed
         try:
+            # Optional: litellm is an optional runtime dependency
             import litellm  # noqa: F401
 
             return True
@@ -423,7 +425,7 @@ class LiteLLMProvider(AIEngineProvider):
             self._validation_errors.append("litellm package is not installed")
             return False
 
-    def get_active_session(self) -> Optional[LiteLLMSession]:
+    def get_active_session(self) -> LiteLLMSession | None:
         """Get the currently active session, if any.
 
         Returns:
@@ -446,6 +448,5 @@ class LiteLLMProvider(AIEngineProvider):
     def __repr__(self) -> str:
         """Return string representation of provider."""
         return (
-            f"LiteLLMProvider(name={self.name!r}, "
-            f"model={self._config.litellm_model!r})"
+            f"LiteLLMProvider(name={self.name!r}, model={self._config.litellm_model!r})"
         )

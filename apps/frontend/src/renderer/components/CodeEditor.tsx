@@ -33,7 +33,6 @@ import { useCodeEditorStore } from '../stores/code-editor-store';
 import { useFileExplorerStore } from '../stores/file-explorer-store';
 import { useVirtualizedTree, type FlattenedNode } from '../hooks/useVirtualizedTree';
 import { cn } from '../lib/utils';
-import type { FileNode } from '../../shared/types';
 
 interface CodeEditorProps {
   projectPath: string;
@@ -135,7 +134,7 @@ function CodeEditorFileTreeItem({
 
   return (
     <div
-      role="button"
+      role="treeitem"
       tabIndex={0}
       className={cn(
         'flex items-center gap-1 py-1 px-2 rounded cursor-pointer select-none',

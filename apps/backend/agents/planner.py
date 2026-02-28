@@ -7,13 +7,15 @@ Handles follow-up planner sessions for adding new subtasks to completed specs.
 
 import logging
 from pathlib import Path
-from typing import Optional
 
+from analysis.prevention_scanner import PreventionScanner
 from core.providers import create_engine_provider
 from core.providers.base import SessionConfig
 from core.providers.config import ProviderConfig
+from implementation_plan import ImplementationPlan
 from phase_config import get_phase_model, get_phase_thinking_budget
 from phase_event import ExecutionPhase, emit_phase
+from prompts_pkg.prompts import get_followup_planner_prompt
 from task_logger import (
     LogPhase,
     get_task_logger,
@@ -30,7 +32,7 @@ from ui import (
     print_status,
 )
 
-from .session import run_agent_session
+from .session import run_agent_session, save_token_stats
 
 logger = logging.getLogger(__name__)
 
@@ -38,8 +40,8 @@ logger = logging.getLogger(__name__)
 def create_planner_session(
     project_dir: Path,
     spec_dir: Path,
-    model: Optional[str] = None,
-    max_thinking_tokens: Optional[int] = None,
+    model: str | None = None,
+    max_thinking_tokens: int | None = None,
 ):
     """
     Create a planner agent session using the configured AI engine provider.
@@ -89,7 +91,6 @@ def create_planner_session(
         )
 
 
-
 async def run_followup_planner(
     project_dir: Path,
     spec_dir: Path,
@@ -120,9 +121,6 @@ async def run_followup_planner(
     Returns:
         bool: True if planning completed successfully
     """
-    from implementation_plan import ImplementationPlan
-    from prompts import get_followup_planner_prompt
-
     # Initialize status manager for ccstatusline
     status_manager = StatusManager(project_dir)
     status_manager.set_active(spec_dir.name, BuildState.PLANNING)
@@ -168,15 +166,74 @@ async def run_followup_planner(
     # Generate follow-up planner prompt
     prompt = get_followup_planner_prompt(spec_dir)
 
+    # Run prevention scanner before planning
+    print_status("Running prevention scanner...", "progress")
+    try:
+        scanner = PreventionScanner()
+        scan_result = scanner.scan(
+            project_dir=project_dir,
+            spec_dir=spec_dir,
+        )
+
+        # Log scan summary
+        if task_logger:
+            summary = scanner.format_summary(scan_result)
+            task_logger.log_message(summary, LogPhase.PLANNING)
+
+        if scan_result.should_block:
+            logger.warning("Prevention scanner found blocking issues")
+            print_status(
+                f"⚠️  Critical issues found: {scan_result.summary.get('critical', 0)} critical, "
+                f"{scan_result.summary.get('high', 0)} high",
+                "warning",
+            )
+        elif scan_result.should_warn:
+            logger.info("Prevention scanner found warnings")
+            print_status(
+                f"Note: {scan_result.summary.get('total_issues', 0)} issues detected "
+                f"(see prevention_scan.json)",
+                "info",
+            )
+        else:
+            logger.info("Prevention scanner found no critical issues")
+            print_status("✅ No critical issues detected", "success")
+    except Exception as e:
+        logger.warning(f"Prevention scanner failed: {e}")
+        print_status(f"Prevention scanner warning: {e}", "warning")
+        # Continue with planning even if scanner fails
+
+    print()
     print_status("Running follow-up planner...", "progress")
     print()
 
     try:
         # Run single planning session
         async with client:
-            status, response = await run_agent_session(
+            (
+                status,
+                response,
+                usage_metadata,
+                _,
+            ) = await run_agent_session(
                 client, prompt, spec_dir, verbose, phase=LogPhase.PLANNING
             )
+
+        # Save token statistics for planning phase
+        if usage_metadata:
+            try:
+                saved = save_token_stats(
+                    spec_dir,
+                    "planning",
+                    usage_metadata["input_tokens"],
+                    usage_metadata["output_tokens"],
+                )
+                if saved:
+                    logger.debug(
+                        f"Planning phase token stats saved: {usage_metadata['input_tokens']} in, "
+                        f"{usage_metadata['output_tokens']} out"
+                    )
+            except Exception as e:
+                logger.warning(f"Failed to save planning phase token stats: {e}")
 
         # End planning phase in task logger
         if task_logger:

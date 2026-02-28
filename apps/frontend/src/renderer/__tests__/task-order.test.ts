@@ -272,7 +272,7 @@ describe('Task Order State Management', () => {
 
     it('should handle corrupted localStorage data gracefully', () => {
       // Spy on console.error to verify error logging
-      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
       localStorage.setItem('task-order-state-project-1', 'invalid-json{{{');
 
@@ -296,7 +296,7 @@ describe('Task Order State Management', () => {
 
     it('should handle localStorage access errors', () => {
       // Spy on console.error
-      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
       // Mock localStorage.getItem to throw
       const originalGetItem = localStorage.getItem;
@@ -335,7 +335,7 @@ describe('Task Order State Management', () => {
 
       const stored = localStorage.getItem('task-order-state-project-1');
       expect(stored).toBeTruthy();
-      expect(JSON.parse(stored!)).toEqual(order);
+      expect(JSON.parse(stored as string)).toEqual(order);
     });
 
     it('should not save if taskOrder is null', () => {
@@ -359,7 +359,7 @@ describe('Task Order State Management', () => {
 
     it('should handle localStorage write errors gracefully', () => {
       // Spy on console.error
-      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
       const order = createTestTaskOrder({ backlog: ['task-1'] });
       useTaskStore.setState({ taskOrder: order });
@@ -390,7 +390,7 @@ describe('Task Order State Management', () => {
 
       useTaskStore.getState().saveTaskOrder('project-1');
 
-      const stored = JSON.parse(localStorage.getItem('task-order-state-project-1')!);
+      const stored = JSON.parse(localStorage.getItem('task-order-state-project-1') as string);
       expect(stored.backlog).toEqual(['new-task-1', 'new-task-2']);
     });
   });
@@ -418,7 +418,7 @@ describe('Task Order State Management', () => {
     });
 
     it('should handle localStorage removal errors gracefully', () => {
-      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
       // Mock localStorage.removeItem to throw
       const originalRemoveItem = localStorage.removeItem;
@@ -589,7 +589,7 @@ describe('Task Order State Management', () => {
 
   describe('localStorage persistence edge cases', () => {
     it('should handle empty string in localStorage', () => {
-      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
       localStorage.setItem('task-order-state-project-1', '');
 
@@ -805,7 +805,9 @@ describe('Task Order State Management', () => {
       useTaskStore.setState({ tasks, taskOrder: orderWithStaleInMultipleColumns });
 
       const currentTaskIds = new Set(tasks.map(t => t.id));
-      const taskOrder = useTaskStore.getState().taskOrder!;
+      const storeTaskOrder = useTaskStore.getState().taskOrder;
+      if (!storeTaskOrder) throw new Error('Task order not set');
+      const taskOrder = storeTaskOrder;
 
       // Filter each column
       const validBacklog = taskOrder.backlog.filter(id => currentTaskIds.has(id));

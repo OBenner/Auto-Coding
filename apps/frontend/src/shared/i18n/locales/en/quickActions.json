@@ -1,0 +1,20 @@
+{
+  "title": "Quick Actions",
+  "recentActions": "Recent Actions",
+  "clearHistory": "Clear History",
+  "noRecentActions": "No recent actions",
+  "noRecentActionsHint": "Your recent actions will appear here for quick access",
+  "searchPlaceholder": "Search commands...",
+  "noCommandsFound": "No commands found",
+  "recent": "Recent",
+  "navigate": "to navigate",
+  "select": "to select",
+  "close": "to close",
+  "actionTypes": {
+    "batch_qa": "Batch QA ({{count}} tasks)",
+    "batch_status_update": "Update to {{status}} ({{count}} tasks)",
+    "create_task": "Create Task",
+    "start_task": "Start Task",
+    "stop_task": "Stop Task"
+  }
+}

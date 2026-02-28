@@ -1,0 +1,176 @@
+---
+title: Auto-Code Component Interaction & Communication Patterns
+---
+sequenceDiagram
+    autonumber
+
+    participant User as 👤 User
+    participant Browser as 🌐 Web Browser
+    participant ElectronUI as 🖥️ Electron<br/>Renderer (React)
+    participant Preload as 🔒 Preload Bridge<br/>(contextBridge)
+    participant MainProcess as ⚡ Electron<br/>Main Process
+    participant WebFrontend as ⚛️ Web Frontend<br/>(React)
+    participant WebBackend as 🌐 Web Backend<br/>(FastAPI)
+    participant BackendCLI as 🐍 Backend CLI<br/>(Python)
+    participant ClaudeSDK as 🤖 Claude SDK
+    participant Database as 💾 Graphiti/LadybugDB
+
+    %% ========================================
+    %% Electron Desktop App IPC Communication
+    %% ========================================
+
+    Note over User,Database: 📱 ELECTRON DESKTOP APP - IPC COMMUNICATION
+
+    User->>ElectronUI: 1. Click "Create New Spec"
+
+    ElectronUI->>ElectronUI: 2. Call window.electronAPI.task.createSpec()
+    Note right of ElectronUI: IPC call via exposed API<br/>(security boundary)
+
+    ElectronUI->>Preload: 3. invoke('task:create-spec', data)
+    Note right of Preload: contextBridge.exposeInMainWorld()<br/>Secure IPC channel
+
+    Preload->>MainProcess: 4. ipcRenderer.invoke('task:create-spec')
+    Note right of MainProcess: IPC Handler registered<br/>via ipcMain.handle()
+
+    MainProcess->>MainProcess: 5. Validate request & permissions
+
+    MainProcess->>BackendCLI: 6. spawn('python', ['spec_runner.py'])
+    Note right of MainProcess: Child process with<br/>stdout/stderr streams
+
+    BackendCLI->>ClaudeSDK: 7. Create agent session
+    ClaudeSDK-->>BackendCLI: 8. Agent response
+
+    BackendCLI->>Database: 9. Store spec & context
+    Database-->>BackendCLI: 10. Confirmation
+
+    BackendCLI-->>MainProcess: 11. JSON output via stdout
+    Note left of BackendCLI: Stream-based communication<br/>newline-delimited JSON
+
+    MainProcess->>MainProcess: 12. Parse stdout stream
+
+    MainProcess-->>Preload: 13. IPC response + progress events
+    Note left of MainProcess: event.sender.send()<br/>for progress updates
+
+    Preload-->>ElectronUI: 14. Promise resolves with data
+
+    ElectronUI->>ElectronUI: 15. Update Zustand state
+    ElectronUI->>User: 16. Show success notification
+
+    %% ========================================
+    %% Web Application HTTP Communication
+    %% ========================================
+
+    Note over User,Database: 🌐 WEB APPLICATION - HTTP + WEBSOCKET COMMUNICATION
+
+    User->>Browser: 17. Open web interface
+    Browser->>WebFrontend: 18. Load React app
+
+    WebFrontend->>WebBackend: 19. GET /api/specs (HTTP)
+    Note right of WebFrontend: Fetch API<br/>REST HTTP request
+
+    WebBackend->>WebBackend: 20. Authenticate JWT token
+
+    WebBackend->>BackendCLI: 21. subprocess.run(['python', 'run.py', '--list'])
+    Note right of WebBackend: Synchronous subprocess<br/>for quick operations
+
+    BackendCLI-->>WebBackend: 22. JSON output via stdout
+
+    WebBackend-->>WebFrontend: 23. HTTP 200 + JSON payload
+    Note left of WebBackend: CORS headers included
+
+    WebFrontend->>WebFrontend: 24. Update Zustand state
+    WebFrontend->>Browser: 25. Render spec list
+
+    Browser->>WebFrontend: 26. Click "Run Build"
+
+    WebFrontend->>WebBackend: 27. WebSocket connect (ws://)
+    Note right of WebFrontend: Real-time updates channel
+
+    WebBackend-->>WebFrontend: 28. WebSocket connected
+
+    WebFrontend->>WebBackend: 29. POST /api/specs/{id}/run (HTTP)
+
+    WebBackend->>BackendCLI: 30. subprocess.Popen(['python', 'run.py'])
+    Note right of WebBackend: Async subprocess with<br/>stdout/stderr streaming
+
+    loop Real-time Progress Updates
+        BackendCLI-->>WebBackend: 31. stdout stream (progress JSON)
+        WebBackend-->>WebFrontend: 32. WebSocket message (progress)
+        WebFrontend->>Browser: 33. Update progress UI
+    end
+
+    BackendCLI->>ClaudeSDK: 34. Agent operations
+    ClaudeSDK-->>BackendCLI: 35. Agent responses
+
+    BackendCLI->>Database: 36. Update session memory
+    Database-->>BackendCLI: 37. Confirmation
+
+    BackendCLI-->>WebBackend: 38. Process exit with status
+
+    WebBackend-->>WebFrontend: 39. WebSocket message (complete)
+
+    WebBackend-->>WebFrontend: 40. HTTP 200 + final result
+
+    WebFrontend->>Browser: 41. Show completion notification
+
+    %% ========================================
+    %% Direct CLI Usage
+    %% ========================================
+
+    Note over User,Database: 💻 DIRECT CLI USAGE (No IPC/HTTP)
+
+    User->>BackendCLI: 42. python run.py --spec 001
+    Note right of User: Terminal command
+
+    BackendCLI->>ClaudeSDK: 43. Create agent sessions
+    ClaudeSDK-->>BackendCLI: 44. Agent responses
+
+    BackendCLI->>Database: 45. Read/write memory
+    Database-->>BackendCLI: 46. Data
+
+    BackendCLI-->>User: 47. stdout/stderr output
+    Note left of BackendCLI: Direct terminal output
+
+    %% ========================================
+    %% IPC Security Architecture
+    %% ========================================
+
+    Note over ElectronUI,MainProcess: 🔒 IPC SECURITY ARCHITECTURE
+
+    rect rgb(255, 243, 224)
+        Note over ElectronUI: RENDERER PROCESS (Untrusted)<br/>• No direct Node.js access<br/>• Context isolation enabled<br/>• nodeIntegration: false
+    end
+
+    rect rgb(255, 183, 77)
+        Note over Preload: PRELOAD BRIDGE (Security Boundary)<br/>• contextBridge.exposeInMainWorld()<br/>• Whitelist-only API exposure<br/>• Input validation
+    end
+
+    rect rgb(129, 199, 132)
+        Note over MainProcess: MAIN PROCESS (Trusted)<br/>• Full Node.js + Electron API<br/>• IPC handler validation<br/>• Process spawning control
+    end
+
+    %% ========================================
+    %% HTTP API Patterns
+    %% ========================================
+
+    Note over WebFrontend,WebBackend: 🌐 HTTP API PATTERNS
+
+    rect rgb(227, 242, 253)
+        Note over WebFrontend: CLIENT-SIDE<br/>• Fetch API (REST)<br/>• WebSocket API (real-time)<br/>• JWT token in headers<br/>• Zustand state management
+    end
+
+    rect rgb(252, 228, 236)
+        Note over WebBackend: SERVER-SIDE<br/>• FastAPI REST endpoints<br/>• CORS middleware<br/>• JWT authentication<br/>• WebSocket endpoint (/ws)<br/>• Subprocess management
+    end
+
+    %% Styling
+    style User fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    style Browser fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    style ElectronUI fill:#ba68c8,stroke:#6a1b9a,stroke-width:2px,color:#fff
+    style Preload fill:#ffb74d,stroke:#e65100,stroke-width:3px,color:#000
+    style MainProcess fill:#81c784,stroke:#1b5e20,stroke-width:2px
+    style WebFrontend fill:#f8bbd0,stroke:#c2185b,stroke-width:2px
+    style WebBackend fill:#ef5350,stroke:#b71c1c,stroke-width:2px,color:#fff
+    style BackendCLI fill:#66bb6a,stroke:#1b5e20,stroke-width:2px,color:#fff
+    style ClaudeSDK fill:#4db6ac,stroke:#004d40,stroke-width:2px,color:#fff
+    style Database fill:#26a69a,stroke:#004d40,stroke-width:2px,color:#fff

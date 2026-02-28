@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 from core.progress import get_next_subtask
-from prompt_generator import generate_planner_prompt
+from prompts_pkg.prompt_generator import generate_planner_prompt
 from spec.validate_pkg import SpecValidator, auto_fix_plan
 
 
@@ -311,9 +311,9 @@ async def test_planner_session_does_not_trigger_post_session_processing_on_retry
         _spec_dir: Path,
         _verbose: bool = False,
         phase: LogPhase = LogPhase.CODING,
-    ) -> tuple[str, str]:
+    ) -> tuple[str, str, None, None]:
         assert phase == LogPhase.PLANNING
-        return "error", "planner failed"
+        return "error", "planner failed", None, None  # Add decision_tracker=None
 
     monkeypatch.setattr("agents.coder.create_client", fake_create_client)
     monkeypatch.setattr("agents.coder.get_graphiti_context", fake_get_graphiti_context)
@@ -374,7 +374,7 @@ async def test_worktree_planning_to_coding_sync_updates_source_phase_status(
         spec_dir: Path,
         _verbose: bool = False,
         phase: LogPhase = LogPhase.CODING,
-    ) -> tuple[str, str]:
+    ) -> tuple[str, str, None, None]:
         if phase == LogPhase.PLANNING:
             plan = {
                 "feature": "Test feature",
@@ -397,7 +397,7 @@ async def test_worktree_planning_to_coding_sync_updates_source_phase_status(
                 json.dumps(plan, indent=2),
                 encoding="utf-8",
             )
-            return "continue", "planned"
+            return "continue", "planned", None, None  # Add decision_tracker=None
 
         # First coding session should see planning already completed in source spec logs
         # Note: task_logs.json is created/synced by run_autonomous_agent; absence indicates a bug.
@@ -406,7 +406,7 @@ async def test_worktree_planning_to_coding_sync_updates_source_phase_status(
         )
         assert logs["phases"]["planning"]["status"] == "completed"
         assert logs["phases"]["coding"]["status"] == "active"
-        return "complete", "done"
+        return "complete", "done", None, None  # Add decision_tracker=None
 
     monkeypatch.setattr("agents.coder.create_client", fake_create_client)
     monkeypatch.setattr("agents.coder.get_graphiti_context", fake_get_graphiti_context)

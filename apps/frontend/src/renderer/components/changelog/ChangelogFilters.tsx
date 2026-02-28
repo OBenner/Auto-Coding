@@ -92,6 +92,7 @@ export function ChangelogFilters({
             onValueChange={(value) => onSourceModeChange(value as ChangelogSourceMode)}
             className="space-y-2"
           >
+            {/* biome-ignore lint/a11y/noLabelWithoutControl: Label wraps RadioGroupItem which handles the control */}
             <label
               className={cn(
                 'flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-all',
@@ -117,6 +118,7 @@ export function ChangelogFilters({
               </div>
             </label>
 
+            {/* biome-ignore lint/a11y/noLabelWithoutControl: Label wraps RadioGroupItem which handles the control */}
             <label
               className={cn(
                 'flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-all',
@@ -139,6 +141,7 @@ export function ChangelogFilters({
               </div>
             </label>
 
+            {/* biome-ignore lint/a11y/noLabelWithoutControl: Label wraps RadioGroupItem which handles the control */}
             <label
               className={cn(
                 'flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-all',

@@ -277,7 +277,7 @@ const MCP_SERVERS: Record<string, { name: string; description: string; icon: Rea
     ],
   },
   'auto-claude': {
-    name: 'Auto-Claude Tools',
+    name: 'Auto-Code Tools',
     description: 'Build progress tracking, session context, discoveries & gotchas recording',
     icon: ListChecks,
     tools: [
@@ -897,9 +897,10 @@ export function AgentTools() {
       try {
         const result = await window.electronAPI.checkMcpHealth(server);
         if (result.success && result.data) {
+          const healthData = result.data;
           setServerHealthStatus(prev => ({
             ...prev,
-            [server.id]: result.data!,
+            [server.id]: healthData,
           }));
         }
       } catch (_error) {
@@ -1172,7 +1173,7 @@ export function AgentTools() {
                   </div>
                 </div>
 
-                {/* Auto-Claude (always enabled) */}
+                {/* Auto-Code (always enabled) */}
                 <div className="flex items-center justify-between py-2 border-t border-border opacity-60">
                   <div className="flex items-center gap-3">
                     <ListChecks className="h-4 w-4 text-muted-foreground" />

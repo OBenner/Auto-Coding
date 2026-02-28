@@ -34,6 +34,7 @@ export function APIRoutesSection({ api }: APIRoutesSectionProps) {
       </CollapsibleTrigger>
       <CollapsibleContent className="mt-2 space-y-1.5">
         {api.routes.slice(0, 10).map((route, idx) => (
+          /* biome-ignore lint/suspicious/noArrayIndexKey: Routes may have duplicate paths with different methods */
           <div key={idx} className="flex items-start gap-2 text-xs">
             <div className="flex gap-1 shrink-0">
               {route.methods.map(method => (

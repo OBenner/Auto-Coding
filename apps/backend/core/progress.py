@@ -9,9 +9,13 @@ Enhanced with colored output, icons, and better visual formatting.
 """
 
 import json
+import logging
 from pathlib import Path
 
 from core.plan_normalization import normalize_subtask_aliases
+
+logger = logging.getLogger(__name__)
+from core.timing_history import get_timing_history
 from ui import (
     Icons,
     bold,
@@ -110,6 +114,65 @@ def is_build_complete(spec_dir: Path) -> bool:
     """
     completed, total = count_subtasks(spec_dir)
     return total > 0 and completed == total
+
+
+def _load_stuck_subtask_ids(spec_dir: Path) -> set[str]:
+    """Load IDs of subtasks marked as stuck from attempt_history.json."""
+    stuck_subtask_ids: set[str] = set()
+    attempt_history_file = spec_dir / "memory" / "attempt_history.json"
+    if attempt_history_file.exists():
+        try:
+            with open(attempt_history_file, encoding="utf-8") as f:
+                attempt_history = json.load(f)
+            for entry in attempt_history.get("stuck_subtasks", []):
+                if "subtask_id" in entry:
+                    stuck_subtask_ids.add(entry["subtask_id"])
+        except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+            # Corrupted attempt history is non-fatal; skip stuck-subtask filtering
+            pass
+    return stuck_subtask_ids
+
+
+def is_build_ready_for_qa(spec_dir: Path) -> bool:
+    """
+    Check if the build is ready for QA validation.
+
+    Unlike is_build_complete() which requires all subtasks to be "completed",
+    this function considers the build ready when all subtasks have reached
+    a terminal state: completed, failed, or stuck (exhausted retries in attempt_history.json).
+
+    Args:
+        spec_dir: Directory containing implementation_plan.json
+
+    Returns:
+        True if all subtasks are in a terminal state, False otherwise
+    """
+    plan_file = spec_dir / "implementation_plan.json"
+    if not plan_file.exists():
+        return False
+
+    stuck_subtask_ids = _load_stuck_subtask_ids(spec_dir)
+
+    try:
+        with open(plan_file, encoding="utf-8") as f:
+            plan = json.load(f)
+
+        total = 0
+        terminal = 0
+
+        for phase in plan.get("phases", []):
+            for subtask in phase.get("subtasks", phase.get("chunks", [])):
+                total += 1
+                status = subtask.get("status", "pending")
+                subtask_id = subtask.get("id")
+
+                if status in ("completed", "failed") or subtask_id in stuck_subtask_ids:
+                    terminal += 1
+
+        return total > 0 and terminal == total
+
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+        return False
 
 
 def get_progress_percentage(spec_dir: Path) -> float:
@@ -230,8 +293,33 @@ def print_progress_summary(spec_dir: Path, show_next: bool = True) -> None:
                         f"  {icon(Icons.ARROW_RIGHT)} Next: {highlight(next_id)} - {next_desc}"
                     )
 
-        except (OSError, json.JSONDecodeError, UnicodeDecodeError):
-            pass  # Ignore corrupted/unreadable progress files
+            # Show recovery metrics if available
+            recovery_stats = get_recovery_metrics_summary(spec_dir)
+            if recovery_stats:
+                print()
+                print("Recovery Metrics:")
+                success_rate = recovery_stats["success_rate"]
+                total_attempts = recovery_stats["total_attempts"]
+                successful = recovery_stats["successful_recoveries"]
+
+                if success_rate >= 70:
+                    rate_display = success(f"{success_rate:.0f}%")
+                elif success_rate >= 40:
+                    rate_display = warning(f"{success_rate:.0f}%")
+                else:
+                    rate_display = f"{success_rate:.0f}%"
+
+                print(
+                    f"  {icon(Icons.SUCCESS)} Success Rate: {rate_display} ({successful}/{total_attempts} attempts)"
+                )
+
+                if recovery_stats["circular_fixes"] > 0:
+                    print(
+                        f"  {icon(Icons.WARNING)} Circular Fixes: {recovery_stats['circular_fixes']}"
+                    )
+
+        except (OSError, json.JSONDecodeError, UnicodeDecodeError) as e:
+            logger.debug(f"Failed to load plan file for phase summary: {e}")
     else:
         print()
         print_status("No implementation subtasks yet - planner needs to run", "pending")
@@ -415,6 +503,8 @@ def get_next_subtask(spec_dir: Path) -> dict | None:
     if not plan_file.exists():
         return None
 
+    stuck_subtask_ids = _load_stuck_subtask_ids(spec_dir)
+
     try:
         with open(plan_file, encoding="utf-8") as f:
             plan = json.load(f)
@@ -432,8 +522,11 @@ def get_next_subtask(spec_dir: Path) -> dict | None:
                 str(phase_id_raw) if phase_id_raw is not None else f"unknown:{i}"
             )
             subtasks = phase.get("subtasks", phase.get("chunks", []))
+            # Stuck subtasks count as "resolved" for phase dependency purposes.
+            # This prevents one stuck subtask from blocking all downstream phases.
             phase_complete[phase_id_key] = all(
-                s.get("status") == "completed" for s in subtasks
+                s.get("status") == "completed" or s.get("id") in stuck_subtask_ids
+                for s in subtasks
             )
 
         # Find next available subtask
@@ -455,8 +548,10 @@ def get_next_subtask(spec_dir: Path) -> dict | None:
             if not deps_satisfied:
                 continue
 
-            # Find first pending subtask in this phase
+            # Find first pending subtask in this phase (skip stuck ones)
             for subtask in phase.get("subtasks", phase.get("chunks", [])):
+                if subtask.get("id") in stuck_subtask_ids:
+                    continue
                 status = subtask.get("status", "pending")
                 if status in {"pending", "not_started", "not started"}:
                     subtask_out, _changed = normalize_subtask_aliases(subtask)
@@ -474,6 +569,70 @@ def get_next_subtask(spec_dir: Path) -> dict | None:
         return None
 
 
+def reset_subtask_to_pending(spec_dir: Path, subtask_id: str) -> bool:
+    """
+    Reset a subtask's status back to 'pending' so it can be retried.
+
+    This is needed during recovery: when a subtask fails mid-execution,
+    its status stays 'in_progress' but get_next_subtask() only picks up
+    'pending' subtasks. Without this reset, the recovery loop can't find
+    the subtask to retry.
+
+    Args:
+        spec_dir: Directory containing implementation_plan.json
+        subtask_id: ID of the subtask to reset
+
+    Returns:
+        True if the subtask was found and reset
+    """
+    plan_file = spec_dir / "implementation_plan.json"
+    if not plan_file.exists():
+        return False
+
+    try:
+        with open(plan_file, encoding="utf-8") as f:
+            plan = json.load(f)
+
+        # Find and reset the subtask
+        found = False
+        for phase in plan.get("phases", []):
+            for subtask in phase.get("subtasks", phase.get("chunks", [])):
+                if subtask.get("id") == subtask_id:
+                    old_status = subtask.get("status", "unknown")
+                    subtask["status"] = "pending"
+                    # Clear execution data for clean retry
+                    subtask.pop("actual_output", None)
+                    subtask.pop("started_at", None)
+                    subtask.pop("completed_at", None)
+                    logger.info(f"Reset subtask {subtask_id}: {old_status} -> pending")
+                    found = True
+                    break
+            if found:
+                break
+
+        if not found:
+            return False
+
+        # Atomic write back
+        tmp_file = plan_file.with_suffix(".json.tmp")
+        with open(tmp_file, "w", encoding="utf-8") as f:
+            json.dump(plan, f, indent=2)
+        tmp_file.replace(plan_file)
+
+        return True
+
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError) as e:
+        logger.error(f"Failed to reset subtask {subtask_id}: {e}")
+        # Clean up temp file
+        tmp_file = plan_file.with_suffix(".json.tmp")
+        if tmp_file.exists():
+            try:
+                tmp_file.unlink()
+            except OSError:
+                pass
+        return False
+
+
 def format_duration(seconds: float) -> str:
     """Format a duration in human-readable form."""
     if seconds < 60:
@@ -484,3 +643,191 @@ def format_duration(seconds: float) -> str:
     else:
         hours = seconds / 3600
         return f"{hours:.1f}h"
+
+
+# Timing History Integration Functions
+
+
+def record_subtask_completion(
+    spec_dir: Path,
+    subtask_id: str,
+    started_at: float,
+    completed_at: float | None = None,
+    status: str = "completed",
+) -> None:
+    """
+    Record completion of a subtask for future time estimates.
+
+    Args:
+        spec_dir: Directory containing timing_history.json
+        subtask_id: Subtask identifier (e.g., "subtask-1-1")
+        started_at: Unix timestamp when subtask started
+        completed_at: Unix timestamp when completed (defaults to now)
+        status: Completion status (default: "completed")
+    """
+    try:
+        history = get_timing_history(spec_dir)
+        history.record_completion(
+            operation_type="subtask",
+            operation_id=subtask_id,
+            started_at=started_at,
+            completed_at=completed_at,
+            status=status,
+        )
+    except (OSError, ValueError, AttributeError):
+        pass  # Silent failure - timing history is non-critical
+
+
+def record_phase_completion(
+    spec_dir: Path,
+    phase_id: str,
+    started_at: float,
+    completed_at: float | None = None,
+    status: str = "completed",
+) -> None:
+    """
+    Record completion of a phase for future time estimates.
+
+    Args:
+        spec_dir: Directory containing timing_history.json
+        phase_id: Phase identifier (e.g., "phase-1-backend-metrics")
+        started_at: Unix timestamp when phase started
+        completed_at: Unix timestamp when completed (defaults to now)
+        status: Completion status (default: "completed")
+    """
+    try:
+        history = get_timing_history(spec_dir)
+        history.record_completion(
+            operation_type="phase",
+            operation_id=phase_id,
+            started_at=started_at,
+            completed_at=completed_at,
+            status=status,
+        )
+    except (OSError, ValueError, AttributeError):
+        pass  # Silent failure - timing history is non-critical
+
+
+def get_estimated_completion_time(
+    spec_dir: Path,
+    operation_type: str = "subtask",
+    operation_id: str | None = None,
+) -> dict:
+    """
+    Get estimated completion time based on historical data.
+
+    Args:
+        spec_dir: Directory containing timing_history.json
+        operation_type: Type of operation ("subtask", "phase", "agent_session")
+        operation_id: Optional specific operation ID for exact matches
+
+    Returns:
+        Dict with 'estimated_seconds', 'confidence', 'sample_size', and
+        'formatted' (human-readable time string)
+    """
+    try:
+        history = get_timing_history(spec_dir)
+        estimate = history.estimate_completion(operation_type, operation_id)
+
+        # Add formatted duration
+        formatted = format_duration(estimate["estimated_seconds"])
+        return {
+            **estimate,
+            "formatted": formatted,
+        }
+    except (OSError, ValueError, AttributeError):
+        # Return conservative default on error
+        return {
+            "estimated_seconds": 300.0,
+            "confidence": "low",
+            "sample_size": 0,
+            "formatted": "5m",
+        }
+
+
+def get_remaining_time_estimate(spec_dir: Path) -> dict:
+    """
+    Estimate total remaining time for all pending subtasks.
+
+    Args:
+        spec_dir: Directory containing implementation_plan.json and timing_history.json
+
+    Returns:
+        Dict with 'total_seconds', 'formatted', 'confidence', and 'pending_count'
+    """
+    try:
+        counts = count_subtasks_detailed(spec_dir)
+        pending_count = counts["pending"] + counts["in_progress"]
+
+        if pending_count == 0:
+            return {
+                "total_seconds": 0.0,
+                "formatted": "0s",
+                "confidence": "high",
+                "pending_count": 0,
+            }
+
+        # Get average subtask duration from history
+        history = get_timing_history(spec_dir)
+        avg_duration = history.get_average_duration("subtask", min_samples=2)
+
+        if avg_duration is None:
+            # No historical data - use conservative estimate
+            total_seconds = pending_count * 300.0  # 5 minutes per subtask
+            confidence = "low"
+        else:
+            total_seconds = pending_count * avg_duration
+            # Confidence based on sample size
+            sample_size = len(history.get_records("subtask"))
+            if sample_size >= 5:
+                confidence = "high"
+            elif sample_size >= 2:
+                confidence = "medium"
+            else:
+                confidence = "low"
+
+        return {
+            "total_seconds": round(total_seconds, 2),
+            "formatted": format_duration(total_seconds),
+            "confidence": confidence,
+            "pending_count": pending_count,
+        }
+    except (OSError, ValueError, AttributeError):
+        return {
+            "total_seconds": 0.0,
+            "formatted": "unknown",
+            "confidence": "low",
+            "pending_count": 0,
+        }
+
+
+def get_recovery_metrics_summary(spec_dir: Path) -> dict | None:
+    """
+    Get recovery metrics summary for the current build.
+
+    Args:
+        spec_dir: Directory containing recovery_metrics.json
+
+    Returns:
+        Dict with recovery stats, or None if no metrics available
+    """
+    try:
+        # Import here to avoid circular dependency
+        from qa.recovery_metrics import RecoveryMetrics
+
+        metrics = RecoveryMetrics(spec_dir)
+        stats = metrics.get_stats()
+
+        if stats["total_attempts"] == 0:
+            return None
+
+        return {
+            "total_attempts": stats["total_attempts"],
+            "successful_recoveries": stats["successful_recoveries"],
+            "failed_recoveries": stats["failed_recoveries"],
+            "circular_fixes": stats["circular_fixes"],
+            "success_rate": stats["success_rate"],
+            "avg_iterations": stats.get("avg_iterations", 0.0),
+        }
+    except (OSError, ValueError, AttributeError, ImportError):
+        return None

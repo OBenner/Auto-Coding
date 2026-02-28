@@ -154,7 +154,7 @@ function createSessionObject(terminal: TerminalProcess): TerminalSession {
     id: terminal.id,
     title: terminal.title,
     cwd: terminal.cwd,
-    projectPath: terminal.projectPath!,
+    projectPath: terminal.projectPath ?? '',
     isClaudeMode: terminal.isClaudeMode,
     claudeSessionId: terminal.claudeSessionId,
     outputBuffer: terminal.outputBuffer,
@@ -222,6 +222,18 @@ export function persistAllSessions(terminals: Map<string, TerminalProcess>): voi
       persistSession(terminal);
     }
   });
+}
+
+/**
+ * Clear a terminal ID from pendingDelete, allowing session saves to proceed.
+ *
+ * Must be called when re-creating a terminal with a previously-used ID
+ * (e.g., worktree switching, terminal restart after shell exit). Without this,
+ * the pendingDelete guard blocks persistence for the new terminal.
+ */
+export function clearPendingDelete(terminalId: string): void {
+  const store = getTerminalSessionStore();
+  store.clearPendingDelete(terminalId);
 }
 
 /**

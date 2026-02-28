@@ -18,7 +18,7 @@ import { Badge } from '../../ui/badge';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '../../ui/collapsible';
 import { cn } from '../../../lib/utils';
 import type {
-  PRLogs,
+  PRLogs as PRLogsType,
   PRLogPhase,
   PRPhaseLog,
   PRLogEntry
@@ -26,7 +26,7 @@ import type {
 
 interface PRLogsProps {
   prNumber: number;
-  logs: PRLogs | null;
+  logs: PRLogsType | null;
   isLoading: boolean;
   isStreaming?: boolean;
 }
@@ -288,6 +288,7 @@ function PhaseLogSection({ phase, phaseLog, isExpanded, onToggle, isStreaming = 
     <Collapsible open={isExpanded} onOpenChange={onToggle}>
       <CollapsibleTrigger asChild>
         <button
+          type="button"
           className={cn(
             'w-full flex items-center justify-between p-3 rounded-lg border transition-colors',
             'hover:bg-secondary/50',
@@ -406,6 +407,7 @@ function OrchestratorActivitySection({ entries, isExpanded, onToggle }: Orchestr
   return (
     <div className="rounded-md border border-border/50 bg-secondary/10 overflow-hidden">
       <button
+        type="button"
         onClick={onToggle}
         className={cn(
           'w-full flex items-center justify-between p-2 transition-colors',
@@ -479,6 +481,7 @@ function AgentLogGroup({ group, isExpanded, onToggle }: AgentLogGroupProps) {
           </Badge>
           {hasMultipleEntries && (
             <button
+              type="button"
               onClick={onToggle}
               className={cn(
                 'flex items-center gap-1 text-[10px] px-2 py-0.5 rounded transition-colors',
@@ -550,6 +553,7 @@ function LogEntry({ entry }: LogEntryProps) {
           <span className="break-words flex-1">{entry.content}</span>
           {hasDetail && (
             <button
+              type="button"
               onClick={() => setIsExpanded(!isExpanded)}
               className={cn(
                 'flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded shrink-0',
@@ -605,6 +609,7 @@ function LogEntry({ entry }: LogEntryProps) {
         <span className="break-words whitespace-pre-wrap flex-1">{entry.content}</span>
         {hasDetail && (
           <button
+            type="button"
             onClick={() => setIsExpanded(!isExpanded)}
             className={cn(
               'flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded shrink-0',

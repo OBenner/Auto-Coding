@@ -33,6 +33,7 @@ export function RateLimitIndicator() {
 
   return (
     <div className="mx-3 mb-3">
+      {/* biome-ignore lint/a11y/useSemanticElements: Using div with role="button" for complex styling */}
       <div
         className="relative flex items-start gap-2 rounded-lg border border-warning/50 bg-warning/10 p-3 cursor-pointer hover:bg-warning/20 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         onClick={reopenRateLimitModal}

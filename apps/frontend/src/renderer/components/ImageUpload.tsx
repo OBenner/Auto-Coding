@@ -275,6 +275,9 @@ export function ImageUpload({
   return (
     <div className={cn('space-y-3', className)}>
       {/* Drop zone */}
+      {/* biome-ignore lint/a11y/noNoninteractiveElementInteractions: This is a drop zone with intentional drag/click handlers */}
+      {/* biome-ignore lint/a11y/noStaticElementInteractions: Drop zone requires these handlers */}
+      {/* biome-ignore lint/a11y/useKeyWithClickEvents: The hidden file input handles keyboard accessibility */}
       <div
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}

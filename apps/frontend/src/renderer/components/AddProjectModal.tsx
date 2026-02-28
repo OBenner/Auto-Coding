@@ -161,6 +161,7 @@ export function AddProjectModal({ open, onOpenChange, onProjectAdded }: AddProje
       <div className="py-4 space-y-3">
         {/* Open Existing Option */}
         <button
+          type="button"
           onClick={handleOpenExisting}
           className={cn(
             'w-full flex items-center gap-4 p-4 rounded-xl border border-border',
@@ -183,6 +184,7 @@ export function AddProjectModal({ open, onOpenChange, onProjectAdded }: AddProje
 
         {/* Create New Option */}
         <button
+          type="button"
           onClick={() => setStep('create-form')}
           className={cn(
             'w-full flex items-center gap-4 p-4 rounded-xl border border-border',

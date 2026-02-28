@@ -1,0 +1,13 @@
+{
+  "name": "ui-extension",
+  "version": "1.0.0",
+  "author": "Auto-Coding Team",
+  "description": "Example UI plugin that adds a custom dashboard widget showing project statistics, demonstrating React component integration and IPC communication",
+  "plugin_type": "ui",
+  "required_permissions": [
+    "read_files"
+  ],
+  "dependencies": [],
+  "homepage": "https://github.com/OBenner/Auto-Coding/tree/main/examples/plugins/ui-extension",
+  "license": "MIT"
+}

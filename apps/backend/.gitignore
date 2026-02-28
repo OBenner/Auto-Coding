@@ -62,5 +62,11 @@ Thumbs.db
 # Tests (development only)
 tests/
 
-# Auto Claude data directory
+# Auto Code data directory
 .auto-claude/
+
+# Auto Claude generated files
+.auto-claude-security.json
+.auto-claude-status
+.security-key
+logs/security/

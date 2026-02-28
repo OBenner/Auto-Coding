@@ -97,7 +97,7 @@ export function FirstSpecStep({ onNext, onBack, onSkip, onOpenTaskCreator }: Fir
             Create Your First Task
           </h1>
           <p className="mt-2 text-muted-foreground">
-            Describe what you want to build and let Auto Claude handle the rest
+            Describe what you want to build and let Auto Code handle the rest
           </p>
         </div>
 
@@ -130,6 +130,7 @@ export function FirstSpecStep({ onNext, onBack, onSkip, onOpenTaskCreator }: Fir
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {tips.map((tip, index) => (
               <TipCard
+                // biome-ignore lint/suspicious/noArrayIndexKey: Static list with stable order
                 key={index}
                 icon={tip.icon}
                 title={tip.title}

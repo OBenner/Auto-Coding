@@ -159,12 +159,12 @@ export function FileTreeItem({
 
   return (
     <div
-      role={node.isDirectory ? 'button' : undefined}
-      tabIndex={node.isDirectory ? 0 : undefined}
+      role="treeitem"
+      tabIndex={0}
       draggable
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
-      onKeyDown={node.isDirectory ? handleKeyDown : undefined}
+      onKeyDown={handleKeyDown}
       className={cn(
         'flex items-center gap-1 py-1 px-2 rounded cursor-grab select-none',
         'hover:bg-accent/50 transition-colors',

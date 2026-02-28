@@ -36,9 +36,9 @@ from typing import TYPE_CHECKING
 
 # Import the full Claude adapter implementation (always available)
 from core.providers.adapters.claude import (
+    CLAUDE_MODELS,
     ClaudeAgentProvider,
     ClaudeAgentSession,
-    CLAUDE_MODELS,
 )
 
 
@@ -47,50 +47,56 @@ from core.providers.adapters.claude import (
 def _get_litellm_provider():
     """Lazy import for LiteLLMProvider."""
     from core.providers.adapters.litellm import LiteLLMProvider
+
     return LiteLLMProvider
 
 
 def _get_litellm_session():
     """Lazy import for LiteLLMSession."""
     from core.providers.adapters.litellm import LiteLLMSession
+
     return LiteLLMSession
 
 
 def _get_litellm_models():
     """Lazy import for LITELLM_MODELS."""
     from core.providers.adapters.litellm import LITELLM_MODELS
+
     return LITELLM_MODELS
 
 
 def _get_openrouter_provider():
     """Lazy import for OpenRouterProvider."""
     from core.providers.adapters.openrouter import OpenRouterProvider
+
     return OpenRouterProvider
 
 
 def _get_openrouter_session():
     """Lazy import for OpenRouterSession."""
     from core.providers.adapters.openrouter import OpenRouterSession
+
     return OpenRouterSession
 
 
 def _get_openrouter_models():
     """Lazy import for OPENROUTER_MODELS."""
     from core.providers.adapters.openrouter import OPENROUTER_MODELS
+
     return OPENROUTER_MODELS
 
 
 # For TYPE_CHECKING, we can import directly since it won't execute
 if TYPE_CHECKING:
     from core.providers.adapters.litellm import (
+        LITELLM_MODELS,
         LiteLLMProvider,
         LiteLLMSession,
-        LITELLM_MODELS,
     )
     from core.providers.adapters.openrouter import (
+        OPENROUTER_MODELS,
         OpenRouterProvider,
         OpenRouterSession,
-        OPENROUTER_MODELS,
     )
 
 

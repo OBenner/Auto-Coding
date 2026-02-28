@@ -504,7 +504,7 @@ export function ClaudeCodeStatusBadge({ className }: ClaudeCodeStatusBadgeProps)
           {/* Version selector - only show when Claude is installed */}
           {versionInfo?.installed && (
             <div className="space-y-1.5">
-              <label className="text-xs text-muted-foreground">
+              <label htmlFor="version-select" className="text-xs text-muted-foreground">
                 {t("navigation:claudeCode.switchVersion", "Switch Version")}
               </label>
               <Select
@@ -550,7 +550,7 @@ export function ClaudeCodeStatusBadge({ className }: ClaudeCodeStatusBadgeProps)
           {/* CLI Installation selector - show when multiple installations are found */}
           {installations.length > 1 && (
             <div className="space-y-1.5">
-              <label className="text-xs text-muted-foreground">
+              <label htmlFor="installation-select" className="text-xs text-muted-foreground">
                 {t("navigation:claudeCode.switchInstallation", "Switch Installation")}
               </label>
               <Select
