@@ -41,6 +41,10 @@
       "title": "Notifications",
       "description": "Alert preferences"
     },
+    "feedback": {
+      "title": "Feedback",
+      "description": "User feedback collection settings"
+    },
     "debug": {
       "title": "Debug & Logs",
       "description": "Troubleshooting tools"
@@ -48,6 +52,10 @@
     "keyboardShortcuts": {
       "title": "Keyboard Shortcuts",
       "description": "Customize keyboard shortcuts for common actions"
+    },
+    "envConfig": {
+      "title": "Environment Config",
+      "description": "Configure Claude authentication and environment tokens"
     }
   },
   "apiProfiles": {
@@ -56,10 +64,12 @@
     "addButton": "Add Profile",
     "presets": {
       "anthropic": "Anthropic",
+      "openai": "OpenAI",
       "openrouter": "OpenRouter",
       "groq": "Groq",
       "glmGlobal": "GLM (Global)",
-      "glmChina": "GLM (China)"
+      "glmChina": "GLM (China)",
+      "ollama": "Ollama (Local)"
     },
     "fields": {
       "name": "Name",
@@ -184,6 +194,14 @@
     "default": "Default",
     "comfortable": "Comfortable",
     "large": "Large"
+  },
+  "gpuAcceleration": {
+    "label": "GPU Acceleration",
+    "description": "Use WebGL for terminal rendering (experimental, faster with many terminals)",
+    "auto": "Auto (use WebGL when supported)",
+    "on": "Always on",
+    "off": "Off (default)",
+    "helperText": "Changes apply to new terminals only"
   },
   "general": {
     "otherAgentSettings": "Other Agent Settings",
@@ -311,6 +329,12 @@
     "onReviewNeededDescription": "Notify when QA requires your review",
     "sound": "Sound",
     "soundDescription": "Play sound with notifications"
+  },
+  "feedback": {
+    "title": "Feedback Settings",
+    "description": "Configure feedback collection preferences",
+    "enableFeedback": "Enable Feedback Collection",
+    "enableFeedbackDescription": "Collect feedback after agent tasks complete to help improve the system"
   },
   "actions": {
     "save": "Save Settings",

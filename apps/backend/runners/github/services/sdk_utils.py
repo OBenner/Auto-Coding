@@ -25,6 +25,13 @@ logger = logging.getLogger(__name__)
 # Check if debug mode is enabled
 DEBUG_MODE = os.environ.get("DEBUG", "").lower() in ("true", "1", "yes")
 
+# Errors that are recoverable (callers can fall back to text parsing or retry)
+# vs fatal errors (auth failures, circuit breaker) that should propagate
+RECOVERABLE_ERRORS = {
+    "structured_output_validation_failed",
+    "tool_use_concurrency_error",
+}
+
 
 def _short_model_name(model: str | None) -> str:
     """Convert full model name to a short display name for logs.
@@ -162,8 +169,11 @@ async def process_sdk_stream(
         - msg_count: Total message count
         - subagent_tool_ids: Mapping of tool_id -> agent_name
         - error: Error message if stream processing failed (None on success)
+        - error_recoverable: Boolean indicating if the error is recoverable (fallback possible) vs fatal
+        - last_assistant_text: Last non-empty assistant text block (for cleaner fallback parsing)
     """
     result_text = ""
+    last_assistant_text = ""  # Last assistant text block (for cleaner fallback parsing)
     structured_output = None
     agents_invoked = []
     msg_count = 0
@@ -349,6 +359,9 @@ async def process_sdk_stream(
                         block_type = type(block).__name__
                         if block_type == "TextBlock" and hasattr(block, "text"):
                             result_text += block.text
+                            # Track last non-empty text for fallback parsing
+                            if block.text.strip():
+                                last_assistant_text = block.text
                             # Always print text content preview (not just in DEBUG_MODE)
                             text_preview = block.text[:500].replace("\n", " ").strip()
                             if text_preview:
@@ -465,11 +478,16 @@ async def process_sdk_stream(
 
     safe_print(f"[{context_name}] Session ended. Total messages: {msg_count}")
 
+    # Categorize error as recoverable (fallback possible) vs fatal
+    error_recoverable = stream_error in RECOVERABLE_ERRORS if stream_error else False
+
     return {
         "result_text": result_text,
+        "last_assistant_text": last_assistant_text,
         "structured_output": structured_output,
         "agents_invoked": agents_invoked,
         "msg_count": msg_count,
         "subagent_tool_ids": subagent_tool_ids,
         "error": stream_error,
+        "error_recoverable": error_recoverable,
     }

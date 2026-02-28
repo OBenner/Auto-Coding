@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 
 # Check for Claude SDK availability
 try:
+    # Optional: claude_agent_sdk is checked at runtime for availability
     import claude_agent_sdk  # noqa: F401
 
     SDK_AVAILABLE = True

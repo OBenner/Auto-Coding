@@ -455,7 +455,7 @@ def test_json_parsing_robustness():
             json_match = re.search(r"```json\s*(\[.*?\])\s*```", text, re.DOTALL)
             if json_match:
                 return json.loads(json_match.group(1))
-        except (json.JSONDecodeError, ValueError):
+        except ValueError:
             return []  # Malformed JSON in AI response
         return []
 

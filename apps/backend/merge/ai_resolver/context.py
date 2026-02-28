@@ -11,8 +11,9 @@ optimized for minimal token usage.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import TYPE_CHECKING
+import json
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from ..types import SemanticChange
@@ -34,6 +35,9 @@ class ConflictContext:
     ]  # (task_id, intent, changes)
     conflict_description: str
     language: str = "unknown"
+    semantic_context: dict[str, Any] = field(
+        default_factory=dict
+    )  # Additional semantic information (scopes, signatures, renames, etc.)
 
     def to_prompt_context(self) -> str:
         """Format as context for the AI prompt."""
@@ -41,13 +45,32 @@ class ConflictContext:
             f"File: {self.file_path}",
             f"Location: {self.location}",
             f"Language: {self.language}",
-            "",
-            "--- BASELINE CODE (before any changes) ---",
-            self.baseline_code,
-            "--- END BASELINE ---",
-            "",
-            "CHANGES FROM EACH TASK:",
         ]
+
+        # Add semantic context if available
+        if self.semantic_context:
+            lines.append("")
+            lines.append("--- SEMANTIC CONTEXT ---")
+            for key, value in self.semantic_context.items():
+                if isinstance(value, (list, dict)):
+                    serialized = json.dumps(value, indent=2, default=str)
+                    if len(serialized) > 1000:
+                        serialized = serialized[:1000] + "\n... (truncated)"
+                    lines.append(f"{key}: {serialized}")
+                else:
+                    lines.append(f"{key}: {value}")
+            lines.append("--- END SEMANTIC CONTEXT ---")
+
+        lines.extend(
+            [
+                "",
+                "--- BASELINE CODE (before any changes) ---",
+                self.baseline_code,
+                "--- END BASELINE ---",
+                "",
+                "CHANGES FROM EACH TASK:",
+            ]
+        )
 
         for task_id, intent, changes in self.task_changes:
             lines.append(f"\n[Task: {task_id}]")

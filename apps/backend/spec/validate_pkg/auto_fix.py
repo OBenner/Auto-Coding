@@ -54,12 +54,10 @@ def _repair_json_syntax(content: str) -> str | None:
             bracket_stack.append("{")
         elif char == "[":
             bracket_stack.append("[")
-        elif char == "}":
-            if bracket_stack and bracket_stack[-1] == "{":
-                bracket_stack.pop()
-        elif char == "]":
-            if bracket_stack and bracket_stack[-1] == "[":
-                bracket_stack.pop()
+        elif char == "}" and bracket_stack and bracket_stack[-1] == "{":
+            bracket_stack.pop()
+        elif char == "]" and bracket_stack and bracket_stack[-1] == "[":
+            bracket_stack.pop()
 
     if bracket_stack:
         # Try to find a reasonable truncation point and close
