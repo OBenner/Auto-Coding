@@ -903,6 +903,91 @@
       "saveFailedDescription": "Échec de l'enregistrement des raccourcis clavier. Veuillez réessayer."
     }
   },
+  "webhooks": {
+    "title": "Webhooks et intégrations",
+    "enableWebhooks": "Activer les Webhooks",
+    "enableDescription": "Déclencher des builds à partir d'événements externes et envoyer des notifications",
+    "integrationOverviewTitle": "Intégrations Webhook",
+    "integrationOverviewDescription": "Configurez les webhooks sortants pour envoyer des notifications de build à Slack, Discord, Teams ou Jira. Configurez les webhooks entrants pour déclencher des builds depuis GitHub ou GitLab.",
+    "integrationsConfigured": "{{count}} intégration configurée",
+    "integrationsConfigured_plural": "{{count}} intégrations configurées",
+    "outgoingTitle": "Notifications sortantes",
+    "outgoingDescription": "Envoyer les mises à jour de statut de build aux services externes",
+    "incomingTitle": "Webhooks entrants",
+    "incomingDescription": "Déclencher des builds à partir d'événements externes",
+    "logsHint": "Consultez les journaux détaillés de livraison des webhooks et les informations de dépannage dans le visualiseur de journaux.",
+    "status": {
+      "connected": "Connecté",
+      "notConfigured": "Non configuré",
+      "active": "Actif",
+      "configError": "Erreur de configuration",
+      "enabled": "Activé"
+    },
+    "actions": {
+      "configure": "Configurer",
+      "setup": "Installer",
+      "configureAriaLabel": "Configurer l'intégration {{integration}}"
+    },
+    "integrations": {
+      "slack": "Slack",
+      "discord": "Discord",
+      "teams": "Microsoft Teams",
+      "jira": "Jira",
+      "github": "GitHub",
+      "gitlab": "GitLab",
+      "generic": "Webhook générique"
+    },
+    "logs": {
+      "title": "Journaux de livraison des webhooks",
+      "filterByStatus": "Filtrer par statut",
+      "filterByEvent": "Filtrer par événement",
+      "allStatuses": "Tous les statuts",
+      "allEvents": "Tous les événements",
+      "loading": "Chargement des journaux...",
+      "empty": "Aucun journal de webhook",
+      "emptyDescription": "Les journaux de livraison des webhooks apparaîtront ici une fois les webhooks déclenchés",
+      "noMatch": "Aucun journal ne correspond aux filtres sélectionnés",
+      "clearFilters": "Effacer les filtres",
+      "attempt": "Tentative {{current}}/{{max}}",
+      "request": "Requête",
+      "response": "Réponse",
+      "eventData": "Données de l'événement",
+      "url": "URL :",
+      "headers": "En-têtes :",
+      "body": "Corps :",
+      "statusLabel": "Statut :",
+      "id": "ID :",
+      "webhookId": "ID du webhook :",
+      "completed": "Terminé :",
+      "statusBadge": {
+        "success": "Succès",
+        "failed": "Échoué",
+        "retrying": "Nouvelle tentative",
+        "pending": "En attente"
+      },
+      "timeAgo": {
+        "justNow": "À l'instant",
+        "minutesAgo": "il y a {{count}}m",
+        "hoursAgo": "il y a {{count}}h",
+        "daysAgo": "il y a {{count}}j"
+      },
+      "duration": {
+        "unavailable": "N/D"
+      }
+    },
+    "events": {
+      "build_started": "Build démarré",
+      "build_completed": "Build terminé",
+      "build_failed": "Build échoué",
+      "subtask_started": "Sous-tâche démarrée",
+      "subtask_completed": "Sous-tâche terminée",
+      "subtask_failed": "Sous-tâche échouée",
+      "pr_opened": "PR ouverte",
+      "pr_merged": "PR fusionnée",
+      "pr_closed": "PR fermée",
+      "custom": "Personnalisé"
+    }
+  },
   "agentPreferences": {
     "title": "Préférences de comportement de l'agent",
     "description": "Configurez comment les agents adaptent leur comportement à vos préférences",

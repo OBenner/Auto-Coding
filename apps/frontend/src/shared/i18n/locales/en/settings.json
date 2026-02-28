@@ -899,6 +899,91 @@
       "saveFailedDescription": "Failed to save keyboard shortcuts. Please try again."
     }
   },
+  "webhooks": {
+    "title": "Webhooks & Integrations",
+    "enableWebhooks": "Enable Webhooks",
+    "enableDescription": "Trigger builds from external events and send notifications",
+    "integrationOverviewTitle": "Webhook Integrations",
+    "integrationOverviewDescription": "Configure outgoing webhooks to send build notifications to Slack, Discord, Teams, or Jira. Set up incoming webhooks to trigger builds from GitHub or GitLab events.",
+    "integrationsConfigured": "{{count}} integration configured",
+    "integrationsConfigured_plural": "{{count}} integrations configured",
+    "outgoingTitle": "Outgoing Notifications",
+    "outgoingDescription": "Send build status updates to external services",
+    "incomingTitle": "Incoming Webhooks",
+    "incomingDescription": "Trigger builds from external events",
+    "logsHint": "View detailed webhook delivery logs and troubleshooting information in the Webhook Logs viewer.",
+    "status": {
+      "connected": "Connected",
+      "notConfigured": "Not configured",
+      "active": "Active",
+      "configError": "Configuration error",
+      "enabled": "Enabled"
+    },
+    "actions": {
+      "configure": "Configure",
+      "setup": "Setup",
+      "configureAriaLabel": "Configure {{integration}} integration"
+    },
+    "integrations": {
+      "slack": "Slack",
+      "discord": "Discord",
+      "teams": "Microsoft Teams",
+      "jira": "Jira",
+      "github": "GitHub",
+      "gitlab": "GitLab",
+      "generic": "Generic Webhook"
+    },
+    "logs": {
+      "title": "Webhook Delivery Logs",
+      "filterByStatus": "Filter by status",
+      "filterByEvent": "Filter by event",
+      "allStatuses": "All Statuses",
+      "allEvents": "All Events",
+      "loading": "Loading logs...",
+      "empty": "No webhook logs yet",
+      "emptyDescription": "Webhook delivery logs will appear here once webhooks are triggered",
+      "noMatch": "No logs match the selected filters",
+      "clearFilters": "Clear Filters",
+      "attempt": "Attempt {{current}}/{{max}}",
+      "request": "Request",
+      "response": "Response",
+      "eventData": "Event Data",
+      "url": "URL:",
+      "headers": "Headers:",
+      "body": "Body:",
+      "statusLabel": "Status:",
+      "id": "ID:",
+      "webhookId": "Webhook ID:",
+      "completed": "Completed:",
+      "statusBadge": {
+        "success": "Success",
+        "failed": "Failed",
+        "retrying": "Retrying",
+        "pending": "Pending"
+      },
+      "timeAgo": {
+        "justNow": "Just now",
+        "minutesAgo": "{{count}}m ago",
+        "hoursAgo": "{{count}}h ago",
+        "daysAgo": "{{count}}d ago"
+      },
+      "duration": {
+        "unavailable": "N/A"
+      }
+    },
+    "events": {
+      "build_started": "Build Started",
+      "build_completed": "Build Completed",
+      "build_failed": "Build Failed",
+      "subtask_started": "Subtask Started",
+      "subtask_completed": "Subtask Completed",
+      "subtask_failed": "Subtask Failed",
+      "pr_opened": "PR Opened",
+      "pr_merged": "PR Merged",
+      "pr_closed": "PR Closed",
+      "custom": "Custom"
+    }
+  },
   "agentPreferences": {
     "title": "Agent Behavior Preferences",
     "description": "Configure how agents adapt their behavior to match your preferences",

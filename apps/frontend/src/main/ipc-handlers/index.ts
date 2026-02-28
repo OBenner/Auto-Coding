@@ -40,6 +40,7 @@ import { registerMergeAnalyticsHandlers } from './merge-analytics-handlers';
 import { registerAnalyticsHandlers } from './analytics-handlers';
 import { registerTokenStatsHandlers } from './token-stats-handler';
 import { registerTemplateHandlers } from './template-handlers';
+import { registerWebhookHandlers } from './webhooks-handlers';
 import { registerPatternHandlers } from './pattern-handlers';
 import { registerSessionReplayHandlers } from './session-replay-handlers';
 import { registerFeedbackHandlers } from './feedback-handlers';
@@ -150,6 +151,9 @@ export function setupIpcHandlers(
   // Template library handlers
   registerTemplateHandlers();
 
+  // Webhook integration handlers
+  registerWebhookHandlers(agentManager, getMainWindow);
+
   // Pattern learning handlers
   registerPatternHandlers();
 
@@ -195,6 +199,7 @@ export {
   registerAnalyticsHandlers,
   registerTokenStatsHandlers,
   registerTemplateHandlers,
+  registerWebhookHandlers,
   registerPatternHandlers,
   registerSessionReplayHandlers,
   registerFeedbackHandlers,
