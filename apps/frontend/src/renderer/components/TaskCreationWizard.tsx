@@ -798,10 +798,10 @@ export function TaskCreationWizard({
         >
           <span className="flex items-center gap-2">
             <Brain className="h-4 w-4" />
-            Custom Template
+            {t('tasks:wizard.customTemplate')}
             {selectedCustomTemplateId && (
               <span className="text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded">
-                Selected
+                {t('tasks:wizard.selected')}
               </span>
             )}
           </span>
@@ -843,10 +843,10 @@ export function TaskCreationWizard({
         >
           <span className="flex items-center gap-2">
             <Brain className="h-4 w-4" />
-            Agent Models
+            {t('tasks:wizard.agentModels')}
             {Object.keys(agentModels).length > 0 && (
               <span className="text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded">
-                {Object.keys(agentModels).length} configured
+                {t('tasks:wizard.agentModelsConfigured', { count: Object.keys(agentModels).length })}
               </span>
             )}
           </span>
@@ -861,14 +861,14 @@ export function TaskCreationWizard({
         {showAgentModels && (
           <div id="agent-models-section" className="space-y-4 p-4 rounded-lg border border-border bg-muted/30">
             <p className="text-xs text-muted-foreground mb-3">
-              Configure which model to use for specific agent types. Leave empty to use defaults.
+              {t('tasks:wizard.agentModelsDescription')}
             </p>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Coder Agent */}
               <div className="space-y-2">
                 <Label htmlFor="agent-model-coder" className="text-sm font-medium text-foreground">
-                  Coder Agent
+                  {t('tasks:wizard.coderAgent')}
                 </Label>
                 <Select
                   value={agentModels.coder || ''}
@@ -883,10 +883,10 @@ export function TaskCreationWizard({
                   disabled={isCreating}
                 >
                   <SelectTrigger id="agent-model-coder">
-                    <SelectValue placeholder="Use default" />
+                    <SelectValue placeholder={t('tasks:wizard.useDefault')} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Use default</SelectItem>
+                    <SelectItem value="">{t('tasks:wizard.useDefault')}</SelectItem>
                     {AVAILABLE_MODELS.map((model) => (
                       <SelectItem key={model.value} value={model.value}>
                         {model.label}
@@ -899,7 +899,7 @@ export function TaskCreationWizard({
               {/* Planner Agent */}
               <div className="space-y-2">
                 <Label htmlFor="agent-model-planner" className="text-sm font-medium text-foreground">
-                  Planner Agent
+                  {t('tasks:wizard.plannerAgent')}
                 </Label>
                 <Select
                   value={agentModels.planner || ''}
@@ -914,10 +914,10 @@ export function TaskCreationWizard({
                   disabled={isCreating}
                 >
                   <SelectTrigger id="agent-model-planner">
-                    <SelectValue placeholder="Use default" />
+                    <SelectValue placeholder={t('tasks:wizard.useDefault')} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Use default</SelectItem>
+                    <SelectItem value="">{t('tasks:wizard.useDefault')}</SelectItem>
                     {AVAILABLE_MODELS.map((model) => (
                       <SelectItem key={model.value} value={model.value}>
                         {model.label}
@@ -930,7 +930,7 @@ export function TaskCreationWizard({
               {/* QA Reviewer Agent */}
               <div className="space-y-2">
                 <Label htmlFor="agent-model-qa-reviewer" className="text-sm font-medium text-foreground">
-                  QA Reviewer Agent
+                  {t('tasks:wizard.qaReviewerAgent')}
                 </Label>
                 <Select
                   value={agentModels.qa_reviewer || ''}
@@ -945,10 +945,10 @@ export function TaskCreationWizard({
                   disabled={isCreating}
                 >
                   <SelectTrigger id="agent-model-qa-reviewer">
-                    <SelectValue placeholder="Use default" />
+                    <SelectValue placeholder={t('tasks:wizard.useDefault')} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Use default</SelectItem>
+                    <SelectItem value="">{t('tasks:wizard.useDefault')}</SelectItem>
                     {AVAILABLE_MODELS.map((model) => (
                       <SelectItem key={model.value} value={model.value}>
                         {model.label}

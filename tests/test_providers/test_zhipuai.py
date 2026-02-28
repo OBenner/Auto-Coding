@@ -10,7 +10,6 @@ Tests the core.providers.adapters.zhipuai module functionality including:
 - Configuration validation and health checks
 """
 
-import asyncio
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -218,7 +217,7 @@ class TestZhipuAISession:
 
         assert len(session.messages) == 0
 
-    def test_complete_inactive_session_raises_error(self):
+    async def test_complete_inactive_session_raises_error(self):
         """Tests complete() raises ProviderError when session is closed."""
         from core.providers.adapters.zhipuai import ZhipuAISession
         from core.providers.exceptions import ProviderError
@@ -230,20 +229,15 @@ class TestZhipuAISession:
         )
         session.close()
 
-        async def complete():
+        with pytest.raises(ProviderError) as exc_info:
             async for _ in session.complete("Hello"):
                 pass
+        assert "Session is closed" in str(exc_info.value)
 
-        loop = asyncio.new_event_loop()
-        try:
-            with pytest.raises(ProviderError) as exc_info:
-                loop.run_until_complete(complete())
-            assert "Session is closed" in str(exc_info.value)
-        finally:
-            loop.close()
-
-    def test_complete_no_sdk_raises_not_installed(self):
+    async def test_complete_no_sdk_raises_not_installed(self):
         """Tests complete() raises ProviderNotInstalled when zai-sdk missing."""
+        import sys
+
         from core.providers.adapters.zhipuai import ZhipuAISession
         from core.providers.exceptions import ProviderNotInstalled
 
@@ -254,8 +248,6 @@ class TestZhipuAISession:
         )
 
         # Remove cached zai module and patch sys.modules to simulate missing SDK
-        import sys
-
         saved_modules = {
             k: sys.modules.pop(k)
             for k in list(sys.modules)
@@ -263,20 +255,10 @@ class TestZhipuAISession:
         }
         try:
             with patch.dict("sys.modules", {"zai": None}):
-
-                async def complete():
+                with pytest.raises(ProviderNotInstalled) as exc_info:
                     async for _ in session.complete("Hello"):
                         pass
-
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                try:
-                    with pytest.raises(ProviderNotInstalled) as exc_info:
-                        loop.run_until_complete(complete())
-                    assert "zai-sdk" in str(exc_info.value)
-                finally:
-                    loop.close()
-                    asyncio.set_event_loop(None)
+                assert "zai-sdk" in str(exc_info.value)
         finally:
             sys.modules.update(saved_modules)
 
@@ -559,7 +541,7 @@ class TestZhipuAIProviderCreateSession:
 class TestZhipuAIProviderSendMessage:
     """Tests for ZhipuAIProvider.send_message() method."""
 
-    def test_send_message_no_active_session_raises_error(self):
+    async def test_send_message_no_active_session_raises_error(self):
         """Tests send_message raises error when no active session."""
         from core.providers.adapters.zhipuai import ZhipuAIProvider
         from core.providers.config import ProviderConfig
@@ -568,19 +550,12 @@ class TestZhipuAIProviderSendMessage:
         config = ProviderConfig(provider="zhipuai")
         provider = ZhipuAIProvider(config)
 
-        async def send():
+        with pytest.raises(ProviderError) as exc_info:
             async for _ in provider.send_message("Hello"):
                 pass
+        assert "No active session" in str(exc_info.value)
 
-        loop = asyncio.new_event_loop()
-        try:
-            with pytest.raises(ProviderError) as exc_info:
-                loop.run_until_complete(send())
-            assert "No active session" in str(exc_info.value)
-        finally:
-            loop.close()
-
-    def test_send_message_closed_session_raises_error(self):
+    async def test_send_message_closed_session_raises_error(self):
         """Tests send_message raises error when session is closed."""
         from core.providers.adapters.zhipuai import ZhipuAIProvider
         from core.providers.base import SessionConfig
@@ -600,17 +575,10 @@ class TestZhipuAIProviderSendMessage:
             session = provider.create_session(session_config)
             session.close()
 
-        async def send():
+        with pytest.raises(ProviderError) as exc_info:
             async for _ in provider.send_message("Hello"):
                 pass
-
-        loop = asyncio.new_event_loop()
-        try:
-            with pytest.raises(ProviderError) as exc_info:
-                loop.run_until_complete(send())
-            assert "Session is closed" in str(exc_info.value)
-        finally:
-            loop.close()
+        assert "Session is closed" in str(exc_info.value)
 
 
 # =============================================================================

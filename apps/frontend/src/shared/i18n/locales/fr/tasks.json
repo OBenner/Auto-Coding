@@ -289,7 +289,16 @@
     },
     "errors": {
       "createFailed": "Échec de la création de la tâche. Veuillez réessayer."
-    }
+    },
+    "customTemplate": "Modèle personnalisé",
+    "selected": "Sélectionné",
+    "agentModels": "Modèles d'agents",
+    "agentModelsConfigured": "{{count}} configuré(s)",
+    "agentModelsDescription": "Configurez le modèle à utiliser pour chaque type d'agent. Laissez vide pour utiliser les valeurs par défaut.",
+    "coderAgent": "Agent Codeur",
+    "plannerAgent": "Agent Planificateur",
+    "qaReviewerAgent": "Agent Réviseur QA",
+    "useDefault": "Utiliser par défaut"
   },
   "feedback": {
     "dragDropHint": "Glissez-déposez des images ou collez des captures d'écran",

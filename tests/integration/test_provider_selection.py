@@ -13,18 +13,10 @@ Tests the CLI provider and model selection functionality including:
 
 import json
 import os
-
-# Add backend directory to path if not already added by conftest
 import sys
-from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-
-backend_path = Path(__file__).parent.parent.parent / "apps" / "backend"
-if str(backend_path) not in sys.path:
-    sys.path.insert(0, str(backend_path))
-
 
 # =============================================================================
 # CLI ARGUMENT PARSING TESTS
@@ -36,7 +28,6 @@ class TestCLIProviderArgumentParsing:
 
     def test_parse_args_with_provider_zhipuai(self):
         """Tests CLI parsing accepts --provider zhipuai."""
-        import sys
 
         from cli.main import parse_args
 
@@ -51,7 +42,6 @@ class TestCLIProviderArgumentParsing:
 
     def test_parse_args_with_provider_claude(self):
         """Tests CLI parsing accepts --provider claude."""
-        import sys
 
         from cli.main import parse_args
 
@@ -65,7 +55,6 @@ class TestCLIProviderArgumentParsing:
 
     def test_parse_args_with_provider_litellm(self):
         """Tests CLI parsing accepts --provider litellm."""
-        import sys
 
         from cli.main import parse_args
 
@@ -79,7 +68,6 @@ class TestCLIProviderArgumentParsing:
 
     def test_parse_args_with_provider_openrouter(self):
         """Tests CLI parsing accepts --provider openrouter."""
-        import sys
 
         from cli.main import parse_args
 
@@ -93,7 +81,6 @@ class TestCLIProviderArgumentParsing:
 
     def test_parse_args_provider_defaults_to_none(self):
         """Tests provider argument defaults to None when not specified."""
-        import sys
 
         from cli.main import parse_args
 
@@ -107,7 +94,6 @@ class TestCLIProviderArgumentParsing:
 
     def test_parse_args_with_invalid_provider_rejected(self):
         """Tests CLI rejects invalid provider names."""
-        import sys
 
         from cli.main import parse_args
 
@@ -126,7 +112,6 @@ class TestCLIModelArgumentParsing:
 
     def test_parse_args_with_model(self):
         """Tests CLI parsing accepts --model flag."""
-        import sys
 
         from cli.main import parse_args
 
@@ -140,7 +125,6 @@ class TestCLIModelArgumentParsing:
 
     def test_parse_args_with_claude_model(self):
         """Tests CLI parsing accepts Claude model."""
-        import sys
 
         from cli.main import parse_args
 
@@ -154,7 +138,6 @@ class TestCLIModelArgumentParsing:
 
     def test_parse_args_with_gpt_model(self):
         """Tests CLI parsing accepts GPT model."""
-        import sys
 
         from cli.main import parse_args
 
@@ -168,7 +151,6 @@ class TestCLIModelArgumentParsing:
 
     def test_parse_args_model_defaults_to_none(self):
         """Tests model argument defaults to None when not specified."""
-        import sys
 
         from cli.main import parse_args
 
@@ -182,7 +164,6 @@ class TestCLIModelArgumentParsing:
 
     def test_parse_args_with_provider_and_model(self):
         """Tests CLI parsing accepts both --provider and --model flags."""
-        import sys
 
         from cli.main import parse_args
 
@@ -240,25 +221,31 @@ class TestProviderSelectionBehavior:
                             mock_workspace.return_value = WorkspaceMode.DIRECT
 
                             # Ensure we start from a clean env
-                            os.environ.pop("AI_ENGINE_PROVIDER", None)
+                            prev_provider = os.environ.pop("AI_ENGINE_PROVIDER", None)
 
-                            with patch("agents.sync_spec_to_source"):
-                                handle_build_command(
-                                    project_dir=project_dir,
-                                    spec_dir=spec_dir,
-                                    model="test-model",
-                                    provider="zhipuai",
-                                    max_iterations=None,
-                                    verbose=False,
-                                    force_isolated=False,
-                                    force_direct=True,
-                                    auto_continue=True,
-                                    skip_qa=True,
-                                    force_bypass_approval=True,
-                                )
+                            try:
+                                with patch("agents.sync_spec_to_source"):
+                                    handle_build_command(
+                                        project_dir=project_dir,
+                                        spec_dir=spec_dir,
+                                        model="test-model",
+                                        provider="zhipuai",
+                                        max_iterations=None,
+                                        verbose=False,
+                                        force_isolated=False,
+                                        force_direct=True,
+                                        auto_continue=True,
+                                        skip_qa=True,
+                                        force_bypass_approval=True,
+                                    )
 
-                            # Verify provider env var was set as side effect
-                            assert os.environ.get("AI_ENGINE_PROVIDER") == "zhipuai"
+                                # Verify provider env var was set as side effect
+                                assert os.environ.get("AI_ENGINE_PROVIDER") == "zhipuai"
+                            finally:
+                                if prev_provider is None:
+                                    os.environ.pop("AI_ENGINE_PROVIDER", None)
+                                else:
+                                    os.environ["AI_ENGINE_PROVIDER"] = prev_provider
 
     def test_provider_none_does_not_override_environment(self, temp_dir):
         """Tests provider=None does not override existing environment variable."""
@@ -406,7 +393,6 @@ class TestProviderOverride:
 
     def test_cli_provider_overrides_environment(self, temp_dir):
         """Tests CLI --provider flag overrides environment variable."""
-        import sys
 
         from cli.main import parse_args
 
@@ -527,7 +513,6 @@ class TestProviderSelectionIntegration:
 
     def test_full_provider_selection_workflow(self, temp_dir, temp_git_repo):
         """Tests complete workflow: CLI args -> environment -> execution."""
-        import sys
 
         from cli.main import parse_args
 

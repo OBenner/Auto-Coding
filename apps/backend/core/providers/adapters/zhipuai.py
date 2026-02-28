@@ -21,6 +21,7 @@ Provider Capabilities:
 - Multi-modal: text, vision, images, video, embeddings
 """
 
+import asyncio
 import logging
 import uuid
 from collections.abc import AsyncIterator
@@ -59,6 +60,8 @@ class ZhipuAISession(AgentSession):
         messages: Conversation history
     """
 
+    DEFAULT_TIMEOUT: float = 300.0  # 5 minutes
+
     def __init__(
         self,
         session_id: str,
@@ -67,6 +70,7 @@ class ZhipuAISession(AgentSession):
         system_prompt: str = "",
         temperature: float | None = None,
         max_tokens: int | None = None,
+        timeout: float | None = None,
     ):
         """Initialize ZhipuAI session.
 
@@ -77,12 +81,14 @@ class ZhipuAISession(AgentSession):
             system_prompt: Optional system prompt
             temperature: Optional temperature for generation
             max_tokens: Optional max tokens for response
+            timeout: Optional timeout in seconds for API calls (default: 300)
         """
         super().__init__(session_id, provider_name="zhipuai")
         self._model = model
         self._api_key = api_key
         self._temperature = temperature
         self._max_tokens = max_tokens
+        self._timeout = timeout if timeout is not None else self.DEFAULT_TIMEOUT
         self._messages: list[dict[str, str]] = []
         self._client: Any = None
 
@@ -162,8 +168,9 @@ class ZhipuAISession(AgentSession):
         try:
             if stream:
                 # Streaming completion
-                response = await self._client.chat.completions.create(
-                    **completion_kwargs
+                response = await asyncio.wait_for(
+                    self._client.chat.completions.create(**completion_kwargs),
+                    timeout=self._timeout,
                 )
                 full_response = ""
 
@@ -180,8 +187,9 @@ class ZhipuAISession(AgentSession):
                     self.add_assistant_message(full_response)
             else:
                 # Non-streaming completion
-                response = await self._client.chat.completions.create(
-                    **completion_kwargs
+                response = await asyncio.wait_for(
+                    self._client.chat.completions.create(**completion_kwargs),
+                    timeout=self._timeout,
                 )
                 if hasattr(response, "choices") and response.choices:
                     content = response.choices[0].message.content
@@ -190,6 +198,9 @@ class ZhipuAISession(AgentSession):
                         self.add_assistant_message(content)
                         yield content
 
+        except TimeoutError:
+            logger.error("ZhipuAI API call timed out after %.1f seconds", self._timeout)
+            raise ProviderError(f"ZhipuAI API call timed out after {self._timeout}s")
         except Exception as e:
             logger.error(f"ZhipuAI completion error: {e}")
             raise ProviderError(f"ZhipuAI completion failed: {e}") from e

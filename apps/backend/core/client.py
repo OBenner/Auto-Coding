@@ -814,7 +814,7 @@ def create_client(
     if session_config is not None:
         if hasattr(session_config, "provider") and session_config.provider:
             if session_config.provider != "claude":
-                logger.warning(
+                raise ValueError(
                     f"SessionConfig provider override detected: {session_config.provider}. "
                     f"create_client() only creates Claude SDK clients. "
                     f"For alternative providers, use create_engine_provider() instead."

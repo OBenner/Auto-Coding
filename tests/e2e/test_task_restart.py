@@ -12,15 +12,6 @@ End-to-end tests for the task restart functionality including:
 
 import json
 
-# Add backend directory to path if not already added by conftest
-import sys
-from pathlib import Path
-
-backend_path = Path(__file__).parent.parent.parent / "apps" / "backend"
-if str(backend_path) not in sys.path:
-    sys.path.insert(0, str(backend_path))
-
-
 # =============================================================================
 # RESTART FROM SUBTASK TESTS
 # =============================================================================
@@ -437,6 +428,8 @@ class TestRestartCLIIntegration:
     def test_restart_from_parameter_type(self):
         """Tests that restart_from parameter accepts string or None."""
         import inspect
+        import types
+        from typing import Union, get_args, get_origin
 
         from cli.build_commands import handle_build_command
 
@@ -445,8 +438,14 @@ class TestRestartCLIIntegration:
 
         # Parameter annotation should be str | None
         annotation = param.annotation
-        # Check that it's a union type or allows None
-        assert "str" in str(annotation) or "None" in str(annotation)
+        origin = get_origin(annotation)
+        if annotation is str:
+            pass  # plain str is acceptable
+        elif origin is Union or origin is types.UnionType:
+            args = set(get_args(annotation))
+            assert args == {str, type(None)}, f"Expected str | None, got {annotation}"
+        else:
+            raise AssertionError(f"Expected str or str | None, got {annotation}")
 
 
 # =============================================================================

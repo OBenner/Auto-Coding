@@ -289,7 +289,16 @@
     },
     "errors": {
       "createFailed": "Failed to create task. Please try again."
-    }
+    },
+    "customTemplate": "Custom Template",
+    "selected": "Selected",
+    "agentModels": "Agent Models",
+    "agentModelsConfigured": "{{count}} configured",
+    "agentModelsDescription": "Configure which model to use for specific agent types. Leave empty to use defaults.",
+    "coderAgent": "Coder Agent",
+    "plannerAgent": "Planner Agent",
+    "qaReviewerAgent": "QA Reviewer Agent",
+    "useDefault": "Use default"
   },
   "feedback": {
     "dragDropHint": "Drag & drop images or paste screenshots",

@@ -650,10 +650,11 @@ def get_next_subtask(spec_dir: Path, restart_from: str | None = None) -> dict | 
                     # All subsequent subtasks are complete
                     return None
             # If restart_from subtask not found, log warning and fall through to normal flow
-            logging.getLogger(__name__).warning(
-                f"restart_from subtask '{restart_from}' not found in plan, "
-                "falling through to normal flow"
-            )
+            if restart_phase_index is None:
+                logging.getLogger(__name__).warning(
+                    f"restart_from subtask '{restart_from}' not found in plan, "
+                    "falling through to normal flow"
+                )
 
         # Build a map of phase completion
         phase_complete = _build_phase_completion_map(phases, stuck_subtask_ids)
