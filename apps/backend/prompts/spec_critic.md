@@ -48,7 +48,7 @@ If the `actor_critic_thinking` tool is available, use it for structured dual-per
 ```text
 # Actor-Critic Multi-Round Dialogue Pattern
 
-Tool: mcp__aquarius-wing__actor-critic-thinking__actor_critic_thinking
+Tool: mcp__actor-critic-thinking__actor_critic_thinking
 Parameters:
   - role (required): "actor" (creative/empathetic) or "critic" (analytical/evaluative)
   - thoughtNumber (optional): Current thought number in sequence

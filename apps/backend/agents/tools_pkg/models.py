@@ -186,6 +186,30 @@ AGENT_CONFIGS = {
         "auto_claude_tools": [],
         "thinking_default": "high",
     },
+    "spec_requirements": {
+        "tools": BASE_READ_TOOLS + WEB_TOOLS,
+        "mcp_servers": [],  # Requirements gathering - reads project
+        "auto_claude_tools": [],
+        "thinking_default": "medium",
+    },
+    "spec_research": {
+        "tools": BASE_READ_TOOLS + WEB_TOOLS,
+        "mcp_servers": ["context7"],  # Needs docs lookup
+        "auto_claude_tools": [],
+        "thinking_default": "medium",
+    },
+    "spec_writing": {
+        "tools": BASE_READ_TOOLS + BASE_WRITE_TOOLS,
+        "mcp_servers": [],  # Writes spec.md
+        "auto_claude_tools": [],
+        "thinking_default": "high",
+    },
+    "spec_planning": {
+        "tools": BASE_READ_TOOLS + BASE_WRITE_TOOLS,
+        "mcp_servers": [],  # Creates implementation_plan.json
+        "auto_claude_tools": [],
+        "thinking_default": "high",
+    },
     "spec_compaction": {
         "tools": BASE_READ_TOOLS + BASE_WRITE_TOOLS,
         "mcp_servers": [],
@@ -437,6 +461,7 @@ def _map_mcp_server_name(
         "electron": "electron",
         "puppeteer": "puppeteer",
         "auto-claude": "auto-claude",
+        "actor-critic-thinking": "actor-critic-thinking",
     }
     # Check if it's a known mapping
     mapped = mappings.get(name.lower().strip())

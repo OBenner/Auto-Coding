@@ -22,9 +22,12 @@ Usage:
     validate_actor_critic_config()
 """
 
+import logging
 import os
 import shutil
 from dataclasses import dataclass
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -189,4 +192,6 @@ def validate_actor_critic_config() -> None:
         raise RuntimeError(error_msg)
 
     # Configuration is valid
-    print(f"Actor-Critic MCP configuration validated: {config.get_status_summary()}")
+    logger.info(
+        "Actor-Critic MCP configuration validated: %s", config.get_status_summary()
+    )
