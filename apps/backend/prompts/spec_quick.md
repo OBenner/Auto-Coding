@@ -33,8 +33,9 @@ That's it. No deep analysis needed.
 
 Create a concise `spec.md`:
 
-```bash
-cat > spec.md << 'EOF'
+Use the **Write** tool to create `spec.md` with the following structure:
+
+```markdown
 # Quick Spec: [Task Name]
 
 ## Task
@@ -51,8 +52,9 @@ cat > spec.md << 'EOF'
 
 ## Notes
 [Any gotchas or considerations - optional]
-EOF
 ```
+
+**IMPORTANT**: Use the Write tool to create this file. Do NOT use `cat >`, heredoc (`<< EOF`), or bash redirection — these hang on Windows.
 
 **Keep it short!** A simple spec should be 20-50 lines, not 200+.
 
@@ -62,8 +64,9 @@ EOF
 
 Create `implementation_plan.json`:
 
-```bash
-cat > implementation_plan.json << 'EOF'
+Use the **Write** tool to create `implementation_plan.json` with the following structure:
+
+```json
 {
   "spec_name": "[spec-name]",
   "workflow_type": "simple",
@@ -98,8 +101,9 @@ cat > implementation_plan.json << 'EOF'
     "estimated_sessions": 1
   }
 }
-EOF
 ```
+
+**IMPORTANT**: Use the Write tool to create this file. Do NOT use `cat >`, heredoc (`<< EOF`), or bash redirection — these hang on Windows.
 
 ---
 

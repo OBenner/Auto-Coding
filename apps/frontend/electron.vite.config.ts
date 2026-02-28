@@ -84,6 +84,7 @@ export default defineConfig({
     define: sentryDefines,
     root: resolve(__dirname, 'src/renderer'),
     build: {
+      target: 'esnext',
       rollupOptions: {
         input: {
           index: resolve(__dirname, 'src/renderer/index.html')

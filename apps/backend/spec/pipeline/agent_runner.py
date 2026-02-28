@@ -192,6 +192,20 @@ class AgentRunner:
                                     print(f"\n[Tool: {tool_name}]", flush=True)
                                 current_tool = tool_name
 
+                    elif msg_type == "SystemMessage":
+                        # Handle system messages (rate_limit_event, etc.)
+                        subtype = getattr(msg, "subtype", "unknown")
+                        debug_detailed(
+                            "agent_runner",
+                            f"System message: {subtype}",
+                        )
+                        if subtype == "rate_limit_event":
+                            debug(
+                                "agent_runner",
+                                "Rate limit event received, continuing...",
+                            )
+                        continue
+
                     elif msg_type == "UserMessage" and hasattr(msg, "content"):
                         for block in msg.content:
                             block_type = type(block).__name__

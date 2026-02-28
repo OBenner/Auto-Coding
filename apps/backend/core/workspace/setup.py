@@ -267,6 +267,8 @@ def symlink_node_modules_to_worktree(
                     ["cmd", "/c", "mklink", "/J", str(target_path), str(source_path)],
                     capture_output=True,
                     text=True,
+                    encoding="utf-8",
+                    errors="replace",
                 )
                 if result.returncode != 0:
                     raise OSError(result.stderr or "mklink /J failed")

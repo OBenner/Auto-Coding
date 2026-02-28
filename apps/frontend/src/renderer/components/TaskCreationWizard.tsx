@@ -278,16 +278,15 @@ export function TaskCreationWizard({
       return modelMap[provider];
     };
 
-    // Only update if the current model doesn't match the new provider
-    const providerPrefixMap: Record<AIProvider, string> = {
-      zhipuai: 'glm',
-      openrouter: 'anthropic/',
-      litellm: 'gpt',
-      claude: 'claude'
+    // Only update if the current model doesn't belong to the new provider
+    // Use the model map values to check ownership instead of fragile prefix matching
+    const providerModelValues: Record<AIProvider, string[]> = {
+      claude: ['claude-opus-4-5-20251101', 'claude-sonnet-4-5-20250929', 'claude-haiku-4-5-20251001'],
+      litellm: ['gpt-4o', 'gpt-4-turbo', 'gpt-4o-mini'],
+      openrouter: ['anthropic/claude-opus-4', 'anthropic/claude-sonnet-4', 'anthropic/claude-haiku-4', 'openai/gpt-4o', 'openai/gpt-4o-mini'],
+      zhipuai: ['glm-4-plus', 'glm-4', 'glm-4-flash', 'glm-4-air']
     };
-    const currentModelBelongsToProvider = providerModel.startsWith(
-      providerPrefixMap[provider]
-    );
+    const currentModelBelongsToProvider = providerModelValues[provider].includes(providerModel);
 
     if (!currentModelBelongsToProvider) {
       setProviderModel(getDefaultModel(provider));

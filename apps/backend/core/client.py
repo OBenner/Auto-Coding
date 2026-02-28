@@ -29,6 +29,19 @@ from core.platform import (
 logger = logging.getLogger(__name__)
 
 # =============================================================================
+# Windows System Prompt Limits
+# =============================================================================
+# Windows CreateProcessW has a 32,768 character limit for the entire command line.
+# When CLAUDE.md is very large and passed as --system-prompt, the command can exceed
+# this limit, causing ERROR_FILE_NOT_FOUND. We cap CLAUDE.md content to stay safe.
+# 20,000 chars leaves ~12KB headroom for CLI overhead (model, tools, MCP config, etc.)
+WINDOWS_MAX_SYSTEM_PROMPT_CHARS = 20000
+WINDOWS_TRUNCATION_MESSAGE = (
+    "\n\n[... CLAUDE.md truncated due to Windows command-line length limit ...]"
+)
+CLAUDE_MD_HEADER = "\n\n# Project Instructions (from CLAUDE.md)\n\n"
+
+# =============================================================================
 # Project Index Cache
 # =============================================================================
 # Caches project index and capabilities to avoid reloading on every create_client() call.
@@ -629,15 +642,21 @@ def load_preferences(
         # Get preference profile from Graphiti memory
         memory = get_graphiti_memory(spec_dir, project_dir)
 
-        # Run async operation in sync context
+        # Run async operation in sync context.
+        # If a loop is already running (e.g. inside Ideation async process),
+        # delegate to a worker thread that owns its own event loop.
         import asyncio
+        import concurrent.futures
 
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
         try:
-            profile_data = loop.run_until_complete(memory.get_preference_profile())
-        finally:
-            loop.close()
+            asyncio.get_running_loop()
+            # Already inside an async context — run in a separate thread
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(asyncio.run, memory.get_preference_profile())
+                profile_data = future.result(timeout=30)
+        except RuntimeError:
+            # No running loop — safe to create one
+            profile_data = asyncio.run(memory.get_preference_profile())
 
         if not profile_data:
             logger.debug("No preference profile found, using defaults")
@@ -1121,8 +1140,45 @@ def create_client(
     if should_use_claude_md():
         claude_md_content = load_claude_md(project_dir)
         if claude_md_content:
-            base_prompt = f"{base_prompt}\n\n# Project Instructions (from CLAUDE.md)\n\n{claude_md_content}"
-            print("   - CLAUDE.md: included in system prompt")
+            # On Windows, the SDK passes system_prompt as a --system-prompt CLI argument.
+            # Windows CreateProcessW has a 32,768 character limit for the entire command line.
+            # When CLAUDE.md is very large, the command can exceed this limit, causing Windows
+            # to return ERROR_FILE_NOT_FOUND which the SDK misreports as "Claude Code not found".
+            # Cap CLAUDE.md content to keep total command line under the limit. (#1661)
+            was_truncated = False
+            if is_windows():
+                max_claude_md_chars = (
+                    WINDOWS_MAX_SYSTEM_PROMPT_CHARS
+                    - len(base_prompt)
+                    - len(WINDOWS_TRUNCATION_MESSAGE)
+                    - len(CLAUDE_MD_HEADER)
+                )
+                if max_claude_md_chars <= 0:
+                    # Base prompt alone already exceeds the limit; replace
+                    # CLAUDE.md entirely with the truncation notice.
+                    claude_md_content = WINDOWS_TRUNCATION_MESSAGE
+                    was_truncated = True
+                    logger.warning(
+                        "CLAUDE.md omitted: base prompt (%d chars) exceeds "
+                        "Windows command-line budget (%d chars)",
+                        len(base_prompt),
+                        WINDOWS_MAX_SYSTEM_PROMPT_CHARS,
+                    )
+                    print(
+                        "   - CLAUDE.md: omitted (base prompt exceeds Windows command-line limit)"
+                    )
+                elif len(claude_md_content) > max_claude_md_chars:
+                    claude_md_content = (
+                        claude_md_content[:max_claude_md_chars]
+                        + WINDOWS_TRUNCATION_MESSAGE
+                    )
+                    print(
+                        "   - CLAUDE.md: truncated (exceeded Windows command-line limit)"
+                    )
+                    was_truncated = True
+            base_prompt = f"{base_prompt}{CLAUDE_MD_HEADER}{claude_md_content}"
+            if not was_truncated:
+                print("   - CLAUDE.md: included in system prompt")
         else:
             print("   - CLAUDE.md: not found in project root")
     else:

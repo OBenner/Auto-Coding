@@ -62,6 +62,10 @@ const browserMockAPI: ElectronAPI = {
     success: true
   }),
 
+  saveCompetitorAnalysis: async () => ({
+    success: true
+  }),
+
   generateRoadmap: (_projectId: string, _enableCompetitorAnalysis?: boolean, _refreshCompetitorAnalysis?: boolean) => {
     console.warn('[Browser Mock] generateRoadmap called');
   },
@@ -657,6 +661,10 @@ const browserMockAPI: ElectronAPI = {
     _projectId?: string,
     _filter?: import('../../shared/types').ProductivityAnalyticsFilter
   ) => ({ success: true as const, data: [] as import('../../shared/types').ProductivityTrendPoint[] }),
+  getFailureMetrics: async (_projectId?: string) => ({
+    success: true as const,
+    data: { total_failures: 0 } as import('../../shared/types').FailureMetrics
+  }),
   exportProductivityAnalytics: async () => ({ success: true as const, data: '/mock/export/productivity' })
 };
 

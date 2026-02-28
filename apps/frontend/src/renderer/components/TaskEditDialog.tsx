@@ -203,6 +203,8 @@ export function TaskEditDialog({ task, open, onOpenChange, onSaved }: TaskEditDi
       impact !== (task.metadata?.impact || '') ||
       model !== (task.metadata?.model || '') ||
       thinkingLevel !== (task.metadata?.thinkingLevel || '') ||
+      provider !== (task.metadata?.provider || 'claude') ||
+      providerModel !== (task.metadata?.providerModel || '') ||
       requireReviewBeforeCoding !== (task.metadata?.requireReviewBeforeCoding ?? false) ||
       JSON.stringify(images) !== JSON.stringify(task.metadata?.attachedImages || []) ||
       JSON.stringify(phaseModels) !== JSON.stringify(task.metadata?.phaseModels || DEFAULT_PHASE_MODELS) ||

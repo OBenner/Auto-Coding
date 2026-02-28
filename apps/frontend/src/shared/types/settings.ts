@@ -30,6 +30,9 @@ export interface RecentAction {
   projectId?: string;
 }
 
+// GPU acceleration mode for terminal WebGL rendering
+export type GpuAcceleration = 'auto' | 'on' | 'off';
+
 // Color theme types for multi-theme support
 export type ColorTheme = 'default' | 'dusk' | 'lime' | 'ocean' | 'retro' | 'neo' | 'forest';
 
@@ -349,6 +352,8 @@ export interface AppSettings {
    * When `undefined`, callers should treat it as `true`.
    */
   feedbackEnabled?: boolean;
+  /** GPU acceleration mode for terminal WebGL rendering */
+  gpuAcceleration?: GpuAcceleration;
 }
 
 // Auto-Code Source Environment Configuration (for auto-claude repo .env)

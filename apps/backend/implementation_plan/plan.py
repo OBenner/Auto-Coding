@@ -60,15 +60,15 @@ class ImplementationPlan:
             "spec_file": self.spec_file,
         }
         # Include status fields if set (synced with UI)
-        if self.status:
+        if self.status is not None:
             result["status"] = self.status
-        if self.planStatus:
+        if self.planStatus is not None:
             result["planStatus"] = self.planStatus
-        if self.recoveryNote:
+        if self.recoveryNote is not None:
             result["recoveryNote"] = self.recoveryNote
-        if self.qa_signoff:
+        if self.qa_signoff is not None:
             result["qa_signoff"] = self.qa_signoff
-        if self.provider_config:
+        if self.provider_config is not None:
             result["provider_config"] = self.provider_config
         return result
 
@@ -115,7 +115,7 @@ class ImplementationPlan:
         status based on subtask completion.
         """
         self.updated_at = datetime.now().isoformat()
-        if not self.created_at:
+        if self.created_at is None:
             self.created_at = self.updated_at
         self.update_status_from_subtasks()
 
@@ -174,9 +174,9 @@ class ImplementationPlan:
 
         if not all_subtasks:
             # No subtasks yet - stay in backlog/pending
-            if not self.status:
+            if self.status is None:
                 self.status = "backlog"
-            if not self.planStatus:
+            if self.planStatus is None:
                 self.planStatus = "pending"
             return
 

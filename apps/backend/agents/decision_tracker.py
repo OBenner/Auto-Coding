@@ -18,7 +18,7 @@ from task_logger.decision_models import (
     DecisionType,
 )
 from task_logger.logger import TaskLogger
-from task_logger.models import LogPhase
+from task_logger.models import LogEntryType, LogPhase
 
 logger = logging.getLogger(__name__)
 
@@ -340,13 +340,15 @@ class DecisionTracker:
 
         detail = "\n".join(detail_parts)
 
-        # Log with expandable detail
+        # Log as DECISION type with decision_data for the UI Decisions tab
         self.task_logger.log_with_detail(
             content=summary,
             detail=detail,
+            entry_type=LogEntryType.DECISION,
             phase=LogPhase(decision.phase),
             collapsed=True,
             print_to_console=print_to_console,
+            decision_data=decision.to_dict(),
         )
 
         # Save all decisions to file

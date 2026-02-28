@@ -126,75 +126,52 @@ def check_api_key() -> bool:
     return True
 
 
-def test_cli_flags() -> bool:
+def test_cli_flags() -> None:
     """Test that CLI accepts provider and model flags."""
-    try:
-        result = subprocess.run(
-            [sys.executable, "run.py", "--help"],
-            cwd=backend_path,
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
+    result = subprocess.run(
+        [sys.executable, "run.py", "--help"],
+        cwd=backend_path,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
 
-        help_text = result.stdout
+    help_text = result.stdout
 
-        # Check for --provider flag
-        if "--provider" not in help_text:
-            print("✗ --provider flag not found in CLI help")
-            return False
-        print("✓ --provider flag available in CLI")
+    # Check for --provider flag
+    assert "--provider" in help_text, "--provider flag not found in CLI help"
+    print("✓ --provider flag available in CLI")
 
-        # Check for zhipuai in provider choices
-        if "zhipuai" not in help_text:
-            print("✗ zhipuai not listed as provider choice")
-            return False
-        print("✓ zhipuai listed as provider choice")
+    # Check for zhipuai in provider choices
+    assert "zhipuai" in help_text, "zhipuai not listed as provider choice"
+    print("✓ zhipuai listed as provider choice")
 
-        # Check for --model flag
-        if "--model" not in help_text:
-            print("✗ --model flag not found in CLI help")
-            return False
-        print("✓ --model flag available in CLI")
-
-        return True
-    except Exception as e:
-        print(f"✗ Error testing CLI flags: {e}")
-        return False
+    # Check for --model flag
+    assert "--model" in help_text, "--model flag not found in CLI help"
+    print("✓ --model flag available in CLI")
 
 
-def test_provider_factory() -> bool:
+def test_provider_factory() -> None:
     """Test that provider factory can create ZhipuAI provider."""
-    try:
-        # Import factory
-        from core.providers.factory import get_available_provider_names
+    # Import factory
+    from core.providers.factory import get_available_provider_names
 
-        # Check if zhipuai is in available providers
-        providers = get_available_provider_names()
-        if "zhipuai" not in providers:
-            print(f"✗ zhipuai not in available providers: {providers}")
-            return False
-        print(f"✓ zhipuai available in provider factory: {providers}")
+    # Check if zhipuai is in available providers
+    providers = get_available_provider_names()
+    assert "zhipuai" in providers, f"zhipuai not in available providers: {providers}"
+    print(f"✓ zhipuai available in provider factory: {providers}")
 
-        # Try to create provider (will fail without API key, but that's OK)
-        from core.providers.config import ProviderConfig
-        from core.providers.factory import create_engine_provider
+    # Try to create provider (will fail without API key, but that's OK)
+    from core.providers.config import ProviderConfig
+    from core.providers.factory import create_engine_provider
 
-        config = ProviderConfig(provider="zhipuai", zhipuai_api_key="test_key_12345")
+    config = ProviderConfig(provider="zhipuai", zhipuai_api_key="test_key_12345")
 
-        provider = create_engine_provider(config)
-        if provider.name != "zhipuai":
-            print(f"✗ Provider name is not 'zhipuai': {provider.name}")
-            return False
-        print("✓ Provider factory creates zhipuai provider successfully")
-
-        return True
-    except ImportError as e:
-        print(f"✗ Import error (zai-sdk may not be installed): {e}")
-        return False
-    except Exception as e:
-        print(f"✗ Error testing provider factory: {e}")
-        return False
+    provider = create_engine_provider(config)
+    assert provider.name == "zhipuai", (
+        f"Provider name is not 'zhipuai': {provider.name}"
+    )
+    print("✓ Provider factory creates zhipuai provider successfully")
 
 
 def run_e2e_test(spec_dir: Path, project_dir: Path) -> bool:
@@ -325,13 +302,19 @@ def main():
     # Test 1: CLI flags
     print("\n[TEST 1] CLI Flags")
     print("-" * 60)
-    if not test_cli_flags():
+    try:
+        test_cli_flags()
+    except (AssertionError, Exception) as e:
+        print(f"✗ CLI flags test failed: {e}")
         all_passed = False
 
     # Test 2: Provider factory
     print("\n[TEST 2] Provider Factory")
     print("-" * 60)
-    if not test_provider_factory():
+    try:
+        test_provider_factory()
+    except (AssertionError, Exception) as e:
+        print(f"✗ Provider factory test failed: {e}")
         all_passed = False
 
     # Test 3: E2E with actual provider (requires API key)

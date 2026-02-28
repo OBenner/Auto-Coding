@@ -397,10 +397,9 @@
         "haiku": "Claude Haiku 4 / GPT-4o Mini / Mistral Small"
       },
       "zhipuai": {
-        "glm-4-plus": "GLM-4 Plus (Most Capable)",
-        "glm-4": "GLM-4 (Balanced)",
-        "glm-4-flash": "GLM-4 Flash (Fast)",
-        "glm-4-air": "GLM-4 Air (Economical)"
+        "opus": "GLM-4 Plus (Most Capable)",
+        "sonnet": "GLM-4 (Balanced)",
+        "haiku": "GLM-4 Flash / Air (Fast)"
       }
     }
   },
@@ -457,6 +456,7 @@
     "complete": "Merge complete",
     "autoResolved": "{{count}} file(s) auto-resolved"
   },
+  "markDoneFailed": "Failed to mark as done",
   "prPolling": {
     "autoRefreshing": "Auto-refreshing"
   }

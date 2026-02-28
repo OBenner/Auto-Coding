@@ -137,6 +137,7 @@ export class AgentProcessManager {
     }
     if (autoBuildSourcePath) {
       this.autoBuildSourcePath = autoBuildSourcePath;
+      console.warn(`[AgentProcess] configure() set autoBuildSourcePath: ${autoBuildSourcePath}`);
     }
   }
 
@@ -352,8 +353,14 @@ export class AgentProcessManager {
     };
 
     // If manually configured AND valid, use that
-    if (this.autoBuildSourcePath && await validatePath(this.autoBuildSourcePath)) {
-      return this.autoBuildSourcePath;
+    if (this.autoBuildSourcePath) {
+      const isValid = await validatePath(this.autoBuildSourcePath);
+      console.warn(`[AgentProcess] Configured autoBuildSourcePath: ${this.autoBuildSourcePath}, valid: ${isValid}`);
+      if (isValid) {
+        return this.autoBuildSourcePath;
+      }
+    } else {
+      console.warn('[AgentProcess] No autoBuildSourcePath configured, using auto-detect');
     }
 
     // Auto-detect from app location (configured path was invalid or not set)

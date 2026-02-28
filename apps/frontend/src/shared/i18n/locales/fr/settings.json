@@ -64,10 +64,12 @@
     "addButton": "Ajouter un profil",
     "presets": {
       "anthropic": "Anthropic",
+      "openai": "OpenAI",
       "openrouter": "OpenRouter",
       "groq": "Groq",
       "glmGlobal": "GLM (Global)",
-      "glmChina": "GLM (China)"
+      "glmChina": "GLM (China)",
+      "ollama": "Ollama (Local)"
     },
     "fields": {
       "name": "Nom",
@@ -192,6 +194,14 @@
     "default": "Par défaut",
     "comfortable": "Confortable",
     "large": "Grand"
+  },
+  "gpuAcceleration": {
+    "label": "Accélération GPU",
+    "description": "Utiliser WebGL pour le rendu des terminaux (expérimental, plus rapide avec plusieurs terminaux)",
+    "auto": "Auto (utiliser WebGL si supporté)",
+    "on": "Toujours activé",
+    "off": "Désactivé (par défaut)",
+    "helperText": "Les modifications s'appliquent uniquement aux nouveaux terminaux"
   },
   "general": {
     "otherAgentSettings": "Autres paramètres de l'agent",

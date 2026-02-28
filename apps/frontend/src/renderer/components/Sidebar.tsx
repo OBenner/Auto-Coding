@@ -469,26 +469,29 @@ export function Sidebar({
         <ScrollArea className="flex-1">
           <div className={cn("py-4 transition-all duration-300", isCollapsed ? "px-2" : "px-3")}>
             {/* Project Section */}
-            <div className="relative">
+            <div>
               {!isCollapsed && (
                 <h3 className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   {t('sections.project')}
                 </h3>
               )}
-              {/* Animated indicator for active nav item */}
-              {selectedProjectId && (
-                <NavIndicator
-                  activeView={activeView}
-                  containerRef={navContainerRef}
-                  itemRefs={navItemRefs}
-                  position={indicatorPosition}
-                />
-              )}
-              <nav ref={navContainerRef} className="space-y-1">
-                <AnimatePresence mode="popLayout">
-                  {visibleNavItems.map((item) => renderNavItem(item))}
-                </AnimatePresence>
-              </nav>
+              {/* relative wrapper starts here so NavIndicator top:0 aligns with nav top */}
+              <div className="relative">
+                {/* Animated indicator for active nav item */}
+                {selectedProjectId && (
+                  <NavIndicator
+                    activeView={activeView}
+                    containerRef={navContainerRef}
+                    itemRefs={navItemRefs}
+                    position={indicatorPosition}
+                  />
+                )}
+                <nav ref={navContainerRef} className="space-y-1">
+                  <AnimatePresence mode="popLayout">
+                    {visibleNavItems.map((item) => renderNavItem(item))}
+                  </AnimatePresence>
+                </nav>
+              </div>
             </div>
           </div>
         </ScrollArea>
