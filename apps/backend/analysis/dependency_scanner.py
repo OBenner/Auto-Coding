@@ -25,6 +25,7 @@ Usage:
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -148,7 +149,9 @@ class DependencyScanner:
 
         # Check for security vulnerabilities (only for scanned ecosystems)
         if check_security and (scan_python or scan_node):
-            self._check_security_vulnerabilities(project_dir, result)
+            self._check_security_vulnerabilities(
+                project_dir, result, scan_python=scan_python, scan_node=scan_node
+            )
 
         # Separate security updates
         result.security_updates = [u for u in result.updates_available if u.is_security]
@@ -358,20 +361,30 @@ class DependencyScanner:
             result.scan_errors.append(f"Node.js dependency scan error: {e}")
 
     def _check_security_vulnerabilities(
-        self, project_dir: Path, result: DependencyScanResult
+        self,
+        project_dir: Path,
+        result: DependencyScanResult,
+        scan_python: bool = True,
+        scan_node: bool = True,
     ) -> None:
         """
         Check for security vulnerabilities in dependencies.
 
         Runs security audit tools (pip-audit, npm audit) and enriches
         the existing updates with CVE information and severity data.
+
+        Args:
+            project_dir: Project directory path
+            result: Scan result to enrich with CVE data
+            scan_python: Whether to check Python dependencies
+            scan_node: Whether to check Node.js dependencies
         """
         # Check Python dependencies for CVEs
-        if self._is_python_project(project_dir):
+        if scan_python and self._is_python_project(project_dir):
             self._check_python_cves(project_dir, result)
 
         # Check Node.js dependencies for CVEs
-        if self._is_node_project(project_dir):
+        if scan_node and self._is_node_project(project_dir):
             self._check_node_cves(project_dir, result)
 
     def _check_python_cves(
@@ -505,8 +518,6 @@ class DependencyScanner:
                                 # Also check URL for CVE pattern
                                 url = via_entry.get("url", "")
                                 if "CVE-" in url:
-                                    import re
-
                                     cve_match = re.search(r"CVE-\d{4}-\d+", url)
                                     if cve_match and cve_match.group() not in cve_ids:
                                         cve_ids.append(cve_match.group())

@@ -296,57 +296,62 @@ class DependencyAnalyzer(BaseAnalyzer):
             )
             batches.append(batch)
 
-        # Create patch update batches (low risk, can be combined)
-        for ecosystem, patch_updates_list in patch_updates_by_ecosystem.items():
-            batch_counter += 1
+        # Create batches for non-security updates grouped by type and ecosystem
+        batch_type_configs = [
+            (
+                patch_updates_by_ecosystem,
+                "patch",
+                "low",
+                "Patch updates for {count} {ecosystem} package(s). "
+                "Low risk - typically backwards compatible. Safe to batch together.",
+            ),
+            (
+                minor_updates_by_ecosystem,
+                "minor",
+                "medium",
+                "Minor updates for {count} {ecosystem} package(s). "
+                "Medium risk - may include new features. Test in development environment.",
+            ),
+            (
+                unknown_updates_by_ecosystem,
+                "unknown",
+                "medium",
+                "Updates with non-semver versions for {count} "
+                "{ecosystem} package(s). Review changelog before applying.",
+            ),
+        ]
 
-            avg_priority = sum(
-                self.get_update_priority(
-                    u.get("name", ""),
-                    u.get("update_type", ""),
-                    False,
+        for (
+            updates_by_eco,
+            update_type,
+            risk_level,
+            notes_template,
+        ) in batch_type_configs:
+            for ecosystem, update_list in updates_by_eco.items():
+                batch_counter += 1
+
+                avg_priority = sum(
+                    self.get_update_priority(
+                        u.get("name", ""),
+                        u.get("update_type", ""),
+                        False,
+                    )
+                    for u in update_list
+                ) // max(len(update_list), 1)
+
+                batch = UpdateBatch(
+                    batch_id=f"{update_type}-{ecosystem}-{batch_counter}",
+                    update_type=update_type,
+                    ecosystem=ecosystem,
+                    packages=[u.get("name", "") for u in update_list],
+                    risk_level=risk_level,
+                    is_security_batch=False,
+                    priority=avg_priority,
+                    notes=notes_template.format(
+                        count=len(update_list), ecosystem=ecosystem
+                    ),
                 )
-                for u in patch_updates_list
-            ) // max(len(patch_updates_list), 1)
-
-            batch = UpdateBatch(
-                batch_id=f"patch-{ecosystem}-{batch_counter}",
-                update_type="patch",
-                ecosystem=ecosystem,
-                packages=[u.get("name", "") for u in patch_updates_list],
-                risk_level="low",
-                is_security_batch=False,
-                priority=avg_priority,
-                notes=f"Patch updates for {len(patch_updates_list)} {ecosystem} package(s). "
-                f"Low risk - typically backwards compatible. Safe to batch together.",
-            )
-            batches.append(batch)
-
-        # Create minor update batches (medium risk)
-        for ecosystem, minor_updates_list in minor_updates_by_ecosystem.items():
-            batch_counter += 1
-
-            avg_priority = sum(
-                self.get_update_priority(
-                    u.get("name", ""),
-                    u.get("update_type", ""),
-                    False,
-                )
-                for u in minor_updates_list
-            ) // max(len(minor_updates_list), 1)
-
-            batch = UpdateBatch(
-                batch_id=f"minor-{ecosystem}-{batch_counter}",
-                update_type="minor",
-                ecosystem=ecosystem,
-                packages=[u.get("name", "") for u in minor_updates_list],
-                risk_level="medium",
-                is_security_batch=False,
-                priority=avg_priority,
-                notes=f"Minor updates for {len(minor_updates_list)} {ecosystem} package(s). "
-                f"Medium risk - may include new features. Test in development environment.",
-            )
-            batches.append(batch)
+                batches.append(batch)
 
         # Create individual batches for major updates (high risk, one per package)
         for major_update in major_updates:
@@ -371,32 +376,6 @@ class DependencyAnalyzer(BaseAnalyzer):
                 notes=f"Major update for {package_name} ({major_update.get('current_version')} → "
                 f"{major_update.get('latest_version')}). High risk - likely contains breaking changes. "
                 f"Review release notes and test in separate branch.",
-            )
-            batches.append(batch)
-
-        # Create batches for unknown update types (conservative default)
-        for ecosystem, unknown_list in unknown_updates_by_ecosystem.items():
-            batch_counter += 1
-
-            avg_priority = sum(
-                self.get_update_priority(
-                    u.get("name", ""),
-                    u.get("update_type", ""),
-                    False,
-                )
-                for u in unknown_list
-            ) // max(len(unknown_list), 1)
-
-            batch = UpdateBatch(
-                batch_id=f"unknown-{ecosystem}-{batch_counter}",
-                update_type="unknown",
-                ecosystem=ecosystem,
-                packages=[u.get("name", "") for u in unknown_list],
-                risk_level="medium",
-                is_security_batch=False,
-                priority=avg_priority,
-                notes=f"Updates with non-semver versions for {len(unknown_list)} "
-                f"{ecosystem} package(s). Review changelog before applying.",
             )
             batches.append(batch)
 
@@ -479,15 +458,17 @@ class DependencyAnalyzer(BaseAnalyzer):
             while len(latest_parts) < 3:
                 latest_parts.append(0)
 
+            # Downgrades or equal versions are unknown
+            if latest_parts <= current_parts:
+                return "unknown"
+
             # Compare versions
             if latest_parts[0] > current_parts[0]:
                 return "major"
             elif latest_parts[1] > current_parts[1]:
                 return "minor"
-            elif latest_parts[2] > current_parts[2]:
-                return "patch"
             else:
-                return "unknown"
+                return "patch"
         except (ValueError, IndexError):
             # If version parsing fails, default to unknown
             return "unknown"

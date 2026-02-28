@@ -200,55 +200,27 @@ def _generate_markdown_report(
         )
         lines.append("")
 
-        # Group by severity
-        critical = [u for u in scan_result.security_updates if u.severity == "critical"]
-        high = [u for u in scan_result.security_updates if u.severity == "high"]
-        medium = [u for u in scan_result.security_updates if u.severity == "medium"]
-        low = [u for u in scan_result.security_updates if u.severity == "low"]
-
-        if critical:
-            lines.append("### 🚨 Critical")
-            for update in critical:
-                lines.append(f"- **{update.name}** ({update.ecosystem})")
-                lines.append(
-                    f"  - Current: `{update.current_version}` → Latest: `{update.latest_version}`"
-                )
-                if update.cve_ids:
-                    lines.append(f"  - CVEs: {', '.join(update.cve_ids)}")
-                lines.append("")
-
-        if high:
-            lines.append("### 🔴 High")
-            for update in high:
-                lines.append(f"- **{update.name}** ({update.ecosystem})")
-                lines.append(
-                    f"  - Current: `{update.current_version}` → Latest: `{update.latest_version}`"
-                )
-                if update.cve_ids:
-                    lines.append(f"  - CVEs: {', '.join(update.cve_ids)}")
-                lines.append("")
-
-        if medium:
-            lines.append("### 🟡 Medium")
-            for update in medium:
-                lines.append(f"- **{update.name}** ({update.ecosystem})")
-                lines.append(
-                    f"  - Current: `{update.current_version}` → Latest: `{update.latest_version}`"
-                )
-                if update.cve_ids:
-                    lines.append(f"  - CVEs: {', '.join(update.cve_ids)}")
-                lines.append("")
-
-        if low:
-            lines.append("### 🟢 Low")
-            for update in low:
-                lines.append(f"- **{update.name}** ({update.ecosystem})")
-                lines.append(
-                    f"  - Current: `{update.current_version}` → Latest: `{update.latest_version}`"
-                )
-                if update.cve_ids:
-                    lines.append(f"  - CVEs: {', '.join(update.cve_ids)}")
-                lines.append("")
+        # Render each severity group
+        severity_levels = [
+            ("critical", "🚨 Critical"),
+            ("high", "🔴 High"),
+            ("medium", "🟡 Medium"),
+            ("low", "🟢 Low"),
+        ]
+        for severity_key, severity_heading in severity_levels:
+            group = [
+                u for u in scan_result.security_updates if u.severity == severity_key
+            ]
+            if group:
+                lines.append(f"### {severity_heading}")
+                for update in group:
+                    lines.append(f"- **{update.name}** ({update.ecosystem})")
+                    lines.append(
+                        f"  - Current: `{update.current_version}` → Latest: `{update.latest_version}`"
+                    )
+                    if update.cve_ids:
+                        lines.append(f"  - CVEs: {', '.join(update.cve_ids)}")
+                    lines.append("")
 
     # Update Batches Section
     lines.append("## 📦 Recommended Update Batches")
@@ -290,48 +262,30 @@ def _generate_markdown_report(
     lines.append("## 📋 All Available Updates")
     lines.append("")
 
-    # Group by ecosystem
-    python_updates = [
-        u for u in scan_result.updates_available if u.ecosystem == "python"
-    ]
-    node_updates = [
-        u for u in scan_result.updates_available if u.ecosystem in ("node", "npm")
+    # Render update tables grouped by ecosystem
+    ecosystem_groups = [
+        (
+            "Python Packages",
+            [u for u in scan_result.updates_available if u.ecosystem == "python"],
+        ),
+        (
+            "Node.js Packages",
+            [
+                u
+                for u in scan_result.updates_available
+                if u.ecosystem in ("node", "npm")
+            ],
+        ),
     ]
 
-    if python_updates:
-        lines.append("### Python Packages")
+    for heading, updates in ecosystem_groups:
+        if not updates:
+            continue
+        lines.append(f"### {heading}")
         lines.append("")
-
-        # Create table header
         lines.append("| Package | Current | Latest | Type | Security |")
         lines.append("|---------|---------|--------|------|----------|")
-
-        for update in python_updates:
-            security_badge = "🔒" if update.is_security else ""
-            cve_list = ", ".join(update.cve_ids) if update.cve_ids else ""
-            package_link = (
-                f"[{update.name}]({update.changelog_url})"
-                if update.changelog_url
-                else update.name
-            )
-            lines.append(
-                f"| {package_link} | "
-                f"`{update.current_version}` | "
-                f"`{update.latest_version}` | "
-                f"{update.update_type} | "
-                f"{security_badge} {cve_list} |"
-            )
-        lines.append("")
-
-    if node_updates:
-        lines.append("### Node.js Packages")
-        lines.append("")
-
-        # Create table header
-        lines.append("| Package | Current | Latest | Type | Security |")
-        lines.append("|---------|---------|--------|------|----------|")
-
-        for update in node_updates:
+        for update in updates:
             security_badge = "🔒" if update.is_security else ""
             cve_list = ", ".join(update.cve_ids) if update.cve_ids else ""
             package_link = (

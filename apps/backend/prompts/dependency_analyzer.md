@@ -169,30 +169,35 @@ Query: "[package-name] [old-version] to [new-version] breaking changes migration
 Group dependencies into priority categories:
 
 ### P1 - Security Critical (Update Immediately)
+
 - Has CVE with **critical** or **high** severity
 - Known exploits in the wild
 - Affects authentication, encryption, or data integrity
 - **Action**: Single updates or very small batches (2-3 packages)
 
 ### P2 - Security Moderate (Update Soon)
+
 - Has CVE with **medium** or **low** severity
 - No known exploits
 - Theoretical security issues
 - **Action**: Batch by ecosystem (all Python, all Node.js)
 
 ### P3 - High Stability Impact (Manual Review)
+
 - Major version updates (e.g., 1.0.0 → 2.0.0)
 - Core framework dependencies (React, Django, Express, etc.)
 - High breaking change probability (>60%)
 - **Action**: One at a time, manual testing after each
 
 ### P4 - Low Risk Updates (Batch Together)
+
 - Patch updates (1.0.0 → 1.0.1)
 - Low breaking probability (<20%)
 - Non-core dependencies
 - **Action**: Large batches (10-20 packages)
 
 ### P5 - Defer (Can Wait)
+
 - Major updates with low impact
 - Unused or rarely used dependencies
 - No security issues
@@ -332,7 +337,7 @@ EOF
 
 **If generating a spec**, use the spec template:
 
-```bash
+````bash
 # Read spec template
 cat ../spec_runner/spec_template.md
 
@@ -471,7 +476,7 @@ The task is complete when:
 - [ ] Changelogs reviewed for breaking changes
 
 SPEC_EOF
-```
+````
 
 ---
 
