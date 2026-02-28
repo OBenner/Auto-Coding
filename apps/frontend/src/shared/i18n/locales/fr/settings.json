@@ -21,6 +21,14 @@
       "title": "Outils de développement",
       "description": "Préférences IDE et terminal"
     },
+    "provider": {
+      "title": "Fournisseur IA",
+      "description": "Sélectionnez votre fournisseur IA et vos modèles"
+    },
+    "cost": {
+      "title": "Comparaison des coûts",
+      "description": "Comparer les prix des modèles entre fournisseurs"
+    },
     "agent": {
       "title": "Paramètres de l'agent",
       "description": "Modèle par défaut et framework"
@@ -181,6 +189,33 @@
     "searchPlaceholder": "Rechercher des modèles...",
     "noResults": "Aucun modèle ne correspond à votre recherche",
     "discoveryNotAvailable": "Découverte de modèles indisponible. Saisissez le nom du modèle manuellement."
+  },
+  "costComparison": {
+    "title": "Comparaison des coûts",
+    "description": "Comparer les prix entre les modèles et fournisseurs IA",
+    "providers": {
+      "anthropic": "Anthropic (Claude)",
+      "openai": "OpenAI",
+      "google": "Google Gemini",
+      "ollama": "Ollama (Local)"
+    },
+    "input": "Entrée",
+    "output": "Sortie",
+    "model": "modèle",
+    "models": "modèles",
+    "free": "GRATUIT",
+    "cheapest": "Moins cher",
+    "localFree": "Local",
+    "infoTitle": "Informations sur les prix",
+    "infoDescription": "Tous les prix indiqués sont par million de tokens (USD). Les modèles locaux via Ollama sont gratuits.",
+    "notesTitle": "Notes importantes",
+    "note1": "Les prix sont par million de tokens et peuvent varier selon le fournisseur",
+    "note2": "Les modèles locaux (Ollama) s'exécutent sur votre machine et n'ont pas de coûts d'API",
+    "note3": "Les coûts réels dépendent de l'utilisation des tokens d'entrée et de sortie",
+    "modelNames": {
+      "claude": "Claude {{family}} {{size}}",
+      "gemini": "Gemini {{name}}"
+    }
   },
   "language": {
     "label": "Langue de l'interface",
@@ -380,6 +415,27 @@
       "integrationDescription": "Configurer la mémoire persistante inter-sessions pour les agents",
       "syncDescription": "Configurer la mémoire persistante"
     }
+  },
+  "provider": {
+    "title": "Fournisseur IA",
+    "description": "Sélectionnez votre fournisseur IA et les modèles disponibles",
+    "selectProvider": "Sélectionner le fournisseur",
+    "selectProviderPlaceholder": "Choisir un fournisseur IA",
+    "availableProviders": "Fournisseurs disponibles",
+    "selectedProvider": "Fournisseur sélectionné",
+    "name": "Nom",
+    "endpoint": "Point de terminaison",
+    "model": "modèle",
+    "models": "modèles",
+    "modelsAvailable": "Modèles disponibles",
+    "autoDiscovery": "Découverte automatique",
+    "showModels": "Afficher les modèles disponibles",
+    "hideModels": "Masquer les modèles",
+    "fallbackModel": "Modèle de secours",
+    "fallbackModelDescription": "Modèle à utiliser si le modèle principal n'est pas disponible",
+    "selectFallbackModel": "Sélectionner le modèle de secours",
+    "noFallback": "Pas de secours (utiliser le défaut du fournisseur)",
+    "fallbackInfo": "Si votre modèle principal devient indisponible, le système basculera automatiquement vers ce modèle."
   },
   "agentProfile": {
     "label": "Profil d'agent",

@@ -15,9 +15,20 @@ This enables:
 """
 
 import json
+import logging
+import os
 from pathlib import Path
 
 from agents.templates.models import AgentTemplate
+
+logger = logging.getLogger(__name__)
+
+
+def _safe_template_filename(name: str) -> str:
+    safe = Path(name).name
+    if not safe or safe in {".", ".."}:
+        raise ValueError(f"Unsafe template name for filename: {name!r}")
+    return safe
 
 
 def get_templates_dir(project_dir: Path) -> Path:
@@ -57,12 +68,20 @@ def save_template(template: AgentTemplate, project_dir: Path) -> None:
         raise ValueError(f"Cannot save invalid template: {', '.join(errors)}")
 
     templates_dir = get_templates_dir(project_dir)
-    template_file = templates_dir / f"{template.name}.json"
+    safe_name = _safe_template_filename(template.name)
+    template_file = templates_dir / f"{safe_name}.json"
+    tmp_file = templates_dir / f"{safe_name}.json.tmp"
 
     try:
-        with open(template_file, "w", encoding="utf-8") as f:
+        with open(tmp_file, "w", encoding="utf-8") as f:
             json.dump(template.to_dict(), f, indent=2, ensure_ascii=False)
+        os.replace(str(tmp_file), str(template_file))
     except OSError as e:
+        try:
+            if tmp_file.exists():
+                tmp_file.unlink()
+        except OSError:
+            pass  # Ignore tmp-file cleanup errors; the original save error is re-raised below
         raise OSError(f"Failed to save template '{template.name}': {e}") from e
 
 
@@ -88,9 +107,15 @@ def load_template(name: str, project_dir: Path) -> AgentTemplate | None:
     try:
         with open(template_file, encoding="utf-8") as f:
             data = json.load(f)
+        try:
             return AgentTemplate.from_dict(data)
-    except (json.JSONDecodeError, OSError):
-        # If file is corrupted or unreadable, return None
+        except Exception as e:
+            logger.warning("Failed to deserialize template '%s': %s", name, e)
+            return None
+    except (json.JSONDecodeError, OSError) as e:
+        logger.warning(
+            "Failed to load template '%s' from '%s': %s", name, template_file, e
+        )
         return None
 
 
@@ -120,8 +145,10 @@ def load_templates(project_dir: Path) -> list[AgentTemplate]:
                     data = json.load(f)
                     template = AgentTemplate.from_dict(data)
                     templates.append(template)
-            except (json.JSONDecodeError, OSError, KeyError, ValueError):
-                # Skip corrupted or invalid template files
+            except Exception as e:
+                logger.warning(
+                    "Skipping invalid template file '%s': %s", template_file, e
+                )
                 continue
     except OSError:
         # If directory is not accessible, return empty list
@@ -219,8 +246,15 @@ def export_template(template: AgentTemplate, export_path: Path) -> None:
     # Create parent directories if they don't exist
     export_path.parent.mkdir(parents=True, exist_ok=True)
 
+    tmp_path = export_path.with_suffix(".json.tmp")
     try:
-        with open(export_path, "w", encoding="utf-8") as f:
+        with open(tmp_path, "w", encoding="utf-8") as f:
             json.dump(template.to_dict(), f, indent=2, ensure_ascii=False)
+        os.replace(str(tmp_path), str(export_path))
     except OSError as e:
+        try:
+            if tmp_path.exists():
+                tmp_path.unlink()
+        except OSError:
+            pass  # Ignore tmp-file cleanup errors; the original export error is re-raised below
         raise OSError(f"Failed to export template to '{export_path}': {e}") from e

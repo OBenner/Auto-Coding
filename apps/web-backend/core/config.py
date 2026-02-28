@@ -25,7 +25,7 @@ class Settings:
 
     def __init__(self):
         # Server configuration
-        self.HOST: str = os.getenv("HOST", "127.0.0.1")
+        self.HOST: str = os.getenv("HOST", "")
         self.PORT: int = int(os.getenv("PORT", "8000"))
         self.DEBUG: bool = os.getenv("DEBUG", "false").lower() == "true"
 
@@ -37,8 +37,8 @@ class Settings:
 
         # Authentication
         self.SECRET_KEY: str = os.getenv(
-            "SECRET_KEY", "dev-secret-key-change-in-production"
-        )
+            "SECRET_KEY", ""
+        )  # NOSONAR - no default secret
         self.ACCESS_TOKEN_EXPIRE_MINUTES: int = int(
             os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60")
         )
@@ -50,9 +50,7 @@ class Settings:
                 os.path.join(os.path.dirname(__file__), "..", "..", "backend")
             ),
         )
-        self.PYTHON_BACKEND_URL: str = os.getenv(
-            "PYTHON_BACKEND_URL", "http://127.0.0.1:8000"
-        )
+        self.PYTHON_BACKEND_URL: str = os.getenv("PYTHON_BACKEND_URL", "")
 
         # WebSocket configuration
         self.WS_HEARTBEAT_INTERVAL: int = int(os.getenv("WS_HEARTBEAT_INTERVAL", "30"))
@@ -69,12 +67,10 @@ class Settings:
         self.GITLAB_CLIENT_SECRET: str = os.getenv("GITLAB_CLIENT_SECRET", "")
 
         # OAuth redirect URI
-        self.OAUTH_REDIRECT_URI: str = os.getenv(
-            "OAUTH_REDIRECT_URI", "http://localhost:8000/api/git/callback"
-        )
+        self.OAUTH_REDIRECT_URI: str = os.getenv("OAUTH_REDIRECT_URI", "")
 
         # Redis configuration for usage tracking
-        self.REDIS_HOST: str = os.getenv("REDIS_HOST", "localhost")
+        self.REDIS_HOST: str = os.getenv("REDIS_HOST", "")
         self.REDIS_PORT: int = int(os.getenv("REDIS_PORT", "6379"))
         self.REDIS_DB: int = int(os.getenv("REDIS_DB", "0"))
         self.REDIS_PASSWORD: str = os.getenv("REDIS_PASSWORD", "")
@@ -84,7 +80,7 @@ class Settings:
 
     def _validate(self):
         """Validate critical configuration"""
-        if not self.DEBUG and self.SECRET_KEY == "dev-secret-key-change-in-production":
+        if not self.DEBUG and not self.SECRET_KEY:
             raise ValueError(
                 "SECRET_KEY must be set to a secure value in production. "
                 "Set DEBUG=false only when SECRET_KEY is properly configured."

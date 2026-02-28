@@ -12,6 +12,8 @@ The client factory now uses AGENT_CONFIGS from agents/tools_pkg/models.py as the
 single source of truth for phase-aware tool and MCP server configuration.
 """
 
+from __future__ import annotations
+
 import copy
 import json
 import logging
@@ -19,7 +21,7 @@ import os
 import threading
 import time
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from core.platform import (
     is_windows,
@@ -138,7 +140,9 @@ def invalidate_project_cache(project_dir: Path | None = None) -> None:
                 logger.debug(f"Invalidated project index cache for {project_dir}")
 
 
-from agents.templates.models import AgentTemplate
+if TYPE_CHECKING:
+    from agents.templates.models import AgentTemplate
+
 from agents.tools_pkg import (
     CONTEXT7_TOOLS,
     ELECTRON_TOOLS,
@@ -157,6 +161,7 @@ from core.auth import (
     require_auth_token,
     validate_token_not_encrypted,
 )
+from core.providers.config import get_provider_config
 from linear_updater import is_linear_enabled
 from prompts_pkg.project_context import detect_project_capabilities, load_project_index
 from security import bash_security_hook
@@ -502,6 +507,18 @@ def get_electron_mcp_log_level() -> str:
     return level
 
 
+def is_actor_critic_mcp_enabled() -> bool:
+    """
+    Check if Actor-Critic MCP server integration is enabled and available.
+
+    Delegates to actor_critic_config.is_actor_critic_enabled() which checks
+    both the ACTOR_CRITIC_MCP_ENABLED env var AND npx availability.
+    """
+    from core.actor_critic_config import is_actor_critic_enabled
+
+    return is_actor_critic_enabled()
+
+
 def should_use_claude_md() -> bool:
     """Check if CLAUDE.md instructions should be included in system prompt."""
     return os.environ.get("USE_CLAUDE_MD", "").lower() == "true"
@@ -714,6 +731,10 @@ def create_client(
     Only starts MCP servers that the agent actually needs, reducing context
     window bloat and startup latency.
 
+    **NOTE:** This function creates Claude-specific clients only. For other
+    AI providers (OpenAI, Google Gemini, Ollama, etc.), use the provider factory:
+    `create_engine_provider()` from `core.providers.factory`.
+
     Args:
         project_dir: Root directory for the project (working directory)
         spec_dir: Directory containing the spec (for settings file)
@@ -753,6 +774,28 @@ def create_client(
        (see security.py for ALLOWED_COMMANDS)
     4. Tool filtering - Each agent type only sees relevant tools (prevents misuse)
     """
+    # Check configured AI provider and log it
+    provider_config = get_provider_config()
+    configured_provider = provider_config.provider
+    provider_summary = provider_config.get_provider_summary()
+
+    # Log provider information
+    logger.info(f"AI Engine Provider: {provider_summary}")
+    print(f"AI Engine Provider: {provider_summary}")
+
+    # Warn if non-Claude provider is configured
+    if configured_provider != "claude":
+        logger.warning(
+            f"Non-Claude provider configured ({configured_provider}), but create_client() "
+            f"only supports Claude Agent SDK. For {configured_provider}, use create_engine_provider() "
+            f"from core.providers.factory instead."
+        )
+        print(
+            f"⚠️  Note: create_client() is Claude-specific. "
+            f"Configured provider is '{configured_provider}'. "
+            f"Proceeding with Claude Agent SDK."
+        )
+
     # Get OAuth token - Claude CLI handles token lifecycle internally
     oauth_token = require_auth_token()
 
@@ -823,10 +866,11 @@ def create_client(
             raise ValueError(f"Custom template validation failed: {'; '.join(errors)}")
 
         # Use template's tool configuration
-        allowed_tools_list = custom_template.tools
+        allowed_tools_list = list(custom_template.tools or [])
 
         # Use template's MCP server configuration
-        required_servers = custom_template.mcp_servers
+        mcp_servers_raw = custom_template.mcp_servers or []
+        required_servers = list(mcp_servers_raw)
 
         # Override max_thinking_tokens based on template's thinking level if not explicitly set
         if max_thinking_tokens is None:
@@ -1008,6 +1052,8 @@ def create_client(
         mcp_servers_list.append("linear (project management)")
     if graphiti_mcp_enabled:
         mcp_servers_list.append("graphiti-memory (knowledge graph)")
+    if "actor-critic-thinking" in required_servers:
+        mcp_servers_list.append("actor-critic-thinking (dual-perspective analysis)")
     if "auto-claude" in required_servers and auto_claude_tools_enabled:
         mcp_servers_list.append(f"auto-claude ({agent_type} tools)")
     if mcp_servers_list:
@@ -1082,6 +1128,13 @@ def create_client(
             "url": get_graphiti_mcp_url(),
         }
 
+    # Actor-Critic Thinking MCP server for dual-perspective analysis
+    if "actor-critic-thinking" in required_servers:
+        mcp_servers["actor-critic-thinking"] = {
+            "command": "npx",
+            "args": ["-y", "mcp-server-actor-critic-thinking"],
+        }
+
     # Add custom auto-claude MCP server if required and available
     if "auto-claude" in required_servers and auto_claude_tools_enabled:
         auto_claude_mcp_server = create_auto_claude_mcp_server(spec_dir, project_dir)
@@ -1131,10 +1184,11 @@ def create_client(
             f"# Custom Agent Instructions (from template: {custom_template.name})\n\n"
             f"{custom_template.custom_prompt}"
         )
-        print(
-            f"   - Custom template: {custom_template.name} ({custom_template.category})"
+        logger.info(
+            "Custom template enabled: name=%s category=%s",
+            custom_template.name,
+            custom_template.category,
         )
-        print(f"   - Template description: {custom_template.description}")
 
     # Include CLAUDE.md if enabled and present
     if should_use_claude_md():

@@ -20,7 +20,7 @@
  * />
  * ```
  */
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Loader2, X, CheckCircle2, AlertCircle } from 'lucide-react';
 import {
@@ -58,6 +58,9 @@ export function TemplateTestDialog({
 }: TemplateTestDialogProps) {
   const { t } = useTranslation(['templates', 'common']);
 
+  const mountedRef = useRef(true);
+  useEffect(() => { return () => { mountedRef.current = false; }; }, []);
+
   // Form state
   const [testInput, setTestInput] = useState('');
 
@@ -76,6 +79,12 @@ export function TemplateTestDialog({
   }, [open]);
 
   const handleRunTest = async () => {
+    // Guard API availability
+    if (!window?.electronAPI?.testCustomTemplate) {
+      setError(t('templates:testDialog.apiNotAvailable'));
+      return;
+    }
+
     // Validate test input
     if (!testInput.trim()) {
       setError(t('templates:testDialog.inputRequired'));
@@ -90,6 +99,8 @@ export function TemplateTestDialog({
       // Call the test API via template store
       const result = await window.electronAPI.testCustomTemplate(template.id, testInput.trim());
 
+      if (!mountedRef.current) return;
+
       if (result.success && result.data) {
         setTestResult(result.data);
         onTestComplete?.(result.data);
@@ -99,7 +110,9 @@ export function TemplateTestDialog({
     } catch (err) {
       setError(err instanceof Error ? err.message : t('templates:testDialog.testFailed'));
     } finally {
-      setIsRunning(false);
+      if (mountedRef.current) {
+        setIsRunning(false);
+      }
     }
   };
 
@@ -184,7 +197,7 @@ export function TemplateTestDialog({
                 <h4 className="text-sm font-semibold text-foreground mb-3">{t('templates:preview.sections.acceptanceCriteria')}</h4>
                 <ul className="space-y-1 text-sm">
                   {testResult.acceptance_criteria?.map((criterion, index) => (
-                    <li key={index} className="text-muted-foreground flex items-start gap-2">
+                    <li key={`${index}-${criterion}`} className="text-muted-foreground flex items-start gap-2">
                       <span className="text-primary mt-0.5">•</span>
                       <span>{criterion}</span>
                     </li>

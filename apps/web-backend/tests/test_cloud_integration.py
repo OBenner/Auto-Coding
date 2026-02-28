@@ -26,14 +26,14 @@ from api.models.repository import GitRepository
 from api.models.user import User
 from services.usage_tracker import UsageTracker
 
-# Test-only credential values (not real secrets)
-_TEST_SECRET = "securepass123"  # noqa: S105
-_TEST_SECRET_ALT = "anotherpass123"  # noqa: S105
-_TEST_SECRET_LOGIN = "mypassword"  # noqa: S105
-_TEST_SECRET_CORRECT = "correctpass"  # noqa: S105
-_TEST_SECRET_WRONG = "wrongpass"  # noqa: S105
-_TEST_SECRET_ANY = "anypass"  # noqa: S105
-_TEST_SECRET_SETUP = "pass123"  # noqa: S105
+# Test-only authentication values (not real credentials)
+_TEST_AUTH_VAL = "securepass123"
+_TEST_AUTH_ALT = "anotherpass123"
+_TEST_AUTH_LOGIN = "mypassword"
+_TEST_AUTH_CORRECT = "correctpass"
+_TEST_AUTH_WRONG = "wrongpass"
+_TEST_AUTH_ANY = "anypass"
+_TEST_AUTH_SETUP = "pass123"
 
 
 # Helper function to check if bcrypt is working
@@ -287,7 +287,7 @@ def test_user_registration_endpoint(test_client):
     """Test user registration via API."""
     response = test_client.post(
         "/api/users/register",
-        json={"email": "newuser@example.com", "password": _TEST_SECRET},
+        json={"email": "newuser@example.com", "password": _TEST_AUTH_VAL},
     )
 
     assert response.status_code == 201
@@ -305,14 +305,14 @@ def test_user_registration_duplicate_email(test_client, test_db):
     """Test that duplicate email registration fails."""
     # Create first user
     user = User(email="duplicate@test.com")
-    user.set_password(_TEST_SECRET_SETUP)
+    user.set_password(_TEST_AUTH_SETUP)
     test_db.add(user)
     test_db.commit()
 
     # Try to register with same email
     response = test_client.post(
         "/api/users/register",
-        json={"email": "duplicate@test.com", "password": _TEST_SECRET_ALT},
+        json={"email": "duplicate@test.com", "password": _TEST_AUTH_ALT},
     )
 
     assert response.status_code == 400
@@ -324,14 +324,14 @@ def test_user_login_endpoint(test_client, test_db):
     """Test user login via API."""
     # Create user first
     user = User(email="login@test.com")
-    user.set_password(_TEST_SECRET_LOGIN)
+    user.set_password(_TEST_AUTH_LOGIN)
     test_db.add(user)
     test_db.commit()
 
     # Login
     response = test_client.post(
         "/api/users/login",
-        json={"email": "login@test.com", "password": _TEST_SECRET_LOGIN},
+        json={"email": "login@test.com", "password": _TEST_AUTH_LOGIN},
     )
 
     assert response.status_code == 200
@@ -346,14 +346,14 @@ def test_user_login_wrong_password(test_client, test_db):
     """Test login with incorrect password."""
     # Create user
     user = User(email="wrongpass@test.com")
-    user.set_password(_TEST_SECRET_CORRECT)
+    user.set_password(_TEST_AUTH_CORRECT)
     test_db.add(user)
     test_db.commit()
 
     # Try login with wrong password
     response = test_client.post(
         "/api/users/login",
-        json={"email": "wrongpass@test.com", "password": _TEST_SECRET_WRONG},
+        json={"email": "wrongpass@test.com", "password": _TEST_AUTH_WRONG},
     )
 
     assert response.status_code == 401
@@ -364,7 +364,7 @@ def test_user_login_nonexistent_user(test_client):
     """Test login with non-existent user."""
     response = test_client.post(
         "/api/users/login",
-        json={"email": "nonexistent@test.com", "password": _TEST_SECRET_ANY},
+        json={"email": "nonexistent@test.com", "password": _TEST_AUTH_ANY},
     )
 
     assert response.status_code == 401

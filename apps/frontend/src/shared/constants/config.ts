@@ -48,6 +48,8 @@ export const DEFAULT_APP_SETTINGS = {
   globalOpenAIApiKey: undefined as string | undefined,
   // Selected agent profile - defaults to 'auto' for per-phase optimized model selection
   selectedAgentProfile: 'auto',
+  // Selected AI provider - defaults to 'anthropic' (Claude)
+  selectedProviderId: 'anthropic',
   // Changelog preferences (persisted between sessions)
   changelogFormat: 'keep-a-changelog' as const,
   changelogAudience: 'user-facing' as const,

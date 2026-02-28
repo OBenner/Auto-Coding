@@ -36,6 +36,7 @@ from .scheduler_commands import (
     handle_schedule_status_command,
     handle_schedule_stop_command,
 )
+from .security_commands import handle_security_audit_command
 from .spec_commands import print_specs_list
 from .utils import (
     DEFAULT_MODEL,
@@ -436,6 +437,20 @@ Environment Variables:
         help="Export analytics to file (with --analytics)",
     )
 
+    # Security audit commands
+    parser.add_argument(
+        "--security-audit",
+        action="store_true",
+        help="Run comprehensive security audit on the project",
+    )
+    parser.add_argument(
+        "--security-output-format",
+        type=str,
+        default="both",
+        choices=["json", "markdown", "both"],
+        help="Output format for security audit report (default: both)",
+    )
+
     return parser.parse_args()
 
 
@@ -578,6 +593,27 @@ def _run_cli() -> None:
             granularity=args.analytics_granularity,
             export_path=export_path,
             export_format=args.analytics_format,
+        )
+        return
+
+    # Handle security audit command
+    if args.security_audit:
+        # Security audit can run with or without a spec
+        spec_dir = None
+        if args.spec:
+            spec_dir = find_spec(project_dir, args.spec)
+            if not spec_dir:
+                print_banner()
+                print(f"\nError: Spec '{args.spec}' not found")
+                print("\nAvailable specs:")
+                print_specs_list(project_dir)
+                sys.exit(1)
+
+        handle_security_audit_command(
+            project_dir=project_dir,
+            spec_dir=spec_dir,
+            output_format=args.security_output_format,
+            verbose=args.verbose,
         )
         return
 

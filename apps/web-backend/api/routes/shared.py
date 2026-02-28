@@ -151,6 +151,84 @@ def list_specs() -> list[dict]:
     return specs
 
 
+def build_item_detail(item_id: str, not_found_label: str) -> dict:
+    """
+    Build a detailed information dict for a spec/task item.
+
+    Encapsulates the common logic shared by get_spec_detail and get_task_detail.
+
+    Args:
+        item_id: Spec/task number (e.g., "001") or full folder name
+        not_found_label: Label used in 404 messages (e.g., "Spec" or "Task")
+
+    Returns:
+        Dict with keys: number, name, folder, status, has_build, spec_content,
+        and a nested 'progress' dict with completed/in_progress/pending/failed/total/percentage.
+
+    Raises:
+        HTTPException: 404 if the item directory or spec.md is not found
+    """
+    # Local import to avoid circular dependency (fastapi imports app, app imports routes)
+    from fastapi import HTTPException
+    from fastapi import status as http_status
+
+    spec_dir = find_spec_dir(item_id)
+    if spec_dir is None:
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail=f"{not_found_label} {item_id} not found",
+        )
+
+    spec_file = spec_dir / "spec.md"
+    if not spec_file.exists():
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail=f"{not_found_label} {item_id} not found",
+        )
+
+    try:
+        spec_content = spec_file.read_text(encoding="utf-8")
+    except Exception as e:
+        logger.warning("Failed to read spec content: %s", e)
+        spec_content = None
+
+    folder_name = spec_dir.name
+    parts = folder_name.split("-", 1)
+    number = parts[0] if len(parts) > 0 else item_id
+    name = parts[1] if len(parts) > 1 else "unknown"
+
+    progress_detail = count_subtasks_detailed(spec_dir)
+    percentage = get_progress_percentage(spec_dir)
+
+    if progress_detail["total"] == 0:
+        item_status = "pending"
+    elif progress_detail["completed"] == progress_detail["total"]:
+        item_status = "complete"
+    elif progress_detail["in_progress"] > 0 or progress_detail["completed"] > 0:
+        item_status = "in_progress"
+    else:
+        item_status = "initialized"
+
+    has_build = (spec_dir / "implementation_plan.json").exists()
+
+    return {
+        "number": number,
+        "name": name,
+        "folder": folder_name,
+        "status": item_status,
+        "has_build": has_build,
+        "spec_content": spec_content,
+        "progress": {
+            "completed": progress_detail["completed"],
+            "in_progress": progress_detail["in_progress"],
+            "pending": progress_detail["pending"],
+            "failed": progress_detail["failed"],
+            "total": progress_detail["total"],
+            "percentage": percentage,
+        },
+    }
+
+
 def find_spec_dir(spec_id: str) -> Path | None:
     """
     Get spec directory for a given spec/task ID.

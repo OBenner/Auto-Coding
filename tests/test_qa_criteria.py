@@ -17,7 +17,7 @@ import json
 import sys
 import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -528,13 +528,14 @@ class TestShouldRunQA:
 
     def test_should_run_qa_build_not_complete(self, spec_dir: Path):
         """Returns False when build not complete."""
-        # Set up mock to return build not complete
         mock_progress.is_build_ready_for_qa.return_value = False
+
 
         plan = {"feature": "Test", "phases": []}
         save_implementation_plan(spec_dir, plan)
 
-        result = should_run_qa(spec_dir)
+        with patch('qa.criteria.is_build_ready_for_qa', return_value=False):
+            result = should_run_qa(spec_dir)
         assert result is False
 
         # Reset mock
@@ -544,37 +545,44 @@ class TestShouldRunQA:
         """Returns False when already approved."""
         mock_progress.is_build_ready_for_qa.return_value = True
 
+
         plan = {"feature": "Test", "qa_signoff": qa_signoff_approved}
         save_implementation_plan(spec_dir, plan)
 
-        result = should_run_qa(spec_dir)
+        with patch('qa.criteria.is_build_ready_for_qa', return_value=True):
+            result = should_run_qa(spec_dir)
         assert result is False
 
     def test_should_run_qa_build_complete_not_approved(self, spec_dir: Path):
         """Returns True when build complete but not approved."""
         mock_progress.is_build_ready_for_qa.return_value = True
 
+
         plan = {"feature": "Test", "phases": []}
         save_implementation_plan(spec_dir, plan)
 
-        result = should_run_qa(spec_dir)
+        with patch('qa.criteria.is_build_ready_for_qa', return_value=True):
+            result = should_run_qa(spec_dir)
         assert result is True
 
     def test_should_run_qa_rejected_status(self, spec_dir: Path, qa_signoff_rejected: dict):
         """Returns True when rejected (needs re-review after fixes)."""
         mock_progress.is_build_ready_for_qa.return_value = True
 
+
         plan = {"feature": "Test", "qa_signoff": qa_signoff_rejected}
         save_implementation_plan(spec_dir, plan)
 
-        result = should_run_qa(spec_dir)
+        with patch('qa.criteria.is_build_ready_for_qa', return_value=True):
+            result = should_run_qa(spec_dir)
         assert result is True
 
     def test_should_run_qa_no_plan(self, spec_dir: Path):
         """Returns False when no plan exists (build not complete)."""
         mock_progress.is_build_ready_for_qa.return_value = False
 
-        result = should_run_qa(spec_dir)
+        with patch('qa.criteria.is_build_ready_for_qa', return_value=False):
+            result = should_run_qa(spec_dir)
         assert result is False
 
         # Reset mock
@@ -901,9 +909,16 @@ class TestQAStateMachine:
 class TestQAIntegration:
     """Integration tests for QA criteria logic."""
 
+    @pytest.fixture(autouse=True)
+    def patch_is_build_ready_for_qa(self):
+        """Patch is_build_ready_for_qa directly to avoid module-level mock fragility."""
+        with patch('qa.criteria.is_build_ready_for_qa', return_value=True):
+            yield
+
     def test_full_qa_workflow_approved_first_try(self, spec_dir: Path):
         """Full workflow where QA approves on first try."""
         mock_progress.is_build_ready_for_qa.return_value = True
+
 
         # Build complete
         plan = {"feature": "Test Feature", "phases": []}
@@ -928,6 +943,7 @@ class TestQAIntegration:
     def test_full_qa_workflow_with_fixes(self, spec_dir: Path):
         """Full workflow with reject-fix-approve cycle."""
         mock_progress.is_build_ready_for_qa.return_value = True
+
 
         # Build complete
         plan = {"feature": "Test Feature", "phases": []}
@@ -968,6 +984,7 @@ class TestQAIntegration:
     def test_qa_workflow_max_iterations(self, spec_dir: Path):
         """Test behavior when max iterations are reached."""
         mock_progress.is_build_ready_for_qa.return_value = True
+
 
         plan = {
             "feature": "Test",

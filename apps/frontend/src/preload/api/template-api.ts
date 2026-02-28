@@ -77,8 +77,12 @@ export const createTemplateAPI = (): TemplateAPI => ({
     ipcRenderer.invoke(IPC_CHANNELS.TEMPLATE_CUSTOM_EXPORT, templateId),
   importCustomTemplate: (
     jsonData: string
-  ): Promise<IPCResult<CustomTemplate & { validationErrors?: string[] }>> =>
-    ipcRenderer.invoke(IPC_CHANNELS.TEMPLATE_CUSTOM_IMPORT, jsonData),
+  ): Promise<IPCResult<CustomTemplate & { validationErrors?: string[] }>> => {
+    if (typeof jsonData !== 'string' || jsonData.length > 1_000_000) {
+      return Promise.resolve({ success: false, error: 'Invalid or oversized template data' });
+    }
+    return ipcRenderer.invoke(IPC_CHANNELS.TEMPLATE_CUSTOM_IMPORT, jsonData);
+  },
   testCustomTemplate: (templateId: string, testInput: string): Promise<IPCResult<GeneratedSpec>> =>
     ipcRenderer.invoke(IPC_CHANNELS.TEMPLATE_CUSTOM_TEST, templateId, testInput)
 });

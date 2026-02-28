@@ -300,6 +300,10 @@ export interface AppSettings {
   graphitiMcpUrl?: string;
   // Onboarding wizard completion state
   onboardingCompleted?: boolean;
+  // Selected AI provider (anthropic, openrouter, groq, etc.)
+  selectedProviderId?: string;
+  // Fallback model ID to use if primary model unavailable
+  fallbackModelId?: string;
   // Selected agent profile for preset model/thinking configurations
   selectedAgentProfile?: string;
   // Custom phase configuration for Auto profile (overrides defaults)
@@ -422,3 +426,57 @@ export const DEFAULT_KEYBOARD_SHORTCUTS: Record<KeyboardShortcutAction, KeyCombi
   batchQA: 'Cmd+Shift+Q',
   batchStatusUpdate: 'Cmd+Shift+S'
 };
+
+// ============================================
+// AI Provider Configuration (Backend .env sync)
+// ============================================
+
+/**
+ * Supported AI engine providers
+ */
+export type AIEngineProvider = 'claude' | 'openai' | 'google' | 'litellm' | 'openrouter' | 'ollama';
+
+/**
+ * AI Provider configuration from backend .env file
+ * Mirrors apps/backend/core/providers/config.py ProviderConfig
+ */
+export interface AIProviderConfig {
+  // Core settings
+  provider: AIEngineProvider;
+
+  // Claude Agent SDK settings
+  anthropicApiKey?: string;
+  claudeModel?: string;
+
+  // OpenAI settings
+  openaiApiKey?: string;
+  openaiModel?: string;
+  openaiBaseUrl?: string;
+
+  // Google Gemini settings
+  googleApiKey?: string;
+  googleModel?: string;
+
+  // LiteLLM settings
+  litellmModel?: string;
+  litellmApiBase?: string;
+  litellmApiKey?: string;
+
+  // OpenRouter settings
+  openrouterApiKey?: string;
+  openrouterModel?: string;
+  openrouterBaseUrl?: string;
+
+  // Ollama settings
+  ollamaModel?: string;
+  ollamaBaseUrl?: string;
+}
+
+/**
+ * Provider configuration validation result
+ */
+export interface ProviderConfigValidation {
+  isValid: boolean;
+  errors: string[];
+  availableProviders: AIEngineProvider[];
+}

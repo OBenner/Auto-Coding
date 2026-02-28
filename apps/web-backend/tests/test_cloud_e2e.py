@@ -16,14 +16,15 @@ Requirements:
 """
 
 import json
+import os
 import subprocess
 import sys
 import time
 
 import requests
 
-# Test configuration
-API_BASE_URL = "http://localhost:8000"
+# Test configuration - must be set via environment variable for E2E tests
+API_BASE_URL = os.environ.get("API_BASE_URL", "")
 TEST_USER_EMAIL = "test@example.com"
 TEST_USER_PASSWORD = "testpass123"
 TEST_ORG = "Test Organization"

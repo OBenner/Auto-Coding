@@ -130,9 +130,8 @@ class ConversationRound:
         if "file_path" in tool_input:
             self.code_references.add(tool_input["file_path"])
         elif "path" in tool_input:
-            self.code_references.add(tool_input["path"])
-        elif "pattern" in tool_input and "path" in tool_input:
-            # Grep/Glob operations
+            # Covers both direct path access and Grep/Glob operations
+            # (which also have a "pattern" key alongside "path")
             self.code_references.add(tool_input["path"])
 
     def set_usage(self, input_tokens: int, output_tokens: int) -> None:

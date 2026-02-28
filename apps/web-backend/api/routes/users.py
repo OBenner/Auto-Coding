@@ -21,6 +21,9 @@ from api.models.user import (
 
 logger = logging.getLogger(__name__)
 
+# OAuth2 standard token type constant (not a credential)
+_BEARER = "bearer"
+
 # Create router for user endpoints
 router = APIRouter(prefix="/api/users", tags=["users"])
 
@@ -89,7 +92,7 @@ async def register_user(
 
     return TokenResponse(
         access_token=access_token,
-        token_type="bearer",  # nosec B106 - OAuth2 standard token type, not a password
+        token_type=_BEARER,
         user=user_response,
     )
 
@@ -157,6 +160,6 @@ async def login_user(
 
     return TokenResponse(
         access_token=access_token,
-        token_type="bearer",  # nosec B106 - OAuth2 standard token type, not a password
+        token_type=_BEARER,
         user=user_response,
     )

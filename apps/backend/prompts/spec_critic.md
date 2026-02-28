@@ -41,6 +41,35 @@ Understand:
 
 **CRITICAL**: Use extended thinking for this phase. Think deeply about:
 
+**USE ACTOR-CRITIC THINKING TOOL (IF AVAILABLE):**
+
+If the `actor_critic_thinking` tool is available, use it for structured dual-perspective analysis:
+
+```text
+# Actor-Critic Multi-Round Dialogue Pattern
+
+Tool: mcp__actor-critic-thinking__actor_critic_thinking
+Parameters:
+  - role (required): "actor" (creative/empathetic) or "critic" (analytical/evaluative)
+  - thoughtNumber (optional): Current thought number in sequence
+  - totalThoughts (optional): Total thoughts (must be odd ≥3 for multi-round)
+  - nextRoundNeeded (optional): Boolean for whether another round is needed
+
+Example Pattern:
+Round 1 (Actor): Identify spec strengths and potential benefits
+Round 2 (Critic): Identify weaknesses, edge cases, and issues
+Round 3 (Actor): Respond to critic's concerns with improvements
+Round 4 (Critic): Evaluate remaining concerns
+Round 5 (Actor): Final synthesis with balanced recommendations
+```
+
+The actor-critic tool provides:
+- **Systematic "devil's advocate" reasoning** - Forces critique from multiple perspectives
+- **Multi-round dialogue** - Enables deeper analysis through iterative refinement
+- **Structured thinking** - Ensures both creative and analytical perspectives are considered
+
+If tool is NOT available, proceed with standard extended thinking.
+
 ### 1.1: Technical Accuracy
 
 Compare spec.md against research.json AND validate with Context7:
@@ -256,10 +285,11 @@ spec.md has been updated with fixes.
 ## CRITICAL RULES
 
 1. **USE EXTENDED THINKING** - This is the deep analysis phase
-2. **ALWAYS compare against research** - Research is the source of truth
-3. **FIX issues, don't just report** - Make actual changes to spec.md
-4. **VERIFY after fixing** - Ensure spec is still valid
-5. **BE THOROUGH** - Check everything, miss nothing
+2. **USE ACTOR-CRITIC TOOL IF AVAILABLE** - Leverage `actor_critic_thinking` for dual-perspective analysis
+3. **ALWAYS compare against research** - Research is the source of truth
+4. **FIX issues, don't just report** - Make actual changes to spec.md
+5. **VERIFY after fixing** - Ensure spec is still valid
+6. **BE THOROUGH** - Check everything, miss nothing
 
 ---
 
@@ -299,6 +329,8 @@ spec.md has been updated with fixes.
 
 When analyzing, think through:
 
+**Standard Extended Thinking Pattern:**
+
 > "Looking at this spec.md, I need to deeply analyze it against the research findings...
 >
 > First, let me check all package names. The research says the package is [X], but the spec says [Y]. This is a mismatch that needs fixing.
@@ -316,6 +348,27 @@ When analyzing, think through:
 > For feasibility, the Docker setup seems correct based on research. The port numbers match.
 >
 > Overall, I found [N] issues that need fixing before this spec is ready for implementation."
+
+**Actor-Critic Thinking Pattern (if tool available):**
+
+> "I'll use the mcp__actor-critic-thinking__actor_critic_thinking tool to analyze this spec from multiple perspectives.
+>
+> **Round 1 (Actor)** - As a creative advocate, I'll identify the spec's strengths:
+> [Use mcp__actor-critic-thinking__actor_critic_thinking with role='actor', thoughtNumber=1, totalThoughts=5]
+>
+> **Round 2 (Critic)** - As an analytical evaluator, I'll identify weaknesses:
+> [Use mcp__actor-critic-thinking__actor_critic_thinking with role='critic', thoughtNumber=2, totalThoughts=5]
+>
+> **Round 3 (Actor)** - Responding to the critic's concerns:
+> [Use mcp__actor-critic-thinking__actor_critic_thinking with role='actor', thoughtNumber=3, totalThoughts=5, nextRoundNeeded=true]
+>
+> **Round 4 (Critic)** - Evaluating remaining concerns:
+> [Use mcp__actor-critic-thinking__actor_critic_thinking with role='critic', thoughtNumber=4, totalThoughts=5, nextRoundNeeded=false]
+>
+> **Round 5 (Actor)** - Final synthesis with balanced recommendations:
+> [Use mcp__actor-critic-thinking__actor_critic_thinking with role='actor', thoughtNumber=5, totalThoughts=5]
+>
+> After multi-round analysis, I've identified [N] issues requiring fixes."
 
 ---
 

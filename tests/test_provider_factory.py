@@ -455,7 +455,8 @@ class TestFactoryFunctions:
         assert "zhipuai" in names
         assert "openai" in names
         assert "ollama" in names
-        assert len(names) == 6
+        assert "google" in names
+        assert len(names) == 7
 
     def test_create_engine_provider_unknown_raises_error(self):
         """Tests create_engine_provider() raises error for unknown provider."""
@@ -617,10 +618,11 @@ class TestAIEngineProviderEnum:
         from core.providers.config import AIEngineProvider
 
         assert AIEngineProvider.CLAUDE.value == "claude"
+        assert AIEngineProvider.OPENAI.value == "openai"
+        assert AIEngineProvider.GOOGLE.value == "google"
         assert AIEngineProvider.LITELLM.value == "litellm"
         assert AIEngineProvider.OPENROUTER.value == "openrouter"
         assert AIEngineProvider.ZHIPUAI.value == "zhipuai"
-        assert AIEngineProvider.OPENAI.value == "openai"
         assert AIEngineProvider.OLLAMA.value == "ollama"
 
     def test_enum_is_str(self):
@@ -628,17 +630,18 @@ class TestAIEngineProviderEnum:
         from core.providers.config import AIEngineProvider
 
         assert isinstance(AIEngineProvider.CLAUDE.value, str)
+        assert isinstance(AIEngineProvider.OPENAI.value, str)
+        assert isinstance(AIEngineProvider.GOOGLE.value, str)
         assert isinstance(AIEngineProvider.LITELLM.value, str)
         assert isinstance(AIEngineProvider.OPENROUTER.value, str)
         assert isinstance(AIEngineProvider.ZHIPUAI.value, str)
-        assert isinstance(AIEngineProvider.OPENAI.value, str)
         assert isinstance(AIEngineProvider.OLLAMA.value, str)
 
     def test_enum_count(self):
         """Tests AIEngineProvider has expected number of values."""
         from core.providers.config import AIEngineProvider
 
-        assert len(AIEngineProvider) == 6
+        assert len(AIEngineProvider) == 7
 
 
 # =============================================================================
