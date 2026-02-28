@@ -30,12 +30,12 @@ from __future__ import annotations
 
 import logging
 import os
+import uuid
 from pathlib import Path
 from typing import Any
 
 from ..models import WebhookConfig, WebhookEvent, WebhookIntegration, WebhookType
 from .base import BaseIntegration
-
 
 # =============================================================================
 # Logging
@@ -121,13 +121,15 @@ class JiraIntegration(BaseIntegration):
         # If issue_key is set, use that specific issue
         # Otherwise, use a generic endpoint (will be determined per event)
         if self.issue_key:
-            webhook_url = f"{self.api_url.rstrip('/')}/rest/api/3/issue/{self.issue_key}/comment"
+            webhook_url = (
+                f"{self.api_url.rstrip('/')}/rest/api/3/issue/{self.issue_key}/comment"
+            )
         else:
             # Generic API URL - the actual issue key will be added dynamically
             webhook_url = f"{self.api_url.rstrip('/')}/rest/api/3/issue"
 
         return WebhookConfig(
-            id="jira-notification",
+            id=f"jira-notification-{uuid.uuid4().hex[:8]}",
             name="Jira Build Notifications",
             type=WebhookType.OUTGOING,
             integration=WebhookIntegration.JIRA,
@@ -190,7 +192,10 @@ class JiraIntegration(BaseIntegration):
                     return True, f"Successfully connected to Jira as {display_name}"
                 else:
                     error_text = response.text
-                    return False, f"Authentication failed: {response.status_code} - {error_text}"
+                    return (
+                        False,
+                        f"Authentication failed: {response.status_code} - {error_text}",
+                    )
 
         except Exception as e:
             logger.error(f"Jira connection test failed: {e}", exc_info=True)
@@ -238,16 +243,18 @@ class JiraIntegration(BaseIntegration):
         content = []
 
         # Header with emoji and title
-        content.append({
-            "type": "heading",
-            "attrs": {"level": 3},
-            "content": [
-                {
-                    "type": "text",
-                    "text": f"{emoji} {title}",
-                }
-            ],
-        })
+        content.append(
+            {
+                "type": "heading",
+                "attrs": {"level": 3},
+                "content": [
+                    {
+                        "type": "text",
+                        "text": f"{emoji} {title}",
+                    }
+                ],
+            }
+        )
 
         # Rule
         content.append({"type": "rule"})
@@ -257,126 +264,192 @@ class JiraIntegration(BaseIntegration):
             spec_name = event_data.get("spec_name", "Unknown")
             spec_id = event_data.get("spec_id", "Unknown")
 
-            content.append({
-                "type": "paragraph",
-                "content": [
-                    {"type": "text", "text": "Spec: ", "marks": [{"type": "strong"}]},
-                    {"type": "text", "text": spec_name},
-                ],
-            })
+            content.append(
+                {
+                    "type": "paragraph",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": "Spec: ",
+                            "marks": [{"type": "strong"}],
+                        },
+                        {"type": "text", "text": spec_name},
+                    ],
+                }
+            )
 
-            content.append({
-                "type": "paragraph",
-                "content": [
-                    {"type": "text", "text": "ID: ", "marks": [{"type": "strong"}]},
-                    {"type": "text", "text": spec_id},
-                ],
-            })
+            content.append(
+                {
+                    "type": "paragraph",
+                    "content": [
+                        {"type": "text", "text": "ID: ", "marks": [{"type": "strong"}]},
+                        {"type": "text", "text": spec_id},
+                    ],
+                }
+            )
 
         elif event_type in ["subtask_started", "subtask_completed", "subtask_failed"]:
             subtask_id = event_data.get("subtask_id", "Unknown")
             subtask_desc = event_data.get("subtask_description", "")
 
-            content.append({
-                "type": "paragraph",
-                "content": [
-                    {"type": "text", "text": "Subtask: ", "marks": [{"type": "strong"}]},
-                    {"type": "text", "text": subtask_id},
-                ],
-            })
-
-            if subtask_desc:
-                content.append({
+            content.append(
+                {
                     "type": "paragraph",
                     "content": [
-                        {"type": "text", "text": subtask_desc},
+                        {
+                            "type": "text",
+                            "text": "Subtask: ",
+                            "marks": [{"type": "strong"}],
+                        },
+                        {"type": "text", "text": subtask_id},
                     ],
-                })
+                }
+            )
+
+            if subtask_desc:
+                content.append(
+                    {
+                        "type": "paragraph",
+                        "content": [
+                            {"type": "text", "text": subtask_desc},
+                        ],
+                    }
+                )
 
         # Add event-specific details
         if event_type == "build_started":
             total_subtasks = event_data.get("total_subtasks", 0)
-            content.append({
-                "type": "paragraph",
-                "content": [
-                    {"type": "text", "text": "Total Subtasks: ", "marks": [{"type": "strong"}]},
-                    {"type": "text", "text": str(total_subtasks)},
-                ],
-            })
+            content.append(
+                {
+                    "type": "paragraph",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": "Total Subtasks: ",
+                            "marks": [{"type": "strong"}],
+                        },
+                        {"type": "text", "text": str(total_subtasks)},
+                    ],
+                }
+            )
 
         elif event_type == "build_completed":
             success = event_data.get("success", False)
             duration = event_data.get("duration_seconds", 0)
 
             status_text = "✅ Success" if success else "⚠️ Failed"
-            duration_str = f"{duration:.1f}s" if duration < 60 else f"{duration/60:.1f}m"
+            duration_str = (
+                f"{duration:.1f}s" if duration < 60 else f"{duration / 60:.1f}m"
+            )
 
-            content.append({
-                "type": "paragraph",
-                "content": [
-                    {"type": "text", "text": "Status: ", "marks": [{"type": "strong"}]},
-                    {"type": "text", "text": status_text},
-                ],
-            })
+            content.append(
+                {
+                    "type": "paragraph",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": "Status: ",
+                            "marks": [{"type": "strong"}],
+                        },
+                        {"type": "text", "text": status_text},
+                    ],
+                }
+            )
 
-            content.append({
-                "type": "paragraph",
-                "content": [
-                    {"type": "text", "text": "Duration: ", "marks": [{"type": "strong"}]},
-                    {"type": "text", "text": duration_str},
-                ],
-            })
+            content.append(
+                {
+                    "type": "paragraph",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": "Duration: ",
+                            "marks": [{"type": "strong"}],
+                        },
+                        {"type": "text", "text": duration_str},
+                    ],
+                }
+            )
 
         elif event_type == "build_failed":
             error = event_data.get("error_message", "Unknown error")
             failed_subtask = event_data.get("failed_subtask")
 
-            content.append({
-                "type": "paragraph",
-                "content": [
-                    {"type": "text", "text": "Error: ", "marks": [{"type": "strong"}]},
-                    {"type": "text", "text": error},
-                ],
-            })
-
-            if failed_subtask:
-                content.append({
+            content.append(
+                {
                     "type": "paragraph",
                     "content": [
-                        {"type": "text", "text": "Failed Subtask: ", "marks": [{"type": "strong"}]},
-                        {"type": "text", "text": failed_subtask},
+                        {
+                            "type": "text",
+                            "text": "Error: ",
+                            "marks": [{"type": "strong"}],
+                        },
+                        {"type": "text", "text": error},
                     ],
-                })
+                }
+            )
+
+            if failed_subtask:
+                content.append(
+                    {
+                        "type": "paragraph",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": "Failed Subtask: ",
+                                "marks": [{"type": "strong"}],
+                            },
+                            {"type": "text", "text": failed_subtask},
+                        ],
+                    }
+                )
 
         elif event_type == "subtask_completed":
             session = event_data.get("session_number", "Unknown")
-            content.append({
-                "type": "paragraph",
-                "content": [
-                    {"type": "text", "text": "Session: ", "marks": [{"type": "strong"}]},
-                    {"type": "text", "text": str(session)},
-                ],
-            })
+            content.append(
+                {
+                    "type": "paragraph",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": "Session: ",
+                            "marks": [{"type": "strong"}],
+                        },
+                        {"type": "text", "text": str(session)},
+                    ],
+                }
+            )
 
         elif event_type == "subtask_failed":
             error = event_data.get("error_message", "Unknown error")
             attempt = event_data.get("attempt_number", 1)
 
-            content.append({
-                "type": "paragraph",
-                "content": [
-                    {"type": "text", "text": "Error: ", "marks": [{"type": "strong"}]},
-                    {"type": "text", "text": error},
-                ],
-            })
+            content.append(
+                {
+                    "type": "paragraph",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": "Error: ",
+                            "marks": [{"type": "strong"}],
+                        },
+                        {"type": "text", "text": error},
+                    ],
+                }
+            )
 
-            content.append({
-                "type": "paragraph",
-                "content": [
-                    {"type": "text", "text": "Attempt: ", "marks": [{"type": "strong"}]},
-                    {"type": "text", "text": str(attempt)},
-                ],
-            })
+            content.append(
+                {
+                    "type": "paragraph",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": "Attempt: ",
+                            "marks": [{"type": "strong"}],
+                        },
+                        {"type": "text", "text": str(attempt)},
+                    ],
+                }
+            )
 
         # Add metadata if available
         if event.metadata:
@@ -388,12 +461,18 @@ class JiraIntegration(BaseIntegration):
             if metadata_items:
                 content.append({"type": "rule"})
                 for item in metadata_items:
-                    content.append({
-                        "type": "paragraph",
-                        "content": [
-                            {"type": "text", "text": item, "marks": [{"type": "code"}]},
-                        ],
-                    })
+                    content.append(
+                        {
+                            "type": "paragraph",
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": item,
+                                    "marks": [{"type": "code"}],
+                                },
+                            ],
+                        }
+                    )
 
         # Build the final payload
         # If issue_key is set in config, create a comment
@@ -408,7 +487,14 @@ class JiraIntegration(BaseIntegration):
                 }
             }
         else:
-            # Create issue payload (for when no default issue is set)
+            # Create issue payload when no default issue is set.
+            # WARNING: This creates a NEW Jira issue for every event.
+            # Consider setting JIRA_ISSUE_KEY to add comments to an existing issue
+            # instead of creating a new issue per event.
+            logger.warning(
+                "JIRA_ISSUE_KEY is not set -- a new Jira issue will be created "
+                "for this event. Set JIRA_ISSUE_KEY to add comments to an existing issue."
+            )
             return {
                 "fields": {
                     "project": {"key": self.project_key or "AUTO"},
@@ -422,7 +508,9 @@ class JiraIntegration(BaseIntegration):
                 }
             }
 
-    def _get_message_details(self, event_type: str, event_data: dict[str, Any]) -> tuple[str, str]:
+    def _get_message_details(
+        self, event_type: str, event_data: dict[str, Any]
+    ) -> tuple[str, str]:
         """
         Get message title and emoji for an event type.
 

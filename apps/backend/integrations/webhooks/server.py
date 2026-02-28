@@ -20,21 +20,19 @@ Usage:
 
 from __future__ import annotations
 
+import inspect
 import logging
 import uuid
+from collections.abc import AsyncGenerator, Callable
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import AsyncGenerator, Callable
 
-from fastapi import FastAPI, Header, HTTPException, Request, Response, status
+from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from .auth import (
     extract_signature_from_header,
-    prepare_auth_headers,
-    sign_webhook_payload,
-    validate_auth_config,
     verify_api_key,
     verify_basic_auth,
     verify_bearer_token,
@@ -88,7 +86,9 @@ class TestConnectionResponse(BaseModel):
 
     success: bool = Field(description="Whether test webhook was sent successfully")
     message: str = Field(description="Human-readable result message")
-    log_entry: dict | None = Field(default=None, description="Webhook log entry if sent")
+    log_entry: dict | None = Field(
+        default=None, description="Webhook log entry if sent"
+    )
 
 
 # =============================================================================
@@ -104,36 +104,45 @@ WebhookHandler = Callable[[WebhookConfig, dict], None]
 # =============================================================================
 
 
-@asynccontextmanager
-async def _lifespan(spec_dir: Path) -> AsyncGenerator[None, None]:
-    """
-    Lifespan context manager for FastAPI app.
+def _make_lifespan(spec_dir: Path):
+    """Create a lifespan context manager for the given spec directory."""
 
-    Handles startup and shutdown events for the webhook server.
+    @asynccontextmanager
+    async def _lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+        """
+        Lifespan context manager for FastAPI app.
 
-    Args:
-        spec_dir: Directory containing webhook configurations
+        Handles startup and shutdown events for the webhook server.
 
-    Yields:
-        None
-    """
-    # Startup
-    logger.info(f"Starting webhook server for spec dir: {spec_dir}")
-    storage = WebhookStorage(spec_dir=spec_dir)
-    configs = storage.load_configs()
+        Args:
+            app: The FastAPI application instance
 
-    incoming_count = sum(1 for cfg in configs if cfg.type == WebhookType.INCOMING and cfg.enabled)
-    outgoing_count = sum(1 for cfg in configs if cfg.type == WebhookType.OUTGOING and cfg.enabled)
+        Yields:
+            None
+        """
+        # Startup
+        logger.info(f"Starting webhook server for spec dir: {spec_dir}")
+        storage = WebhookStorage(spec_dir=spec_dir)
+        configs = storage.load_configs()
 
-    logger.info(
-        f"Loaded {len(configs)} webhook configs "
-        f"({incoming_count} incoming enabled, {outgoing_count} outgoing enabled)"
-    )
+        incoming_count = sum(
+            1 for cfg in configs if cfg.type == WebhookType.INCOMING and cfg.enabled
+        )
+        outgoing_count = sum(
+            1 for cfg in configs if cfg.type == WebhookType.OUTGOING and cfg.enabled
+        )
 
-    yield
+        logger.info(
+            f"Loaded {len(configs)} webhook configs "
+            f"({incoming_count} incoming enabled, {outgoing_count} outgoing enabled)"
+        )
 
-    # Shutdown
-    logger.info("Shutting down webhook server")
+        yield
+
+        # Shutdown
+        logger.info("Shutting down webhook server")
+
+    return _lifespan
 
 
 def create_webhook_server(
@@ -169,7 +178,7 @@ def create_webhook_server(
         title="Auto Claude Webhook Server",
         description="Receive and process webhooks from external services",
         version="1.0.0",
-        lifespan=lambda: _lifespan(spec_dir),
+        lifespan=_make_lifespan(spec_dir),
     )
 
     # =============================================================================
@@ -251,12 +260,31 @@ def create_webhook_server(
                 detail=f"Webhook {webhook_config.id} is disabled",
             )
 
+        # Determine event type from headers or payload, not from config
+        # GitHub uses X-GitHub-Event header, GitLab uses X-Gitlab-Event, etc.
+        github_event = request.headers.get("X-GitHub-Event")
+        gitlab_event = request.headers.get("X-Gitlab-Event")
+        if github_event:
+            event_type_str = f"github_{github_event}"
+        elif gitlab_event:
+            event_type_str = f"gitlab_{gitlab_event}"
+        else:
+            event_type_str = "custom"
+
+        # Map to WebhookEventType, falling back to CUSTOM
+        from .models import WebhookEventType
+
+        try:
+            resolved_event_type = WebhookEventType(event_type_str)
+        except ValueError:
+            resolved_event_type = WebhookEventType.CUSTOM
+
         # Create log entry
         log_id = str(uuid.uuid4())
         webhook_log = WebhookLog(
             id=log_id,
             webhook_id=webhook_config.id,
-            event_type=webhook_config.events[0] if webhook_config.events else None,  # type: ignore
+            event_type=resolved_event_type,
             request_method="POST",
             request_url=str(request.url),
         )
@@ -304,9 +332,12 @@ def create_webhook_server(
 
         # Process webhook
         try:
-            # Call custom handler if provided
+            # Call custom handler if provided (handle both sync and async)
             if custom_handler:
-                custom_handler(webhook_config, payload)
+                if inspect.iscoroutinefunction(custom_handler):
+                    await custom_handler(webhook_config, payload)
+                else:
+                    custom_handler(webhook_config, payload)
 
             # Mark as successful
             webhook_log.mark_completed(
@@ -316,8 +347,7 @@ def create_webhook_server(
             storage.save_log(webhook_log)
 
             logger.info(
-                f"Webhook {webhook_config.id} processed successfully "
-                f"(log ID: {log_id})"
+                f"Webhook {webhook_config.id} processed successfully (log ID: {log_id})"
             )
 
             return JSONResponse(
@@ -376,8 +406,20 @@ def create_webhook_server(
             HTTPException: If webhook not found or send fails
         """
         try:
-            # Load webhook config from project directory
-            project_dir = Path(request.project_dir)
+            # Validate project_dir to prevent path traversal attacks
+            project_dir = Path(request.project_dir).resolve()
+            if not project_dir.is_dir():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid project directory",
+                )
+            # Restrict to directories containing .auto-claude
+            auto_claude_marker = project_dir / ".auto-claude"
+            if not auto_claude_marker.is_dir():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid project directory",
+                )
             storage = WebhookStorage(spec_dir=project_dir)
 
             config = storage.load_config(request.webhook_id)
@@ -404,7 +446,9 @@ def create_webhook_server(
                     content={
                         "success": True,
                         "message": "Test notification sent successfully",
-                        "log_entry": result.log_entry.to_dict() if result.log_entry else None,
+                        "log_entry": result.log_entry.to_dict()
+                        if result.log_entry
+                        else None,
                     },
                 )
             else:
@@ -413,8 +457,12 @@ def create_webhook_server(
                     status_code=status.HTTP_200_OK,
                     content={
                         "success": False,
-                        "message": result.log_entry.error_message if result.log_entry else "Webhook test failed",
-                        "log_entry": result.log_entry.to_dict() if result.log_entry else None,
+                        "message": result.log_entry.error_message
+                        if result.log_entry
+                        else "Webhook test failed",
+                        "log_entry": result.log_entry.to_dict()
+                        if result.log_entry
+                        else None,
                     },
                 )
 
@@ -424,7 +472,7 @@ def create_webhook_server(
             logger.error(f"Error testing webhook {request.webhook_id}: {e}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=str(e),
+                detail="An internal error occurred while testing the webhook",
             )
 
     # =============================================================================
@@ -432,13 +480,22 @@ def create_webhook_server(
     # =============================================================================
 
     @app.get("/webhooks", tags=["admin"])
-    async def list_webhooks() -> dict[str, list[dict]]:
+    async def list_webhooks(request: Request) -> dict[str, list[dict]]:
         """
         List all configured webhooks (admin endpoint).
 
+        Restricted to localhost connections only.
         Returns metadata about configured webhooks without exposing
         sensitive credentials.
         """
+        # Restrict admin endpoint to localhost
+        client_host = request.client.host if request.client else None
+        if client_host not in ("127.0.0.1", "::1", "localhost"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Admin endpoints are only accessible from localhost",
+            )
+
         configs = storage.load_configs()
 
         # Sanitize configs (remove secrets)
@@ -553,7 +610,9 @@ async def _authenticate_request(
     # HMAC signature verification
     elif auth_config.auth_type == "signature":
         if not auth_config.secret:
-            logger.warning(f"Webhook {webhook_config.id} has signature auth but no secret")
+            logger.warning(
+                f"Webhook {webhook_config.id} has signature auth but no secret"
+            )
             return False
 
         # Get signature header

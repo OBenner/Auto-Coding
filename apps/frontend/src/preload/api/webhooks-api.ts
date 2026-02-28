@@ -10,49 +10,49 @@ import type {
 
 export interface WebhooksAPI {
   // Webhook configuration management
-  getWebhookConfigs: () => Promise<IPCResult<WebhookConfig[]>>;
-  getWebhookConfig: (id: string) => Promise<IPCResult<WebhookConfig>>;
-  saveWebhookConfig: (config: Partial<WebhookConfig> & { id?: string }) => Promise<IPCResult<WebhookConfig>>;
-  deleteWebhookConfig: (id: string) => Promise<IPCResult>;
+  getWebhookConfigs: (projectId: string) => Promise<IPCResult<WebhookConfig[]>>;
+  getWebhookConfig: (projectId: string, id: string) => Promise<IPCResult<WebhookConfig>>;
+  saveWebhookConfig: (projectId: string, config: Partial<WebhookConfig> & { id?: string }) => Promise<IPCResult<WebhookConfig>>;
+  deleteWebhookConfig: (projectId: string, id: string) => Promise<IPCResult>;
 
   // Webhook operations
-  testConnection: (id: string) => Promise<IPCResult<WebhookTestResult>>;
-  enableConfig: (id: string) => Promise<IPCResult>;
-  disableConfig: (id: string) => Promise<IPCResult>;
+  testConnection: (projectId: string, config: WebhookConfig) => Promise<IPCResult<WebhookTestResult>>;
+  enableConfig: (projectId: string, id: string) => Promise<IPCResult>;
+  disableConfig: (projectId: string, id: string) => Promise<IPCResult>;
 
   // Webhook logs and status
-  getLogs: (webhookId: string, limit?: number) => Promise<IPCResult<WebhookLog[]>>;
-  getIntegrationStatus: (integration: string) => Promise<IPCResult<WebhookIntegrationStatus>>;
+  getLogs: (projectId: string, webhookId: string, limit?: number) => Promise<IPCResult<WebhookLog[]>>;
+  getIntegrationStatus: (projectId: string, integration: string) => Promise<IPCResult<WebhookIntegrationStatus>>;
 }
 
 export const createWebhooksAPI = (): WebhooksAPI => ({
   // Webhook configuration management
-  getWebhookConfigs: (): Promise<IPCResult<WebhookConfig[]>> =>
-    ipcRenderer.invoke(IPC_CHANNELS.WEBHOOK_GET_CONFIGS),
+  getWebhookConfigs: (projectId: string): Promise<IPCResult<WebhookConfig[]>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.WEBHOOK_GET_CONFIGS, projectId),
 
-  getWebhookConfig: (id: string): Promise<IPCResult<WebhookConfig>> =>
-    ipcRenderer.invoke(IPC_CHANNELS.WEBHOOK_GET_CONFIG, id),
+  getWebhookConfig: (projectId: string, id: string): Promise<IPCResult<WebhookConfig>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.WEBHOOK_GET_CONFIG, projectId, id),
 
-  saveWebhookConfig: (config: Partial<WebhookConfig> & { id?: string }): Promise<IPCResult<WebhookConfig>> =>
-    ipcRenderer.invoke(IPC_CHANNELS.WEBHOOK_SAVE_CONFIG, config),
+  saveWebhookConfig: (projectId: string, config: Partial<WebhookConfig> & { id?: string }): Promise<IPCResult<WebhookConfig>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.WEBHOOK_SAVE_CONFIG, projectId, config),
 
-  deleteWebhookConfig: (id: string): Promise<IPCResult> =>
-    ipcRenderer.invoke(IPC_CHANNELS.WEBHOOK_DELETE_CONFIG, id),
+  deleteWebhookConfig: (projectId: string, id: string): Promise<IPCResult> =>
+    ipcRenderer.invoke(IPC_CHANNELS.WEBHOOK_DELETE_CONFIG, projectId, id),
 
   // Webhook operations
-  testConnection: (id: string): Promise<IPCResult<WebhookTestResult>> =>
-    ipcRenderer.invoke(IPC_CHANNELS.WEBHOOK_TEST_CONNECTION, id),
+  testConnection: (projectId: string, config: WebhookConfig): Promise<IPCResult<WebhookTestResult>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.WEBHOOK_TEST_CONNECTION, projectId, config),
 
-  enableConfig: (id: string): Promise<IPCResult> =>
-    ipcRenderer.invoke(IPC_CHANNELS.WEBHOOK_ENABLE_CONFIG, id),
+  enableConfig: (projectId: string, id: string): Promise<IPCResult> =>
+    ipcRenderer.invoke(IPC_CHANNELS.WEBHOOK_ENABLE_CONFIG, projectId, id),
 
-  disableConfig: (id: string): Promise<IPCResult> =>
-    ipcRenderer.invoke(IPC_CHANNELS.WEBHOOK_DISABLE_CONFIG, id),
+  disableConfig: (projectId: string, id: string): Promise<IPCResult> =>
+    ipcRenderer.invoke(IPC_CHANNELS.WEBHOOK_DISABLE_CONFIG, projectId, id),
 
   // Webhook logs and status
-  getLogs: (webhookId: string, limit?: number): Promise<IPCResult<WebhookLog[]>> =>
-    ipcRenderer.invoke(IPC_CHANNELS.WEBHOOK_GET_LOGS, webhookId, limit),
+  getLogs: (projectId: string, webhookId: string, limit?: number): Promise<IPCResult<WebhookLog[]>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.WEBHOOK_GET_LOGS, projectId, webhookId, limit),
 
-  getIntegrationStatus: (integration: string): Promise<IPCResult<WebhookIntegrationStatus>> =>
-    ipcRenderer.invoke(IPC_CHANNELS.WEBHOOK_GET_INTEGRATION_STATUS, integration)
+  getIntegrationStatus: (projectId: string, integration: string): Promise<IPCResult<WebhookIntegrationStatus>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.WEBHOOK_GET_INTEGRATION_STATUS, projectId, integration)
 });

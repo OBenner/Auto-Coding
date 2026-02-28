@@ -26,12 +26,12 @@ from __future__ import annotations
 
 import logging
 import os
+import uuid
 from pathlib import Path
 from typing import Any
 
 from ..models import WebhookConfig, WebhookEvent, WebhookIntegration, WebhookType
 from .base import BaseIntegration
-
 
 # =============================================================================
 # Logging
@@ -79,8 +79,6 @@ class SlackIntegration(BaseIntegration):
         # Load Slack-specific configuration BEFORE calling super().__init__()
         # because _check_configured() is called in parent's __init__
         self.webhook_url = os.environ.get("SLACK_WEBHOOK_URL")
-        self.bot_token = os.environ.get("SLACK_BOT_TOKEN")
-        self.default_channel = os.environ.get("SLACK_CHANNEL")
 
         super().__init__(spec_dir=spec_dir, project_dir=project_dir)
 
@@ -107,7 +105,7 @@ class SlackIntegration(BaseIntegration):
             raise ValueError("SLACK_WEBHOOK_URL environment variable is not set")
 
         return WebhookConfig(
-            id="slack-notification",
+            id=f"slack-notification-{uuid.uuid4().hex[:8]}",
             name="Slack Build Notifications",
             type=WebhookType.OUTGOING,
             integration=WebhookIntegration.SLACK,
@@ -127,6 +125,7 @@ class SlackIntegration(BaseIntegration):
         try:
             # Create a test event
             from ..models import WebhookEventType
+
             test_event = WebhookEvent(
                 type=WebhookEventType.CUSTOM,
                 data={
@@ -187,14 +186,16 @@ class SlackIntegration(BaseIntegration):
         blocks = []
 
         # Header block with emoji and status
-        blocks.append({
-            "type": "header",
-            "text": {
-                "type": "plain_text",
-                "text": f"{emoji} {message}",
-                "emoji": True,
-            },
-        })
+        blocks.append(
+            {
+                "type": "header",
+                "text": {
+                    "type": "plain_text",
+                    "text": f"{emoji} {message}",
+                    "emoji": True,
+                },
+            }
+        )
 
         # Divider
         blocks.append({"type": "divider"})
@@ -204,51 +205,61 @@ class SlackIntegration(BaseIntegration):
             spec_name = event_data.get("spec_name", "Unknown")
             spec_id = event_data.get("spec_id", "Unknown")
 
-            blocks.append({
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": f"*Spec:* {spec_name}\n*ID:* {spec_id}",
-                },
-            })
+            blocks.append(
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": f"*Spec:* {spec_name}\n*ID:* {spec_id}",
+                    },
+                }
+            )
 
         elif event_type in ["subtask_started", "subtask_completed", "subtask_failed"]:
             subtask_id = event_data.get("subtask_id", "Unknown")
             subtask_desc = event_data.get("subtask_description", "")
 
-            blocks.append({
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": f"*Subtask:* {subtask_id}\n{subtask_desc}",
-                },
-            })
+            blocks.append(
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": f"*Subtask:* {subtask_id}\n{subtask_desc}",
+                    },
+                }
+            )
 
         # Add event-specific details
         if event_type == "build_started":
             total_subtasks = event_data.get("total_subtasks", 0)
-            blocks.append({
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": f"*Total Subtasks:* {total_subtasks}",
-                },
-            })
+            blocks.append(
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": f"*Total Subtasks:* {total_subtasks}",
+                    },
+                }
+            )
 
         elif event_type == "build_completed":
             success = event_data.get("success", False)
             duration = event_data.get("duration_seconds", 0)
 
             status_emoji = "✅" if success else "⚠️"
-            duration_str = f"{duration:.1f}s" if duration < 60 else f"{duration/60:.1f}m"
+            duration_str = (
+                f"{duration:.1f}s" if duration < 60 else f"{duration / 60:.1f}m"
+            )
 
-            blocks.append({
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": f"*Status:* {status_emoji} {'Success' if success else 'Failed'}\n*Duration:* {duration_str}",
-                },
-            })
+            blocks.append(
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": f"*Status:* {status_emoji} {'Success' if success else 'Failed'}\n*Duration:* {duration_str}",
+                    },
+                }
+            )
 
         elif event_type == "build_failed":
             error = event_data.get("error_message", "Unknown error")
@@ -258,35 +269,41 @@ class SlackIntegration(BaseIntegration):
             if failed_subtask:
                 error_text += f"\n*Failed Subtask:* {failed_subtask}"
 
-            blocks.append({
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": error_text,
-                },
-            })
+            blocks.append(
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": error_text,
+                    },
+                }
+            )
 
         elif event_type == "subtask_completed":
             session = event_data.get("session_number", "Unknown")
-            blocks.append({
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": f"*Session:* {session}",
-                },
-            })
+            blocks.append(
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": f"*Session:* {session}",
+                    },
+                }
+            )
 
         elif event_type == "subtask_failed":
             error = event_data.get("error_message", "Unknown error")
             attempt = event_data.get("attempt_number", 1)
 
-            blocks.append({
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": f"*Error:* {error}\n*Attempt:* {attempt}",
-                },
-            })
+            blocks.append(
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": f"*Error:* {error}\n*Attempt:* {attempt}",
+                    },
+                }
+            )
 
         # Add context metadata if available
         if event.metadata:
@@ -296,34 +313,39 @@ class SlackIntegration(BaseIntegration):
                     context_items.append(f"{key}: {value}")
 
             if context_items:
-                blocks.append({
-                    "type": "context",
-                    "elements": [
-                        {
-                            "type": "mrkdwn",
-                            "text": " | ".join(context_items),
-                        }
-                    ],
-                })
+                blocks.append(
+                    {
+                        "type": "context",
+                        "elements": [
+                            {
+                                "type": "mrkdwn",
+                                "text": " | ".join(context_items),
+                            }
+                        ],
+                    }
+                )
 
         # Build the final payload
-        payload = {
+        payload: dict[str, Any] = {
             "text": message,  # Fallback text for notifications
             "blocks": blocks,
         }
 
-        # Add attachment for color (legacy Slack format)
+        # Add attachment for color sidebar (legacy Slack format)
+        # Note: only include color, not blocks -- blocks are already at top level
         if color:
             payload["attachments"] = [
                 {
                     "color": color,
-                    "blocks": blocks,
+                    "fallback": message,
                 }
             ]
 
         return payload
 
-    def _get_message_details(self, event_type: str, event_data: dict[str, Any]) -> tuple[str, str, str]:
+    def _get_message_details(
+        self, event_type: str, event_data: dict[str, Any]
+    ) -> tuple[str, str, str]:
         """
         Get message text, color, and emoji for an event type.
 

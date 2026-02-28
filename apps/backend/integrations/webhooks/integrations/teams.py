@@ -25,12 +25,17 @@ from __future__ import annotations
 
 import logging
 import os
+import uuid
 from pathlib import Path
 from typing import Any
 
-from ..models import WebhookConfig, WebhookEvent, WebhookIntegration, WebhookType
+from ..models import (
+    WebhookConfig,
+    WebhookEvent,
+    WebhookIntegration,
+    WebhookType,
+)
 from .base import BaseIntegration
-
 
 # =============================================================================
 # Logging
@@ -102,7 +107,7 @@ class TeamsIntegration(BaseIntegration):
             raise ValueError("TEAMS_WEBHOOK_URL environment variable is not set")
 
         return WebhookConfig(
-            id="teams-notification",
+            id=f"teams-notification-{uuid.uuid4().hex[:8]}",
             name="Microsoft Teams Build Notifications",
             type=WebhookType.OUTGOING,
             integration=WebhookIntegration.TEAMS,
@@ -114,28 +119,60 @@ class TeamsIntegration(BaseIntegration):
         """
         Test the Teams webhook connection.
 
-        Sends a test message to verify the webhook is working.
+        Sends a test message directly (bypasses is_enabled check)
+        to verify the webhook URL is working.
 
         Returns:
             Tuple of (success, message) with test result
         """
         try:
-            # Create a test event
-            test_event = WebhookEvent(
-                type="custom",  # type: ignore[arg-type]
-                data={
-                    "test": True,
-                    "message": "This is a test notification from Auto Claude",
-                },
-            )
+            import httpx
 
-            # Send test notification
-            success, message = await self.send_notification(test_event)
+            if not self.webhook_url:
+                return False, "TEAMS_WEBHOOK_URL is not configured"
 
-            if success:
-                return True, "Successfully sent test message to Microsoft Teams"
-            else:
-                return False, f"Failed to send test message: {message}"
+            test_payload = {
+                "type": "message",
+                "attachments": [
+                    {
+                        "contentType": "application/vnd.microsoft.card.adaptive",
+                        "contentUrl": None,
+                        "content": {
+                            "$schema": "https://adaptivecards.io/schemas/adaptive-card.json",
+                            "type": "AdaptiveCard",
+                            "version": "1.4",
+                            "body": [
+                                {
+                                    "type": "TextBlock",
+                                    "text": "Auto Claude Test Connection",
+                                    "weight": "Bolder",
+                                    "size": "Large",
+                                },
+                                {
+                                    "type": "TextBlock",
+                                    "text": "This is a test notification from Auto Claude.",
+                                    "wrap": True,
+                                },
+                            ],
+                        },
+                    }
+                ],
+            }
+
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    self.webhook_url,
+                    json=test_payload,
+                    timeout=10.0,
+                )
+
+                if response.is_success:
+                    return True, "Successfully sent test message to Microsoft Teams"
+                else:
+                    return (
+                        False,
+                        f"Failed to send test message: HTTP {response.status_code}",
+                    )
 
         except Exception as e:
             logger.error(f"Teams connection test failed: {e}", exc_info=True)
@@ -162,7 +199,7 @@ class TeamsIntegration(BaseIntegration):
                         "contentType": "application/vnd.microsoft.card.adaptive",
                         "contentUrl": null,
                         "content": {
-                            "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+                            "$schema": "https://adaptivecards.io/schemas/adaptive-card.json",
                             "type": "AdaptiveCard",
                             "version": "1.4",
                             "body": [
@@ -196,26 +233,32 @@ class TeamsIntegration(BaseIntegration):
         event_data = event.data
 
         # Build base message
-        title, text, color, theme_color = self._get_message_details(event_type, event_data)
+        title, text, _color, theme_color = self._get_message_details(
+            event_type, event_data
+        )
 
         # Create Adaptive Card body
         body = []
 
         # Title block with emoji
-        body.append({
-            "type": "TextBlock",
-            "text": title,
-            "weight": "Bolder",
-            "size": "Large",
-        })
+        body.append(
+            {
+                "type": "TextBlock",
+                "text": title,
+                "weight": "Bolder",
+                "size": "Large",
+            }
+        )
 
         # Add text description
         if text:
-            body.append({
-                "type": "TextBlock",
-                "text": text,
-                "wrap": True,
-            })
+            body.append(
+                {
+                    "type": "TextBlock",
+                    "text": text,
+                    "wrap": True,
+                }
+            )
 
         # Collect facts for event details
         facts = []
@@ -225,10 +268,12 @@ class TeamsIntegration(BaseIntegration):
             spec_name = event_data.get("spec_name", "Unknown")
             spec_id = event_data.get("spec_id", "Unknown")
 
-            facts.extend([
-                {"title": "Spec", "value": spec_name},
-                {"title": "ID", "value": spec_id},
-            ])
+            facts.extend(
+                [
+                    {"title": "Spec", "value": spec_name},
+                    {"title": "ID", "value": spec_id},
+                ]
+            )
 
         elif event_type in ["subtask_started", "subtask_completed", "subtask_failed"]:
             subtask_id = event_data.get("subtask_id", "Unknown")
@@ -248,12 +293,16 @@ class TeamsIntegration(BaseIntegration):
             duration = event_data.get("duration_seconds", 0)
 
             status_text = "✅ Success" if success else "⚠️ Failed"
-            duration_str = f"{duration:.1f}s" if duration < 60 else f"{duration/60:.1f}m"
+            duration_str = (
+                f"{duration:.1f}s" if duration < 60 else f"{duration / 60:.1f}m"
+            )
 
-            facts.extend([
-                {"title": "Status", "value": status_text},
-                {"title": "Duration", "value": duration_str},
-            ])
+            facts.extend(
+                [
+                    {"title": "Status", "value": status_text},
+                    {"title": "Duration", "value": duration_str},
+                ]
+            )
 
         elif event_type == "build_failed":
             error = event_data.get("error_message", "Unknown error")
@@ -271,10 +320,12 @@ class TeamsIntegration(BaseIntegration):
             error = event_data.get("error_message", "Unknown error")
             attempt = event_data.get("attempt_number", 1)
 
-            facts.extend([
-                {"title": "Error", "value": error},
-                {"title": "Attempt", "value": str(attempt)},
-            ])
+            facts.extend(
+                [
+                    {"title": "Error", "value": error},
+                    {"title": "Attempt", "value": str(attempt)},
+                ]
+            )
 
         # Add metadata facts if available
         if event.metadata:
@@ -284,14 +335,16 @@ class TeamsIntegration(BaseIntegration):
 
         # Add FactSet if we have facts
         if facts:
-            body.append({
-                "type": "FactSet",
-                "facts": facts,
-            })
+            body.append(
+                {
+                    "type": "FactSet",
+                    "facts": facts,
+                }
+            )
 
         # Build the Adaptive Card
         card = {
-            "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+            "$schema": "https://adaptivecards.io/schemas/adaptive-card.json",
             "type": "AdaptiveCard",
             "version": "1.4",
             "body": body,
@@ -304,7 +357,9 @@ class TeamsIntegration(BaseIntegration):
             }
 
         # Build the final payload
-        payload = {
+        # Note: themeColor is NOT supported on Adaptive Cards by Teams.
+        # It only applies to the legacy MessageCard format.
+        payload: dict[str, Any] = {
             "type": "message",
             "attachments": [
                 {
@@ -314,10 +369,6 @@ class TeamsIntegration(BaseIntegration):
                 }
             ],
         }
-
-        # Add themeColor for notification color
-        if theme_color:
-            payload["themeColor"] = theme_color
 
         return payload
 

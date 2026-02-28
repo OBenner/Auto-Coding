@@ -36,6 +36,7 @@ import os
 import sys
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 # Setup logging
 logging.basicConfig(
@@ -73,21 +74,29 @@ async def verify_slack_integration() -> dict[str, Any]:
         "summary": {"passed": 0, "failed": 0, "total": 0},
     }
 
-    # Get spec directory (handle both worktree and normal environments)
-    spec_dir_default = "../.auto-claude/specs/084-webhook-integration-hub"
+    # Get spec directory from environment variable or auto-detect
     spec_dir_env = os.environ.get("SPEC_DIR")
 
-    # Try environment variable first, then default, then worktree path
     if spec_dir_env:
         spec_dir = Path(spec_dir_env).resolve()
     else:
-        spec_dir = Path(spec_dir_default).resolve()
-
-    # If not found, try worktree path
-    if not spec_dir.exists():
-        worktree_spec = Path("../../.auto-claude/specs/084-webhook-integration-hub").resolve()
-        if worktree_spec.exists():
-            spec_dir = worktree_spec
+        # Auto-detect: try common locations relative to working directory
+        candidates = [
+            Path("../.auto-claude/specs"),
+            Path("../../.auto-claude/specs"),
+            Path(".auto-claude/specs"),
+        ]
+        spec_dir = None
+        for candidate in candidates:
+            resolved = candidate.resolve()
+            if resolved.is_dir():
+                # Look for any spec directory inside
+                spec_dirs = sorted(resolved.iterdir())
+                if spec_dirs:
+                    spec_dir = spec_dirs[0]
+                    break
+        if spec_dir is None:
+            spec_dir = Path("../.auto-claude/specs/placeholder").resolve()
 
     if not spec_dir.exists():
         print_test("Spec Directory", False, f"Directory not found: {spec_dir}")
@@ -112,7 +121,9 @@ async def verify_slack_integration() -> dict[str, Any]:
         results["summary"]["total"] += 1
     except Exception as e:
         print_test("Import SlackIntegration", False, str(e))
-        results["tests"].append({"name": "Import SlackIntegration", "passed": False, "error": str(e)})
+        results["tests"].append(
+            {"name": "Import SlackIntegration", "passed": False, "error": str(e)}
+        )
         results["summary"]["failed"] += 1
         results["summary"]["total"] += 1
         return results
@@ -128,7 +139,9 @@ async def verify_slack_integration() -> dict[str, Any]:
         results["summary"]["total"] += 1
     except Exception as e:
         print_test("Initialize integration", False, str(e))
-        results["tests"].append({"name": "Initialize integration", "passed": False, "error": str(e)})
+        results["tests"].append(
+            {"name": "Initialize integration", "passed": False, "error": str(e)}
+        )
         results["summary"]["failed"] += 1
         results["summary"]["total"] += 1
         return results
@@ -139,15 +152,25 @@ async def verify_slack_integration() -> dict[str, Any]:
     webhook_url = os.environ.get("SLACK_WEBHOOK_URL", "")
 
     if is_configured:
-        print_test("Integration configured", True, f"Webhook URL: {webhook_url[:30]}...")
+        # Mask the webhook URL to avoid leaking sensitive tokens
+        masked_url = webhook_url[:20] + "***" if len(webhook_url) > 20 else "***"
+        print_test("Integration configured", True, f"Webhook URL: {masked_url}")
     else:
-        print_test("Integration configured", False, "SLACK_WEBHOOK_URL not set (using mock mode)")
+        print_test(
+            "Integration configured",
+            False,
+            "SLACK_WEBHOOK_URL not set (using mock mode)",
+        )
 
-    results["tests"].append({
-        "name": "Integration configured",
-        "passed": is_configured,
-        "note": "Mock mode - no actual webhook" if not is_configured else "Real webhook configured"
-    })
+    results["tests"].append(
+        {
+            "name": "Integration configured",
+            "passed": is_configured,
+            "note": "Mock mode - no actual webhook"
+            if not is_configured
+            else "Real webhook configured",
+        }
+    )
     results["summary"]["passed"] += 1  # Always count as pass (we support both modes)
     results["summary"]["total"] += 1
 
@@ -157,49 +180,71 @@ async def verify_slack_integration() -> dict[str, Any]:
         status = integration.get_status()
 
         print_test("Get integration status", True, json.dumps(status, indent=2))
-        results["tests"].append({"name": "Get integration status", "passed": True, "status": status})
+        results["tests"].append(
+            {"name": "Get integration status", "passed": True, "status": status}
+        )
         results["summary"]["passed"] += 1
         results["summary"]["total"] += 1
     except Exception as e:
         print_test("Get integration status", False, str(e))
-        results["tests"].append({"name": "Get integration status", "passed": False, "error": str(e)})
+        results["tests"].append(
+            {"name": "Get integration status", "passed": False, "error": str(e)}
+        )
         results["summary"]["failed"] += 1
         results["summary"]["total"] += 1
 
     # Test 5: Format Payloads for Different Events
     print_section("Test 5: Format Payloads for Build Events")
     events_to_test = [
-        ("build_started", {
-            "spec_name": "Webhook & Integration Hub",
-            "spec_id": "084",
-            "total_subtasks": 27,
-        }),
-        ("build_completed", {
-            "spec_name": "Webhook & Integration Hub",
-            "spec_id": "084",
-            "success": True,
-            "duration_seconds": 120.5,
-        }),
-        ("build_failed", {
-            "spec_name": "Webhook & Integration Hub",
-            "spec_id": "084",
-            "error_message": "Test error",
-            "failed_subtask": "subtask-7-3",
-        }),
-        ("subtask_started", {
-            "subtask_id": "subtask-7-3",
-            "subtask_description": "End-to-end verification",
-        }),
-        ("subtask_completed", {
-            "subtask_id": "subtask-7-3",
-            "subtask_description": "End-to-end verification",
-            "session_number": 13,
-        }),
-        ("subtask_failed", {
-            "subtask_id": "subtask-7-3",
-            "error_message": "Test error",
-            "attempt_number": 2,
-        }),
+        (
+            "build_started",
+            {
+                "spec_name": "Webhook & Integration Hub",
+                "spec_id": "084",
+                "total_subtasks": 27,
+            },
+        ),
+        (
+            "build_completed",
+            {
+                "spec_name": "Webhook & Integration Hub",
+                "spec_id": "084",
+                "success": True,
+                "duration_seconds": 120.5,
+            },
+        ),
+        (
+            "build_failed",
+            {
+                "spec_name": "Webhook & Integration Hub",
+                "spec_id": "084",
+                "error_message": "Test error",
+                "failed_subtask": "subtask-7-3",
+            },
+        ),
+        (
+            "subtask_started",
+            {
+                "subtask_id": "subtask-7-3",
+                "subtask_description": "End-to-end verification",
+            },
+        ),
+        (
+            "subtask_completed",
+            {
+                "subtask_id": "subtask-7-3",
+                "subtask_description": "End-to-end verification",
+                "session_number": 13,
+            },
+        ),
+        (
+            "subtask_failed",
+            {
+                "subtask_id": "subtask-7-3",
+                "error_message": "Test error",
+                "attempt_number": 2,
+            },
+        ),
     ]
 
     for event_type_str, event_data in events_to_test:
@@ -217,14 +262,26 @@ async def verify_slack_integration() -> dict[str, Any]:
             assert "blocks" in payload, "Payload missing 'blocks' field"
             assert len(payload["blocks"]) > 0, "Payload has no blocks"
 
-            print_test(f"Format payload: {event_type_str}", True, f"Message: {payload['text'][:50]}...")
-            results["tests"].append({"name": f"Format payload: {event_type_str}", "passed": True})
+            print_test(
+                f"Format payload: {event_type_str}",
+                True,
+                f"Message: {payload['text'][:50]}...",
+            )
+            results["tests"].append(
+                {"name": f"Format payload: {event_type_str}", "passed": True}
+            )
             results["summary"]["passed"] += 1
             results["summary"]["total"] += 1
 
         except Exception as e:
             print_test(f"Format payload: {event_type_str}", False, str(e))
-            results["tests"].append({"name": f"Format payload: {event_type_str}", "passed": False, "error": str(e)})
+            results["tests"].append(
+                {
+                    "name": f"Format payload: {event_type_str}",
+                    "passed": False,
+                    "error": str(e),
+                }
+            )
             results["summary"]["failed"] += 1
             results["summary"]["total"] += 1
 
@@ -236,24 +293,32 @@ async def verify_slack_integration() -> dict[str, Any]:
 
             if success:
                 print_test("Test connection", True, message)
-                results["tests"].append({"name": "Test connection", "passed": True, "message": message})
+                results["tests"].append(
+                    {"name": "Test connection", "passed": True, "message": message}
+                )
                 results["summary"]["passed"] += 1
             else:
                 print_test("Test connection", False, message)
-                results["tests"].append({"name": "Test connection", "passed": False, "error": message})
+                results["tests"].append(
+                    {"name": "Test connection", "passed": False, "error": message}
+                )
                 results["summary"]["failed"] += 1
 
             results["summary"]["total"] += 1
 
         except Exception as e:
             print_test("Test connection", False, str(e))
-            results["tests"].append({"name": "Test connection", "passed": False, "error": str(e)})
+            results["tests"].append(
+                {"name": "Test connection", "passed": False, "error": str(e)}
+            )
             results["summary"]["failed"] += 1
             results["summary"]["total"] += 1
     else:
         print_section("Test 6: Test Slack Connection")
         print_test("Test connection", True, "Skipped (no webhook URL configured)")
-        results["tests"].append({"name": "Test connection", "passed": True, "note": "Skipped - mock mode"})
+        results["tests"].append(
+            {"name": "Test connection", "passed": True, "note": "Skipped - mock mode"}
+        )
         results["summary"]["passed"] += 1
         results["summary"]["total"] += 1
 
@@ -274,24 +339,46 @@ async def verify_slack_integration() -> dict[str, Any]:
 
             if success:
                 print_test("Send test notification", True, message)
-                results["tests"].append({"name": "Send test notification", "passed": True, "message": message})
+                results["tests"].append(
+                    {
+                        "name": "Send test notification",
+                        "passed": True,
+                        "message": message,
+                    }
+                )
                 results["summary"]["passed"] += 1
             else:
                 print_test("Send test notification", False, message)
-                results["tests"].append({"name": "Send test notification", "passed": False, "error": message})
+                results["tests"].append(
+                    {
+                        "name": "Send test notification",
+                        "passed": False,
+                        "error": message,
+                    }
+                )
                 results["summary"]["failed"] += 1
 
             results["summary"]["total"] += 1
 
         except Exception as e:
             print_test("Send test notification", False, str(e))
-            results["tests"].append({"name": "Send test notification", "passed": False, "error": str(e)})
+            results["tests"].append(
+                {"name": "Send test notification", "passed": False, "error": str(e)}
+            )
             results["summary"]["failed"] += 1
             results["summary"]["total"] += 1
     else:
         print_section("Test 7: Send Test Notification")
-        print_test("Send test notification", True, "Skipped (no webhook URL configured)")
-        results["tests"].append({"name": "Send test notification", "passed": True, "note": "Skipped - mock mode"})
+        print_test(
+            "Send test notification", True, "Skipped (no webhook URL configured)"
+        )
+        results["tests"].append(
+            {
+                "name": "Send test notification",
+                "passed": True,
+                "note": "Skipped - mock mode",
+            }
+        )
         results["summary"]["passed"] += 1
         results["summary"]["total"] += 1
 
@@ -304,7 +391,9 @@ async def verify_slack_integration() -> dict[str, Any]:
         logs = storage.load_logs(limit=10)
 
         print_test("Retrieve webhook logs", True, f"Found {len(logs)} log entries")
-        results["tests"].append({"name": "Retrieve webhook logs", "passed": True, "log_count": len(logs)})
+        results["tests"].append(
+            {"name": "Retrieve webhook logs", "passed": True, "log_count": len(logs)}
+        )
         results["summary"]["passed"] += 1
         results["summary"]["total"] += 1
 
@@ -313,11 +402,15 @@ async def verify_slack_integration() -> dict[str, Any]:
             print("\n  Recent webhook logs:")
             for log in logs[:3]:
                 status_emoji = "✅" if log.status.value == "success" else "❌"
-                print(f"    {status_emoji} {log.event_type.value} - {log.status.value} ({log.created_at})")
+                print(
+                    f"    {status_emoji} {log.event_type.value} - {log.status.value} ({log.created_at})"
+                )
 
     except Exception as e:
         print_test("Retrieve webhook logs", False, str(e))
-        results["tests"].append({"name": "Retrieve webhook logs", "passed": False, "error": str(e)})
+        results["tests"].append(
+            {"name": "Retrieve webhook logs", "passed": False, "error": str(e)}
+        )
         results["summary"]["failed"] += 1
         results["summary"]["total"] += 1
 
@@ -342,7 +435,9 @@ async def verify_slack_integration() -> dict[str, Any]:
 
     except Exception as e:
         print_test("Enable/Disable integration", False, str(e))
-        results["tests"].append({"name": "Enable/Disable integration", "passed": False, "error": str(e)})
+        results["tests"].append(
+            {"name": "Enable/Disable integration", "passed": False, "error": str(e)}
+        )
         results["summary"]["failed"] += 1
         results["summary"]["total"] += 1
 
@@ -356,18 +451,32 @@ async def verify_slack_integration() -> dict[str, Any]:
                 state_data = json.load(f)
 
             print_test("State persistence", True, f"State file: {state_file}")
-            results["tests"].append({"name": "State persistence", "passed": True, "state_file": str(state_file)})
+            results["tests"].append(
+                {
+                    "name": "State persistence",
+                    "passed": True,
+                    "state_file": str(state_file),
+                }
+            )
             results["summary"]["passed"] += 1
             results["summary"]["total"] += 1
         else:
             print_test("State persistence", False, "State file not created")
-            results["tests"].append({"name": "State persistence", "passed": False, "error": "State file not found"})
+            results["tests"].append(
+                {
+                    "name": "State persistence",
+                    "passed": False,
+                    "error": "State file not found",
+                }
+            )
             results["summary"]["failed"] += 1
             results["summary"]["total"] += 1
 
     except Exception as e:
         print_test("State persistence", False, str(e))
-        results["tests"].append({"name": "State persistence", "passed": False, "error": str(e)})
+        results["tests"].append(
+            {"name": "State persistence", "passed": False, "error": str(e)}
+        )
         results["summary"]["failed"] += 1
         results["summary"]["total"] += 1
 
@@ -419,8 +528,10 @@ async def main() -> int:
         print("\n  ⚠️  Running in MOCK mode (no SLACK_WEBHOOK_URL set)")
         print("  Set SLACK_WEBHOOK_URL to test with real Slack notifications")
     else:
-        print(f"\n  ✅ Running in REAL mode (webhook URL configured)")
-        print(f"  Webhook: {webhook_url[:30]}...")
+        print("\n  ✅ Running in REAL mode (webhook URL configured)")
+        # Mask the webhook URL to avoid leaking sensitive tokens
+        masked = webhook_url[:20] + "***" if len(webhook_url) > 20 else "***"
+        print(f"  Webhook: {masked}")
 
     try:
         results = await verify_slack_integration()

@@ -21,19 +21,18 @@ Usage:
 
 from __future__ import annotations
 
+import ast
 import asyncio
 import json
 import logging
+import operator
 import uuid
-from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 import httpx
 
 from ..models import (
-    AuthenticationConfig,
-    RetryConfig,
     WebhookConfig,
     WebhookDeliveryStatus,
     WebhookEvent,
@@ -41,7 +40,6 @@ from ..models import (
     WebhookLog,
 )
 from ..storage import WebhookStorage
-
 
 # =============================================================================
 # Logging
@@ -179,11 +177,15 @@ class OutgoingWebhookSender:
         # Validate webhook config
         if not webhook_config.enabled:
             logger.warning(f"Webhook {webhook_config.id} is disabled, skipping")
-            return self._create_skipped_result(webhook_config, event, "Webhook is disabled")
+            return self._create_skipped_result(
+                webhook_config, event, "Webhook is disabled"
+            )
 
         if not webhook_config.url:
             logger.error(f"Webhook {webhook_config.id} has no URL configured")
-            return self._create_skipped_result(webhook_config, event, "No URL configured")
+            return self._create_skipped_result(
+                webhook_config, event, "No URL configured"
+            )
 
         if event.type not in webhook_config.events:
             logger.debug(
@@ -195,8 +197,12 @@ class OutgoingWebhookSender:
 
         # Check custom event filter if configured
         if webhook_config.custom_event_filter:
-            if not self._evaluate_event_filter(event, webhook_config.custom_event_filter):
-                logger.info(f"Event filter did not match for webhook {webhook_config.id}")
+            if not self._evaluate_event_filter(
+                event, webhook_config.custom_event_filter
+            ):
+                logger.info(
+                    f"Event filter did not match for webhook {webhook_config.id}"
+                )
                 return self._create_skipped_result(
                     webhook_config, event, "Event filter did not match"
                 )
@@ -229,8 +235,10 @@ class OutgoingWebhookSender:
         """
         retry_config = webhook_config.retry_config
         last_log_entry = None
+        # Always make at least one attempt (attempt 0 is the initial request)
+        total_attempts = max(retry_config.max_retries, 1)
 
-        for attempt in range(1, retry_config.max_retries + 1):
+        for attempt in range(1, total_attempts + 1):
             # Create log entry for this attempt
             log_entry = WebhookLog(
                 id=str(uuid.uuid4()),
@@ -502,7 +510,9 @@ class OutgoingWebhookSender:
 
         # Apply custom template if configured
         if webhook_config.payload_template:
-            return self._apply_payload_template(base_payload, webhook_config.payload_template)
+            return self._apply_payload_template(
+                base_payload, webhook_config.payload_template
+            )
 
         # Apply integration-specific format
         integration = webhook_config.integration.value
@@ -561,7 +571,10 @@ class OutgoingWebhookSender:
                     "type": "section",
                     "fields": [
                         {"type": "mrkdwn", "text": f"*Event:*\n{event_type}"},
-                        {"type": "mrkdwn", "text": f"*Timestamp:*\n{event.get('timestamp', 'Unknown')}"},
+                        {
+                            "type": "mrkdwn",
+                            "text": f"*Timestamp:*\n{event.get('timestamp', 'Unknown')}",
+                        },
                     ],
                 },
             ],
@@ -582,7 +595,9 @@ class OutgoingWebhookSender:
 
         # Build description based on event type
         if event_type == "build_started":
-            description = f"Build started for spec **{data.get('spec_name', 'Unknown')}**"
+            description = (
+                f"Build started for spec **{data.get('spec_name', 'Unknown')}**"
+            )
             color = 0x0099FF  # Blue
         elif event_type == "build_completed":
             if data.get("success"):
@@ -592,10 +607,14 @@ class OutgoingWebhookSender:
                 description = f"Build completed with errors for spec **{data.get('spec_name', 'Unknown')}**"
                 color = 0xFF9900  # Orange
         elif event_type == "build_failed":
-            description = f"Build failed for spec **{data.get('spec_name', 'Unknown')}**"
+            description = (
+                f"Build failed for spec **{data.get('spec_name', 'Unknown')}**"
+            )
             color = 0xFF0000  # Red
         elif event_type == "subtask_started":
-            description = f"Subtask started: {data.get('subtask_description', 'Unknown')}"
+            description = (
+                f"Subtask started: {data.get('subtask_description', 'Unknown')}"
+            )
             color = 0x0099FF  # Blue
         elif event_type == "subtask_completed":
             description = f"Subtask completed: {data.get('subtask_id', 'Unknown')}"
@@ -615,7 +634,11 @@ class OutgoingWebhookSender:
                     "color": color,
                     "fields": [
                         {"name": "Event", "value": event_type, "inline": True},
-                        {"name": "Timestamp", "value": event.get("timestamp", "Unknown"), "inline": True},
+                        {
+                            "name": "Timestamp",
+                            "value": event.get("timestamp", "Unknown"),
+                            "inline": True,
+                        },
                     ],
                 }
             ]
@@ -625,11 +648,16 @@ class OutgoingWebhookSender:
         """
         Build Microsoft Teams-specific payload format.
 
+        .. deprecated::
+            This uses the legacy MessageCard format. Microsoft recommends migrating
+            to Adaptive Cards for new integrations. See TeamsIntegration.format_payload()
+            for the Adaptive Card implementation.
+
         Args:
             event: Base event data
 
         Returns:
-            Teams-formatted payload
+            Teams-formatted payload (legacy MessageCard format)
         """
         event_type = event.get("event", "unknown")
         data = event.get("data", {})
@@ -638,7 +666,11 @@ class OutgoingWebhookSender:
         if event_type == "build_started":
             text = f"Build started for spec **{data.get('spec_name', 'Unknown')}**"
         elif event_type == "build_completed":
-            status = "completed successfully" if data.get("success") else "completed with errors"
+            status = (
+                "completed successfully"
+                if data.get("success")
+                else "completed with errors"
+            )
             text = f"Build {status} for spec **{data.get('spec_name', 'Unknown')}**"
         elif event_type == "build_failed":
             text = f"Build failed for spec **{data.get('spec_name', 'Unknown')}**"
@@ -655,7 +687,9 @@ class OutgoingWebhookSender:
             "@type": "MessageCard",
             "@context": "https://schema.org/extensions",
             "summary": f"Auto Claude Event: {event_type}",
-            "themeColor": "0078D7" if event_type in ["build_started", "subtask_started"] else "FF0000",
+            "themeColor": "0078D7"
+            if event_type in ["build_started", "subtask_started"]
+            else "FF0000",
             "title": f"Auto Claude Event: {event_type.replace('_', ' ').title()}",
             "text": text,
         }
@@ -678,22 +712,29 @@ class OutgoingWebhookSender:
             Transformed payload
         """
         if isinstance(template, str):
-            # Jinja2-style template string
+            # Jinja2-style template string (using sandboxed environment for security)
             try:
-                from jinja2 import Template
+                from jinja2.sandbox import SandboxedEnvironment
 
-                tmpl = Template(template)
+                env = SandboxedEnvironment()
+                tmpl = env.from_string(template)
                 rendered = tmpl.render(**event)
                 return json.loads(rendered)
             except Exception as e:
-                logger.warning(f"Failed to apply Jinja2 template: {e}, using event as-is")
+                logger.warning(
+                    f"Failed to apply Jinja2 template: {e}, using event as-is"
+                )
                 return event
 
         elif isinstance(template, dict):
             # Dict template with variable substitution
             result = {}
             for key, value in template.items():
-                if isinstance(value, str) and value.startswith("{{") and value.endswith("}}"):
+                if (
+                    isinstance(value, str)
+                    and value.startswith("{{")
+                    and value.endswith("}}")
+                ):
                     # Simple variable substitution
                     var_name = value[2:-2].strip()
                     result[key] = event.get(var_name, value)
@@ -819,13 +860,14 @@ class OutgoingWebhookSender:
         filter_expr: str,
     ) -> bool:
         """
-        Evaluate a custom event filter expression.
+        Evaluate a custom event filter expression safely.
 
-        The filter expression can reference event data fields.
-        Example: "data.spec_id == '001'"
+        Supports simple comparison expressions like:
+        - "field == 'value'"
+        - "field != 'value'"
+        - "field == 'value1' and other_field == 'value2'"
 
-        WARNING: This uses eval() with restricted globals.
-        Only basic operations are allowed for security.
+        Uses AST parsing instead of eval() to prevent code injection.
 
         Args:
             event: Webhook event
@@ -835,32 +877,80 @@ class OutgoingWebhookSender:
             True if filter matches, False otherwise
         """
         try:
-            # Restricted evaluation environment
-            safe_globals = {
-                "__builtins__": {
-                    "True": True,
-                    "False": False,
-                    "None": None,
-                    "len": len,
-                    "str": str,
-                    "int": int,
-                    "float": float,
-                    "bool": bool,
-                    "list": list,
-                    "dict": dict,
-                }
-            }
-
-            # Build event dict for evaluation
             event_dict = event.to_dict()
-
-            # Evaluate expression with event data as locals
-            result = eval(filter_expr, safe_globals, event_dict)
-            return bool(result)
-
+            tree = ast.parse(filter_expr, mode="eval")
+            return bool(self._safe_eval_node(tree.body, event_dict))
         except Exception as e:
             logger.warning(f"Failed to evaluate event filter '{filter_expr}': {e}")
             return False
+
+    @staticmethod
+    def _safe_eval_node(node: ast.AST, context: dict[str, Any]) -> Any:
+        """Safely evaluate an AST node against context data."""
+        _SAFE_OPS: dict[type, Any] = {
+            ast.Eq: operator.eq,
+            ast.NotEq: operator.ne,
+            ast.Lt: operator.lt,
+            ast.LtE: operator.le,
+            ast.Gt: operator.gt,
+            ast.GtE: operator.ge,
+            ast.In: lambda a, b: a in b,
+            ast.NotIn: lambda a, b: a not in b,
+        }
+
+        if isinstance(node, ast.Constant):
+            return node.value
+        elif isinstance(node, ast.Name):
+            return context.get(node.id)
+        elif isinstance(node, ast.Compare):
+            left = OutgoingWebhookSender._safe_eval_node(node.left, context)
+            for op_node, comparator in zip(node.ops, node.comparators):
+                op_func = _SAFE_OPS.get(type(op_node))
+                if op_func is None:
+                    raise ValueError(
+                        f"Unsupported comparison: {type(op_node).__name__}"
+                    )
+                right = OutgoingWebhookSender._safe_eval_node(comparator, context)
+                if not op_func(left, right):
+                    return False
+                left = right
+            return True
+        elif isinstance(node, ast.BoolOp):
+            if isinstance(node.op, ast.And):
+                return all(
+                    OutgoingWebhookSender._safe_eval_node(v, context)
+                    for v in node.values
+                )
+            elif isinstance(node.op, ast.Or):
+                return any(
+                    OutgoingWebhookSender._safe_eval_node(v, context)
+                    for v in node.values
+                )
+        elif isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Not):
+            return not OutgoingWebhookSender._safe_eval_node(node.operand, context)
+        elif isinstance(node, ast.Attribute):
+            value = OutgoingWebhookSender._safe_eval_node(node.value, context)
+            if isinstance(value, dict):
+                return value.get(node.attr)
+            return getattr(value, node.attr, None)
+        elif isinstance(node, ast.Call):
+            # Only allow safe string methods
+            if isinstance(node.func, ast.Attribute) and node.func.attr in (
+                "startswith",
+                "endswith",
+                "lower",
+                "upper",
+                "strip",
+            ):
+                obj = OutgoingWebhookSender._safe_eval_node(node.func.value, context)
+                args = [
+                    OutgoingWebhookSender._safe_eval_node(a, context) for a in node.args
+                ]
+                if isinstance(obj, str):
+                    return getattr(obj, node.func.attr)(*args)
+            raise ValueError(f"Unsupported function call: {ast.dump(node.func)}")
+
+        raise ValueError(f"Unsupported AST node: {type(node).__name__}")
 
     def _create_skipped_result(
         self,

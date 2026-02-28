@@ -14,15 +14,12 @@ Key Models:
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, field_validator, model_validator
-
+from pydantic import BaseModel, Field, model_validator
 
 # =============================================================================
 # Constants and Enums
@@ -98,9 +95,9 @@ class RetryConfig(BaseModel):
 class AuthenticationConfig(BaseModel):
     """Authentication configuration for webhook endpoints."""
 
-    auth_type: Literal[
-        "none", "api_key", "bearer_token", "basic_auth", "signature"
-    ] = Field(default="none", description="Type of authentication")
+    auth_type: Literal["none", "api_key", "bearer_token", "basic_auth", "signature"] = (
+        Field(default="none", description="Type of authentication")
+    )
 
     # API key / Bearer token
     api_key: str | None = Field(default=None, description="API key or bearer token")
@@ -125,18 +122,25 @@ class AuthenticationConfig(BaseModel):
     )
 
     @model_validator(mode="after")
-    def validate_api_key(self) -> "AuthenticationConfig":
+    def validate_api_key(self) -> AuthenticationConfig:
         """Validate API key is present when auth_type requires it."""
         if self.auth_type in ["api_key", "bearer_token"] and not self.api_key:
             raise ValueError("API key is required for api_key and bearer_token auth")
         return self
 
     @model_validator(mode="after")
-    def validate_basic_auth(self) -> "AuthenticationConfig":
+    def validate_basic_auth(self) -> AuthenticationConfig:
         """Validate both username and password are present for basic auth."""
         if self.auth_type == "basic_auth":
             if not self.username or not self.password:
                 raise ValueError("Both username and password required for basic auth")
+        return self
+
+    @model_validator(mode="after")
+    def validate_signature_secret(self) -> AuthenticationConfig:
+        """Validate secret is present when auth_type is signature."""
+        if self.auth_type == "signature" and not self.secret:
+            raise ValueError("Secret is required for signature auth type")
         return self
 
 
@@ -206,14 +210,14 @@ class WebhookConfig(BaseModel):
     )
 
     @model_validator(mode="after")
-    def validate_outgoing_url(self) -> "WebhookConfig":
+    def validate_outgoing_url(self) -> WebhookConfig:
         """Validate URL is present for outgoing webhooks."""
         if self.type == WebhookType.OUTGOING and not self.url:
             raise ValueError("URL is required for outgoing webhooks")
         return self
 
     @model_validator(mode="after")
-    def validate_incoming_path(self) -> "WebhookConfig":
+    def validate_incoming_path(self) -> WebhookConfig:
         """Validate path is present for incoming webhooks."""
         if self.type == WebhookType.INCOMING and not self.path:
             raise ValueError("Path is required for incoming webhooks")
@@ -222,10 +226,12 @@ class WebhookConfig(BaseModel):
         return self
 
     @model_validator(mode="after")
-    def validate_events_for_outgoing(self) -> "WebhookConfig":
+    def validate_events_for_outgoing(self) -> WebhookConfig:
         """Validate events are specified for outgoing webhooks."""
         if self.type == WebhookType.OUTGOING and not self.events:
-            raise ValueError("At least one event must be specified for outgoing webhooks")
+            raise ValueError(
+                "At least one event must be specified for outgoing webhooks"
+            )
         return self
 
     def to_dict(self) -> dict[str, Any]:
@@ -249,7 +255,7 @@ class WebhookConfig(BaseModel):
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "WebhookConfig":
+    def from_dict(cls, data: dict[str, Any]) -> WebhookConfig:
         """Create WebhookConfig from dictionary."""
         # Convert enum values back to enums
         if "type" in data and isinstance(data["type"], str):
@@ -287,7 +293,9 @@ class WebhookLog(BaseModel):
     webhook_id: str = Field(description="ID of the webhook config that was used")
 
     # Event info
-    event_type: WebhookEventType = Field(description="Type of event that triggered webhook")
+    event_type: WebhookEventType = Field(
+        description="Type of event that triggered webhook"
+    )
     event_data: dict[str, Any] = Field(
         default_factory=dict,
         description="Event payload data",
@@ -326,7 +334,9 @@ class WebhookLog(BaseModel):
     )
 
     # Error info
-    error_message: str | None = Field(default=None, description="Error message if failed")
+    error_message: str | None = Field(
+        default=None, description="Error message if failed"
+    )
     error_type: str | None = Field(
         default=None,
         description="Type of error (connection, timeout, validation, etc.)",
@@ -375,7 +385,7 @@ class WebhookLog(BaseModel):
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "WebhookLog":
+    def from_dict(cls, data: dict[str, Any]) -> WebhookLog:
         """Create WebhookLog from dictionary."""
         if "event_type" in data and isinstance(data["event_type"], str):
             data["event_type"] = WebhookEventType(data["event_type"])
@@ -394,11 +404,11 @@ class WebhookLog(BaseModel):
         self.status = status
         self.completed_at = datetime.now().isoformat()
 
-        if status_code:
+        if status_code is not None:
             self.response_status_code = status_code
-        if response_body:
+        if response_body is not None:
             self.response_body = response_body
-        if error_message:
+        if error_message is not None:
             self.error_message = error_message
 
         # Calculate duration
@@ -440,7 +450,7 @@ class WebhookEvent:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "WebhookEvent":
+    def from_dict(cls, data: dict[str, Any]) -> WebhookEvent:
         """Create WebhookEvent from dictionary."""
         event_type = data.get("type", "custom")
         if isinstance(event_type, str):
@@ -460,7 +470,7 @@ class WebhookEvent:
         spec_name: str,
         total_subtasks: int,
         metadata: dict[str, Any] | None = None,
-    ) -> "WebhookEvent":
+    ) -> WebhookEvent:
         """Create a build started event."""
         return cls(
             type=WebhookEventType.BUILD_STARTED,
@@ -480,7 +490,7 @@ class WebhookEvent:
         success: bool,
         duration_seconds: float,
         metadata: dict[str, Any] | None = None,
-    ) -> "WebhookEvent":
+    ) -> WebhookEvent:
         """Create a build completed event."""
         return cls(
             type=WebhookEventType.BUILD_COMPLETED,
@@ -501,7 +511,7 @@ class WebhookEvent:
         error_message: str,
         failed_subtask: str | None = None,
         metadata: dict[str, Any] | None = None,
-    ) -> "WebhookEvent":
+    ) -> WebhookEvent:
         """Create a build failed event."""
         return cls(
             type=WebhookEventType.BUILD_FAILED,
@@ -521,7 +531,7 @@ class WebhookEvent:
         subtask_id: str,
         subtask_description: str,
         metadata: dict[str, Any] | None = None,
-    ) -> "WebhookEvent":
+    ) -> WebhookEvent:
         """Create a subtask started event."""
         return cls(
             type=WebhookEventType.SUBTASK_STARTED,
@@ -540,7 +550,7 @@ class WebhookEvent:
         subtask_id: str,
         session_number: int,
         metadata: dict[str, Any] | None = None,
-    ) -> "WebhookEvent":
+    ) -> WebhookEvent:
         """Create a subtask completed event."""
         return cls(
             type=WebhookEventType.SUBTASK_COMPLETED,
@@ -560,7 +570,7 @@ class WebhookEvent:
         error_message: str,
         attempt_number: int,
         metadata: dict[str, Any] | None = None,
-    ) -> "WebhookEvent":
+    ) -> WebhookEvent:
         """Create a subtask failed event."""
         return cls(
             type=WebhookEventType.SUBTASK_FAILED,
@@ -572,5 +582,3 @@ class WebhookEvent:
             },
             metadata=metadata or {},
         )
-
-

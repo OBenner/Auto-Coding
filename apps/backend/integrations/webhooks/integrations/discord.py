@@ -25,12 +25,18 @@ from __future__ import annotations
 
 import logging
 import os
+import uuid
 from pathlib import Path
 from typing import Any
 
-from ..models import WebhookConfig, WebhookEvent, WebhookIntegration, WebhookType
+from ..models import (
+    WebhookConfig,
+    WebhookEvent,
+    WebhookEventType,
+    WebhookIntegration,
+    WebhookType,
+)
 from .base import BaseIntegration
-
 
 # =============================================================================
 # Logging
@@ -102,7 +108,7 @@ class DiscordIntegration(BaseIntegration):
             raise ValueError("DISCORD_WEBHOOK_URL environment variable is not set")
 
         return WebhookConfig(
-            id="discord-notification",
+            id=f"discord-notification-{uuid.uuid4().hex[:8]}",
             name="Discord Build Notifications",
             type=WebhookType.OUTGOING,
             integration=WebhookIntegration.DISCORD,
@@ -122,7 +128,7 @@ class DiscordIntegration(BaseIntegration):
         try:
             # Create a test event
             test_event = WebhookEvent(
-                type="custom",  # type: ignore[arg-type]
+                type=WebhookEventType.CUSTOM,
                 data={
                     "test": True,
                     "message": "This is a test notification from Auto Claude",
@@ -182,7 +188,9 @@ class DiscordIntegration(BaseIntegration):
         event_data = event.data
 
         # Build base message
-        title, description, color, emoji = self._get_message_details(event_type, event_data)
+        title, description, color, emoji = self._get_message_details(
+            event_type, event_data
+        )
 
         # Create embed
         embed = {
@@ -198,57 +206,67 @@ class DiscordIntegration(BaseIntegration):
             spec_name = event_data.get("spec_name", "Unknown")
             spec_id = event_data.get("spec_id", "Unknown")
 
-            embed["fields"].extend([
-                {
-                    "name": "Spec",
-                    "value": spec_name,
-                    "inline": True,
-                },
-                {
-                    "name": "ID",
-                    "value": spec_id,
-                    "inline": True,
-                },
-            ])
+            embed["fields"].extend(
+                [
+                    {
+                        "name": "Spec",
+                        "value": spec_name,
+                        "inline": True,
+                    },
+                    {
+                        "name": "ID",
+                        "value": spec_id,
+                        "inline": True,
+                    },
+                ]
+            )
 
         elif event_type in ["subtask_started", "subtask_completed", "subtask_failed"]:
             subtask_id = event_data.get("subtask_id", "Unknown")
             subtask_desc = event_data.get("subtask_description", "")
 
-            embed["fields"].append({
-                "name": "Subtask",
-                "value": f"{subtask_id}\n{subtask_desc}",
-                "inline": False,
-            })
+            embed["fields"].append(
+                {
+                    "name": "Subtask",
+                    "value": f"{subtask_id}\n{subtask_desc}",
+                    "inline": False,
+                }
+            )
 
         # Add event-specific details
         if event_type == "build_started":
             total_subtasks = event_data.get("total_subtasks", 0)
-            embed["fields"].append({
-                "name": "Total Subtasks",
-                "value": str(total_subtasks),
-                "inline": True,
-            })
+            embed["fields"].append(
+                {
+                    "name": "Total Subtasks",
+                    "value": str(total_subtasks),
+                    "inline": True,
+                }
+            )
 
         elif event_type == "build_completed":
             success = event_data.get("success", False)
             duration = event_data.get("duration_seconds", 0)
 
             status_text = "✅ Success" if success else "⚠️ Failed"
-            duration_str = f"{duration:.1f}s" if duration < 60 else f"{duration/60:.1f}m"
+            duration_str = (
+                f"{duration:.1f}s" if duration < 60 else f"{duration / 60:.1f}m"
+            )
 
-            embed["fields"].extend([
-                {
-                    "name": "Status",
-                    "value": status_text,
-                    "inline": True,
-                },
-                {
-                    "name": "Duration",
-                    "value": duration_str,
-                    "inline": True,
-                },
-            ])
+            embed["fields"].extend(
+                [
+                    {
+                        "name": "Status",
+                        "value": status_text,
+                        "inline": True,
+                    },
+                    {
+                        "name": "Duration",
+                        "value": duration_str,
+                        "inline": True,
+                    },
+                ]
+            )
 
         elif event_type == "build_failed":
             error = event_data.get("error_message", "Unknown error")
@@ -256,42 +274,50 @@ class DiscordIntegration(BaseIntegration):
 
             error_value = f"```{error}```"
             if failed_subtask:
-                embed["fields"].append({
-                    "name": "Failed Subtask",
-                    "value": failed_subtask,
-                    "inline": False,
-                })
+                embed["fields"].append(
+                    {
+                        "name": "Failed Subtask",
+                        "value": failed_subtask,
+                        "inline": False,
+                    }
+                )
 
-            embed["fields"].append({
-                "name": "Error",
-                "value": error_value,
-                "inline": False,
-            })
+            embed["fields"].append(
+                {
+                    "name": "Error",
+                    "value": error_value,
+                    "inline": False,
+                }
+            )
 
         elif event_type == "subtask_completed":
             session = event_data.get("session_number", "Unknown")
-            embed["fields"].append({
-                "name": "Session",
-                "value": str(session),
-                "inline": True,
-            })
+            embed["fields"].append(
+                {
+                    "name": "Session",
+                    "value": str(session),
+                    "inline": True,
+                }
+            )
 
         elif event_type == "subtask_failed":
             error = event_data.get("error_message", "Unknown error")
             attempt = event_data.get("attempt_number", 1)
 
-            embed["fields"].extend([
-                {
-                    "name": "Error",
-                    "value": f"```{error}```",
-                    "inline": False,
-                },
-                {
-                    "name": "Attempt",
-                    "value": str(attempt),
-                    "inline": True,
-                },
-            ])
+            embed["fields"].extend(
+                [
+                    {
+                        "name": "Error",
+                        "value": f"```{error}```",
+                        "inline": False,
+                    },
+                    {
+                        "name": "Attempt",
+                        "value": str(attempt),
+                        "inline": True,
+                    },
+                ]
+            )
 
         # Add footer with metadata if available
         footer_text = "Auto Claude"

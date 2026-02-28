@@ -29,15 +29,13 @@ from __future__ import annotations
 import abc
 import json
 import logging
-import os
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from typing import Any
 
-from ..models import WebhookConfig, WebhookEvent, WebhookIntegration, WebhookType
-
+from ..models import WebhookConfig, WebhookEvent
 
 # =============================================================================
 # Logging
@@ -102,7 +100,7 @@ class IntegrationState:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "IntegrationState":
+    def from_dict(cls, data: dict[str, Any]) -> IntegrationState:
         """Create IntegrationState from dictionary."""
         connection_status = data.get("connection_status", "not_configured")
         if isinstance(connection_status, str):
@@ -117,8 +115,8 @@ class IntegrationState:
             total_sent=data.get("total_sent", 0),
             total_failed=data.get("total_failed", 0),
             last_sent_at=data.get("last_sent_at"),
-            created_at=data.get("created_at"),
-            updated_at=data.get("updated_at"),
+            created_at=data.get("created_at") or datetime.now().isoformat(),
+            updated_at=data.get("updated_at") or datetime.now().isoformat(),
             metadata=data.get("metadata", {}),
         )
 
@@ -131,7 +129,7 @@ class IntegrationState:
             json.dump(self.to_dict(), f, indent=2)
 
     @classmethod
-    def load(cls, spec_dir: Path, integration_name: str) -> "IntegrationState | None":
+    def load(cls, spec_dir: Path, integration_name: str) -> IntegrationState | None:
         """Load state from the spec directory."""
         state_file = spec_dir / f".integration_{integration_name}.json"
         if not state_file.exists():
@@ -141,7 +139,9 @@ class IntegrationState:
             with open(state_file, encoding="utf-8") as f:
                 return cls.from_dict(json.load(f))
         except (OSError, json.JSONDecodeError, UnicodeDecodeError) as e:
-            logger.warning(f"Failed to load integration state for {integration_name}: {e}")
+            logger.warning(
+                f"Failed to load integration state for {integration_name}: {e}"
+            )
             return None
 
 
@@ -321,7 +321,9 @@ class BaseIntegration(abc.ABC):
         """
         # Check if integration is enabled
         if not self.is_enabled:
-            logger.debug(f"{self.INTEGRATION_NAME} integration is not enabled, skipping notification")
+            logger.debug(
+                f"{self.INTEGRATION_NAME} integration is not enabled, skipping notification"
+            )
             return False, "Integration is not enabled"
 
         # Get config
@@ -367,7 +369,9 @@ class BaseIntegration(abc.ABC):
                 self.state.save(self.spec_dir, self.INTEGRATION_NAME)
 
                 error_msg = result.log_entry.error_message or "Unknown error"
-                logger.warning(f"{self.INTEGRATION_NAME} notification failed: {error_msg}")
+                logger.warning(
+                    f"{self.INTEGRATION_NAME} notification failed: {error_msg}"
+                )
                 return False, f"Failed to send notification: {error_msg}"
 
         except Exception as e:
@@ -376,7 +380,10 @@ class BaseIntegration(abc.ABC):
             self.state.connection_status = IntegrationStatus.ERROR
             self.state.save(self.spec_dir, self.INTEGRATION_NAME)
 
-            logger.error(f"Error sending {self.INTEGRATION_NAME} notification: {e}", exc_info=True)
+            logger.error(
+                f"Error sending {self.INTEGRATION_NAME} notification: {e}",
+                exc_info=True,
+            )
             return False, f"Error: {e}"
 
         finally:

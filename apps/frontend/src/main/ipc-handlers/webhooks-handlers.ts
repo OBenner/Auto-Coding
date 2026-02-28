@@ -1,11 +1,7 @@
 import { ipcMain, BrowserWindow } from 'electron';
 import { promises as fsPromises } from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
-
-// ESM-compatible __dirname
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import { randomUUID } from 'crypto';
 
 import { IPC_CHANNELS } from '../../shared/constants';
 import type {
@@ -95,7 +91,7 @@ const readWebhooksLogs = async (projectPath: string): Promise<WebhookLog[]> => {
  * Generate a unique ID for a webhook config
  */
 const generateWebhookId = (): string => {
-  return `webhook-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  return `webhook-${Date.now()}-${randomUUID().replace(/-/g, '').slice(0, 9)}`;
 };
 
 /**

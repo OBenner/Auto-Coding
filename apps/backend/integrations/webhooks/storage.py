@@ -9,10 +9,13 @@ Handles loading and saving webhook data to JSON files in the spec directory.
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 
 from .models import WebhookConfig, WebhookLog
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -45,7 +48,13 @@ class WebhookStorage:
         try:
             with open(config_path, encoding="utf-8") as f:
                 data = json.load(f)
-                return [WebhookConfig.from_dict(cfg) for cfg in data]
+                configs = []
+                for cfg in data:
+                    try:
+                        configs.append(WebhookConfig.from_dict(cfg))
+                    except Exception as e:
+                        logger.warning(f"Skipping invalid webhook config entry: {e}")
+                return configs
         except (OSError, json.JSONDecodeError, UnicodeDecodeError):
             return []
 
@@ -78,16 +87,19 @@ class WebhookStorage:
         try:
             with open(log_path, encoding="utf-8") as f:
                 data = json.load(f)
-                logs = [WebhookLog.from_dict(log) for log in data]
+                logs = []
+                for log_entry in data:
+                    try:
+                        logs.append(WebhookLog.from_dict(log_entry))
+                    except Exception as e:
+                        logger.warning(f"Skipping invalid webhook log entry: {e}")
 
                 # Filter by webhook_id if specified
                 if webhook_id:
                     logs = [log for log in logs if log.webhook_id == webhook_id]
 
                 # Sort by created_at descending and limit
-                logs.sort(
-                    key=lambda log: log.created_at or "", reverse=True
-                )
+                logs.sort(key=lambda log: log.created_at or "", reverse=True)
                 return logs[:limit]
 
         except (OSError, json.JSONDecodeError, UnicodeDecodeError):

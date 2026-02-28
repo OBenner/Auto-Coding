@@ -341,8 +341,10 @@ def print_build_complete_banner(
         duration_seconds: Optional build duration in seconds
     """
     # Get spec info for webhooks
-    spec_id = spec_dir.name.split("-")[-1] if "-" in spec_dir.name else spec_dir.name
-    spec_name = spec_id  # Could be enhanced to read from spec.md
+    # Extract numeric prefix from spec directory name like "084-webhook-integration-hub"
+    parts = spec_dir.name.split("-", 1)
+    spec_id = parts[0] if parts[0].isdigit() else spec_dir.name
+    spec_name = parts[1] if len(parts) > 1 else spec_id
 
     # Send build completed webhook
     try:
@@ -405,10 +407,10 @@ def notify_build_start(spec_dir: Path) -> None:
         if total == 0:
             return  # No subtasks yet, don't send webhook
 
-        spec_id = (
-            spec_dir.name.split("-")[-1] if "-" in spec_dir.name else spec_dir.name
-        )
-        spec_name = spec_id  # Could be enhanced to read from spec.md
+        # Extract numeric prefix from spec directory name like "084-webhook-integration-hub"
+        parts = spec_dir.name.split("-", 1)
+        spec_id = parts[0] if parts[0].isdigit() else spec_dir.name
+        spec_name = parts[1] if len(parts) > 1 else spec_id
 
         _notify_build_started_impl(spec_dir, spec_id, spec_name, total)
     except Exception as e:
@@ -432,10 +434,10 @@ def notify_build_error(
         failed_subtask: Optional subtask that failed
     """
     try:
-        spec_id = (
-            spec_dir.name.split("-")[-1] if "-" in spec_dir.name else spec_dir.name
-        )
-        spec_name = spec_id  # Could be enhanced to read from spec.md
+        # Extract numeric prefix from spec directory name like "084-webhook-integration-hub"
+        parts = spec_dir.name.split("-", 1)
+        spec_id = parts[0] if parts[0].isdigit() else spec_dir.name
+        spec_name = parts[1] if len(parts) > 1 else spec_id
 
         _notify_build_failed_impl(
             spec_dir, spec_id, spec_name, error_message, failed_subtask
@@ -914,7 +916,7 @@ def _send_webhooks_async(
 
             # Load webhook configs
             storage = WebhookStorage(spec_dir=spec_dir)
-            configs = storage.list_webhooks()
+            configs = storage.load_configs()
 
             # Filter for outgoing webhooks enabled for this event
             matching_configs = [

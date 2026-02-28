@@ -87,7 +87,9 @@ def verify_github_webhook_handler() -> dict[str, Any]:
 
     # If not found, try worktree path
     if not spec_dir.exists():
-        worktree_spec = Path("../../.auto-claude/specs/084-webhook-integration-hub").resolve()
+        worktree_spec = Path(
+            "../../.auto-claude/specs/084-webhook-integration-hub"
+        ).resolve()
         if worktree_spec.exists():
             spec_dir = worktree_spec
 
@@ -124,7 +126,9 @@ def verify_github_webhook_handler() -> dict[str, Any]:
         results["summary"]["total"] += 1
     except Exception as e:
         print_test("Import GitHubWebhookHandler", False, str(e))
-        results["tests"].append({"name": "Import GitHubWebhookHandler", "passed": False, "error": str(e)})
+        results["tests"].append(
+            {"name": "Import GitHubWebhookHandler", "passed": False, "error": str(e)}
+        )
         results["summary"]["failed"] += 1
         results["summary"]["total"] += 1
         return results
@@ -140,7 +144,9 @@ def verify_github_webhook_handler() -> dict[str, Any]:
         results["summary"]["total"] += 1
     except Exception as e:
         print_test("Initialize handler", False, str(e))
-        results["tests"].append({"name": "Initialize handler", "passed": False, "error": str(e)})
+        results["tests"].append(
+            {"name": "Initialize handler", "passed": False, "error": str(e)}
+        )
         results["summary"]["failed"] += 1
         results["summary"]["total"] += 1
         return results
@@ -150,19 +156,25 @@ def verify_github_webhook_handler() -> dict[str, Any]:
     try:
         supported_integrations = HandlerRegistry.list_supported_integrations()
 
-        assert "github" in supported_integrations, "GitHub not in supported integrations"
+        assert "github" in supported_integrations, (
+            "GitHub not in supported integrations"
+        )
 
         print_test("Handler registry", True, f"Supported: {supported_integrations}")
-        results["tests"].append({
-            "name": "Handler registry",
-            "passed": True,
-            "supported_integrations": supported_integrations
-        })
+        results["tests"].append(
+            {
+                "name": "Handler registry",
+                "passed": True,
+                "supported_integrations": supported_integrations,
+            }
+        )
         results["summary"]["passed"] += 1
         results["summary"]["total"] += 1
     except Exception as e:
         print_test("Handler registry", False, str(e))
-        results["tests"].append({"name": "Handler registry", "passed": False, "error": str(e)})
+        results["tests"].append(
+            {"name": "Handler registry", "passed": False, "error": str(e)}
+        )
         results["summary"]["failed"] += 1
         results["summary"]["total"] += 1
 
@@ -188,7 +200,9 @@ def verify_github_webhook_handler() -> dict[str, Any]:
         results["summary"]["total"] += 1
     except Exception as e:
         print_test("Create webhook config", False, str(e))
-        results["tests"].append({"name": "Create webhook config", "passed": False, "error": str(e)})
+        results["tests"].append(
+            {"name": "Create webhook config", "passed": False, "error": str(e)}
+        )
         results["summary"]["failed"] += 1
         results["summary"]["total"] += 1
         test_config = None
@@ -233,7 +247,9 @@ def verify_github_webhook_handler() -> dict[str, Any]:
 
     except Exception as e:
         print_test("Validate push payload", False, str(e))
-        results["tests"].append({"name": "Validate push payload", "passed": False, "error": str(e)})
+        results["tests"].append(
+            {"name": "Validate push payload", "passed": False, "error": str(e)}
+        )
         results["summary"]["failed"] += 1
         results["summary"]["total"] += 1
 
@@ -252,23 +268,27 @@ def verify_github_webhook_handler() -> dict[str, Any]:
         print_test(
             "Extract push event data",
             True,
-            f"Event: {event_data['event_type']}, Branch: {event_data['branch']}"
+            f"Event: {event_data['event_type']}, Branch: {event_data['branch']}",
         )
-        results["tests"].append({
-            "name": "Extract push event data",
-            "passed": True,
-            "event_data": {
-                "event_type": event_data["event_type"],
-                "branch": event_data["branch"],
-                "repo": event_data["repo_name"],
+        results["tests"].append(
+            {
+                "name": "Extract push event data",
+                "passed": True,
+                "event_data": {
+                    "event_type": event_data["event_type"],
+                    "branch": event_data["branch"],
+                    "repo": event_data["repo_name"],
+                },
             }
-        })
+        )
         results["summary"]["passed"] += 1
         results["summary"]["total"] += 1
 
     except Exception as e:
         print_test("Extract push event data", False, str(e))
-        results["tests"].append({"name": "Extract push event data", "passed": False, "error": str(e)})
+        results["tests"].append(
+            {"name": "Extract push event data", "passed": False, "error": str(e)}
+        )
         results["summary"]["failed"] += 1
         results["summary"]["total"] += 1
 
@@ -279,18 +299,34 @@ def verify_github_webhook_handler() -> dict[str, Any]:
 
         if action == WebhookAction.TRIGGER_BUILD:
             print_test("Determine action (push)", True, f"Action: {action.value}")
-            results["tests"].append({"name": "Determine action (push)", "passed": True, "action": action.value})
+            results["tests"].append(
+                {
+                    "name": "Determine action (push)",
+                    "passed": True,
+                    "action": action.value,
+                }
+            )
             results["summary"]["passed"] += 1
         else:
-            print_test("Determine action (push)", False, f"Unexpected action: {action.value}")
-            results["tests"].append({"name": "Determine action (push)", "passed": False, "action": action.value})
+            print_test(
+                "Determine action (push)", False, f"Unexpected action: {action.value}"
+            )
+            results["tests"].append(
+                {
+                    "name": "Determine action (push)",
+                    "passed": False,
+                    "action": action.value,
+                }
+            )
             results["summary"]["failed"] += 1
 
         results["summary"]["total"] += 1
 
     except Exception as e:
         print_test("Determine action (push)", False, str(e))
-        results["tests"].append({"name": "Determine action (push)", "passed": False, "error": str(e)})
+        results["tests"].append(
+            {"name": "Determine action (push)", "passed": False, "error": str(e)}
+        )
         results["summary"]["failed"] += 1
         results["summary"]["total"] += 1
 
@@ -323,31 +359,39 @@ def verify_github_webhook_handler() -> dict[str, Any]:
 
         # Extract PR event data
         pr_event_data = handler.extract_event_data(pr_payload)
-        assert pr_event_data["event_type"] == "pull_request", "Event type should be 'pull_request'"
+        assert pr_event_data["event_type"] == "pull_request", (
+            "Event type should be 'pull_request'"
+        )
         assert pr_event_data["pr_number"] == 123, "PR number mismatch"
         assert pr_event_data["pr_merged"] is True, "PR should be merged"
 
         # Determine action for PR merge
         pr_action = handler.determine_action(pr_payload)
-        assert pr_action == WebhookAction.TRIGGER_BUILD, "Should trigger build on PR merge"
+        assert pr_action == WebhookAction.TRIGGER_BUILD, (
+            "Should trigger build on PR merge"
+        )
 
         print_test(
             "Process PR merge payload",
             True,
-            f"PR #{pr_event_data['pr_number']} merged, action: {pr_action.value}"
+            f"PR #{pr_event_data['pr_number']} merged, action: {pr_action.value}",
         )
-        results["tests"].append({
-            "name": "Process PR merge payload",
-            "passed": True,
-            "pr_number": pr_event_data["pr_number"],
-            "action": pr_action.value
-        })
+        results["tests"].append(
+            {
+                "name": "Process PR merge payload",
+                "passed": True,
+                "pr_number": pr_event_data["pr_number"],
+                "action": pr_action.value,
+            }
+        )
         results["summary"]["passed"] += 1
         results["summary"]["total"] += 1
 
     except Exception as e:
         print_test("Process PR merge payload", False, str(e))
-        results["tests"].append({"name": "Process PR merge payload", "passed": False, "error": str(e)})
+        results["tests"].append(
+            {"name": "Process PR merge payload", "passed": False, "error": str(e)}
+        )
         results["summary"]["failed"] += 1
         results["summary"]["total"] += 1
 
@@ -360,19 +404,31 @@ def verify_github_webhook_handler() -> dict[str, Any]:
         main_action = handler.determine_action(main_branch_payload)
 
         if main_action == WebhookAction.NO_ACTION:
-            print_test("Main branch push no action", True, "Correctly skips main branch")
-            results["tests"].append({"name": "Main branch push no action", "passed": True})
+            print_test(
+                "Main branch push no action", True, "Correctly skips main branch"
+            )
+            results["tests"].append(
+                {"name": "Main branch push no action", "passed": True}
+            )
             results["summary"]["passed"] += 1
         else:
-            print_test("Main branch push no action", False, f"Unexpected action: {main_action.value}")
-            results["tests"].append({"name": "Main branch push no action", "passed": False})
+            print_test(
+                "Main branch push no action",
+                False,
+                f"Unexpected action: {main_action.value}",
+            )
+            results["tests"].append(
+                {"name": "Main branch push no action", "passed": False}
+            )
             results["summary"]["failed"] += 1
 
         results["summary"]["total"] += 1
 
     except Exception as e:
         print_test("Main branch push no action", False, str(e))
-        results["tests"].append({"name": "Main branch push no action", "passed": False, "error": str(e)})
+        results["tests"].append(
+            {"name": "Main branch push no action", "passed": False, "error": str(e)}
+        )
         results["summary"]["failed"] += 1
         results["summary"]["total"] += 1
 
@@ -390,7 +446,11 @@ def verify_github_webhook_handler() -> dict[str, Any]:
             results["tests"].append({"name": "PR opened no action", "passed": True})
             results["summary"]["passed"] += 1
         else:
-            print_test("PR opened no action", False, f"Unexpected action: {pr_opened_action.value}")
+            print_test(
+                "PR opened no action",
+                False,
+                f"Unexpected action: {pr_opened_action.value}",
+            )
             results["tests"].append({"name": "PR opened no action", "passed": False})
             results["summary"]["failed"] += 1
 
@@ -398,7 +458,9 @@ def verify_github_webhook_handler() -> dict[str, Any]:
 
     except Exception as e:
         print_test("PR opened no action", False, str(e))
-        results["tests"].append({"name": "PR opened no action", "passed": False, "error": str(e)})
+        results["tests"].append(
+            {"name": "PR opened no action", "passed": False, "error": str(e)}
+        )
         results["summary"]["failed"] += 1
         results["summary"]["total"] += 1
 
@@ -409,32 +471,42 @@ def verify_github_webhook_handler() -> dict[str, Any]:
             result = handler.handle_webhook(test_config, push_payload)
 
             assert result.success is True, "Webhook processing should succeed"
-            assert result.action_taken == WebhookAction.TRIGGER_BUILD, "Should trigger build"
-            assert "spec_id" in result.extracted_data or "repo_name" in result.extracted_data, \
-                "Should extract data"
+            assert result.action_taken == WebhookAction.TRIGGER_BUILD, (
+                "Should trigger build"
+            )
+            assert (
+                "spec_id" in result.extracted_data
+                or "repo_name" in result.extracted_data
+            ), "Should extract data"
 
             print_test(
                 "Full webhook processing",
                 True,
-                f"Action: {result.action_taken.value}, Message: {result.message}"
+                f"Action: {result.action_taken.value}, Message: {result.message}",
             )
-            results["tests"].append({
-                "name": "Full webhook processing",
-                "passed": True,
-                "action": result.action_taken.value,
-                "message": result.message
-            })
+            results["tests"].append(
+                {
+                    "name": "Full webhook processing",
+                    "passed": True,
+                    "action": result.action_taken.value,
+                    "message": result.message,
+                }
+            )
             results["summary"]["passed"] += 1
             results["summary"]["total"] += 1
 
         except Exception as e:
             print_test("Full webhook processing", False, str(e))
-            results["tests"].append({"name": "Full webhook processing", "passed": False, "error": str(e)})
+            results["tests"].append(
+                {"name": "Full webhook processing", "passed": False, "error": str(e)}
+            )
             results["summary"]["failed"] += 1
             results["summary"]["total"] += 1
     else:
         print_test("Full webhook processing", True, "Skipped (no config)")
-        results["tests"].append({"name": "Full webhook processing", "passed": True, "note": "Skipped"})
+        results["tests"].append(
+            {"name": "Full webhook processing", "passed": True, "note": "Skipped"}
+        )
         results["summary"]["passed"] += 1
         results["summary"]["total"] += 1
 
@@ -445,22 +517,31 @@ def verify_github_webhook_handler() -> dict[str, Any]:
             factory_handler = create_handler_for_webhook(test_config, spec_dir)
 
             assert factory_handler is not None, "Factory should return handler"
-            assert isinstance(factory_handler, GitHubWebhookHandler), \
+            assert isinstance(factory_handler, GitHubWebhookHandler), (
                 "Should return GitHubWebhookHandler instance"
+            )
 
-            print_test("Handler factory function", True, "Factory creates correct handler")
-            results["tests"].append({"name": "Handler factory function", "passed": True})
+            print_test(
+                "Handler factory function", True, "Factory creates correct handler"
+            )
+            results["tests"].append(
+                {"name": "Handler factory function", "passed": True}
+            )
             results["summary"]["passed"] += 1
             results["summary"]["total"] += 1
 
         except Exception as e:
             print_test("Handler factory function", False, str(e))
-            results["tests"].append({"name": "Handler factory function", "passed": False, "error": str(e)})
+            results["tests"].append(
+                {"name": "Handler factory function", "passed": False, "error": str(e)}
+            )
             results["summary"]["failed"] += 1
             results["summary"]["total"] += 1
     else:
         print_test("Handler factory function", True, "Skipped (no config)")
-        results["tests"].append({"name": "Handler factory function", "passed": True, "note": "Skipped"})
+        results["tests"].append(
+            {"name": "Handler factory function", "passed": True, "note": "Skipped"}
+        )
         results["summary"]["passed"] += 1
         results["summary"]["total"] += 1
 
@@ -494,31 +575,37 @@ def verify_webhook_server() -> dict[str, Any]:
 
         if response.status_code == 200:
             health_data = response.json()
-            print_test("Server health check", True, f"Status: {health_data.get('status')}")
-            results["tests"].append({
-                "name": "Server health check",
-                "passed": True,
-                "health": health_data
-            })
+            print_test(
+                "Server health check", True, f"Status: {health_data.get('status')}"
+            )
+            results["tests"].append(
+                {"name": "Server health check", "passed": True, "health": health_data}
+            )
             results["summary"]["passed"] += 1
         else:
-            print_test("Server health check", False, f"Status code: {response.status_code}")
-            results["tests"].append({
-                "name": "Server health check",
-                "passed": False,
-                "status_code": response.status_code
-            })
+            print_test(
+                "Server health check", False, f"Status code: {response.status_code}"
+            )
+            results["tests"].append(
+                {
+                    "name": "Server health check",
+                    "passed": False,
+                    "status_code": response.status_code,
+                }
+            )
             results["summary"]["failed"] += 1
 
         results["summary"]["total"] += 1
 
     except Exception as e:
         print_test("Server health check", True, f"Skipped (server not running: {e})")
-        results["tests"].append({
-            "name": "Server health check",
-            "passed": True,
-            "note": "Skipped - server not running"
-        })
+        results["tests"].append(
+            {
+                "name": "Server health check",
+                "passed": True,
+                "note": "Skipped - server not running",
+            }
+        )
         results["summary"]["passed"] += 1
         results["summary"]["total"] += 1
         return results  # Skip remaining server tests if server is not running
@@ -547,28 +634,36 @@ def verify_webhook_server() -> dict[str, Any]:
             print_test(
                 "Send webhook to server",
                 True,
-                f"Log ID: {response_data.get('log_id', 'N/A')}"
+                f"Log ID: {response_data.get('log_id', 'N/A')}",
             )
-            results["tests"].append({
-                "name": "Send webhook to server",
-                "passed": True,
-                "response": response_data
-            })
+            results["tests"].append(
+                {
+                    "name": "Send webhook to server",
+                    "passed": True,
+                    "response": response_data,
+                }
+            )
             results["summary"]["passed"] += 1
         else:
-            print_test("Send webhook to server", False, f"Status code: {response.status_code}")
-            results["tests"].append({
-                "name": "Send webhook to server",
-                "passed": False,
-                "status_code": response.status_code
-            })
+            print_test(
+                "Send webhook to server", False, f"Status code: {response.status_code}"
+            )
+            results["tests"].append(
+                {
+                    "name": "Send webhook to server",
+                    "passed": False,
+                    "status_code": response.status_code,
+                }
+            )
             results["summary"]["failed"] += 1
 
         results["summary"]["total"] += 1
 
     except Exception as e:
         print_test("Send webhook to server", False, str(e))
-        results["tests"].append({"name": "Send webhook to server", "passed": False, "error": str(e)})
+        results["tests"].append(
+            {"name": "Send webhook to server", "passed": False, "error": str(e)}
+        )
         results["summary"]["failed"] += 1
         results["summary"]["total"] += 1
 
@@ -582,26 +677,28 @@ def verify_webhook_server() -> dict[str, Any]:
             webhook_count = len(webhooks_data.get("webhooks", []))
 
             print_test("List webhooks", True, f"Found {webhook_count} webhook(s)")
-            results["tests"].append({
-                "name": "List webhooks",
-                "passed": True,
-                "count": webhook_count
-            })
+            results["tests"].append(
+                {"name": "List webhooks", "passed": True, "count": webhook_count}
+            )
             results["summary"]["passed"] += 1
         else:
             print_test("List webhooks", False, f"Status code: {response.status_code}")
-            results["tests"].append({
-                "name": "List webhooks",
-                "passed": False,
-                "status_code": response.status_code
-            })
+            results["tests"].append(
+                {
+                    "name": "List webhooks",
+                    "passed": False,
+                    "status_code": response.status_code,
+                }
+            )
             results["summary"]["failed"] += 1
 
         results["summary"]["total"] += 1
 
     except Exception as e:
         print_test("List webhooks", False, str(e))
-        results["tests"].append({"name": "List webhooks", "passed": False, "error": str(e)})
+        results["tests"].append(
+            {"name": "List webhooks", "passed": False, "error": str(e)}
+        )
         results["summary"]["failed"] += 1
         results["summary"]["total"] += 1
 
@@ -635,7 +732,9 @@ def verify_webhook_logs() -> dict[str, Any]:
             spec_dir = Path(spec_dir_default).resolve()
 
         if not spec_dir.exists():
-            worktree_spec = Path("../../.auto-claude/specs/084-webhook-integration-hub").resolve()
+            worktree_spec = Path(
+                "../../.auto-claude/specs/084-webhook-integration-hub"
+            ).resolve()
             if worktree_spec.exists():
                 spec_dir = worktree_spec
 
@@ -643,11 +742,9 @@ def verify_webhook_logs() -> dict[str, Any]:
         logs = storage.load_logs(limit=10)
 
         print_test("Retrieve webhook logs", True, f"Found {len(logs)} log entries")
-        results["tests"].append({
-            "name": "Retrieve webhook logs",
-            "passed": True,
-            "log_count": len(logs)
-        })
+        results["tests"].append(
+            {"name": "Retrieve webhook logs", "passed": True, "log_count": len(logs)}
+        )
         results["summary"]["passed"] += 1
         results["summary"]["total"] += 1
 
@@ -656,12 +753,16 @@ def verify_webhook_logs() -> dict[str, Any]:
             print("\n  Recent webhook logs:")
             for log in logs[:3]:
                 status_emoji = "✅" if log.status.value == "success" else "❌"
-                print(f"    {status_emoji} {log.event_type.value if log.event_type else 'N/A'} - "
-                      f"{log.status.value} ({log.created_at})")
+                print(
+                    f"    {status_emoji} {log.event_type.value if log.event_type else 'N/A'} - "
+                    f"{log.status.value} ({log.created_at})"
+                )
 
     except Exception as e:
         print_test("Retrieve webhook logs", False, str(e))
-        results["tests"].append({"name": "Retrieve webhook logs", "passed": False, "error": str(e)})
+        results["tests"].append(
+            {"name": "Retrieve webhook logs", "passed": False, "error": str(e)}
+        )
         results["summary"]["failed"] += 1
         results["summary"]["total"] += 1
 
@@ -681,7 +782,9 @@ def print_summary(results: list[dict[str, Any]]) -> None:
     print(f"  ❌ Failed:   {total_failed}")
 
     if total_failed == 0:
-        print("\n  🎉 All tests passed! GitHub webhook integration is working correctly.")
+        print(
+            "\n  🎉 All tests passed! GitHub webhook integration is working correctly."
+        )
     else:
         print(f"\n  ⚠️  {total_failed} test(s) failed. Please review the output above.")
 
@@ -695,7 +798,7 @@ def print_summary(results: list[dict[str, Any]]) -> None:
             "total_tests": total_tests,
             "passed": total_passed,
             "failed": total_failed,
-        }
+        },
     }
 
     results_file = Path("./github_webhook_verification_results.json")

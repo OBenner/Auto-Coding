@@ -20,8 +20,9 @@ Usage:
 
 from __future__ import annotations
 
+import ast
 import logging
-import subprocess
+import operator
 from abc import ABC, abstractmethod
 from enum import Enum
 from pathlib import Path
@@ -29,8 +30,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from ..models import WebhookConfig, WebhookEventType
-
+from ..models import WebhookConfig
 
 # =============================================================================
 # Logging
@@ -297,8 +297,7 @@ class IncomingWebhookHandler(ABC):
             # In a future subtask, this will integrate with the build system
             subtask_id = event_data.get("subtask_id", "unknown")
             logger.info(
-                f"Would trigger subtask {subtask_id} "
-                f"from webhook {webhook_config.id}"
+                f"Would trigger subtask {subtask_id} from webhook {webhook_config.id}"
             )
 
             return HandlerResult(
@@ -460,11 +459,16 @@ class GitHubWebhookHandler(IncomingWebhookHandler):
         # This would be set when the webhook is configured
         # For now, we'll derive it from the branch name or PR title
         if branch:
-            # Try to extract spec ID from branch name (e.g., "feature/084-xxx")
-            if "-" in branch:
-                parts = branch.split("-")
-                if len(parts) >= 2 and parts[1].isdigit():
-                    extracted["spec_id"] = f"{parts[0]}-{parts[1]}"
+            # Try to extract spec ID from branch name
+            # Handles patterns like "feature/084-xxx", "084-xxx", "auto-code/084-xxx"
+            import re
+
+            # Strip prefix (e.g., "feature/" or "auto-code/")
+            branch_name = branch.rsplit("/", 1)[-1] if "/" in branch else branch
+            # Look for leading numeric ID like "084-..."
+            match = re.match(r"^(\d+)-", branch_name)
+            if match:
+                extracted["spec_id"] = match.group(1)
 
         return extracted
 
@@ -652,7 +656,9 @@ class GenericWebhookHandler(IncomingWebhookHandler):
             template = webhook_config.payload_template
             if template is not None:
                 event_data = self._apply_payload_template(payload, template)
-                logger.info(f"Applied payload template, extracted: {list(event_data.keys())}")
+                logger.info(
+                    f"Applied payload template, extracted: {list(event_data.keys())}"
+                )
             else:
                 # No template - use raw payload
                 event_data = {
@@ -717,13 +723,15 @@ class GenericWebhookHandler(IncomingWebhookHandler):
         filter_expr: str,
     ) -> bool:
         """
-        Evaluate a custom event filter expression.
+        Evaluate a custom event filter expression safely.
 
-        The filter expression can reference event_data fields.
-        Example: "branch == 'main' and status == 'success'"
+        Supports simple comparison expressions like:
+        - "field == 'value'"
+        - "field != 'value'"
+        - "field == 'value1' and other_field == 'value2'"
+        - "field == 'value1' or other_field == 'value2'"
 
-        WARNING: This uses eval() with restricted globals.
-        Only basic operations are allowed for security.
+        Uses AST parsing instead of eval() to prevent code injection.
 
         Args:
             event_data: Extracted event data
@@ -733,30 +741,70 @@ class GenericWebhookHandler(IncomingWebhookHandler):
             True if filter matches, False otherwise
         """
         try:
-            # Restricted evaluation environment
-            # Only allow safe operations
-            safe_globals = {
-                "__builtins__": {
-                    "True": True,
-                    "False": False,
-                    "None": None,
-                    "len": len,
-                    "str": str,
-                    "int": int,
-                    "float": float,
-                    "bool": bool,
-                    "list": list,
-                    "dict": dict,
-                }
-            }
-
-            # Evaluate expression with event_data as locals
-            result = eval(filter_expr, safe_globals, event_data)
-            return bool(result)
-
+            tree = ast.parse(filter_expr, mode="eval")
+            return bool(self._safe_eval_node(tree.body, event_data))
         except Exception as e:
             logger.warning(f"Failed to evaluate event filter '{filter_expr}': {e}")
             return False
+
+    def _safe_eval_node(self, node: ast.AST, context: dict[str, Any]) -> Any:
+        """Safely evaluate an AST node against context data."""
+        _SAFE_OPS = {
+            ast.Eq: operator.eq,
+            ast.NotEq: operator.ne,
+            ast.Lt: operator.lt,
+            ast.LtE: operator.le,
+            ast.Gt: operator.gt,
+            ast.GtE: operator.ge,
+            ast.In: lambda a, b: a in b,
+            ast.NotIn: lambda a, b: a not in b,
+        }
+
+        if isinstance(node, ast.Constant):
+            return node.value
+        elif isinstance(node, ast.Name):
+            return context.get(node.id)
+        elif isinstance(node, ast.Compare):
+            left = self._safe_eval_node(node.left, context)
+            for op_node, comparator in zip(node.ops, node.comparators):
+                op_func = _SAFE_OPS.get(type(op_node))
+                if op_func is None:
+                    raise ValueError(
+                        f"Unsupported comparison operator: {type(op_node).__name__}"
+                    )
+                right = self._safe_eval_node(comparator, context)
+                if not op_func(left, right):
+                    return False
+                left = right
+            return True
+        elif isinstance(node, ast.BoolOp):
+            if isinstance(node.op, ast.And):
+                return all(self._safe_eval_node(v, context) for v in node.values)
+            elif isinstance(node.op, ast.Or):
+                return any(self._safe_eval_node(v, context) for v in node.values)
+        elif isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Not):
+            return not self._safe_eval_node(node.operand, context)
+        elif isinstance(node, ast.Attribute):
+            value = self._safe_eval_node(node.value, context)
+            if isinstance(value, dict):
+                return value.get(node.attr)
+            return getattr(value, node.attr, None)
+        elif isinstance(node, ast.Call):
+            # Only allow safe string methods
+            if isinstance(node.func, ast.Attribute) and node.func.attr in (
+                "startswith",
+                "endswith",
+                "lower",
+                "upper",
+                "strip",
+            ):
+                obj = self._safe_eval_node(node.func.value, context)
+                args = [self._safe_eval_node(a, context) for a in node.args]
+                if isinstance(obj, str):
+                    return getattr(obj, node.func.attr)(*args)
+            raise ValueError(f"Unsupported function call: {ast.dump(node.func)}")
+
+        raise ValueError(f"Unsupported AST node: {type(node).__name__}")
 
     def _apply_payload_template(
         self,
@@ -990,6 +1038,16 @@ class HandlerRegistry:
             List of integration identifiers
         """
         return list(cls._handlers.keys())
+
+    @classmethod
+    def reset(cls) -> None:
+        """
+        Reset the handler registry.
+
+        Clears all registered handlers. Useful for testing to ensure
+        clean state between test cases.
+        """
+        cls._handlers = {}
 
 
 # =============================================================================

@@ -101,7 +101,11 @@ def start_webhook_server_if_enabled(spec_dir: Path) -> bool:
 
     # Get host and port from environment
     webhook_host = os.getenv("WEBHOOK_HOST", "127.0.0.1")
-    webhook_port = int(os.getenv("WEBHOOK_PORT", "8080"))
+    try:
+        webhook_port = int(os.getenv("WEBHOOK_PORT", "8080"))
+    except ValueError:
+        logger.warning("Invalid WEBHOOK_PORT value, falling back to 8080")
+        webhook_port = 8080
 
     logger.info(f"Webhooks enabled - starting server on {webhook_host}:{webhook_port}")
 
@@ -346,9 +350,9 @@ def init_auto_claude_dir(project_dir: Path) -> tuple[Path, bool]:
             gitignore_updated = len(added) > 0
             marker.touch()
 
-    # Start webhook server if enabled (only on first init)
-    if dir_created:
-        start_webhook_server_if_enabled(spec_dir=auto_claude_dir)
+    # Start webhook server if enabled (guard in start_webhook_server_if_enabled
+    # handles duplicate calls, so it's safe to always attempt startup)
+    start_webhook_server_if_enabled(spec_dir=auto_claude_dir)
 
     return auto_claude_dir, gitignore_updated
 
