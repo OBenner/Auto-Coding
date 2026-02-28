@@ -12,6 +12,7 @@ Falls back to basic analysis if extraction fails (never blocks the build).
 
 from __future__ import annotations
 
+import collections
 import json
 import logging
 import os
@@ -141,9 +142,9 @@ def load_log_file(log_path: Path, max_lines: int = 1000) -> list[str]:
 
     try:
         with open(log_path, encoding="utf-8", errors="replace") as f:
-            # Read all lines and take the last max_lines
-            all_lines = f.readlines()
-            return all_lines[-max_lines:] if len(all_lines) > max_lines else all_lines
+            # Stream file and keep only the last max_lines using bounded buffer
+            tail = collections.deque(f, maxlen=max_lines)
+            return list(tail)
 
     except Exception as e:
         logger.warning(f"Failed to read log file {log_path}: {e}")
@@ -234,6 +235,7 @@ def extract_relevant_lines(
     relevant_entries = []
 
     # Default error patterns if none provided
+    compiled_patterns = None
     if not error_pattern:
         error_keywords = [
             "error",
@@ -248,7 +250,15 @@ def extract_relevant_lines(
             "warning",
         ]
     else:
-        error_keywords = [error_pattern]
+        # Compile error_pattern as regex for matching
+        try:
+            compiled_patterns = [re.compile(error_pattern, re.IGNORECASE)]
+        except re.error:
+            logger.warning(
+                f"Invalid regex pattern '{error_pattern}', using as substring"
+            )
+            compiled_patterns = None
+            error_keywords = [error_pattern]
 
     # Find matching lines and their context
     for i, line in enumerate(lines):
@@ -260,9 +270,14 @@ def extract_relevant_lines(
         level = parsed.get("level", "").upper()
 
         # Check if line matches error criteria
-        is_error_line = level in ["ERROR", "CRITICAL", "FATAL"] or any(
-            keyword in message for keyword in error_keywords
-        )
+        if error_pattern and compiled_patterns:
+            is_error_line = level in ["ERROR", "CRITICAL", "FATAL"] or any(
+                pat.search(message) for pat in compiled_patterns
+            )
+        else:
+            is_error_line = level in ["ERROR", "CRITICAL", "FATAL"] or any(
+                keyword in message for keyword in error_keywords
+            )
 
         if is_error_line:
             # Add context lines
@@ -427,7 +442,22 @@ def _analyze_logs_with_llm(
     import asyncio
 
     try:
-        return asyncio.run(_run_llm_log_analysis(log_content, relevant_lines))
+        try:
+            asyncio.get_running_loop()
+            # Already in async context - run in separate thread
+            import concurrent.futures
+
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                return executor.submit(
+                    asyncio.run,
+                    _run_llm_log_analysis(log_content, relevant_lines),
+                ).result()
+        except RuntimeError:
+            # No running loop - safe to use asyncio.run directly
+            return asyncio.run(_run_llm_log_analysis(log_content, relevant_lines))
+    except RuntimeError as e:
+        logger.warning(f"LLM log analysis failed (async context issue): {e}")
+        return None
     except Exception as e:
         logger.warning(f"LLM log analysis failed: {e}")
         return None
@@ -715,6 +745,6 @@ def format_for_graphiti(analysis: dict[str, Any]) -> dict[str, Any]:
             "patterns_found": analysis.get("patterns_found", []),
             "affected_components": analysis.get("affected_components", []),
             "confidence": analysis.get("confidence", 0.0),
-            "timestamp": analysis["timestamp"],
+            "timestamp": analysis.get("timestamp", datetime.now(UTC).isoformat()),
         },
     }

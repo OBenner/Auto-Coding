@@ -140,7 +140,7 @@ def get_common_patterns() -> list[ErrorPattern]:
         ErrorPattern(
             category="import_error",
             name="Module Not Found",
-            error_types=["ModuleNotFoundError", "ImportError", "ImportError"],
+            error_types=["ModuleNotFoundError", "ImportError"],
             message_patterns=[
                 r"no module named",
                 r"cannot find module",
@@ -388,7 +388,7 @@ def get_common_patterns() -> list[ErrorPattern]:
         ErrorPattern(
             category="file_error",
             name="File Not Found",
-            error_types=["FileNotFoundError", "FileNotFoundError", "ENOENT"],
+            error_types=["FileNotFoundError", "ENOENT"],
             message_patterns=[
                 r"no such file",
                 r"file not found",

@@ -491,9 +491,9 @@ app.listen(4000, () => {
         port1 = detector.detect_port_from_sources(8000)
         port2 = detector.detect_port_from_sources(8000)
 
-        # Invalid ports should be skipped
-        assert port1 in [8000, 70000]  # Falls through to next source or default
-        assert port2 == 8000  # 70000 is invalid, falls back to default
+        # Invalid ports (999 < 1000, 70000 > 65535) should be skipped
+        assert port1 == 8000  # 999 is out of valid range, falls back to default
+        assert port2 == 8000  # 70000 is out of valid range, falls back to default
 
     def test_detects_from_docker_compose(self, tmp_path):
         """Detects port from docker-compose.yml port mapping."""

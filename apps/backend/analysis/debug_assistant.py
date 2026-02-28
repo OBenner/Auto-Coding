@@ -364,16 +364,49 @@ class DebugAssistant:
             # Use Graphiti search for similar errors
             from integrations.graphiti.queries_pkg.search import GraphitiSearch
 
-            search = GraphitiSearch(memory.client, memory.graphiti_config)
-            similar_errors = search.search_similar_errors(
-                error_type=error_type,
-                error_message=error_message,
-                min_score=0.5,
-                limit=5,
+            search = GraphitiSearch(
+                client=memory.client,
+                group_id=memory.group_id,
+                spec_context_id=memory.spec_context_id,
+                group_id_mode=memory.group_id_mode,
+                project_dir=memory.project_dir,
             )
+
+            # search_similar_errors is async - run it
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                loop = None
+
+            if loop and loop.is_running():
+                # Already in async context - create task
+                import concurrent.futures
+
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    similar_errors = executor.submit(
+                        asyncio.run,
+                        search.search_similar_errors(
+                            error_type=error_type,
+                            error_message=error_message,
+                            min_score=0.5,
+                            limit=5,
+                        ),
+                    ).result()
+            else:
+                similar_errors = asyncio.run(
+                    search.search_similar_errors(
+                        error_type=error_type,
+                        error_message=error_message,
+                        min_score=0.5,
+                        limit=5,
+                    )
+                )
 
             return similar_errors
 
+        except ImportError as e:
+            logger.warning(f"Graphiti not available for historical errors: {e}")
+            return []
         except Exception as e:
             logger.warning(f"Failed to retrieve historical errors: {e}")
             return []
@@ -388,35 +421,24 @@ class DebugAssistant:
         """Suggest fixes using AI or patterns."""
         # Run async fix suggestion
         try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                # If called from async context, create task
+            coro = suggest_fix(
+                parsed_trace=parsed_trace,
+                pattern_match=pattern_match,
+                code_context=code_context,
+                historical_errors=historical_errors,
+                project_dir=self.project_dir,
+            )
+
+            try:
+                asyncio.get_running_loop()
+                # Already in async context - run in thread
                 import concurrent.futures
 
                 with concurrent.futures.ThreadPoolExecutor() as executor:
-                    suggestion = loop.run_in_executor(
-                        executor,
-                        lambda: asyncio.run(
-                            suggest_fix(
-                                parsed_trace=parsed_trace,
-                                pattern_match=pattern_match,
-                                code_context=code_context,
-                                historical_errors=historical_errors,
-                                project_dir=self.project_dir,
-                            )
-                        ),
-                    ).result()
-            else:
-                # Run directly if not in async context
-                suggestion = asyncio.run(
-                    suggest_fix(
-                        parsed_trace=parsed_trace,
-                        pattern_match=pattern_match,
-                        code_context=code_context,
-                        historical_errors=historical_errors,
-                        project_dir=self.project_dir,
-                    )
-                )
+                    suggestion = executor.submit(asyncio.run, coro).result()
+            except RuntimeError:
+                # No running loop - safe to use asyncio.run
+                suggestion = asyncio.run(coro)
 
             return suggestion or {
                 "root_cause": "Unable to generate suggestion",

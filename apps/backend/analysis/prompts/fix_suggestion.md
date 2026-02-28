@@ -79,7 +79,7 @@ You must respond with **ONLY** valid JSON. No markdown formatting, no explanatio
       "description": "What to fix",
       "code_example": "Optional: before/after code snippet",
       "file_path": "Optional: specific file to modify",
-      "line_number": "Optional: specific line to change",
+      "line_number": 42,
       "priority": "high | medium | low"
     }
   ],

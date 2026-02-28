@@ -231,7 +231,7 @@ def create_debugging_tools(spec_dir: Path, project_dir: Path) -> list:
             }
 
         try:
-            from analysis.breakpoint_suggester import suggest_breakpoints
+            from analysis.breakpoint_suggester import suggest_breakpoints_for_file
 
             # Convert to Path object
             file_path_obj = Path(file_path)
@@ -248,9 +248,10 @@ def create_debugging_tools(spec_dir: Path, project_dir: Path) -> list:
                 }
 
             # Suggest breakpoints
-            suggestions = suggest_breakpoints(
+            result = suggest_breakpoints_for_file(
                 file_path=file_path_obj, error_line=error_line
             )
+            suggestions = result.get("suggestions", [])
 
             # Format suggestions
             formatted = _format_breakpoint_suggestions(suggestions)
@@ -450,6 +451,9 @@ def _format_breakpoint_suggestions(suggestions: list[dict[str, Any]]) -> str:
     # Display by category (priority order)
     priority_order = [
         "error_context",
+        "pre_error",
+        "error_line",
+        "post_error",
         "function_entry",
         "conditional",
         "loop",

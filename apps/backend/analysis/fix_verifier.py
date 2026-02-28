@@ -27,6 +27,7 @@ Usage:
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import shlex
@@ -180,10 +181,17 @@ class FixVerifier:
         )
 
     def _make_cache_key(self, fix: dict | FixSuggestion, project_dir: str) -> str:
-        """Generate a cache key for the fix."""
+        """Generate a content-based cache key for the fix."""
         if isinstance(fix, FixSuggestion):
-            return f"{project_dir}:{fix.fix_category}:{len(fix.suggested_fixes)}"
-        return f"{project_dir}:{fix.get('fix_category', 'unknown')}:{len(fix.get('suggested_fixes', []))}"
+            category = fix.fix_category
+            fixes = fix.suggested_fixes
+        else:
+            category = fix.get("fix_category", "unknown")
+            fixes = fix.get("suggested_fixes", [])
+
+        content = json.dumps(fixes, sort_keys=True, default=str)
+        content_hash = hashlib.sha256(content.encode()).hexdigest()[:12]
+        return f"{project_dir}:{category}:{content_hash}"
 
     def _assess_risk(self, fix: FixSuggestion, parsed_trace: dict | None) -> str:
         """
@@ -214,13 +222,16 @@ class FixVerifier:
     def _discover_test_command(self, project_dir: Path) -> str:
         """Discover the test command for the project."""
         try:
-            from test_discovery import TestDiscovery
+            from .test_discovery import TestDiscovery
 
             discovery = TestDiscovery()
             result = discovery.discover(project_dir)
             return result.test_command
-        except Exception:
-            # Fallback to common test commands
+        except ImportError:
+            logger.debug("TestDiscovery module not available, using fallback")
+            return self._get_fallback_test_command(project_dir)
+        except Exception as e:
+            logger.warning(f"Test discovery failed: {e}")
             return self._get_fallback_test_command(project_dir)
 
     def _get_fallback_test_command(self, project_dir: Path) -> str:
@@ -401,6 +412,8 @@ class FixVerifier:
 
         except subprocess.TimeoutExpired:
             logger.warning("Test execution timed out after 5 minutes")
+            process.kill()
+            process.communicate()  # Reap the process
             result["ran"] = True
             result["output"] = "Test execution timed out"
         except Exception as e:

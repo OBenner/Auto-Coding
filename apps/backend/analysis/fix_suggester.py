@@ -380,23 +380,33 @@ def get_pattern_based_suggestion(
 
     Args:
         parsed_trace: Parsed stack trace
-        pattern_match: Error pattern match result
+        pattern_match: Error pattern match result (supports both nested
+            {"pattern": {...}} and flattened {"category": ..., "description": ...} shapes)
 
     Returns:
         Suggestion dict with pattern-based recommendations
     """
-    if pattern_match and pattern_match.get("pattern"):
-        pattern = pattern_match["pattern"]
-        return {
-            "root_cause": pattern.get("description", "Unknown error pattern"),
-            "fix_category": pattern.get("category", "unknown"),
-            "suggested_fixes": [
-                pattern.get("suggestion", "No specific suggestion available")
-            ],
-            "verification_steps": _get_verification_steps(pattern.get("category")),
-            "confidence": pattern_match.get("confidence", 0.5),
-            "pattern_based": True,
-        }
+    if pattern_match:
+        # Support both nested (pattern_match["pattern"]) and flattened shapes
+        if "pattern" in pattern_match:
+            pattern = pattern_match["pattern"]
+        elif "category" in pattern_match or "description" in pattern_match:
+            # Flattened shape from DebugAssistant._match_pattern()
+            pattern = pattern_match
+        else:
+            pattern = None
+
+        if pattern:
+            return {
+                "root_cause": pattern.get("description", "Unknown error pattern"),
+                "fix_category": pattern.get("category", "unknown"),
+                "suggested_fixes": [
+                    pattern.get("suggestion", "No specific suggestion available")
+                ],
+                "verification_steps": _get_verification_steps(pattern.get("category")),
+                "confidence": pattern_match.get("confidence", 0.5),
+                "pattern_based": True,
+            }
 
     # Fallback for unknown errors
     error_type = (

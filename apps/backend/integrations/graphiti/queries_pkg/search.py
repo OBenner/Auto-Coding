@@ -440,27 +440,35 @@ class GraphitiSearch:
 
                         entry_type = data.get("type")
                         if entry_type == EPISODE_TYPE_ERROR_PATTERN:
+                            # Map stored fields to output shape
+                            # Writer stores: error_type, error_message, file_path, solution, context
                             similar_errors.append(
                                 {
                                     "type": "error_pattern",
-                                    "error_pattern": data.get("error_pattern", ""),
-                                    "common_causes": data.get("common_causes", []),
-                                    "solutions": data.get("solutions", []),
-                                    "files_affected": data.get("files_affected", []),
+                                    "error_pattern": data.get("error_message", "")
+                                    or data.get("error_type", ""),
+                                    "common_causes": data.get("context", []),
+                                    "solutions": [data["solution"]]
+                                    if data.get("solution")
+                                    else [],
+                                    "files_affected": [data["file_path"]]
+                                    if data.get("file_path")
+                                    else [],
                                     "score": score,
                                 }
                             )
                         elif entry_type == EPISODE_TYPE_ROOT_CAUSE:
+                            # Map stored fields to output shape
+                            # Writer stores: failure_type, category, description,
+                            # affected_files, confidence, recommendations
                             similar_errors.append(
                                 {
                                     "type": "root_cause",
-                                    "error_description": data.get(
-                                        "error_description", ""
-                                    ),
-                                    "root_cause": data.get("root_cause", ""),
-                                    "solution": data.get("solution", ""),
-                                    "prevention": data.get("prevention", ""),
-                                    "files_involved": data.get("files_involved", []),
+                                    "error_description": data.get("description", ""),
+                                    "root_cause": data.get("category", ""),
+                                    "solution": data.get("recommendations", []),
+                                    "prevention": data.get("failure_type", ""),
+                                    "files_involved": data.get("affected_files", []),
                                     "score": score,
                                 }
                             )

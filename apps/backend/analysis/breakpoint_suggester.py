@@ -16,7 +16,7 @@ Usage:
     from breakpoint_suggester import suggest_breakpoints, BreakpointSuggester
 
     suggester = BreakpointSuggester()
-    breakpoints = suggester.suggest_for_error(
+    result = suggester.suggest_for_code(
         code='''def my_function():
             x = compute()
             return x + 1
@@ -26,7 +26,7 @@ Usage:
         language='python'
     )
 
-    for bp in breakpoints:
+    for bp in result['suggestions']:
         print(f"Line {bp['line']}: {bp['reason']}")
 """
 

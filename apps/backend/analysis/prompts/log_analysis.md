@@ -129,7 +129,7 @@ You must respond with **ONLY** valid JSON. No markdown formatting, no explanatio
   "critical_issues": [
     {
       "message": "Exact error message",
-      "frequency": "Number of occurrences",
+      "frequency": 1,
       "impact": "What this breaks"
     }
   ]

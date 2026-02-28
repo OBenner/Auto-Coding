@@ -148,11 +148,12 @@ def parse_javascript_trace(trace: str) -> ParsedStackTrace | None:
         # "    at file:line:col"
         # "    at functionName (https://...:line:col)"
         frame_patterns = [
-            re.compile(
-                r"\s+at (\S+) \(([^:]+):(\d+):\d+\)"
-            ),  # function (file:line:col)
-            re.compile(r"\s+at (\S+):(\d+):\d+"),  # file:line:col (anonymous)
-            re.compile(r"\s+at ([^(]+) \(([^:]+):(\d+)\)"),  # function (file:line)
+            # function (file:line:col) - use lookahead for line:col to handle URLs/Windows paths
+            re.compile(r"\s+at (\S+) \((.+?):(\d+):\d+\)"),
+            # file:line:col (anonymous)
+            re.compile(r"\s+at (.+?):(\d+):\d+$"),
+            # function (file:line)
+            re.compile(r"\s+at ([^(]+) \((.+?):(\d+)\)"),
         ]
 
         for line in lines[1:]:
@@ -411,7 +412,10 @@ def extract_error_type(trace: str) -> str:
 
 def get_failing_file(parsed_trace: ParsedStackTrace | None) -> str | None:
     """
-    Get the file path where the error originated (deepest frame).
+    Get the file path where the error originated.
+
+    For Python/Rust traces, the throw site is in the last frame.
+    For JavaScript traces, the throw site is in the first frame.
 
     Args:
         parsed_trace: Parsed stack trace
@@ -422,13 +426,18 @@ def get_failing_file(parsed_trace: ParsedStackTrace | None) -> str | None:
     if not parsed_trace or not parsed_trace.frames:
         return None
 
-    # Return the last frame (where the error occurred)
+    # JS traces list the throw site first; other languages list it last
+    if parsed_trace.language == "javascript":
+        return parsed_trace.frames[0].file_path
     return parsed_trace.frames[-1].file_path
 
 
 def get_failing_line(parsed_trace: ParsedStackTrace | None) -> int | None:
     """
-    Get the line number where the error originated (deepest frame).
+    Get the line number where the error originated.
+
+    For Python/Rust traces, the throw site is in the last frame.
+    For JavaScript traces, the throw site is in the first frame.
 
     Args:
         parsed_trace: Parsed stack trace
@@ -439,7 +448,8 @@ def get_failing_line(parsed_trace: ParsedStackTrace | None) -> int | None:
     if not parsed_trace or not parsed_trace.frames:
         return None
 
-    # Return the last frame (where the error occurred)
+    if parsed_trace.language == "javascript":
+        return parsed_trace.frames[0].line_number
     return parsed_trace.frames[-1].line_number
 
 
