@@ -421,12 +421,21 @@ def create_webhook_server(
         try:
             # Validate project_dir to prevent path traversal attacks
             raw_project_dir = request.project_dir
-            if ".." in raw_project_dir:
+
+            # Treat project_dir as a path relative to the configured spec_dir root.
+            # This prevents directory traversal and absolute-path abuse.
+            base_root = spec_dir if isinstance(spec_dir, Path) else Path(spec_dir)
+            candidate_dir = (base_root / raw_project_dir).resolve()
+            try:
+                # Ensure the resolved path is within the allowed root
+                candidate_dir.relative_to(base_root)
+            except ValueError:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Invalid project directory",
                 )
-            project_dir = Path(raw_project_dir).resolve()
+
+            project_dir = candidate_dir
             if not project_dir.is_dir():
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
