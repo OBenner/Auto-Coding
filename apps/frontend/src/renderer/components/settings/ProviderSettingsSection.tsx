@@ -9,9 +9,7 @@ import type { AIEngineProvider } from '../../../shared/types/settings';
 
 type ProviderType = AIEngineProvider;
 
-interface ProviderSettingsSectionProps {
-  // Future: add settings state and onChange handler
-}
+type ProviderSettingsSectionProps = Record<string, never>;
 
 /**
  * Provider settings component for configuring AI providers
