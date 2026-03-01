@@ -228,9 +228,10 @@ class CommandParser:
         if not command_type:
             return ""
 
-        # Remove any trailing non-word characters (anything that's not a-z, A-Z, 0-9, _, or unicode letters)
-        # Also remove purely numeric commands
-        sanitized = re.sub(r"\W+$", "", command_type, flags=re.UNICODE)
+        # Extract leading word characters only — avoids backtracking at end-of-string (S5852)
+        # e.g. "merge!" → "merge", "merge." → "merge"
+        m = re.match(r"\w+", command_type, re.UNICODE)
+        sanitized = m.group(0) if m else ""
 
         # Skip purely numeric commands (e.g., /123)
         if sanitized.isdigit():
@@ -272,8 +273,10 @@ class CommandParser:
         # This handles cases like "main!" or "branch." by extracting "main", "branch"
         sanitized_args = []
         for arg in args:
-            # Remove trailing punctuation (but keep internal punctuation like hyphens, underscores)
-            sanitized = re.sub(r"[^\w-]+$", "", arg, flags=re.UNICODE)
+            # Extract leading word/hyphen characters — avoids backtracking at end-of-string (S5852)
+            # e.g. "main!" → "main", "feature-branch." → "feature-branch"
+            m = re.match(r"[\w-]+", arg, re.UNICODE)
+            sanitized = m.group(0) if m else ""
             if sanitized:  # Only add non-empty args
                 sanitized_args.append(sanitized)
 
