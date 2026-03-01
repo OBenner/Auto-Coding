@@ -28,6 +28,8 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+_CODEBASE_MAP_FILENAME = "codebase_map.json"
+
 
 async def _save_to_graphiti_async(
     spec_dir: Path,
@@ -164,7 +166,7 @@ def create_memory_tools(spec_dir: Path, project_dir: Path) -> list:
         memory_dir = spec_dir / "memory"
         memory_dir.mkdir(exist_ok=True)
 
-        codebase_map_file = memory_dir / "codebase_map.json"
+        codebase_map_file = memory_dir / _CODEBASE_MAP_FILENAME
         saved_to_graphiti = False
 
         try:
@@ -377,7 +379,7 @@ def create_memory_tools(spec_dir: Path, project_dir: Path) -> list:
         result_parts = []
 
         # Load codebase map
-        codebase_map_file = memory_dir / "codebase_map.json"
+        codebase_map_file = memory_dir / _CODEBASE_MAP_FILENAME
         if codebase_map_file.exists():
             try:
                 with open(codebase_map_file, encoding="utf-8") as f:
@@ -443,7 +445,7 @@ def create_memory_tools(spec_dir: Path, project_dir: Path) -> list:
         category_filter = args.get("category")
 
         memory_dir = spec_dir / "memory"
-        codebase_map_file = memory_dir / "codebase_map.json"
+        codebase_map_file = memory_dir / _CODEBASE_MAP_FILENAME
 
         if not codebase_map_file.exists():
             return {
@@ -456,8 +458,8 @@ def create_memory_tools(spec_dir: Path, project_dir: Path) -> list:
             }
 
         try:
-            with open(codebase_map_file, encoding="utf-8") as f:
-                codebase_map = json.load(f)
+            raw = await asyncio.to_thread(codebase_map_file.read_text, encoding="utf-8")
+            codebase_map = json.loads(raw)
 
             discoveries = codebase_map.get("discovered_files", {})
 
