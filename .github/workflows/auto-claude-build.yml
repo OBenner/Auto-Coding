@@ -13,20 +13,9 @@
 name: Auto-Claude Build
 
 on:
-  pull_request:
-    branches: [main, develop]
-    paths:
-      - 'apps/**'
-      - 'tests/**'
-      - 'guides/**'
-      - '.github/workflows/auto-claude-build.yml'
-  push:
-    branches: [main, develop]
-    paths:
-      - 'apps/**'
-      - 'tests/**'
-      - 'guides/**'
-      - '.github/workflows/auto-claude-build.yml'
+  # This workflow is a template/example — trigger it manually in your own repo.
+  # The pull_request/push triggers are intentionally removed so this demo
+  # workflow does not run in CI without the required ANTHROPIC_API_KEY secret.
   workflow_dispatch:
     inputs:
       spec_number:
@@ -39,7 +28,7 @@ on:
         default: ''
 
 concurrency:
-  group: auto-claude-${{ github.event.pull_request.number || github.ref }}
+  group: auto-claude-${{ github.ref }}
   cancel-in-progress: true
 
 env:
