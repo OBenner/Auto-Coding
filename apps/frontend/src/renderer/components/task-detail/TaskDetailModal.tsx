@@ -608,9 +608,9 @@ function TaskDetailModalContent({ open, task, onOpenChange, onSwitchToTerminals,
                     expandedPhases={state.expandedPhases}
                     isStuck={state.isStuck}
                     logsEndRef={state.logsEndRef}
+                    logsContainerRef={state.logsContainerRef}
                     onLogsScroll={state.handleLogsScroll}
                     onTogglePhase={state.togglePhase}
-                    shouldAutoScroll={state.shouldAutoScroll}
                   />
                 </TabsContent>
 
