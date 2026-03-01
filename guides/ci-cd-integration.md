@@ -72,12 +72,11 @@ Auto-Claude uses standard exit codes to indicate build results:
 A complete GitHub Actions workflow is provided at `.github/workflows/auto-claude-build.yml`. Copy this to your repository and customize as needed.
 
 **Key Features:**
-- Triggers on PRs and pushes to main/develop
-- Manual workflow dispatch with custom inputs
+- Manual `workflow_dispatch` trigger with custom inputs (spec number, task description)
 - Spec-based and task-based build modes
 - Automatic artifact uploads
 - PR comments with build results
-- Multi-platform support (Linux, macOS, Windows)
+- Runs on `ubuntu-latest` runner
 
 ### Workflow Triggers
 
@@ -115,8 +114,9 @@ env:
   AUTO_CLAUDE_CI: 'true'
   AUTO_CLAUDE_JSON_OUTPUT: 'true'
 
-  # Required: Authentication
-  ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+  # Required: Authentication — Claude OAuth token (NOT ANTHROPIC_API_KEY)
+  # Generate with: claude setup-token --print
+  CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 
   # Optional: Model selection
   # CLAUDE_MODEL: 'claude-sonnet-4-5-20250929'
@@ -129,8 +129,11 @@ env:
 
 **Setup Secrets:**
 1. Go to repository **Settings** → **Secrets and variables** → **Actions**
-2. Add `ANTHROPIC_API_KEY` (get token from `claude setup-token`)
-3. Add optional keys (`OPENAI_API_KEY`, `LINEAR_API_KEY`, etc.)
+2. Run `claude setup-token --print` locally to obtain your Claude OAuth token
+3. Add `CLAUDE_CODE_OAUTH_TOKEN` with that token value
+   > **Note:** `ANTHROPIC_API_KEY` is intentionally **not supported** — Auto Code requires
+   > Claude Code OAuth tokens to avoid silent billing to raw API credits.
+4. Add optional keys (`OPENAI_API_KEY`, `LINEAR_API_KEY`, etc.)
 
 ### Spec-Based Build
 
@@ -186,7 +189,7 @@ Post build results as PR comments:
     github-token: ${{ secrets.GITHUB_TOKEN }}
     script: |
       // Read build log
-      const buildLog = JSON.parse(fs.readFileSync('.auto-claude/specs/001/build-log.json', 'utf8'));
+      const buildLog = JSON.parse(fs.readFileSync('.auto-claude/specs/001/artifacts/build-log.json', 'utf8'));
 
       // Build comment
       let comment = '## 🤖 Auto-Claude Build Results\n\n';

@@ -28,6 +28,7 @@ class BuildStatus(str, Enum):
     BUILD_FAILED = "build_failed"
     QA_FAILED = "qa_failed"
     SYSTEM_ERROR = "system_error"
+    INTERRUPTED = "interrupted"
 
 
 def format_build_result(
@@ -86,7 +87,7 @@ def format_build_result(
             ExitCode.BUILD_FAILED: BuildStatus.BUILD_FAILED,
             ExitCode.QA_FAILED: BuildStatus.QA_FAILED,
             ExitCode.SYSTEM_ERROR: BuildStatus.SYSTEM_ERROR,
-            ExitCode.INTERRUPTED: BuildStatus.BUILD_FAILED,
+            ExitCode.INTERRUPTED: BuildStatus.INTERRUPTED,
         }
         status = status_map.get(status, BuildStatus.SYSTEM_ERROR)
 
@@ -161,7 +162,7 @@ def format_qa_result(
             "passed": passed,
             "issuesFound": issues_found,
             "issuesFixed": issues_fixed,
-            "issuesRemaining": issues_found - issues_fixed,
+            "issuesRemaining": max(0, issues_found - issues_fixed),
         },
     }
 

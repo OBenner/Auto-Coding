@@ -496,6 +496,10 @@ def _run_cli() -> None:
     # Parse arguments
     args = parse_args()
 
+    # Wire --ci flag into CI mode env var so is_ci_mode() picks it up
+    if args.ci:
+        os.environ["AUTO_CLAUDE_CI"] = "1"
+
     # Import debug functions after environment setup
     from debug import debug, debug_error, debug_section, debug_success
 
