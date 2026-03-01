@@ -41,7 +41,7 @@ import json
 import os
 import tempfile
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -388,7 +388,7 @@ class WorkspaceManager:
         """
         state = self.get_project_state(project_name)
         if state:
-            state.last_sync = datetime.now(timezone.utc).isoformat()
+            state.last_sync = datetime.now(UTC).isoformat()
 
     def get_project_by_path(self, file_path: str | Path) -> ProjectConfig | None:
         """
@@ -432,7 +432,7 @@ class WorkspaceManager:
         """Save workspace state to disk using atomic write."""
         state = {
             "workspace": self.config.name,
-            "last_saved": datetime.now(timezone.utc).isoformat(),
+            "last_saved": datetime.now(UTC).isoformat(),
             "projects": {
                 name: project_state.to_dict()
                 for name, project_state in self._project_states.items()
