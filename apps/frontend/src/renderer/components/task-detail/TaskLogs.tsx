@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react';
+import { useState, useRef, useCallback, useMemo } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import {
   Terminal,
@@ -19,15 +19,11 @@ import {
   Brain,
   Cpu,
   X,
-<<<<<<< HEAD
-  ArrowDown
-=======
   Lightbulb,
   GitBranch,
   Target,
   TrendingUp,
   Layers
->>>>>>> origin/develop
 } from 'lucide-react';
 import { Badge } from '../ui/badge';
 import { cn } from '../../lib/utils';
@@ -44,9 +40,9 @@ interface TaskLogsProps {
   expandedPhases: Set<TaskLogPhase>;
   isStuck: boolean;
   logsEndRef: React.RefObject<HTMLDivElement | null>;
+  logsContainerRef: React.RefObject<HTMLDivElement | null>;
   onLogsScroll: (e: React.UIEvent<HTMLDivElement>) => void;
   onTogglePhase: (phase: TaskLogPhase) => void;
-  shouldAutoScroll: boolean;
 }
 
 const PHASE_LABELS: Record<TaskLogPhase, string> = {
@@ -143,23 +139,13 @@ export function TaskLogs({
   expandedPhases,
   isStuck,
   logsEndRef,
+  logsContainerRef,
   onLogsScroll,
-  onTogglePhase,
-  shouldAutoScroll
+  onTogglePhase
 }: TaskLogsProps) {
   const parentRef = useRef<HTMLDivElement>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<LogFilterType>('all');
-  const [showNewLogsIndicator, setShowNewLogsIndicator] = useState(false);
-  const previousLogCountRef = useRef(0);
-
-  // Performance measurement
-  const renderStartTime = useMemo(() => performance.now(), []);
-  const performanceMetricsRef = useRef({
-    initialRender: 0,
-    filterChanges: [] as Array<{ filter: LogFilterType; time: number; itemCount: number }>,
-    logUpdates: [] as Array<{ logCount: number; time: number }>
-  });
 
   // Helper function to check if an entry matches the current filter
   const entryMatchesFilter = useCallback((entry: TaskLogEntry | undefined, filter: LogFilterType): boolean => {
@@ -279,18 +265,6 @@ export function TaskLogs({
     overscan: OVERSCAN,
   });
 
-  // Auto-scroll to bottom when new logs arrive for active tasks
-  useEffect(() => {
-    if (shouldAutoScroll && filteredItems.length > 0) {
-      // Scroll to the last item using the virtualizer's scrollToIndex
-      // This is more efficient than scrollIntoView for virtualized lists
-      rowVirtualizer.scrollToIndex(filteredItems.length - 1, {
-        align: 'end',
-        behavior: 'smooth',
-      });
-    }
-  }, [shouldAutoScroll, filteredItems.length, rowVirtualizer]);
-
   // Create toggle handler for phase headers
   const createPhaseToggleHandler = useCallback(
     (phase: TaskLogPhase) => {
@@ -307,137 +281,28 @@ export function TaskLogs({
     [toggleDetail]
   );
 
-  // Track if user is scrolled away from bottom (within threshold)
-  const [isScrolledUp, setIsScrolledUp] = useState(false);
-
-  // Handle scroll to detect if user is scrolled away from bottom
-  const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
-    const target = e.currentTarget;
-    const { scrollTop, scrollHeight, clientHeight } = target;
-    const threshold = 100; // pixels from bottom to consider "at bottom"
-
-    // User is scrolled up if they're more than threshold pixels from bottom
-    const scrolledUp = scrollHeight - scrollTop - clientHeight > threshold;
-    setIsScrolledUp(scrolledUp);
-
-    // Call parent's scroll handler if provided
-    onLogsScroll(e);
-  }, [onLogsScroll]);
-
-  // Calculate total log count across all phases
-  const totalLogCount = useMemo(() => {
-    if (!phaseLogs) return 0;
-    return Object.values(phaseLogs.phases).reduce(
-      (sum, phase) => sum + (phase?.entries?.length || 0),
-      0
-    );
-  }, [phaseLogs]);
-
-  // Detect new logs arriving while scrolled up
-  useEffect(() => {
-    const currentLogCount = totalLogCount;
-
-    // Check if new logs arrived and user is scrolled up
-    if (currentLogCount > previousLogCountRef.current && isScrolledUp) {
-      setShowNewLogsIndicator(true);
-    }
-
-    // Update previous count
-    previousLogCountRef.current = currentLogCount;
-
-    // Hide indicator if user scrolls back to bottom
-    if (!isScrolledUp) {
-      setShowNewLogsIndicator(false);
-    }
-  }, [totalLogCount, isScrolledUp]);
-
-  // Scroll to bottom handler for the indicator button
-  const scrollToBottom = useCallback(() => {
-    if (filteredItems.length > 0) {
-      rowVirtualizer.scrollToIndex(filteredItems.length - 1, {
-        align: 'end',
-        behavior: 'smooth',
-      });
-      setShowNewLogsIndicator(false);
-    }
-  }, [filteredItems.length, rowVirtualizer]);
-
-  // Performance: Measure initial render when logs load
-  useEffect(() => {
-    if (phaseLogs && totalLogCount > 0) {
-      const renderEndTime = performance.now();
-      const initialRenderTime = renderEndTime - renderStartTime;
-
-      performanceMetricsRef.current.initialRender = initialRenderTime;
-
-      // Log performance metrics to console for verification
-      console.group('📊 TaskLogs Performance Metrics');
-      console.log(`Initial Render: ${initialRenderTime.toFixed(2)}ms`);
-      console.log(`Total Log Entries: ${totalLogCount}`);
-      console.log(`Flattened Items: ${flattenedItems.length}`);
-      console.log(`Filtered Items: ${filteredItems.length}`);
-      console.log(`Performance Target: <100ms ${initialRenderTime < 100 ? '✅ PASS' : '❌ FAIL'}`);
-      console.groupEnd();
-
-      // Track for log update measurements
-      previousLogCountRef.current = totalLogCount;
-    }
-  }, [phaseLogs, totalLogCount, flattenedItems.length, filteredItems.length, renderStartTime]);
-
-  // Performance: Measure render time when logs update
-  useEffect(() => {
-    if (phaseLogs && totalLogCount > 0 && previousLogCountRef.current > 0) {
-      const updateStartTime = performance.now();
-
-      // Use requestAnimationFrame to measure after React completes rendering
-      requestAnimationFrame(() => {
-        const updateEndTime = performance.now();
-        const updateTime = updateEndTime - updateStartTime;
-
-        performanceMetricsRef.current.logUpdates.push({
-          logCount: totalLogCount,
-          time: updateTime
-        });
-
-        console.log(`🔄 TaskLogs Update: ${totalLogCount} entries rendered in ${updateTime.toFixed(2)}ms`);
-
-        previousLogCountRef.current = totalLogCount;
-      });
-    }
-  }, [phaseLogs, totalLogCount]);
-
-  // Performance: Measure filter change performance
-  useEffect(() => {
-    if (phaseLogs && totalLogCount > 0) {
-      const filterStartTime = performance.now();
-
-      // Use requestAnimationFrame to measure after React completes rendering
-      requestAnimationFrame(() => {
-        const filterEndTime = performance.now();
-        const filterTime = filterEndTime - filterStartTime;
-
-        performanceMetricsRef.current.filterChanges.push({
-          filter: filterType,
-          time: filterTime,
-          itemCount: filteredItems.length
-        });
-
-        console.log(`🔍 Filter Change (${filterType}): ${filteredItems.length} items rendered in ${filterTime.toFixed(2)}ms`);
-      });
-    }
-  }, [filterType, filteredItems.length, phaseLogs, totalLogCount]);
-
-  // Expose performance metrics to window for debugging (development only)
-  useEffect(() => {
-    if (process.env.NODE_ENV === 'development') {
-      (window as any).__taskLogsPerformance = performanceMetricsRef.current;
-    }
-  }, []);
-
   if (isLoadingLogs) {
     return (
       <div className="flex items-center justify-center py-8">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  // Fallback to legacy raw logs if no phase logs exist
+  if (!phaseLogs && task.logs && task.logs.length > 0) {
+    return (
+      <div
+        ref={logsContainerRef}
+        className="h-full overflow-y-auto scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent"
+        onScroll={onLogsScroll}
+      >
+        <div className="p-4">
+          <pre className="text-xs font-mono text-muted-foreground whitespace-pre-wrap break-all">
+            {task.logs.join('')}
+            <div ref={logsEndRef} />
+          </pre>
+        </div>
       </div>
     );
   }
@@ -454,7 +319,7 @@ export function TaskLogs({
   }
 
   return (
-    <div className="h-full flex flex-col relative">
+    <div className="h-full flex flex-col">
       {/* Search and Filter Controls */}
       <div className="flex-shrink-0 p-3 border-b border-border bg-background/50">
         <div className="flex items-center gap-2">
@@ -517,29 +382,11 @@ export function TaskLogs({
         )}
       </div>
 
-      {/* New Logs Indicator */}
-      {showNewLogsIndicator && (
-        <div className="absolute bottom-6 right-6 z-10">
-          <button
-            onClick={scrollToBottom}
-            className={cn(
-              'flex items-center gap-2 px-4 py-2 rounded-lg shadow-lg',
-              'bg-primary text-primary-foreground',
-              'hover:bg-primary/90 transition-colors',
-              'animate-in fade-in slide-in-from-bottom-2 duration-300'
-            )}
-          >
-            <ArrowDown className="h-4 w-4" />
-            <span className="text-sm font-medium">New logs</span>
-          </button>
-        </div>
-      )}
-
       {/* Logs List */}
       <div
         ref={parentRef}
         className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent"
-        onScroll={handleScroll}
+        onScroll={onLogsScroll}
       >
         <div className="p-4">
           {filteredItems.length === 0 ? (
@@ -623,11 +470,7 @@ interface PhaseLogSectionProps {
   taskId?: string;
 }
 
-<<<<<<< HEAD
-const PhaseLogSection = React.memo(function PhaseLogSection({ phase, phaseLog, isExpanded, onToggle, isTaskStuck, phaseConfig }: PhaseLogSectionProps) {
-=======
 function PhaseLogSection({ phase, phaseLog, isExpanded, onToggle, isTaskStuck, phaseConfig, taskId }: PhaseLogSectionProps) {
->>>>>>> origin/develop
   const Icon = PHASE_ICONS[phase];
   const status = phaseLog?.status || 'pending';
   const hasEntries = (phaseLog?.entries.length || 0) > 0;
@@ -734,7 +577,7 @@ function PhaseLogSection({ phase, phaseLog, isExpanded, onToggle, isTaskStuck, p
       )}
     </div>
   );
-});
+}
 
 // Log Entry Component
 interface LogEntryProps {
@@ -743,7 +586,7 @@ interface LogEntryProps {
   onToggleExpand: () => void;
 }
 
-const LogEntry = React.memo(function LogEntry({ entry, isExpanded, onToggleExpand }: LogEntryProps) {
+function LogEntry({ entry, isExpanded, onToggleExpand }: LogEntryProps) {
   const hasDetail = Boolean(entry.detail);
 
   const getToolInfo = (toolName: string) => {
@@ -1132,9 +975,6 @@ const LogEntry = React.memo(function LogEntry({ entry, isExpanded, onToggleExpan
       )}
     </div>
   );
-<<<<<<< HEAD
-});
-=======
 }
 
 // Decision Alternative Card Component
@@ -1214,4 +1054,3 @@ function DecisionAlternativeCard({ alternative }: { alternative: Alternative }) 
     </div>
   );
 }
->>>>>>> origin/develop
