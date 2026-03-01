@@ -63,10 +63,28 @@ def test_dirs():
 
 
 @pytest.fixture
-def manager(test_dirs):
-    """Create a BackgroundTaskManager instance."""
+async def manager(test_dirs):
+    """Create a BackgroundTaskManager instance with cleanup."""
     spec_dir, project_dir = test_dirs
-    return BackgroundTaskManager(spec_dir, project_dir)
+    mgr = BackgroundTaskManager(spec_dir, project_dir)
+    yield mgr
+    # Cleanup: cancel all running tasks and kill remaining processes
+    for task_id, process in list(mgr.processes.items()):
+        try:
+            process.kill()
+            await asyncio.sleep(0.1)
+        except Exception:
+            pass
+    mgr.processes.clear()
+    # Cancel any pending async tasks
+    for task_id, async_task in list(mgr._async_tasks.items()):
+        if not async_task.done():
+            async_task.cancel()
+            try:
+                await asyncio.sleep(0.1)
+            except Exception:
+                pass
+    mgr._async_tasks.clear()
 
 
 @pytest.mark.asyncio
