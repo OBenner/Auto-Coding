@@ -189,6 +189,6 @@ export class BackgroundTaskState {
       const oldestTime = new Date(oldest.startedAt || oldest.createdAt).getTime();
       const taskTime = new Date(task.startedAt || task.createdAt).getTime();
       return taskTime < oldestTime ? task : oldest;
-    });
+    }, runningTasks[0]);
   }
 }

@@ -205,8 +205,7 @@ class TestLongRunningCommands:
         assert state_file.exists(), "State file should be created"
 
         # Load state directly from file
-        with open(state_file) as f:
-            saved_state = json.load(f)
+        saved_state = json.loads(state_file.read_text(encoding="utf-8"))
 
         # Verify state contents
         assert saved_state["id"] == task_id
@@ -219,8 +218,7 @@ class TestLongRunningCommands:
         await asyncio.sleep(1)
 
         # Verify final state is persisted
-        with open(state_file) as f:
-            final_state = json.load(f)
+        final_state = json.loads(state_file.read_text(encoding="utf-8"))
 
         assert final_state["status"] == "completed"
         assert final_state["completed_at"] is not None
@@ -413,8 +411,7 @@ class TestLongRunningCommands:
             # Load state from disk to verify persistence
             state_file = manager._get_task_state_file(task_id)
             assert state_file.exists()
-            with open(state_file) as f:
-                persisted_state = json.load(f)
+            persisted_state = json.loads(state_file.read_text(encoding="utf-8"))
             assert "memory_stats" in persisted_state
             assert persisted_state["memory_stats"] == final_mem_stats
             logger.info("✓ Memory stats persisted to disk")
@@ -681,8 +678,7 @@ class TestLongRunningCommands:
         state_file = spec_dir / ".background_tasks" / f"{task_id}.json"
         assert state_file.exists(), "State file should exist"
 
-        with open(state_file) as f:
-            state_data = json.load(f)
+        state_data = json.loads(state_file.read_text(encoding="utf-8"))
 
         # Verify all critical fields are present
         required_fields = ["id", "command", "status", "created_at", "timeout"]

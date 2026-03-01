@@ -11,6 +11,9 @@ import { pythonEnvManager } from '../python-env-manager';
 /** Maximum length for status messages displayed in progress UI */
 const STATUS_MESSAGE_MAX_LENGTH = 200;
 
+/** Maximum number of characters to keep in the in-memory output buffer */
+const MAX_OUTPUT_BUFFER_CHARS = 100_000;
+
 /**
  * Formats a raw log line for display as a status message.
  * Strips ANSI escape codes, extracts the first line, and truncates to max length.
@@ -164,15 +167,18 @@ print(json.dumps({'task_id': task_id}))
       const output = data.toString('utf-8');
       debugLog('[Background Task Manager] Task output:', { taskId, output });
 
-      // Append output to task
+      // Append output to task (with buffer limit to prevent unbounded memory growth)
       const task = this.state.getTask(taskId);
       if (task) {
-        const updatedOutput = task.output + output;
+        const combined = (task.output ?? '') + output;
+        const updatedOutput = combined.length > MAX_OUTPUT_BUFFER_CHARS
+          ? combined.slice(combined.length - MAX_OUTPUT_BUFFER_CHARS)
+          : combined;
         this.state.updateTask(taskId, { output: updatedOutput });
 
-        // Emit progress event
+        // Emit only the new chunk to the renderer
         this.emitter.emit('background-task-progress', taskId, {
-          output: updatedOutput,
+          output,
           message: formatStatusMessage(output)
         });
       }

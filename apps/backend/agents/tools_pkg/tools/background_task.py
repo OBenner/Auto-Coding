@@ -392,7 +392,12 @@ class BackgroundTaskManager:
         self._save_task_state(task_id)
 
         # Start command execution in background
-        asyncio.create_task(self._run_command(task_id))
+        # Store task reference to prevent premature garbage collection
+        bg_task = asyncio.create_task(self._run_command(task_id))
+        bg_task.add_done_callback(
+            lambda t: t.exception() if not t.cancelled() and t.exception() else None
+        )
+        self.tasks[task_id]["_async_task"] = bg_task
 
         logger.info(f"Started background task {task_id}: {command}")
         return task_id
@@ -727,8 +732,16 @@ def create_background_task_tools(spec_dir: Path, project_dir: Path) -> list:
                     }
                 ]
             }
-        except Exception as e:
-            return {"content": [{"type": "text", "text": f"Error starting task: {e}"}]}
+        except Exception:
+            logger.error("Failed to start background task", exc_info=True)
+            return {
+                "content": [
+                    {
+                        "type": "text",
+                        "text": "Error starting task. Check server logs for details.",
+                    }
+                ]
+            }
 
     tools.append(start_background_command)
 

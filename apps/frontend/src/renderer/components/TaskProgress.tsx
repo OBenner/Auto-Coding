@@ -159,7 +159,7 @@ export function TaskProgress({ taskId, onClose }: TaskProgressProps) {
       if (progressTaskId === taskId && xtermRef.current && isMountedRef.current) {
         xtermRef.current.write(output);
         // Update task state with new output
-        setTask((prev: BackgroundTask | null) => prev ? { ...prev, output: prev.output + output } : null);
+        setTask((prev: BackgroundTask | null) => prev ? { ...prev, output: (prev.output ?? '') + output } : null);
       }
     };
 

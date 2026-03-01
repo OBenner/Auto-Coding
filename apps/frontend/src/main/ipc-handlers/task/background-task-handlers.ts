@@ -4,6 +4,7 @@ import type { IPCResult } from '../../../shared/types';
 import { BackgroundTaskManager } from '../../agent/background-task-manager';
 import { BackgroundTaskState, BackgroundTask, BackgroundTaskStatus } from '../../agent/task-state';
 import { AgentManager } from '../../agent';
+import { EventEmitter } from 'events';
 import { debugLog, debugError } from '../../../shared/utils/debug-logger';
 
 // Singleton instances for background task management
@@ -24,7 +25,6 @@ function initializeBackgroundTaskManager(agentManager: AgentManager): Background
     // Access the process manager and emitter from agent manager
     // Note: This requires AgentManager to expose these properties
     // For now, we'll create a new instance - this should be refactored to use AgentManager's instances
-    const { EventEmitter } = require('events');
     const emitter = new EventEmitter();
 
     // Forward events to IPC channels
