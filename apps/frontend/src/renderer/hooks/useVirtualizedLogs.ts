@@ -30,32 +30,15 @@ export interface FlattenedLogItem {
 }
 
 /**
- * Configuration for height estimation calculations
- */
-const HEIGHT_CONFIG = {
-  PHASE_HEADER: 60,           // Phase collapsible header
-  BASE_ENTRY_HEIGHT: 32,      // Base height for single-line log entry
-  TOOL_ENTRY_HEIGHT: 40,      // Base height for tool entries
-  ERROR_ENTRY_HEIGHT: 48,     // Base height for error entries
-  LINE_HEIGHT_NORMAL: 18,     // Pixels per line for normal content
-  LINE_HEIGHT_COMPACT: 16,    // Pixels per line for compact/error content
-  CHARS_PER_LINE_NORMAL: 85,  // Estimated chars per line for content
-  CHARS_PER_LINE_TOOL: 40,    // Estimated chars per line for tool names
-  CHARS_PER_LINE_DETAIL: 90,  // Estimated chars per line for detail sections
-  DETAIL_MIN_HEIGHT: 50,      // Minimum detail section height
-  DETAIL_MAX_HEIGHT: 400,     // Maximum detail section height
-} as const;
-
-/**
  * Estimated heights for different item types (in pixels)
- * Legacy export for backwards compatibility
+ * These are base heights - actual heights may vary dynamically
  */
 export const ESTIMATED_HEIGHTS = {
-  PHASE_HEADER: HEIGHT_CONFIG.PHASE_HEADER,
-  LOG_ENTRY_SIMPLE: HEIGHT_CONFIG.BASE_ENTRY_HEIGHT,
-  LOG_ENTRY_TOOL: HEIGHT_CONFIG.TOOL_ENTRY_HEIGHT,
-  LOG_ENTRY_ERROR: HEIGHT_CONFIG.ERROR_ENTRY_HEIGHT,
-  LOG_ENTRY_DETAIL: HEIGHT_CONFIG.DETAIL_MIN_HEIGHT,
+  PHASE_HEADER: 60,           // Phase collapsible header
+  LOG_ENTRY_SIMPLE: 32,       // Simple text/info entries
+  LOG_ENTRY_TOOL: 40,         // Tool start/end entries
+  LOG_ENTRY_ERROR: 48,        // Error entries
+  LOG_ENTRY_DETAIL: 150,      // Expanded detail section (additional height)
 } as const;
 
 /**
@@ -114,103 +97,36 @@ export function flattenLogs(
 }
 
 /**
- * Calculates the number of lines needed to display text content,
- * accounting for both explicit newlines and text wrapping.
- *
- * @param text - The text content to measure
- * @param charsPerLine - Estimated characters per line before wrapping
- * @returns Total number of lines needed
- */
-function calculateTextLines(text: string, charsPerLine: number): number {
-  if (!text) {
-    return 0;
-  }
-
-  // Split by explicit newlines first
-  const explicitLines = text.split('\n');
-  let totalLines = 0;
-
-  for (const line of explicitLines) {
-    // Estimate how many wrapped lines this explicit line will create
-    const wrappedLines = Math.ceil(Math.max(0, line.length) / charsPerLine);
-    totalLines += Math.max(1, wrappedLines);
-  }
-
-  return totalLines;
-}
-
-/**
  * Estimates the height of a flattened log item based on its type and content.
  * Used by the virtualizer for smooth scrolling with dynamic heights.
- *
- * This function considers:
- * - Entry type (different base heights)
- * - Content text length and wrapping
- * - Tool name length for tool entries
- * - Detail section size when expanded
  *
  * @param item - The flattened log item
  * @returns Estimated height in pixels
  */
 export function estimateLogItemHeight(item: FlattenedLogItem): number {
   if (item.type === 'phase-header') {
-    return HEIGHT_CONFIG.PHASE_HEADER;
+    return ESTIMATED_HEIGHTS.PHASE_HEADER;
   }
 
+  // For log entries, base height depends on entry type
   const entry = item.entry;
   if (!entry) {
-    return HEIGHT_CONFIG.BASE_ENTRY_HEIGHT;
+    return ESTIMATED_HEIGHTS.LOG_ENTRY_SIMPLE;
   }
 
-<<<<<<< HEAD
-  // Determine base height and line height based on entry type
   let baseHeight: number;
-  let lineHeight: number;
-=======
-  let baseHeight: number;
->>>>>>> origin/develop
 
+  // Adjust base height by entry type
   switch (entry.type) {
     case 'tool_start':
     case 'tool_end':
-      baseHeight = HEIGHT_CONFIG.TOOL_ENTRY_HEIGHT;
-      lineHeight = HEIGHT_CONFIG.LINE_HEIGHT_NORMAL;
-
-      // Add height for tool name if it exists and might wrap
-      if (entry.tool_name) {
-        const toolLines = calculateTextLines(
-          entry.tool_name,
-          HEIGHT_CONFIG.CHARS_PER_LINE_TOOL
-        );
-        if (toolLines > 1) {
-          baseHeight += (toolLines - 1) * lineHeight;
-        }
-      }
+      baseHeight = ESTIMATED_HEIGHTS.LOG_ENTRY_TOOL;
       break;
-
     case 'error':
-      baseHeight = HEIGHT_CONFIG.ERROR_ENTRY_HEIGHT;
-      lineHeight = HEIGHT_CONFIG.LINE_HEIGHT_COMPACT;
+      baseHeight = ESTIMATED_HEIGHTS.LOG_ENTRY_ERROR;
       break;
-
     case 'success':
     case 'info':
-<<<<<<< HEAD
-    default:
-      baseHeight = HEIGHT_CONFIG.BASE_ENTRY_HEIGHT;
-      lineHeight = HEIGHT_CONFIG.LINE_HEIGHT_NORMAL;
-      break;
-  }
-
-  // Add height for content text if it wraps to multiple lines
-  if (entry.content) {
-    const contentLines = calculateTextLines(
-      entry.content,
-      HEIGHT_CONFIG.CHARS_PER_LINE_NORMAL
-    );
-    if (contentLines > 1) {
-      baseHeight += (contentLines - 1) * lineHeight;
-=======
       baseHeight = ESTIMATED_HEIGHTS.LOG_ENTRY_SIMPLE;
       break;
     default: {
@@ -223,22 +139,16 @@ export function estimateLogItemHeight(item: FlattenedLogItem): number {
         baseHeight = ESTIMATED_HEIGHTS.LOG_ENTRY_SIMPLE;
       }
       break;
->>>>>>> origin/develop
     }
   }
 
   // Add detail section height if expanded
   if (item.isDetailExpanded && entry.detail) {
-    const detailLines = calculateTextLines(
-      entry.detail,
-      HEIGHT_CONFIG.CHARS_PER_LINE_DETAIL
-    );
+    // Estimate additional height based on detail content length
+    const detailLines = entry.detail.split('\n').length;
     const detailHeight = Math.min(
-      Math.max(
-        detailLines * HEIGHT_CONFIG.LINE_HEIGHT_NORMAL + 20,
-        HEIGHT_CONFIG.DETAIL_MIN_HEIGHT
-      ),
-      HEIGHT_CONFIG.DETAIL_MAX_HEIGHT
+      Math.max(detailLines * 14 + 20, ESTIMATED_HEIGHTS.LOG_ENTRY_DETAIL),
+      300 // Max height for detail section
     );
     baseHeight += detailHeight;
   }
