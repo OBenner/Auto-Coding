@@ -6,9 +6,12 @@ Tracks CPU, memory, and time usage for agent execution phases.
 Provides metrics for real-time progress visualization in the frontend.
 """
 
+import logging
 import os
 import time
 from typing import TypedDict
+
+logger = logging.getLogger(__name__)
 
 _HAS_PSUTIL = False
 try:
@@ -16,7 +19,7 @@ try:
 
     _HAS_PSUTIL = True
 except ImportError:
-    pass
+    psutil = None  # psutil is optional; metrics will be limited
 
 
 class ResourceMetrics(TypedDict, total=False):
@@ -76,7 +79,7 @@ class ResourceTracker:
                 if cpu is not None and cpu >= 0:
                     metrics["cpu_percent"] = round(cpu, 1)
             except (psutil.Error, OSError, ValueError):
-                pass
+                logger.debug("Failed to get CPU percent", exc_info=True)
 
             try:
                 # Get memory info
@@ -90,7 +93,7 @@ class ResourceTracker:
                 if mem_percent is not None and mem_percent >= 0:
                     metrics["memory_percent"] = round(mem_percent, 1)
             except (psutil.Error, OSError, ValueError, AttributeError):
-                pass
+                logger.debug("Failed to get memory info", exc_info=True)
 
         return metrics
 
@@ -102,7 +105,7 @@ class ResourceTracker:
                 # Reset CPU percent baseline
                 self._process.cpu_percent(interval=None)
             except (psutil.Error, OSError):
-                pass
+                logger.debug("Failed to reset CPU percent baseline", exc_info=True)
 
 
 # Global tracker instance for convenience

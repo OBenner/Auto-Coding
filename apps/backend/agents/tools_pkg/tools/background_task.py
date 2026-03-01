@@ -194,14 +194,10 @@ class BackgroundTaskManager:
             mem_percent = mem_stats["percent"]
 
             if mem_percent >= self.MEMORY_CRITICAL_THRESHOLD:
-                logger.error(
-                    f"Task {task_id}: Critical memory usage at {mem_percent}%"
-                )
+                logger.error(f"Task {task_id}: Critical memory usage at {mem_percent}%")
                 return False
             elif mem_percent >= self.MEMORY_WARNING_THRESHOLD:
-                logger.warning(
-                    f"Task {task_id}: High memory usage at {mem_percent}%"
-                )
+                logger.warning(f"Task {task_id}: High memory usage at {mem_percent}%")
 
             return True
         except Exception as e:
@@ -263,7 +259,10 @@ class BackgroundTaskManager:
                             task["output"] = "".join(output_lines)
 
                             # Check memory usage periodically
-                            if len(output_lines) % (10 * self.MEMORY_CHECK_INTERVAL) == 0:
+                            if (
+                                len(output_lines) % (10 * self.MEMORY_CHECK_INTERVAL)
+                                == 0
+                            ):
                                 mem_stats = self._get_memory_stats()
                                 if mem_stats:
                                     task["memory_stats"] = mem_stats
@@ -341,7 +340,7 @@ class BackgroundTaskManager:
             # Clean up process reference
             # Note: asyncio subprocess manages stream cleanup automatically
             if task_id in self.processes:
-                proc = self.processes.pop(task_id)
+                self.processes.pop(task_id)
 
             # Save final task state
             self._save_task_state(task_id)
@@ -729,11 +728,7 @@ def create_background_task_tools(spec_dir: Path, project_dir: Path) -> list:
                 ]
             }
         except Exception as e:
-            return {
-                "content": [
-                    {"type": "text", "text": f"Error starting task: {e}"}
-                ]
-            }
+            return {"content": [{"type": "text", "text": f"Error starting task: {e}"}]}
 
     tools.append(start_background_command)
 
@@ -761,11 +756,7 @@ def create_background_task_tools(spec_dir: Path, project_dir: Path) -> list:
             }
 
         status_str = json.dumps(status, indent=2)
-        return {
-            "content": [
-                {"type": "text", "text": f"Task Status:\n{status_str}"}
-            ]
-        }
+        return {"content": [{"type": "text", "text": f"Task Status:\n{status_str}"}]}
 
     tools.append(get_task_status)
 
@@ -793,11 +784,7 @@ def create_background_task_tools(spec_dir: Path, project_dir: Path) -> list:
             }
 
         output_str = json.dumps(output, indent=2)
-        return {
-            "content": [
-                {"type": "text", "text": f"Task Output:\n{output_str}"}
-            ]
-        }
+        return {"content": [{"type": "text", "text": f"Task Output:\n{output_str}"}]}
 
     tools.append(get_task_output)
 

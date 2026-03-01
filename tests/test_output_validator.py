@@ -388,7 +388,7 @@ class TestConfidenceThreshold:
         # Score should be 0.5 (base) + 0.1 (file+line) + 0.1 (desc>50) = 0.7
         # But vague pattern makes it a false positive, so it should fail validation before threshold check
         # This test should check that the actionability score alone is insufficient
-        score = validator._score_actionability(finding)
+        validator._score_actionability(finding)
         # With no fix, short title, and low severity: 0.5 (base) + 0.1 (file+line) = 0.6
         # But this still meets 0.6 threshold for low severity
         # Let's check the finding gets filtered as false positive instead

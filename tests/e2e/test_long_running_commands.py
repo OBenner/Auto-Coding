@@ -844,5 +844,5 @@ if __name__ == "__main__":
         try:
             import shutil
             shutil.rmtree(tmpdir, ignore_errors=True)
-        except:
+        except Exception:
             pass  # Ignore cleanup errors on Windows

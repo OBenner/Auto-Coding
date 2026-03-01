@@ -553,13 +553,13 @@ class TestImportOrderPreventsEarlyFailure:
 
     def test_cli_utils_lazy_import_of_graphiti_config(self):
         """
-        cli/utils.py directly imports graphiti_config lazily in validate_environment().
+        cli/utils.py directly imports integrations.graphiti.config lazily in validate_environment().
 
-        The fix ensures that graphiti_config is NOT imported at the module level
+        The fix ensures that integrations.graphiti.config is NOT imported at the module level
         in cli/utils.py (line 59). Instead, it's imported lazily inside the
         validate_environment() function where it's actually used.
 
-        Note: graphiti_config may still be imported transitively through other
+        Note: integrations.graphiti.config may still be imported transitively through other
         modules imported by cli.utils (e.g., linear_integration, spec.pipeline).
         The key fix is that the DIRECT import from cli/utils.py is lazy.
         """
@@ -591,8 +591,8 @@ class TestImportOrderPreventsEarlyFailure:
         lines = utils_content.split("\n")
         module_level_imports = "\n".join(lines[:first_function_lineno])
 
-        assert "from graphiti_config import" not in module_level_imports, (
-            "graphiti_config should not be imported at module level in cli/utils.py"
+        assert "from integrations.graphiti.config import" not in module_level_imports, (
+            "integrations.graphiti.config should not be imported at module level in cli/utils.py"
         )
 
         # Verify that graphiti_config IS imported inside validate_environment()
@@ -620,8 +620,8 @@ class TestImportOrderPreventsEarlyFailure:
             lines[validate_env_lineno - 1 : validate_env_end_lineno]
         )
         assert (
-            "from graphiti_config import get_graphiti_status" in validate_env_block
-        ), "graphiti_config should be imported inside validate_environment()"
+            "from integrations.graphiti.config import get_graphiti_status" in validate_env_block
+        ), "integrations.graphiti.config should be imported inside validate_environment()"
 
     def test_entry_points_validate_before_cli_imports(self):
         """

@@ -56,6 +56,7 @@ def main() -> None:
         auto_fix_plan(args.spec_dir)
 
     # Run validations
+    results = []
     if args.checkpoint == "all":
         results = validator.validate_all()
     elif args.checkpoint == "prereqs":

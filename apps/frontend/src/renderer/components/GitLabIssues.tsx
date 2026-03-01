@@ -78,6 +78,29 @@ export function GitLabIssues({ onOpenSettings, onNavigateToTask }: GitLabIssuesP
     resetInvestigationStatus();
   }, [resetInvestigationStatus]);
 
+  const handleQuickCreate = useCallback(async (issue: GitLabIssue) => {
+    if (!selectedProject?.id) return;
+
+    try {
+      const result = await window.electronAPI.gitlab.importGitLabIssues(
+        selectedProject.id,
+        [issue.iid]
+      );
+
+      if (result.success) {
+        // Navigate to the newly created task if available
+        if (result.data?.imported && result.data.imported > 0) {
+          // Optionally navigate to tasks view or show success message
+          console.log(`Spec created for issue #${issue.iid}`);
+        }
+      } else {
+        console.error('Failed to create spec:', result.error);
+      }
+    } catch (error) {
+      console.error('Error creating spec from issue:', error);
+    }
+  }, [selectedProject?.id]);
+
   // Not connected state
   if (!syncStatus?.connected) {
     return <NotConnectedState error={syncStatus?.error || null} onOpenSettings={onOpenSettings} />;
@@ -108,6 +131,7 @@ export function GitLabIssues({ onOpenSettings, onNavigateToTask }: GitLabIssuesP
             error={error}
             onSelectIssue={selectIssue}
             onInvestigate={handleInvestigate}
+            onQuickCreate={handleQuickCreate}
           />
         </div>
 

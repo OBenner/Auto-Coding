@@ -176,6 +176,9 @@ class WebGLContextManager {
   }
 }
 
+/** Type alias so tests / external modules can reference the class without importing the private class itself. */
+export type WebGLContextManagerType = WebGLContextManager;
+
 // Export singleton instance
 export const webglContextManager = WebGLContextManager.getInstance();
 

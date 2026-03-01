@@ -264,9 +264,7 @@ class TaskStateStore:
             logger.error(f"Failed to find orphaned tasks: {e}", exc_info=True)
             return []
 
-    def mark_task_orphaned(
-        self, task_id: str, reason: str = "App restarted"
-    ) -> bool:
+    def mark_task_orphaned(self, task_id: str, reason: str = "App restarted") -> bool:
         """
         Mark a task as orphaned due to app restart or crash.
 

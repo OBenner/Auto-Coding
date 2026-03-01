@@ -117,9 +117,6 @@ export class BackgroundTaskManager {
     // Get Python environment
     const [pythonPath, pythonArgs] = parsePythonCommand(autoBuildSource);
 
-    // Prepare MCP tools script path
-    const mcpToolsPath = path.join(autoBuildSource, 'agents', 'tools_pkg', 'tools', 'background_task.py');
-
     // Build command to execute background task via Python
     const args = [
       ...pythonArgs,
@@ -133,7 +130,7 @@ from pathlib import Path
 
 manager = BackgroundTaskManager(Path('${workingDir.replace(/\\/g, '\\\\')}'), Path('${workingDir.replace(/\\/g, '\\\\')}'))
 import asyncio
-task_id = asyncio.run(manager.start_task('''${command.replace(/'/g, "\\'")}''', timeout=${timeout}, working_dir='${workingDir.replace(/\\/g, '\\\\')}'))
+task_id = asyncio.run(manager.start_task('''${command.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}''', timeout=${timeout}, working_dir='${workingDir.replace(/\\/g, '\\\\')}'))
 print(json.dumps({'task_id': task_id}))
       `.trim()
     ];

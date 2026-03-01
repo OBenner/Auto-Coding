@@ -6,11 +6,14 @@ Build status tracking and status file management for ccstatusline integration.
 """
 
 import json
+import logging
 import threading
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 from .colors import warning
 
@@ -292,4 +295,4 @@ class StatusManager:
             try:
                 self.status_file.unlink()
             except OSError:
-                pass
+                logger.debug("Failed to remove status file: %s", self.status_file)

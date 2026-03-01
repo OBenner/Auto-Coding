@@ -241,7 +241,7 @@ function cleanBackendForPackaging(frontendDir) {
         console.log(`[package] Cannot move ${dir}, removing it instead...`);
         try {
           fs.rmSync(fullPath, { recursive: true, force: true });
-        } catch (rmErr) {
+        } catch (_rmErr) {
           if (isWindows()) {
             // Use PowerShell for reliable removal of symlinks/junctions on Windows
             console.log(`[package] Using PowerShell to remove ${dir}...`);
@@ -373,7 +373,8 @@ async function main() {
 // Run main() only when this file is executed directly (not when imported for testing)
 if (require.main === module) {
   main().catch((err) => {
-    console.error(`[package] Error: ${err.message}`);
+    const safeMsg = String(err.message || '').replace(/[\x00-\x1f\x7f\n\r]/g, ' ').slice(0, 200);
+    console.error('[package] Error: ' + safeMsg);
     process.exitCode = 1;
   });
 }
