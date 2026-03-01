@@ -28,6 +28,7 @@ Detailed documentation for Auto Code setup and usage.
 | **[CLOUD_SETUP.md](CLOUD_SETUP.md)** | Cloud infrastructure setup - initial deployment and configuration |
 | **[CLOUD_DEPLOYMENT.md](CLOUD_DEPLOYMENT.md)** | Cloud production deployment - operations, scaling, and maintenance |
 | **[SPEC-CREATION-PIPELINE.md](SPEC-CREATION-PIPELINE.md)** | Comprehensive guide to spec creation pipeline architecture and internals |
+| **[dependency_update_agent.md](dependency_update_agent.md)** | Automated dependency management - scan outdated packages, assess risk, and generate update specs |
 | **[windows-development.md](windows-development.md)** | Windows-specific development guide (file encoding, paths, line endings) |
 | **[linux.md](linux.md)** | Linux-specific installation and build guide (Flatpak, AppImage) |
 | **[INTEGRATION-LINEAR.md](INTEGRATION-LINEAR.md)** | Linear integration for real-time build progress tracking via issues and subtask sync |
