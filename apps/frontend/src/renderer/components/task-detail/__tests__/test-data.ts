@@ -433,7 +433,7 @@ export function generateSpecializedTestLogs(
   const options: TestDataGeneratorOptions = {
     entryCount: count,
     startTimestamp: new Date(),
-    includeErrors: scenario !== 'errors-only' ? false : true,
+    includeErrors: scenario === 'errors-only',
     includeToolOutput: true,
     subtaskCount: 10
   };
@@ -450,7 +450,6 @@ export function generateSpecializedTestLogs(
     case 'text-only':
       return allEntries.filter(e => e.type === 'text' || e.type === 'info');
 
-    case 'mixed-heavy':
     default:
       // Return all entries with extra detail content
       return allEntries.map(entry => ({

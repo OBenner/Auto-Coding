@@ -118,7 +118,6 @@ function entryMatchesFilter(entry: TaskLogEntry | undefined, filter: string): bo
     case 'info':
       return entry.type === 'info' || entry.type === 'success' ||
              entry.type === 'text' || entry.type === 'phase_start' || entry.type === 'phase_end';
-    case 'all':
     default:
       return true;
   }
