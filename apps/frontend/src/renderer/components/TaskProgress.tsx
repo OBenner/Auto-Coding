@@ -129,7 +129,14 @@ export function TaskProgress({ taskId, onClose }: TaskProgressProps) {
    */
   const fetchTaskStatus = useCallback(async () => {
     try {
-      const result = await window.electronAPI.backgroundTaskGetStatus(taskId);
+      const result = await window.electronAPI?.backgroundTaskGetStatus(taskId);
+      if (!result) {
+        if (isMountedRef.current) {
+          setError('electronAPI not available');
+          setLoading(false);
+        }
+        return;
+      }
       if (result.success && result.data && isMountedRef.current) {
         setTask(result.data);
         setLoading(false);
@@ -293,7 +300,11 @@ export function TaskProgress({ taskId, onClose }: TaskProgressProps) {
     setIsCancelling(true);
 
     try {
-      const result = await window.electronAPI.backgroundTaskCancel(taskId);
+      const result = await window.electronAPI?.backgroundTaskCancel(taskId);
+      if (!result) {
+        setError('electronAPI not available');
+        return;
+      }
       if (result.success) {
         // Refresh task status to show cancelled state
         await fetchTaskStatus();

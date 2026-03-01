@@ -98,7 +98,7 @@ export class BackgroundTaskState {
    * Get all tasks
    */
   getAllTasks(): Map<string, BackgroundTask> {
-    return this.tasks;
+    return new Map(this.tasks);
   }
 
   /**

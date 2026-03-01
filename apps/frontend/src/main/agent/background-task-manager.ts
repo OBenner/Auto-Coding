@@ -139,14 +139,27 @@ print(json.dumps({'task_id': task_id}))
 
     // Spawn Python process
     const pythonEnv = pythonEnvManager.getPythonEnv();
-    const proc = spawn(pythonPath, args, {
-      cwd: workingDir,
-      env: {
-        ...pythonEnv,
-        PYTHONPATH: autoBuildSource
-      },
-      shell: false
-    });
+    let proc: ChildProcess;
+    try {
+      proc = spawn(pythonPath, args, {
+        cwd: workingDir,
+        env: {
+          ...pythonEnv,
+          PYTHONPATH: autoBuildSource
+        },
+        shell: false
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      debugError('[Background Task Manager] Failed to spawn process:', { taskId, error: message });
+      this.state.updateTask(taskId, {
+        status: 'failed',
+        completedAt: new Date().toISOString(),
+        error: `Failed to spawn process: ${message}`
+      });
+      this.emitter.emit('background-task-error', taskId, `Failed to spawn process: ${message}`);
+      return;
+    }
 
     // Store process
     this.processes.set(taskId, proc);
@@ -200,11 +213,18 @@ print(json.dumps({'task_id': task_id}))
     });
 
     // Handle process exit
-    proc.on('exit', (code: number | null) => {
-      debugLog('[Background Task Manager] Task exited:', { taskId, code });
+    proc.on('exit', (code: number | null, signal: NodeJS.Signals | null) => {
+      debugLog('[Background Task Manager] Task exited:', { taskId, code, signal });
 
-      // Determine status based on exit code
-      const status: BackgroundTaskStatus = code === 0 ? 'completed' : code === null ? 'cancelled' : 'failed';
+      // Determine status based on exit code and signal
+      let status: BackgroundTaskStatus;
+      if (code === 0) {
+        status = 'completed';
+      } else if (signal) {
+        status = 'cancelled';
+      } else {
+        status = 'failed';
+      }
 
       // Update task state
       this.state.updateTask(taskId, {
@@ -330,7 +350,7 @@ print(json.dumps({'task_id': task_id}))
 
     for (const taskId of this.state.getAllTaskIds()) {
       const task = this.state.getTask(taskId);
-      if (!task || task.status === 'running') {
+      if (!task || task.status === 'running' || task.status === 'pending') {
         continue;
       }
 

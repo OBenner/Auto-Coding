@@ -368,7 +368,7 @@ suggestion = manager.get_retry_suggestion(error_context["error_type"])
 **Command execution safety:**
 - All commands execute within Auto Code's security sandbox
 - Working directory restricted to project directory
-- No shell injection vulnerabilities (uses `asyncio.create_subprocess_shell` safely)
+- No shell injection vulnerabilities (uses `asyncio.create_subprocess_exec` with argument list, not shell)
 - Process isolation prevents interference with other tasks
 
 **State file security:**
