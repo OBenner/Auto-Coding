@@ -3,18 +3,28 @@
 Git Worktree Manager - Per-Spec Architecture
 =============================================
 
-Each spec gets its own worktree:
+Each spec gets its own worktree with support for both single-project
+and multi-project workspace modes.
+
+Single-project mode (backward compatible):
 - Worktree path: .auto-claude/worktrees/tasks/{spec-name}/
 - Branch name: auto-claude/{spec-name}
+
+Multi-project workspace mode:
+- Worktree path: .auto-claude/workspaces/{workspace-name}/projects/{project-name}/worktrees/{spec-name}/
+- Branch name: auto-claude/{spec-name}
+- Per-project worktree isolation
 
 This allows:
 1. Multiple specs to be worked on simultaneously
 2. Each spec's changes are isolated
 3. Branches persist until explicitly merged
 4. Clear 1:1:1 mapping: spec → worktree → branch
+5. Per-project worktrees in multi-codebase workspaces
 """
 
 import asyncio
+import logging
 import os
 import re
 import shutil
@@ -25,6 +35,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import TypedDict, TypeVar
+
+logger = logging.getLogger(__name__)
 
 from core.gh_executable import get_gh_executable, invalidate_gh_cache
 from core.git_executable import get_git_executable, get_isolated_git_env, run_git
@@ -169,8 +181,22 @@ class WorktreeManager:
     """
     Manages per-spec Git worktrees.
 
-    Each spec gets its own worktree in .auto-claude/worktrees/tasks/{spec-name}/ with
-    a corresponding branch auto-claude/{spec-name}.
+    Supports both single-project and multi-project workspace modes:
+
+    Single-project mode (backward compatible):
+    - Worktree path: .auto-claude/worktrees/tasks/{spec-name}/
+    - Branch name: auto-claude/{spec-name}
+
+    Multi-project workspace mode:
+    - Worktree path: .auto-claude/workspaces/{workspace-name}/projects/{project-name}/worktrees/{spec-name}/
+    - Branch name: auto-claude/{spec-name}
+    - Isolates worktrees per project in a workspace
+
+    Args:
+        project_dir: Root directory of the project
+        base_branch: Base branch for worktree creation (defaults to auto-detected main/master)
+        workspace_name: Optional workspace name for multi-project mode
+        project_name: Optional project name for multi-project mode
     """
 
     # Timeout constants for subprocess operations
@@ -178,10 +204,27 @@ class WorktreeManager:
     GH_CLI_TIMEOUT = 60  # 1 minute for gh CLI commands
     GH_QUERY_TIMEOUT = 30  # 30 seconds for gh CLI queries
 
-    def __init__(self, project_dir: Path, base_branch: str | None = None):
+    def __init__(
+        self,
+        project_dir: Path,
+        base_branch: str | None = None,
+        workspace_name: str | None = None,
+        project_name: str | None = None,
+    ):
         self.project_dir = project_dir
         self.base_branch = base_branch or self._detect_base_branch()
-        self.worktrees_dir = project_dir / ".auto-claude" / "worktrees" / "tasks"
+        self.workspace_name = workspace_name
+        self.project_name = project_name
+
+        # Determine worktrees directory based on context
+        if workspace_name and project_name:
+            # Multi-project workspace mode
+            workspace_dir = project_dir / ".auto-claude" / "workspaces" / workspace_name
+            self.worktrees_dir = workspace_dir / "projects" / project_name / "worktrees"
+        else:
+            # Single-project mode (backward compatible)
+            self.worktrees_dir = project_dir / ".auto-claude" / "worktrees" / "tasks"
+
         self._merge_lock = asyncio.Lock()
 
     def _detect_base_branch(self) -> str:
@@ -430,7 +473,7 @@ class WorktreeManager:
                     if os.path.samefile(resolved_path, registered_path):
                         return True
             except OSError:
-                pass
+                logger.debug("samefile comparison failed for worktree path check")
             # Fallback to normalized case comparison for non-existent paths
             if os.path.normcase(str(resolved_path)) == os.path.normcase(
                 str(registered_path)
@@ -503,7 +546,7 @@ class WorktreeManager:
                     stats["days_since_last_commit"] = (
                         datetime.now() - last_commit_date
                     ).days
-            except (ValueError, TypeError) as e:
+            except (ValueError, TypeError):
                 # If parsing fails, silently continue without date info
                 pass
 
@@ -645,6 +688,27 @@ class WorktreeManager:
             )
 
         print(f"Created worktree: {worktree_path.name} on branch {branch_name}")
+
+        # Auto-push branch with tracking (-u) to simplify later push/PR operations.
+        # Non-fatal: if push fails (e.g., no remote, offline), just warn and continue.
+        if not branch_exists:
+            remote_check = self._run_git(["remote", "get-url", "origin"])
+            if remote_check.returncode != 0:
+                logger.warning("Skipping auto-push: no 'origin' remote configured")
+            else:
+                push_result = self._run_git(
+                    ["push", "-u", "origin", branch_name],
+                    timeout=self.GIT_PUSH_TIMEOUT,
+                )
+                if push_result.returncode == 0:
+                    logger.info(
+                        f"Auto-pushed branch {branch_name} with upstream tracking"
+                    )
+                else:
+                    logger.warning(
+                        f"Could not auto-push branch {branch_name}: "
+                        f"{push_result.stderr.strip()}"
+                    )
 
         return WorktreeInfo(
             path=worktree_path,
@@ -1270,7 +1334,6 @@ class WorktreeManager:
             if result.returncode == 0:
                 return result.stdout.strip()
         except (
-            subprocess.TimeoutExpired,
             FileNotFoundError,
             subprocess.SubprocessError,
         ) as e:

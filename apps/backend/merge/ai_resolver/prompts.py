@@ -23,17 +23,26 @@ INSTRUCTIONS:
 1. Analyze what each task intended to accomplish
 2. Merge the changes so that ALL task intents are preserved
 3. Resolve any conflicts by understanding the semantic purpose
-4. Output ONLY the merged code - no explanations
+4. Use the provided semantic context (scope, signatures, renames) to make intelligent decisions
+5. Explain your resolution rationale before providing the merged code
 
 RULES:
 - All imports from all tasks should be included
 - All hook calls should be preserved (order matters: earlier tasks first)
 - If tasks modify the same function, combine their changes logically
 - If tasks wrap JSX differently, apply wrappings from outside-in (earlier task = outer)
+- Consider variable scope (local vs global) when resolving naming conflicts
+- Respect function signatures - if a signature changed, ensure all calls are compatible
+- Detect renames vs replacements - preserve renames across all references
 - Preserve code style consistency
 
 OUTPUT FORMAT:
-Return only the merged code block, wrapped in triple backticks with the language:
+First, provide a brief explanation of your resolution rationale (2-4 sentences):
+- What conflicts were identified
+- How you resolved them
+- Why this approach preserves all task intents
+
+Then, provide the merged code block wrapped in triple backticks with the language:
 ```{language}
 merged code here
 ```
@@ -47,9 +56,19 @@ There are {num_conflicts} conflict regions in {file_path}. Resolve each one.
 
 {combined_context}
 
-For each conflict region, output the merged code in a separate code block labeled with the location:
+SEMANTIC GUIDANCE:
+- Use provided scope information to distinguish local vs global variables
+- Respect function signatures when merging parameter or return type changes
+- Detect renames vs replacements to preserve intent across all references
+- Consider the semantic context for each conflict region
+
+For each conflict region, provide:
+1. A brief explanation of the resolution rationale (2-3 sentences)
+2. The merged code in a code block labeled with the location
 
 ## Location: <location>
+**Explanation:** [Your rationale for how you resolved this conflict]
+
 ```{language}
 merged code
 ```

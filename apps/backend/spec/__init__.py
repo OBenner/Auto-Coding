@@ -44,16 +44,11 @@ from .complexity import (
 from .phases import PhaseExecutor, PhaseResult
 
 __all__ = [
-    # Main orchestrator
-    "SpecOrchestrator",
-    "get_specs_dir",
-    # Complexity assessment
     "Complexity",
     "ComplexityAnalyzer",
     "ComplexityAssessment",
     "run_ai_complexity_assessment",
     "save_assessment",
-    # Phase execution
     "PhaseExecutor",
     "PhaseResult",
 ]

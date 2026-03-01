@@ -7,15 +7,14 @@ Handles automatic issue fixing workflow including permissions and state manageme
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 try:
     from ..models import AutoFixState, AutoFixStatus, GitHubRunnerConfig
     from ..permissions import GitHubPermissionChecker
 except (ImportError, ValueError, SystemError):
-    from models import AutoFixState, AutoFixStatus, GitHubRunnerConfig
-    from permissions import GitHubPermissionChecker
+    from runners.github.models import AutoFixState, AutoFixStatus, GitHubRunnerConfig
+    from runners.github.permissions import GitHubPermissionChecker
 
 
 class AutoFixProcessor:
@@ -163,7 +162,7 @@ class AutoFixProcessor:
                 state = AutoFixState.load(self.github_dir, issue_number)
                 if state:
                     queue.append(state)
-            except (ValueError, json.JSONDecodeError):
+            except ValueError:
                 continue
 
         return sorted(queue, key=lambda s: s.created_at, reverse=True)

@@ -145,11 +145,12 @@ def find_spec(project_dir: Path, spec_identifier: str) -> Path | None:
 
         # Try matching by number prefix
         for spec_folder in specs_dir.iterdir():
-            if spec_folder.is_dir() and spec_folder.name.startswith(
-                spec_identifier + "-"
+            if (
+                spec_folder.is_dir()
+                and spec_folder.name.startswith(spec_identifier + "-")
+                and (spec_folder / "spec.md").exists()
             ):
-                if (spec_folder / "spec.md").exists():
-                    return spec_folder
+                return spec_folder
 
     # Check worktree specs (for merge-preview, merge, review, discard operations)
     worktree_base = project_dir / ".auto-claude" / "worktrees" / "tasks"
@@ -242,7 +243,7 @@ def validate_environment(spec_dir: Path) -> bool:
 
     # Check Graphiti integration (optional but show status)
     # Lazy import to avoid triggering pywintypes import before validation (ACS-253)
-    from graphiti_config import get_graphiti_status
+    from integrations.graphiti.config import get_graphiti_status
 
     graphiti_status = get_graphiti_status()
     if graphiti_status["available"]:

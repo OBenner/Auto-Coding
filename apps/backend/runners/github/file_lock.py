@@ -34,12 +34,12 @@ from typing import Any
 _IS_WINDOWS = os.name == "nt"
 _WINDOWS_LOCK_SIZE = 1024 * 1024
 
-try:
+try:  # Platform-specific
     import fcntl  # type: ignore
 except ImportError:  # pragma: no cover
     fcntl = None
 
-try:
+try:  # Platform-specific
     import msvcrt  # type: ignore
 except ImportError:  # pragma: no cover
     msvcrt = None
@@ -157,7 +157,7 @@ class FileLock:
                 # Non-blocking lock attempt
                 _try_lock(self._fd, self.exclusive)
                 return  # Lock acquired
-            except (BlockingIOError, OSError):
+            except OSError:
                 # Lock held by another process
                 elapsed = time.time() - start_time
                 if elapsed >= self.timeout:
@@ -249,8 +249,8 @@ def atomic_write(filepath: str | Path, mode: str = "w", encoding: str = "utf-8")
         # Clean up temp file on error
         try:
             os.unlink(tmp_path)
-        except Exception:
-            pass
+        except OSError:
+            pass  # Temp file already removed or inaccessible
         raise
 
 
@@ -315,8 +315,8 @@ async def locked_write(
                 await asyncio.get_running_loop().run_in_executor(
                     None, os.unlink, tmp_path
                 )
-            except Exception:
-                pass
+            except OSError:
+                pass  # Temp file already removed or inaccessible
             raise
 
     finally:
@@ -478,8 +478,8 @@ async def locked_json_update(
                 await asyncio.get_running_loop().run_in_executor(
                     None, os.unlink, tmp_path
                 )
-            except Exception:
-                pass
+            except OSError:
+                pass  # Temp file already removed or inaccessible
             raise
 
         return updated_data

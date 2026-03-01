@@ -16,6 +16,7 @@ if str(_PARENT_DIR) not in sys.path:
     sys.path.insert(0, str(_PARENT_DIR))
 
 
+from .analytics_commands import handle_analytics_command
 from .batch_commands import (
     handle_batch_cleanup_command,
     handle_batch_create_command,
@@ -28,6 +29,14 @@ from .qa_commands import (
     handle_qa_status_command,
     handle_review_status_command,
 )
+from .scheduler_commands import (
+    handle_schedule_cancel_command,
+    handle_schedule_command,
+    handle_schedule_start_command,
+    handle_schedule_status_command,
+    handle_schedule_stop_command,
+)
+from .security_commands import handle_security_audit_command
 from .spec_commands import print_specs_list
 from .utils import (
     DEFAULT_MODEL,
@@ -118,7 +127,15 @@ Environment Variables:
         "--model",
         type=str,
         default=None,
-        help=f"Claude model to use (default: {DEFAULT_MODEL})",
+        help=f"Model to use (default: {DEFAULT_MODEL})",
+    )
+
+    parser.add_argument(
+        "--provider",
+        type=str,
+        default=None,
+        choices=["claude", "litellm", "openrouter", "zhipuai"],
+        help="AI provider to use (default: from env or claude)",
     )
 
     parser.add_argument(
@@ -263,6 +280,15 @@ Environment Variables:
         help="Skip approval check and start build anyway (for debugging)",
     )
 
+    # Task restart
+    parser.add_argument(
+        "--restart-from",
+        type=str,
+        default=None,
+        metavar="SUBTASK_ID",
+        help="Restart build from a specific subtask ID (preserves provider/model config)",
+    )
+
     # Base branch for worktree creation
     parser.add_argument(
         "--base-branch",
@@ -293,6 +319,58 @@ Environment Variables:
         "--no-dry-run",
         action="store_true",
         help="Actually delete files in cleanup (not just preview)",
+    )
+
+    # Scheduler commands
+    parser.add_argument(
+        "--schedule",
+        type=str,
+        default=None,
+        metavar="SPEC",
+        help="Schedule a build for a specific spec",
+    )
+    parser.add_argument(
+        "--schedule-at",
+        type=str,
+        default=None,
+        metavar="TIME",
+        help="With --schedule: when to run (ISO format or 'tonight 10pm')",
+    )
+    parser.add_argument(
+        "--schedule-priority",
+        type=str,
+        default="normal",
+        choices=["low", "normal", "high", "urgent"],
+        help="With --schedule: build priority (default: normal)",
+    )
+    parser.add_argument(
+        "--schedule-deps",
+        type=str,
+        default=None,
+        metavar="SPECS",
+        help="With --schedule: comma-separated spec IDs this build depends on",
+    )
+    parser.add_argument(
+        "--schedule-status",
+        action="store_true",
+        help="Show status of scheduled builds",
+    )
+    parser.add_argument(
+        "--schedule-cancel",
+        type=str,
+        default=None,
+        metavar="BUILD_ID",
+        help="Cancel a scheduled build",
+    )
+    parser.add_argument(
+        "--schedule-start",
+        action="store_true",
+        help="Start the scheduler service",
+    )
+    parser.add_argument(
+        "--schedule-stop",
+        action="store_true",
+        help="Stop the scheduler service",
     )
 
     # Merge analytics commands
@@ -337,6 +415,52 @@ Environment Variables:
         default=None,
         metavar="TASK_ID",
         help="Filter analytics by task ID",
+    )
+
+    # Productivity analytics commands
+    parser.add_argument(
+        "--analytics",
+        action="store_true",
+        help="Show productivity analytics across all specs",
+    )
+    parser.add_argument(
+        "--analytics-trends",
+        action="store_true",
+        help="Show productivity trends over time",
+    )
+    parser.add_argument(
+        "--analytics-days",
+        type=int,
+        default=30,
+        help="Number of days for trends analysis (default: 30)",
+    )
+    parser.add_argument(
+        "--analytics-granularity",
+        type=str,
+        default="daily",
+        choices=["daily", "weekly", "monthly"],
+        help="Time granularity for trends (default: daily)",
+    )
+    parser.add_argument(
+        "--analytics-export-path",
+        type=str,
+        default=None,
+        metavar="FILE",
+        help="Export analytics to file (with --analytics)",
+    )
+
+    # Security audit commands
+    parser.add_argument(
+        "--security-audit",
+        action="store_true",
+        help="Run comprehensive security audit on the project",
+    )
+    parser.add_argument(
+        "--security-output-format",
+        type=str,
+        default="both",
+        choices=["json", "markdown", "both"],
+        help="Output format for security audit report (default: both)",
     )
 
     return parser.parse_args()
@@ -386,6 +510,9 @@ def _run_cli() -> None:
     # This allows get_phase_model() to fall back to task_metadata.json
     model = args.model or os.environ.get("AUTO_BUILD_MODEL")
 
+    # Get provider from CLI arg (default: from env or claude)
+    provider = args.provider
+
     # Handle --list command
     if args.list:
         print_banner()
@@ -415,6 +542,38 @@ def _run_cli() -> None:
         handle_batch_cleanup_command(str(project_dir), dry_run=not args.no_dry_run)
         return
 
+    # Handle scheduler commands
+    if args.schedule:
+        deps = (
+            [d.strip() for d in args.schedule_deps.split(",") if d.strip()]
+            if args.schedule_deps
+            else None
+        )
+        handle_schedule_command(
+            args.schedule,
+            str(project_dir),
+            scheduled_time=args.schedule_at,
+            priority=args.schedule_priority,
+            dependencies=deps,
+        )
+        return
+
+    if args.schedule_status:
+        handle_schedule_status_command(str(project_dir))
+        return
+
+    if args.schedule_cancel:
+        handle_schedule_cancel_command(args.schedule_cancel, str(project_dir))
+        return
+
+    if args.schedule_start:
+        handle_schedule_start_command(str(project_dir))
+        return
+
+    if args.schedule_stop:
+        handle_schedule_stop_command(str(project_dir))
+        return
+
     # Handle merge analytics commands
     if args.merge_analytics_list:
         handle_merge_analytics_list_command(
@@ -431,6 +590,42 @@ def _run_cli() -> None:
             project_dir,
             output_path=args.analytics_output,
             format=args.analytics_format,
+        )
+        return
+
+    # Handle productivity analytics command
+    if args.analytics:
+        export_path = (
+            Path(args.analytics_export_path) if args.analytics_export_path else None
+        )
+        handle_analytics_command(
+            project_dir=project_dir,
+            trends=args.analytics_trends,
+            days=args.analytics_days,
+            granularity=args.analytics_granularity,
+            export_path=export_path,
+            export_format=args.analytics_format,
+        )
+        return
+
+    # Handle security audit command
+    if args.security_audit:
+        # Security audit can run with or without a spec
+        spec_dir = None
+        if args.spec:
+            spec_dir = find_spec(project_dir, args.spec)
+            if not spec_dir:
+                print_banner()
+                print(f"\nError: Spec '{args.spec}' not found")
+                print("\nAvailable specs:")
+                print_specs_list(project_dir)
+                sys.exit(1)
+
+        handle_security_audit_command(
+            project_dir=project_dir,
+            spec_dir=spec_dir,
+            output_format=args.security_output_format,
+            verbose=args.verbose,
         )
         return
 
@@ -547,6 +742,7 @@ def _run_cli() -> None:
         project_dir=project_dir,
         spec_dir=spec_dir,
         model=model,
+        provider=provider,
         max_iterations=args.max_iterations,
         verbose=args.verbose,
         force_isolated=args.isolated,
@@ -556,6 +752,7 @@ def _run_cli() -> None:
         force_bypass_approval=args.force,
         base_branch=args.base_branch,
         json_mode=args.json,
+        restart_from=args.restart_from,
     )
 
 

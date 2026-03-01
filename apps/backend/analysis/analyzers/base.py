@@ -7,6 +7,7 @@ Provides common constants, utilities, and base functionality shared across all a
 
 from __future__ import annotations
 
+import fnmatch
 import json
 from pathlib import Path
 
@@ -84,6 +85,17 @@ SERVICE_ROOT_FILES = {
     "Makefile",
     "Dockerfile",
 }
+
+
+def _should_skip(parts: tuple[str, ...]) -> bool:
+    """Return True if any path part matches a SKIP_DIRS entry (literal or glob)."""
+    return any(fnmatch.fnmatch(part, skip) for part in parts for skip in SKIP_DIRS)
+
+
+def collect_files(root: Path, glob: str, *, limit: int | None = None) -> list[Path]:
+    """Collect files matching *glob* under *root*, skipping SKIP_DIRS."""
+    files = [f for f in root.rglob(glob) if not _should_skip(f.parts)]
+    return files[:limit] if limit else files
 
 
 class BaseAnalyzer:

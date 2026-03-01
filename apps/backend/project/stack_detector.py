@@ -6,10 +6,13 @@ Detects programming languages, package managers, databases,
 infrastructure tools, and cloud providers from project files.
 """
 
+import logging
 from pathlib import Path
 
 from .config_parser import ConfigParser
 from .models import TechnologyStack
+
+logger = logging.getLogger(__name__)
 
 
 class StackDetector:
@@ -254,7 +257,7 @@ class StackDetector:
                             self.stack.infrastructure.append("kubernetes")
                             break
                 except OSError:
-                    pass
+                    logger.debug("Failed to read YAML file for k8s detection")
 
         # Helm
         if self.parser.file_exists("Chart.yaml", "charts/"):

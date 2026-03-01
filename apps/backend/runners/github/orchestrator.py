@@ -14,6 +14,7 @@ REFACTORED: Service layer architecture - orchestrator delegates to specialized s
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -21,6 +22,8 @@ from pathlib import Path
 try:
     # When imported as part of package
     from .bot_detection import BotDetector
+    from .command_executor import CommandExecutor, CommandResult
+    from .command_parser import CommandParser
     from .context_gatherer import PRContext, PRContextGatherer
     from .gh_client import GHClient
     from .models import (
@@ -49,10 +52,12 @@ try:
     from .services.io_utils import safe_print
 except (ImportError, ValueError, SystemError):
     # When imported directly (runner.py adds github dir to path)
-    from bot_detection import BotDetector
-    from context_gatherer import PRContext, PRContextGatherer
-    from gh_client import GHClient
-    from models import (
+    from runners.github.bot_detection import BotDetector
+    from runners.github.command_executor import CommandExecutor, CommandResult
+    from runners.github.command_parser import CommandParser
+    from runners.github.context_gatherer import PRContext, PRContextGatherer
+    from runners.github.gh_client import GHClient
+    from runners.github.models import (
         BRANCH_BEHIND_BLOCKER_MSG,
         BRANCH_BEHIND_REASONING,
         AICommentTriage,
@@ -67,15 +72,15 @@ except (ImportError, ValueError, SystemError):
         StructuralIssue,
         TriageResult,
     )
-    from permissions import GitHubPermissionChecker
-    from rate_limiter import RateLimiter
-    from services import (
+    from runners.github.permissions import GitHubPermissionChecker
+    from runners.github.rate_limiter import RateLimiter
+    from runners.github.services import (
         AutoFixProcessor,
         BatchProcessor,
         PRReviewEngine,
         TriageEngine,
     )
-    from services.io_utils import safe_print
+    from runners.github.services.io_utils import safe_print
 
 
 @dataclass
@@ -640,8 +645,8 @@ class GitHubOrchestrator:
                 from .context_gatherer import FollowupContextGatherer
                 from .services.followup_reviewer import FollowupReviewer
             except (ImportError, ValueError, SystemError):
-                from context_gatherer import FollowupContextGatherer
-                from services.followup_reviewer import FollowupReviewer
+                from runners.github.context_gatherer import FollowupContextGatherer
+                from runners.github.services.followup_reviewer import FollowupReviewer
 
             # Gather follow-up context
             gatherer = FollowupContextGatherer(
@@ -875,7 +880,7 @@ class GitHubOrchestrator:
                         ParallelFollowupReviewer,
                     )
                 except (ImportError, ValueError, SystemError):
-                    from services.parallel_followup_reviewer import (
+                    from runners.github.services.parallel_followup_reviewer import (
                         ParallelFollowupReviewer,
                     )
 
@@ -1379,6 +1384,123 @@ class GitHubOrchestrator:
         return result.summary
 
     # =========================================================================
+    # CODE REVIEW WORKFLOW
+    # =========================================================================
+
+    async def code_review_pr(self, pr_number: int) -> list[PRReviewFinding]:
+        """
+        Run security-focused code review on a pull request.
+
+        Performs:
+        - Security vulnerability scanning (secrets, SAST)
+        - Converts security findings to PR review findings
+        - Does NOT post to GitHub (for manual review of security issues)
+
+        Args:
+            pr_number: The PR number to review
+
+        Returns:
+            List of PRReviewFinding objects with security issues found
+
+        Raises:
+            Exception: If review fails
+        """
+        safe_print(
+            f"[DEBUG orchestrator] code_review_pr() called for PR #{pr_number}",
+            flush=True,
+        )
+
+        self._report_progress(
+            "gathering_context",
+            10,
+            f"Gathering context for PR #{pr_number}...",
+            pr_number=pr_number,
+        )
+
+        try:
+            # Gather PR context
+            safe_print("[DEBUG orchestrator] Creating context gatherer...")
+            gatherer = PRContextGatherer(
+                self.project_dir, pr_number, repo=self.config.repo
+            )
+
+            safe_print("[DEBUG orchestrator] Gathering PR context...")
+            pr_context = await gatherer.gather()
+            if pr_context is None:
+                raise RuntimeError(f"Failed to gather context for PR #{pr_number}")
+            safe_print(
+                f"[DEBUG orchestrator] Context gathered: {pr_context.title} "
+                f"({len(pr_context.changed_files)} files changed)",
+                flush=True,
+            )
+
+            self._report_progress(
+                "analyzing",
+                30,
+                "Running security scan...",
+                pr_number=pr_number,
+            )
+
+            # Import code review service
+            try:
+                from .services.code_review_service import CodeReviewService
+            except (ImportError, ValueError, SystemError):
+                from runners.github.services.code_review_service import (
+                    CodeReviewService,
+                )
+
+            # Create code review service
+            code_review_service = CodeReviewService(
+                project_dir=self.project_dir,
+                github_dir=self.github_dir,
+                config=self.config,
+                progress_callback=self.progress_callback,
+            )
+
+            # Run code review (security scan)
+            safe_print("[DEBUG orchestrator] Running security-focused code review...")
+            findings = await code_review_service.review_code_changes(
+                context=pr_context,
+                changed_files=None,  # Scan all changed files
+            )
+
+            safe_print(
+                f"[DEBUG orchestrator] Code review complete: {len(findings)} findings",
+                flush=True,
+            )
+
+            # Get summary statistics
+            summary = code_review_service.get_findings_summary(findings)
+            by_sev = summary.get("by_severity", {})
+            safe_print(
+                f"[CodeReview] Summary: {summary.get('total', 0)} total findings "
+                f"({by_sev.get('critical', 0)} critical, "
+                f"{by_sev.get('high', 0)} high)",
+                flush=True,
+            )
+
+            self._report_progress(
+                "complete",
+                100,
+                f"Code review complete: {len(findings)} findings",
+                pr_number=pr_number,
+            )
+
+            return findings
+
+        except Exception as e:
+            import traceback
+
+            error_details = f"{type(e).__name__}: {e}"
+            full_traceback = traceback.format_exc()
+            safe_print(
+                f"[ERROR orchestrator] Code review failed for PR #{pr_number}: {error_details}",
+                flush=True,
+            )
+            safe_print(f"[ERROR orchestrator] Full traceback:\n{full_traceback}")
+            raise
+
+    # =========================================================================
     # ISSUE TRIAGE WORKFLOW
     # =========================================================================
 
@@ -1605,3 +1727,112 @@ class GitHubOrchestrator:
     async def process_pending_batches(self) -> int:
         """Process all pending batches."""
         return await self.batch_processor.process_pending_batches()
+
+    # =========================================================================
+    # COMMAND PROCESSING WORKFLOW
+    # =========================================================================
+
+    async def process_commands(
+        self,
+        comment_text: str,
+        pr_number: int,
+        username: str,
+    ) -> list[CommandResult]:
+        """
+        Process commands from a PR comment.
+
+        This method:
+        1. Parses the comment text to extract commands
+        2. Executes each command with permission validation
+        3. Returns the results of command execution
+
+        Supported commands:
+        - /merge [method] - Merge PR (optional method: merge, squash, rebase)
+        - /resolve - Attempt to resolve dependency conflicts
+        - /process - Process and summarize PR comments
+
+        Args:
+            comment_text: The PR comment text to parse for commands
+            pr_number: The PR number where the comment was posted
+            username: The GitHub username who posted the comment
+
+        Returns:
+            List of CommandResult objects (one per command executed)
+
+        Example:
+            >>> results = await orchestrator.process_commands(
+            ...     comment_text="Please /merge and then /resolve",
+            ...     pr_number=123,
+            ...     username="octocat"
+            ... )
+            >>> for result in results:
+            ...     print(f"{result.command_type}: {result.message}")
+        """
+        logger = logging.getLogger(__name__)
+        logger.info(f"Processing commands from user '{username}' on PR #{pr_number}")
+
+        self._report_progress(
+            "parsing_commands",
+            10,
+            f"Parsing commands from comment on PR #{pr_number}...",
+            pr_number=pr_number,
+        )
+
+        try:
+            # Parse commands from comment text
+            parser = CommandParser()
+            commands = parser.parse(comment_text)
+
+            if not commands:
+                logger.info(f"No commands found in comment on PR #{pr_number}")
+                return []
+
+            logger.info(
+                f"Found {len(commands)} command(s) in comment: "
+                f"{[c.type for c in commands]}"
+            )
+
+            self._report_progress(
+                "executing_commands",
+                20,
+                f"Executing {len(commands)} command(s) on PR #{pr_number}...",
+                pr_number=pr_number,
+            )
+
+            # Initialize command executor with gh_client and config
+            executor = CommandExecutor(
+                project_dir=self.project_dir,
+                gh_client=self.gh_client,
+                repo=self.config.repo,
+                allowed_roles=self.config.auto_fix_allowed_roles,
+            )
+
+            # Execute all commands (stops on first failure)
+            results = await executor.execute_all(
+                commands=commands,
+                pr_number=pr_number,
+                username=username,
+            )
+
+            # Report completion
+            successful = sum(1 for r in results if r.success)
+            total = len(results)
+
+            self._report_progress(
+                "complete",
+                100,
+                f"Command execution complete: {successful}/{total} succeeded",
+                pr_number=pr_number,
+            )
+
+            logger.info(
+                f"Command execution complete for PR #{pr_number}: "
+                f"{successful}/{total} succeeded"
+            )
+
+            return results
+
+        except Exception as e:
+            logger.error(f"Failed to process commands for PR #{pr_number}: {e}")
+            # Return empty list on error (caller can handle)
+            return []

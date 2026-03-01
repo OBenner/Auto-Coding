@@ -6,7 +6,7 @@ CLI commands for building specs and handling the main build flow.
 """
 
 import asyncio
-import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -135,11 +135,15 @@ def _generate_test_report_data(
 
     return test_report_data
 
+# Pattern management commands are available in pattern_commands.py
+# Run: python apps/backend/cli/pattern_commands.py --help
+
 
 def handle_build_command(
     project_dir: Path,
     spec_dir: Path,
     model: str,
+    provider: str | None,
     max_iterations: int | None,
     verbose: bool,
     force_isolated: bool,
@@ -149,6 +153,7 @@ def handle_build_command(
     force_bypass_approval: bool,
     base_branch: str | None = None,
     json_mode: bool = False,
+    restart_from: str | None = None,
 ) -> None:
     """
     Handle the main build command.
@@ -157,6 +162,7 @@ def handle_build_command(
         project_dir: Project root directory
         spec_dir: Spec directory path
         model: Model to use (used as default; may be overridden by task_metadata.json)
+        provider: AI provider to use (claude, litellm, openrouter, zhipuai)
         max_iterations: Maximum number of iterations (None for unlimited)
         verbose: Enable verbose output
         force_isolated: Force isolated workspace mode
@@ -166,9 +172,10 @@ def handle_build_command(
         force_bypass_approval: Force bypass approval check
         base_branch: Base branch for worktree creation (default: current branch)
         json_mode: Enable JSON output mode for CI/CD pipelines
+        restart_from: Subtask ID to restart from (None for normal execution)
     """
     # Lazy imports to avoid loading heavy modules
-    from agent import run_autonomous_agent, sync_spec_to_source
+    from agents import run_autonomous_agent, sync_spec_to_source
     from debug import (
         debug,
         debug_info,
@@ -181,8 +188,32 @@ def handle_build_command(
 
     from .utils import print_banner, validate_environment
 
-    # Determine if we should skip interactive prompts (CI mode or auto-continue)
-    non_interactive = auto_continue or is_ci_mode()
+    # Set provider from CLI argument if provided
+    if provider:
+        from core.providers.config import AIEngineProvider
+
+        valid_providers = [p.value for p in AIEngineProvider]
+        if provider not in valid_providers:
+            print(
+                f"\nError: Invalid provider '{provider}'. Must be one of: {', '.join(valid_providers)}"
+            )
+            sys.exit(1)
+        os.environ["AI_ENGINE_PROVIDER"] = provider
+        debug("run.py", f"Provider set from CLI: {provider}")
+        # Map CLI --model to provider-specific env var for consistent display
+        if model:
+            model_env_map = {
+                "claude": "CLAUDE_MODEL",
+                "litellm": "LITELLM_MODEL",
+                "openrouter": "OPENROUTER_MODEL",
+                "zhipuai": "ZHIPUAI_MODEL",
+            }
+            env_key = model_env_map.get(provider)
+            if env_key:
+                os.environ[env_key] = model
+
+    # Determine if we should skip interactive prompts (CI mode, JSON mode, or auto-continue)
+    non_interactive = auto_continue or json_mode or is_ci_mode()
 
     # Track build start time for JSON output
     build_start_time = time.time()
@@ -204,6 +235,17 @@ def handle_build_command(
     print_banner()
     print(f"\nProject directory: {project_dir}")
     print(f"Spec: {spec_dir.name}")
+
+    # Get current provider for display
+    from core.providers.config import get_provider_config
+
+    provider_config = get_provider_config()
+    provider_display = (
+        provider_config.get_provider_summary() if provider_config else "unknown"
+    )
+
+    # Show provider and model information
+    print(f"Provider: {provider_display}")
     # Show phase-specific models if they differ
     if planning_model != coding_model or coding_model != qa_model:
         print(
@@ -343,6 +385,7 @@ def handle_build_command(
                 max_iterations=max_iterations,
                 verbose=verbose,
                 source_spec_dir=source_spec_dir,  # For syncing progress back to main project
+                restart_from=restart_from,  # Restart from specific subtask if specified
             )
         )
         debug_success("run.py", "Agent execution completed")
@@ -398,7 +441,6 @@ def handle_build_command(
             except KeyboardInterrupt:
                 print("\n\nQA validation paused.")
                 print(f"Resume: python auto-claude/run.py --spec {spec_dir.name} --qa")
-                qa_approved = False
 
                 # Generate test report artifact even on interrupt
                 if artifact_manager:
@@ -568,7 +610,7 @@ def _handle_build_interrupt(
         json_mode: Enable JSON output mode
         non_interactive: Skip interactive prompts (CI mode or auto-continue)
     """
-    from agent import run_autonomous_agent
+    from agents import run_autonomous_agent
 
     # Create artifact manager for saving build logs on interrupt
     artifact_manager = None
@@ -734,7 +776,7 @@ def _handle_build_interrupt(
         if choice == "skip":
             print()
             print_status("Resuming build...", "info")
-            status_manager.update(state=BuildState.RUNNING)
+            status_manager.update(state=BuildState.BUILDING)
             asyncio.run(
                 run_autonomous_agent(
                     project_dir=working_dir,
