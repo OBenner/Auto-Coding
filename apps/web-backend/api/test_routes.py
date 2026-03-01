@@ -1,71 +1,73 @@
 """
-Test API routes for WebSocket broadcasting testing
+Test API routes for WebSocket broadcasting testing.
 
-These endpoints are used for E2E testing of WebSocket functionality.
-They allow test scripts to trigger broadcasts via HTTP, ensuring they
-use the same ConnectionManager instance as the running server.
+WARNING: These endpoints are only registered when DEBUG=true (see main.py).
+They must NEVER be exposed in production.
 """
 
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
-from typing import Optional
+from enum import Enum
 
-from api.websocket import broadcast_log_event, broadcast_execution_event
+from fastapi import APIRouter
+from pydantic import BaseModel, Field
+
+from api.websocket import broadcast_execution_event, broadcast_log_event
 
 router = APIRouter(prefix="/test", tags=["test"])
 
 
+class LogLevel(str, Enum):
+    """Allowed log levels."""
+
+    debug = "debug"
+    info = "info"
+    warning = "warning"
+    error = "error"
+    critical = "critical"
+
+
 class BroadcastLogRequest(BaseModel):
-    """Request model for broadcast log event"""
-    spec_id: str
-    log_line: str
-    level: str = "info"
+    """Request model for broadcast log event."""
+
+    spec_id: str = Field(..., min_length=1, max_length=200)
+    log_line: str = Field(..., min_length=1, max_length=10000)
+    level: LogLevel = LogLevel.info
 
 
 class BroadcastExecutionRequest(BaseModel):
-    """Request model for broadcast execution event"""
-    spec_id: str
-    phase: str
-    phase_progress: float
-    overall_progress: float
-    message: Optional[str] = None
-    current_subtask: Optional[str] = None
+    """Request model for broadcast execution event."""
+
+    spec_id: str = Field(..., min_length=1, max_length=200)
+    phase: str = Field(..., min_length=1, max_length=100)
+    phase_progress: float = Field(..., ge=0.0, le=100.0)
+    overall_progress: float = Field(..., ge=0.0, le=100.0)
+    message: str | None = Field(None, max_length=1000)
+    current_subtask: str | None = Field(None, max_length=200)
 
 
 @router.post("/broadcast")
 async def test_broadcast_log(request: BroadcastLogRequest):
     """
-    Test endpoint to trigger a log event broadcast.
-
-    Used for E2E testing to verify WebSocket clients receive events.
+    Trigger a log event broadcast (debug/test only).
     """
-    try:
-        await broadcast_log_event(
-            spec_id=request.spec_id,
-            log_line=request.log_line,
-            level=request.level
-        )
-        return {"status": "ok", "message": "Log event broadcasted"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    await broadcast_log_event(
+        spec_id=request.spec_id,
+        log_line=request.log_line,
+        level=request.level.value,
+    )
+    return {"status": "ok", "message": "Log event broadcasted"}
 
 
 @router.post("/broadcast-execution")
 async def test_broadcast_execution(request: BroadcastExecutionRequest):
     """
-    Test endpoint to trigger an execution event broadcast.
-
-    Used for E2E testing to verify WebSocket clients receive execution progress events.
+    Trigger an execution event broadcast (debug/test only).
     """
-    try:
-        await broadcast_execution_event(
-            spec_id=request.spec_id,
-            phase=request.phase,
-            phase_progress=request.phase_progress,
-            overall_progress=request.overall_progress,
-            message=request.message,
-            current_subtask=request.current_subtask
-        )
-        return {"status": "ok", "message": "Execution event broadcasted"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    await broadcast_execution_event(
+        spec_id=request.spec_id,
+        phase=request.phase,
+        phase_progress=request.phase_progress,
+        overall_progress=request.overall_progress,
+        message=request.message,
+        current_subtask=request.current_subtask,
+    )
+    return {"status": "ok", "message": "Execution event broadcasted"}

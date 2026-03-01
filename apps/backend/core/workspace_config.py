@@ -34,7 +34,7 @@ import os
 import tempfile
 from collections import deque
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 from pathlib import Path
 from typing import Any
@@ -162,7 +162,7 @@ class WorkspaceConfig:
 
     def __post_init__(self):
         """Initialize workspace state."""
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
 
         if self.created_at is None:
             self.created_at = now
@@ -326,7 +326,7 @@ class WorkspaceConfig:
                 )
 
         self.projects.append(project)
-        self.updated_at = datetime.now(timezone.utc).isoformat()
+        self.updated_at = datetime.now(UTC).isoformat()
 
     def remove_project(self, name: str) -> bool:
         """
@@ -354,7 +354,7 @@ class WorkspaceConfig:
             )
 
         self.projects.remove(project)
-        self.updated_at = datetime.now(timezone.utc).isoformat()
+        self.updated_at = datetime.now(UTC).isoformat()
         return True
 
     def to_dict(self) -> dict[str, Any]:
