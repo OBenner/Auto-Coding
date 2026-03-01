@@ -7,9 +7,12 @@ progress tracking, and state persistence.
 """
 
 import asyncio
+import collections
 import json
 import logging
+import os
 import shlex
+import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -63,6 +66,7 @@ class BackgroundTaskManager:
     MEMORY_WARNING_THRESHOLD = 80.0  # Warn at 80% memory usage
     MEMORY_CRITICAL_THRESHOLD = 90.0  # Critical at 90% memory usage
     MEMORY_CHECK_INTERVAL = 5  # Check memory every 5 lines of output
+    MAX_OUTPUT_LINES = 10000  # Rolling buffer size for output lines
 
     # Task states
     STATE_PENDING = "pending"
@@ -145,13 +149,33 @@ class BackgroundTaskManager:
         except ValueError:
             return False
 
+        # Atomic write: write to temp file, fsync, then replace
+        tmp_fd = None
+        tmp_path = None
         try:
-            with open(state_file, "w", encoding="utf-8") as f:
+            tmp_fd, tmp_path = tempfile.mkstemp(
+                dir=str(state_file.parent), suffix=".tmp"
+            )
+            with os.fdopen(tmp_fd, "w", encoding="utf-8") as f:
+                tmp_fd = None  # os.fdopen takes ownership
                 json.dump(self.tasks[task_id], f, indent=2)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp_path, str(state_file))
+            tmp_path = None  # replaced successfully
             return True
         except Exception as e:
             logger.error(f"Failed to save task state for {task_id}: {e}")
             return False
+        finally:
+            # Clean up temp file on error
+            if tmp_fd is not None:
+                os.close(tmp_fd)
+            if tmp_path is not None:
+                try:
+                    os.unlink(tmp_path)
+                except OSError:
+                    pass
 
     def _load_task_state(self, task_id: str) -> bool:
         """
@@ -290,7 +314,9 @@ class BackgroundTaskManager:
             # Stream output with timeout
             async def read_and_wait():
                 """Read output and wait for completion."""
-                output_lines = []
+                output_lines: collections.deque[str] = collections.deque(
+                    maxlen=self.MAX_OUTPUT_LINES
+                )
                 if process.stdout:
                     async for line in process.stdout:
                         line_text = line.decode("utf-8", errors="replace")
@@ -367,11 +393,12 @@ class BackgroundTaskManager:
                 # Try to terminate process gracefully
                 try:
                     process.terminate()
-                    await asyncio.sleep(0.5)
-                    if process.returncode is None:
+                    try:
+                        await asyncio.wait_for(process.wait(), timeout=2.0)
+                    except asyncio.TimeoutError:
                         process.kill()
-                        await asyncio.sleep(0.1)
-                except Exception as e:
+                        await asyncio.wait_for(process.wait(), timeout=5.0)
+                except (OSError, asyncio.TimeoutError) as e:
                     logger.error(f"Error terminating process for task {task_id}: {e}")
 
         except Exception as e:
@@ -551,10 +578,14 @@ class BackgroundTaskManager:
             process = self.processes[task_id]
             try:
                 process.terminate()
-                await asyncio.sleep(0.5)  # Give it time to graceful shutdown
-                if process.returncode is None:
+                # Wait for graceful shutdown with timeout
+                try:
+                    await asyncio.wait_for(process.wait(), timeout=2.0)
+                except asyncio.TimeoutError:
+                    # Force kill if graceful shutdown failed
                     process.kill()
-            except Exception as e:
+                    await asyncio.wait_for(process.wait(), timeout=5.0)
+            except (OSError, asyncio.TimeoutError) as e:
                 logger.error(f"Error cancelling task {task_id}: {e}")
                 return False
             finally:

@@ -184,13 +184,14 @@ class TestLongRunningCommands:
         """
         # Create a command that produces incremental output
         # Use -u for unbuffered Python output and flush=True in prints
+        # Produce 20 lines at 0.1s each so task["output"] gets flushed (every 10 lines)
         task_id = await manager.start_task(
-            f"{sys.executable} -u -c \"import time; [print(f'Line {{i}}', flush=True) or time.sleep(0.3) for i in range(1, 6)]\"",
+            f"{sys.executable} -u -c \"import time; [print(f'Line {{i}}', flush=True) or time.sleep(0.1) for i in range(1, 21)]\"",
             timeout=10,
         )
 
-        # Wait for task to start and produce some output
-        await asyncio.sleep(0.5)
+        # Wait for initial output (need at least 10 lines for output flush)
+        await asyncio.sleep(1.2)
 
         # Check that we're getting partial output
         output_data = manager.get_task_output(task_id)
@@ -198,7 +199,7 @@ class TestLongRunningCommands:
         initial_len = len(output_data.get("output", ""))
 
         # Wait for more output to arrive
-        await asyncio.sleep(0.6)
+        await asyncio.sleep(0.5)
 
         # Output should have grown (proves real-time streaming)
         output_data_2 = manager.get_task_output(task_id)
@@ -218,7 +219,7 @@ class TestLongRunningCommands:
         final_output = manager.get_task_output(task_id)
         assert final_output is not None
         assert "Line 1" in final_output["output"]
-        assert "Line 5" in final_output["output"]
+        assert "Line 20" in final_output["output"]
 
         logger.info(f"✓ Real-time output streaming test passed: {task_id}")
 
