@@ -1,0 +1,117 @@
+{
+  "refreshTasks": "Actualiser les tâches",
+  "status": {
+    "backlog": "En attente",
+    "queue": "File d'attente",
+    "todo": "À faire",
+    "in_progress": "En cours",
+    "review": "Révision",
+    "prCreated": "PR créée",
+    "complete": "Terminé",
+    "archived": "Archivé",
+    "pending": "En attente",
+    "running": "En cours d'exécution",
+    "completed": "Terminé",
+    "failed": "Échoué",
+    "cancelled": "Annulé"
+  },
+  "actions": {
+    "start": "Démarrer",
+    "stop": "Arrêter",
+    "recover": "Récupérer",
+    "resume": "Reprendre",
+    "archive": "Archiver",
+    "delete": "Supprimer",
+    "view": "Voir les détails",
+    "viewLogs": "Voir les journaux",
+    "cancel": "Annuler",
+    "retry": "Réessayer",
+    "taskActions": "Actions de la tâche",
+    "selectTask": "Sélectionner la tâche : {{title}}"
+  },
+  "labels": {
+    "running": "En cours d'exécution",
+    "needsReview": "Nécessite une révision",
+    "pending": "En attente",
+    "stuck": "Bloqué",
+    "incomplete": "Incomplet",
+    "recovering": "Récupération...",
+    "taskId": "ID de la tâche",
+    "specId": "ID de la spécification",
+    "status": "Statut",
+    "progress": "Progression",
+    "duration": "Durée",
+    "startedAt": "Démarré le",
+    "completedAt": "Terminé le"
+  },
+  "creation": {
+    "title": "Créer une nouvelle tâche",
+    "description": "Décrivez ce que vous voulez construire",
+    "placeholder": "Décrivez votre tâche...",
+    "complexity": "Complexité",
+    "complexityOptions": {
+      "simple": "Simple",
+      "standard": "Standard",
+      "complex": "Complexe"
+    },
+    "submit": "Créer la tâche",
+    "cancel": "Annuler"
+  },
+  "empty": {
+    "title": "Aucune tâche pour le moment",
+    "description": "Créez votre première tâche pour commencer",
+    "noRunning": "Aucune tâche en cours d'exécution",
+    "noCompleted": "Aucune tâche terminée"
+  },
+  "execution": {
+    "phases": {
+      "idle": "Inactif",
+      "planning": "Planification",
+      "coding": "Codage",
+      "reviewing": "Révision",
+      "fixing": "Correction",
+      "complete": "Terminé",
+      "failed": "Échoué"
+    },
+    "labels": {
+      "interrupted": "Interrompu",
+      "progress": "Progression",
+      "currentPhase": "Phase actuelle",
+      "elapsed": "Temps écoulé"
+    }
+  },
+  "logs": {
+    "title": "Journaux de construction",
+    "search": {
+      "placeholder": "Rechercher dans les journaux...",
+      "showing": "Affichage de {{filtered}} sur {{total}} éléments",
+      "noResults": "Aucun journal correspondant",
+      "noResultsHint": "Essayez d'ajuster votre recherche"
+    },
+    "filters": {
+      "all": "Tous",
+      "errors": "Erreurs",
+      "warnings": "Avertissements",
+      "info": "Info"
+    },
+    "empty": "Aucun journal pour le moment",
+    "emptyHint": "Les journaux apparaîtront ici lors de l'exécution de la tâche"
+  },
+  "details": {
+    "title": "Détails de la tâche",
+    "description": "Description",
+    "status": "Statut",
+    "progress": "Progression",
+    "logs": "Journaux",
+    "files": "Fichiers modifiés",
+    "metadata": "Métadonnées"
+  },
+  "errors": {
+    "failedToLoad": "Échec du chargement des tâches",
+    "failedToStart": "Échec du démarrage de la tâche",
+    "failedToStop": "Échec de l'arrêt de la tâche",
+    "failedToDelete": "Échec de la suppression de la tâche",
+    "notFound": "Tâche introuvable",
+    "alreadyRunning": "La tâche est déjà en cours d'exécution"
+  }
+}

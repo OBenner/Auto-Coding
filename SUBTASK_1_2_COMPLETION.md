@@ -1,9 +1,11 @@
 # Subtask 1-2 Completion Summary
 
 ## Task
+
 Implement command extraction for /merge, /resolve, /process
 
 ## Status
+
 ✅ **COMPLETED**
 
 ## What Was Done

@@ -1,0 +1,104 @@
+{
+  "common": {
+    "confirm": "Confirm",
+    "cancel": "Cancel",
+    "close": "Close",
+    "ok": "OK",
+    "yes": "Yes",
+    "no": "No",
+    "delete": "Delete",
+    "save": "Save",
+    "continue": "Continue"
+  },
+  "confirmDelete": {
+    "title": "Confirm Deletion",
+    "message": "Are you sure you want to delete this item?",
+    "description": "This action cannot be undone.",
+    "confirm": "Delete",
+    "cancel": "Cancel"
+  },
+  "confirmCancel": {
+    "title": "Cancel Task",
+    "message": "Are you sure you want to cancel this task?",
+    "description": "The task will be stopped and cannot be resumed.",
+    "confirm": "Cancel Task",
+    "cancel": "Keep Running"
+  },
+  "taskDelete": {
+    "title": "Delete Task",
+    "message": "Are you sure you want to delete task \"{{taskName}}\"?",
+    "description": "This will permanently delete the task and all associated data.",
+    "confirm": "Delete Task",
+    "cancel": "Cancel"
+  },
+  "specDelete": {
+    "title": "Delete Spec",
+    "message": "Are you sure you want to delete spec \"{{specName}}\"?",
+    "description": "This will permanently delete the spec and all associated tasks.",
+    "confirm": "Delete Spec",
+    "cancel": "Cancel"
+  },
+  "unsavedChanges": {
+    "title": "Unsaved Changes",
+    "message": "You have unsaved changes that will be lost.",
+    "description": "Do you want to save your changes before leaving?",
+    "save": "Save Changes",
+    "discard": "Discard Changes",
+    "cancel": "Stay on Page"
+  },
+  "error": {
+    "title": "Error",
+    "message": "An error occurred",
+    "description": "Please try again or contact support if the problem persists.",
+    "close": "Close",
+    "retry": "Retry"
+  },
+  "success": {
+    "title": "Success",
+    "message": "Operation completed successfully",
+    "close": "Close"
+  },
+  "createSpec": {
+    "title": "Create New Spec",
+    "description": "Fill in the details to create a new specification",
+    "taskDescription": "Task Description",
+    "taskDescriptionPlaceholder": "Describe what you want to build...",
+    "complexity": "Complexity Level",
+    "complexitySimple": "Simple - Quick fixes or small changes",
+    "complexityStandard": "Standard - New features or moderate changes",
+    "complexityComplex": "Complex - Large features or architectural changes",
+    "attachments": "Attachments (Optional)",
+    "attachmentsDescription": "Upload relevant files or documentation",
+    "create": "Create Spec",
+    "cancel": "Cancel",
+    "creating": "Creating...",
+    "success": "Spec created successfully",
+    "error": "Failed to create spec"
+  },
+  "authentication": {
+    "title": "Authentication Required",
+    "message": "Please authenticate to continue",
+    "description": "Enter your access token to authenticate with the backend",
+    "tokenPlaceholder": "Enter your access token",
+    "verify": "Verify Token",
+    "cancel": "Cancel",
+    "verifying": "Verifying...",
+    "success": "Authentication successful",
+    "error": "Authentication failed"
+  },
+  "connectionError": {
+    "title": "Connection Error",
+    "message": "Failed to connect to backend",
+    "description": "Please check your API settings and try again",
+    "settings": "Open Settings",
+    "retry": "Retry",
+    "cancel": "Cancel"
+  },
+  "websocketDisconnected": {
+    "title": "WebSocket Disconnected",
+    "message": "Real-time updates are temporarily unavailable",
+    "description": "The connection will automatically reconnect",
+    "reconnect": "Reconnect Now",
+    "dismiss": "Dismiss"
+  }
+}

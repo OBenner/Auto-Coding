@@ -11,6 +11,21 @@ export const IPC_CHANNELS = {
   PROJECT_UPDATE_SETTINGS: 'project:updateSettings',
   PROJECT_INITIALIZE: 'project:initialize',
   PROJECT_CHECK_VERSION: 'project:checkVersion',
+  PROJECT_GET_BY_WORKSPACE: 'project:getByWorkspace',
+  PROJECT_GET_WORKSPACE: 'project:getWorkspace',
+  PROJECT_SET_WORKSPACE: 'project:setWorkspace',
+
+  // Workspace operations (multi-codebase orchestration)
+  WORKSPACE_LIST: 'workspace:list',
+  WORKSPACE_GET: 'workspace:get',
+  WORKSPACE_CREATE: 'workspace:create',
+  WORKSPACE_UPDATE: 'workspace:update',
+  WORKSPACE_DELETE: 'workspace:delete',
+  WORKSPACE_RENAME: 'workspace:rename',
+  WORKSPACE_ADD_PROJECT: 'workspace:addProject',
+  WORKSPACE_REMOVE_PROJECT: 'workspace:removeProject',
+  WORKSPACE_UPDATE_PROJECT: 'workspace:updateProject',
+  WORKSPACE_GET_BUILD_ORDER: 'workspace:getBuildOrder',
 
   // Tab state operations (persisted in main process)
   TAB_STATE_GET: 'tabState:get',
@@ -155,6 +170,11 @@ export const IPC_CHANNELS = {
   SETTINGS_SAVE: 'settings:save',
   SETTINGS_GET_CLI_TOOLS_INFO: 'settings:getCliToolsInfo',
 
+  // AI Provider Configuration (backend .env sync)
+  PROVIDER_CONFIG_GET: 'provider:config:get',
+  PROVIDER_CONFIG_UPDATE: 'provider:config:update',
+  PROVIDER_CONFIG_VALIDATE: 'provider:config:validate',
+
   // API Profile management (custom Anthropic-compatible endpoints)
   PROFILES_GET: 'profiles:get',
   PROFILES_SAVE: 'profiles:save',
@@ -188,6 +208,7 @@ export const IPC_CHANNELS = {
   ROADMAP_STOP: 'roadmap:stop',
   ROADMAP_UPDATE_FEATURE: 'roadmap:updateFeature',
   ROADMAP_CONVERT_TO_SPEC: 'roadmap:convertToSpec',
+  COMPETITOR_ANALYSIS_SAVE: 'roadmap:competitorAnalysisSave',
 
   // Roadmap events (main -> renderer)
   ROADMAP_PROGRESS: 'roadmap:progress',
@@ -460,6 +481,14 @@ export const IPC_CHANNELS = {
   GITHUB_TRIAGE_COMPLETE: 'github:triage:complete',
   GITHUB_TRIAGE_ERROR: 'github:triage:error',
 
+  // GitHub Code Review operations
+  GITHUB_CODE_REVIEW_TRIGGER: 'github:code-review:trigger',
+
+  // GitHub Code Review events (main -> renderer)
+  GITHUB_CODE_REVIEW_PROGRESS: 'github:code-review:progress',
+  GITHUB_CODE_REVIEW_COMPLETE: 'github:code-review:complete',
+  GITHUB_CODE_REVIEW_ERROR: 'github:code-review:error',
+
   // Merge Analytics operations
   MERGE_ANALYTICS_GET_HISTORY: 'mergeAnalytics:getHistory',
   MERGE_ANALYTICS_GET_SUMMARY: 'mergeAnalytics:getSummary',
@@ -469,6 +498,7 @@ export const IPC_CHANNELS = {
   // Productivity Analytics operations
   PRODUCTIVITY_ANALYTICS_GET_SUMMARY: 'productivityAnalytics:getSummary',
   PRODUCTIVITY_ANALYTICS_GET_TRENDS: 'productivityAnalytics:getTrends',
+  PRODUCTIVITY_ANALYTICS_GET_FAILURE_METRICS: 'productivityAnalytics:getFailureMetrics',
   PRODUCTIVITY_ANALYTICS_EXPORT: 'productivityAnalytics:export',
 
   // Memory Infrastructure status (LadybugDB - no Docker required)
@@ -524,6 +554,10 @@ export const IPC_CHANNELS = {
   INSIGHTS_NEW_SESSION: 'insights:newSession',
   INSIGHTS_SWITCH_SESSION: 'insights:switchSession',
   INSIGHTS_DELETE_SESSION: 'insights:deleteSession',
+  INSIGHTS_DELETE_SESSIONS: 'insights:deleteSessions',
+  INSIGHTS_ARCHIVE_SESSION: 'insights:archiveSession',
+  INSIGHTS_ARCHIVE_SESSIONS: 'insights:archiveSessions',
+  INSIGHTS_UNARCHIVE_SESSION: 'insights:unarchiveSession',
   INSIGHTS_RENAME_SESSION: 'insights:renameSession',
   INSIGHTS_UPDATE_MODEL_CONFIG: 'insights:updateModelConfig',
 
@@ -623,6 +657,34 @@ export const IPC_CHANNELS = {
   TEMPLATE_PREVIEW: 'template:preview',
   TEMPLATE_CREATE_SPEC: 'template:createSpec',
   TEMPLATE_SUGGEST: 'template:suggest',
+
+  // Webhook operations
+  WEBHOOK_GET_CONFIGS: 'webhook:getConfigs',
+  WEBHOOK_GET_CONFIG: 'webhook:getConfig',
+  WEBHOOK_SAVE_CONFIG: 'webhook:saveConfig',
+  WEBHOOK_DELETE_CONFIG: 'webhook:deleteConfig',
+  WEBHOOK_TEST_CONNECTION: 'webhook:testConnection',
+  WEBHOOK_GET_LOGS: 'webhook:getLogs',
+  WEBHOOK_GET_INTEGRATION_STATUS: 'webhook:getIntegrationStatus',
+  WEBHOOK_ENABLE_CONFIG: 'webhook:enableConfig',
+  WEBHOOK_DISABLE_CONFIG: 'webhook:disableConfig',
+
+  // Pattern operations (codebase pattern learning)
+  PATTERN_LIST: 'pattern:list',
+  PATTERN_GET_CATEGORIES: 'pattern:getCategories',
+  PATTERN_GET_DETAILS: 'pattern:getDetails',
+  PATTERN_APPROVE: 'pattern:approve',
+  PATTERN_OVERRIDE: 'pattern:override',
+  PATTERN_DELETE: 'pattern:delete',
+
+  // Custom template operations (user-created)
+  TEMPLATE_CUSTOM_LIST: 'template:custom:list',
+  TEMPLATE_CUSTOM_SAVE: 'template:custom:save',
+  TEMPLATE_CUSTOM_UPDATE: 'template:custom:update',
+  TEMPLATE_CUSTOM_DELETE: 'template:custom:delete',
+  TEMPLATE_CUSTOM_EXPORT: 'template:custom:export',
+  TEMPLATE_CUSTOM_IMPORT: 'template:custom:import',
+  TEMPLATE_CUSTOM_TEST: 'template:custom:test',
 
   // Session Replay operations
   SESSION_REPLAY_LIST: 'sessionReplay:list',

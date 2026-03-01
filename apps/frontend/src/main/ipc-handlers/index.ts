@@ -12,6 +12,7 @@ import { PythonEnvManager } from '../python-env-manager';
 
 // Import all handler registration functions
 import { registerProjectHandlers } from './project-handlers';
+import { registerWorkspaceHandlers } from './workspace-handlers';
 import { registerTaskHandlers } from './task-handlers';
 import { registerTerminalHandlers } from './terminal-handlers';
 import { registerAgenteventsHandlers } from './agent-events-handlers';
@@ -40,9 +41,12 @@ import { registerMergeAnalyticsHandlers } from './merge-analytics-handlers';
 import { registerAnalyticsHandlers } from './analytics-handlers';
 import { registerTokenStatsHandlers } from './token-stats-handler';
 import { registerTemplateHandlers } from './template-handlers';
+import { registerWebhookHandlers } from './webhooks-handlers';
+import { registerPatternHandlers } from './pattern-handlers';
 import { registerSessionReplayHandlers } from './session-replay-handlers';
 import { registerFeedbackHandlers } from './feedback-handlers';
 import { notificationService } from '../notification-service';
+import { setAgentManagerRef } from './utils';
 
 /**
  * Setup all IPC handlers across all domains
@@ -61,8 +65,14 @@ export function setupIpcHandlers(
   // Initialize notification service
   notificationService.initialize(getMainWindow);
 
+  // Wire up agent manager for circuit breaker cleanup
+  setAgentManagerRef(agentManager);
+
   // Project handlers (including Python environment setup)
   registerProjectHandlers(pythonEnvManager, agentManager, getMainWindow);
+
+  // Workspace handlers (multi-codebase orchestration)
+  registerWorkspaceHandlers();
 
   // Task handlers
   registerTaskHandlers(agentManager, pythonEnvManager, getMainWindow);
@@ -145,6 +155,12 @@ export function setupIpcHandlers(
   // Template library handlers
   registerTemplateHandlers();
 
+  // Webhook integration handlers
+  registerWebhookHandlers(agentManager, getMainWindow);
+
+  // Pattern learning handlers
+  registerPatternHandlers();
+
   // Session replay handlers
   registerSessionReplayHandlers();
 
@@ -160,6 +176,7 @@ export function setupIpcHandlers(
 // Re-export all individual registration functions for potential custom usage
 export {
   registerProjectHandlers,
+  registerWorkspaceHandlers,
   registerTaskHandlers,
   registerTerminalHandlers,
   registerTerminalWorktreeIpcHandlers,
@@ -187,6 +204,8 @@ export {
   registerAnalyticsHandlers,
   registerTokenStatsHandlers,
   registerTemplateHandlers,
+  registerWebhookHandlers,
+  registerPatternHandlers,
   registerSessionReplayHandlers,
   registerFeedbackHandlers,
   registerSchedulerHandlers

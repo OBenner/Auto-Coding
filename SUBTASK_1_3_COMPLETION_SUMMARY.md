@@ -47,11 +47,13 @@ Successfully added comprehensive edge case handling to the GitHub PR Command Par
 ### Pattern Updates
 
 **Before:**
+
 ```python
 COMMAND_PATTERN = re.compile(r"/(\w+)(?:\s+([^\n]*?))?(?=\s|$|/)")
 ```
 
 **After:**
+
 ```python
 COMMAND_PATTERN = re.compile(r"(?<!/)/(\S+?)(?:\s+([^\n]*?))?(?=\s|$|/)")
 MALFORMED_PATTERN = re.compile(r"/[^\w\s]|/\d+|//+")
@@ -105,6 +107,6 @@ With the Command Parser now complete and robust, the next phase is:
 
 ## Commit
 
-```
+```text
 f0603164 - auto-claude: subtask-1-3 - Add edge case handling (empty input, malformed commands, special chars)
 ```

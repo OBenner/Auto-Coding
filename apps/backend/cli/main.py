@@ -36,6 +36,7 @@ from .scheduler_commands import (
     handle_schedule_status_command,
     handle_schedule_stop_command,
 )
+from .security_commands import handle_security_audit_command
 from .spec_commands import print_specs_list
 from .utils import (
     DEFAULT_MODEL,
@@ -126,7 +127,15 @@ Environment Variables:
         "--model",
         type=str,
         default=None,
-        help=f"Claude model to use (default: {DEFAULT_MODEL})",
+        help=f"Model to use (default: {DEFAULT_MODEL})",
+    )
+
+    parser.add_argument(
+        "--provider",
+        type=str,
+        default=None,
+        choices=["claude", "litellm", "openrouter", "zhipuai"],
+        help="AI provider to use (default: from env or claude)",
     )
 
     parser.add_argument(
@@ -257,6 +266,15 @@ Environment Variables:
         "--force",
         action="store_true",
         help="Skip approval check and start build anyway (for debugging)",
+    )
+
+    # Task restart
+    parser.add_argument(
+        "--restart-from",
+        type=str,
+        default=None,
+        metavar="SUBTASK_ID",
+        help="Restart build from a specific subtask ID (preserves provider/model config)",
     )
 
     # Base branch for worktree creation
@@ -419,6 +437,20 @@ Environment Variables:
         help="Export analytics to file (with --analytics)",
     )
 
+    # Security audit commands
+    parser.add_argument(
+        "--security-audit",
+        action="store_true",
+        help="Run comprehensive security audit on the project",
+    )
+    parser.add_argument(
+        "--security-output-format",
+        type=str,
+        default="both",
+        choices=["json", "markdown", "both"],
+        help="Output format for security audit report (default: both)",
+    )
+
     return parser.parse_args()
 
 
@@ -465,6 +497,9 @@ def _run_cli() -> None:
     # Get model from CLI arg or env var (None if not explicitly set)
     # This allows get_phase_model() to fall back to task_metadata.json
     model = args.model or os.environ.get("AUTO_BUILD_MODEL")
+
+    # Get provider from CLI arg (default: from env or claude)
+    provider = args.provider
 
     # Handle --list command
     if args.list:
@@ -558,6 +593,27 @@ def _run_cli() -> None:
             granularity=args.analytics_granularity,
             export_path=export_path,
             export_format=args.analytics_format,
+        )
+        return
+
+    # Handle security audit command
+    if args.security_audit:
+        # Security audit can run with or without a spec
+        spec_dir = None
+        if args.spec:
+            spec_dir = find_spec(project_dir, args.spec)
+            if not spec_dir:
+                print_banner()
+                print(f"\nError: Spec '{args.spec}' not found")
+                print("\nAvailable specs:")
+                print_specs_list(project_dir)
+                sys.exit(1)
+
+        handle_security_audit_command(
+            project_dir=project_dir,
+            spec_dir=spec_dir,
+            output_format=args.security_output_format,
+            verbose=args.verbose,
         )
         return
 
@@ -674,6 +730,7 @@ def _run_cli() -> None:
         project_dir=project_dir,
         spec_dir=spec_dir,
         model=model,
+        provider=provider,
         max_iterations=args.max_iterations,
         verbose=args.verbose,
         force_isolated=args.isolated,
@@ -682,6 +739,7 @@ def _run_cli() -> None:
         skip_qa=args.skip_qa,
         force_bypass_approval=args.force,
         base_branch=args.base_branch,
+        restart_from=args.restart_from,
     )
 
 

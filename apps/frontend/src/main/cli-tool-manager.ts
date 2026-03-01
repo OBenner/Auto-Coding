@@ -52,7 +52,6 @@ import {
   sortNvmVersionDirs,
   getGitDetectionPaths,
   getGitHubCLIDetectionPaths,
-  type ClaudeDetectionPaths,
   type WindowsToolPaths,
 } from './platform/paths';
 

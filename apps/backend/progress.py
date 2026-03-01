@@ -15,10 +15,12 @@ from core.progress import (
     get_progress_percentage,
     get_recovery_metrics_summary,
     is_build_complete,
+    is_build_ready_for_qa,
     print_build_complete_banner,
     print_paused_banner,
     print_progress_summary,
     print_session_header,
+    reset_subtask_to_pending,
 )
 
 
@@ -45,10 +47,12 @@ __all__ = [
     "get_recovery_metrics_summary",
     "get_recovery_metrics",
     "is_build_complete",
+    "is_build_ready_for_qa",
     "print_build_complete_banner",
     "print_paused_banner",
     "print_progress_summary",
     "print_session_header",
+    "reset_subtask_to_pending",
 ]
 
 # Make RecoveryMetrics available for imports (lazy loaded)

@@ -229,6 +229,11 @@ class GraphitiMemory:
             self._code_relationships = None
 
     @property
+    def client(self) -> "GraphitiClient | None":
+        """Get the underlying GraphitiClient (must be initialized first)."""
+        return self._client
+
+    @property
     def code_relationships(self) -> CodeRelationshipQueries | None:
         """
         Get the code relationship queries module.
@@ -295,13 +300,24 @@ class GraphitiMemory:
             )
             return False
 
-    async def save_pattern(self, pattern: str) -> bool:
-        """Save a code pattern to the knowledge graph."""
+    async def save_pattern(
+        self, pattern: str, category_metadata: dict | None = None
+    ) -> bool:
+        """
+        Save a code pattern to the knowledge graph.
+
+        Args:
+            pattern: Description of the code pattern
+            category_metadata: Optional dict with category, confidence, reasoning
+
+        Returns:
+            True if saved successfully
+        """
         if not await self._ensure_initialized():
             return False
 
         try:
-            result = await self._queries.add_pattern(pattern)
+            result = await self._queries.add_pattern(pattern, category_metadata)
 
             if result and self.state:
                 self.state.episode_count += 1
@@ -530,6 +546,7 @@ class GraphitiMemory:
         task_description: str,
         agent_type: str,
         context: dict,
+        rating: int | None = None,
     ) -> bool:
         """
         Add user feedback to the preference profile and save it.
@@ -544,6 +561,7 @@ class GraphitiMemory:
             task_description: Description of the task that was evaluated
             agent_type: Agent that produced the output
             context: Additional context about the feedback
+            rating: Optional rating (1-5 for stars, 0/1 for thumbs)
 
         Returns:
             True if feedback was added and saved successfully
@@ -567,6 +585,7 @@ class GraphitiMemory:
                 task_description=task_description,
                 agent_type=agent_type,
                 context=context,
+                rating=rating,
             )
 
             # Save updated profile

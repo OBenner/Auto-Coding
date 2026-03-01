@@ -520,4 +520,65 @@ export function registerProjectHandlers(
       }
     }
   );
+
+  // ============================================
+  // Workspace Integration
+  // ============================================
+
+  /**
+   * Get all projects that belong to a workspace
+   */
+  ipcMain.handle(
+    IPC_CHANNELS.PROJECT_GET_BY_WORKSPACE,
+    async (_event, workspaceName: string): Promise<IPCResult<Project[]>> => {
+      try {
+        const projects = projectStore.getProjectsByWorkspace(workspaceName);
+        return { success: true, data: projects };
+      } catch (error) {
+        console.error('[IPC] Failed to get projects by workspace:', error);
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Failed to get projects by workspace'
+        };
+      }
+    }
+  );
+
+  /**
+   * Get the workspace name for a project (if any)
+   */
+  ipcMain.handle(
+    IPC_CHANNELS.PROJECT_GET_WORKSPACE,
+    async (_event, projectId: string): Promise<IPCResult<string | undefined>> => {
+      try {
+        const workspaceName = projectStore.getWorkspaceForProject(projectId);
+        return { success: true, data: workspaceName };
+      } catch (error) {
+        console.error('[IPC] Failed to get workspace for project:', error);
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Failed to get workspace for project'
+        };
+      }
+    }
+  );
+
+  /**
+   * Associate a project with a workspace (or remove association if workspaceName is undefined)
+   */
+  ipcMain.handle(
+    IPC_CHANNELS.PROJECT_SET_WORKSPACE,
+    async (_event, projectId: string, workspaceName: string | undefined): Promise<IPCResult<Project | undefined>> => {
+      try {
+        const project = projectStore.setProjectWorkspace(projectId, workspaceName);
+        return { success: true, data: project };
+      } catch (error) {
+        console.error('[IPC] Failed to set project workspace:', error);
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Failed to set project workspace'
+        };
+      }
+    }
+  );
 }

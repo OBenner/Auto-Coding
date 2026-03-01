@@ -49,6 +49,11 @@ from ui import (
     print_status,
 )
 
+from .decision_extractor import (
+    DecisionExtractor,
+    extract_decisions_from_history,
+    log_extracted_decision,
+)
 from .decision_tracker import DecisionTracker
 from .memory_manager import save_session_memory
 from .process_isolator import (
@@ -125,9 +130,8 @@ class ConversationRound:
         if "file_path" in tool_input:
             self.code_references.add(tool_input["file_path"])
         elif "path" in tool_input:
-            self.code_references.add(tool_input["path"])
-        elif "pattern" in tool_input and "path" in tool_input:
-            # Grep/Glob operations
+            # Covers both direct path access and Grep/Glob operations
+            # (which also have a "pattern" key alongside "path")
             self.code_references.add(tool_input["path"])
 
     def set_usage(self, input_tokens: int, output_tokens: int) -> None:
@@ -893,6 +897,9 @@ async def run_agent_session(
     if subtask_id:
         decision_tracker.set_subtask(subtask_id)
 
+    # Initialize heuristic decision extractor for this session
+    decision_extractor = DecisionExtractor()
+
     current_tool = None
     message_count = 0
     tool_count = 0
@@ -949,6 +956,7 @@ async def run_agent_session(
 
         # Collect response text and show tool use
         response_text = ""
+        last_msg_type = None
         debug("session", "Starting to receive response stream...")
         async for msg in client.receive_response():
             msg_type = type(msg).__name__
@@ -972,6 +980,17 @@ async def run_agent_session(
             if message_count % _GC_MESSAGE_INTERVAL == 0:
                 _memory_monitor.maybe_gc()
 
+            # Decision extraction: detect round boundary (UserMessage → AssistantMessage)
+            if msg_type == "AssistantMessage" and last_msg_type == "UserMessage":
+                try:
+                    extracted = decision_extractor.end_round()
+                    if extracted:
+                        log_extracted_decision(decision_tracker, extracted)
+                except Exception:
+                    pass  # Decision extraction failures are non-fatal
+
+            last_msg_type = msg_type
+
             # Handle AssistantMessage (text and tool use)
             if msg_type == "AssistantMessage" and hasattr(msg, "content"):
                 for block in msg.content:
@@ -982,6 +1001,8 @@ async def run_agent_session(
                         print(block.text, end="", flush=True)
                         # Track text in conversation history
                         current_round.add_text(block.text)
+                        # Feed to decision extractor
+                        decision_extractor.on_text_block(block.text)
                         # Log text to task logger (persist without double-printing)
                         if task_logger and block.text.strip():
                             task_logger.log(
@@ -1025,6 +1046,8 @@ async def run_agent_session(
                         # Track tool call in conversation history
                         if inp:
                             current_round.add_tool_call(tool_name, inp)
+                            # Feed to decision extractor
+                            decision_extractor.on_tool_call(tool_name, inp)
 
                         # Log tool start (handles printing too)
                         if task_logger:
@@ -1071,6 +1094,11 @@ async def run_agent_session(
                                     detail=str(result_content),
                                     phase=phase,
                                 )
+                            # Feed error to decision extractor
+                            if current_tool:
+                                decision_extractor.on_tool_error(
+                                    current_tool, str(result_content)[:500]
+                                )
                         elif is_error:
                             # Show errors (truncated)
                             error_str = str(result_content)[:500]
@@ -1088,6 +1116,11 @@ async def run_agent_session(
                                     result=error_str[:100],
                                     detail=str(result_content),
                                     phase=phase,
+                                )
+                            # Feed error to decision extractor
+                            if current_tool:
+                                decision_extractor.on_tool_error(
+                                    current_tool, error_str
                                 )
                         else:
                             # Tool succeeded
@@ -1128,6 +1161,14 @@ async def run_agent_session(
                         current_tool = None
 
         print("\n" + "-" * 70 + "\n")
+
+        # Extract decisions from the final round
+        try:
+            extracted = decision_extractor.end_round()
+            if extracted:
+                log_extracted_decision(decision_tracker, extracted)
+        except Exception:
+            pass  # Decision extraction failures are non-fatal
 
         # Record successful API interaction
         _api_circuit_breaker.record_success()
@@ -1637,6 +1678,29 @@ async def run_agent_session_isolated(
                     f"\n✓ Agent subprocess completed successfully "
                     f"(execution time: {result.execution_time:.1f}s)\n"
                 )
+
+                # Extract decisions from conversation history (post-hoc)
+                if conversation_history:
+                    try:
+                        _phase = (
+                            LogPhase.PLANNING
+                            if agent_type == "planner"
+                            else LogPhase.CODING
+                        )
+                        _task_logger = get_task_logger(spec_dir)
+                        _tracker = DecisionTracker(
+                            spec_dir=spec_dir,
+                            task_logger=_task_logger,
+                            current_phase=_phase,
+                        )
+                        if subtask_id:
+                            _tracker.set_subtask(subtask_id)
+                        for _decision in extract_decisions_from_history(
+                            conversation_history
+                        ):
+                            log_extracted_decision(_tracker, _decision)
+                    except Exception:
+                        pass  # Decision extraction failures are non-fatal
 
                 # For subprocess execution, we consider it "complete" since it ran to completion
                 return "complete", response_text, usage_metadata

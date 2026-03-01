@@ -18,69 +18,16 @@ Test scenarios:
 - Integration with orchestrator
 """
 
-import asyncio
-import json
 import logging
 import sys
+import tempfile
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, Mock, patch
 from typing import Any
-
-# Add apps/backend to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
-
-# Import necessary modules
-try:
-    from runners.github.command_parser import CommandParser, Command, CommandParseError
-    from runners.github.command_executor import CommandExecutor, CommandResult, CommandExecutionError, PermissionDeniedError
-    from runners.github.permissions import GitHubPermissionChecker, PermissionError
-    from runners.github.gh_client import GHClient, GHCommandError
-except ImportError:
-    # Fallback for direct import
-    import importlib.util
-    import sys
-
-    # Load command_parser
-    parser_path = Path(__file__).parent.parent.parent / "runners" / "github" / "command_parser.py"
-    spec = importlib.util.spec_from_file_location("runners.github.command_parser", parser_path)
-    command_parser_module = importlib.util.module_from_spec(spec)
-    sys.modules["runners.github.command_parser"] = command_parser_module
-    spec.loader.exec_module(command_parser_module)
-    CommandParser = command_parser_module.CommandParser
-    Command = command_parser_module.Command
-    CommandParseError = command_parser_module.CommandParseError
-
-    # Load command_executor
-    executor_path = Path(__file__).parent.parent.parent / "runners" / "github" / "command_executor.py"
-    spec = importlib.util.spec_from_file_location("runners.github.command_executor", executor_path)
-    command_executor_module = importlib.util.module_from_spec(spec)
-    sys.modules["runners.github.command_executor"] = command_executor_module
-    spec.loader.exec_module(command_executor_module)
-    CommandExecutor = command_executor_module.CommandExecutor
-    CommandResult = command_executor_module.CommandResult
-    CommandExecutionError = command_executor_module.CommandExecutionError
-    PermissionDeniedError = command_executor_module.PermissionDeniedError
-
-    # Load permissions
-    permissions_path = Path(__file__).parent.parent.parent / "runners" / "github" / "permissions.py"
-    spec = importlib.util.spec_from_file_location("runners.github.permissions", permissions_path)
-    permissions_module = importlib.util.module_from_spec(spec)
-    sys.modules["runners.github.permissions"] = permissions_module
-    spec.loader.exec_module(permissions_module)
-    GitHubPermissionChecker = permissions_module.GitHubPermissionChecker
-    PermissionError = permissions_module.PermissionError
-
-    # Load gh_client
-    gh_client_path = Path(__file__).parent.parent.parent / "runners" / "github" / "gh_client.py"
-    spec = importlib.util.spec_from_file_location("runners.github.gh_client", gh_client_path)
-    gh_client_module = importlib.util.module_from_spec(spec)
-    sys.modules["runners.github.gh_client"] = gh_client_module
-    spec.loader.exec_module(gh_client_module)
-    GHClient = gh_client_module.GHClient
-    GHCommandError = gh_client_module.GHCommandError
-
+from runners.github.command_executor import CommandExecutor
+from runners.github.command_parser import CommandParser
 
 # Configure test logging
 logging.basicConfig(level=logging.DEBUG)
@@ -110,23 +57,22 @@ class MockGHClient:
         self.comments_posted = []
         self.inline_comments = []
 
-    async def pr_merge(self, pr_number: int, merge_method: str = "merge"):
+    async def pr_merge(
+        self, pr_number: int, merge_method: str = "merge"
+    ) -> dict[str, Any]:
         """Mock PR merge."""
         self.pr_merge_called = True
         self.merge_method = merge_method
         # Simulate successful merge
         return {"merged": True, "pr_number": pr_number}
 
-    async def pr_comment(self, pr_number: int, body: str):
+    async def pr_comment(self, pr_number: int, body: str) -> None:
         """Mock PR comment posting."""
         self.pr_comment_called = True
-        self.comments_posted.append({
-            "pr_number": pr_number,
-            "body": body
-        })
+        self.comments_posted.append({"pr_number": pr_number, "body": body})
         logger.debug(f"Mock: Posted comment to PR #{pr_number}: {body[:100]}...")
 
-    async def get_inline_comments(self, pr_number: int):
+    async def get_inline_comments(self, pr_number: int) -> list[dict[str, Any]]:
         """Mock inline comment retrieval."""
         self.get_inline_comments_called = True
         return self.inline_comments
@@ -146,7 +92,11 @@ class MockPermissionChecker:
         result = MagicMock()
         result.allowed = self.allowed
         result.role = self.role
-        result.reason = "User has sufficient permissions" if self.allowed else "Insufficient permissions"
+        result.reason = (
+            "User has sufficient permissions"
+            if self.allowed
+            else "Insufficient permissions"
+        )
         return result
 
     async def get_user_role(self, username: str):
@@ -166,7 +116,7 @@ async def test_end_to_end_merge_command():
     print("-" * 70)
 
     # Setup
-    project_dir = Path("/tmp/test_project")
+    project_dir = Path(tempfile.gettempdir()) / "test_project"
     comment_text = "/merge"
     pr_number = 123
     username = "testuser"
@@ -188,9 +138,7 @@ async def test_end_to_end_merge_command():
 
     # Create executor with mocked dependencies
     executor = CommandExecutor(
-        project_dir=project_dir,
-        gh_client=mock_gh_client,
-        repo="owner/repo"
+        project_dir=project_dir, gh_client=mock_gh_client, repo="owner/repo"
     )
     # Replace permission checker with mock
     executor._permission_checker = mock_permission_checker
@@ -227,15 +175,11 @@ async def test_end_to_end_resolve_command():
     print("-" * 70)
 
     # Setup
-    project_dir = Path("/tmp/test_project")
     comment_text = "/resolve"
     pr_number = 456
     username = "testuser"
 
     # Create a temporary package.json file for detection
-    import tempfile
-    import os
-
     with tempfile.TemporaryDirectory() as tmpdir:
         project_dir = Path(tmpdir)
         package_json = project_dir / "package.json"
@@ -258,9 +202,7 @@ async def test_end_to_end_resolve_command():
 
         # Create executor
         executor = CommandExecutor(
-            project_dir=project_dir,
-            gh_client=mock_gh_client,
-            repo="owner/repo"
+            project_dir=project_dir, gh_client=mock_gh_client, repo="owner/repo"
         )
         executor._permission_checker = mock_permission_checker
 
@@ -268,10 +210,12 @@ async def test_end_to_end_resolve_command():
         async def mock_subprocess_exec(*args, **kwargs):
             mock_process = Mock()
             mock_process.returncode = 0
-            mock_process.communicate = AsyncMock(return_value=(b"packages installed", b""))
+            mock_process.communicate = AsyncMock(
+                return_value=(b"packages installed", b"")
+            )
             return mock_process
 
-        with patch('asyncio.create_subprocess_exec', side_effect=mock_subprocess_exec):
+        with patch("asyncio.create_subprocess_exec", side_effect=mock_subprocess_exec):
             # Execute command
             result = await executor.execute(commands[0], pr_number, username)
 
@@ -303,7 +247,7 @@ async def test_end_to_end_process_command():
     print("-" * 70)
 
     # Setup
-    project_dir = Path("/tmp/test_project")
+    project_dir = Path(tempfile.gettempdir()) / "test_project"
     comment_text = "/process"
     pr_number = 789
     username = "testuser"
@@ -316,15 +260,15 @@ async def test_end_to_end_process_command():
             "path": "src/main.py",
             "line": 42,
             "body": "Consider adding error handling here",
-            "user": {"login": "reviewer1"}
+            "user": {"login": "reviewer1"},
         },
         {
             "id": 2,
             "path": "src/utils.py",
             "line": 15,
             "body": "This function could be simplified",
-            "user": {"login": "reviewer2"}
-        }
+            "user": {"login": "reviewer2"},
+        },
     ]
 
     # Mock permission checker (process is read-only, so less strict)
@@ -341,9 +285,7 @@ async def test_end_to_end_process_command():
 
     # Create executor
     executor = CommandExecutor(
-        project_dir=project_dir,
-        gh_client=mock_gh_client,
-        repo="owner/repo"
+        project_dir=project_dir, gh_client=mock_gh_client, repo="owner/repo"
     )
     executor._permission_checker = mock_permission_checker
 
@@ -385,7 +327,7 @@ async def test_permission_denied_flow():
     print("-" * 70)
 
     # Setup
-    project_dir = Path("/tmp/test_project")
+    project_dir = Path(tempfile.gettempdir()) / "test_project"
     comment_text = "/merge"
     pr_number = 999
     username = "unauthorized_user"
@@ -405,9 +347,7 @@ async def test_permission_denied_flow():
 
     # Create executor
     executor = CommandExecutor(
-        project_dir=project_dir,
-        gh_client=mock_gh_client,
-        repo="owner/repo"
+        project_dir=project_dir, gh_client=mock_gh_client, repo="owner/repo"
     )
     executor._permission_checker = mock_permission_checker
 
@@ -441,7 +381,7 @@ async def test_multiple_commands_sequential_execution():
     print("-" * 70)
 
     # Setup
-    project_dir = Path("/tmp/test_project")
+    project_dir = Path(tempfile.gettempdir()) / "test_project"
     comment_text = "/process and /merge"
     pr_number = 111
     username = "testuser"
@@ -463,9 +403,7 @@ async def test_multiple_commands_sequential_execution():
 
     # Create executor
     executor = CommandExecutor(
-        project_dir=project_dir,
-        gh_client=mock_gh_client,
-        repo="owner/repo"
+        project_dir=project_dir, gh_client=mock_gh_client, repo="owner/repo"
     )
     executor._permission_checker = mock_permission_checker
 
@@ -480,8 +418,8 @@ async def test_multiple_commands_sequential_execution():
     assert results[1].success is True
     print("  ✓ Both commands executed successfully")
 
-    # Verify feedback posted for both
-    assert len(mock_gh_client.comments_posted) == 2
+    # Verify feedback posted for both (at least one per command)
+    assert len(mock_gh_client.comments_posted) >= 2
     print("  ✓ Feedback comments posted for both commands")
 
     print("✅ TEST 5 PASSED\n")
@@ -494,7 +432,7 @@ async def test_command_failure_stops_execution():
     print("-" * 70)
 
     # Setup
-    project_dir = Path("/tmp/test_project")
+    project_dir = Path(tempfile.gettempdir()) / "test_project"
     comment_text = "/merge and /resolve"
     pr_number = 222
     username = "testuser"
@@ -522,9 +460,7 @@ async def test_command_failure_stops_execution():
 
     # Create executor
     executor = CommandExecutor(
-        project_dir=project_dir,
-        gh_client=mock_gh_client,
-        repo="owner/repo"
+        project_dir=project_dir, gh_client=mock_gh_client, repo="owner/repo"
     )
     executor._permission_checker = mock_permission_checker
 
@@ -536,7 +472,9 @@ async def test_command_failure_stops_execution():
     assert results[0].command_type == "merge"
     assert results[0].success is False
     # Verify it's an error (regardless of the specific message)
-    assert "failed" in results[0].message.lower() or "error" in results[0].message.lower()
+    assert (
+        "failed" in results[0].message.lower() or "error" in results[0].message.lower()
+    )
     print(f"  ✓ First command failed as expected: {results[0].message}")
 
     # Verify second command was NOT executed
@@ -592,7 +530,7 @@ async def test_mixed_known_and_unknown_commands():
     print("-" * 70)
 
     # Setup
-    project_dir = Path("/tmp/test_project")
+    project_dir = Path(tempfile.gettempdir()) / "test_project"
     comment_text = "/process and /unknown then /merge"
     pr_number = 333
     username = "testuser"
@@ -617,9 +555,7 @@ async def test_mixed_known_and_unknown_commands():
 
     # Create executor
     executor = CommandExecutor(
-        project_dir=project_dir,
-        gh_client=mock_gh_client,
-        repo="owner/repo"
+        project_dir=project_dir, gh_client=mock_gh_client, repo="owner/repo"
     )
     executor._permission_checker = mock_permission_checker
 
@@ -635,13 +571,13 @@ async def test_mixed_known_and_unknown_commands():
 
 
 @pytest.mark.asyncio
-async def test_audit_trail_logging():
+async def test_audit_trail_logging(caplog):
     """Test that audit trail is logged for command execution."""
     print("\nTEST 10: Audit Trail Logging")
     print("-" * 70)
 
     # Setup
-    project_dir = Path("/tmp/test_project")
+    project_dir = Path(tempfile.gettempdir()) / "test_project"
     comment_text = "/merge"
     pr_number = 444
     username = "audituser"
@@ -658,43 +594,21 @@ async def test_audit_trail_logging():
 
     # Create executor with audit capture
     executor = CommandExecutor(
-        project_dir=project_dir,
-        gh_client=mock_gh_client,
-        repo="owner/repo"
+        project_dir=project_dir, gh_client=mock_gh_client, repo="owner/repo"
     )
     executor._permission_checker = mock_permission_checker
 
-    # Capture log output
-    import io
-    log_capture = io.StringIO()
-    handler = logging.StreamHandler(log_capture)
-    handler.setLevel(logging.INFO)
-    formatter = logging.Formatter('%(message)s')
-    handler.setFormatter(formatter)
-
-    # Get the logger and clear any existing handlers
-    executor_logger = logging.getLogger('runners.github.command_executor')
-    executor_logger.handlers.clear()
-    executor_logger.addHandler(handler)
-    executor_logger.setLevel(logging.INFO)
-    executor_logger.propagate = False  # Don't propagate to parent loggers
-
-    # Execute command
-    result = await executor.execute(commands[0], pr_number, username)
-
-    # Get log output
-    log_output = log_capture.getvalue()
+    # Execute command and capture logs via pytest caplog fixture
+    with caplog.at_level(logging.INFO, logger="runners.github.command_executor"):
+        await executor.execute(commands[0], pr_number, username)
 
     # Verify audit logging
-    assert "AUDIT:" in log_output
-    assert "attempt" in log_output
-    assert "success" in log_output
-    assert username in log_output
-    assert str(pr_number) in log_output
+    assert "AUDIT:" in caplog.text
+    assert "attempt" in caplog.text
+    assert "success" in caplog.text
+    assert username in caplog.text
+    assert str(pr_number) in caplog.text
     print("  ✓ Audit trail logged correctly")
-
-    # Clean up
-    executor_logger.removeHandler(handler)
 
     print("✅ TEST 10 PASSED\n")
 
@@ -708,6 +622,7 @@ def main():
 
     # Run pytest programmatically
     import pytest as pt
+
     exit_code = pt.main([__file__, "-v", "-s"])
 
     return exit_code

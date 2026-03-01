@@ -22,7 +22,8 @@
     "agentTools": "MCP Overview",
     "analytics": "Analytics",
     "mergeAnalytics": "Merge Analytics",
-    "sessions": "Session Replay"
+    "sessions": "Session Replay",
+    "feedback": "Feedback"
   },
   "actions": {
     "settings": "Settings",

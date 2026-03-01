@@ -29,19 +29,34 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 try:
-    from .gh_client import GHClient, GHCommandError
     from .command_parser import Command
+    from .gh_client import GHClient, GHCommandError
     from .permissions import GitHubPermissionChecker, PermissionError
 except (ImportError, ValueError, SystemError):
-    from gh_client import GHClient, GHCommandError
     from command_parser import Command
+    from gh_client import GHClient, GHCommandError
     from permissions import GitHubPermissionChecker, PermissionError
+
+# Environment variables safe to pass to child processes (no secrets)
+_ALLOWED_SUBPROCESS_ENV_KEYS = {
+    "PATH",
+    "HOME",
+    "USER",
+    "SHELL",
+    "USERPROFILE",
+    "TEMP",
+    "TMP",
+    "SystemRoot",
+    "LANG",
+    "LC_ALL",
+}
 
 # Configure logger
 logger = logging.getLogger(__name__)
@@ -222,6 +237,7 @@ class CommandExecutor:
 
         # Log as structured JSON for easy parsing
         import json
+
         logger.info(f"AUDIT: {json.dumps(audit_entry)}")
 
     async def execute(
@@ -365,9 +381,7 @@ class CommandExecutor:
 
             # Stop on first failure
             if not result.success:
-                logger.info(
-                    f"Stopping command execution after failure: {command.type}"
-                )
+                logger.info(f"Stopping command execution after failure: {command.type}")
                 break
 
         return results
@@ -400,6 +414,9 @@ class CommandExecutor:
             f"Checking permissions for user '{username}' to execute '/{command.type}'"
         )
 
+        # Commands that post to or modify the repository require write access
+        write_ops = {"merge", "resolve", "process"}
+
         # Log permission check attempt
         self._log_audit(
             event_type="permission_check",
@@ -407,7 +424,7 @@ class CommandExecutor:
             command=command,
             pr_number=pr_number,
             additional_context={
-                "command_requires_write": command.type in ["merge", "resolve"],
+                "command_requires_write": command.type in write_ops,
             },
         )
 
@@ -416,7 +433,7 @@ class CommandExecutor:
             checker = await self._get_permission_checker()
 
             # Write operations require write access
-            if command.type in ["merge", "resolve"]:
+            if command.type in write_ops:
                 # Check if user has sufficient role for write operations
                 result = await checker.is_allowed_for_autofix(username)
 
@@ -516,7 +533,7 @@ class CommandExecutor:
             )
 
             # Fail open for read operations, fail closed for write operations
-            return command.type not in ["merge", "resolve"]
+            return command.type not in write_ops
 
     async def _get_permission_checker(self) -> GitHubPermissionChecker:
         """
@@ -533,7 +550,7 @@ class CommandExecutor:
             repo = self.repo
             if repo is None:
                 # Try to get repo from gh_client
-                repo = getattr(self.gh_client, 'repo', None)
+                repo = getattr(self.gh_client, "repo", None)
 
             if repo is None:
                 raise PermissionError(
@@ -629,7 +646,9 @@ class CommandExecutor:
                 merge_method=merge_method,
             )
 
-            logger.info(f"Successfully merged PR #{pr_number} using {merge_method} method")
+            logger.info(
+                f"Successfully merged PR #{pr_number} using {merge_method} method"
+            )
 
             result = CommandResult(
                 success=True,
@@ -666,7 +685,9 @@ class CommandExecutor:
             elif "merge conflict" in error_msg.lower():
                 message = f"✗ PR #{pr_number} has merge conflicts that must be resolved"
                 error_type = "merge_conflict"
-            elif "required status" in error_msg.lower() or "checks" in error_msg.lower():
+            elif (
+                "required status" in error_msg.lower() or "checks" in error_msg.lower()
+            ):
                 message = f"✗ PR #{pr_number} has failing CI checks that must pass"
                 error_type = "failing_checks"
             elif "approved" in error_msg.lower() or "review" in error_msg.lower():
@@ -779,7 +800,7 @@ class CommandExecutor:
             package_manager = await self._detect_package_manager()
 
             if not package_manager:
-                logger.warning(f"No package manager detected in project")
+                logger.warning("No package manager detected in project")
                 result = CommandResult(
                     success=False,
                     command_type="resolve",
@@ -806,7 +827,9 @@ class CommandExecutor:
             # Run the appropriate install command
             install_command, install_args = self._get_install_command(package_manager)
 
-            logger.info(f"Running package install: {install_command} {' '.join(install_args)}")
+            logger.info(
+                f"Running package install: {install_command} {' '.join(install_args)}"
+            )
 
             # Log package manager detection
             self._log_audit(
@@ -820,6 +843,11 @@ class CommandExecutor:
                 },
             )
 
+            # Build a sanitized env — strip secrets (tokens, keys) from subprocess
+            safe_env = {
+                k: v for k, v in os.environ.items() if k in _ALLOWED_SUBPROCESS_ENV_KEYS
+            }
+
             # Execute the install command using asyncio
             process = await asyncio.create_subprocess_exec(
                 install_command,
@@ -827,6 +855,7 @@ class CommandExecutor:
                 cwd=self.project_dir,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
+                env=safe_env,
             )
 
             stdout, stderr = await asyncio.wait_for(
@@ -850,7 +879,9 @@ class CommandExecutor:
                         "pr_number": pr_number,
                         "package_manager": package_manager,
                         "install_command": f"{install_command} {' '.join(install_args)}",
-                        "stdout": stdout_str[-500:] if len(stdout_str) > 500 else stdout_str,
+                        "stdout": stdout_str[-500:]
+                        if len(stdout_str) > 500
+                        else stdout_str,
                         "resolved_by": username,
                     },
                 )
@@ -879,7 +910,9 @@ class CommandExecutor:
                     success=False,
                     command_type="resolve",
                     message=f"✗ Failed to resolve dependencies using {package_manager}",
-                    error=error_msg[:500] if error_msg else f"Command failed with exit code {process.returncode}",
+                    error=error_msg[:500]
+                    if error_msg
+                    else f"Command failed with exit code {process.returncode}",
                     data={
                         "pr_number": pr_number,
                         "package_manager": package_manager,
@@ -906,13 +939,24 @@ class CommandExecutor:
                 return result
 
         except asyncio.TimeoutError:
-            logger.error(f"Package install timed out after 120s")
+            logger.error("Package install timed out after 120s")
+            # Kill orphaned subprocess to avoid resource leakage
+            try:
+                process.kill()
+            except ProcessLookupError:
+                pass  # Process already exited
+            await process.wait()
             result = CommandResult(
                 success=False,
                 command_type="resolve",
-                message=f"✗ Package install timed out (120s limit)",
+                message="✗ Package install timed out (120s limit)",
                 error="Package installation exceeded timeout limit",
-                data={"pr_number": pr_number, "package_manager": package_manager if 'package_manager' in locals() else None},
+                data={
+                    "pr_number": pr_number,
+                    "package_manager": package_manager
+                    if "package_manager" in locals()
+                    else None,
+                },
             )
 
             # Log timeout
@@ -925,7 +969,9 @@ class CommandExecutor:
                 error="Package install timed out",
                 additional_context={
                     "timeout_seconds": 120,
-                    "package_manager": package_manager if 'package_manager' in locals() else None,
+                    "package_manager": package_manager
+                    if "package_manager" in locals()
+                    else None,
                 },
             )
 
@@ -938,7 +984,11 @@ class CommandExecutor:
                 command_type="resolve",
                 message=f"✗ Package manager not found: {install_command}",
                 error=f"The {package_manager} executable is not installed or not in PATH",
-                data={"pr_number": pr_number, "package_manager": package_manager, "executable": install_command},
+                data={
+                    "pr_number": pr_number,
+                    "package_manager": package_manager,
+                    "executable": install_command,
+                },
             )
 
             # Log executable not found
@@ -965,9 +1015,14 @@ class CommandExecutor:
             result = CommandResult(
                 success=False,
                 command_type="resolve",
-                message=f"✗ Failed to resolve dependencies",
+                message="✗ Failed to resolve dependencies",
                 error=error_msg[:500],
-                data={"pr_number": pr_number, "package_manager": package_manager if 'package_manager' in locals() else None},
+                data={
+                    "pr_number": pr_number,
+                    "package_manager": package_manager
+                    if "package_manager" in locals()
+                    else None,
+                },
             )
 
             # Log unexpected error
@@ -980,7 +1035,9 @@ class CommandExecutor:
                 error=error_msg[:500],
                 additional_context={
                     "error_type": "unexpected_error",
-                    "package_manager": package_manager if 'package_manager' in locals() else None,
+                    "package_manager": package_manager
+                    if "package_manager" in locals()
+                    else None,
                 },
             )
 
@@ -1031,6 +1088,7 @@ class CommandExecutor:
                 # Handle wildcards
                 if "*" in file_name:
                     import glob
+
                     matches = glob.glob(str(self.project_dir / file_name))
                     if matches:
                         return pm_name
@@ -1064,7 +1122,10 @@ class CommandExecutor:
             "hatch": ("hatch", ["env", "create"]),
             "pdm": ("pdm", ["install"]),
             "uv": ("uv", ["sync"]),
-            "conda": ("conda", ["env", "update", "--file", "environment.yml", "--prune"]),
+            "conda": (
+                "conda",
+                ["env", "update", "--file", "environment.yml", "--prune"],
+            ),
             # Rust
             "cargo": ("cargo", ["build", "--workspace"]),  # Build to fetch dependencies
             # Go
@@ -1162,11 +1223,11 @@ class CommandExecutor:
             # Generate summary of comments
             summary_lines = [
                 f"## Comment Summary for PR #{pr_number}",
-                f"",
+                "",
                 f"Processed by: @{username}",
                 f"Total comments: {len(comments)}",
-                f"",
-                f"### Comment Breakdown",
+                "",
+                "### Comment Breakdown",
             ]
 
             # Group comments by file
@@ -1179,7 +1240,9 @@ class CommandExecutor:
 
             # Add per-file summary
             for file_path, file_comments in sorted(comments_by_file.items()):
-                summary_lines.append(f"\n**{file_path}**: {len(file_comments)} comment(s)")
+                summary_lines.append(
+                    f"\n**{file_path}**: {len(file_comments)} comment(s)"
+                )
 
                 # Add brief excerpts from each comment
                 for comment in file_comments[:5]:  # Limit to 5 comments per file
@@ -1194,14 +1257,16 @@ class CommandExecutor:
                     summary_lines.append(f"  - ... and {len(file_comments) - 5} more")
 
             # Add actionable items section
-            summary_lines.extend([
-                "",
-                "### Next Steps",
-                "",
-                "Please review the comments above and address the feedback.",
-                "Use `/resolve` after making changes to update dependencies.",
-                "",
-            ])
+            summary_lines.extend(
+                [
+                    "",
+                    "### Next Steps",
+                    "",
+                    "Please review the comments above and address the feedback.",
+                    "Use `/resolve` after making changes to update dependencies.",
+                    "",
+                ]
+            )
 
             summary = "\n".join(summary_lines)
 
@@ -1270,7 +1335,9 @@ class CommandExecutor:
 
         except Exception as e:
             error_msg = str(e)
-            logger.error(f"Unexpected error processing comments for PR #{pr_number}: {error_msg}")
+            logger.error(
+                f"Unexpected error processing comments for PR #{pr_number}: {error_msg}"
+            )
 
             result = CommandResult(
                 success=False,
@@ -1301,18 +1368,18 @@ class CommandExecutor:
 
     async def _post_feedback(self, pr_number: int, result: CommandResult) -> None:
         """
-        Post command execution feedback as a PR comment.
+                Post command execution feedback as a PR comment.
 
-        Formats the command result into a structured PR comment with:
-- Status indicator (✓/✗)
-- Command type
-- Execution message
-- Error details (if failed)
-- Additional context from result data
+                Formats the command result into a structured PR comment with:
+        - Status indicator (✓/✗)
+        - Command type
+        - Execution message
+        - Error details (if failed)
+        - Additional context from result data
 
-        Args:
-            pr_number: The PR number
-            result: The command execution result
+                Args:
+                    pr_number: The PR number
+                    result: The command execution result
         """
         logger.debug(f"Posting feedback for PR #{pr_number}: {result.message}")
 
@@ -1327,7 +1394,9 @@ class CommandExecutor:
         # Post the comment
         try:
             await self.gh_client.pr_comment(pr_number, comment_body)
-            logger.info(f"Posted feedback comment for command '/{result.command_type}' on PR #{pr_number}")
+            logger.info(
+                f"Posted feedback comment for command '/{result.command_type}' on PR #{pr_number}"
+            )
         except GHCommandError as e:
             logger.error(f"Failed to post feedback comment on PR #{pr_number}: {e}")
         except Exception as e:
@@ -1412,9 +1481,11 @@ class CommandExecutor:
             lines.append("")
 
         # Add footer
-        lines.extend([
-            "---",
-            "*This comment was automatically generated by the command executor.*",
-        ])
+        lines.extend(
+            [
+                "---",
+                "*This comment was automatically generated by the command executor.*",
+            ]
+        )
 
         return "\n".join(lines)

@@ -24,7 +24,6 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass
-from typing import Any
 
 # Configure logger
 logger = logging.getLogger(__name__)
@@ -96,11 +95,15 @@ class CommandParser:
     # Supported command types
     SUPPORTED_COMMANDS = ["merge", "resolve", "process"]
 
+    # Maximum comment length to parse — guards against ReDoS on pathological input
+    MAX_INPUT_LENGTH = 20_000
+
     # Regex pattern to match commands: /command [args...]
     # Captures the command name (including trailing special chars) and optional arguments
     # Pattern: / followed by non-whitespace chars (command), then optional args, stops at whitespace, end, or another /
     # Negative lookbehind (?<!/) prevents matching commands after another slash (e.g., //merge)
-    COMMAND_PATTERN = re.compile(r"(?<!/)/(\S+?)(?:\s+([^\n]*?))?(?=\s|$|/)")
+    # [^\n#/]*? on the args side avoids catastrophic backtracking
+    COMMAND_PATTERN = re.compile(r"(?<!/)/(\S+?)(?:\s+([^\n#/]*?))?(?=\s|$|/)")
 
     # Pattern for detecting malformed commands (e.g., /@merge, /123, //merge)
     # Matches: slash followed by non-word non-space, slash followed by digits, double slash
@@ -146,9 +149,21 @@ class CommandParser:
             logger.debug("Empty text provided to parser")
             return []
 
-        # Check for malformed command patterns and log warnings
+        # Guard against extremely long inputs to avoid ReDoS
+        if len(text) > self.MAX_INPUT_LENGTH:
+            logger.warning(
+                "Comment text too long for command parsing (len=%d, max=%d); truncating",
+                len(text),
+                self.MAX_INPUT_LENGTH,
+            )
+            text = text[: self.MAX_INPUT_LENGTH]
+
+        # Check for malformed command patterns and log warnings (metadata only, no raw text)
         if self.MALFORMED_PATTERN.search(text):
-            logger.debug("Detected potentially malformed command patterns in input")
+            logger.debug(
+                "Detected potentially malformed command patterns in input",
+                extra={"event": "malformed_command_detected", "length": len(text)},
+            )
 
         commands = []
 

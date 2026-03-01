@@ -1,5 +1,5 @@
 import { app } from 'electron';
-import { existsSync, Dirent, promises as fsPromises } from 'fs';
+import { Dirent, promises as fsPromises } from 'fs';
 import path from 'path';
 import { atomicWriteFile } from './fs-utils';
 import { v4 as uuidv4 } from 'uuid';
@@ -226,6 +226,36 @@ export class ProjectStore {
    */
   getProjects(): Project[] {
     return this.data.projects;
+  }
+
+  /**
+   * Get all projects that belong to a workspace
+   */
+  getProjectsByWorkspace(workspaceName: string): Project[] {
+    return this.data.projects.filter(p => p.workspaceName === workspaceName);
+  }
+
+  /**
+   * Get the workspace name for a project (if any)
+   */
+  getWorkspaceForProject(projectId: string): string | undefined {
+    const project = this.data.projects.find(p => p.id === projectId);
+    return project?.workspaceName;
+  }
+
+  /**
+   * Associate a project with a workspace (or remove association if workspaceName is undefined)
+   */
+  setProjectWorkspace(projectId: string, workspaceName: string | undefined): Project | undefined {
+    const project = this.data.projects.find(p => p.id === projectId);
+    if (!project) {
+      return undefined;
+    }
+
+    project.workspaceName = workspaceName;
+    project.updatedAt = new Date();
+    this.saveAsync();
+    return project;
   }
 
   /**

@@ -18,7 +18,7 @@ import json
 import logging
 import os
 import threading
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -114,7 +114,7 @@ def _save_quality_history(spec_dir: Path, scores: list[dict[str, Any]]) -> None:
     try:
         payload = {
             "scores": scores,
-            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(UTC).isoformat(),
         }
         with open(tmp_file, "w", encoding="utf-8") as f:
             json.dump(payload, f, indent=2)
@@ -201,7 +201,7 @@ def calculate_quality_score(
         session_id=session_id,
         spec_id=spec_id,
         agent_type=agent_type,
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
         test_pass_rate=test_pass_rate,
         acceptance_criteria_met=criteria_met,
         user_approval_rate=user_approval_rate,
@@ -393,8 +393,8 @@ def analyze_quality_trend(
         # Return empty trend
         return QualityTrend(
             spec_id=spec_id,
-            period_start=datetime.now(timezone.utc),
-            period_end=datetime.now(timezone.utc),
+            period_start=datetime.now(UTC),
+            period_end=datetime.now(UTC),
             alert_threshold_percent=alert_threshold,
             minimum_sessions_for_trend=min_sessions,
         )
@@ -410,8 +410,8 @@ def analyze_quality_trend(
     if not scores:
         return QualityTrend(
             spec_id=spec_id,
-            period_start=datetime.now(timezone.utc),
-            period_end=datetime.now(timezone.utc),
+            period_start=datetime.now(UTC),
+            period_end=datetime.now(UTC),
             alert_threshold_percent=alert_threshold,
             minimum_sessions_for_trend=min_sessions,
         )
