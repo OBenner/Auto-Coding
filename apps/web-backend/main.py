@@ -66,10 +66,13 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Configure CORS
+# Configure CORS - use explicit origins list, fall back to localhost for dev
+cors_origins = (
+    CORS_ORIGINS if CORS_ORIGINS else ["http://localhost:3000", "http://localhost:5173"]
+)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=CORS_ORIGINS,
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "Accept", "X-Requested-With"],
@@ -100,6 +103,16 @@ app.include_router(tasks.router)
 app.include_router(usage.router)
 app.include_router(users.router)
 app.include_router(websocket_router)
+
+# Only expose test routes in debug/development mode
+if DEBUG:
+    try:
+        from api import test_routes
+
+        app.include_router(test_routes.router)
+        logger.info("Test routes enabled (DEBUG mode)")
+    except ImportError:
+        logger.debug("Test routes module not available")
 
 
 @app.get("/")

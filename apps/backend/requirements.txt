@@ -40,6 +40,20 @@ zai-sdk>=0.2.2
 # Pydantic for structured output schemas
 pydantic>=2.0.0
 
+# FastAPI - Web framework for building APIs with webhooks
+# Provides automatic OpenAPI documentation, async support, type validation
+fastapi>=0.104.0
+
+# Uvicorn - ASGI server for running FastAPI applications
+# Required to serve FastAPI apps in production
+uvicorn[standard]>=0.24.0
+
+# HTTP clients for webhook delivery
+# httpx - Modern async HTTP client with HTTP/2 support
+httpx>=0.25.0
+# aiohttp - Async HTTP client/server library (alternative HTTP client)
+aiohttp>=3.9.0
+
 # tiktoken - Token counting for accurate context window estimation
 tiktoken>=0.5.0
 

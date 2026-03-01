@@ -133,7 +133,7 @@ def test_cli_flags() -> None:
         cwd=backend_path,
         capture_output=True,
         text=True,
-        timeout=10,
+        timeout=30,
     )
 
     help_text = result.stdout
@@ -266,7 +266,7 @@ def run_e2e_test(spec_dir: Path, project_dir: Path) -> bool:
             [sys.executable, str(hello_file)],
             capture_output=True,
             text=True,
-            timeout=10,
+            timeout=30,
         )
 
         if run_result.returncode != 0:

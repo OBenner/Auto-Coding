@@ -108,7 +108,8 @@ from core.sentry import capture_exception, init_sentry
 
 init_sentry(component="spec-runner")
 
-from debug import debug, debug_error, debug_section, debug_success
+from core.workspace import get_workspace_manager
+from debug import debug, debug_error, debug_section, debug_success, debug_warning
 from phase_config import resolve_model_id
 from review import ReviewState
 from spec import SpecOrchestrator
@@ -129,6 +130,10 @@ Complexity Tiers:
   standard  - 6 phases: Discovery → Requirements → Context → Spec → Plan → Validate
   complex   - 8 phases: Full pipeline with research and self-critique
 
+Multi-Project Support:
+  --workspace NAME     - Use a workspace with multiple related projects
+  Auto-detected if workspace exists in .auto-claude/workspaces/
+
 Examples:
   # Simple UI fix (auto-detected as simple)
   python spec_runner.py --task "Fix button color in Header component"
@@ -141,6 +146,9 @@ Examples:
 
   # Interactive mode
   python spec_runner.py --interactive
+
+  # Multi-project spec with workspace
+  python spec_runner.py --task "Update API and client" --workspace my-workspace
         """,
     )
     parser.add_argument(
@@ -220,6 +228,11 @@ Examples:
         action="store_true",
         help="Build directly in project without worktree isolation (default: use isolated worktree)",
     )
+    parser.add_argument(
+        "--workspace",
+        type=str,
+        help="Workspace name for multi-project specs (if not specified, detects automatically)",
+    )
 
     args = parser.parse_args()
 
@@ -269,6 +282,44 @@ Examples:
     # Resolve model shorthand to full model ID
     resolved_model = resolve_model_id(args.model)
 
+    # Detect and load workspace for multi-project support
+    workspace_manager = None
+    workspace_context = None
+    if args.workspace:
+        try:
+            workspace_manager = get_workspace_manager(
+                project_dir, workspace_name=args.workspace
+            )
+            if workspace_manager:
+                workspace_context = {
+                    "name": workspace_manager.config.name,
+                    "projects": [
+                        {
+                            "name": p.name,
+                            "path": p.path,
+                            "enabled": p.enabled,
+                        }
+                        for p in workspace_manager.config.enabled_projects
+                    ],
+                }
+                debug(
+                    "spec_runner",
+                    "Loaded workspace",
+                    workspace_name=workspace_manager.config.name,
+                    project_count=len(workspace_manager.config.enabled_projects),
+                )
+                print_status(
+                    f"Using workspace '{workspace_manager.config.name}' "
+                    f"with {len(workspace_manager.config.enabled_projects)} project(s)",
+                    "info",
+                )
+        except Exception as e:
+            debug_warning(
+                "spec_runner", f"Failed to load workspace: {e}", exc_info=True
+            )
+            # Non-fatal - continue with single-project mode
+            pass
+
     debug(
         "spec_runner",
         "Creating spec orchestrator",
@@ -280,6 +331,7 @@ Examples:
         use_ai_assessment=not args.no_ai_assessment,
         interactive=args.interactive or not task_description,
         auto_approve=args.auto_approve,
+        workspace=workspace_context["name"] if workspace_context else None,
     )
 
     orchestrator = SpecOrchestrator(
@@ -292,6 +344,27 @@ Examples:
         complexity_override=args.complexity,
         use_ai_assessment=not args.no_ai_assessment,
     )
+
+    # Save workspace context to spec directory for agent access
+    if workspace_context and orchestrator.spec_dir:
+        workspace_context_file = orchestrator.spec_dir / "workspace_context.json"
+        try:
+            import json
+
+            workspace_context_file.write_text(
+                json.dumps(workspace_context, indent=2), encoding="utf-8"
+            )
+            debug(
+                "spec_runner",
+                "Saved workspace context to spec directory",
+                file=str(workspace_context_file),
+            )
+        except Exception as e:
+            debug_warning(
+                "spec_runner",
+                f"Failed to save workspace context: {e}",
+                exc_info=True,
+            )
 
     try:
         debug("spec_runner", "Starting spec orchestrator run...")
@@ -417,6 +490,10 @@ Examples:
         debug_error("spec_runner", f"Unexpected error: {e}")
         print(f"\n\nUnexpected error: {e}")
         sys.exit(1)
+
+
+# Alias for programmatic usage
+run_spec = main
 
 
 if __name__ == "__main__":

@@ -11,6 +11,21 @@ export const IPC_CHANNELS = {
   PROJECT_UPDATE_SETTINGS: 'project:updateSettings',
   PROJECT_INITIALIZE: 'project:initialize',
   PROJECT_CHECK_VERSION: 'project:checkVersion',
+  PROJECT_GET_BY_WORKSPACE: 'project:getByWorkspace',
+  PROJECT_GET_WORKSPACE: 'project:getWorkspace',
+  PROJECT_SET_WORKSPACE: 'project:setWorkspace',
+
+  // Workspace operations (multi-codebase orchestration)
+  WORKSPACE_LIST: 'workspace:list',
+  WORKSPACE_GET: 'workspace:get',
+  WORKSPACE_CREATE: 'workspace:create',
+  WORKSPACE_UPDATE: 'workspace:update',
+  WORKSPACE_DELETE: 'workspace:delete',
+  WORKSPACE_RENAME: 'workspace:rename',
+  WORKSPACE_ADD_PROJECT: 'workspace:addProject',
+  WORKSPACE_REMOVE_PROJECT: 'workspace:removeProject',
+  WORKSPACE_UPDATE_PROJECT: 'workspace:updateProject',
+  WORKSPACE_GET_BUILD_ORDER: 'workspace:getBuildOrder',
 
   // Tab state operations (persisted in main process)
   TAB_STATE_GET: 'tabState:get',
@@ -649,6 +664,17 @@ export const IPC_CHANNELS = {
   TEMPLATE_CREATE_SPEC: 'template:createSpec',
   TEMPLATE_SUGGEST: 'template:suggest',
 
+  // Webhook operations
+  WEBHOOK_GET_CONFIGS: 'webhook:getConfigs',
+  WEBHOOK_GET_CONFIG: 'webhook:getConfig',
+  WEBHOOK_SAVE_CONFIG: 'webhook:saveConfig',
+  WEBHOOK_DELETE_CONFIG: 'webhook:deleteConfig',
+  WEBHOOK_TEST_CONNECTION: 'webhook:testConnection',
+  WEBHOOK_GET_LOGS: 'webhook:getLogs',
+  WEBHOOK_GET_INTEGRATION_STATUS: 'webhook:getIntegrationStatus',
+  WEBHOOK_ENABLE_CONFIG: 'webhook:enableConfig',
+  WEBHOOK_DISABLE_CONFIG: 'webhook:disableConfig',
+
   // Pattern operations (codebase pattern learning)
   PATTERN_LIST: 'pattern:list',
   PATTERN_GET_CATEGORIES: 'pattern:getCategories',
@@ -665,7 +691,6 @@ export const IPC_CHANNELS = {
   TEMPLATE_CUSTOM_EXPORT: 'template:custom:export',
   TEMPLATE_CUSTOM_IMPORT: 'template:custom:import',
   TEMPLATE_CUSTOM_TEST: 'template:custom:test',
-
 
   // Session Replay operations
   SESSION_REPLAY_LIST: 'sessionReplay:list',

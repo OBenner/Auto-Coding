@@ -478,3 +478,149 @@ export interface RoadmapProviderConfig {
  * Canny-specific status values
  */
 export type CannyStatus = 'open' | 'under review' | 'planned' | 'in progress' | 'complete' | 'closed';
+
+// ============================================
+// Webhook Integration Types
+// ============================================
+
+/**
+ * Type of webhook integration
+ */
+export type WebhookType = 'incoming' | 'outgoing';
+
+/**
+ * Pre-built webhook integrations
+ */
+export type WebhookIntegration = 'slack' | 'discord' | 'teams' | 'jira' | 'github' | 'gitlab' | 'generic';
+
+/**
+ * Events that can trigger outgoing webhooks
+ */
+export type WebhookEventType =
+  | 'build_started'
+  | 'build_completed'
+  | 'build_failed'
+  | 'subtask_started'
+  | 'subtask_completed'
+  | 'subtask_failed'
+  | 'pr_opened'
+  | 'pr_merged'
+  | 'pr_closed'
+  | 'custom';
+
+/**
+ * Status of webhook delivery attempts
+ */
+export type WebhookDeliveryStatus = 'pending' | 'success' | 'failed' | 'retrying';
+
+/**
+ * Authentication type for webhook endpoints
+ */
+export type WebhookAuthType = 'none' | 'api_key' | 'bearer_token' | 'basic_auth' | 'signature';
+
+/**
+ * Signature hash algorithm
+ */
+export type WebhookSignatureAlgorithm = 'hmac_sha256' | 'hmac_sha512';
+
+/**
+ * Retry configuration for webhook deliveries
+ */
+export interface WebhookRetryConfig {
+  max_retries: number;
+  retry_delay_seconds: number;
+  backoff_multiplier: number;
+  retry_on_status_codes: number[];
+}
+
+/**
+ * Authentication configuration for webhook endpoints
+ */
+export interface WebhookAuthenticationConfig {
+  auth_type: WebhookAuthType;
+  api_key?: string;
+  api_key_header?: string;
+  username?: string;
+  password?: string;
+  secret?: string;
+  signature_algorithm: WebhookSignatureAlgorithm;
+  signature_header?: string;
+}
+
+/**
+ * Configuration for a webhook integration
+ */
+export interface WebhookConfig {
+  id: string;
+  name: string;
+  type: WebhookType;
+  integration: WebhookIntegration;
+  url?: string;
+  path?: string;
+  auth: WebhookAuthenticationConfig;
+  events: WebhookEventType[];
+  custom_event_filter?: string;
+  payload_template?: Record<string, unknown> | string;
+  enabled: boolean;
+  retry_config: WebhookRetryConfig;
+  description?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * Audit log entry for webhook delivery attempts
+ */
+export interface WebhookLog {
+  id: string;
+  webhook_id: string;
+  event_type: WebhookEventType;
+  event_data: Record<string, unknown>;
+  status: WebhookDeliveryStatus;
+  request_url?: string;
+  request_method: string;
+  request_headers: Record<string, string>;
+  request_body?: Record<string, unknown> | null;
+  response_status_code?: number | null;
+  response_headers: Record<string, string>;
+  response_body?: string | null;
+  error_message?: string | null;
+  error_type?: string | null;
+  attempt_number: number;
+  max_retries: number;
+  created_at: string;
+  completed_at?: string | null;
+  duration_ms?: number | null;
+}
+
+/**
+ * Event that can trigger outgoing webhooks
+ */
+export interface WebhookEvent {
+  type: WebhookEventType;
+  data: Record<string, unknown>;
+  timestamp: string;
+  metadata: Record<string, unknown>;
+}
+
+/**
+ * Connection status for a webhook integration
+ */
+export interface WebhookIntegrationStatus {
+  integration: WebhookIntegration;
+  connected: boolean;
+  enabled: boolean;
+  last_tested?: string;
+  error?: string;
+}
+
+/**
+ * Result of testing a webhook connection
+ */
+export interface WebhookTestResult {
+  success: boolean;
+  integration: WebhookIntegration;
+  message: string;
+  error?: string;
+  response_status_code?: number;
+}

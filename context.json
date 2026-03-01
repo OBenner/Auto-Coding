@@ -1,71 +1,43 @@
 {
   "files_to_modify": {
-    "frontend": [
-      "apps/frontend/src/renderer/components/KanbanBoard.tsx",
-      "apps/frontend/src/renderer/hooks/index.ts",
-      "apps/frontend/src/shared/i18n/locales/en/tasks.json",
-      "apps/frontend/src/shared/i18n/locales/fr/tasks.json"
+    "backend": [
+      "apps/backend/cli/main.py",
+      "apps/backend/cli/build_commands.py",
+      "apps/backend/cli/utils.py"
     ]
   },
   "files_to_create": {
-    "frontend": [
-      "apps/frontend/src/renderer/components/KanbanBoard/utils/index.ts",
-      "apps/frontend/src/renderer/hooks/useTaskFiltering.ts"
+    "backend": [
+      "apps/backend/cli/exit_codes.py",
+      "apps/backend/cli/json_output.py",
+      "apps/backend/cli/artifacts.py",
+      "tests/test_cli_exit_codes.py",
+      "tests/test_json_output.py",
+      "tests/test_artifacts.py"
+    ],
+    "root": [
+      ".github/workflows/auto-claude-build.yml",
+      "guides/ci-cd-integration.md"
     ]
   },
   "files_to_reference": [
-    "apps/frontend/src/renderer/components/github-issues/hooks/useIssueFiltering.ts",
-    "apps/frontend/src/renderer/components/gitlab-issues/hooks/useIssueFiltering.ts",
-    "apps/frontend/src/renderer/components/linear-import/hooks/useIssueFiltering.ts",
-    "apps/frontend/src/renderer/components/github-issues/utils/index.ts",
-    "apps/frontend/src/renderer/components/github-issues/components/IssueList.tsx",
-    "apps/frontend/src/renderer/components/github-issues/components/IssueListHeader.tsx"
+    "apps/backend/cli/workspace_commands.py",
+    "apps/backend/ui/status.py",
+    "apps/backend/agents/utils.py",
+    ".github/workflows/ci.yml"
   ],
   "patterns": {
-    "hook_pattern": "All useIssueFiltering hooks follow same pattern: useState for searchQuery, useMemo for filtered results, return { searchQuery, setSearchQuery, filteredIssues }",
-    "utility_pattern": "Utility functions in utils/index.ts handle actual filtering logic (filterIssuesBySearch)",
-    "integration_pattern": "Components import hook, destructure filteredResults, use filteredResults in render instead of raw data",
-    "i18n_pattern": "All user-facing text uses translation keys (e.g., t('tasks:search.placeholder'))"
+    "cli_argument_pattern": "All CLI flags are added to argparse.ArgumentParser in cli/main.py with proper help text and examples",
+    "exit_code_pattern": "Use sys.exit() with specific codes - currently using 0 (success), 1 (error), 130 (Ctrl+C)",
+    "json_output_pattern": "JSON output already used in workspace_commands.py: print(json.dumps(result))",
+    "env_var_pattern": "Environment variables read via os.getenv() in utils.py - e.g., DEFAULT_BRANCH, AUTO_BUILD_MODEL",
+    "artifact_pattern": "Status and build data tracked in ui/status.py with BuildState enum and StatusManager"
   },
   "existing_implementations": {
-    "description": "Found 4 identical useIssueFiltering implementations following the same pattern",
-    "github_issues": {
-      "file": "apps/frontend/src/renderer/components/github-issues/hooks/useIssueFiltering.ts",
-      "features": ["searchQuery state", "filteredIssues memo", "onSearchStart/onSearchClear callbacks"],
-      "utility": "apps/frontend/src/renderer/components/github-issues/utils/index.ts"
-    },
-    "gitlab_issues": {
-      "file": "apps/frontend/src/renderer/components/gitlab-issues/hooks/useIssueFiltering.ts",
-      "features": ["searchQuery state", "filteredIssues memo"],
-      "utility": "apps/frontend/src/renderer/components/gitlab-issues/utils/index.ts"
-    },
-    "linear_import": {
-      "file": "apps/frontend/src/renderer/components/linear-import/hooks/useIssueFiltering.ts",
-      "features": ["searchQuery state", "filterState state", "filteredIssues memo", "uniqueStateTypes memo"],
-      "utility": "Inline filtering (no separate utility file)"
-    },
-    "kanban_current": {
-      "file": "apps/frontend/src/renderer/components/KanbanBoard.tsx",
-      "features": ["Inline filteredTasks memo on line 739-744"],
-      "issues": ["No dedicated hook", "No search functionality", "Only filters by archived status"]
-    }
-  },
-  "task_type_info": {
-    "file": "apps/frontend/src/shared/types/task.ts",
-    "filterable_fields": {
-      "basic": ["id", "title", "description", "status"],
-      "metadata": ["category", "priority", "complexity", "impact", "sourceType"],
-      "timestamps": ["createdAt", "updatedAt"]
-    },
-    "status_values": ["backlog", "queue", "in_progress", "ai_review", "human_review", "done", "pr_created", "error"],
-    "category_values": ["feature", "bug_fix", "refactoring", "documentation", "security", "performance", "ui_ux", "infrastructure", "testing"],
-    "priority_values": ["low", "medium", "high", "urgent"],
-    "complexity_values": ["trivial", "small", "medium", "large", "complex"],
-    "impact_values": ["low", "medium", "high", "critical"]
-  },
-  "tech_stack": {
-    "frontend": ["electron", "react", "typescript", "zustand", "i18next", "vitest"],
-    "testing_framework": "vitest + testing-library",
-    "i18n_framework": "react-i18next"
+    "cli_structure": "CLI entry point is apps/backend/run.py which imports cli.main. argparse used for argument parsing in cli/main.py",
+    "exit_codes": "Current exit codes: 0 (success), 1 (various errors), 130 (KeyboardInterrupt). No specific codes for build/QA failure",
+    "json_output": "JSON output pattern exists in workspace_commands.py for --merge-preview and --create-pr commands",
+    "build_states": "BuildState enum in ui/status.py: IDLE, PLANNING, BUILDING, QA, COMPLETE, PAUSED, ERROR",
+    "github_actions": "Existing CI workflow: .github/workflows/ci.yml with cross-platform testing (Linux, Windows, macOS)"
   }
 }

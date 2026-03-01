@@ -12,12 +12,31 @@ from collections.abc import Callable
 from fastapi import status
 from services.usage_tracker import UsageTracker
 from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.sessions import SessionMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
 from core.config import settings
 
 logger = logging.getLogger(__name__)
+
+
+class WebSocketExcludedSessionMiddleware(SessionMiddleware):
+    """
+    Custom SessionMiddleware that excludes WebSocket paths.
+
+    WebSocket connections don't use HTTP session cookies, so we skip
+    session validation for WebSocket upgrade requests.
+    """
+
+    async def __call__(self, scope, receive, send):
+        # Skip session middleware for WebSocket connections
+        if scope["type"] == "websocket":
+            await self.app(scope, receive, send)
+            return
+
+        # Apply session middleware for HTTP requests only
+        await super().__call__(scope, receive, send)
 
 
 class UsageTrackingMiddleware(BaseHTTPMiddleware):
@@ -90,7 +109,7 @@ class UsageTrackingMiddleware(BaseHTTPMiddleware):
         """
         Determine if endpoint should be tracked.
 
-        Excludes health checks, metrics endpoints, and static files.
+        Excludes health checks, metrics endpoints, static files, and WebSocket connections.
 
         Args:
             path: Request path
@@ -113,7 +132,7 @@ class UsageTrackingMiddleware(BaseHTTPMiddleware):
             return False
 
         # Exclude paths that start with certain prefixes
-        excluded_prefixes = ["/static/", "/assets/"]
+        excluded_prefixes = ["/static/", "/assets/", "/ws/"]
         if any(path.startswith(prefix) for prefix in excluded_prefixes):
             return False
 

@@ -319,31 +319,31 @@ export function TaskDetail({ taskId, onBack }: TaskDetailProps) {
 								<div className="flex items-center justify-between text-sm">
 									<span className="text-gray-600">Overall Progress</span>
 									<span className="font-semibold">
-										{task.progress.percentage}%
+										{task.progress?.percentage ?? 0}%
 									</span>
 								</div>
 								<div className="h-3 bg-gray-200 rounded-full overflow-hidden">
 									<div
 										className="h-full bg-blue-600 transition-all duration-300"
-										style={{ width: `${task.progress.percentage}%` }}
+										style={{ width: `${task.progress?.percentage ?? 0}%` }}
 									/>
 								</div>
 								<div className="grid grid-cols-4 gap-2 text-xs text-gray-600">
 									<div className="flex items-center gap-1">
 										<CheckCircle2 className="h-3 w-3 text-green-600" />
-										<span>{task.progress.completed} completed</span>
+										<span>{task.progress?.completed ?? 0} completed</span>
 									</div>
 									<div className="flex items-center gap-1">
 										<Loader2 className="h-3 w-3 text-blue-600" />
-										<span>{task.progress.in_progress} in progress</span>
+										<span>{task.progress?.in_progress ?? 0} in progress</span>
 									</div>
 									<div className="flex items-center gap-1">
 										<Circle className="h-3 w-3 text-gray-400" />
-										<span>{task.progress.pending} pending</span>
+										<span>{task.progress?.pending ?? 0} pending</span>
 									</div>
 									<div className="flex items-center gap-1">
 										<AlertCircle className="h-3 w-3 text-red-600" />
-										<span>{task.progress.failed} failed</span>
+										<span>{task.progress?.failed ?? 0} failed</span>
 									</div>
 								</div>
 							</div>
