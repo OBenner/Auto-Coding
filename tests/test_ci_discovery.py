@@ -13,6 +13,7 @@ Tests cover:
 import json
 import tempfile
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -22,7 +23,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "apps" / "backend"))
 
 from ci_discovery import (
     CIConfig,
-    CIWorkflow,
     CIDiscovery,
     discover_ci,
     get_ci_test_commands,
@@ -630,9 +630,17 @@ class TestEdgeCases:
         """Test handling of non-existent directory."""
         fake_dir = Path("/nonexistent/path")
 
-        # Should not raise
-        result = discovery.discover(fake_dir)
-        assert result is None
+        # Targeted mock: only return False for paths under /nonexistent
+        _original_exists = Path.exists
+
+        def _selective_exists(self):
+            if str(self).startswith("/nonexistent"):
+                return False
+            return _original_exists(self)
+
+        with patch.object(Path, 'exists', _selective_exists):
+            result = discovery.discover(fake_dir)
+            assert result is None
 
     def test_ci_priority_github_first(self, discovery, temp_dir):
         """Test that GitHub Actions takes priority."""

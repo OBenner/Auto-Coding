@@ -162,9 +162,13 @@ export function estimateLogItemHeight(item: FlattenedLogItem): number {
     return HEIGHT_CONFIG.BASE_ENTRY_HEIGHT;
   }
 
+<<<<<<< HEAD
   // Determine base height and line height based on entry type
   let baseHeight: number;
   let lineHeight: number;
+=======
+  let baseHeight: number;
+>>>>>>> origin/develop
 
   switch (entry.type) {
     case 'tool_start':
@@ -191,6 +195,7 @@ export function estimateLogItemHeight(item: FlattenedLogItem): number {
 
     case 'success':
     case 'info':
+<<<<<<< HEAD
     default:
       baseHeight = HEIGHT_CONFIG.BASE_ENTRY_HEIGHT;
       lineHeight = HEIGHT_CONFIG.LINE_HEIGHT_NORMAL;
@@ -205,6 +210,20 @@ export function estimateLogItemHeight(item: FlattenedLogItem): number {
     );
     if (contentLines > 1) {
       baseHeight += (contentLines - 1) * lineHeight;
+=======
+      baseHeight = ESTIMATED_HEIGHTS.LOG_ENTRY_SIMPLE;
+      break;
+    default: {
+      // Estimate height based on content length (text wraps ~80 chars per line)
+      const contentLength = entry.content?.length ?? 0;
+      if (contentLength > 200) {
+        const estimatedLines = Math.ceil(contentLength / 80);
+        baseHeight = Math.max(ESTIMATED_HEIGHTS.LOG_ENTRY_SIMPLE, estimatedLines * 18 + 12);
+      } else {
+        baseHeight = ESTIMATED_HEIGHTS.LOG_ENTRY_SIMPLE;
+      }
+      break;
+>>>>>>> origin/develop
     }
   }
 

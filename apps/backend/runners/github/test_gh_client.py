@@ -2,8 +2,6 @@
 Tests for GHClient timeout and retry functionality.
 """
 
-import asyncio
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest

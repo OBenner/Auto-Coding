@@ -12,8 +12,10 @@ from pathlib import Path
 from core.sentry import capture_exception
 
 from .schema import (
+    EPISODE_TYPE_ERROR_PATTERN,
     EPISODE_TYPE_GOTCHA,
     EPISODE_TYPE_PATTERN,
+    EPISODE_TYPE_ROOT_CAUSE,
     EPISODE_TYPE_SESSION_INSIGHT,
     EPISODE_TYPE_TASK_OUTCOME,
     MAX_CONTEXT_RESULTS,
@@ -376,3 +378,118 @@ class GraphitiSearch:
                 operation="get_patterns_and_gotchas",
             )
             return [], []
+
+    async def search_similar_errors(
+        self,
+        error_message: str,
+        error_type: str | None = None,
+        limit: int = 5,
+        min_score: float = 0.3,
+    ) -> list[dict]:
+        """
+        Search for similar historical errors in the knowledge graph.
+
+        Finds error patterns and root causes from previous debugging sessions
+        that match the current error, enabling learning from past resolutions.
+
+        Args:
+            error_message: The error message or traceback to search for
+            error_type: Optional error type (e.g., "TypeError", "ImportError")
+            limit: Maximum number of results to return
+            min_score: Minimum relevance score (0.0-1.0)
+
+        Returns:
+            List of similar errors with their solutions/resolutions
+        """
+        try:
+            # Build search query - include error context
+            query_parts = ["error", "debug", "issue"]
+            if error_type:
+                query_parts.append(error_type)
+            query = " ".join(query_parts) + f": {error_message}"
+
+            results = await self.client.graphiti.search(
+                query=query,
+                group_ids=[self.group_id],
+                num_results=limit * 3,  # Get more to filter by score and type
+            )
+
+            similar_errors = []
+            for result in results:
+                content = getattr(result, "content", None) or getattr(
+                    result, "fact", None
+                )
+                score = getattr(result, "score", 0.0)
+
+                # Filter by minimum score
+                if score < min_score:
+                    continue
+
+                # Look for error patterns and root causes
+                if content and (
+                    EPISODE_TYPE_ERROR_PATTERN in str(content)
+                    or EPISODE_TYPE_ROOT_CAUSE in str(content)
+                ):
+                    try:
+                        data = (
+                            json.loads(content) if isinstance(content, str) else content
+                        )
+                        # Ensure data is a dict before processing (fixes ACS-215)
+                        if not isinstance(data, dict):
+                            continue
+
+                        entry_type = data.get("type")
+                        if entry_type == EPISODE_TYPE_ERROR_PATTERN:
+                            # Map stored fields to output shape
+                            # Writer stores: error_type, error_message, file_path, solution, context
+                            similar_errors.append(
+                                {
+                                    "type": "error_pattern",
+                                    "error_pattern": data.get("error_message", "")
+                                    or data.get("error_type", ""),
+                                    "common_causes": data.get("context", []),
+                                    "solutions": [data["solution"]]
+                                    if data.get("solution")
+                                    else [],
+                                    "files_affected": [data["file_path"]]
+                                    if data.get("file_path")
+                                    else [],
+                                    "score": score,
+                                }
+                            )
+                        elif entry_type == EPISODE_TYPE_ROOT_CAUSE:
+                            # Map stored fields to output shape
+                            # Writer stores: failure_type, category, description,
+                            # affected_files, confidence, recommendations
+                            similar_errors.append(
+                                {
+                                    "type": "root_cause",
+                                    "error_description": data.get("description", ""),
+                                    "root_cause": data.get("category", ""),
+                                    "solution": data.get("recommendations", []),
+                                    "prevention": data.get("failure_type", ""),
+                                    "files_involved": data.get("affected_files", []),
+                                    "score": score,
+                                }
+                            )
+                    except (json.JSONDecodeError, TypeError, AttributeError):
+                        continue
+
+            # Sort by score and limit results
+            similar_errors.sort(key=lambda x: x.get("score", 0), reverse=True)
+
+            logger.info(
+                f"Found {len(similar_errors[:limit])} similar errors for: {error_message[:50]}..."
+            )
+            return similar_errors[:limit]
+
+        except Exception as e:
+            logger.warning(f"Failed to search similar errors: {e}")
+            capture_exception(
+                e,
+                error_summary=error_message[:100] if error_message else "",
+                error_type=error_type,
+                group_id=self.group_id,
+                operation="search_similar_errors",
+            )
+            return []

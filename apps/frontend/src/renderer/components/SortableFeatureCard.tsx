@@ -1,5 +1,6 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { motion } from 'motion/react';
 import { cn } from '../lib/utils';
 import { Card } from './ui/card';
 import { Badge } from './ui/badge';
@@ -9,7 +10,8 @@ import {
   TooltipContent,
   TooltipTrigger
 } from './ui/tooltip';
-import { Play, ExternalLink, TrendingUp, Layers, ThumbsUp } from 'lucide-react';
+import { Play, ExternalLink, TrendingUp, Layers, ThumbsUp, Archive } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import {
   ROADMAP_PRIORITY_COLORS,
   ROADMAP_PRIORITY_LABELS,
@@ -24,6 +26,7 @@ interface SortableFeatureCardProps {
   onClick: () => void;
   onConvertToSpec?: (feature: RoadmapFeature) => void;
   onGoToTask?: (specId: string) => void;
+  onArchive?: (featureId: string) => void;
 }
 
 export function SortableFeatureCard({
@@ -31,8 +34,10 @@ export function SortableFeatureCard({
   roadmap,
   onClick,
   onConvertToSpec,
-  onGoToTask
+  onGoToTask,
+  onArchive
 }: SortableFeatureCardProps) {
+  const { t } = useTranslation('common');
   const {
     attributes,
     listeners,
@@ -60,14 +65,26 @@ export function SortableFeatureCard({
   const isExternal = feature.source?.provider && feature.source.provider !== 'internal';
 
   return (
-    <div
+    <motion.div
       ref={setNodeRef}
       style={style}
       className={cn(
-        'touch-none transition-all duration-200',
-        isDragging && 'dragging-placeholder opacity-40 scale-[0.98]',
+        'touch-none',
         isOver && !isDragging && 'ring-2 ring-primary/30 ring-offset-2 ring-offset-background rounded-xl'
       )}
+      animate={{
+        scale: isDragging ? 1.05 : 1,
+        opacity: isDragging ? 0.8 : 1,
+        boxShadow: isDragging
+          ? '0 10px 40px -10px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(0, 0, 0, 0.05)'
+          : '0 0 0 0 rgba(0, 0, 0, 0)',
+      }}
+      transition={{
+        type: 'spring',
+        stiffness: 300,
+        damping: 25,
+        mass: 0.5,
+      }}
       {...attributes}
       {...listeners}
     >
@@ -119,7 +136,7 @@ export function SortableFeatureCard({
             </div>
             <h3 className="font-medium text-sm leading-snug line-clamp-2">{feature.title}</h3>
           </div>
-          <div className="shrink-0">
+          <div className="shrink-0 flex items-center gap-1">
             {feature.linkedSpecId ? (
               <Button
                 variant="outline"
@@ -133,7 +150,7 @@ export function SortableFeatureCard({
                 }}
               >
                 <ExternalLink className="h-3 w-3 mr-1" />
-                Task
+                {t('roadmap.task')}
               </Button>
             ) : (
               feature.status !== 'done' &&
@@ -148,9 +165,24 @@ export function SortableFeatureCard({
                   }}
                 >
                   <Play className="h-3 w-3 mr-1" />
-                  Build
+                  {t('roadmap.build')}
                 </Button>
               )
+            )}
+            {feature.status === 'done' && onArchive && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2"
+                title={t('roadmap.archiveFeature')}
+                aria-label={t('accessibility.archiveFeatureAriaLabel')}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onArchive(feature.id);
+                }}
+              >
+                <Archive className="h-3 w-3" />
+              </Button>
             )}
           </div>
         </div>
@@ -209,6 +241,6 @@ export function SortableFeatureCard({
           )}
         </div>
       </Card>
-    </div>
+    </motion.div>
   );
 }

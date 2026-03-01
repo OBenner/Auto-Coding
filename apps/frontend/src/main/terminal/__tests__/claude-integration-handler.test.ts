@@ -222,8 +222,10 @@ describe('claude-integration-handler', () => {
     });
 
     it('uses the resolved CLI path and PATH prefix when invoking Claude', async () => {
+      // Use a relative command to test PATH prefix behavior
+      // (absolute paths skip PATH prefix via isAbsoluteExecutableCommand)
       mockGetClaudeCliInvocation.mockReturnValue({
-        command: "/opt/claude bin/claude's",
+        command: "claude",
         env: { PATH: '/opt/claude/bin:/usr/bin' },
       });
       const profileManager = {
@@ -242,7 +244,7 @@ describe('claude-integration-handler', () => {
       const written = mockWriteToPty.mock.calls[0][1] as string;
       expect(written).toContain(buildCdCommand('/tmp/project'));
       expect(written).toContain(getPathPrefixExpectation(platform, '/opt/claude/bin:/usr/bin'));
-      expect(written).toContain(getQuotedCommand(platform, "/opt/claude bin/claude's"));
+      expect(written).toContain(getQuotedCommand(platform, "claude"));
       expect(mockReleaseSessionId).toHaveBeenCalledWith('term-1');
       expect(mockPersistSession).toHaveBeenCalledWith(terminal);
       expect(profileManager.getActiveProfile).toHaveBeenCalled();
@@ -402,7 +404,7 @@ describe('claude-integration-handler', () => {
 
       expect(written).toContain(histPrefix);
       expect(written).toContain(configDir);
-      expect(written).toContain(getPathPrefixExpectation(platform, '/opt/claude/bin:/usr/bin'));
+      // PATH prefix is skipped for absolute executable paths (isAbsoluteExecutableCommand)
       expect(written).toContain(getQuotedCommand(platform, command));
       expect(written).toContain(clearCmd);
       expect(profileManager.getProfile).toHaveBeenCalledWith('prof-2');
@@ -436,7 +438,7 @@ describe('claude-integration-handler', () => {
 
       const written = mockWriteToPty.mock.calls[0][1] as string;
       expect(written).toContain(getQuotedCommand(platform, command));
-      expect(written).toContain(getPathPrefixExpectation(platform, '/opt/claude/bin:/usr/bin'));
+      // PATH prefix is skipped for absolute executable paths (isAbsoluteExecutableCommand)
       expect(profileManager.getProfile).toHaveBeenCalledWith('prof-3');
       expect(profileManager.markProfileUsed).toHaveBeenCalledWith('prof-3');
       expect(mockPersistSession).toHaveBeenCalledWith(terminal);
@@ -460,7 +462,7 @@ describe('claude-integration-handler', () => {
       resumeClaude(terminal, 'abc123', () => null);
 
       const resumeCall = mockWriteToPty.mock.calls[0][1] as string;
-      expect(resumeCall).toContain(getPathPrefixExpectation(platform, '/opt/claude/bin:/usr/bin'));
+      // PATH prefix is skipped for absolute executable paths (isAbsoluteExecutableCommand)
       expect(resumeCall).toContain(getQuotedCommand(platform, '/opt/claude/bin/claude') + ' --continue');
       expect(resumeCall).not.toContain('--resume');
       // sessionId is cleared because --continue doesn't track specific sessions
@@ -656,7 +658,7 @@ describe('invokeClaudeAsync', () => {
 
       const written = mockWriteToPty.mock.calls[0][1] as string;
       expect(written).toContain(buildCdCommand('/tmp/project'));
-      expect(written).toContain(getPathPrefixExpectation(platform, '/opt/claude/bin:/usr/bin'));
+      // PATH prefix is skipped for absolute executable paths (isAbsoluteExecutableCommand)
       expect(mockReleaseSessionId).toHaveBeenCalledWith('term-1');
       expect(mockPersistSession).toHaveBeenCalledWith(terminal);
       expect(profileManager.markProfileUsed).toHaveBeenCalledWith('default');
@@ -914,7 +916,8 @@ describe('claude-integration-handler - Helper Functions', () => {
       // Use a default terminal name pattern so renaming logic kicks in
       const terminal = createMockTerminal({ title: 'Terminal 1' });
       const mockWindow = {
-        webContents: { send: vi.fn() }
+        isDestroyed: vi.fn(() => false),
+        webContents: { send: vi.fn(), isDestroyed: vi.fn(() => false) }
       };
 
       finalizeClaudeInvoke(
@@ -934,7 +937,8 @@ describe('claude-integration-handler - Helper Functions', () => {
       // Use a default terminal name pattern so renaming logic kicks in
       const terminal = createMockTerminal({ title: 'Terminal 2' });
       const mockWindow = {
-        webContents: { send: vi.fn() }
+        isDestroyed: vi.fn(() => false),
+        webContents: { send: vi.fn(), isDestroyed: vi.fn(() => false) }
       };
 
       finalizeClaudeInvoke(
@@ -955,7 +959,8 @@ describe('claude-integration-handler - Helper Functions', () => {
       const terminal = createMockTerminal({ title: 'Terminal 3' });
       const mockSend = vi.fn();
       const mockWindow = {
-        webContents: { send: mockSend }
+        isDestroyed: vi.fn(() => false),
+        webContents: { send: mockSend, isDestroyed: vi.fn(() => false) }
       };
 
       finalizeClaudeInvoke(
@@ -980,7 +985,8 @@ describe('claude-integration-handler - Helper Functions', () => {
       const terminal = createMockTerminal({ title: 'Claude' });
       const mockSend = vi.fn();
       const mockWindow = {
-        webContents: { send: mockSend }
+        isDestroyed: vi.fn(() => false),
+        webContents: { send: mockSend, isDestroyed: vi.fn(() => false) }
       };
 
       finalizeClaudeInvoke(
@@ -1004,7 +1010,8 @@ describe('claude-integration-handler - Helper Functions', () => {
       const terminal = createMockTerminal({ title: 'My Custom Terminal' });
       const mockSend = vi.fn();
       const mockWindow = {
-        webContents: { send: mockSend }
+        isDestroyed: vi.fn(() => false),
+        webContents: { send: mockSend, isDestroyed: vi.fn(() => false) }
       };
 
       finalizeClaudeInvoke(
