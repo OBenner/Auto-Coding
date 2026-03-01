@@ -81,6 +81,9 @@ class BackgroundTaskManager:
         self.project_dir = project_dir
         self.tasks: dict[str, dict[str, Any]] = {}
         self.processes: dict[str, asyncio.subprocess.Process] = {}
+        self._async_tasks: dict[
+            str, asyncio.Task
+        ] = {}  # prevent GC of background tasks
 
     def _generate_task_id(self) -> str:
         """
@@ -395,9 +398,10 @@ class BackgroundTaskManager:
         # Store task reference to prevent premature garbage collection
         bg_task = asyncio.create_task(self._run_command(task_id))
         bg_task.add_done_callback(
-            lambda t: t.exception() if not t.cancelled() and t.exception() else None
+            lambda t: self._async_tasks.pop(task_id, None)
+            or (t.exception() if not t.cancelled() and t.exception() else None)
         )
-        self.tasks[task_id]["_async_task"] = bg_task
+        self._async_tasks[task_id] = bg_task
 
         logger.info(f"Started background task {task_id}: {command}")
         return task_id
