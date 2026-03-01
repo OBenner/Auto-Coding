@@ -65,6 +65,7 @@ function createMockTask(overrides: Partial<any> = {}): any {
 function createMockRefs() {
   return {
     logsEndRef: React.createRef<HTMLDivElement>(),
+    logsContainerRef: React.createRef<HTMLDivElement>(),
   };
 }
 
@@ -157,7 +158,6 @@ describe('TaskLogs Performance Benchmarks', () => {
             {...createMockRefs()}
             onLogsScroll={vi.fn()}
             onTogglePhase={vi.fn()}
-            shouldAutoScroll={false}
           />
         );
       });
@@ -192,7 +192,6 @@ describe('TaskLogs Performance Benchmarks', () => {
             {...createMockRefs()}
             onLogsScroll={vi.fn()}
             onTogglePhase={vi.fn()}
-            shouldAutoScroll={false}
           />
         );
       });
@@ -222,7 +221,6 @@ describe('TaskLogs Performance Benchmarks', () => {
                 {...createMockRefs()}
                 onLogsScroll={vi.fn()}
                 onTogglePhase={vi.fn()}
-                shouldAutoScroll={false}
               />
             ),
           measurements
@@ -256,7 +254,6 @@ describe('TaskLogs Performance Benchmarks', () => {
             {...createMockRefs()}
             onLogsScroll={vi.fn()}
             onTogglePhase={vi.fn()}
-            shouldAutoScroll={false}
           />
         );
       });
@@ -295,7 +292,6 @@ describe('TaskLogs Performance Benchmarks', () => {
           {...createMockRefs()}
           onLogsScroll={vi.fn()}
           onTogglePhase={vi.fn()}
-          shouldAutoScroll={false}
         />
       );
 
@@ -343,7 +339,6 @@ describe('TaskLogs Performance Benchmarks', () => {
           {...createMockRefs()}
           onLogsScroll={vi.fn()}
           onTogglePhase={vi.fn()}
-          shouldAutoScroll={false}
         />
       );
 
@@ -385,7 +380,6 @@ describe('TaskLogs Performance Benchmarks', () => {
           {...createMockRefs()}
           onLogsScroll={vi.fn()}
           onTogglePhase={vi.fn()}
-          shouldAutoScroll={false}
         />
       );
 
@@ -436,7 +430,6 @@ describe('TaskLogs Performance Benchmarks', () => {
           {...createMockRefs()}
           onLogsScroll={vi.fn()}
           onTogglePhase={vi.fn()}
-          shouldAutoScroll={false}
         />
       );
 
@@ -514,7 +507,6 @@ describe('TaskLogs Performance Benchmarks', () => {
                 {...createMockRefs()}
                 onLogsScroll={vi.fn()}
                 onTogglePhase={vi.fn()}
-                shouldAutoScroll={false}
               />
             ),
           measurements
@@ -546,7 +538,6 @@ describe('TaskLogs Performance Benchmarks', () => {
           {...createMockRefs()}
           onLogsScroll={vi.fn()}
           onTogglePhase={vi.fn()}
-          shouldAutoScroll={false}
         />
       );
 
@@ -564,7 +555,6 @@ describe('TaskLogs Performance Benchmarks', () => {
             {...createMockRefs()}
             onLogsScroll={vi.fn()}
             onTogglePhase={vi.fn()}
-            shouldAutoScroll={false}
           />
         );
       }, measurements);
@@ -584,7 +574,6 @@ describe('TaskLogs Performance Benchmarks', () => {
             {...createMockRefs()}
             onLogsScroll={vi.fn()}
             onTogglePhase={vi.fn()}
-            shouldAutoScroll={false}
           />
         );
       }, measurements);
@@ -610,7 +599,6 @@ describe('TaskLogs Performance Benchmarks', () => {
             {...createMockRefs()}
             onLogsScroll={vi.fn()}
             onTogglePhase={vi.fn()}
-            shouldAutoScroll={false}
           />
         );
       });
@@ -641,7 +629,6 @@ describe('TaskLogs Performance Benchmarks', () => {
             {...createMockRefs()}
             onLogsScroll={vi.fn()}
             onTogglePhase={vi.fn()}
-            shouldAutoScroll={false}
           />
         );
         const endTime = performance.now();
@@ -682,7 +669,6 @@ describe('TaskLogs Performance Benchmarks', () => {
             {...createMockRefs()}
             onLogsScroll={vi.fn()}
             onTogglePhase={vi.fn()}
-            shouldAutoScroll={false}
           />
         );
       });
