@@ -594,3 +594,27 @@ export interface TaskTokenStats {
   created_at: string;
   updated_at: string;
 }
+
+// Background task types (long-running commands)
+export type BackgroundTaskStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
+
+export interface BackgroundTask {
+  id: string;
+  command: string;
+  workingDir: string;
+  status: BackgroundTaskStatus;
+  createdAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+  timeout: number;
+  output: string;
+  error: string | null;
+  exitCode: number | null;
+  pid: number | null;
+  memoryStats?: {
+    percent: number;
+    availableMb: number;
+    totalMb: number;
+    usedMb: number;
+  };
+}

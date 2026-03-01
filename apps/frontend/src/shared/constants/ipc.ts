@@ -69,6 +69,21 @@ export const IPC_CHANNELS = {
   // Task token statistics
   TASK_TOKEN_STATS_GET: 'task:tokenStats:get',
 
+  // Background task operations (long-running commands)
+  BACKGROUND_TASK_START: 'backgroundTask:start',
+  BACKGROUND_TASK_CANCEL: 'backgroundTask:cancel',
+  BACKGROUND_TASK_GET_STATUS: 'backgroundTask:getStatus',
+  BACKGROUND_TASK_GET_OUTPUT: 'backgroundTask:getOutput',
+  BACKGROUND_TASK_LIST_RUNNING: 'backgroundTask:listRunning',
+  BACKGROUND_TASK_LIST_BY_STATUS: 'backgroundTask:listByStatus',
+
+  // Background task events (main -> renderer)
+  BACKGROUND_TASK_CREATED: 'backgroundTask:created',
+  BACKGROUND_TASK_STARTED: 'backgroundTask:started',
+  BACKGROUND_TASK_PROGRESS: 'backgroundTask:progress',
+  BACKGROUND_TASK_COMPLETE: 'backgroundTask:complete',
+  BACKGROUND_TASK_ERROR: 'backgroundTask:error',
+
   // Batch operations
   TASK_BATCH_RUN_QA: 'task:batchRunQA',
 
