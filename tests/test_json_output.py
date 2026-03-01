@@ -139,7 +139,7 @@ class TestFormatBuildResultWithOptions:
 
         data = json.loads(result)
         assert "duration" in data
-        assert data["duration"] == 123.46  # Rounded to 2 decimal places
+        assert data["duration"] == pytest.approx(123.46)  # Rounded to 2 decimal places
 
     def test_with_error_message(self):
         """Format build result with error message."""
@@ -235,7 +235,7 @@ class TestFormatBuildResultWithOptions:
         assert data["status"] == "success"
         assert data["exitCode"] == 0
         assert data["specName"] == "001-auth"
-        assert data["duration"] == 300.79
+        assert data["duration"] == pytest.approx(300.79)
         assert data["changedFiles"] == files
         assert data["filesChanged"] == 2
         assert data["artifacts"] == artifacts
@@ -616,7 +616,7 @@ class TestParseBuildResult:
 
         assert parsed["status"] == "success"
         assert parsed["specName"] == "001-feature"
-        assert parsed["duration"] == 100.0
+        assert parsed["duration"] == pytest.approx(100.0)
         assert parsed["changedFiles"] == ["src/test.py"]
 
 
@@ -730,7 +730,7 @@ class TestBuildResultEdgeCases:
         )
 
         data = json.loads(result)
-        assert data["duration"] == 0.0
+        assert data["duration"] == pytest.approx(0.0)
 
     def test_very_long_spec_name(self):
         """Build result with very long spec name."""
@@ -793,7 +793,7 @@ class TestBuildResultEdgeCases:
         )
 
         data = json.loads(result)
-        assert data["duration"] == 123.46
+        assert data["duration"] == pytest.approx(123.46)
 
     def test_negative_duration_not_rounded_to_zero(self):
         """Negative duration is preserved (though unlikely in practice)."""
@@ -875,7 +875,7 @@ class TestJsonOutputIntegration:
         assert parsed_data["status"] == "success"
         assert parsed_data["specName"] == "001-integration-test"
         assert parsed_data["exitCode"] == 0
-        assert parsed_data["duration"] == 250.75
+        assert parsed_data["duration"] == pytest.approx(250.75)
         assert parsed_data["changedFiles"] == original_data["changed_files"]
         assert parsed_data["artifacts"] == original_data["artifacts"]
         assert parsed_data["metadata"] == original_data["metadata"]

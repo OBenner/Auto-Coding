@@ -42,12 +42,6 @@ concurrency:
   group: auto-claude-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
-permissions:
-  contents: read
-  actions: read
-  pull-requests: write
-  issues: write
-
 env:
   # Auto-Claude Configuration
   AUTO_CLAUDE_CI: 'true'                    # Enable CI mode (non-interactive)
@@ -69,6 +63,11 @@ jobs:
   auto-claude-build:
     name: Auto-Claude Build (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: write
+      issues: write
 
     strategy:
       fail-fast: false

@@ -105,7 +105,7 @@ class TestSaveBuildLog:
 
         assert data["status"] == "success"
         assert data["exitCode"] == 0
-        assert data["duration"] == 120.5
+        assert data["duration"] == pytest.approx(120.5)
         assert len(data["changedFiles"]) == 2
 
     def test_save_build_log_adds_timestamp(self, tmp_path):
@@ -195,7 +195,7 @@ class TestSaveTestReport:
         data = json.loads(path.read_text())
 
         assert data["passed"] == 42
-        assert data["coverage"] == 87.5
+        assert data["coverage"] == pytest.approx(87.5)
         assert len(data["tests"]) == 2
 
     def test_save_test_report_adds_timestamp(self, tmp_path):
@@ -244,7 +244,7 @@ class TestSaveCoverageReport:
         data = json.loads(path.read_text())
 
         assert "modules" in data
-        assert data["modules"]["src/main.py"]["lines"] == 92.0
+        assert data["modules"]["src/main.py"]["lines"] == pytest.approx(92.0)
 
     def test_save_coverage_adds_timestamp(self, tmp_path):
         """Automatically add timestamp to coverage report."""
