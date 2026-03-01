@@ -10,10 +10,11 @@ import asyncio
 import json
 import logging
 import shlex
-import sys
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+
+from core.platform import is_windows
 
 try:
     from claude_agent_sdk import tool
@@ -141,6 +142,10 @@ class BackgroundTaskManager:
 
         try:
             state_file = self._get_task_state_file(task_id)
+        except ValueError:
+            return False
+
+        try:
             with open(state_file, "w", encoding="utf-8") as f:
                 json.dump(self.tasks[task_id], f, indent=2)
             return True
@@ -158,7 +163,12 @@ class BackgroundTaskManager:
         Returns:
             True if loaded successfully, False otherwise
         """
-        state_file = self._get_task_state_file(task_id)
+        try:
+            state_file = self._get_task_state_file(task_id)
+        except ValueError:
+            # Invalid task_id (path traversal, bad chars)
+            return False
+
         if not state_file.exists():
             return False
 
@@ -245,7 +255,7 @@ class BackgroundTaskManager:
             # Using shlex.split() + create_subprocess_exec() instead of create_subprocess_shell()
             # This prevents command injection attacks like: echo "test" && rm -rf /
             try:
-                if sys.platform == "win32":
+                if is_windows():
                     # On Windows, shlex.split() in POSIX mode (default) treats
                     # backslashes as escape characters, mangling paths like
                     # C:\Python\python.exe → C:Pythonpython.exe.
@@ -326,8 +336,12 @@ class BackgroundTaskManager:
                 if final_mem:
                     task["memory_stats"] = final_mem
 
-                # Determine final status based on exit code
-                if process.returncode == 0:
+                # Don't overwrite status if task was already cancelled
+                if task.get("status") == self.STATE_CANCELLED:
+                    logger.debug(
+                        f"Task {task_id} was cancelled, skipping status update"
+                    )
+                elif process.returncode == 0:
                     task["status"] = self.STATE_COMPLETED
                     logger.info(f"Task {task_id} completed successfully")
                 else:
@@ -340,10 +354,11 @@ class BackgroundTaskManager:
                     self._capture_error_context(task_id)
 
             except asyncio.TimeoutError:
-                # Timeout occurred
-                task["status"] = self.STATE_FAILED
-                task["error"] = f"Command timed out after {timeout} seconds"
-                task["completed_at"] = datetime.now(UTC).isoformat()
+                # Timeout occurred - don't overwrite if already cancelled
+                if task.get("status") != self.STATE_CANCELLED:
+                    task["status"] = self.STATE_FAILED
+                    task["error"] = f"Command timed out after {timeout} seconds"
+                    task["completed_at"] = datetime.now(UTC).isoformat()
                 logger.error(f"Task {task_id} timed out after {timeout} seconds")
 
                 # Capture error context for timeout
@@ -360,10 +375,11 @@ class BackgroundTaskManager:
                     logger.error(f"Error terminating process for task {task_id}: {e}")
 
         except Exception as e:
-            # Unexpected error during command execution
-            task["status"] = self.STATE_FAILED
-            task["error"] = f"Execution error: {str(e)}"
-            task["completed_at"] = datetime.now(UTC).isoformat()
+            # Unexpected error - don't overwrite if already cancelled
+            if task.get("status") != self.STATE_CANCELLED:
+                task["status"] = self.STATE_FAILED
+                task["error"] = f"Execution error: {str(e)}"
+                task["completed_at"] = datetime.now(UTC).isoformat()
             logger.error(f"Task {task_id} failed with error: {e}", exc_info=True)
             # Capture error context for execution errors
             self._capture_error_context(task_id)

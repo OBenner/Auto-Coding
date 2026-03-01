@@ -71,21 +71,21 @@ async def manager(test_dirs):
     spec_dir, project_dir = test_dirs
     mgr = BackgroundTaskManager(spec_dir, project_dir)
     yield mgr
-    # Cleanup: cancel all running tasks and kill remaining processes
+    # Cleanup: kill all remaining subprocess processes and await termination
     for task_id, process in list(mgr.processes.items()):
         try:
             process.kill()
-            await asyncio.sleep(0.1)
-        except Exception:
+            await asyncio.wait_for(process.wait(), timeout=5.0)
+        except (OSError, asyncio.TimeoutError):
             pass
     mgr.processes.clear()
-    # Cancel any pending async tasks
+    # Cancel any pending async tasks and await them
     for task_id, async_task in list(mgr._async_tasks.items()):
         if not async_task.done():
             async_task.cancel()
             try:
-                await asyncio.sleep(0.1)
-            except Exception:
+                await asyncio.wait_for(async_task, timeout=5.0)
+            except (asyncio.CancelledError, asyncio.TimeoutError, OSError):
                 pass
     mgr._async_tasks.clear()
 
@@ -183,25 +183,29 @@ class TestLongRunningCommands:
         - Final output includes all command output
         """
         # Create a command that produces incremental output
-        # Use Python for cross-platform compatibility
+        # Use -u for unbuffered Python output and flush=True in prints
         task_id = await manager.start_task(
-            f"{sys.executable} -c \"import time; [print(f'Line {{i}}') or time.sleep(0.2) for i in range(1, 6)]\"",
+            f"{sys.executable} -u -c \"import time; [print(f'Line {{i}}', flush=True) or time.sleep(0.3) for i in range(1, 6)]\"",
             timeout=10,
         )
 
-        # Wait for task to start
-        await asyncio.sleep(0.3)
+        # Wait for task to start and produce some output
+        await asyncio.sleep(0.5)
 
         # Check that we're getting partial output
         output_data = manager.get_task_output(task_id)
         assert output_data is not None
+        initial_len = len(output_data.get("output", ""))
 
-        # Wait a bit more
-        await asyncio.sleep(0.5)
+        # Wait for more output to arrive
+        await asyncio.sleep(0.6)
 
-        # Output should have grown
+        # Output should have grown (proves real-time streaming)
         output_data_2 = manager.get_task_output(task_id)
         assert output_data_2 is not None
+        assert len(output_data_2.get("output", "")) > initial_len, (
+            f"Output did not grow: initial={initial_len}, current={len(output_data_2.get('output', ''))}"
+        )
 
         # Poll for completion
         for _ in range(20):
@@ -858,7 +862,6 @@ async def test_full_lifecycle_integration(test_dirs):
         timeout=10,
     )
     tasks.append(("build", task1_id))
-    await asyncio.sleep(1.1)  # Delay to ensure unique task IDs (second precision)
 
     # Task 2: Will be cancelled (long running)
     task2_id = await manager.start_task(
@@ -866,7 +869,6 @@ async def test_full_lifecycle_integration(test_dirs):
         timeout=30,
     )
     tasks.append(("long_process", task2_id))
-    await asyncio.sleep(1.1)  # Delay to ensure unique task IDs (second precision)
 
     # Task 3: Will fail
     task3_id = await manager.start_task(
