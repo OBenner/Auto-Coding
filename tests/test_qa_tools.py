@@ -40,10 +40,11 @@ def mock_tool_decorator(name, description, params):
 mock_agent_sdk.tool = mock_tool_decorator
 sys.modules['claude_agent_sdk'] = mock_agent_sdk
 
-import agents.tools_pkg.tools.qa as _qa_tools_mod
-# Ensure the qa tools module uses our mock tool decorator even if already imported
-_qa_tools_mod.tool = mock_tool_decorator
-_qa_tools_mod.SDK_TOOLS_AVAILABLE = True
+# Force fresh import so the module picks up our mock_tool_decorator
+for _mod in ['agents.tools_pkg.tools.qa', 'agents.tools_pkg.tools', 'agents.tools_pkg']:
+    sys.modules.pop(_mod, None)
+
+
 from agents.tools_pkg.tools.qa import create_qa_tools
 
 

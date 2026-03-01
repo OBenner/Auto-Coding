@@ -12,8 +12,6 @@ Tests the complete flow:
 import json
 import pytest
 import sys
-import tempfile
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 # Store original modules for cleanup
@@ -149,7 +147,7 @@ class TestFailurAnalysisE2E:
                 "errors": ["SyntaxError: invalid syntax on line 42 - missing closing parenthesis"],
                 "is_recurring": False,
                 "qa_iteration": 1,
-            }
+            },
         )
 
         # Verify root cause was extracted
@@ -187,7 +185,7 @@ class TestFailurAnalysisE2E:
                 "issues": issues,
                 "is_recurring": True,
                 "qa_iteration": 2,
-            }
+            },
         )
 
         # Format for Graphiti
@@ -258,8 +256,8 @@ class TestFailurAnalysisE2E:
         valid_trends = ["improving", "stable", "declining", "insufficient_data"]
         assert trends["trend"] in valid_trends
 
-        # success_rate_trend is a float (positive = improving)
-        assert isinstance(trends["success_rate_trend"], float)
+        # success_rate_trend is numeric (positive = improving)
+        assert isinstance(trends["success_rate_trend"], (int, float))
 
         # recurring_issues_trend can be "reducing", "stable", "increasing", or "unknown"
         assert trends["recurring_issues_trend"] in ["reducing", "stable", "increasing", "unknown"]
@@ -436,7 +434,7 @@ def verify_token():
         })
 
         # Use new_callable=MagicMock to avoid AsyncMock (original is async)
-        with patch('memory.graphiti_helpers.get_graphiti_memory', new_callable=MagicMock, return_value=mock_memory) as mock_get_memory:
+        with patch('memory.graphiti_helpers.get_graphiti_memory', new_callable=MagicMock, return_value=mock_memory):
             # Retrieve context for new session
             from memory.graphiti_helpers import get_graphiti_memory
             memory = get_graphiti_memory(temp_spec_dir, temp_project_dir)
@@ -495,7 +493,7 @@ class TestGraphitiIntegration:
                 "issues": issues,
                 "is_recurring": False,
                 "test_suite": "integration",
-            }
+            },
         )
 
         formatted = format_for_graphiti(result)
@@ -546,7 +544,7 @@ class TestEndToEndFlow:
                 "issues": issues,
                 "is_recurring": True,
                 "qa_iteration": 3,
-            }
+            },
         )
 
         # Verify analysis
@@ -622,7 +620,12 @@ class TestEndToEndFlow:
         # First half: 2/5 = 40%
         # Second half: 4/5 = 80%
         # Difference = 0.4, which is > 0.1 = improving
-        assert trends["success_rate_trend"] > 0.1  # positive float means improving
+        # success_rate_trend should always be numeric (float); guard against unexpected types
+        srt = trends["success_rate_trend"]
+        assert isinstance(srt, (int, float)), (
+            f"success_rate_trend should be numeric, got {type(srt).__name__}: {srt!r}"
+        )
+        assert srt > 0.1  # positive float means improving
         assert trends["trend"] == "improving"
 
 

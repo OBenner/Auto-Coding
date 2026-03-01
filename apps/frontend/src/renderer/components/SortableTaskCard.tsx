@@ -1,7 +1,10 @@
 import { memo, useCallback } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { useTranslation } from 'react-i18next';
+import { motion } from 'motion/react';
 import { TaskCard } from './TaskCard';
+import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
 import { cn } from '../lib/utils';
 import type { Task, TaskStatus } from '../../shared/types';
 
@@ -13,6 +16,8 @@ interface SortableTaskCardProps {
   isSelectable?: boolean;
   isSelected?: boolean;
   onToggleSelect?: () => void;
+  // Drag disabled when auto-sort is active
+  isDragDisabled?: boolean;
 }
 
 // Custom comparator - only re-render when task or onClick actually changed
@@ -28,11 +33,13 @@ function sortableTaskCardPropsAreEqual(
     prevProps.onStatusChange === nextProps.onStatusChange &&
     prevProps.isSelectable === nextProps.isSelectable &&
     prevProps.isSelected === nextProps.isSelected &&
-    prevProps.onToggleSelect === nextProps.onToggleSelect
+    prevProps.onToggleSelect === nextProps.onToggleSelect &&
+    prevProps.isDragDisabled === nextProps.isDragDisabled
   );
 }
 
-export const SortableTaskCard = memo(function SortableTaskCard({ task, onClick, onStatusChange, isSelectable, isSelected, onToggleSelect }: SortableTaskCardProps) {
+export const SortableTaskCard = memo(function SortableTaskCard({ task, onClick, onStatusChange, isSelectable, isSelected, onToggleSelect, isDragDisabled }: SortableTaskCardProps) {
+  const { t } = useTranslation(['tasks']);
   const {
     attributes,
     listeners,
@@ -41,7 +48,10 @@ export const SortableTaskCard = memo(function SortableTaskCard({ task, onClick, 
     transition,
     isDragging,
     isOver
-  } = useSortable({ id: task.id });
+  } = useSortable({
+    id: task.id,
+    disabled: isDragDisabled
+  });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -55,17 +65,30 @@ export const SortableTaskCard = memo(function SortableTaskCard({ task, onClick, 
     onClick();
   }, [onClick]);
 
-  return (
-    <div
+  const cardContent = (
+    <motion.div
       ref={setNodeRef}
       style={style}
       className={cn(
-        'touch-none transition-all duration-200',
-        isDragging && 'dragging-placeholder opacity-40 scale-[0.98]',
+        !isDragDisabled && 'touch-none',
+        isDragDisabled && 'cursor-not-allowed',
         isOver && !isDragging && 'ring-2 ring-primary/30 ring-offset-2 ring-offset-background rounded-xl'
       )}
+      animate={{
+        scale: isDragging ? 1.05 : 1,
+        opacity: isDragging ? 0.8 : 1,
+        boxShadow: isDragging
+          ? '0 10px 40px -10px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(0, 0, 0, 0.05)'
+          : '0 0 0 0 rgba(0, 0, 0, 0)',
+      }}
+      transition={{
+        type: 'spring',
+        stiffness: 300,
+        damping: 25,
+        mass: 0.5,
+      }}
       {...attributes}
-      {...listeners}
+      {...(isDragDisabled ? {} : listeners)}
     >
       <TaskCard
         task={task}
@@ -75,6 +98,22 @@ export const SortableTaskCard = memo(function SortableTaskCard({ task, onClick, 
         isSelected={isSelected}
         onToggleSelect={onToggleSelect}
       />
-    </div>
+    </motion.div>
   );
+
+  // Wrap in tooltip when drag is disabled
+  if (isDragDisabled) {
+    return (
+      <Tooltip delayDuration={200}>
+        <TooltipTrigger asChild>
+          {cardContent}
+        </TooltipTrigger>
+        <TooltipContent>
+          {t('kanban.dragDisabledAutoSort')}
+        </TooltipContent>
+      </Tooltip>
+    );
+  }
+
+  return cardContent;
 }, sortableTaskCardPropsAreEqual);

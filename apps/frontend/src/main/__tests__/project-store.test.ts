@@ -47,8 +47,8 @@ async function waitForFile(filePath: string, timeout = 2000): Promise<string> {
 
 /**
  * Wait for the ProjectStore's async initialization to complete.
- * The constructor fires initializeAsync() in the background (not awaited),
- * which can race with subsequent synchronous method calls. This helper
+ * The constructor fires initializeAsync() in the background (fire-and-forget),
+ * which can race with subsequent method calls on macOS. This helper
  * yields enough event-loop ticks for the async init (mkdir + readFile) to finish.
  */
 async function waitForStoreInit(): Promise<void> {
@@ -57,6 +57,34 @@ async function waitForStoreInit(): Promise<void> {
   for (let i = 0; i < 5; i++) {
     await new Promise(r => setTimeout(r, 10));
   }
+}
+
+/**
+ * Pre-populate projects.json so initializeAsync loads the project from disk,
+ * avoiding a race where slow macOS CI I/O lets initializeAsync complete AFTER
+ * addProject and overwrite in-memory data.
+ */
+function writePrepopulatedProjects(projectId: string, projectPath: string): void {
+  const storePath = path.join(USER_DATA_PATH, 'store', 'projects.json');
+  writeFileSync(storePath, JSON.stringify({
+    projects: [{
+      id: projectId,
+      name: path.basename(projectPath),
+      path: projectPath,
+      autoBuildPath: '.auto-claude',
+      settings: {
+        model: 'sonnet',
+        memoryBackend: 'file',
+        linearSync: false,
+        notifications: { onTaskComplete: true, onTaskFailed: true, onReviewNeeded: true, sound: false },
+        graphitiMcpEnabled: true,
+        graphitiMcpUrl: 'http://localhost:8000/mcp/'
+      },
+      createdAt: '2024-01-01T00:00:00Z',
+      updatedAt: '2024-01-01T00:00:00Z'
+    }],
+    settings: {}
+  }));
 }
 
 // Setup test directories with unique secure temp dir
@@ -946,10 +974,15 @@ describe('ProjectStore', () => {
       };
       writeFileSync(path.join(specsDir, 'implementation_plan.json'), JSON.stringify(plan));
 
+      const projectId = 'cache-test-project-id';
+      writePrepopulatedProjects(projectId, TEST_PROJECT_PATH);
+
       const { ProjectStore } = await import('../project-store');
       const store = new ProjectStore();
+      await waitForStoreInit();
 
       const project = store.addProject(TEST_PROJECT_PATH);
+      expect(project.id).toBe(projectId);
 
       // First call should populate cache
       const tasksBefore = await store.getTasks(project.id);
@@ -957,10 +990,12 @@ describe('ProjectStore', () => {
       expect(tasksBefore[0].metadata?.archivedAt).toBeUndefined();
 
       // Archive the task
-      await store.archiveTasks(project.id, ['005-cache-test']);
+      const archiveResult = await store.archiveTasks(project.id, ['005-cache-test']);
+      expect(archiveResult).toBe(true);
 
       // After archiving, cache should be invalidated and getTasks should return updated data
       const tasksAfter = await store.getTasks(project.id);
+      expect(tasksAfter).toHaveLength(1);
       expect(tasksAfter[0].metadata?.archivedAt).toBeDefined();
     });
 
@@ -980,13 +1015,19 @@ describe('ProjectStore', () => {
       };
       writeFileSync(path.join(specsDir, 'implementation_plan.json'), JSON.stringify(plan));
 
+      const projectId = 'invalidate-test-project-id';
+      writePrepopulatedProjects(projectId, TEST_PROJECT_PATH);
+
       const { ProjectStore } = await import('../project-store');
       const store = new ProjectStore();
+      await waitForStoreInit();
 
       const project = store.addProject(TEST_PROJECT_PATH);
+      expect(project.id).toBe(projectId);
 
       // First call should populate cache
       const tasksBefore = await store.getTasks(project.id);
+      expect(tasksBefore).toHaveLength(1);
       expect(tasksBefore[0].title).toBe('Initial Feature');
 
       // Modify the file directly (simulating external change)
@@ -995,6 +1036,7 @@ describe('ProjectStore', () => {
 
       // Without invalidation, should still return cached data
       const tasksCached = await store.getTasks(project.id);
+      expect(tasksCached).toHaveLength(1);
       expect(tasksCached[0].title).toBe('Initial Feature');
 
       // Invalidate cache
@@ -1002,6 +1044,7 @@ describe('ProjectStore', () => {
 
       // Now should return fresh data
       const tasksAfterInvalidation = await store.getTasks(project.id);
+      expect(tasksAfterInvalidation).toHaveLength(1);
       expect(tasksAfterInvalidation[0].title).toBe('Updated Feature');
     });
   });
@@ -1047,6 +1090,7 @@ describe('ProjectStore', () => {
 
       const { ProjectStore } = await import('../project-store');
       const store = new ProjectStore();
+      await waitForStoreInit();
 
       const project = store.addProject(TEST_PROJECT_PATH);
       const tasks = await store.getTasks(project.id);
