@@ -277,6 +277,15 @@ def handle_build_command(
 
     # Validate environment
     if not validate_environment(spec_dir):
+        if json_mode:
+            print(
+                format_build_result(
+                    status=ExitCode.SYSTEM_ERROR,
+                    spec_name=spec_dir.name,
+                    exit_code=ExitCode.SYSTEM_ERROR,
+                    error_message="Environment validation failed",
+                )
+            )
         sys.exit(ExitCode.SYSTEM_ERROR)
 
     # Check human review approval
@@ -284,39 +293,64 @@ def handle_build_command(
     if not review_state.is_approval_valid(spec_dir):
         if force_bypass_approval:
             # User explicitly bypassed approval check
-            print()
-            print(
-                warning(
-                    f"{icon(Icons.WARNING)} WARNING: Bypassing approval check with --force"
+            if not json_mode:
+                print()
+                print(
+                    warning(
+                        f"{icon(Icons.WARNING)} WARNING: Bypassing approval check with --force"
+                    )
                 )
-            )
-            print(muted("This spec has not been approved for building."))
-            print()
+                print(muted("This spec has not been approved for building."))
+                print()
         else:
-            print()
-            content = [
-                bold(f"{icon(Icons.WARNING)} BUILD BLOCKED - REVIEW REQUIRED"),
-                "",
-                "This spec requires human approval before building.",
-            ]
-
-            if review_state.approved and not review_state.is_approval_valid(spec_dir):
-                # Spec changed after approval
-                content.append("")
-                content.append(warning("The spec has been modified since approval."))
-                content.append("Please re-review and re-approve.")
-
-            content.extend(
-                [
+            if json_mode:
+                if review_state.approved and not review_state.is_approval_valid(
+                    spec_dir
+                ):
+                    reason = "spec_changed_after_approval"
+                    details = (
+                        "The spec has been modified since approval. Please re-review."
+                    )
+                else:
+                    reason = "review_required"
+                    details = "This spec requires human approval before building."
+                print(
+                    format_build_result(
+                        status=ExitCode.BUILD_FAILED,
+                        spec_name=spec_dir.name,
+                        exit_code=ExitCode.BUILD_FAILED,
+                        error_message=f"{reason}: {details}",
+                    )
+                )
+            else:
+                print()
+                content = [
+                    bold(f"{icon(Icons.WARNING)} BUILD BLOCKED - REVIEW REQUIRED"),
                     "",
-                    highlight("To review and approve:"),
-                    f"  python auto-claude/review.py --spec-dir {spec_dir}",
-                    "",
-                    muted("Or use --force to bypass this check (not recommended)."),
+                    "This spec requires human approval before building.",
                 ]
-            )
-            print(box(content, width=70, style="heavy"))
-            print()
+
+                if review_state.approved and not review_state.is_approval_valid(
+                    spec_dir
+                ):
+                    # Spec changed after approval
+                    content.append("")
+                    content.append(
+                        warning("The spec has been modified since approval.")
+                    )
+                    content.append("Please re-review and re-approve.")
+
+                content.extend(
+                    [
+                        "",
+                        highlight("To review and approve:"),
+                        f"  python auto-claude/review.py --spec-dir {spec_dir}",
+                        "",
+                        muted("Or use --force to bypass this check (not recommended)."),
+                    ]
+                )
+                print(box(content, width=70, style="heavy"))
+                print()
             sys.exit(ExitCode.BUILD_FAILED)
     else:
         debug_success(
@@ -328,7 +362,8 @@ def handle_build_command(
         if non_interactive:
             # Non-interactive mode: auto-continue with existing build
             debug("run.py", "Non-interactive mode: continuing with existing build")
-            print("Non-interactive: Resuming existing build...")
+            if not json_mode:
+                print("Non-interactive: Resuming existing build...")
         else:
             continue_existing = check_existing_build(project_dir, spec_dir.name)
             if continue_existing:
@@ -429,6 +464,7 @@ def handle_build_command(
                     print("\nAll acceptance criteria verified.")
                     print("The implementation is production-ready.\n")
                 else:
+                    build_status = ExitCode.QA_FAILED
                     print("\n" + "=" * 70)
                     print("  ⚠️  QA VALIDATION INCOMPLETE")
                     print("=" * 70)

@@ -96,8 +96,9 @@ class ArtifactManager:
         artifact_path = self.artifact_dir / "build-log.json"
 
         try:
-            # Add metadata timestamp if not present
+            # Add metadata timestamp if not present (use a copy to avoid mutating caller's dict)
             if "timestamp" not in build_data:
+                build_data = dict(build_data)
                 build_data["timestamp"] = datetime.utcnow().isoformat() + "Z"
 
             # Write build log with pretty formatting
@@ -145,8 +146,9 @@ class ArtifactManager:
         artifact_path = self.artifact_dir / "test-report.json"
 
         try:
-            # Add metadata timestamp if not present
+            # Add metadata timestamp if not present (use a copy to avoid mutating caller's dict)
             if "timestamp" not in test_data:
+                test_data = dict(test_data)
                 test_data["timestamp"] = datetime.utcnow().isoformat() + "Z"
 
             # Write test report with pretty formatting
@@ -194,8 +196,9 @@ class ArtifactManager:
         artifact_path = self.artifact_dir / "coverage-report.json"
 
         try:
-            # Add metadata timestamp if not present
+            # Add metadata timestamp if not present (use a copy to avoid mutating caller's dict)
             if "timestamp" not in coverage_data:
+                coverage_data = dict(coverage_data)
                 coverage_data["timestamp"] = datetime.utcnow().isoformat() + "Z"
 
             # Write coverage report with pretty formatting
@@ -236,16 +239,34 @@ class ArtifactManager:
         if not self.enabled:
             return None
 
+        # Sanitize artifact_name: reject paths with separators or parent components
+        sanitized = Path(artifact_name)
+        if (
+            sanitized.is_absolute()
+            or any(part in ("..", "") for part in sanitized.parts[:-1])
+            or len(sanitized.parts) > 1
+        ):
+            raise ValueError(
+                f"Invalid artifact name '{artifact_name}': must be a plain filename, "
+                "not a path with directories or '..' components"
+            )
+
         # Ensure artifact name ends with .json
+        artifact_name = sanitized.name
         if not artifact_name.endswith(".json"):
             artifact_name = f"{artifact_name}.json"
 
-        artifact_path = self.artifact_dir / artifact_name
+        artifact_path = (self.artifact_dir / artifact_name).resolve()
+        if not artifact_path.is_relative_to(self.artifact_dir.resolve()):
+            raise ValueError(
+                f"Resolved artifact path escapes artifact directory: {artifact_path}"
+            )
 
         try:
             if isinstance(data, dict):
-                # Add timestamp if not present
+                # Add timestamp if not present (use a copy to avoid mutating caller's dict)
                 if "timestamp" not in data:
+                    data = dict(data)
                     data["timestamp"] = datetime.utcnow().isoformat() + "Z"
 
                 # Write JSON data
@@ -278,7 +299,9 @@ class ArtifactManager:
             >>> if path:
             ...     print(f"Artifact at: {path}")
         """
-        artifact_path = self.artifact_dir / artifact_name
+        artifact_path = (self.artifact_dir / Path(artifact_name).name).resolve()
+        if not artifact_path.is_relative_to(self.artifact_dir.resolve()):
+            return None
         if artifact_path.exists():
             return artifact_path
         return None
@@ -441,7 +464,7 @@ class ArtifactManager:
 
         try:
             target_dir.mkdir(parents=True, exist_ok=True)
-            target_path = target_dir / artifact_name
+            target_path = target_dir / Path(artifact_name).name
 
             shutil.copy2(source_path, target_path)
             logger.debug(f"Copied artifact to: {target_path}")

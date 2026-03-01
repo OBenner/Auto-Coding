@@ -483,24 +483,27 @@ class TestCleanupOldArtifacts:
     def test_cleanup_removes_old_artifacts(self, tmp_path):
         """Remove oldest artifacts when count exceeds threshold."""
         manager = ArtifactManager(spec_dir=tmp_path)
+        manager.artifact_dir.mkdir(parents=True, exist_ok=True)
 
-        # Create multiple build logs with different content (same name)
-        # We need to create actual separate files, so use custom names with timestamps
-        for i in range(6):
-            manager.save_custom_artifact(f"build-{i}", {"iteration": i})
-            # Set explicit mtime to ensure deterministic ordering (avoids flaky sleep)
-            artifact_path = manager.artifact_dir / f"build-{i}.json"
-            if artifact_path.exists():
-                os.utime(artifact_path, (1000000 + i, 1000000 + i))
+        # cleanup_old_artifacts groups files by their stem (filename without extension).
+        # Create 6 files that share the stem "report" by using different extensions,
+        # so they all fall into one group and the 3 oldest are removed.
+        for i in range(1, 7):
+            path = manager.artifact_dir / f"report.v{i}"
+            path.write_text(f'{{"iteration": {i}}}', encoding="utf-8")
+            os.utime(path, (1000000 + i, 1000000 + i))
 
         removed = manager.cleanup_old_artifacts(keep_count=3)
-        # Each artifact has unique name, so none are grouped together
-        # The cleanup groups by base name (without extension or suffix)
-        assert removed >= 0  # May remove some depending on grouping
+        assert removed == 3, f"Expected 3 removed, got {removed}"
 
-        # Verify some artifacts still exist
-        artifacts = manager.list_artifacts()
-        assert len(artifacts) > 0
+        remaining = [p for p in manager.artifact_dir.iterdir() if p.is_file()]
+        assert len(remaining) == 3, f"Expected 3 remaining artifacts, got {len(remaining)}"
+
+        # The 3 remaining files should be the newest (v4, v5, v6)
+        remaining_names = {p.name for p in remaining}
+        assert remaining_names == {"report.v4", "report.v5", "report.v6"}, (
+            f"Expected newest artifacts, got {remaining_names}"
+        )
 
     def test_cleanup_disabled(self, tmp_path):
         """Return 0 when artifact generation is disabled."""
@@ -578,26 +581,15 @@ class TestFactoryFunction:
 class TestErrorHandling:
     """Tests for error handling and edge cases."""
 
-    @pytest.mark.skipif(
-        sys.platform == "win32",
-        reason="chmod permission tests are unreliable on Windows",
-    )
     def test_save_build_log_handles_permission_error(self, tmp_path):
-        """Handle permission errors gracefully."""
+        """Handle PermissionError during write gracefully, returning None."""
         manager = ArtifactManager(spec_dir=tmp_path)
 
-        # Make artifact directory read-only
-        manager.artifact_dir.chmod(0o444)
-
-        # Should return None, not raise
-        with patch.object(manager, "artifact_dir", manager.artifact_dir):
-            # Re-create to trigger permission error
+        # Simulate a PermissionError on the actual file write, independent of OS
+        with patch("builtins.open", side_effect=PermissionError("read-only")):
             result = manager.save_build_log({"status": "success"})
-            # The actual behavior depends on OS permissions
-            assert result is None or isinstance(result, Path)
 
-        # Restore permissions for cleanup
-        manager.artifact_dir.chmod(0o755)
+        assert result is None
 
     def test_save_handles_unserializable_data(self, tmp_path):
         """Handle data that cannot be JSON serialized."""

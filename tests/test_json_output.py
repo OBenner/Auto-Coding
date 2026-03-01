@@ -16,14 +16,18 @@ Tests the json_output.py module functionality including:
 import json
 import sys
 from datetime import datetime
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
 # sys.path is set by conftest.py (apps/backend is already on the path)
-# Keep a local fallback for running this file directly
-if not any("apps/backend" in p or "apps\\backend" in p for p in sys.path):
-    sys.path.insert(0, "apps/backend")
+# Keep a local fallback for running this file directly using an absolute path
+_BACKEND_DIR = str(
+    (Path(__file__).resolve().parent.parent / "apps" / "backend")
+)
+if _BACKEND_DIR not in sys.path:
+    sys.path.insert(0, _BACKEND_DIR)
 from cli.exit_codes import ExitCode
 from cli.json_output import (
     BuildStatus,
@@ -936,6 +940,7 @@ class TestBuildStatusValueMapping:
             ExitCode.BUILD_FAILED: BuildStatus.BUILD_FAILED,
             ExitCode.QA_FAILED: BuildStatus.QA_FAILED,
             ExitCode.SYSTEM_ERROR: BuildStatus.SYSTEM_ERROR,
+            ExitCode.INTERRUPTED: BuildStatus.INTERRUPTED,
         }
 
         for exit_code, expected_status in mappings.items():

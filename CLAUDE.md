@@ -205,8 +205,9 @@ export AUTO_CLAUDE_CI=true
 # Enable JSON output
 export AUTO_CLAUDE_JSON_OUTPUT=true
 
-# Required: Anthropic API key
-export ANTHROPIC_API_KEY=your_key_here
+# Required: Claude OAuth token (NOT ANTHROPIC_API_KEY — that is not supported)
+# Generate with: claude setup-token --print
+export CLAUDE_CODE_OAUTH_TOKEN=your_oauth_token_here
 
 # Optional: Configure model
 export CLAUDE_MODEL=claude-sonnet-4-5-20250929
@@ -261,14 +262,23 @@ See `.github/workflows/auto-claude-build.yml` for a complete example workflow. K
 
 ```yaml
 on:
-  pull_request:
-    branches: [main, develop]
-    paths: ['apps/**', 'tests/**']
+  # The provided workflow uses workflow_dispatch (manual trigger).
+  # The pull_request trigger below is an optional customization you can add:
+  # pull_request:
+  #   branches: [main, develop]
+  #   paths: ['apps/**', 'tests/**']
+  workflow_dispatch:
+    inputs:
+      spec_number:
+        description: 'Spec number to build'
+        required: false
+        default: '001'
 
 env:
   AUTO_CLAUDE_CI: 'true'
   AUTO_CLAUDE_JSON_OUTPUT: 'true'
-  ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+  # Use Claude OAuth token — ANTHROPIC_API_KEY is not supported
+  CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 
 jobs:
   auto-claude-build:
