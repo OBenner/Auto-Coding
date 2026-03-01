@@ -152,7 +152,7 @@ class TestLongRunningCommands:
         # Create a command that produces incremental output
         # Use Python for cross-platform compatibility
         task_id = await manager.start_task(
-            f'{sys.executable} -c "import time; [print(f\'Line {i}\') or time.sleep(0.2) for i in range(1, 6)]"',
+            f'{sys.executable} -c "import time; [print(f\'Line {{i}}\') or time.sleep(0.2) for i in range(1, 6)]"',
             timeout=10
         )
 
@@ -239,7 +239,7 @@ class TestLongRunningCommands:
         """
         # Create a long-running task
         task_id = await manager.start_task(
-            f'{sys.executable} -c "import time; [print(f\'Iteration {i}\') or time.sleep(0.5) for i in range(1, 11)]"',
+            f'{sys.executable} -c "import time; [print(f\'Iteration {{i}}\') or time.sleep(0.5) for i in range(1, 11)]"',
             timeout=30
         )
 
@@ -319,7 +319,7 @@ class TestLongRunningCommands:
         # Memory is checked every 50 lines (MEMORY_CHECK_INTERVAL = 5, checked every 10 * 5 lines)
         # We'll produce 100 lines with delays to ensure task runs long enough
         task_id = await manager.start_task(
-            f'{sys.executable} -c "import time; [print(f\'Output line {i:04d}\') or time.sleep(0.05) for i in range(1, 101)]"',
+            f'{sys.executable} -c "import time; [print(f\'Output line {{i:04d}}\') or time.sleep(0.05) for i in range(1, 101)]"',
             timeout=30
         )
 
@@ -577,7 +577,7 @@ class TestLongRunningCommands:
 
         # Create a command that outputs multiple lines over time
         task_id = await manager1.start_task(
-            f'{sys.executable} -c "import time, sys; [print(f\'Progress {i}\', flush=True) or sys.stdout.flush() or time.sleep(0.3) for i in range(1, 20)]"',
+            f'{sys.executable} -c "import time, sys; [print(f\'Progress {{i}}\', flush=True) or sys.stdout.flush() or time.sleep(0.3) for i in range(1, 20)]"',
             timeout=30
         )
 
@@ -724,7 +724,7 @@ async def test_full_lifecycle_integration(test_dirs):
 
     # Task 1: Will complete successfully
     task1_id = await manager.start_task(
-        f'{sys.executable} -c "import time; [print(f\'Build step {i}\') or time.sleep(0.2) for i in range(1, 4)]"',
+        f'{sys.executable} -c "import time; [print(f\'Build step {{i}}\') or time.sleep(0.2) for i in range(1, 4)]"',
         timeout=10
     )
     tasks.append(("build", task1_id))
@@ -732,7 +732,7 @@ async def test_full_lifecycle_integration(test_dirs):
 
     # Task 2: Will be cancelled (long running)
     task2_id = await manager.start_task(
-        f'{sys.executable} -c "import time; [print(f\'Long process {i}\') or time.sleep(1) for i in range(1, 11)]"',
+        f'{sys.executable} -c "import time; [print(f\'Long process {{i}}\') or time.sleep(1) for i in range(1, 11)]"',
         timeout=30
     )
     tasks.append(("long_process", task2_id))
