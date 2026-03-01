@@ -347,7 +347,7 @@ describe('TaskLogs Performance Benchmarks', () => {
         />
       );
 
-      const searchInput = renderResult.container.querySelector('input[type="text"]');
+      const searchInput = renderResult.container.querySelector('input[type="text"]') as HTMLInputElement | null;
       expect(searchInput).toBeDefined();
 
       // Measure search input performance
@@ -389,7 +389,7 @@ describe('TaskLogs Performance Benchmarks', () => {
         />
       );
 
-      const searchInput = renderResult.container.querySelector('input[type="text"]');
+      const searchInput = renderResult.container.querySelector('input[type="text"]') as HTMLInputElement | null;
       expect(searchInput).toBeDefined();
 
       const complexQueries = [
@@ -699,7 +699,7 @@ describe('TaskLogs Performance Benchmarks', () => {
       }
 
       // Measure search
-      const searchInput = initialResult.container.querySelector('input[type="text"]');
+      const searchInput = initialResult.container.querySelector('input[type="text"]') as HTMLInputElement | null;
       if (searchInput) {
         measurePerformanceVoid(() => {
           searchInput.value = 'test';
