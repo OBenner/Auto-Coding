@@ -35,7 +35,7 @@ for (const envPath of possibleEnvPaths) {
   }
 }
 
-import { app, BrowserWindow, shell, nativeImage, session, screen } from 'electron';
+import { app, BrowserWindow, shell, nativeImage, session, screen, Menu } from 'electron';
 import { join } from 'path';
 import { accessSync, readFileSync, writeFileSync, rmSync, cpSync, readdirSync, mkdirSync } from 'fs';
 import { electronApp, optimizer, is } from '@electron-toolkit/utils';
@@ -48,11 +48,12 @@ import { initializeUsageMonitorForwarding } from './ipc-handlers/terminal-handle
 import { initializeAppUpdater, stopPeriodicUpdates } from './app-updater';
 import { DEFAULT_APP_SETTINGS, IPC_CHANNELS } from '../shared/constants';
 import { readSettingsFile } from './settings-utils';
-import { setupErrorLogging } from './app-logger';
+import { appLog, setupErrorLogging } from './app-logger';
 import { initSentryMain } from './sentry';
 import { preWarmToolCache } from './cli-tool-manager';
 import { initializeClaudeProfileManager, getClaudeProfileManager } from './claude-profile-manager';
 import { isMacOS, isWindows } from './platform';
+import { setupMCPLifecycle } from './mcp-manager';
 import type { AppSettings, AuthFailureInfo } from '../shared/types';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -140,6 +141,11 @@ let mainWindow: BrowserWindow | null = null;
 let agentManager: AgentManager | null = null;
 let terminalManager: TerminalManager | null = null;
 
+// Capture child process exits (renderer/GPU/utility) for crash diagnostics.
+app.on('child-process-gone', (_event, details) => {
+  appLog.error('[main] child-process-gone:', details);
+});
+
 function createWindow(): void {
   // Get the primary display's work area (accounts for taskbar, dock, etc.)
   // Wrapped in try/catch to handle potential failures with fallback to safe defaults
@@ -195,13 +201,19 @@ function createWindow(): void {
       sandbox: true,
       contextIsolation: true,
       nodeIntegration: false,
-      backgroundThrottling: false // Prevent terminal lag when window loses focus
+      backgroundThrottling: false, // Prevent terminal lag when window loses focus
+      spellcheck: true
     }
   });
 
   // Show window when ready to avoid visual flash
   mainWindow.on('ready-to-show', () => {
     mainWindow?.show();
+  });
+
+  // Capture renderer process crashes/termination reasons for diagnostics.
+  mainWindow.webContents.on('render-process-gone', (_event, details) => {
+    appLog.error('[main] render-process-gone:', details);
   });
 
   // Handle external links with URL scheme allowlist for security
@@ -225,6 +237,44 @@ function createWindow(): void {
     return { action: 'deny' };
   });
 
+  // Spell check context menu: show suggestions, "Add to Dictionary", and standard edit actions
+  mainWindow.webContents.on('context-menu', (event, params) => {
+    if (!params.misspelledWord) return;
+    event.preventDefault();
+
+    const menuItems: Electron.MenuItemConstructorOptions[] = params.dictionarySuggestions.map(
+      (suggestion) => ({
+        label: suggestion,
+        click: () => {
+          try {
+            if (mainWindow && typeof mainWindow.webContents.replaceMisspelling === 'function') {
+              mainWindow.webContents.replaceMisspelling(suggestion);
+            }
+          } catch (err) {
+            console.error('[Spellcheck] Failed to replace misspelling:', err);
+          }
+        },
+      })
+    );
+    if (menuItems.length > 0) {
+      menuItems.push({ type: 'separator' });
+    }
+    menuItems.push({
+      label: 'Add to Dictionary',
+      click: () => {
+        try {
+          const ses = mainWindow?.webContents?.session;
+          if (ses && typeof ses.addWordToSpellCheckerDictionary === 'function') {
+            ses.addWordToSpellCheckerDictionary(params.misspelledWord);
+          }
+        } catch (err) {
+          console.error('[Spellcheck] Failed to add word to dictionary:', err);
+        }
+      },
+    });
+    Menu.buildFromTemplate(menuItems).popup({ window: mainWindow ?? undefined });
+  });
+
   // Load the renderer
   // In dev mode, electron-vite sets ELECTRON_RENDERER_URL to the Vite dev server
   // Only use the URL if explicitly set - don't fallback based on is.dev
@@ -245,6 +295,10 @@ function createWindow(): void {
 
   // Clean up on close
   mainWindow.on('closed', () => {
+    // Kill all agents when window closes (prevents orphaned processes)
+    agentManager?.killAll?.()?.catch((err: unknown) => {
+      console.warn('[main] Error killing agents on window close:', err);
+    });
     mainWindow = null;
   });
 }
@@ -346,6 +400,10 @@ if (isWindows()) {
   app.commandLine.appendSwitch('disable-gpu-program-cache');
   console.log('[main] Applied Windows GPU cache fixes');
 }
+
+// Setup MCP server lifecycle (starts server if ELECTRON_MCP_ENABLED=true)
+// This integrates with Electron's app lifecycle for automatic startup/shutdown
+setupMCPLifecycle();
 
 // Initialize the application
 app.whenReady().then(() => {

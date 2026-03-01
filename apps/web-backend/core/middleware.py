@@ -7,14 +7,15 @@ Records request metrics to Redis for usage analytics and billing.
 
 import logging
 import time
-from typing import Callable, Optional
+from collections.abc import Callable
+
+from fastapi import status
+from services.usage_tracker import UsageTracker
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.requests import Request
-from starlette.responses import Response, JSONResponse
-from fastapi import status
+from starlette.responses import JSONResponse, Response
 
-from services.usage_tracker import UsageTracker
 from core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -49,10 +50,10 @@ class UsageTrackingMiddleware(BaseHTTPMiddleware):
     def __init__(
         self,
         app,
-        usage_tracker: Optional[UsageTracker] = None,
+        usage_tracker: UsageTracker | None = None,
         rate_limit_enabled: bool = False,
         rate_limit_requests: int = 1000,
-        rate_limit_period: str = "hourly"
+        rate_limit_period: str = "hourly",
     ):
         """
         Initialize usage tracking middleware.
@@ -86,7 +87,7 @@ class UsageTrackingMiddleware(BaseHTTPMiddleware):
             f"(rate_limit_enabled={rate_limit_enabled})"
         )
 
-    def _get_user_id_from_request(self, request: Request) -> Optional[int]:
+    def _get_user_id_from_request(self, request: Request) -> int | None:
         """
         Extract user ID from request (from JWT token or session).
 
@@ -173,7 +174,7 @@ class UsageTrackingMiddleware(BaseHTTPMiddleware):
                 is_allowed, current_count = self.usage_tracker.check_rate_limit(
                     user_id=user_id,
                     limit=self.rate_limit_requests,
-                    period=self.rate_limit_period
+                    period=self.rate_limit_period,
                 )
 
                 if not is_allowed:
@@ -188,8 +189,8 @@ class UsageTrackingMiddleware(BaseHTTPMiddleware):
                             "detail": "Rate limit exceeded",
                             "limit": self.rate_limit_requests,
                             "period": self.rate_limit_period,
-                            "current": current_count
-                        }
+                            "current": current_count,
+                        },
                     )
             except Exception as e:
                 logger.error(f"Error checking rate limit: {e}")
@@ -206,7 +207,7 @@ class UsageTrackingMiddleware(BaseHTTPMiddleware):
                 user_id=user_id,
                 endpoint=request.url.path,
                 method=request.method,
-                status_code=response.status_code
+                status_code=response.status_code,
             )
 
             logger.debug(
@@ -218,10 +219,8 @@ class UsageTrackingMiddleware(BaseHTTPMiddleware):
             logger.error(f"Failed to record request: {e}")
             # Don't fail the request if tracking fails
 
-        # Add custom headers for debugging (optional, can be disabled in production)
+        # Add timing header for debugging (only in debug mode)
         if settings.DEBUG:
             response.headers["X-Process-Time"] = str(process_time)
-            if user_id:
-                response.headers["X-User-Id"] = str(user_id)
 
         return response

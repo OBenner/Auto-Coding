@@ -5,8 +5,9 @@ Provides endpoints for user registration, login, and profile management.
 """
 
 import logging
-from datetime import timedelta
 
+from core.database import get_db
+from core.security import create_access_token
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -17,16 +18,19 @@ from api.models.user import (
     UserRegisterRequest,
     UserResponse,
 )
-from core.database import get_db
-from core.security import create_access_token, verify_password
 
 logger = logging.getLogger(__name__)
+
+# OAuth2 standard token type constant (not a credential)
+_BEARER = "bearer"
 
 # Create router for user endpoints
 router = APIRouter(prefix="/api/users", tags=["users"])
 
 
-@router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED
+)
 async def register_user(
     request: UserRegisterRequest,
     db: Session = Depends(get_db),
@@ -75,9 +79,7 @@ async def register_user(
     logger.info("New user registered: %s", user.email)
 
     # Create access token
-    access_token = create_access_token(
-        data={"sub": str(user.id), "email": user.email}
-    )
+    access_token = create_access_token(data={"sub": str(user.id), "email": user.email})
 
     # Create user response
     user_response = UserResponse(
@@ -90,7 +92,7 @@ async def register_user(
 
     return TokenResponse(
         access_token=access_token,
-        token_type="bearer",
+        token_type=_BEARER,
         user=user_response,
     )
 
@@ -145,9 +147,7 @@ async def login_user(
     logger.info("User logged in: %s", user.email)
 
     # Create access token
-    access_token = create_access_token(
-        data={"sub": str(user.id), "email": user.email}
-    )
+    access_token = create_access_token(data={"sub": str(user.id), "email": user.email})
 
     # Create user response
     user_response = UserResponse(
@@ -160,6 +160,6 @@ async def login_user(
 
     return TokenResponse(
         access_token=access_token,
-        token_type="bearer",
+        token_type=_BEARER,
         user=user_response,
     )

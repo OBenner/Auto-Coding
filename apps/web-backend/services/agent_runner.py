@@ -3,27 +3,65 @@ Agent Runner Service
 
 Service layer for executing Auto Code agents (planner, coder, qa_reviewer, qa_fixer).
 This service wraps the backend agent execution logic and provides async task management.
+Integrates with WebSocket event broadcasting for real-time progress updates.
 """
 
 import asyncio
 import logging
 import sys
-from datetime import datetime
 from pathlib import Path
-from typing import Dict, Optional
-
-from api.models.agent_event import (
-    ExecutionEvent,
-    ExecutionProgressData,
-    LogEvent,
-    ErrorEvent,
-)
-from api.websocket import manager
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
+
+# WebSocket broadcast functions (imported lazily to avoid circular imports)
+_broadcast_execution_event = None
+_broadcast_log_event = None
+_broadcast_error_event = None
+
+
+def _init_websocket_broadcast():
+    """
+    Initialize WebSocket broadcast functions from the websocket module.
+
+    This function is called lazily to avoid circular import issues and
+    to ensure WebSocket broadcasting is only initialized when needed.
+    """
+    global _broadcast_execution_event, _broadcast_log_event, _broadcast_error_event
+
+    if _broadcast_execution_event is not None:
+        return  # Already initialized
+
+    try:
+        from api.websocket import (
+            broadcast_error_event,
+            broadcast_execution_event,
+            broadcast_log_event,
+        )
+
+        _broadcast_execution_event = broadcast_execution_event
+        _broadcast_log_event = broadcast_log_event
+        _broadcast_error_event = broadcast_error_event
+        logger.debug("WebSocket broadcast functions initialized")
+    except ImportError as e:
+        logger.warning(f"WebSocket broadcast functions not available: {e}")
+        _broadcast_execution_event = _noop_broadcast
+        _broadcast_log_event = _noop_broadcast
+        _broadcast_error_event = _noop_broadcast
+
+
+async def _noop_broadcast(*args, **kwargs):
+    """No-op broadcast function when WebSocket module is unavailable."""
+
+
+def _sanitize_log(value: str) -> str:
+    """Sanitize value for safe logging (prevent log injection)."""
+    return str(value).replace("\n", "\\n").replace("\r", "\\r")
+
+
 # Keep track of running agent tasks
-_running_tasks: Dict[str, asyncio.Task] = {}
+_running_tasks: dict[str, asyncio.Task] = {}
 
 
 def _get_backend_path() -> Path:
@@ -33,7 +71,6 @@ def _get_backend_path() -> Path:
     Returns:
         Path to the backend directory
     """
-    # Assuming web-backend and backend are siblings under apps/
     web_backend_dir = Path(__file__).parent.parent
     backend_dir = web_backend_dir.parent / "backend"
 
@@ -53,102 +90,13 @@ def _ensure_backend_in_path():
         sys.path.insert(0, backend_path)
 
 
-async def _broadcast_execution_event(
-    spec_id: str,
-    phase: str,
-    phase_progress: float = 0.0,
-    overall_progress: float = 0.0,
-    message: Optional[str] = None,
-    current_subtask: Optional[str] = None,
-):
-    """
-    Broadcast an execution event to all subscribed clients.
-
-    Args:
-        spec_id: Spec ID
-        phase: Current execution phase
-        phase_progress: Progress within current phase (0-100)
-        overall_progress: Overall build progress (0-100)
-        message: Human-readable status message
-        current_subtask: Currently executing subtask ID
-    """
-    try:
-        event = ExecutionEvent(
-            timestamp=datetime.now().isoformat(),
-            spec_id=spec_id,
-            data=ExecutionProgressData(
-                phase=phase,
-                phase_progress=phase_progress,
-                overall_progress=overall_progress,
-                message=message,
-                current_subtask=current_subtask,
-            ),
-        )
-        await manager.broadcast_to_spec(spec_id, event)
-    except Exception as e:
-        logger.error(f"Failed to broadcast execution event: {e}")
-
-
-async def _broadcast_log_event(
-    spec_id: str,
-    log_line: str,
-    level: str = "info",
-):
-    """
-    Broadcast a log event to all subscribed clients.
-
-    Args:
-        spec_id: Spec ID
-        log_line: Log message
-        level: Log level (debug, info, warning, error)
-    """
-    try:
-        event = LogEvent(
-            timestamp=datetime.now().isoformat(),
-            spec_id=spec_id,
-            log_line=log_line,
-            level=level,
-        )
-        await manager.broadcast_to_spec(spec_id, event)
-    except Exception as e:
-        logger.error(f"Failed to broadcast log event: {e}")
-
-
-async def _broadcast_error_event(
-    spec_id: str,
-    error_message: str,
-    error_type: Optional[str] = None,
-    traceback: Optional[str] = None,
-):
-    """
-    Broadcast an error event to all subscribed clients.
-
-    Args:
-        spec_id: Spec ID
-        error_message: Error message
-        error_type: Error type/category
-        traceback: Error traceback if available
-    """
-    try:
-        event = ErrorEvent(
-            timestamp=datetime.now().isoformat(),
-            spec_id=spec_id,
-            error_message=error_message,
-            error_type=error_type,
-            traceback=traceback,
-        )
-        await manager.broadcast_to_spec(spec_id, event)
-    except Exception as e:
-        logger.error(f"Failed to broadcast error event: {e}")
-
-
 async def run_agent_async(
     spec_id: str,
     agent_type: str,
-    project_dir: Optional[Path] = None,
+    project_dir: Path | None = None,
     model: str = "claude-sonnet-4-5-20250929",
     verbose: bool = False,
-) -> Dict[str, any]:
+) -> dict[str, Any]:
     """
     Run an agent asynchronously.
 
@@ -166,6 +114,9 @@ async def run_agent_async(
         ValueError: If agent_type is invalid
         FileNotFoundError: If spec not found
     """
+    # Initialize WebSocket broadcast functions
+    _init_websocket_broadcast()
+
     # Ensure backend is importable
     _ensure_backend_in_path()
 
@@ -181,7 +132,6 @@ async def run_agent_async(
 
     # Determine project directory
     if project_dir is None:
-        # Default: parent of web-backend (assumes standard layout)
         project_dir = Path(__file__).parent.parent.parent.parent
 
     # Find spec directory
@@ -195,7 +145,6 @@ async def run_agent_async(
     for candidate in specs_dir.iterdir():
         if candidate.is_dir():
             folder_name = candidate.name
-            # Match by number prefix or exact name
             if folder_name.startswith(f"{spec_id}-") or folder_name == spec_id:
                 spec_dir = candidate
                 break
@@ -203,29 +152,39 @@ async def run_agent_async(
     if spec_dir is None:
         raise FileNotFoundError(f"Spec not found: {spec_id}")
 
+    # Use spec_dir.name as the canonical spec_id for broadcasting
+    canonical_spec_id = spec_dir.name
+
     logger.info(
-        f"Starting agent execution: type={agent_type}, spec={spec_dir.name}, "
-        f"model={model}"
+        f"Starting agent execution: type={_sanitize_log(agent_type)}, spec={_sanitize_log(canonical_spec_id)}, "
+        f"model={_sanitize_log(model)}"
     )
 
-    # Broadcast execution start event
-    await _broadcast_execution_event(
-        spec_id=spec_dir.name,
-        phase=agent_type,
-        phase_progress=0.0,
-        overall_progress=0.0,
-        message=f"Starting {agent_type} agent",
-    )
+    # Broadcast agent start event
+    phase_map = {
+        "planner": "planning",
+        "coder": "coding",
+        "qa_reviewer": "qa_review",
+        "qa_fixer": "qa_fixing",
+    }
+    if _broadcast_execution_event is not None:
+        await _broadcast_execution_event(
+            spec_id=canonical_spec_id,
+            phase=phase_map.get(agent_type, "idle"),
+            phase_progress=0.0,
+            overall_progress=0.0,
+            message=f"Starting {agent_type} agent",
+            current_subtask=None,
+        )
 
     try:
-        # Execute agent based on type
         if agent_type == "planner":
-            # Run planner agent
-            await _broadcast_log_event(
-                spec_id=spec_dir.name,
-                log_line=f"Starting planner agent execution",
-                level="info",
-            )
+            if _broadcast_log_event:
+                await _broadcast_log_event(
+                    spec_id=canonical_spec_id,
+                    log_line=f"Running planner agent with model {model}",
+                    level="info",
+                )
 
             success = await run_followup_planner(
                 project_dir=project_dir,
@@ -234,69 +193,68 @@ async def run_agent_async(
                 verbose=verbose,
             )
 
-            # Broadcast completion
             if success:
-                await _broadcast_execution_event(
-                    spec_id=spec_dir.name,
-                    phase="planning",
-                    phase_progress=100.0,
-                    overall_progress=50.0,
-                    message="Planner execution completed successfully",
-                )
+                if _broadcast_execution_event:
+                    await _broadcast_execution_event(
+                        spec_id=canonical_spec_id,
+                        phase="complete",
+                        phase_progress=100.0,
+                        overall_progress=100.0,
+                        message="Planner execution completed successfully",
+                        current_subtask=None,
+                    )
             else:
-                await _broadcast_execution_event(
-                    spec_id=spec_dir.name,
-                    phase="failed",
-                    phase_progress=0.0,
-                    overall_progress=0.0,
-                    message="Planner execution failed",
-                )
+                if _broadcast_execution_event:
+                    await _broadcast_execution_event(
+                        spec_id=canonical_spec_id,
+                        phase="failed",
+                        phase_progress=0.0,
+                        overall_progress=0.0,
+                        message="Planner execution failed",
+                        current_subtask=None,
+                    )
 
             return {
                 "success": success,
                 "agent_type": agent_type,
-                "spec_id": spec_dir.name,
-                "message": "Planner execution completed" if success else "Planner execution failed"
+                "spec_id": canonical_spec_id,
+                "message": "Planner execution completed"
+                if success
+                else "Planner execution failed",
             }
 
         elif agent_type in ["coder", "qa_reviewer", "qa_fixer"]:
-            # Broadcast start of execution
-            phase_map = {
-                "coder": "coding",
-                "qa_reviewer": "qa_review",
-                "qa_fixer": "qa_fixing",
-            }
+            if _broadcast_log_event:
+                await _broadcast_log_event(
+                    spec_id=canonical_spec_id,
+                    log_line=f"Running {agent_type} agent with model {model}",
+                    level="info",
+                )
 
-            await _broadcast_log_event(
-                spec_id=spec_dir.name,
-                log_line=f"Starting {agent_type} execution",
-                level="info",
-            )
-
-            # Run main autonomous agent (handles coder + QA flow)
             await run_autonomous_agent(
                 project_dir=project_dir,
                 spec_dir=spec_dir,
                 model=model,
-                max_iterations=None,  # Unlimited iterations
+                max_iterations=None,
                 verbose=verbose,
-                source_spec_dir=None,  # Not using worktree in web mode
+                source_spec_dir=None,
             )
 
-            # Broadcast completion
-            await _broadcast_execution_event(
-                spec_id=spec_dir.name,
-                phase=phase_map.get(agent_type, agent_type),
-                phase_progress=100.0,
-                overall_progress=100.0,
-                message=f"{agent_type} execution completed",
-            )
+            if _broadcast_execution_event:
+                await _broadcast_execution_event(
+                    spec_id=canonical_spec_id,
+                    phase="complete",
+                    phase_progress=100.0,
+                    overall_progress=100.0,
+                    message=f"{agent_type} execution completed successfully",
+                    current_subtask=None,
+                )
 
             return {
                 "success": True,
                 "agent_type": agent_type,
-                "spec_id": spec_dir.name,
-                "message": f"{agent_type} execution completed"
+                "spec_id": canonical_spec_id,
+                "message": f"{agent_type} execution completed",
             }
 
         else:
@@ -305,36 +263,31 @@ async def run_agent_async(
     except Exception as e:
         logger.error(f"Agent execution failed: {e}", exc_info=True)
 
-        # Broadcast error event
-        await _broadcast_error_event(
-            spec_id=spec_dir.name,
-            error_message=str(e),
-            error_type=type(e).__name__,
-            traceback=None,  # Could include traceback if needed
-        )
+        # Use canonical_spec_id (always defined) instead of spec_dir.name
+        # to avoid UnboundLocalError if spec_dir lookup failed
+        error_spec_id = canonical_spec_id if "canonical_spec_id" in dir() else spec_id
 
-        # Broadcast execution failed state
-        await _broadcast_execution_event(
-            spec_id=spec_dir.name,
-            phase="failed",
-            phase_progress=0.0,
-            overall_progress=0.0,
-            message=f"{agent_type} execution failed: {e}",
-        )
+        if _broadcast_error_event is not None:
+            await _broadcast_error_event(
+                spec_id=error_spec_id,
+                error_message=str(e),
+                error_type=type(e).__name__,
+                traceback=None,
+            )
 
         return {
             "success": False,
             "agent_type": agent_type,
-            "spec_id": spec_id,
+            "spec_id": error_spec_id,
             "error": str(e),
-            "message": f"Agent execution failed: {e}"
+            "message": f"Agent execution failed: {e}",
         }
 
 
 def start_agent_task(
     spec_id: str,
     agent_type: str,
-    project_dir: Optional[Path] = None,
+    project_dir: Path | None = None,
     model: str = "claude-sonnet-4-5-20250929",
     verbose: bool = False,
 ) -> str:
@@ -354,15 +307,15 @@ def start_agent_task(
     Raises:
         RuntimeError: If task already running for this spec
     """
+    _init_websocket_broadcast()
+
     task_id = f"{spec_id}:{agent_type}"
 
-    # Check if already running
     if task_id in _running_tasks and not _running_tasks[task_id].done():
         raise RuntimeError(
             f"Agent task already running for spec {spec_id} (type: {agent_type})"
         )
 
-    # Create and store task
     task = asyncio.create_task(
         run_agent_async(
             spec_id=spec_id,
@@ -375,12 +328,12 @@ def start_agent_task(
 
     _running_tasks[task_id] = task
 
-    logger.info(f"Started agent task: {task_id}")
+    logger.info(f"Started agent task: {_sanitize_log(task_id)}")
 
     return task_id
 
 
-def get_task_status(task_id: str) -> Optional[Dict[str, any]]:
+def get_task_status(task_id: str) -> dict[str, Any] | None:
     """
     Get the status of a running task.
 
@@ -432,17 +385,14 @@ def cancel_task(task_id: str) -> bool:
         return False
 
     task.cancel()
-    logger.info(f"Cancelled agent task: {task_id}")
+    logger.info(f"Cancelled agent task: {_sanitize_log(task_id)}")
 
     return True
 
 
 def cleanup_completed_tasks():
     """Remove completed tasks from tracking"""
-    completed = [
-        task_id for task_id, task in _running_tasks.items()
-        if task.done()
-    ]
+    completed = [task_id for task_id, task in _running_tasks.items() if task.done()]
 
     for task_id in completed:
         del _running_tasks[task_id]

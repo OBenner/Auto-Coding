@@ -30,7 +30,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -151,7 +151,7 @@ class CostTracker:
             "spec_dir": str(self.spec_dir),
             "total_cost": self.get_total_cost(),
             "records": [record.to_dict() for record in self.records],
-            "last_updated": datetime.utcnow().isoformat() + "Z",
+            "last_updated": datetime.now(UTC).isoformat() + "Z",
         }
 
         with open(self._report_file, "w", encoding="utf-8") as f:
@@ -210,7 +210,7 @@ class CostTracker:
             input_tokens=input_tokens,
             output_tokens=output_tokens,
             cost=cost,
-            timestamp=datetime.utcnow().isoformat() + "Z",
+            timestamp=datetime.now(UTC).isoformat() + "Z",
         )
 
         self.records.append(record)

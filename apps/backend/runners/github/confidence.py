@@ -46,10 +46,9 @@ from typing import Any
 
 # Import learning tracker if available
 try:
-    from .learning import LearningPattern, LearningTracker
+    from .learning import LearningTracker
 except (ImportError, ValueError, SystemError):
     LearningTracker = None
-    LearningPattern = None
 
 
 class FalsePositiveRisk(str, Enum):
