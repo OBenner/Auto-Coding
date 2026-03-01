@@ -17,7 +17,7 @@ import json
 import os
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, patch, Mock
+from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 
@@ -54,17 +54,10 @@ def mock_openai_api():
         # Mock successful GPT-4 response
         mock_response = Mock()
         mock_response.choices = [
-            Mock(
-                message=Mock(
-                    content="Test response from GPT-4",
-                    role="assistant"
-                )
-            )
+            Mock(message=Mock(content="Test response from GPT-4", role="assistant"))
         ]
         mock_response.usage = Mock(
-            prompt_tokens=100,
-            completion_tokens=50,
-            total_tokens=150
+            prompt_tokens=100, completion_tokens=50, total_tokens=150
         )
         mock_response.model = "gpt-4"
 
@@ -130,11 +123,11 @@ def create_implementation_plan(spec_dir: Path) -> Path:
                     {
                         "id": "subtask-1-1",
                         "description": "Test subtask",
-                        "status": "pending"
+                        "status": "pending",
                     }
-                ]
+                ],
             }
-        ]
+        ],
     }
     plan_file.write_text(json.dumps(plan_data, indent=2))
     return plan_file
@@ -171,8 +164,12 @@ class TestOpenAIProviderConfiguration:
         config = ProviderConfig.from_env()
 
         # Verify configuration
-        assert config.provider == "litellm", f"Provider should be litellm, got {config.provider}"
-        assert config.get_model_for_provider() == "gpt-4", f"Model should be gpt-4, got {config.get_model_for_provider()}"
+        assert config.provider == "litellm", (
+            f"Provider should be litellm, got {config.provider}"
+        )
+        assert config.get_model_for_provider() == "gpt-4", (
+            f"Model should be gpt-4, got {config.get_model_for_provider()}"
+        )
 
     def test_openai_api_key_required(self, test_env_openai, monkeypatch):
         """Test that OpenAI API key is required for litellm provider."""
@@ -214,7 +211,7 @@ class TestOpenAICostTracking:
 
     def test_cost_calculation_for_gpt4(self, test_env_openai):
         """Test that cost calculation works correctly for GPT-4."""
-        from core.cost_tracking import CostTracker, MODEL_PRICING
+        from core.cost_tracking import MODEL_PRICING, CostTracker
 
         temp_dir, spec_dir, project_dir = test_env_openai
 
@@ -282,8 +279,8 @@ class TestOpenAIProviderFactory:
 
     def test_create_litellm_provider(self, test_env_openai, monkeypatch):
         """Test creating LiteLLM provider for OpenAI."""
-        from core.providers.factory import create_engine_provider
         from core.providers.config import ProviderConfig
+        from core.providers.factory import create_engine_provider
 
         temp_dir, spec_dir, project_dir = test_env_openai
 
@@ -301,7 +298,9 @@ class TestOpenAIProviderFactory:
         # Verify the factory can actually instantiate the provider
         provider = create_engine_provider(config)
         assert provider is not None, "create_engine_provider should return a provider"
-        assert provider.name == "litellm", f"Provider name should be 'litellm', got {provider.name!r}"
+        assert provider.name == "litellm", (
+            f"Provider name should be 'litellm', got {provider.name!r}"
+        )
 
 
 # =============================================================================
@@ -314,7 +313,7 @@ class TestE2EOpenAIIntegration:
 
     @pytest.mark.skipif(
         not os.getenv("OPENAI_API_KEY"),
-        reason="OPENAI_API_KEY not set - skipping live API test"
+        reason="OPENAI_API_KEY not set - skipping live API test",
     )
     def test_e2e_openai_provider_live(self, test_env_openai, monkeypatch):
         """
@@ -323,8 +322,8 @@ class TestE2EOpenAIIntegration:
         This test makes actual API calls to OpenAI if OPENAI_API_KEY is set.
         Skip if running in CI or without API key.
         """
-        from core.providers.config import ProviderConfig
         from core.cost_tracking import CostTracker
+        from core.providers.config import ProviderConfig
 
         temp_dir, spec_dir, project_dir = test_env_openai
 
@@ -366,14 +365,16 @@ class TestE2EOpenAIIntegration:
         # Verify cost is positive
         assert cost_report["total_cost"] > 0, "Total cost should be positive"
 
-    def test_e2e_openai_provider_mock(self, test_env_openai, monkeypatch, mock_openai_api):
+    def test_e2e_openai_provider_mock(
+        self, test_env_openai, monkeypatch, mock_openai_api
+    ):
         """
         E2E Test (MOCKED): Configure OpenAI provider and verify flow.
 
         This test uses mocked API responses for fast, offline testing.
         """
-        from core.providers.config import ProviderConfig
         from core.cost_tracking import CostTracker
+        from core.providers.config import ProviderConfig
 
         temp_dir, spec_dir, project_dir = test_env_openai
 
@@ -384,8 +385,12 @@ class TestE2EOpenAIIntegration:
 
         # Step 2: Verify provider configuration loaded correctly
         config = ProviderConfig.from_env()
-        assert config.provider == "litellm", f"Provider should be litellm, got {config.provider}"
-        assert config.get_model_for_provider() == "gpt-4", f"Model should be gpt-4, got {config.get_model_for_provider()}"
+        assert config.provider == "litellm", (
+            f"Provider should be litellm, got {config.provider}"
+        )
+        assert config.get_model_for_provider() == "gpt-4", (
+            f"Model should be gpt-4, got {config.get_model_for_provider()}"
+        )
 
         # Step 3: Create minimal spec and plan
         spec_file = create_simple_spec(spec_dir)
@@ -440,8 +445,8 @@ class TestE2EOpenAIIntegration:
         """
         E2E Test: Per-agent provider configuration with mixed Claude/OpenAI.
         """
-        from phase_config import get_provider_for_agent
         from core.cost_tracking import CostTracker
+        from phase_config import get_provider_for_agent
 
         temp_dir, spec_dir, project_dir = test_env_openai
 
@@ -554,6 +559,7 @@ def print_manual_test_procedure():
 def run_all_tests():
     """Run all tests using pytest."""
     import sys
+
     sys.exit(pytest.main([__file__, "-v", "--tb=short"]))
 
 
@@ -562,7 +568,7 @@ if __name__ == "__main__":
     print_manual_test_procedure()
 
     # Run automated tests
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("Running Automated E2E Tests...")
-    print("="*70 + "\n")
+    print("=" * 70 + "\n")
     run_all_tests()

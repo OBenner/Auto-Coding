@@ -16,23 +16,24 @@ Tests cover:
 """
 
 import json
-import tempfile
-from pathlib import Path
-import pytest
 
 # Add auto-claude to path for imports
 import sys
+import tempfile
+from pathlib import Path
+
+import pytest
+
 sys.path.insert(0, str(Path(__file__).parent.parent / "apps" / "backend"))
 
 from analysis.owasp_scanner import (
-    OWASPVulnerability,
-    OWASPScanResult,
-    OWASPScanner,
     OWASP_CATEGORIES,
-    scan_for_owasp_issues,
+    OWASPScanner,
+    OWASPScanResult,
+    OWASPVulnerability,
     has_owasp_issues,
+    scan_for_owasp_issues,
 )
-
 
 # =============================================================================
 # FIXTURES
@@ -352,7 +353,9 @@ def run_cmd(user_input):
         result = scanner.scan(temp_dir, include_patterns=["A03"])
 
         assert result.total_vulnerabilities > 0
-        injection_vulns = [v for v in result.vulnerabilities if "injection" in v.title.lower()]
+        injection_vulns = [
+            v for v in result.vulnerabilities if "injection" in v.title.lower()
+        ]
         assert len(injection_vulns) > 0
 
     def test_detect_weak_crypto(self, scanner, temp_dir):
@@ -384,7 +387,8 @@ api_key = "PLACEHOLDER_TEST_KEY_ABCDEFGHIJKLMNOPQR"
 
         assert result.total_vulnerabilities > 0
         cred_vulns = [
-            v for v in result.vulnerabilities
+            v
+            for v in result.vulnerabilities
             if "hardcoded" in v.title.lower() or "password" in v.title.lower()
         ]
         assert len(cred_vulns) > 0
@@ -499,7 +503,8 @@ token = "jwt_token_here_12345"
         result = scanner.scan(temp_dir, include_patterns=["A02"])
 
         cred_vulns = [
-            v for v in result.vulnerabilities
+            v
+            for v in result.vulnerabilities
             if v.category == "A02" and v.title == "Hardcoded credential"
         ]
         assert len(cred_vulns) > 0
@@ -610,10 +615,7 @@ def unsafe(user_input):
         (temp_dir / "safe.py").write_text("print('safe')")
         (temp_dir / "unsafe.py").write_text("eval('unsafe')")
 
-        result = scanner.scan_injection_risks(
-            temp_dir,
-            files_to_scan=["unsafe.py"]
-        )
+        result = scanner.scan_injection_risks(temp_dir, files_to_scan=["unsafe.py"])
 
         # Should only scan unsafe.py
         files_scanned = set(v.file for v in result)
@@ -665,11 +667,11 @@ hashlib.md5(b"test")
         """Test severity levels for different categories."""
         severity_map = {
             "A03": "critical",  # Injection
-            "A01": "high",      # Broken Access Control
-            "A02": "high",      # Cryptographic Failures
-            "A04": "medium",    # Insecure Design
-            "A05": "medium",    # Security Misconfiguration
-            "A09": "low",       # Logging Failures
+            "A01": "high",  # Broken Access Control
+            "A02": "high",  # Cryptographic Failures
+            "A04": "medium",  # Insecure Design
+            "A05": "medium",  # Security Misconfiguration
+            "A09": "low",  # Logging Failures
         }
 
         for category, expected_severity in severity_map.items():

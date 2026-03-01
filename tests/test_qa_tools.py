@@ -9,15 +9,16 @@ Tests the qa.py tools module functionality including:
 """
 
 import json
-import pytest
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock
 
+import pytest
+
 # Store original modules for cleanup
 _original_modules = {}
 _mocked_module_names = [
-    'claude_agent_sdk',
+    "claude_agent_sdk",
 ]
 
 for name in _mocked_module_names:
@@ -28,6 +29,7 @@ for name in _mocked_module_names:
 # The SDK isn't available in the test environment
 mock_agent_sdk = MagicMock()
 
+
 # Create a mock tool decorator that just returns the function
 def mock_tool_decorator(name, description, params):
     def decorator(func):
@@ -35,13 +37,15 @@ def mock_tool_decorator(name, description, params):
         func._tool_description = description
         func._tool_params = params
         return func
+
     return decorator
 
+
 mock_agent_sdk.tool = mock_tool_decorator
-sys.modules['claude_agent_sdk'] = mock_agent_sdk
+sys.modules["claude_agent_sdk"] = mock_agent_sdk
 
 # Force fresh import so the module picks up our mock_tool_decorator
-for _mod in ['agents.tools_pkg.tools.qa', 'agents.tools_pkg.tools', 'agents.tools_pkg']:
+for _mod in ["agents.tools_pkg.tools.qa", "agents.tools_pkg.tools", "agents.tools_pkg"]:
     sys.modules.pop(_mod, None)
 
 
@@ -161,7 +165,9 @@ class TestGetQAStatus:
         assert "✗ unit" in text
         assert "✓ integration" in text
 
-    async def test_get_qa_status_missing_qa_signoff(self, spec_dir: Path, project_dir: Path):
+    async def test_get_qa_status_missing_qa_signoff(
+        self, spec_dir: Path, project_dir: Path
+    ):
         """get_qa_status returns pending message when qa_signoff missing."""
         # Create plan without QA signoff
         plan = {
@@ -183,7 +189,9 @@ class TestGetQAStatus:
         assert "QA has not been run yet" in text
         assert "Status: pending" in text
 
-    async def test_get_qa_status_empty_qa_signoff(self, spec_dir: Path, project_dir: Path):
+    async def test_get_qa_status_empty_qa_signoff(
+        self, spec_dir: Path, project_dir: Path
+    ):
         """get_qa_status handles empty qa_signoff object."""
         # Create plan with empty QA signoff
         plan = {
@@ -205,7 +213,9 @@ class TestGetQAStatus:
         assert "QA has not been run yet" in text
         assert "Status: pending" in text
 
-    async def test_get_qa_status_missing_plan_file(self, spec_dir: Path, project_dir: Path):
+    async def test_get_qa_status_missing_plan_file(
+        self, spec_dir: Path, project_dir: Path
+    ):
         """get_qa_status returns error when implementation_plan.json missing."""
         # Don't create plan file
 
@@ -221,7 +231,9 @@ class TestGetQAStatus:
         assert "No implementation plan found" in text
         assert "Run the planner first" in text
 
-    async def test_get_qa_status_different_statuses(self, spec_dir: Path, project_dir: Path):
+    async def test_get_qa_status_different_statuses(
+        self, spec_dir: Path, project_dir: Path
+    ):
         """get_qa_status handles different QA status values."""
         statuses = ["pending", "in_review", "approved", "rejected", "fixes_applied"]
 
@@ -251,7 +263,9 @@ class TestGetQAStatus:
             text = result["content"][0]["text"]
             assert f"QA Status: {status}" in text
 
-    async def test_get_qa_status_ready_for_revalidation(self, spec_dir: Path, project_dir: Path):
+    async def test_get_qa_status_ready_for_revalidation(
+        self, spec_dir: Path, project_dir: Path
+    ):
         """get_qa_status shows ready_for_qa_revalidation flag."""
         # Create plan with fixes_applied status
         plan = {
@@ -296,7 +310,9 @@ class TestGetQAStatus:
         text = result["content"][0]["text"]
         assert "Error reading QA status" in text
 
-    async def test_get_qa_status_issue_as_string(self, spec_dir: Path, project_dir: Path):
+    async def test_get_qa_status_issue_as_string(
+        self, spec_dir: Path, project_dir: Path
+    ):
         """get_qa_status handles issues as plain strings."""
         # Create plan with string issues (legacy format)
         plan = {
@@ -333,7 +349,9 @@ class TestGetQAStatus:
 class TestUpdateQAStatus:
     """Tests for update_qa_status tool."""
 
-    async def test_update_qa_status_creates_signoff(self, spec_dir: Path, project_dir: Path):
+    async def test_update_qa_status_creates_signoff(
+        self, spec_dir: Path, project_dir: Path
+    ):
         """update_qa_status creates qa_signoff when it doesn't exist."""
         # Create plan without QA signoff
         plan = {
@@ -348,11 +366,13 @@ class TestUpdateQAStatus:
         update_qa_status = tools[0]
 
         # Call the tool
-        result = await update_qa_status({
-            "status": "approved",
-            "issues": "[]",
-            "tests_passed": '{"unit": true, "integration": true}',
-        })
+        result = await update_qa_status(
+            {
+                "status": "approved",
+                "issues": "[]",
+                "tests_passed": '{"unit": true, "integration": true}',
+            }
+        )
 
         # Check result
         text = result["content"][0]["text"]
@@ -363,7 +383,9 @@ class TestUpdateQAStatus:
         assert "qa_signoff" in updated_plan
         assert updated_plan["qa_signoff"]["status"] == "approved"
 
-    async def test_update_qa_status_invalid_status(self, spec_dir: Path, project_dir: Path):
+    async def test_update_qa_status_invalid_status(
+        self, spec_dir: Path, project_dir: Path
+    ):
         """update_qa_status rejects invalid status values."""
         # Create plan
         plan = {
@@ -378,17 +400,21 @@ class TestUpdateQAStatus:
         update_qa_status = tools[0]
 
         # Call the tool with invalid status
-        result = await update_qa_status({
-            "status": "invalid_status",
-            "issues": "[]",
-            "tests_passed": "{}",
-        })
+        result = await update_qa_status(
+            {
+                "status": "invalid_status",
+                "issues": "[]",
+                "tests_passed": "{}",
+            }
+        )
 
         # Check result
         text = result["content"][0]["text"]
         assert "Error: Invalid QA status" in text
 
-    async def test_update_qa_status_missing_plan(self, spec_dir: Path, project_dir: Path):
+    async def test_update_qa_status_missing_plan(
+        self, spec_dir: Path, project_dir: Path
+    ):
         """update_qa_status returns error when plan file missing."""
         # Don't create plan file
 
@@ -397,11 +423,13 @@ class TestUpdateQAStatus:
         update_qa_status = tools[0]
 
         # Call the tool
-        result = await update_qa_status({
-            "status": "approved",
-            "issues": "[]",
-            "tests_passed": "{}",
-        })
+        result = await update_qa_status(
+            {
+                "status": "approved",
+                "issues": "[]",
+                "tests_passed": "{}",
+            }
+        )
 
         # Check result
         text = result["content"][0]["text"]

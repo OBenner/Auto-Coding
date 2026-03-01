@@ -15,31 +15,35 @@ Run this manually to verify the E2E flow works correctly.
 import json
 import sys
 import tempfile
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
 
 # Add apps/backend to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "apps" / "backend"))
 
-from qa.loop import check_user_correction, QA_FIX_REQUEST_MARKER
-from qa.report import initialize_learning_metrics, increment_learning_metric, get_learning_metrics
 from analysis.metrics_tracker import get_detailed_metrics
 from integrations.graphiti.queries_pkg.schema import EPISODE_TYPE_USER_CORRECTION
+from qa.loop import QA_FIX_REQUEST_MARKER, check_user_correction
+from qa.report import (
+    get_learning_metrics,
+    increment_learning_metric,
+    initialize_learning_metrics,
+)
 
 
 def print_step(step_num: int, description: str):
     """Print a formatted step header."""
-    print(f"\n{'='*70}")
+    print(f"\n{'=' * 70}")
     print(f"  STEP {step_num}: {description}")
-    print('='*70)
+    print("=" * 70)
 
 
 def main():
     """Run the manual user correction test."""
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("  USER CORRECTION END-TO-END TEST")
     print("  Testing subtask-5-2 verification requirements")
-    print("="*70)
+    print("=" * 70)
 
     # Create temporary directories
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -63,11 +67,11 @@ def main():
                             "type": "security_vulnerability",
                             "file": "src/auth.py",
                             "message": "JWT token validation missing",
-                            "occurrence_count": 1
+                            "occurrence_count": 1,
                         }
-                    ]
+                    ],
                 }
-            ]
+            ],
         }
         plan_file = spec_dir / "implementation_plan.json"
         plan_file.write_text(json.dumps(implementation_plan, indent=2))
@@ -121,7 +125,7 @@ This is a security best practice that should be remembered for all future authen
         content = qa_fix_file.read_text()
         has_marker = QA_FIX_REQUEST_MARKER in content
 
-        print(f"  ✓ QA_FIX_REQUEST.md created")
+        print("  ✓ QA_FIX_REQUEST.md created")
         print(f"  ✓ Auto-generated marker present: {has_marker}")
         print(f"  ✓ User correction detected: {not has_marker}")
         assert not has_marker, "File should NOT have auto-generated marker"
@@ -151,7 +155,7 @@ This is a security best practice that should be remembered for all future authen
         print(f"  ✓ EPISODE_TYPE_USER_CORRECTION = '{EPISODE_TYPE_USER_CORRECTION}'")
         assert EPISODE_TYPE_USER_CORRECTION == "user_correction"
 
-        print(f"  ✓ Episode type constant is properly defined")
+        print("  ✓ Episode type constant is properly defined")
 
         # Note: Actual Graphiti storage would happen in qa/loop.py when QA runs
         print("\n  Note: In production, this would be stored in Graphiti via:")
@@ -172,7 +176,7 @@ This is a security best practice that should be remembered for all future authen
 
         # Verify metrics
         metrics = get_learning_metrics(spec_dir)
-        print(f"\n  Learning Metrics:")
+        print("\n  Learning Metrics:")
         print(f"    - User corrections applied: {metrics['user_corrections_applied']}")
         print(f"    - Root causes identified: {metrics['root_causes_identified']}")
         print(f"    - Patterns applied: {metrics['patterns_applied']}")
@@ -181,7 +185,7 @@ This is a security best practice that should be remembered for all future authen
 
         # Get detailed metrics
         detailed = get_detailed_metrics(spec_dir)
-        print(f"\n  ✓ Detailed metrics include user corrections")
+        print("\n  ✓ Detailed metrics include user corrections")
         assert detailed["learning_metrics"]["user_corrections_applied"] == 1
 
         # =====================================================================
@@ -208,15 +212,15 @@ This is a security best practice that should be remembered for all future authen
         # =====================================================================
         # VERIFICATION SUMMARY
         # =====================================================================
-        print("\n" + "="*70)
+        print("\n" + "=" * 70)
         print("  ✅ ALL VERIFICATION STEPS COMPLETED SUCCESSFULLY")
-        print("="*70)
+        print("=" * 70)
         print("  Step 1: ✓ User manually edited QA_FIX_REQUEST.md (no marker)")
         print("  Step 2: ✓ Correction detected by check_user_correction()")
         print("  Step 3: ✓ EPISODE_TYPE_USER_CORRECTION defined")
         print("  Step 4: ✓ Metrics tracked the user correction")
         print("  Step 5: ✓ Correction available for future sessions")
-        print("="*70)
+        print("=" * 70)
         print("\n  The complete user correction flow is working correctly!")
         print("  User corrections will be learned and applied in future builds.")
         print()

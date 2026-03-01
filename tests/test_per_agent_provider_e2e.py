@@ -17,7 +17,7 @@ import json
 import os
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, patch, Mock
+from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 
@@ -53,17 +53,10 @@ def mock_multi_provider_api():
         # Mock GPT-4 response
         mock_gpt4_response = Mock()
         mock_gpt4_response.choices = [
-            Mock(
-                message=Mock(
-                    content="Test response from GPT-4",
-                    role="assistant"
-                )
-            )
+            Mock(message=Mock(content="Test response from GPT-4", role="assistant"))
         ]
         mock_gpt4_response.usage = Mock(
-            prompt_tokens=1000,
-            completion_tokens=500,
-            total_tokens=1500
+            prompt_tokens=1000, completion_tokens=500, total_tokens=1500
         )
         mock_gpt4_response.model = "gpt-4"
 
@@ -130,11 +123,11 @@ def create_implementation_plan(spec_dir: Path) -> Path:
                     {
                         "id": "subtask-1-1",
                         "description": "Test subtask",
-                        "status": "pending"
+                        "status": "pending",
                     }
-                ]
+                ],
             }
-        ]
+        ],
     }
     plan_file.write_text(json.dumps(plan_data, indent=2))
     return plan_file
@@ -169,7 +162,9 @@ class TestPerAgentProviderConfiguration:
 
         # Verify planner uses Claude
         planner_provider = get_provider_for_agent("planner")
-        assert planner_provider == "claude", f"Planner should use Claude, got {planner_provider}"
+        assert planner_provider == "claude", (
+            f"Planner should use Claude, got {planner_provider}"
+        )
 
     def test_coder_uses_openai(self, test_env_multi_provider, monkeypatch):
         """Test that coder is configured to use OpenAI via LiteLLM."""
@@ -185,7 +180,9 @@ class TestPerAgentProviderConfiguration:
 
         # Verify coder uses LiteLLM
         coder_provider = get_provider_for_agent("coder")
-        assert coder_provider == "litellm", f"Coder should use LiteLLM, got {coder_provider}"
+        assert coder_provider == "litellm", (
+            f"Coder should use LiteLLM, got {coder_provider}"
+        )
 
     def test_per_agent_provider_fallback(self, test_env_multi_provider, monkeypatch):
         """Test that agents fall back to default provider when not configured."""
@@ -199,7 +196,9 @@ class TestPerAgentProviderConfiguration:
 
         # Verify QA reviewer falls back to Claude
         qa_provider = get_provider_for_agent("qa_reviewer")
-        assert qa_provider == "claude", f"QA reviewer should fall back to Claude, got {qa_provider}"
+        assert qa_provider == "claude", (
+            f"QA reviewer should fall back to Claude, got {qa_provider}"
+        )
 
 
 # =============================================================================
@@ -236,7 +235,7 @@ class TestMultiProviderCostTracking:
 
     def test_cost_breakdown_by_provider(self, test_env_multi_provider):
         """Test that cost report shows usage breakdown by provider."""
-        from core.cost_tracking import CostTracker, MODEL_PRICING
+        from core.cost_tracking import MODEL_PRICING, CostTracker
 
         temp_dir, spec_dir, project_dir = test_env_multi_provider
 
@@ -247,7 +246,9 @@ class TestMultiProviderCostTracking:
         tracker.log_usage("coder", "gpt-4", 1000, 500)
 
         # Calculate expected costs
-        claude_pricing = MODEL_PRICING.get("claude-opus-4-20250514", MODEL_PRICING["claude-sonnet-4-5-20250929"])
+        claude_pricing = MODEL_PRICING.get(
+            "claude-opus-4-20250514", MODEL_PRICING["claude-sonnet-4-5-20250929"]
+        )
         claude_cost = (2000 / 1_000_000 * claude_pricing["input"]) + (
             1000 / 1_000_000 * claude_pricing["output"]
         )
@@ -281,11 +282,15 @@ class TestMultiProviderCostTracking:
         # Verify agent types and models are tracked correctly
         cost_report = get_cost_report(spec_dir)
 
-        planner_records = [r for r in cost_report["records"] if r["agent_type"] == "planner"]
+        planner_records = [
+            r for r in cost_report["records"] if r["agent_type"] == "planner"
+        ]
         assert len(planner_records) == 1, "Should have 1 planner record"
         assert "claude" in planner_records[0]["model"], "Planner should use Claude"
 
-        coder_records = [r for r in cost_report["records"] if r["agent_type"] == "coder"]
+        coder_records = [
+            r for r in cost_report["records"] if r["agent_type"] == "coder"
+        ]
         assert len(coder_records) == 1, "Should have 1 coder record"
         assert coder_records[0]["model"] == "gpt-4", "Coder should use GPT-4"
 
@@ -298,7 +303,9 @@ class TestMultiProviderCostTracking:
 class TestMultiProviderFactory:
     """Tests for creating providers via factory with per-agent configuration."""
 
-    def test_create_claude_provider_for_planner(self, test_env_multi_provider, monkeypatch):
+    def test_create_claude_provider_for_planner(
+        self, test_env_multi_provider, monkeypatch
+    ):
         """Test creating Claude provider for planner agent."""
         from core.providers.config import ProviderConfig
         from core.providers.factory import create_engine_provider
@@ -319,9 +326,13 @@ class TestMultiProviderFactory:
         # Verify the factory can actually instantiate the provider
         provider = create_engine_provider(config)
         assert provider is not None, "create_engine_provider should return a provider"
-        assert provider.name == "claude", f"Provider name should be 'claude', got {provider.name!r}"
+        assert provider.name == "claude", (
+            f"Provider name should be 'claude', got {provider.name!r}"
+        )
 
-    def test_create_litellm_provider_for_coder(self, test_env_multi_provider, monkeypatch):
+    def test_create_litellm_provider_for_coder(
+        self, test_env_multi_provider, monkeypatch
+    ):
         """Test creating LiteLLM provider for coder agent."""
         from core.providers.config import ProviderConfig
         from core.providers.factory import create_engine_provider
@@ -342,7 +353,9 @@ class TestMultiProviderFactory:
         # Verify the factory can actually instantiate the provider
         provider = create_engine_provider(config)
         assert provider is not None, "create_engine_provider should return a provider"
-        assert provider.name == "litellm", f"Provider name should be 'litellm', got {provider.name!r}"
+        assert provider.name == "litellm", (
+            f"Provider name should be 'litellm', got {provider.name!r}"
+        )
 
 
 # =============================================================================
@@ -355,7 +368,7 @@ class TestE2EPerAgentProviderSelection:
 
     @pytest.mark.skipif(
         not (os.getenv("ANTHROPIC_API_KEY") and os.getenv("OPENAI_API_KEY")),
-        reason="API keys not set - skipping live API test"
+        reason="API keys not set - skipping live API test",
     )
     def test_e2e_multi_provider_live(self, test_env_multi_provider, monkeypatch):
         """
@@ -364,8 +377,8 @@ class TestE2EPerAgentProviderSelection:
         This test makes actual API calls if both API keys are set.
         Skip if running in CI or without API keys.
         """
-        from core.providers.config import ProviderConfig
         from core.cost_tracking import CostTracker
+        from core.providers.config import ProviderConfig
 
         temp_dir, spec_dir, project_dir = test_env_multi_provider
 
@@ -418,8 +431,8 @@ class TestE2EPerAgentProviderSelection:
 
         This test uses mocked API responses for fast, offline testing.
         """
-        from core.providers.config import ProviderConfig
         from core.cost_tracking import CostTracker
+        from core.providers.config import ProviderConfig
 
         temp_dir, spec_dir, project_dir = test_env_multi_provider
 
@@ -434,12 +447,20 @@ class TestE2EPerAgentProviderSelection:
 
         # Step 2: Verify provider configurations loaded correctly
         planner_config = ProviderConfig.from_env(agent_type="planner")
-        assert planner_config.provider == "claude", f"Planner provider should be claude, got {planner_config.provider}"
-        assert planner_config.get_model_for_provider() == "claude-opus-4-20250514", f"Planner model should be opus, got {planner_config.get_model_for_provider()}"
+        assert planner_config.provider == "claude", (
+            f"Planner provider should be claude, got {planner_config.provider}"
+        )
+        assert planner_config.get_model_for_provider() == "claude-opus-4-20250514", (
+            f"Planner model should be opus, got {planner_config.get_model_for_provider()}"
+        )
 
         coder_config = ProviderConfig.from_env(agent_type="coder")
-        assert coder_config.provider == "litellm", f"Coder provider should be litellm, got {coder_config.provider}"
-        assert coder_config.get_model_for_provider() == "gpt-4", f"Coder model should be gpt-4, got {coder_config.get_model_for_provider()}"
+        assert coder_config.provider == "litellm", (
+            f"Coder provider should be litellm, got {coder_config.provider}"
+        )
+        assert coder_config.get_model_for_provider() == "gpt-4", (
+            f"Coder model should be gpt-4, got {coder_config.get_model_for_provider()}"
+        )
 
         # Step 3: Create minimal spec and plan
         spec_file = create_simple_spec(spec_dir)
@@ -479,13 +500,21 @@ class TestE2EPerAgentProviderSelection:
         assert len(cost_report["records"]) == 2, "Should have 2 usage records"
 
         # Step 7: Verify both providers are tracked
-        planner_record = next(r for r in cost_report["records"] if r["agent_type"] == "planner")
-        assert "claude" in planner_record["model"], f"Planner should use Claude, got {planner_record['model']}"
+        planner_record = next(
+            r for r in cost_report["records"] if r["agent_type"] == "planner"
+        )
+        assert "claude" in planner_record["model"], (
+            f"Planner should use Claude, got {planner_record['model']}"
+        )
         assert planner_record["input_tokens"] == 2000
         assert planner_record["output_tokens"] == 1000
 
-        coder_record = next(r for r in cost_report["records"] if r["agent_type"] == "coder")
-        assert coder_record["model"] == "gpt-4", f"Coder should use GPT-4, got {coder_record['model']}"
+        coder_record = next(
+            r for r in cost_report["records"] if r["agent_type"] == "coder"
+        )
+        assert coder_record["model"] == "gpt-4", (
+            f"Coder should use GPT-4, got {coder_record['model']}"
+        )
         assert coder_record["input_tokens"] == 1000
         assert coder_record["output_tokens"] == 500
 
@@ -493,7 +522,9 @@ class TestE2EPerAgentProviderSelection:
         from core.cost_tracking import MODEL_PRICING
 
         # Calculate expected costs
-        claude_pricing = MODEL_PRICING.get("claude-opus-4-20250514", MODEL_PRICING["claude-sonnet-4-5-20250929"])
+        claude_pricing = MODEL_PRICING.get(
+            "claude-opus-4-20250514", MODEL_PRICING["claude-sonnet-4-5-20250929"]
+        )
         claude_cost = (2000 / 1_000_000 * claude_pricing["input"]) + (
             1000 / 1_000_000 * claude_pricing["output"]
         )
@@ -510,17 +541,19 @@ class TestE2EPerAgentProviderSelection:
             f"Cost mismatch: expected {expected_total:.6f}, got {actual_total:.6f}"
         )
 
-        print(f"\n✓ E2E Test passed: Per-agent provider selection")
+        print("\n✓ E2E Test passed: Per-agent provider selection")
         print(f"  Planner (Claude): ${claude_cost:.6f}")
         print(f"  Coder (GPT-4): ${gpt4_cost:.6f}")
         print(f"  Total: ${actual_total:.6f}")
 
-    def test_e2e_qa_agent_provider_inheritance(self, test_env_multi_provider, monkeypatch):
+    def test_e2e_qa_agent_provider_inheritance(
+        self, test_env_multi_provider, monkeypatch
+    ):
         """
         E2E Test: QA agents inherit default provider when not explicitly configured.
         """
-        from phase_config import get_provider_for_agent
         from core.cost_tracking import CostTracker
+        from phase_config import get_provider_for_agent
 
         temp_dir, spec_dir, project_dir = test_env_multi_provider
 
@@ -534,7 +567,9 @@ class TestE2EPerAgentProviderSelection:
         qa_reviewer_provider = get_provider_for_agent("qa_reviewer")
         qa_fixer_provider = get_provider_for_agent("qa_fixer")
 
-        assert qa_reviewer_provider == "claude", "QA reviewer should inherit default Claude"
+        assert qa_reviewer_provider == "claude", (
+            "QA reviewer should inherit default Claude"
+        )
         assert qa_fixer_provider == "claude", "QA fixer should inherit default Claude"
 
         # Simulate mixed usage
@@ -676,6 +711,7 @@ def print_manual_test_procedure():
 def run_all_tests():
     """Run all tests using pytest."""
     import sys
+
     sys.exit(pytest.main([__file__, "-v", "--tb=short"]))
 
 
@@ -684,7 +720,7 @@ if __name__ == "__main__":
     print_manual_test_procedure()
 
     # Run automated tests
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("Running Automated E2E Tests for Per-Agent Provider Selection...")
-    print("="*70 + "\n")
+    print("=" * 70 + "\n")
     run_all_tests()

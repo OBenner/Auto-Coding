@@ -10,7 +10,6 @@ import json
 from pathlib import Path
 
 import pytest
-
 from review.state import ReviewState
 
 

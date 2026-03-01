@@ -10,25 +10,25 @@ Tests cover:
 """
 
 import json
+
+# Add auto-claude to path for imports
+import sys
 import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
-# Add auto-claude to path for imports
-import sys
 sys.path.insert(0, str(Path(__file__).parent.parent / "apps" / "backend"))
 
 from services.orchestrator import (
-    ServiceConfig,
     OrchestrationResult,
-    ServiceOrchestrator,
+    ServiceConfig,
     ServiceContext,
-    is_multi_service_project,
+    ServiceOrchestrator,
     get_service_config,
+    is_multi_service_project,
 )
-
 
 # =============================================================================
 # FIXTURES
@@ -441,7 +441,7 @@ class TestEdgeCases:
         fake_dir = Path("/nonexistent/path")
 
         # Should not crash - mock exists to avoid permission error
-        with patch.object(Path, 'exists', return_value=False):
+        with patch.object(Path, "exists", return_value=False):
             orchestrator = ServiceOrchestrator(fake_dir)
             assert orchestrator.is_multi_service() is False
 

@@ -26,18 +26,26 @@ def test_spec_dir(tmp_path):
 
     # Create implementation plan
     plan_file = spec_dir / "implementation_plan.json"
-    plan_file.write_text(json.dumps({
-        "feature": "Test Feature",
-        "phases": [{
-            "id": "phase-1",
-            "subtasks": [{
-                "id": "subtask-1-1",
-                "description": "Test subtask",
-                "status": "in_progress"
-            }]
-        }],
-        "qa_iteration_history": []
-    }))
+    plan_file.write_text(
+        json.dumps(
+            {
+                "feature": "Test Feature",
+                "phases": [
+                    {
+                        "id": "phase-1",
+                        "subtasks": [
+                            {
+                                "id": "subtask-1-1",
+                                "description": "Test subtask",
+                                "status": "in_progress",
+                            }
+                        ],
+                    }
+                ],
+                "qa_iteration_history": [],
+            }
+        )
+    )
 
     return spec_dir
 
@@ -60,24 +68,24 @@ def _make_failure_context():
     return {
         "errors": [
             "SyntaxError: invalid syntax at utils.py:42",
-            "AssertionError: Expected True, got False in test_auth.py:10"
+            "AssertionError: Expected True, got False in test_auth.py:10",
         ],
         "issues": [
             {
                 "file": "utils.py",
                 "line": 42,
                 "description": "Missing closing bracket",
-                "severity": "error"
+                "severity": "error",
             },
             {
                 "file": "tests/test_auth.py",
                 "line": 10,
                 "description": "Authentication test failing",
-                "severity": "error"
-            }
+                "severity": "error",
+            },
         ],
         "is_recurring": False,
-        "subtask_id": "subtask-1-1"
+        "subtask_id": "subtask-1-1",
     }
 
 
@@ -90,9 +98,9 @@ def _make_root_cause():
         "confidence": 0.9,
         "recommendations": [
             "Add closing bracket on line 42",
-            "Verify code follows syntax rules"
+            "Verify code follows syntax rules",
         ],
-        "is_recurring": False
+        "is_recurring": False,
     }
 
 
@@ -152,8 +160,18 @@ async def _helper_trigger_qa_rejection(test_spec_dir, test_project_dir):
 
     # Record QA iteration with correct signature
     issues = [
-        {"file": "utils.py", "line": 42, "description": "Missing closing bracket", "category": "syntax_error"},
-        {"file": "tests/test_auth.py", "line": 10, "description": "Authentication test failing", "category": "test_failure"}
+        {
+            "file": "utils.py",
+            "line": 42,
+            "description": "Missing closing bracket",
+            "category": "syntax_error",
+        },
+        {
+            "file": "tests/test_auth.py",
+            "line": 10,
+            "description": "Authentication test failing",
+            "category": "test_failure",
+        },
     ]
 
     record_iteration(
@@ -161,7 +179,7 @@ async def _helper_trigger_qa_rejection(test_spec_dir, test_project_dir):
         iteration=1,
         status="rejected",
         issues=issues,
-        duration_seconds=10.5
+        duration_seconds=10.5,
     )
 
     # Verify files created
@@ -195,21 +213,25 @@ async def _helper_failure_analyzed(test_spec_dir, test_project_dir):
     assert "is_recurring" in root_cause
 
     # Verify categorization
-    assert root_cause["category"] in ["syntax_error", "test_failure", "build_error", "unknown"]
+    assert root_cause["category"] in [
+        "syntax_error",
+        "test_failure",
+        "build_error",
+        "unknown",
+    ]
     assert root_cause["confidence"] > 0.0
     assert len(root_cause["affected_files"]) > 0
     assert len(root_cause["recommendations"]) > 0
 
     # Test full analysis with extract_root_cause patched to avoid LLM
     mock_root_cause = _make_root_cause()
-    with patch("analysis.failure_analyzer.extract_root_cause", return_value=mock_root_cause):
+    with patch(
+        "analysis.failure_analyzer.extract_root_cause", return_value=mock_root_cause
+    ):
         from analysis.failure_analyzer import analyze_failure
 
         analysis = analyze_failure(
-            test_spec_dir,
-            test_project_dir,
-            "qa_rejection",
-            failure_context
+            test_spec_dir, test_project_dir, "qa_rejection", failure_context
         )
 
         assert "failure_type" in analysis
@@ -229,8 +251,10 @@ async def _helper_failure_stored(test_spec_dir, test_project_dir):
     root_cause = _make_root_cause()
     failure_context = {
         "errors": ["SyntaxError: invalid syntax at utils.py:42"],
-        "issues": [{"file": "utils.py", "line": 42, "description": "Missing closing bracket"}],
-        "subtask_id": "subtask-1-1"
+        "issues": [
+            {"file": "utils.py", "line": 42, "description": "Missing closing bracket"}
+        ],
+        "subtask_id": "subtask-1-1",
     }
 
     # Mock Graphiti if not available in test environment
@@ -241,7 +265,7 @@ async def _helper_failure_stored(test_spec_dir, test_project_dir):
             "qa_rejection",
             root_cause,
             failure_context,
-            GroupIdMode.PROJECT
+            GroupIdMode.PROJECT,
         )
         assert result is False
 
@@ -254,10 +278,14 @@ async def _helper_failure_stored(test_spec_dir, test_project_dir):
     mock_graphiti_nodes = MagicMock()
     mock_graphiti_nodes.EpisodeType = mock_episode_type
 
-    with patch("analysis.failure_storage.is_graphiti_enabled", return_value=True), \
-         patch("analysis.failure_storage.get_graphiti_memory") as mock_memory, \
-         patch.dict(sys.modules, {"graphiti_core": MagicMock(), "graphiti_core.nodes": mock_graphiti_nodes}):
-
+    with (
+        patch("analysis.failure_storage.is_graphiti_enabled", return_value=True),
+        patch("analysis.failure_storage.get_graphiti_memory") as mock_memory,
+        patch.dict(
+            sys.modules,
+            {"graphiti_core": MagicMock(), "graphiti_core.nodes": mock_graphiti_nodes},
+        ),
+    ):
         mock_memory.return_value = mock_memory_instance
 
         result = await store_failure_analysis(
@@ -266,7 +294,7 @@ async def _helper_failure_stored(test_spec_dir, test_project_dir):
             "qa_rejection",
             root_cause,
             failure_context,
-            GroupIdMode.PROJECT
+            GroupIdMode.PROJECT,
         )
 
         assert result is True
@@ -281,37 +309,42 @@ async def _helper_retrieves_patterns(test_spec_dir, test_project_dir):
 
     mock_search_results = [
         MagicMock(
-            content=json.dumps({
-                "type": "root_cause",
-                "failure_type": "qa_rejection",
-                "category": "syntax_error",
-                "description": "Missing closing bracket",
-                "affected_files": ["utils.py"],
-                "confidence": 0.9,
-                "recommendations": ["Add closing bracket"],
-                "is_recurring": False,
-                "spec_id": "previous-spec"
-            }),
-            score=0.85
+            content=json.dumps(
+                {
+                    "type": "root_cause",
+                    "failure_type": "qa_rejection",
+                    "category": "syntax_error",
+                    "description": "Missing closing bracket",
+                    "affected_files": ["utils.py"],
+                    "confidence": 0.9,
+                    "recommendations": ["Add closing bracket"],
+                    "is_recurring": False,
+                    "spec_id": "previous-spec",
+                }
+            ),
+            score=0.85,
         )
     ]
 
     mock_memory_instance = _make_mock_graphiti_memory()
-    mock_memory_instance._client.graphiti.search = AsyncMock(return_value=mock_search_results)
+    mock_memory_instance._client.graphiti.search = AsyncMock(
+        return_value=mock_search_results
+    )
 
     async def mock_get_memory(*args, **kwargs):
         return mock_memory_instance
 
-    with patch("agents.memory_manager.is_graphiti_enabled", return_value=True), \
-         patch("agents.memory_manager.get_graphiti_memory", side_effect=mock_get_memory):
-
+    with (
+        patch("agents.memory_manager.is_graphiti_enabled", return_value=True),
+        patch("agents.memory_manager.get_graphiti_memory", side_effect=mock_get_memory),
+    ):
         patterns = await get_failure_patterns(
             test_spec_dir,
             test_project_dir,
             query="Missing closing bracket syntax error",
             failure_types=["qa_rejection"],
             num_results=5,
-            min_score=0.5
+            min_score=0.5,
         )
 
         assert patterns is not None
@@ -327,26 +360,21 @@ async def _helper_dashboard_metrics(test_spec_dir, test_project_dir):
     """Helper: verify dashboard failure metrics."""
     from analysis.metrics_tracker import get_failure_metrics
 
-    _setup_qa_history(test_spec_dir, [
-        {
-            "iteration": 1,
-            "status": "rejected",
-            "issues": [
-                {"category": "syntax_error", "file": "utils.py"},
-                {"category": "test_failure", "file": "tests/test_auth.py"}
-            ],
-            "root_cause": {
-                "category": "syntax_error",
-                "confidence": 0.9
-            }
-        },
-        {
-            "iteration": 2,
-            "status": "approved",
-            "issues": [],
-            "root_cause": None
-        }
-    ])
+    _setup_qa_history(
+        test_spec_dir,
+        [
+            {
+                "iteration": 1,
+                "status": "rejected",
+                "issues": [
+                    {"category": "syntax_error", "file": "utils.py"},
+                    {"category": "test_failure", "file": "tests/test_auth.py"},
+                ],
+                "root_cause": {"category": "syntax_error", "confidence": 0.9},
+            },
+            {"iteration": 2, "status": "approved", "issues": [], "root_cause": None},
+        ],
+    )
 
     metrics = get_failure_metrics(test_spec_dir)
 
@@ -372,18 +400,21 @@ async def _helper_success_rate_improves(test_spec_dir, test_project_dir):
     from analysis.metrics_tracker import get_failure_metrics, get_success_rate
 
     # First iteration: multiple failures (3 issues)
-    _setup_qa_history(test_spec_dir, [
-        {
-            "iteration": 1,
-            "status": "rejected",
-            "issues": [
-                {"category": "syntax_error", "file": "utils.py"},
-                {"category": "test_failure", "file": "tests/test_auth.py"},
-                {"category": "logic_error", "file": "handlers.py"}
-            ],
-            "root_cause": {"category": "syntax_error", "confidence": 0.9}
-        }
-    ])
+    _setup_qa_history(
+        test_spec_dir,
+        [
+            {
+                "iteration": 1,
+                "status": "rejected",
+                "issues": [
+                    {"category": "syntax_error", "file": "utils.py"},
+                    {"category": "test_failure", "file": "tests/test_auth.py"},
+                    {"category": "logic_error", "file": "handlers.py"},
+                ],
+                "root_cause": {"category": "syntax_error", "confidence": 0.9},
+            }
+        ],
+    )
 
     metrics_before = get_failure_metrics(test_spec_dir)
     # Calculate failure rate for first iteration: issues / iterations
@@ -392,32 +423,28 @@ async def _helper_success_rate_improves(test_spec_dir, test_project_dir):
     failure_rate_before = issues_before / iterations_before
 
     # Add more iterations with fewer failures, then approval
-    _setup_qa_history(test_spec_dir, [
-        {
-            "iteration": 1,
-            "status": "rejected",
-            "issues": [
-                {"category": "syntax_error", "file": "utils.py"},
-                {"category": "test_failure", "file": "tests/test_auth.py"},
-                {"category": "logic_error", "file": "handlers.py"}
-            ],
-            "root_cause": {"category": "syntax_error", "confidence": 0.9}
-        },
-        {
-            "iteration": 2,
-            "status": "rejected",
-            "issues": [
-                {"category": "test_failure", "file": "tests/test_auth.py"}
-            ],
-            "root_cause": {"category": "test_failure", "confidence": 0.85}
-        },
-        {
-            "iteration": 3,
-            "status": "approved",
-            "issues": [],
-            "root_cause": None
-        }
-    ])
+    _setup_qa_history(
+        test_spec_dir,
+        [
+            {
+                "iteration": 1,
+                "status": "rejected",
+                "issues": [
+                    {"category": "syntax_error", "file": "utils.py"},
+                    {"category": "test_failure", "file": "tests/test_auth.py"},
+                    {"category": "logic_error", "file": "handlers.py"},
+                ],
+                "root_cause": {"category": "syntax_error", "confidence": 0.9},
+            },
+            {
+                "iteration": 2,
+                "status": "rejected",
+                "issues": [{"category": "test_failure", "file": "tests/test_auth.py"}],
+                "root_cause": {"category": "test_failure", "confidence": 0.85},
+            },
+            {"iteration": 3, "status": "approved", "issues": [], "root_cause": None},
+        ],
+    )
 
     metrics_after = get_failure_metrics(test_spec_dir)
     success_after = get_success_rate(test_spec_dir)
@@ -436,7 +463,9 @@ async def _helper_success_rate_improves(test_spec_dir, test_project_dir):
 
     assert "root_cause_rate" in metrics_after
 
-    print(f"  [ok] Success rate improved: failure rate {failure_rate_before:.2f} -> {failure_rate_after:.2f}")
+    print(
+        f"  [ok] Success rate improved: failure rate {failure_rate_before:.2f} -> {failure_rate_after:.2f}"
+    )
 
 
 # =============================================================================

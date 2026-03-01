@@ -25,9 +25,7 @@ class TestImportChain:
     def test_code_review_service_imports_in_runner_context(self):
         """Test that CodeReviewService imports when sys.path includes runner context."""
         # Get the backend directory
-        backend_dir = (
-            Path(__file__).parent.parent.parent / "apps" / "backend"
-        )
+        backend_dir = Path(__file__).parent.parent.parent / "apps" / "backend"
 
         # Import should work when we add backend to sys.path
         original_path = sys.path.copy()
@@ -39,18 +37,16 @@ class TestImportChain:
                 CodeReviewService,
             )
 
-            assert (
-                CodeReviewService is not None
-            ), "CodeReviewService should import successfully"
+            assert CodeReviewService is not None, (
+                "CodeReviewService should import successfully"
+            )
 
         finally:
             sys.path = original_path
 
     def test_runner_command_help_works(self):
         """Test that the code-review-pr command help works."""
-        backend_dir = (
-            Path(__file__).parent.parent.parent / "apps" / "backend"
-        )
+        backend_dir = Path(__file__).parent.parent.parent / "apps" / "backend"
         runner_script = backend_dir / "runners" / "github" / "runner.py"
 
         # Skip test if runner script doesn't exist
@@ -72,18 +68,16 @@ class TestImportChain:
         # We just want to verify the module can be loaded
 
         # Check that it's not an import error
-        assert (
-            "ImportError" not in result.stderr
-        ), f"Import error detected: {result.stderr}"
-        assert (
-            "ModuleNotFoundError" not in result.stderr
-        ), f"Module not found: {result.stderr}"
+        assert "ImportError" not in result.stderr, (
+            f"Import error detected: {result.stderr}"
+        )
+        assert "ModuleNotFoundError" not in result.stderr, (
+            f"Module not found: {result.stderr}"
+        )
 
     def test_service_dependencies_available(self):
         """Test that service dependencies can be imported."""
-        backend_dir = (
-            Path(__file__).parent.parent.parent / "apps" / "backend"
-        )
+        backend_dir = Path(__file__).parent.parent.parent / "apps" / "backend"
 
         original_path = sys.path.copy()
         try:
@@ -102,9 +96,7 @@ class TestImportChain:
 
     def test_import_from_runner_py_context(self):
         """Test importing as if we're inside runner.py."""
-        backend_dir = (
-            Path(__file__).parent.parent.parent / "apps" / "backend"
-        )
+        backend_dir = Path(__file__).parent.parent.parent / "apps" / "backend"
         runners_dir = backend_dir / "runners" / "github"
 
         original_path = sys.path.copy()
@@ -133,9 +125,7 @@ class TestServiceDocumentation:
 
     def test_service_has_usage_documentation(self):
         """Test that service file has usage documentation."""
-        backend_dir = (
-            Path(__file__).parent.parent.parent / "apps" / "backend"
-        )
+        backend_dir = Path(__file__).parent.parent.parent / "apps" / "backend"
         service_file = (
             backend_dir / "runners" / "github" / "services" / "code_review_service.py"
         )

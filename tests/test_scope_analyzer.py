@@ -13,12 +13,11 @@ Covers:
 - Edge cases and special scenarios
 """
 
-
 from merge.scope_analyzer import (
+    get_scope_priority,
     infer_scope,
     infer_scope_from_context,
     is_same_scope,
-    get_scope_priority,
 )
 
 
@@ -122,7 +121,9 @@ class TestInferScopeFromContext:
     def test_infer_from_context_class_and_function(self):
         """Infer local scope when context mentions both class and function."""
         # Methods are functions, so "function" should take precedence
-        scope = infer_scope_from_context("method_var", "in class MyClass and function foo")
+        scope = infer_scope_from_context(
+            "method_var", "in class MyClass and function foo"
+        )
         assert scope == "local"
 
     def test_infer_from_context_unknown(self):

@@ -786,6 +786,7 @@
   "cost": {
     "breakdown": "Répartition des coûts par fournisseur",
     "total": "total",
+    "tokens": "jetons",
     "noCosts": "Aucun coût enregistré pour le moment",
     "localModelsNote": "Les modèles locaux (Ollama) s'exécutent sur votre machine sans frais d'API"
   },

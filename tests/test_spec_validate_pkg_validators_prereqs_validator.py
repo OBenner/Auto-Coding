@@ -14,10 +14,10 @@ from pathlib import Path
 
 import pytest
 
-
 # =============================================================================
 # HELPER FUNCTIONS
 # =============================================================================
+
 
 def clean_project_index_files(spec_dir: Path) -> None:
     """Remove project_index.json files that may interfere with tests.
@@ -161,7 +161,9 @@ class TestValidateAutoClaudeFallback:
         # When auto-claude index exists but spec_dir index doesn't, it's valid with a warning
         assert result.valid is True  # Valid because warning path, not error path
         assert len(result.warnings) > 0
-        assert any("auto-claude" in warn or "spec folder" in warn for warn in result.warnings)
+        assert any(
+            "auto-claude" in warn or "spec folder" in warn for warn in result.warnings
+        )
 
     def test_fix_suggests_copy_command(self, spec_dir: Path):
         """Suggested fix should include cp command when auto-claude index exists."""
@@ -217,14 +219,19 @@ class TestValidateValidPrereqs:
         from spec.validate_pkg.validators.prereqs_validator import PrereqsValidator
 
         project_index = spec_dir / "project_index.json"
-        project_index.write_text(json.dumps({
-            "project_type": "monorepo",
-            "services": {
-                "backend": {"path": "backend", "language": "python"},
-                "frontend": {"path": "frontend", "language": "typescript"},
-            },
-            "file_count": 150,
-        }), encoding="utf-8")
+        project_index.write_text(
+            json.dumps(
+                {
+                    "project_type": "monorepo",
+                    "services": {
+                        "backend": {"path": "backend", "language": "python"},
+                        "frontend": {"path": "frontend", "language": "typescript"},
+                    },
+                    "file_count": 150,
+                }
+            ),
+            encoding="utf-8",
+        )
 
         validator = PrereqsValidator(spec_dir)
         result = validator.validate()
@@ -299,6 +306,7 @@ class TestEdgeCases:
 
         # Create symlink
         import os
+
         link_spec = temp_dir / "link_spec"
         try:
             os.symlink(actual_spec, link_spec)
@@ -352,8 +360,8 @@ class TestPrereqsValidatorIntegration:
 
     def test_works_with_context_validator(self, spec_dir: Path):
         """Should work correctly when used with ContextValidator."""
-        from spec.validate_pkg.validators.prereqs_validator import PrereqsValidator
         from spec.validate_pkg.validators.context_validator import ContextValidator
+        from spec.validate_pkg.validators.prereqs_validator import PrereqsValidator
 
         # Create project_index.json
         project_index = spec_dir / "project_index.json"

@@ -791,6 +791,7 @@
   "cost": {
     "breakdown": "Cost Breakdown by Provider",
     "total": "total",
+    "tokens": "tokens",
     "noCosts": "No costs recorded yet",
     "localModelsNote": "Local models (Ollama) run on your machine at no API cost"
   },

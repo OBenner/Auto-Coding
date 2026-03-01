@@ -25,6 +25,8 @@ _pydantic_models_path = (
 sys.path.insert(0, str(_pydantic_models_path))
 
 from pydantic_models import (
+    AICommentTriage,
+    DeepAnalysisFinding,
     # Follow-up review models
     FindingResolution,
     FollowupFinding,
@@ -35,8 +37,6 @@ from pydantic_models import (
     # Initial review models
     QuickScanResult,
     SecurityFinding,
-    DeepAnalysisFinding,
-    AICommentTriage,
 )
 
 
@@ -174,7 +174,11 @@ class TestFollowupReviewResponse:
         """Test valid complete follow-up review response."""
         data = {
             "finding_resolutions": [
-                {"finding_id": "prev-1", "status": "resolved", "resolution_notes": "Fixed"}
+                {
+                    "finding_id": "prev-1",
+                    "status": "resolved",
+                    "resolution_notes": "Fixed",
+                }
             ],
             "new_findings": [
                 {

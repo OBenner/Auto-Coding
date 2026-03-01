@@ -22,7 +22,7 @@ sys.path.insert(0, str(backend_path))
 _mock_agent_sdk = MagicMock()
 
 # Track all modules we modify so we can restore them later
-_original_sdk_module = sys.modules.get('claude_agent_sdk')
+_original_sdk_module = sys.modules.get("claude_agent_sdk")
 _popped_modules: dict[str, object] = {}
 
 
@@ -32,14 +32,19 @@ def _mock_tool_decorator(name, description, params):
         func._tool_description = description
         func._tool_params = params
         return func
+
     return decorator
 
 
 _mock_agent_sdk.tool = _mock_tool_decorator
-sys.modules['claude_agent_sdk'] = _mock_agent_sdk
+sys.modules["claude_agent_sdk"] = _mock_agent_sdk
 
 # Force fresh import so statistics.py picks up our mock tool decorator
-for _mod in ['agents.tools_pkg.tools.statistics', 'agents.tools_pkg.tools', 'agents.tools_pkg']:
+for _mod in [
+    "agents.tools_pkg.tools.statistics",
+    "agents.tools_pkg.tools",
+    "agents.tools_pkg",
+]:
     _existing = sys.modules.pop(_mod, None)
     if _existing is not None:
         _popped_modules[_mod] = _existing
@@ -51,9 +56,9 @@ def _restore_sys_modules_after_all_tests():
     yield
     # Restore or remove the claude_agent_sdk mock
     if _original_sdk_module is not None:
-        sys.modules['claude_agent_sdk'] = _original_sdk_module
+        sys.modules["claude_agent_sdk"] = _original_sdk_module
     else:
-        sys.modules.pop('claude_agent_sdk', None)
+        sys.modules.pop("claude_agent_sdk", None)
     # Restore any popped statistics modules
     for mod_name, mod_obj in _popped_modules.items():
         sys.modules[mod_name] = mod_obj
@@ -162,13 +167,7 @@ class TestPhaseDurationCalculation:
         """Should handle phase with no subtasks."""
         from agents.tools_pkg.tools.statistics import _calculate_phase_durations
 
-        phases = [
-            {
-                "id": "phase-1",
-                "name": "Setup",
-                "subtasks": []
-            }
-        ]
+        phases = [{"id": "phase-1", "name": "Setup", "subtasks": []}]
 
         result = _calculate_phase_durations(phases)
         assert "phase-1" in result
@@ -194,7 +193,7 @@ class TestPhaseDurationCalculation:
                         "started_at": start_time.isoformat(),
                         "completed_at": end_time.isoformat(),
                     }
-                ]
+                ],
             }
         ]
 
@@ -229,8 +228,8 @@ class TestPhaseDurationCalculation:
                         "status": "completed",
                         "started_at": mid_time.isoformat(),
                         "completed_at": end_time.isoformat(),
-                    }
-                ]
+                    },
+                ],
             }
         ]
 
@@ -255,14 +254,16 @@ class TestPhaseDurationCalculation:
                         "id": "subtask-1",
                         "status": "completed",
                         "started_at": start_time.isoformat(),
-                        "completed_at": (start_time + timedelta(minutes=30)).isoformat(),
+                        "completed_at": (
+                            start_time + timedelta(minutes=30)
+                        ).isoformat(),
                     },
                     {
                         "id": "subtask-2",
                         "status": "in_progress",
                         "started_at": (start_time + timedelta(minutes=30)).isoformat(),
-                    }
-                ]
+                    },
+                ],
             }
         ]
 
@@ -285,7 +286,7 @@ class TestPhaseDurationCalculation:
                         "id": "subtask-1",
                         "status": "pending",
                     }
-                ]
+                ],
             }
         ]
 
@@ -310,7 +311,7 @@ class TestPhaseDurationCalculation:
                         "status": "completed",
                         "updated_at": end_time.isoformat(),
                     }
-                ]
+                ],
             }
         ]
 
@@ -340,10 +341,7 @@ class TestCompletionVelocity:
 
         # Use current time to simulate zero elapsed time
         now = datetime.now(timezone.utc)
-        plan = {
-            "created_at": now.isoformat(),
-            "phases": []
-        }
+        plan = {"created_at": now.isoformat(), "phases": []}
         phase_durations = {}
 
         result = _calculate_completion_velocity(plan, phase_durations)
@@ -367,7 +365,7 @@ class TestCompletionVelocity:
                         {"status": "pending"},
                     ]
                 }
-            ]
+            ],
         }
         phase_durations = {}
 
@@ -375,7 +373,10 @@ class TestCompletionVelocity:
         # 4 subtasks in 2 hours = 2 per hour = 48 per day
         assert result["subtasks_per_hour"] == 2.0
         assert result["subtasks_per_day"] == 48.0
-        assert "s" in result["average_subtask_duration"] or "m" in result["average_subtask_duration"]
+        assert (
+            "s" in result["average_subtask_duration"]
+            or "m" in result["average_subtask_duration"]
+        )
 
     def test_no_completed_subtasks(self):
         """Should handle no completed subtasks."""
@@ -391,7 +392,7 @@ class TestCompletionVelocity:
                         {"status": "in_progress"},
                     ]
                 }
-            ]
+            ],
         }
         phase_durations = {}
 
@@ -446,7 +447,7 @@ class TestSessionCounting:
                     "subtasks": [
                         {"session_id": "session-3"},
                     ]
-                }
+                },
             ]
         }
         result = _count_unique_sessions(plan)
@@ -487,7 +488,10 @@ class TestCreateStatisticsTools:
 
     def test_returns_tools_when_sdk_available(self, tmp_path):
         """Should return list of tools when SDK is available."""
-        from agents.tools_pkg.tools.statistics import create_statistics_tools, SDK_TOOLS_AVAILABLE
+        from agents.tools_pkg.tools.statistics import (
+            SDK_TOOLS_AVAILABLE,
+            create_statistics_tools,
+        )
 
         if not SDK_TOOLS_AVAILABLE:
             pytest.skip("SDK not available")
@@ -505,10 +509,14 @@ class TestGetSpecStatistics:
     def reload_statistics_with_mock(self):
         """Force fresh import of statistics module with the proper mock tool decorator."""
         # Ensure our mock (with _mock_tool_decorator) is active before re-importing
-        sys.modules['claude_agent_sdk'] = _mock_agent_sdk
+        sys.modules["claude_agent_sdk"] = _mock_agent_sdk
         # Save current state before popping so we can restore it after the test
         _saved: dict = {}
-        for mod in ['agents.tools_pkg.tools.statistics', 'agents.tools_pkg.tools', 'agents.tools_pkg']:
+        for mod in [
+            "agents.tools_pkg.tools.statistics",
+            "agents.tools_pkg.tools",
+            "agents.tools_pkg",
+        ]:
             if mod in sys.modules:
                 _saved[mod] = sys.modules.pop(mod)
         yield
@@ -540,28 +548,30 @@ class TestGetSpecStatistics:
                             "id": "subtask-1",
                             "status": "completed",
                             "started_at": created_at.isoformat(),
-                            "completed_at": (created_at + timedelta(hours=1)).isoformat(),
-                            "session_id": "session-1"
+                            "completed_at": (
+                                created_at + timedelta(hours=1)
+                            ).isoformat(),
+                            "session_id": "session-1",
                         },
                         {
                             "id": "subtask-2",
                             "status": "in_progress",
                             "started_at": (created_at + timedelta(hours=1)).isoformat(),
-                            "session_id": "session-1"
-                        }
-                    ]
+                            "session_id": "session-1",
+                        },
+                    ],
                 }
             ],
-            "qa_signoff": {
-                "status": "pending",
-                "qa_session": 0
-            }
+            "qa_signoff": {"status": "pending", "qa_session": 0},
         }
 
     @pytest.mark.asyncio
     async def test_no_plan_file(self, temp_spec_dir):
         """Should handle missing implementation plan file."""
-        from agents.tools_pkg.tools.statistics import create_statistics_tools, SDK_TOOLS_AVAILABLE
+        from agents.tools_pkg.tools.statistics import (
+            SDK_TOOLS_AVAILABLE,
+            create_statistics_tools,
+        )
 
         if not SDK_TOOLS_AVAILABLE:
             pytest.skip("SDK not available")
@@ -576,7 +586,10 @@ class TestGetSpecStatistics:
     @pytest.mark.asyncio
     async def test_calculates_statistics(self, temp_spec_dir, sample_plan):
         """Should calculate comprehensive statistics from plan."""
-        from agents.tools_pkg.tools.statistics import create_statistics_tools, SDK_TOOLS_AVAILABLE
+        from agents.tools_pkg.tools.statistics import (
+            SDK_TOOLS_AVAILABLE,
+            create_statistics_tools,
+        )
 
         if not SDK_TOOLS_AVAILABLE:
             pytest.skip("SDK not available")
@@ -605,7 +618,10 @@ class TestGetSpecStatistics:
     @pytest.mark.asyncio
     async def test_handles_invalid_json(self, temp_spec_dir):
         """Should handle invalid JSON in plan file."""
-        from agents.tools_pkg.tools.statistics import create_statistics_tools, SDK_TOOLS_AVAILABLE
+        from agents.tools_pkg.tools.statistics import (
+            SDK_TOOLS_AVAILABLE,
+            create_statistics_tools,
+        )
 
         if not SDK_TOOLS_AVAILABLE:
             pytest.skip("SDK not available")
@@ -625,7 +641,10 @@ class TestGetSpecStatistics:
     @pytest.mark.asyncio
     async def test_includes_qa_iterations(self, temp_spec_dir, sample_plan):
         """Should include QA iteration count in output."""
-        from agents.tools_pkg.tools.statistics import create_statistics_tools, SDK_TOOLS_AVAILABLE
+        from agents.tools_pkg.tools.statistics import (
+            SDK_TOOLS_AVAILABLE,
+            create_statistics_tools,
+        )
 
         if not SDK_TOOLS_AVAILABLE:
             pytest.skip("SDK not available")
@@ -649,7 +668,10 @@ class TestGetSpecStatistics:
     @pytest.mark.asyncio
     async def test_includes_session_count(self, temp_spec_dir, sample_plan):
         """Should include unique session count in output."""
-        from agents.tools_pkg.tools.statistics import create_statistics_tools, SDK_TOOLS_AVAILABLE
+        from agents.tools_pkg.tools.statistics import (
+            SDK_TOOLS_AVAILABLE,
+            create_statistics_tools,
+        )
 
         if not SDK_TOOLS_AVAILABLE:
             pytest.skip("SDK not available")
@@ -669,7 +691,10 @@ class TestGetSpecStatistics:
     @pytest.mark.asyncio
     async def test_includes_completion_rate(self, temp_spec_dir, sample_plan):
         """Should calculate and include completion rate."""
-        from agents.tools_pkg.tools.statistics import create_statistics_tools, SDK_TOOLS_AVAILABLE
+        from agents.tools_pkg.tools.statistics import (
+            SDK_TOOLS_AVAILABLE,
+            create_statistics_tools,
+        )
 
         if not SDK_TOOLS_AVAILABLE:
             pytest.skip("SDK not available")

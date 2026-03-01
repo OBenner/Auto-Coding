@@ -95,6 +95,111 @@ const detectAutoBuildSourcePath = (): string | null => {
 };
 
 /**
+ * Apply ProviderSettings fields onto an existing env vars map.
+ * Sets or deletes keys based on whether values are truthy.
+ */
+function applyProviderSettingsToVars(
+  vars: Record<string, string>,
+  settings: ProviderSettings
+): void {
+  if (settings.provider !== undefined) {
+    vars['AI_ENGINE_PROVIDER'] = settings.provider;
+  }
+  const keyMap: Array<[keyof ProviderSettings, string]> = [
+    ['openaiApiKey', 'OPENAI_API_KEY'],
+    ['googleApiKey', 'GOOGLE_API_KEY'],
+    ['openrouterApiKey', 'OPENROUTER_API_KEY'],
+    ['plannerModel', 'AGENT_MODEL_PLANNER'],
+    ['coderModel', 'AGENT_MODEL_CODER'],
+    ['qaModel', 'AGENT_MODEL_QA_REVIEWER'],
+  ];
+  for (const [settingKey, envKey] of keyMap) {
+    const value = settings[settingKey];
+    if (value !== undefined) {
+      if (value) {
+        vars[envKey] = value as string;
+      } else {
+        delete vars[envKey];
+      }
+    }
+  }
+}
+
+/**
+ * Read existing .env content safely (returns '' if file not found).
+ * Avoids TOCTOU by reading directly and catching ENOENT.
+ */
+function readEnvFileSafe(envPath: string): string {
+  try {
+    return readFileSync(envPath, 'utf-8');
+  } catch (err: unknown) {
+    const code = (err as { code?: string }).code;
+    if (code === 'ENOENT') {
+      return '';
+    }
+    throw err;
+  }
+}
+
+/** Generate minimal .env content for a fresh file */
+function generateFreshEnvContent(vars: Record<string, string>): string {
+  const varLine = (name: string) =>
+    vars[name] ? `${name}=${vars[name]}` : `# ${name}=`;
+  return `# Multi-Provider Configuration
+AI_ENGINE_PROVIDER=${vars['AI_ENGINE_PROVIDER'] || 'claude'}
+
+# Provider API Keys
+${varLine('OPENAI_API_KEY')}
+${varLine('GOOGLE_API_KEY')}
+${varLine('OPENROUTER_API_KEY')}
+
+# Per-Agent Model Configuration
+${varLine('AGENT_MODEL_PLANNER')}
+${varLine('AGENT_MODEL_CODER')}
+${varLine('AGENT_MODEL_QA_REVIEWER')}
+`;
+}
+
+/** Collect active (non-commented) variable names from parsed lines */
+function collectActiveVarNames(lines: string[]): Set<string> {
+  const active = new Set<string>();
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed && !trimmed.startsWith('#')) {
+      const m = trimmed.match(/^([A-Z_]+)=/);
+      if (m) active.add(m[1]);
+    }
+  }
+  return active;
+}
+
+/** Transform a single line, substituting updated variable values */
+function updateEnvLine(
+  line: string,
+  vars: Record<string, string>,
+  activeVars: Set<string>
+): string {
+  const trimmed = line.trim();
+  if (!trimmed || trimmed.startsWith('#')) {
+    // Uncomment a commented-out variable if we have a new value and it's not active yet
+    const commentMatch = trimmed.match(/^#\s*([A-Z_]+)=/);
+    if (commentMatch) {
+      const varName = commentMatch[1];
+      if (vars[varName] !== undefined && !activeVars.has(varName)) {
+        activeVars.add(varName);
+        return `${varName}=${vars[varName]}`;
+      }
+    }
+    return line;
+  }
+  const match = trimmed.match(/^([A-Z_]+)=/);
+  if (match && vars[match[1]] !== undefined) {
+    return `${match[1]}=${vars[match[1]]}`;
+  }
+  return line;
+}
+
+/**
  * Generate .env file content with updated provider settings
  * Preserves existing file structure and only updates provider-related variables
  */
@@ -103,97 +208,29 @@ function generateProviderEnvContent(
   existingContent: string
 ): string {
   if (!existingContent) {
-    // No existing content, create minimal provider section
-    return `# Multi-Provider Configuration
-AI_ENGINE_PROVIDER=${vars['AI_ENGINE_PROVIDER'] || 'claude'}
-
-# Provider API Keys
-${vars['OPENAI_API_KEY'] ? `OPENAI_API_KEY=${vars['OPENAI_API_KEY']}` : '# OPENAI_API_KEY='}
-${vars['GOOGLE_API_KEY'] ? `GOOGLE_API_KEY=${vars['GOOGLE_API_KEY']}` : '# GOOGLE_API_KEY='}
-${vars['OPENROUTER_API_KEY'] ? `OPENROUTER_API_KEY=${vars['OPENROUTER_API_KEY']}` : '# OPENROUTER_API_KEY='}
-
-# Per-Agent Model Configuration
-${vars['AGENT_MODEL_PLANNER'] ? `AGENT_MODEL_PLANNER=${vars['AGENT_MODEL_PLANNER']}` : '# AGENT_MODEL_PLANNER='}
-${vars['AGENT_MODEL_CODER'] ? `AGENT_MODEL_CODER=${vars['AGENT_MODEL_CODER']}` : '# AGENT_MODEL_CODER='}
-${vars['AGENT_MODEL_QA_REVIEWER'] ? `AGENT_MODEL_QA_REVIEWER=${vars['AGENT_MODEL_QA_REVIEWER']}` : '# AGENT_MODEL_QA_REVIEWER='}
-`;
+    return generateFreshEnvContent(vars);
   }
 
-  // Parse existing content line by line and update provider-related variables
   const lines = existingContent.split('\n');
+  const activeVars = collectActiveVarNames(lines);
+  const updatedLines = lines.map(line => updateEnvLine(line, vars, activeVars));
 
-  // First pass: find which variables already have active (non-commented) assignments
-  const activeVars = new Set<string>();
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (trimmed && !trimmed.startsWith('#')) {
-      const match = trimmed.match(/^([A-Z_]+)=/);
-      if (match) activeVars.add(match[1]);
-    }
-  }
-
-  const updatedLines = lines.map(line => {
-    const trimmed = line.trim();
-
-    // Skip empty lines and comments (but preserve them)
-    if (!trimmed || trimmed.startsWith('#')) {
-      // Only uncomment a commented-out variable if there's no active assignment for it
-      const commentMatch = trimmed.match(/^#\s*([A-Z_]+)=/);
-      if (commentMatch) {
-        const varName = commentMatch[1];
-        if (vars[varName] !== undefined && !activeVars.has(varName)) {
-          activeVars.add(varName); // Track that we've now activated this variable
-          return `${varName}=${vars[varName]}`;
-        }
-      }
-      return line;
-    }
-
-    // Check if this line is a variable assignment
-    const match = trimmed.match(/^([A-Z_]+)=/);
-    if (match) {
-      const varName = match[1];
-
-      // Update if we have a new value for this variable
-      if (vars[varName] !== undefined) {
-        return `${varName}=${vars[varName]}`;
-      }
-    }
-
-    return line;
-  });
-
-  // Check if we need to append any new variables that weren't in the file
+  // Collect all var names that appear (commented or not) in the existing file
   const existingVarNames = new Set(
     lines
-      .map(line => {
-        const match = line.trim().match(/^#?\s*([A-Z_]+)=/);
-        return match ? match[1] : null;
-      })
+      .map(line => { const m = line.trim().match(/^#?\s*([A-Z_]+)=/); return m ? m[1] : null; })
       .filter(Boolean)
   );
 
-  const newVars: string[] = [];
   const providerVars = [
-    'AI_ENGINE_PROVIDER',
-    'OPENAI_API_KEY',
-    'GOOGLE_API_KEY',
-    'OPENROUTER_API_KEY',
-    'AGENT_MODEL_PLANNER',
-    'AGENT_MODEL_CODER',
-    'AGENT_MODEL_QA_REVIEWER'
+    'AI_ENGINE_PROVIDER', 'OPENAI_API_KEY', 'GOOGLE_API_KEY', 'OPENROUTER_API_KEY',
+    'AGENT_MODEL_PLANNER', 'AGENT_MODEL_CODER', 'AGENT_MODEL_QA_REVIEWER',
   ];
-
-  providerVars.forEach(varName => {
-    if (!existingVarNames.has(varName) && vars[varName]) {
-      newVars.push(`${varName}=${vars[varName]}`);
-    }
-  });
+  const newVars = providerVars.filter(v => !existingVarNames.has(v) && vars[v])
+    .map(v => `${v}=${vars[v]}`);
 
   if (newVars.length > 0) {
-    updatedLines.push('');
-    updatedLines.push('# Provider Settings (added by UI)');
-    updatedLines.push(...newVars);
+    updatedLines.push('', '# Provider Settings (added by UI)', ...newVars);
   }
 
   return updatedLines.join('\n');
@@ -412,65 +449,14 @@ export function registerSettingsHandlers(
 
         const envPath = path.join(project.path, project.autoBuildPath, '.env');
 
-        // Read existing .env content
-        let existingContent = '';
-        if (existsSync(envPath)) {
-          existingContent = readFileSync(envPath, 'utf-8');
-        }
+        // Read existing .env content (TOCTOU-safe: read directly, catch ENOENT)
+        const existingContent = readEnvFileSafe(envPath);
 
         // Parse existing environment variables
         const existingVars = parseEnvFile(existingContent);
 
-        // Update provider settings
-        if (settings.provider !== undefined) {
-          existingVars['AI_ENGINE_PROVIDER'] = settings.provider;
-        }
-
-        // Update API keys
-        if (settings.openaiApiKey !== undefined) {
-          if (settings.openaiApiKey) {
-            existingVars['OPENAI_API_KEY'] = settings.openaiApiKey;
-          } else {
-            delete existingVars['OPENAI_API_KEY'];
-          }
-        }
-        if (settings.googleApiKey !== undefined) {
-          if (settings.googleApiKey) {
-            existingVars['GOOGLE_API_KEY'] = settings.googleApiKey;
-          } else {
-            delete existingVars['GOOGLE_API_KEY'];
-          }
-        }
-        if (settings.openrouterApiKey !== undefined) {
-          if (settings.openrouterApiKey) {
-            existingVars['OPENROUTER_API_KEY'] = settings.openrouterApiKey;
-          } else {
-            delete existingVars['OPENROUTER_API_KEY'];
-          }
-        }
-
-        // Update per-agent model configuration
-        if (settings.plannerModel !== undefined) {
-          if (settings.plannerModel) {
-            existingVars['AGENT_MODEL_PLANNER'] = settings.plannerModel;
-          } else {
-            delete existingVars['AGENT_MODEL_PLANNER'];
-          }
-        }
-        if (settings.coderModel !== undefined) {
-          if (settings.coderModel) {
-            existingVars['AGENT_MODEL_CODER'] = settings.coderModel;
-          } else {
-            delete existingVars['AGENT_MODEL_CODER'];
-          }
-        }
-        if (settings.qaModel !== undefined) {
-          if (settings.qaModel) {
-            existingVars['AGENT_MODEL_QA_REVIEWER'] = settings.qaModel;
-          } else {
-            delete existingVars['AGENT_MODEL_QA_REVIEWER'];
-          }
-        }
+        // Apply provider settings to env vars map
+        applyProviderSettingsToVars(existingVars, settings);
 
         // Generate new .env content preserving structure
         const newContent = generateProviderEnvContent(existingVars, existingContent);
@@ -507,14 +493,8 @@ export function registerSettingsHandlers(
 
         const envPath = path.join(project.path, project.autoBuildPath, '.env');
 
-        // Read existing .env content
-        let existingContent = '';
-        if (existsSync(envPath)) {
-          existingContent = readFileSync(envPath, 'utf-8');
-        }
-
-        // Parse environment variables
-        const envVars = parseEnvFile(existingContent);
+        // Parse environment variables (TOCTOU-safe: read directly, catch ENOENT)
+        const envVars = parseEnvFile(readEnvFileSafe(envPath));
 
         // Map env vars to ProviderSettings
         const providerSettings: ProviderSettings = {
@@ -1016,88 +996,82 @@ export function registerSettingsHandlers(
     }
   );
 
+  // Static model lists per provider (used by getAvailableModels handler)
+  const STATIC_PROVIDER_MODELS: Record<string, string[]> = {
+    claude: [
+      'claude-sonnet-4-5-20250929',
+      'claude-opus-4-20250514',
+      'claude-haiku-4-5-20251001',
+      'claude-3-5-sonnet-20241022',
+      'claude-3-5-haiku-20241022',
+      'claude-3-opus-20240229',
+    ],
+    litellm: [
+      'gpt-4', 'gpt-4-turbo', 'gpt-4o', 'gpt-4o-mini', 'gpt-3.5-turbo',
+      'anthropic/claude-3-opus-20240229', 'anthropic/claude-3-sonnet-20240229',
+      'anthropic/claude-3-haiku-20240307',
+      'gemini/gemini-pro', 'gemini/gemini-1.5-pro', 'gemini/gemini-1.5-flash',
+      'gemini/gemini-2.0-flash',
+      'ollama/llama3', 'ollama/llama3.1', 'ollama/llama3.2', 'ollama/mistral',
+      'ollama/mixtral', 'ollama/codellama', 'ollama/qwen', 'ollama/qwen2',
+      'ollama/gemma', 'ollama/gemma2',
+    ],
+    openrouter: [
+      'anthropic/claude-3.5-sonnet', 'anthropic/claude-3-opus',
+      'openai/gpt-4-turbo', 'openai/gpt-4o',
+      'google/gemini-pro-1.5',
+      'meta-llama/llama-3.1-405b-instruct', 'meta-llama/llama-3.1-70b-instruct',
+      'mistralai/mixtral-8x7b-instruct',
+    ],
+  };
+
+  /**
+   * Detect available Ollama models by running the Python detector script.
+   * Returns IPCResult with models array or an error.
+   */
+  const fetchOllamaModels = (): IPCResult<{ models: string[] }> => {
+    const { sourcePath } = getSourceEnvPath();
+    if (!sourcePath) {
+      return { success: false, error: 'Auto-build source path not configured. Cannot detect Ollama models.' };
+    }
+    const scriptPath = path.join(sourcePath, 'ollama_model_detector.py');
+    if (!existsSync(scriptPath)) {
+      return { success: false, error: 'Ollama model detector script not found' };
+    }
+    const pythonPath = getToolPath('python');
+    if (!pythonPath) {
+      return { success: false, error: 'Python not found. Please install Python 3.10 or higher.' };
+    }
+    const output = execFileSync(pythonPath, [scriptPath, 'list-models'], {
+      encoding: 'utf-8',
+      timeout: 5000,
+    });
+    const result = JSON.parse(output);
+    if (result.success && result.data?.models) {
+      return { success: true, data: { models: result.data.models.map((m: { name: string }) => m.name) } };
+    }
+    return { success: false, error: result.error || 'Failed to detect Ollama models' };
+  };
+
   // Handler: getAvailableModels - Fetch available models for a provider
   ipcMain.handle(
     IPC_CHANNELS.SETTINGS_GET_AVAILABLE_MODELS,
     async (_, provider: string): Promise<IPCResult<{ models: string[] }>> => {
       try {
-        let models: string[] = [];
-
-        switch (provider) {
-          case 'claude':
-            models = [
-              'claude-sonnet-4-5-20250929',
-              'claude-opus-4-20250514',
-              'claude-haiku-4-5-20251001',
-              'claude-3-5-sonnet-20241022',
-              'claude-3-5-haiku-20241022',
-              'claude-3-opus-20240229'
-            ];
-            break;
-
-          case 'litellm':
-            models = [
-              'gpt-4', 'gpt-4-turbo', 'gpt-4o', 'gpt-4o-mini', 'gpt-3.5-turbo',
-              'anthropic/claude-3-opus-20240229', 'anthropic/claude-3-sonnet-20240229', 'anthropic/claude-3-haiku-20240307',
-              'gemini/gemini-pro', 'gemini/gemini-1.5-pro', 'gemini/gemini-1.5-flash', 'gemini/gemini-2.0-flash',
-              'ollama/llama3', 'ollama/llama3.1', 'ollama/llama3.2', 'ollama/mistral', 'ollama/mixtral',
-              'ollama/codellama', 'ollama/qwen', 'ollama/qwen2', 'ollama/gemma', 'ollama/gemma2'
-            ];
-            break;
-
-          case 'openrouter':
-            models = [
-              'anthropic/claude-3.5-sonnet', 'anthropic/claude-3-opus',
-              'openai/gpt-4-turbo', 'openai/gpt-4o',
-              'google/gemini-pro-1.5',
-              'meta-llama/llama-3.1-405b-instruct', 'meta-llama/llama-3.1-70b-instruct',
-              'mistralai/mixtral-8x7b-instruct'
-            ];
-            break;
-
-          case 'ollama':
-            try {
-              const { sourcePath } = getSourceEnvPath();
-              if (!sourcePath) {
-                return { success: false, error: 'Auto-build source path not configured. Cannot detect Ollama models.' };
-              }
-
-              const scriptPath = path.join(sourcePath, 'ollama_model_detector.py');
-              if (!existsSync(scriptPath)) {
-                return { success: false, error: 'Ollama model detector script not found' };
-              }
-
-              const pythonPath = getToolPath('python');
-              if (!pythonPath) {
-                return { success: false, error: 'Python not found. Please install Python 3.10 or higher.' };
-              }
-
-              const output = execFileSync(pythonPath, [scriptPath, 'list-models'], {
-                encoding: 'utf-8',
-                timeout: 5000
-              });
-
-              const result = JSON.parse(output);
-              if (result.success && result.data && result.data.models) {
-                models = result.data.models.map((m: { name: string }) => m.name);
-              } else {
-                return { success: false, error: result.error || 'Failed to detect Ollama models' };
-              }
-            } catch (err) {
-              const message = err instanceof Error ? err.message : 'Unknown error detecting Ollama models';
-              console.error('[SETTINGS_GET_AVAILABLE_MODELS] Ollama detection error:', message);
-              return { success: false, error: message };
-            }
-            break;
-
-          default:
-            return { success: false, error: `Unknown provider: ${provider}` };
+        const staticModels = STATIC_PROVIDER_MODELS[provider];
+        if (staticModels) {
+          return { success: true, data: { models: staticModels } };
         }
-
-        return {
-          success: true,
-          data: { models }
-        };
+        if (provider === 'ollama') {
+          try {
+            return fetchOllamaModels();
+          } catch (err) {
+            const message = err instanceof Error ? err.message : 'Unknown error detecting Ollama models';
+            console.error('[SETTINGS_GET_AVAILABLE_MODELS] Ollama detection error:', message);
+            return { success: false, error: message };
+          }
+        }
+        return { success: false, error: `Unknown provider: ${provider}` };
       } catch (error) {
         console.error('[SETTINGS_GET_AVAILABLE_MODELS] Error:', error);
         return {

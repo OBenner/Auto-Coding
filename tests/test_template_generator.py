@@ -5,9 +5,11 @@ Unit tests for Spec Generator
 Tests for SpecGenerator class including spec generation, preview, and validation.
 """
 
-import pytest
 import json
 from datetime import datetime
+
+import pytest
+
 from apps.backend.spec.templates.generator import SpecGenerator
 from apps.backend.spec.templates.registry import Template
 

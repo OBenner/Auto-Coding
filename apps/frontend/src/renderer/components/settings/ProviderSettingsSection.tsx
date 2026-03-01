@@ -11,6 +11,178 @@ type ProviderType = AIEngineProvider;
 
 type ProviderSettingsSectionProps = Record<string, never>;
 
+interface ProviderApiKeyFieldsProps {
+  selectedProvider: ProviderType;
+  openaiApiKey: string;
+  googleApiKey: string;
+  openrouterApiKey: string;
+  zhipuaiApiKey: string;
+  onOpenaiChange: (v: string) => void;
+  onGoogleChange: (v: string) => void;
+  onOpenrouterChange: (v: string) => void;
+  onZhipuaiChange: (v: string) => void;
+}
+
+function ProviderApiKeyFields({
+  selectedProvider,
+  openaiApiKey, googleApiKey, openrouterApiKey, zhipuaiApiKey,
+  onOpenaiChange, onGoogleChange, onOpenrouterChange, onZhipuaiChange,
+}: ProviderApiKeyFieldsProps) {
+  const { t } = useTranslation(['settings']);
+  return (
+    <>
+      {selectedProvider === 'litellm' && (
+        <>
+          <div className="space-y-2">
+            <Label htmlFor="openaiApiKey" className="text-sm font-medium text-foreground">
+              {t('settings:aiProvider.apiKeys.openai.label')}
+            </Label>
+            <Input
+              id="openaiApiKey"
+              type="password"
+              placeholder={t('settings:aiProvider.apiKeys.openai.placeholder')}
+              value={openaiApiKey}
+              onChange={(e) => onOpenaiChange(e.target.value)}
+              className="max-w-md"
+            />
+            <p className="text-xs text-muted-foreground">
+              {t('settings:aiProvider.apiKeys.openai.description')}
+            </p>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="googleApiKey" className="text-sm font-medium text-foreground">
+              {t('settings:aiProvider.apiKeys.google.label')}
+            </Label>
+            <Input
+              id="googleApiKey"
+              type="password"
+              placeholder={t('settings:aiProvider.apiKeys.google.placeholder')}
+              value={googleApiKey}
+              onChange={(e) => onGoogleChange(e.target.value)}
+              className="max-w-md"
+            />
+            <p className="text-xs text-muted-foreground">
+              {t('settings:aiProvider.apiKeys.google.description')}
+            </p>
+          </div>
+        </>
+      )}
+      {selectedProvider === 'openrouter' && (
+        <div className="space-y-2">
+          <Label htmlFor="openrouterApiKey" className="text-sm font-medium text-foreground">
+            {t('settings:aiProvider.apiKeys.openrouter.label')}
+          </Label>
+          <Input
+            id="openrouterApiKey"
+            type="password"
+            placeholder={t('settings:aiProvider.apiKeys.openrouter.placeholder')}
+            value={openrouterApiKey}
+            onChange={(e) => onOpenrouterChange(e.target.value)}
+            className="max-w-md"
+          />
+          <p className="text-xs text-muted-foreground">
+            {t('settings:aiProvider.apiKeys.openrouter.description')}
+          </p>
+        </div>
+      )}
+      {selectedProvider === 'zhipuai' && (
+        <div className="space-y-2">
+          <Label htmlFor="zhipuaiApiKey" className="text-sm font-medium text-foreground">
+            {t('settings:aiProvider.apiKeys.zhipuai.label')}
+          </Label>
+          <Input
+            id="zhipuaiApiKey"
+            type="password"
+            placeholder={t('settings:aiProvider.apiKeys.zhipuai.placeholder')}
+            value={zhipuaiApiKey}
+            onChange={(e) => onZhipuaiChange(e.target.value)}
+            className="max-w-md"
+          />
+          <p className="text-xs text-muted-foreground">
+            {t('settings:aiProvider.apiKeys.zhipuai.description')}
+          </p>
+        </div>
+      )}
+    </>
+  );
+}
+
+interface PerAgentModelFieldsProps {
+  plannerModel: string;
+  coderModel: string;
+  qaModel: string;
+  onPlannerChange: (v: string) => void;
+  onCoderChange: (v: string) => void;
+  onQaChange: (v: string) => void;
+}
+
+function PerAgentModelFields({
+  plannerModel, coderModel, qaModel,
+  onPlannerChange, onCoderChange, onQaChange,
+}: PerAgentModelFieldsProps) {
+  const { t } = useTranslation(['settings']);
+  return (
+    <div className="space-y-4 pt-4 border-t border-border">
+      <div>
+        <h3 className="text-sm font-medium text-foreground mb-1">
+          {t('settings:aiProvider.models.title')}
+        </h3>
+        <p className="text-xs text-muted-foreground">
+          {t('settings:aiProvider.models.description')}
+        </p>
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="plannerModel" className="text-sm font-medium text-foreground">
+          {t('settings:aiProvider.models.planner.label')}
+        </Label>
+        <Input
+          id="plannerModel"
+          type="text"
+          placeholder={t('settings:aiProvider.models.planner.placeholder')}
+          value={plannerModel}
+          onChange={(e) => onPlannerChange(e.target.value)}
+          className="max-w-md"
+        />
+        <p className="text-xs text-muted-foreground">
+          {t('settings:aiProvider.models.planner.description')}
+        </p>
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="coderModel" className="text-sm font-medium text-foreground">
+          {t('settings:aiProvider.models.coder.label')}
+        </Label>
+        <Input
+          id="coderModel"
+          type="text"
+          placeholder={t('settings:aiProvider.models.coder.placeholder')}
+          value={coderModel}
+          onChange={(e) => onCoderChange(e.target.value)}
+          className="max-w-md"
+        />
+        <p className="text-xs text-muted-foreground">
+          {t('settings:aiProvider.models.coder.description')}
+        </p>
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="qaModel" className="text-sm font-medium text-foreground">
+          {t('settings:aiProvider.models.qa.label')}
+        </Label>
+        <Input
+          id="qaModel"
+          type="text"
+          placeholder={t('settings:aiProvider.models.qa.placeholder')}
+          value={qaModel}
+          onChange={(e) => onQaChange(e.target.value)}
+          className="max-w-md"
+        />
+        <p className="text-xs text-muted-foreground">
+          {t('settings:aiProvider.models.qa.description')}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 /**
  * Provider settings component for configuring AI providers
  */
@@ -143,152 +315,25 @@ export function ProviderSettingsSection(_props: ProviderSettingsSectionProps) {
                 {t('settings:aiProvider.apiKeys.title')}
               </h3>
             </div>
-
-            {/* LiteLLM provider shows OpenAI and Google keys */}
-            {selectedProvider === 'litellm' && (
-              <>
-                <div className="space-y-2">
-                  <Label htmlFor="openaiApiKey" className="text-sm font-medium text-foreground">
-                    {t('settings:aiProvider.apiKeys.openai.label')}
-                  </Label>
-                  <Input
-                    id="openaiApiKey"
-                    type="password"
-                    placeholder={t('settings:aiProvider.apiKeys.openai.placeholder')}
-                    value={openaiApiKey}
-                    onChange={(e) => setOpenaiApiKey(e.target.value)}
-                    className="max-w-md"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    {t('settings:aiProvider.apiKeys.openai.description')}
-                  </p>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="googleApiKey" className="text-sm font-medium text-foreground">
-                    {t('settings:aiProvider.apiKeys.google.label')}
-                  </Label>
-                  <Input
-                    id="googleApiKey"
-                    type="password"
-                    placeholder={t('settings:aiProvider.apiKeys.google.placeholder')}
-                    value={googleApiKey}
-                    onChange={(e) => setGoogleApiKey(e.target.value)}
-                    className="max-w-md"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    {t('settings:aiProvider.apiKeys.google.description')}
-                  </p>
-                </div>
-              </>
-            )}
-
-            {/* OpenRouter provider shows OpenRouter key */}
-            {selectedProvider === 'openrouter' && (
-              <div className="space-y-2">
-                <Label htmlFor="openrouterApiKey" className="text-sm font-medium text-foreground">
-                  {t('settings:aiProvider.apiKeys.openrouter.label')}
-                </Label>
-                <Input
-                  id="openrouterApiKey"
-                  type="password"
-                  placeholder={t('settings:aiProvider.apiKeys.openrouter.placeholder')}
-                  value={openrouterApiKey}
-                  onChange={(e) => setOpenrouterApiKey(e.target.value)}
-                  className="max-w-md"
-                />
-                <p className="text-xs text-muted-foreground">
-                  {t('settings:aiProvider.apiKeys.openrouter.description')}
-                </p>
-              </div>
-            )}
-
-            {/* ZhipuAI provider shows ZhipuAI key */}
-            {selectedProvider === 'zhipuai' && (
-              <div className="space-y-2">
-                <Label htmlFor="zhipuaiApiKey" className="text-sm font-medium text-foreground">
-                  {t('settings:aiProvider.apiKeys.zhipuai.label')}
-                </Label>
-                <Input
-                  id="zhipuaiApiKey"
-                  type="password"
-                  placeholder={t('settings:aiProvider.apiKeys.zhipuai.placeholder')}
-                  value={zhipuaiApiKey}
-                  onChange={(e) => setZhipuaiApiKey(e.target.value)}
-                  className="max-w-md"
-                />
-                <p className="text-xs text-muted-foreground">
-                  {t('settings:aiProvider.apiKeys.zhipuai.description')}
-                </p>
-              </div>
-            )}
-
-            {/* Model Selection per Agent Type */}
-            <div className="space-y-4 pt-4 border-t border-border">
-              <div>
-                <h3 className="text-sm font-medium text-foreground mb-1">
-                  {t('settings:aiProvider.models.title')}
-                </h3>
-                <p className="text-xs text-muted-foreground">
-                  {t('settings:aiProvider.models.description')}
-                </p>
-              </div>
-
-              {/* Planner Model */}
-              <div className="space-y-2">
-                <Label htmlFor="plannerModel" className="text-sm font-medium text-foreground">
-                  {t('settings:aiProvider.models.planner.label')}
-                </Label>
-                <Input
-                  id="plannerModel"
-                  type="text"
-                  placeholder={t('settings:aiProvider.models.planner.placeholder')}
-                  value={plannerModel}
-                  onChange={(e) => setPlannerModel(e.target.value)}
-                  className="max-w-md"
-                />
-                <p className="text-xs text-muted-foreground">
-                  {t('settings:aiProvider.models.planner.description')}
-                </p>
-              </div>
-
-              {/* Coder Model */}
-              <div className="space-y-2">
-                <Label htmlFor="coderModel" className="text-sm font-medium text-foreground">
-                  {t('settings:aiProvider.models.coder.label')}
-                </Label>
-                <Input
-                  id="coderModel"
-                  type="text"
-                  placeholder={t('settings:aiProvider.models.coder.placeholder')}
-                  value={coderModel}
-                  onChange={(e) => setCoderModel(e.target.value)}
-                  className="max-w-md"
-                />
-                <p className="text-xs text-muted-foreground">
-                  {t('settings:aiProvider.models.coder.description')}
-                </p>
-              </div>
-
-              {/* QA Model */}
-              <div className="space-y-2">
-                <Label htmlFor="qaModel" className="text-sm font-medium text-foreground">
-                  {t('settings:aiProvider.models.qa.label')}
-                </Label>
-                <Input
-                  id="qaModel"
-                  type="text"
-                  placeholder={t('settings:aiProvider.models.qa.placeholder')}
-                  value={qaModel}
-                  onChange={(e) => setQaModel(e.target.value)}
-                  className="max-w-md"
-                />
-                <p className="text-xs text-muted-foreground">
-                  {t('settings:aiProvider.models.qa.description')}
-                </p>
-              </div>
-            </div>
-
+            <ProviderApiKeyFields
+              selectedProvider={selectedProvider}
+              openaiApiKey={openaiApiKey}
+              googleApiKey={googleApiKey}
+              openrouterApiKey={openrouterApiKey}
+              zhipuaiApiKey={zhipuaiApiKey}
+              onOpenaiChange={setOpenaiApiKey}
+              onGoogleChange={setGoogleApiKey}
+              onOpenrouterChange={setOpenrouterApiKey}
+              onZhipuaiChange={setZhipuaiApiKey}
+            />
+            <PerAgentModelFields
+              plannerModel={plannerModel}
+              coderModel={coderModel}
+              qaModel={qaModel}
+              onPlannerChange={setPlannerModel}
+              onCoderChange={setCoderModel}
+              onQaChange={setQaModel}
+            />
           </div>
         )}
 

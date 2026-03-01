@@ -293,10 +293,12 @@ async def test_planner_session_does_not_trigger_post_session_processing_on_retry
 
     class DummySession:
         """Fake session returned by the mock provider."""
+
         client = DummyClient()
 
     class DummyProvider:
         """Fake provider that returns a DummySession."""
+
         name = "claude"
 
         def create_session(self, *_args, **_kwargs):
@@ -374,10 +376,12 @@ async def test_worktree_planning_to_coding_sync_updates_source_phase_status(
 
     class DummySession:
         """Fake session returned by the mock provider."""
+
         client = DummyClient()
 
     class DummyProvider:
         """Fake provider that returns a DummySession."""
+
         name = "claude"
 
         def create_session(self, *_args, **_kwargs):

@@ -497,7 +497,9 @@ class TestCleanupOldArtifacts:
         assert removed == 3, f"Expected 3 removed, got {removed}"
 
         remaining = [p for p in manager.artifact_dir.iterdir() if p.is_file()]
-        assert len(remaining) == 3, f"Expected 3 remaining artifacts, got {len(remaining)}"
+        assert len(remaining) == 3, (
+            f"Expected 3 remaining artifacts, got {len(remaining)}"
+        )
 
         # The 3 remaining files should be the newest (v4, v5, v6)
         remaining_names = {p.name for p in remaining}

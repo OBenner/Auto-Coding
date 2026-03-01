@@ -17,7 +17,7 @@ import json
 import os
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, patch, Mock
+from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 
@@ -56,15 +56,12 @@ def mock_ollama_api():
         mock_response.choices = [
             Mock(
                 message=Mock(
-                    content="Test response from Ollama llama3",
-                    role="assistant"
+                    content="Test response from Ollama llama3", role="assistant"
                 )
             )
         ]
         mock_response.usage = Mock(
-            prompt_tokens=100,
-            completion_tokens=50,
-            total_tokens=150
+            prompt_tokens=100, completion_tokens=50, total_tokens=150
         )
         mock_response.model = "ollama/llama3"
 
@@ -128,11 +125,11 @@ def create_implementation_plan(spec_dir: Path) -> Path:
                     {
                         "id": "subtask-1-1",
                         "description": "Test subtask",
-                        "status": "pending"
+                        "status": "pending",
                     }
-                ]
+                ],
             }
-        ]
+        ],
     }
     plan_file.write_text(json.dumps(plan_data, indent=2))
     return plan_file
@@ -169,8 +166,12 @@ class TestOllamaProviderConfiguration:
         config = ProviderConfig.from_env()
 
         # Verify configuration
-        assert config.provider == "litellm", f"Provider should be litellm, got {config.provider}"
-        assert config.get_model_for_provider() == "ollama/llama3", f"Model should be ollama/llama3, got {config.get_model_for_provider()}"
+        assert config.provider == "litellm", (
+            f"Provider should be litellm, got {config.provider}"
+        )
+        assert config.get_model_for_provider() == "ollama/llama3", (
+            f"Model should be ollama/llama3, got {config.get_model_for_provider()}"
+        )
 
     def test_ollama_no_api_key_required(self, test_env_ollama, monkeypatch):
         """Test that Ollama does not require an API key (local model)."""
@@ -205,18 +206,24 @@ class TestOllamaCostTracking:
         temp_dir, spec_dir, project_dir = test_env_ollama
 
         # Verify Ollama pricing exists and is zero
-        assert "ollama/llama3" in MODEL_PRICING, "ollama/llama3 pricing should be defined"
+        assert "ollama/llama3" in MODEL_PRICING, (
+            "ollama/llama3 pricing should be defined"
+        )
 
         # Verify pricing structure
         ollama_pricing = MODEL_PRICING["ollama/llama3"]
         assert "input" in ollama_pricing, "Should have input pricing"
         assert "output" in ollama_pricing, "Should have output pricing"
-        assert ollama_pricing["input"] == 0.00, "Input price should be zero for local model"
-        assert ollama_pricing["output"] == 0.00, "Output price should be zero for local model"
+        assert ollama_pricing["input"] == pytest.approx(0.0), (
+            "Input price should be zero for local model"
+        )
+        assert ollama_pricing["output"] == pytest.approx(0.0), (
+            "Output price should be zero for local model"
+        )
 
     def test_cost_calculation_for_ollama(self, test_env_ollama):
         """Test that cost calculation returns $0.00 for Ollama models."""
-        from core.cost_tracking import CostTracker, MODEL_PRICING
+        from core.cost_tracking import MODEL_PRICING, CostTracker
 
         temp_dir, spec_dir, project_dir = test_env_ollama
 
@@ -239,7 +246,7 @@ class TestOllamaCostTracking:
         expected_cost = (input_tokens / 1_000_000 * pricing["input"]) + (
             output_tokens / 1_000_000 * pricing["output"]
         )
-        assert expected_cost == 0.00, "Ollama cost should be zero"
+        assert expected_cost == pytest.approx(0.0), "Ollama cost should be zero"
 
         # Verify cost report
         cost_report = get_cost_report(spec_dir)
@@ -247,7 +254,7 @@ class TestOllamaCostTracking:
         assert "total_cost" in cost_report, "Should have total_cost"
 
         actual_cost = cost_report["total_cost"]
-        assert actual_cost == 0.00, (
+        assert actual_cost == pytest.approx(0.0), (
             f"Ollama cost should be $0.00, got ${actual_cost:.2f}"
         )
 
@@ -275,7 +282,9 @@ class TestOllamaCostTracking:
         assert "ollama/codellama" in models, "Should track ollama/codellama"
 
         # Verify total cost is still zero
-        assert cost_report["total_cost"] == 0.00, "Total Ollama cost should be $0.00"
+        assert cost_report["total_cost"] == pytest.approx(0.0), (
+            "Total Ollama cost should be $0.00"
+        )
 
     def test_ollama_models_have_zero_cost(self, test_env_ollama):
         """Test that all Ollama models in MODEL_PRICING have zero cost."""
@@ -285,7 +294,8 @@ class TestOllamaCostTracking:
 
         # Find all Ollama models
         ollama_models = [
-            model_name for model_name in MODEL_PRICING.keys()
+            model_name
+            for model_name in MODEL_PRICING.keys()
             if model_name.startswith("ollama/")
         ]
 
@@ -294,8 +304,12 @@ class TestOllamaCostTracking:
         # Verify all have zero cost
         for model_name in ollama_models:
             pricing = MODEL_PRICING[model_name]
-            assert pricing["input"] == 0.00, f"{model_name} input should be zero"
-            assert pricing["output"] == 0.00, f"{model_name} output should be zero"
+            assert pricing["input"] == pytest.approx(0.0), (
+                f"{model_name} input should be zero"
+            )
+            assert pricing["output"] == pytest.approx(0.0), (
+                f"{model_name} output should be zero"
+            )
 
 
 # =============================================================================
@@ -308,8 +322,8 @@ class TestOllamaProviderFactory:
 
     def test_create_litellm_provider_for_ollama(self, test_env_ollama, monkeypatch):
         """Test creating LiteLLM provider for Ollama."""
-        from core.providers.factory import create_engine_provider
         from core.providers.config import ProviderConfig
+        from core.providers.factory import create_engine_provider
 
         temp_dir, spec_dir, project_dir = test_env_ollama
 
@@ -328,7 +342,9 @@ class TestOllamaProviderFactory:
         # Verify the factory can actually instantiate the provider
         provider = create_engine_provider(config)
         assert provider is not None, "create_engine_provider should return a provider"
-        assert provider.name == "litellm", f"Provider name should be 'litellm', got {provider.name!r}"
+        assert provider.name == "litellm", (
+            f"Provider name should be 'litellm', got {provider.name!r}"
+        )
 
 
 # =============================================================================
@@ -339,15 +355,17 @@ class TestOllamaProviderFactory:
 class TestE2EOllamaIntegration:
     """End-to-end tests for Ollama provider integration."""
 
-    def test_e2e_ollama_provider_mock(self, test_env_ollama, monkeypatch, mock_ollama_api):
+    def test_e2e_ollama_provider_mock(
+        self, test_env_ollama, monkeypatch, mock_ollama_api
+    ):
         """
         E2E Test (MOCKED): Configure Ollama provider and verify zero cost.
 
         This test uses mocked API responses for fast, offline testing without
         requiring a running Ollama instance.
         """
-        from core.providers.config import ProviderConfig
         from core.cost_tracking import CostTracker
+        from core.providers.config import ProviderConfig
 
         temp_dir, spec_dir, project_dir = test_env_ollama
 
@@ -358,8 +376,12 @@ class TestE2EOllamaIntegration:
 
         # Step 2: Verify provider configuration loaded correctly
         config = ProviderConfig.from_env()
-        assert config.provider == "litellm", f"Provider should be litellm, got {config.provider}"
-        assert config.get_model_for_provider() == "ollama/llama3", f"Model should be ollama/llama3, got {config.get_model_for_provider()}"
+        assert config.provider == "litellm", (
+            f"Provider should be litellm, got {config.provider}"
+        )
+        assert config.get_model_for_provider() == "ollama/llama3", (
+            f"Model should be ollama/llama3, got {config.get_model_for_provider()}"
+        )
 
         # Step 3: Create minimal spec and plan
         spec_file = create_simple_spec(spec_dir)
@@ -393,12 +415,14 @@ class TestE2EOllamaIntegration:
         # Step 7: Verify Ollama model is tracked
         record = cost_report["records"][0]
         assert record["agent_type"] == "coder", "Should track coder agent"
-        assert record["model"] == "ollama/llama3", f"Should use ollama/llama3, got {record['model']}"
+        assert record["model"] == "ollama/llama3", (
+            f"Should use ollama/llama3, got {record['model']}"
+        )
         assert record["input_tokens"] == 1000, "Should track input tokens"
         assert record["output_tokens"] == 500, "Should track output tokens"
 
         # Step 8: Verify cost is ZERO (local model, no API cost)
-        assert cost_report["total_cost"] == 0.00, (
+        assert cost_report["total_cost"] == pytest.approx(0.0), (
             f"Ollama cost should be $0.00, got ${cost_report['total_cost']:.2f}"
         )
 
@@ -433,21 +457,23 @@ class TestE2EOllamaIntegration:
 
         # Verify all are Ollama models
         models = [r["model"] for r in cost_report["records"]]
-        assert all(m.startswith("ollama/") for m in models), "All models should be Ollama"
+        assert all(m.startswith("ollama/") for m in models), (
+            "All models should be Ollama"
+        )
 
         # Verify total cost is zero
-        assert cost_report["total_cost"] == 0.00, (
+        assert cost_report["total_cost"] == pytest.approx(0.0), (
             f"Total Ollama cost should be $0.00, got ${cost_report['total_cost']:.2f}"
         )
 
-        print(f"\n✓ E2E Test passed: Multiple Ollama models used, total cost is $0.00")
+        print("\n✓ E2E Test passed: Multiple Ollama models used, total cost is $0.00")
         print(f"  Models used: {', '.join(models)}")
 
     def test_e2e_mixed_claude_and_ollama_cost(self, test_env_ollama, monkeypatch):
         """
         E2E Test: Mix Claude and Ollama usage, verify only Claude has cost.
         """
-        from core.cost_tracking import CostTracker, MODEL_PRICING
+        from core.cost_tracking import MODEL_PRICING, CostTracker
 
         temp_dir, spec_dir, project_dir = test_env_ollama
 
@@ -486,13 +512,15 @@ class TestE2EOllamaIntegration:
         )
 
         # Verify Ollama record has zero cost
-        ollama_record = next(r for r in cost_report["records"] if "ollama" in r["model"])
+        ollama_record = next(
+            r for r in cost_report["records"] if "ollama" in r["model"]
+        )
         ollama_cost = ollama_record.get("cost", 0.00)
-        assert ollama_cost == 0.00, "Ollama record cost should be $0.00"
+        assert ollama_cost == pytest.approx(0.0), "Ollama record cost should be $0.00"
 
-        print(f"\n✓ E2E Test passed: Mixed Claude/Ollama usage")
+        print("\n✓ E2E Test passed: Mixed Claude/Ollama usage")
         print(f"  Claude cost: ${expected_cost:.6f}")
-        print(f"  Ollama cost: $0.00")
+        print("  Ollama cost: $0.00")
         print(f"  Total cost: ${actual_cost:.6f}")
 
 
@@ -591,6 +619,7 @@ def print_manual_test_procedure():
 def run_all_tests():
     """Run all tests using pytest."""
     import sys
+
     sys.exit(pytest.main([__file__, "-v", "--tb=short"]))
 
 
@@ -599,7 +628,7 @@ if __name__ == "__main__":
     print_manual_test_procedure()
 
     # Run automated tests
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("Running Automated E2E Tests for Ollama Provider...")
-    print("="*70 + "\n")
+    print("=" * 70 + "\n")
     run_all_tests()
