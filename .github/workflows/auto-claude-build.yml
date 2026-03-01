@@ -46,6 +46,7 @@ permissions:
   contents: read
   actions: read
   pull-requests: write
+  issues: write
 
 env:
   # Auto-Claude Configuration
@@ -210,8 +211,8 @@ jobs:
               return;
             }
 
-            // Read build log if it exists
-            const buildLogPath = `${specDir}/${latestSpec}/build-log.json`;
+            // Read build log from artifacts subdirectory (where ArtifactManager writes it)
+            const buildLogPath = `${specDir}/${latestSpec}/artifacts/build-log.json`;
             let buildLog = null;
             if (fs.existsSync(buildLogPath)) {
               try {
@@ -221,11 +222,14 @@ jobs:
               }
             }
 
-            // Read QA report if it exists
-            const qaReportPath = `${specDir}/${latestSpec}/qa_report.md`;
+            // Read QA report if it exists — support both naming conventions
+            const qaReportPath = `${specDir}/${latestSpec}/qa-report.md`;
+            const qaReportPathAlt = `${specDir}/${latestSpec}/qa_report.md`;
             let qaReport = null;
             if (fs.existsSync(qaReportPath)) {
               qaReport = fs.readFileSync(qaReportPath, 'utf8');
+            } else if (fs.existsSync(qaReportPathAlt)) {
+              qaReport = fs.readFileSync(qaReportPathAlt, 'utf8');
             }
 
             // Build comment

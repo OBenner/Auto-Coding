@@ -78,14 +78,15 @@ def is_ci_mode() -> bool:
     """
     Check if running in CI/CD mode.
 
-    CI mode is enabled when the AUTO_CLAUDE_CI environment variable is set to 'true' or '1'.
-    This enables headless operation with exit codes and JSON output.
+    CI mode is enabled when the AUTO_CLAUDE_CI environment variable is set to
+    'true', '1', 'yes', or 'on'. This enables headless operation with exit codes
+    and JSON output.
 
     Returns:
         True if in CI mode, False otherwise
     """
     ci_value = os.environ.get("AUTO_CLAUDE_CI", "").lower()
-    return ci_value in ("true", "1")
+    return ci_value in ("true", "1", "yes", "on")
 
 
 def is_json_output_enabled() -> bool:
@@ -93,13 +94,14 @@ def is_json_output_enabled() -> bool:
     Check if JSON output mode is enabled.
 
     JSON output mode is enabled when the AUTO_CLAUDE_JSON_OUTPUT environment variable
-    is set to 'true' or '1'. This enables structured JSON output for programmatic consumption.
+    is set to 'true', '1', 'yes', or 'on'. This enables structured JSON output for
+    programmatic consumption.
 
     Returns:
         True if JSON output is enabled, False otherwise
     """
     json_value = os.environ.get("AUTO_CLAUDE_JSON_OUTPUT", "").lower()
-    return json_value in ("true", "1")
+    return json_value in ("true", "1", "yes", "on")
 
 
 def setup_environment() -> Path:
@@ -235,11 +237,13 @@ def validate_environment(spec_dir: Path) -> bool:
     else:
         print("Linear integration: DISABLED (set LINEAR_API_KEY to enable)")
 
-    # Check CI mode
+    # Check CI mode — write to stderr so CI mode status never corrupts JSON stdout output
     if is_ci_mode():
-        print("CI/CD mode: ENABLED (AUTO_CLAUDE_CI=true)")
+        print("CI/CD mode: ENABLED (AUTO_CLAUDE_CI=true)", file=sys.stderr)
     else:
-        print("CI/CD mode: DISABLED (set AUTO_CLAUDE_CI=true to enable)")
+        print(
+            "CI/CD mode: DISABLED (set AUTO_CLAUDE_CI=true to enable)", file=sys.stderr
+        )
 
     # Check Graphiti integration (optional but show status)
     # Lazy import to avoid triggering pywintypes import before validation (ACS-253)

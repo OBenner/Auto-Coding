@@ -17,13 +17,15 @@ class ExitCode(IntEnum):
     non-zero values indicate various failure modes.
 
     Usage:
-        sys.exit(ExitCode.SUCCESS)  # Build completed successfully
-        sys.exit(ExitCode.BUILD_FAILED)  # Coder agent failed to implement
-        sys.exit(ExitCode.QA_FAILED)  # Build passed but QA rejected
-        sys.exit(ExitCode.SYSTEM_ERROR)  # Unexpected error/exception
+        sys.exit(ExitCode.SUCCESS)      # Build completed successfully
+        sys.exit(ExitCode.BUILD_FAILED) # Coder agent failed to implement
+        sys.exit(ExitCode.QA_FAILED)    # Build passed but QA rejected
+        sys.exit(ExitCode.SYSTEM_ERROR) # Unexpected error/exception
+        sys.exit(ExitCode.INTERRUPTED)  # Build paused/interrupted by user
     """
 
     SUCCESS = 0  # Build completed and passed QA
     BUILD_FAILED = 1  # Coder agent failed to implement feature
     QA_FAILED = 2  # Build completed but QA validation failed
     SYSTEM_ERROR = 3  # Unexpected system error or exception
+    INTERRUPTED = 130  # Build was interrupted/paused by user (SIGINT convention)

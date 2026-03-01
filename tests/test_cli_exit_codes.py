@@ -14,8 +14,10 @@ import sys
 
 import pytest
 
-# Import the ExitCode enum
-sys.path.insert(0, "apps/backend")
+# sys.path is set by conftest.py (apps/backend is already on the path)
+# Keep a local fallback for running this file directly
+if not any("apps/backend" in p or "apps\\backend" in p for p in sys.path):
+    sys.path.insert(0, "apps/backend")
 from cli.exit_codes import ExitCode
 
 
@@ -45,6 +47,7 @@ class TestExitCodeType:
     def test_is_int_enum(self):
         """ExitCode is an IntEnum."""
         from enum import IntEnum
+
         assert issubclass(ExitCode, IntEnum)
 
     def test_members_are_integers(self):
@@ -74,6 +77,7 @@ class TestUnixConventions:
         assert ExitCode.BUILD_FAILED != 0
         assert ExitCode.QA_FAILED != 0
         assert ExitCode.SYSTEM_ERROR != 0
+        assert ExitCode.INTERRUPTED != 0
 
     def test_exit_codes_are_positive(self):
         """All exit codes are positive integers."""
@@ -81,6 +85,7 @@ class TestUnixConventions:
         assert ExitCode.BUILD_FAILED > 0
         assert ExitCode.QA_FAILED > 0
         assert ExitCode.SYSTEM_ERROR > 0
+        assert ExitCode.INTERRUPTED > 0
 
     def test_exit_codes_are_small(self):
         """Exit codes are in the standard range (0-255)."""
@@ -93,8 +98,13 @@ class TestExitCodeUniqueness:
 
     def test_all_codes_are_unique(self):
         """Each exit code has a unique value."""
-        codes = [ExitCode.SUCCESS, ExitCode.BUILD_FAILED,
-                 ExitCode.QA_FAILED, ExitCode.SYSTEM_ERROR]
+        codes = [
+            ExitCode.SUCCESS,
+            ExitCode.BUILD_FAILED,
+            ExitCode.QA_FAILED,
+            ExitCode.SYSTEM_ERROR,
+            ExitCode.INTERRUPTED,
+        ]
         assert len(set(codes)) == len(codes)
 
     def test_no_duplicate_values(self):
@@ -120,17 +130,14 @@ class TestExitCodeComparison:
 
     def test_can_use_in_if_statements(self):
         """Exit codes work in conditional statements."""
-        if ExitCode.SUCCESS:
-            assert True, "SUCCESS (0) is falsy but should be checked explicitly"
+        # SUCCESS (0) is falsy in a boolean context — check it explicitly
+        assert ExitCode.SUCCESS == 0, "SUCCESS must be 0 (falsy)"
+        assert not ExitCode.SUCCESS, "SUCCESS (0) should be falsy"
 
-        if ExitCode.BUILD_FAILED:
-            assert True, "BUILD_FAILED (1) is truthy"
-
-        if ExitCode.QA_FAILED:
-            assert True, "QA_FAILED (2) is truthy"
-
-        if ExitCode.SYSTEM_ERROR:
-            assert True, "SYSTEM_ERROR (3) is truthy"
+        # Non-zero codes are truthy
+        assert ExitCode.BUILD_FAILED, "BUILD_FAILED (1) is truthy"
+        assert ExitCode.QA_FAILED, "QA_FAILED (2) is truthy"
+        assert ExitCode.SYSTEM_ERROR, "SYSTEM_ERROR (3) is truthy"
 
 
 class TestExitCodeInBuildCommands:
@@ -140,6 +147,7 @@ class TestExitCodeInBuildCommands:
         """ExitCode can be imported in build_commands."""
         # This test verifies the import works
         from cli.exit_codes import ExitCode as ExitCodeAlias
+
         assert ExitCodeAlias is ExitCode
 
     def test_exit_code_values_match_spec(self):
@@ -209,8 +217,12 @@ class TestExitCodeInCIPipeline:
         assert exit_code == 0
 
         # Simulate shell: if [ $? -ne 0 ]; then
-        error_codes = [ExitCode.BUILD_FAILED, ExitCode.QA_FAILED,
-                       ExitCode.SYSTEM_ERROR]
+        error_codes = [
+            ExitCode.BUILD_FAILED,
+            ExitCode.QA_FAILED,
+            ExitCode.SYSTEM_ERROR,
+            ExitCode.INTERRUPTED,
+        ]
         for code in error_codes:
             assert code != 0
 
@@ -238,11 +250,12 @@ class TestExitCodeIteration:
     def test_can_iterate_all_codes(self):
         """Can iterate over all exit codes."""
         codes = list(ExitCode)
-        assert len(codes) == 4
+        assert len(codes) == 5
         assert ExitCode.SUCCESS in codes
         assert ExitCode.BUILD_FAILED in codes
         assert ExitCode.QA_FAILED in codes
         assert ExitCode.SYSTEM_ERROR in codes
+        assert ExitCode.INTERRUPTED in codes
 
     def test_iteration_preserves_order(self):
         """Iteration order is consistent."""
@@ -313,15 +326,19 @@ class TestExitCodeHashable:
             ExitCode.SUCCESS: "Build passed",
             ExitCode.BUILD_FAILED: "Build failed",
             ExitCode.QA_FAILED: "QA rejected",
-            ExitCode.SYSTEM_ERROR: "System error"
+            ExitCode.SYSTEM_ERROR: "System error",
         }
         assert code_map[ExitCode.SUCCESS] == "Build passed"
         assert code_map[ExitCode.BUILD_FAILED] == "Build failed"
 
     def test_can_use_in_set(self):
         """Exit codes can be used in sets."""
-        code_set = {ExitCode.SUCCESS, ExitCode.BUILD_FAILED,
-                    ExitCode.QA_FAILED, ExitCode.SYSTEM_ERROR}
+        code_set = {
+            ExitCode.SUCCESS,
+            ExitCode.BUILD_FAILED,
+            ExitCode.QA_FAILED,
+            ExitCode.SYSTEM_ERROR,
+        }
         assert len(code_set) == 4
         assert ExitCode.SUCCESS in code_set
 
@@ -331,8 +348,7 @@ class TestExitCodeImmutability:
 
     def test_cannot_modify_value(self):
         """Exit code values cannot be modified."""
-        original_value = ExitCode.SUCCESS.value
-        # IntEnum values are immutable
+        # IntEnum values are immutable — attempting to set raises AttributeError
         with pytest.raises(AttributeError):
             ExitCode.SUCCESS.value = 99
 
@@ -358,13 +374,15 @@ class TestExitCodeBoundaryValues:
         """Maximum exit code is within valid range."""
         max_code = max(ExitCode)
         assert max_code.value <= 255
-        assert max_code == ExitCode.SYSTEM_ERROR
+        # INTERRUPTED (130) is currently the largest code; update if new codes are added
+        assert max_code == ExitCode.INTERRUPTED
 
     def test_all_values_in_standard_range(self):
         """All exit codes are in Unix-standard range (0-255)."""
         for code in ExitCode:
-            assert 0 <= code.value <= 255, \
+            assert 0 <= code.value <= 255, (
                 f"{code.name} = {code.value} is outside valid range"
+            )
 
 
 class TestExitCodeComprehensiveness:
@@ -386,13 +404,18 @@ class TestExitCodeComprehensiveness:
         """Has code for system error scenario."""
         assert ExitCode.SYSTEM_ERROR == 3
 
+    def test_covers_interrupted_scenario(self):
+        """Has code for build interrupted/paused by user scenario."""
+        assert ExitCode.INTERRUPTED == 130
+
     def test_all_expected_scenarios_covered(self):
         """All major build scenarios have corresponding exit codes."""
         expected_codes = {
             "SUCCESS": 0,
             "BUILD_FAILED": 1,
             "QA_FAILED": 2,
-            "SYSTEM_ERROR": 3
+            "SYSTEM_ERROR": 3,
+            "INTERRUPTED": 130,
         }
         for name, value in expected_codes.items():
             assert hasattr(ExitCode, name)

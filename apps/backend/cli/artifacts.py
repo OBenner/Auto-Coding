@@ -9,17 +9,15 @@ Handles build logs, test reports, coverage reports, and other build outputs.
 import json
 import logging
 import shutil
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 # Ensure parent directory is in path for imports (before other imports)
 _PARENT_DIR = Path(__file__).parent.parent
-if str(_PARENT_DIR) not in Path(__file__).parent.parts:
-    import sys
-
-    if str(_PARENT_DIR) not in sys.path:
-        sys.path.insert(0, str(_PARENT_DIR))
+if str(_PARENT_DIR) not in sys.path:
+    sys.path.insert(0, str(_PARENT_DIR))
 
 logger = logging.getLogger(__name__)
 
@@ -79,7 +77,7 @@ class ArtifactManager:
         Args:
             build_data: Dictionary containing build information
                 Required keys: status, timestamp
-                Optional keys: duration, error, changedFiles, metadata
+                Optional keys: duration, error, changed_files, metadata
 
         Returns:
             Path to saved artifact file, or None if disabled
@@ -89,7 +87,7 @@ class ArtifactManager:
             ...     "status": "success",
             ...     "timestamp": "2025-02-06T18:30:00Z",
             ...     "duration": 120.5,
-            ...     "changedFiles": ["src/main.py"]
+            ...     "changed_files": ["src/main.py"]
             ... })
         """
         if not self.enabled:

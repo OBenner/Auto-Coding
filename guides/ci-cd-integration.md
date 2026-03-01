@@ -25,6 +25,8 @@ Auto-Claude's CI/CD mode enables fully automated builds without interactive prom
 ### Basic CI Mode Usage
 
 ```bash
+cd apps/backend
+
 # Run in CI mode (non-interactive)
 python run.py --spec 001 --ci
 
@@ -37,6 +39,10 @@ export AUTO_CLAUDE_JSON_OUTPUT=true
 python run.py --spec 001
 ```
 
+> **JSON purity note:** When `--json` is used, all machine-readable output goes to
+> stdout and all human-readable status messages go to stderr. Ensure your scripts
+> capture stdout only (e.g. `python run.py --spec 001 --ci --json 2>/dev/null`).
+
 ### Exit Codes
 
 Auto-Claude uses standard exit codes to indicate build results:
@@ -47,10 +53,12 @@ Auto-Claude uses standard exit codes to indicate build results:
 | **1** | Build Failed | Implementation errors, agent couldn't complete task |
 | **2** | QA Failed | Validation rejected, acceptance criteria not met |
 | **3** | System Error | Configuration, authentication, or runtime errors |
+| **130** | Interrupted | Build was paused or interrupted by the user (SIGINT) |
 
 **GitHub Actions Integration:**
 ```yaml
 - name: Run Auto-Claude
+  working-directory: apps/backend
   run: python run.py --spec 001 --ci
   # Exit codes are automatically handled by GitHub Actions
 ```
@@ -425,7 +433,9 @@ jobs:
       - name: Setup Auto-Claude
         run: |
           cd apps/backend
-          uv venv && uv pip install -r requirements.txt
+          uv venv
+          source .venv/bin/activate
+          uv pip install -r requirements.txt
 
       - name: Run AI review
         env:

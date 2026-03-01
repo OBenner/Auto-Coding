@@ -20,8 +20,10 @@ from unittest.mock import patch
 
 import pytest
 
-# Import JSON output module
-sys.path.insert(0, "apps/backend")
+# sys.path is set by conftest.py (apps/backend is already on the path)
+# Keep a local fallback for running this file directly
+if not any("apps/backend" in p or "apps\\backend" in p for p in sys.path):
+    sys.path.insert(0, "apps/backend")
 from cli.exit_codes import ExitCode
 from cli.json_output import (
     BuildStatus,
@@ -38,19 +40,19 @@ class TestBuildStatusEnum:
 
     def test_success_status_value(self):
         """SUCCESS status value is 'success'."""
-        assert BuildStatus.SUCCESS == "success"
+        assert BuildStatus.SUCCESS.value == "success"
 
     def test_build_failed_status_value(self):
         """BUILD_FAILED status value is 'build_failed'."""
-        assert BuildStatus.BUILD_FAILED == "build_failed"
+        assert BuildStatus.BUILD_FAILED.value == "build_failed"
 
     def test_qa_failed_status_value(self):
         """QA_FAILED status value is 'qa_failed'."""
-        assert BuildStatus.QA_FAILED == "qa_failed"
+        assert BuildStatus.QA_FAILED.value == "qa_failed"
 
     def test_system_error_status_value(self):
         """SYSTEM_ERROR status value is 'system_error'."""
-        assert BuildStatus.SYSTEM_ERROR == "system_error"
+        assert BuildStatus.SYSTEM_ERROR.value == "system_error"
 
     def test_is_string_enum(self):
         """BuildStatus is a string enum."""
@@ -287,6 +289,32 @@ class TestFormatBuildResultExitCodeConversion:
 
         data = json.loads(result)
         assert data["status"] == "system_error"
+
+
+class TestFormatBuildResultExitCodeTypes:
+    """Tests verifying format_build_result accepts ExitCode as exit_code parameter."""
+
+    def test_accepts_exit_code_enum_as_exit_code(self):
+        """format_build_result accepts ExitCode enum for exit_code parameter."""
+        # The function signature is: exit_code: ExitCode | int
+        # This test verifies ExitCode instances are accepted without error
+        result = format_build_result(
+            status=BuildStatus.SUCCESS,
+            spec_name="001-feature",
+            exit_code=ExitCode.SUCCESS,
+        )
+        data = json.loads(result)
+        assert data["exitCode"] == 0
+
+    def test_accepts_int_as_exit_code(self):
+        """format_build_result accepts plain int for exit_code parameter."""
+        result = format_build_result(
+            status=BuildStatus.BUILD_FAILED,
+            spec_name="001-feature",
+            exit_code=1,
+        )
+        data = json.loads(result)
+        assert data["exitCode"] == 1
 
 
 class TestFormatBuildResultJsonStructure:

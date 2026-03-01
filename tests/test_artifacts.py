@@ -20,6 +20,7 @@ Tests the artifacts.py module functionality including:
 """
 
 import json
+import os
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -27,8 +28,10 @@ from unittest.mock import patch
 
 import pytest
 
-# Import artifact manager module
-sys.path.insert(0, "apps/backend")
+# sys.path is set by conftest.py (apps/backend is already on the path)
+# Keep a local fallback for running this file directly
+if not any("apps/backend" in p or "apps\\backend" in p for p in sys.path):
+    sys.path.insert(0, "apps/backend")
 from cli.artifacts import ArtifactManager, create_artifact_manager
 
 
@@ -77,10 +80,7 @@ class TestSaveBuildLog:
     def test_save_minimal_build_log(self, tmp_path):
         """Save build log with minimal required data."""
         manager = ArtifactManager(spec_dir=tmp_path)
-        build_data = {
-            "status": "success",
-            "exitCode": 0
-        }
+        build_data = {"status": "success", "exitCode": 0}
 
         path = manager.save_build_log(build_data)
         assert path is not None
@@ -97,7 +97,7 @@ class TestSaveBuildLog:
             "duration": 120.5,
             "error": None,
             "changedFiles": ["src/main.py", "tests/test_main.py"],
-            "metadata": {"model": "claude-sonnet-4-5"}
+            "metadata": {"model": "claude-sonnet-4-5"},
         }
 
         path = manager.save_build_log(build_data)
@@ -156,10 +156,7 @@ class TestSaveBuildLog:
     def test_save_build_log_handles_unicode(self, tmp_path):
         """Save build log with unicode characters."""
         manager = ArtifactManager(spec_dir=tmp_path)
-        build_data = {
-            "status": "success",
-            "error": "Error: 𝕌𝕟𝕚𝕔𝕠𝕕𝕖 𝕥𝕖𝕤𝕥 🚀"
-        }
+        build_data = {"status": "success", "error": "Error: 𝕌𝕟𝕚𝕔𝕠𝕕𝕖 𝕥𝕖𝕤𝕥 🚀"}
 
         path = manager.save_build_log(build_data)
         data = json.loads(path.read_text())
@@ -190,8 +187,8 @@ class TestSaveTestReport:
             "coverage": 87.5,
             "tests": [
                 {"name": "test_login", "status": "passed", "duration": 0.5},
-                {"name": "test_logout", "status": "passed", "duration": 0.3}
-            ]
+                {"name": "test_logout", "status": "passed", "duration": 0.3},
+            ],
         }
 
         path = manager.save_test_report(test_data)
@@ -225,10 +222,7 @@ class TestSaveCoverageReport:
     def test_save_coverage_report(self, tmp_path):
         """Save coverage report with metrics."""
         manager = ArtifactManager(spec_dir=tmp_path)
-        coverage_data = {
-            "lineCoverage": 85.5,
-            "branchCoverage": 78.2
-        }
+        coverage_data = {"lineCoverage": 85.5, "branchCoverage": 78.2}
 
         path = manager.save_coverage_report(coverage_data)
         assert path is not None
@@ -242,8 +236,8 @@ class TestSaveCoverageReport:
             "branchCoverage": 78.2,
             "modules": {
                 "src/main.py": {"lines": 92.0, "branches": 85.0},
-                "src/utils.py": {"lines": 78.0, "branches": 72.0}
-            }
+                "src/utils.py": {"lines": 78.0, "branches": 72.0},
+            },
         }
 
         path = manager.save_coverage_report(coverage_data)
@@ -492,10 +486,12 @@ class TestCleanupOldArtifacts:
 
         # Create multiple build logs with different content (same name)
         # We need to create actual separate files, so use custom names with timestamps
-        import time
         for i in range(6):
             manager.save_custom_artifact(f"build-{i}", {"iteration": i})
-            time.sleep(0.01)  # Ensure different modification times
+            # Set explicit mtime to ensure deterministic ordering (avoids flaky sleep)
+            artifact_path = manager.artifact_dir / f"build-{i}.json"
+            if artifact_path.exists():
+                os.utime(artifact_path, (1000000 + i, 1000000 + i))
 
         removed = manager.cleanup_old_artifacts(keep_count=3)
         # Each artifact has unique name, so none are grouped together
@@ -545,7 +541,9 @@ class TestCopyArtifactToDirectory:
         manager = ArtifactManager(spec_dir=tmp_path)
         target_dir = tmp_path / "shared"
 
-        copied_path = manager.copy_artifact_to_directory("does-not-exist.json", target_dir)
+        copied_path = manager.copy_artifact_to_directory(
+            "does-not-exist.json", target_dir
+        )
         assert copied_path is None
 
     def test_copy_disabled(self, tmp_path):
@@ -580,6 +578,10 @@ class TestFactoryFunction:
 class TestErrorHandling:
     """Tests for error handling and edge cases."""
 
+    @pytest.mark.skipif(
+        sys.platform == "win32",
+        reason="chmod permission tests are unreliable on Windows",
+    )
     def test_save_build_log_handles_permission_error(self, tmp_path):
         """Handle permission errors gracefully."""
         manager = ArtifactManager(spec_dir=tmp_path)
@@ -588,7 +590,7 @@ class TestErrorHandling:
         manager.artifact_dir.chmod(0o444)
 
         # Should return None, not raise
-        with patch.object(manager, 'artifact_dir', manager.artifact_dir):
+        with patch.object(manager, "artifact_dir", manager.artifact_dir):
             # Re-create to trigger permission error
             result = manager.save_build_log({"status": "success"})
             # The actual behavior depends on OS permissions
@@ -642,28 +644,26 @@ class TestArtifactIntegration:
         manager = ArtifactManager(spec_dir=tmp_path)
 
         # 1. Save build log
-        build_log = manager.save_build_log({
-            "status": "success",
-            "exitCode": 0,
-            "duration": 120.5,
-            "changedFiles": ["src/auth.py"]
-        })
+        build_log = manager.save_build_log(
+            {
+                "status": "success",
+                "exitCode": 0,
+                "duration": 120.5,
+                "changedFiles": ["src/auth.py"],
+            }
+        )
         assert build_log is not None
 
         # 2. Save test report
-        test_report = manager.save_test_report({
-            "passed": 42,
-            "failed": 0,
-            "total": 42,
-            "coverage": 87.5
-        })
+        test_report = manager.save_test_report(
+            {"passed": 42, "failed": 0, "total": 42, "coverage": 87.5}
+        )
         assert test_report is not None
 
         # 3. Save coverage report
-        coverage_report = manager.save_coverage_report({
-            "lineCoverage": 87.5,
-            "branchCoverage": 82.0
-        })
+        coverage_report = manager.save_coverage_report(
+            {"lineCoverage": 87.5, "branchCoverage": 82.0}
+        )
         assert coverage_report is not None
 
         # 4. List all artifacts
@@ -694,7 +694,11 @@ class TestArtifactIntegration:
         manager.save_coverage_report({"lineCoverage": 85.5})
 
         # Load all artifacts and check timestamps
-        for artifact_name in ["build-log.json", "test-report.json", "coverage-report.json"]:
+        for artifact_name in [
+            "build-log.json",
+            "test-report.json",
+            "coverage-report.json",
+        ]:
             data = manager.load_artifact(artifact_name)
             assert "timestamp" in data
             assert data["timestamp"].endswith("Z")
@@ -709,11 +713,8 @@ class TestArtifactIntegration:
             "status": "success",
             "exitCode": 0,
             "duration": 123.456,
-            "nested": {
-                "key": "value",
-                "number": 42
-            },
-            "list": [1, 2, 3]
+            "nested": {"key": "value", "number": 42},
+            "list": [1, 2, 3],
         }
 
         manager.save_build_log(original_data)

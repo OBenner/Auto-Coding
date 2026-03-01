@@ -6,6 +6,7 @@ CLI commands for building specs and handling the main build flow.
 """
 
 import asyncio
+import logging
 import os
 import sys
 import time
@@ -17,14 +18,15 @@ _PARENT_DIR = Path(__file__).parent.parent
 if str(_PARENT_DIR) not in sys.path:
     sys.path.insert(0, str(_PARENT_DIR))
 
+logger = logging.getLogger(__name__)
+
 # Import only what we need at module level
 # Heavy imports are lazy-loaded in functions to avoid import errors
-from progress import print_paused_banner
-from review import ReviewState
-
 from cli.artifacts import create_artifact_manager
 from cli.exit_codes import ExitCode
 from cli.json_output import format_build_result
+from progress import print_paused_banner
+from review import ReviewState
 from ui import (
     BuildState,
     Icons,
@@ -87,12 +89,17 @@ def _generate_test_report_data(
                 impl_plan = json.load(f)
             qa_stats = impl_plan.get("qa_stats", {})
             iteration_history = impl_plan.get("qa_iteration_history", [])
-        except (OSError, json.JSONDecodeError):
-            pass
+        except (OSError, json.JSONDecodeError) as e:
+            # Non-critical: QA stats unavailable; proceed with defaults
+            logger.debug("Could not read implementation plan for QA stats: %s", e)
 
     # Count iterations by status
-    iterations_approved = sum(1 for it in iteration_history if it.get("status") == "approved")
-    iterations_rejected = sum(1 for it in iteration_history if it.get("status") == "rejected")
+    iterations_approved = sum(
+        1 for it in iteration_history if it.get("status") == "approved"
+    )
+    iterations_rejected = sum(
+        1 for it in iteration_history if it.get("status") == "rejected"
+    )
     iterations_error = sum(1 for it in iteration_history if it.get("status") == "error")
     total_iterations = len(iteration_history)
 
@@ -104,7 +111,9 @@ def _generate_test_report_data(
     generated_test_count = 0
     if generated_tests_dir.exists():
         generated_test_count = sum(
-            1 for f in generated_tests_dir.iterdir() if f.is_file() and f.suffix == ".py"
+            1
+            for f in generated_tests_dir.iterdir()
+            if f.is_file() and f.suffix == ".py"
         )
 
     # Build test report data
@@ -134,6 +143,7 @@ def _generate_test_report_data(
         test_report_data["averageDuration"] = round(sum(durations) / len(durations), 2)
 
     return test_report_data
+
 
 # Pattern management commands are available in pattern_commands.py
 # Run: python apps/backend/cli/pattern_commands.py --help
@@ -232,9 +242,10 @@ def handle_build_command(
     coding_model = get_phase_model(spec_dir, "coding", model)
     qa_model = get_phase_model(spec_dir, "qa", model)
 
-    print_banner()
-    print(f"\nProject directory: {project_dir}")
-    print(f"Spec: {spec_dir.name}")
+    if not json_mode:
+        print_banner()
+        print(f"\nProject directory: {project_dir}")
+        print(f"Spec: {spec_dir.name}")
 
     # Get current provider for display
     from core.providers.config import get_provider_config
@@ -244,24 +255,25 @@ def handle_build_command(
         provider_config.get_provider_summary() if provider_config else "unknown"
     )
 
-    # Show provider and model information
-    print(f"Provider: {provider_display}")
-    # Show phase-specific models if they differ
-    if planning_model != coding_model or coding_model != qa_model:
-        print(
-            f"Models: Planning={planning_model.split('-')[1] if '-' in planning_model else planning_model}, "
-            f"Coding={coding_model.split('-')[1] if '-' in coding_model else coding_model}, "
-            f"QA={qa_model.split('-')[1] if '-' in qa_model else qa_model}"
-        )
-    else:
-        print(f"Model: {planning_model}")
+    if not json_mode:
+        # Show provider and model information
+        print(f"Provider: {provider_display}")
+        # Show phase-specific models if they differ
+        if planning_model != coding_model or coding_model != qa_model:
+            print(
+                f"Models: Planning={planning_model.split('-')[1] if '-' in planning_model else planning_model}, "
+                f"Coding={coding_model.split('-')[1] if '-' in coding_model else coding_model}, "
+                f"QA={qa_model.split('-')[1] if '-' in qa_model else qa_model}"
+            )
+        else:
+            print(f"Model: {planning_model}")
 
-    if max_iterations:
-        print(f"Max iterations: {max_iterations}")
-    else:
-        print("Max iterations: Unlimited (runs until all subtasks complete)")
+        if max_iterations:
+            print(f"Max iterations: {max_iterations}")
+        else:
+            print("Max iterations: Unlimited (runs until all subtasks complete)")
 
-    print()
+        print()
 
     # Validate environment
     if not validate_environment(spec_dir):
@@ -515,16 +527,35 @@ def handle_build_command(
 
                 worktree_path = get_existing_build_worktree(project_dir, spec_dir.name)
                 if worktree_path:
+                    # Try HEAD~1..HEAD first; fall back to HEAD-only show for fresh branches
                     result = subprocess.run(
-                        ["git", "diff", "--name-only", "HEAD~1", "HEAD"],
+                        [
+                            "git",
+                            "diff",
+                            "--name-only",
+                            "--diff-filter=ACM",
+                            "HEAD~1",
+                            "HEAD",
+                        ],
                         cwd=worktree_path,
                         capture_output=True,
                         text=True,
                         timeout=10,
                     )
+                    if result.returncode != 0:
+                        # Fresh branch with only one commit — list files from first commit
+                        result = subprocess.run(
+                            ["git", "show", "--name-only", "--format=", "HEAD"],
+                            cwd=worktree_path,
+                            capture_output=True,
+                            text=True,
+                            timeout=10,
+                        )
                     if result.returncode == 0:
                         changed_files = [
-                            f.strip() for f in result.stdout.strip().split("\n") if f.strip()
+                            f.strip()
+                            for f in result.stdout.strip().split("\n")
+                            if f.strip()
                         ]
             except Exception:
                 # If we can't get changed files, continue without them
@@ -635,20 +666,20 @@ def _handle_build_interrupt(
                 build_log_data = {
                     "status": "interrupted",
                     "timestamp": None,  # Will be added by artifact manager
-                    "exitCode": ExitCode.SUCCESS,
+                    "exitCode": ExitCode.INTERRUPTED,
                     "error": "Build interrupted in non-interactive mode",
                 }
                 artifact_manager.save_build_log(build_log_data)
 
             json_output = format_build_result(
-                status=ExitCode.SUCCESS,
+                status=ExitCode.INTERRUPTED,
                 spec_name=spec_dir.name,
-                exit_code=ExitCode.SUCCESS,
+                exit_code=ExitCode.INTERRUPTED,
                 duration_seconds=None,
                 error_message="Build interrupted in non-interactive mode",
             )
             print(json_output)
-        sys.exit(ExitCode.SUCCESS)
+        sys.exit(ExitCode.INTERRUPTED)
 
     # Offer to add human input with enhanced menu
     try:
@@ -702,20 +733,20 @@ def _handle_build_interrupt(
                     build_log_data = {
                         "status": "paused",
                         "timestamp": None,  # Will be added by artifact manager
-                        "exitCode": ExitCode.SUCCESS,
+                        "exitCode": ExitCode.INTERRUPTED,
                         "error": "Build paused by user",
                     }
                     artifact_manager.save_build_log(build_log_data)
 
                 json_output = format_build_result(
-                    status=ExitCode.SUCCESS,
+                    status=ExitCode.INTERRUPTED,
                     spec_name=spec_dir.name,
-                    exit_code=ExitCode.SUCCESS,
+                    exit_code=ExitCode.INTERRUPTED,
                     duration_seconds=None,
                     error_message="Build paused by user",
                 )
                 print(json_output)
-            sys.exit(ExitCode.SUCCESS)
+            sys.exit(ExitCode.INTERRUPTED)
 
         human_input = ""
 
@@ -737,20 +768,20 @@ def _handle_build_interrupt(
                         build_log_data = {
                             "status": "paused",
                             "timestamp": None,  # Will be added by artifact manager
-                            "exitCode": ExitCode.SUCCESS,
+                            "exitCode": ExitCode.INTERRUPTED,
                             "error": "Build paused by user",
                         }
                         artifact_manager.save_build_log(build_log_data)
 
                     json_output = format_build_result(
-                        status=ExitCode.SUCCESS,
+                        status=ExitCode.INTERRUPTED,
                         spec_name=spec_dir.name,
-                        exit_code=ExitCode.SUCCESS,
+                        exit_code=ExitCode.INTERRUPTED,
                         duration_seconds=None,
                         error_message="Build paused by user",
                     )
                     print(json_output)
-                sys.exit(ExitCode.SUCCESS)
+                sys.exit(ExitCode.INTERRUPTED)
 
         if human_input:
             # Save to HUMAN_INPUT.md
@@ -820,42 +851,42 @@ def _handle_build_interrupt(
                 build_log_data = {
                     "status": "paused",
                     "timestamp": None,  # Will be added by artifact manager
-                    "exitCode": ExitCode.SUCCESS,
+                    "exitCode": ExitCode.INTERRUPTED,
                     "error": "Build paused by user (Ctrl+C)",
                 }
                 artifact_manager.save_build_log(build_log_data)
 
             json_output = format_build_result(
-                status=ExitCode.SUCCESS,
+                status=ExitCode.INTERRUPTED,
                 spec_name=spec_dir.name,
-                exit_code=ExitCode.SUCCESS,
+                exit_code=ExitCode.INTERRUPTED,
                 duration_seconds=None,
                 error_message="Build paused by user (Ctrl+C)",
             )
             print(json_output)
-        sys.exit(ExitCode.SUCCESS)
+        sys.exit(ExitCode.INTERRUPTED)
     except EOFError:
-        # stdin closed
+        # stdin closed — treat as an interrupted build, not a system error
         if json_mode:
             # Save build log artifact on EOF
             if artifact_manager:
                 build_log_data = {
-                    "status": "error",
+                    "status": "interrupted",
                     "timestamp": None,  # Will be added by artifact manager
-                    "exitCode": ExitCode.SYSTEM_ERROR,
+                    "exitCode": ExitCode.INTERRUPTED,
                     "error": "Build interrupted (EOF)",
                 }
                 artifact_manager.save_build_log(build_log_data)
 
             json_output = format_build_result(
-                status=ExitCode.SYSTEM_ERROR,
+                status=ExitCode.INTERRUPTED,
                 spec_name=spec_dir.name,
-                exit_code=ExitCode.SYSTEM_ERROR,
+                exit_code=ExitCode.INTERRUPTED,
                 duration_seconds=None,
                 error_message="Build interrupted (EOF)",
             )
             print(json_output)
-        pass
+        sys.exit(ExitCode.INTERRUPTED)
 
     # Resume instructions (shown when user provided instructions or chose file/type/paste)
     print()

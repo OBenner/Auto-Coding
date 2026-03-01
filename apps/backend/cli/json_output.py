@@ -33,7 +33,7 @@ class BuildStatus(str, Enum):
 def format_build_result(
     status: BuildStatus | ExitCode,
     spec_name: str,
-    exit_code: int,
+    exit_code: ExitCode | int,
     duration_seconds: float | None = None,
     error_message: str | None = None,
     changed_files: list[str] | None = None,
@@ -50,7 +50,7 @@ def format_build_result(
     Args:
         status: Build status (BuildStatus enum or ExitCode enum)
         spec_name: Name of the spec that was built
-        exit_code: Exit code value (0=success, 1=build_failed, 2=qa_failed, 3=error)
+        exit_code: Exit code value (ExitCode enum or int; 0=success, 1=build_failed, 2=qa_failed, 3=error)
         duration_seconds: Build duration in seconds (optional)
         error_message: Error message if build failed (optional)
         changed_files: List of files changed by the build (optional)
@@ -86,6 +86,7 @@ def format_build_result(
             ExitCode.BUILD_FAILED: BuildStatus.BUILD_FAILED,
             ExitCode.QA_FAILED: BuildStatus.QA_FAILED,
             ExitCode.SYSTEM_ERROR: BuildStatus.SYSTEM_ERROR,
+            ExitCode.INTERRUPTED: BuildStatus.BUILD_FAILED,
         }
         status = status_map.get(status, BuildStatus.SYSTEM_ERROR)
 
