@@ -7,8 +7,9 @@ Utilities for reading and parsing project configuration files
 """
 
 import json
-import tomllib
 from pathlib import Path
+
+import tomllib
 
 
 class ConfigParser:
