@@ -190,16 +190,17 @@ class TestLongRunningCommands:
             timeout=10,
         )
 
-        # Wait for initial output (need at least 10 lines for output flush)
+        # Wait for initial output (need at least 10 lines for output flush at 10-line intervals)
+        # 20 lines at 0.1s each = 2s total; first flush at ~1.0s (line 10)
         await asyncio.sleep(1.2)
 
-        # Check that we're getting partial output
+        # Check that we're getting partial output (10 lines flushed)
         output_data = manager.get_task_output(task_id)
         assert output_data is not None
         initial_len = len(output_data.get("output", ""))
 
-        # Wait for more output to arrive
-        await asyncio.sleep(0.5)
+        # Wait for next flush threshold (line 20 at ~2.0s from start)
+        await asyncio.sleep(1.0)
 
         # Output should have grown (proves real-time streaming)
         output_data_2 = manager.get_task_output(task_id)
