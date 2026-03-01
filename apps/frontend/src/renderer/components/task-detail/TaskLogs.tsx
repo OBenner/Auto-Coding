@@ -206,24 +206,7 @@ export function TaskLogs({
         // Always show phase headers
         if (item.type === 'phase-header') return true;
 
-        // Filter log entries
-        const entry = item.entry;
-        if (!entry) return false;
-
-        switch (filterType) {
-          case 'errors':
-            return entry.type === 'error';
-          case 'tools':
-            return entry.type === 'tool_start' || entry.type === 'tool_end';
-          case 'info':
-            // Info filter includes: info, success, text, phase_start, phase_end
-            return entry.type === 'info' || entry.type === 'success' ||
-                   entry.type === 'text' || entry.type === 'phase_start' || entry.type === 'phase_end';
-          case 'decisions':
-            return entry.type === 'decision';
-          default:
-            return true;
-        }
+        return entryMatchesFilter(item.entry, filterType);
       });
     }
 
@@ -473,7 +456,7 @@ interface PhaseLogSectionProps {
 function PhaseLogSection({ phase, phaseLog, isExpanded, onToggle, isTaskStuck, phaseConfig, taskId }: PhaseLogSectionProps) {
   const Icon = PHASE_ICONS[phase];
   const status = phaseLog?.status || 'pending';
-  const hasEntries = (phaseLog?.entries.length || 0) > 0;
+  const hasEntries = (phaseLog?.entries?.length || 0) > 0;
 
   const getStatusBadge = () => {
     switch (status) {
@@ -541,7 +524,7 @@ function PhaseLogSection({ phase, phaseLog, isExpanded, onToggle, isTaskStuck, p
           <span className="font-medium text-sm">{PHASE_LABELS[phase]}</span>
           {hasEntries && (
             <span className="text-xs text-muted-foreground">
-              ({phaseLog?.entries.length} entries)
+              ({phaseLog?.entries?.length} entries)
             </span>
           )}
         </div>

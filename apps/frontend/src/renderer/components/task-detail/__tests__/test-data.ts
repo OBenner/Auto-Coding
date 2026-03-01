@@ -139,7 +139,7 @@ const VALIDATION_SUBPHASES = [
  * Generate a random integer between min and max (inclusive)
  */
 function randomInt(min: number, max: number): number {
-  return Math.floor(Math.random() * (max - min + 1)) + min;
+  return Math.floor(Math.random() * (max - min + 1)) + min; // NOSONAR
 }
 
 /**
@@ -167,7 +167,7 @@ function generateLogEntry(
 ): TaskLogEntry {
   // Determine entry type based on patterns
   let type: TaskLogEntryType;
-  const rand = Math.random();
+  const rand = Math.random(); // NOSONAR
 
   if (rand < 0.5) {
     type = 'text';
@@ -217,7 +217,7 @@ function generateLogEntry(
     case 'tool_end':
       tool_name = randomPick(TOOL_NAMES);
       content = `Completed: ${tool_name}`;
-      if (Math.random() > 0.7) {
+      if (Math.random() > 0.7) { // NOSONAR
         detail = JSON.stringify({
           exit_code: 0,
           duration_ms: randomInt(50, 5000),
@@ -256,7 +256,7 @@ function generateLogEntry(
   }
 
   // Add subphase for certain types
-  if ((type === 'text' || type === 'tool_start' || type === 'tool_end') && Math.random() > 0.6) {
+  if ((type === 'text' || type === 'tool_start' || type === 'tool_end') && Math.random() > 0.6) { // NOSONAR
     if (phase === 'planning') {
       subphase = randomPick(PLANNING_SUBPHASES);
     } else if (phase === 'coding') {
@@ -267,7 +267,7 @@ function generateLogEntry(
   }
 
   // Assign to a random subtask
-  const subtask_id = Math.random() > 0.3
+  const subtask_id = Math.random() > 0.3 // NOSONAR
     ? `subtask-${randomInt(1, options.subtaskCount)}`
     : undefined;
 
