@@ -183,6 +183,151 @@ gh pr create --base main
 
 See [RELEASE.md](RELEASE.md) for detailed release process documentation.
 
+### CI/CD Integration
+
+Auto Code supports headless CI/CD mode for automated builds triggered by git events. This enables DevOps automation where AI agents validate code, run tests, and generate artifacts without human interaction.
+
+**Key Features:**
+- **Non-interactive operation** - No prompts or UI, fully automated
+- **Exit code handling** - Standard codes for build status (0=success, 1=build failed, 2=QA failed, 3=system error)
+- **JSON output** - Structured output for parsing in automation scripts
+- **Artifact generation** - Build logs, test reports, coverage reports
+- **GitHub Actions integration** - Example workflow provided
+
+**Configuration:**
+
+Enable CI mode via environment variables:
+
+```bash
+# Enable CI mode (non-interactive)
+export AUTO_CLAUDE_CI=true
+
+# Enable JSON output
+export AUTO_CLAUDE_JSON_OUTPUT=true
+
+# Required: Claude OAuth token (NOT ANTHROPIC_API_KEY — that is not supported)
+# Generate with: claude setup-token --print
+export CLAUDE_CODE_OAUTH_TOKEN=your_oauth_token_here
+
+# Optional: Configure model
+export CLAUDE_MODEL=claude-sonnet-4-5-20250929
+
+# Optional: Enable Graphiti memory
+export GRAPHITI_ENABLED=true
+export GRAPHITI_LLM_PROVIDER=openai
+export OPENAI_API_KEY=your_openai_key
+```
+
+**Usage in CI/CD:**
+
+```bash
+# Run a spec in CI mode
+python run.py --spec 001 --ci --json
+
+# Run from task description in CI mode
+python run.py --task "Fix login bug" --ci --json
+
+# Exit codes:
+# 0 = Success (build passed, QA approved)
+# 1 = Build failed (implementation errors)
+# 2 = QA failed (validation rejected)
+# 3 = System error (configuration, auth, etc.)
+```
+
+**JSON Output Format:**
+
+```json
+{
+  "status": "success",
+  "exit_code": 0,
+  "duration": "5m 23s",
+  "spec_id": "001",
+  "changed_files": ["src/auth.js", "tests/auth.test.js"],
+  "test_results": {
+    "passed": 42,
+    "failed": 0,
+    "coverage": "87%"
+  },
+  "qa_status": "approved",
+  "artifacts": [
+    ".auto-claude/specs/001/artifacts/build-log.json",
+    ".auto-claude/specs/001/artifacts/test-report.json"
+  ]
+}
+```
+
+**GitHub Actions Example:**
+
+See `.github/workflows/auto-claude-build.yml` for a complete example workflow. Key features:
+
+```yaml
+on:
+  # The provided workflow uses workflow_dispatch (manual trigger).
+  # The pull_request trigger below is an optional customization you can add:
+  # pull_request:
+  #   branches: [main, develop]
+  #   paths: ['apps/**', 'tests/**']
+  workflow_dispatch:
+    inputs:
+      spec_number:
+        description: 'Spec number to build'
+        required: false
+        default: '001'
+
+env:
+  AUTO_CLAUDE_CI: 'true'
+  AUTO_CLAUDE_JSON_OUTPUT: 'true'
+  # Use Claude OAuth token — ANTHROPIC_API_KEY is not supported
+  CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+
+jobs:
+  auto-claude-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Python
+        uses: ./.github/actions/setup-python-backend
+      - name: Run Auto Claude
+        run: python run.py --spec 001 --ci --json
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: auto-claude-results
+          path: .auto-claude/specs/**/artifacts/
+```
+
+**Generated Artifacts:**
+
+CI mode generates the following artifacts in `.auto-claude/specs/XXX/artifacts/`:
+- `build-log.json` - Structured build log with status, duration, errors
+- `test-report.json` - Test results with pass/fail counts and coverage
+- `qa-report.md` - QA validation results
+- `coverage-report.json` - Code coverage metrics (if tests run)
+
+**Best Practices:**
+
+1. **Use matrix builds** - Test on multiple OS platforms (Ubuntu, Windows, macOS)
+2. **Cache dependencies** - Speed up builds by caching Python packages
+3. **Fail fast** - Use `fail-fast: false` to allow all platforms to complete
+4. **Comment on PRs** - Post build results as PR comments for visibility
+5. **Set resource limits** - Add timeout to prevent runaway agent sessions
+6. **Secure secrets** - Never commit API keys, use GitHub Secrets
+
+**Exit Code Handling:**
+
+```bash
+# In your CI script
+python run.py --spec 001 --ci --json
+EXIT_CODE=$?
+
+case $EXIT_CODE in
+  0) echo "✅ Build succeeded";;
+  1) echo "❌ Build failed - check implementation";;
+  2) echo "⚠️ QA rejected - validation issues";;
+  3) echo "🔥 System error - check configuration";;
+esac
+```
+
 ## Architecture
 
 ### Core Pipeline
