@@ -178,18 +178,22 @@ export function TaskProgress({ taskId, onClose }: TaskProgressProps) {
       }
     };
 
-    // Register IPC event listeners
-    window.electronAPI.onBackgroundTaskProgress?.(handleProgress);
-    window.electronAPI.onBackgroundTaskComplete?.(handleComplete);
-    window.electronAPI.onBackgroundTaskError?.(handleError);
+    isMountedRef.current = true;
+
+    // Register IPC event listeners and capture unsubscribe functions
+    const offProgress = window.electronAPI.onBackgroundTaskProgress?.(handleProgress);
+    const offComplete = window.electronAPI.onBackgroundTaskComplete?.(handleComplete);
+    const offError = window.electronAPI.onBackgroundTaskError?.(handleError);
 
     // Initial fetch
     fetchTaskStatus();
 
     return () => {
       isMountedRef.current = false;
-      // Cleanup listeners (if API provides unregister methods)
-      // Note: Electron API may need to provide cleanup methods
+      // Cleanup listeners
+      if (typeof offProgress === 'function') offProgress();
+      if (typeof offComplete === 'function') offComplete();
+      if (typeof offError === 'function') offError();
     };
   }, [taskId, fetchTaskStatus]);
 
@@ -375,7 +379,7 @@ export function TaskProgress({ taskId, onClose }: TaskProgressProps) {
           {/* Duration */}
           <div className="flex items-center gap-2">
             <Clock className="w-3.5 h-3.5 text-muted-foreground" />
-            <span className="text-muted-foreground">Duration:</span>
+            <span className="text-muted-foreground">{t('tasks:backgroundTask.duration')}</span>
             <span className="text-foreground font-medium">
               {formatDuration(task.startedAt, task.completedAt)}
             </span>
@@ -385,7 +389,7 @@ export function TaskProgress({ taskId, onClose }: TaskProgressProps) {
           {task.memoryStats && (
             <div className="flex items-center gap-2">
               <MemoryStick className="w-3.5 h-3.5 text-muted-foreground" />
-              <span className="text-muted-foreground">Memory:</span>
+              <span className="text-muted-foreground">{t('tasks:backgroundTask.memory')}</span>
               <span className="text-foreground font-medium">
                 {task.memoryStats.percent.toFixed(1)}% ({formatMemory(task.memoryStats.usedMb)})
               </span>
@@ -395,7 +399,7 @@ export function TaskProgress({ taskId, onClose }: TaskProgressProps) {
           {/* Exit Code (if completed/failed) */}
           {task.exitCode !== null && (
             <div className="flex items-center gap-2">
-              <span className="text-muted-foreground">Exit Code:</span>
+              <span className="text-muted-foreground">{t('tasks:backgroundTask.exitCode')}</span>
               <span className={`font-medium ${task.exitCode === 0 ? 'text-green-500' : 'text-red-500'}`}>
                 {task.exitCode}
               </span>
@@ -404,7 +408,7 @@ export function TaskProgress({ taskId, onClose }: TaskProgressProps) {
 
           {/* Timeout */}
           <div className="flex items-center gap-2">
-            <span className="text-muted-foreground">Timeout:</span>
+            <span className="text-muted-foreground">{t('tasks:backgroundTask.timeout')}</span>
             <span className="text-foreground font-medium">
               {task.timeout >= 3600 ? `${(task.timeout / 3600).toFixed(1)}h` : `${task.timeout}s`}
             </span>
@@ -435,15 +439,15 @@ export function TaskProgress({ taskId, onClose }: TaskProgressProps) {
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
               <X className="h-5 w-5 text-destructive" />
-              Cancel Task
+              {t('tasks:backgroundTask.cancelTitle')}
             </AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="text-sm text-muted-foreground space-y-3">
                 <p>
-                  Are you sure you want to cancel this running task?
+                  {t('tasks:backgroundTask.cancelConfirmation')}
                 </p>
                 <p className="text-destructive">
-                  This will terminate the process immediately. Any unsaved progress will be lost.
+                  {t('tasks:backgroundTask.cancelWarning')}
                 </p>
                 <div className="bg-muted/50 rounded-lg p-3 text-sm">
                   <div className="flex flex-col gap-1">
@@ -454,7 +458,7 @@ export function TaskProgress({ taskId, onClose }: TaskProgressProps) {
                       </code>
                     </div>
                     <div className="text-xs text-muted-foreground">
-                      Duration: {formatDuration(task.startedAt, task.completedAt)}
+                      {t('tasks:backgroundTask.duration')} {formatDuration(task.startedAt, task.completedAt)}
                     </div>
                   </div>
                 </div>
@@ -476,12 +480,12 @@ export function TaskProgress({ taskId, onClose }: TaskProgressProps) {
               {isCancelling ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Cancelling...
+                  {t('tasks:backgroundTask.cancelling')}
                 </>
               ) : (
                 <>
                   <X className="mr-2 h-4 w-4" />
-                  Cancel Task
+                  {t('tasks:backgroundTask.cancelAction')}
                 </>
               )}
             </AlertDialogAction>

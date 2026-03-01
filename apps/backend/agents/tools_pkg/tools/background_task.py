@@ -100,15 +100,30 @@ class BackgroundTaskManager:
         """
         Get the state file path for a task.
 
+        Validates task_id to prevent path traversal attacks.
+
         Args:
             task_id: Task identifier
 
         Returns:
             Path to the task state file
+
+        Raises:
+            ValueError: If task_id contains unsafe characters
         """
+        import re
+
+        if not re.match(r"^[a-zA-Z0-9_\-]+$", task_id):
+            raise ValueError(f"Invalid task_id: {task_id!r}")
+
         state_dir = self.spec_dir / ".background_tasks"
         state_dir.mkdir(parents=True, exist_ok=True)
-        return state_dir / f"{task_id}.json"
+        candidate = (state_dir / f"{task_id}.json").resolve()
+
+        if not str(candidate).startswith(str(state_dir.resolve())):
+            raise ValueError(f"Path traversal detected in task_id: {task_id!r}")
+
+        return candidate
 
     def _save_task_state(self, task_id: str) -> bool:
         """

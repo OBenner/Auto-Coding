@@ -47,7 +47,7 @@ export function registerTaskHandlers(
   registerTaskArchiveHandlers();
 
   // Register background task handlers (start, cancel, status, output, list)
-  registerBackgroundTaskHandlers(agentManager);
+  registerBackgroundTaskHandlers(agentManager, getMainWindow);
 
   // Register spec file handlers (implementation plan, QA report, QA escalation)
   registerSpecFileHandlers();

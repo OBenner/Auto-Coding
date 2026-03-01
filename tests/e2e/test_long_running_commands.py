@@ -17,6 +17,7 @@ Usage:
 import asyncio
 import json
 import logging
+import sys
 import tempfile
 import time
 from pathlib import Path
@@ -108,7 +109,7 @@ class TestLongRunningCommands:
         # Create a task that runs for a few seconds
         # Use Python for cross-platform compatibility
         task_id = await manager.start_task(
-            'python -c "import time; print(\'Starting\'); time.sleep(1); print(\'Done\')"',
+            f'{sys.executable} -c "import time; print(\'Starting\'); time.sleep(1); print(\'Done\')"',
             timeout=10
         )
 
@@ -151,7 +152,7 @@ class TestLongRunningCommands:
         # Create a command that produces incremental output
         # Use Python for cross-platform compatibility
         task_id = await manager.start_task(
-            'python -c "import time; [print(f\'Line {i}\') or time.sleep(0.2) for i in range(1, 6)]"',
+            f'{sys.executable} -c "import time; [print(f\'Line {i}\') or time.sleep(0.2) for i in range(1, 6)]"',
             timeout=10
         )
 
@@ -193,7 +194,7 @@ class TestLongRunningCommands:
 
         # Create a task
         task_id = await manager.start_task(
-            'python -c "import time; print(\'Testing persistence\'); time.sleep(0.5)"',
+            f'{sys.executable} -c "import time; print(\'Testing persistence\'); time.sleep(0.5)"',
             timeout=10
         )
 
@@ -238,7 +239,7 @@ class TestLongRunningCommands:
         """
         # Create a long-running task
         task_id = await manager.start_task(
-            'python -c "import time; [print(f\'Iteration {i}\') or time.sleep(0.5) for i in range(1, 11)]"',
+            f'{sys.executable} -c "import time; [print(f\'Iteration {i}\') or time.sleep(0.5) for i in range(1, 11)]"',
             timeout=30
         )
 
@@ -281,7 +282,7 @@ class TestLongRunningCommands:
         """
         # Create a task with short timeout
         task_id = await manager.start_task(
-            'python -c "import time; time.sleep(10)"',  # Will timeout
+            f'{sys.executable} -c "import time; time.sleep(10)"',  # Will timeout
             timeout=1  # 1 second timeout
         )
 
@@ -318,7 +319,7 @@ class TestLongRunningCommands:
         # Memory is checked every 50 lines (MEMORY_CHECK_INTERVAL = 5, checked every 10 * 5 lines)
         # We'll produce 100 lines with delays to ensure task runs long enough
         task_id = await manager.start_task(
-            'python -c "import time; [print(f\'Output line {i:04d}\') or time.sleep(0.05) for i in range(1, 101)]"',
+            f'{sys.executable} -c "import time; [print(f\'Output line {i:04d}\') or time.sleep(0.05) for i in range(1, 101)]"',
             timeout=30
         )
 
@@ -433,7 +434,7 @@ class TestLongRunningCommands:
         """
         # Create a task that will fail
         task_id = await manager.start_task(
-            'python -c "import sys; print(\'About to fail\'); sys.exit(42)"',
+            f'{sys.executable} -c "import sys; print(\'About to fail\'); sys.exit(42)"',
             timeout=10
         )
 
@@ -468,13 +469,13 @@ class TestLongRunningCommands:
         - Tasks are sorted by creation time
         """
         # Create multiple tasks with different outcomes
-        task1_id = await manager.start_task('python -c "import time; print(\'Task 1\'); time.sleep(0.3)"', timeout=10)
+        task1_id = await manager.start_task(f'{sys.executable} -c "import time; print(\'Task 1\'); time.sleep(0.3)"', timeout=10)
         await asyncio.sleep(0.1)
 
-        task2_id = await manager.start_task('python -c "import sys; print(\'Task 2\'); sys.exit(1)"', timeout=10)
+        task2_id = await manager.start_task(f'{sys.executable} -c "import sys; print(\'Task 2\'); sys.exit(1)"', timeout=10)
         await asyncio.sleep(0.1)
 
-        task3_id = await manager.start_task('python -c "import time; time.sleep(5)"', timeout=10)
+        task3_id = await manager.start_task(f'{sys.executable} -c "import time; time.sleep(5)"', timeout=10)
 
         # Wait for first two tasks to complete
         await asyncio.sleep(0.5)
@@ -515,7 +516,7 @@ class TestLongRunningCommands:
 
         # Create a running task
         task_id = await manager.start_task(
-            'python -c "import time; time.sleep(10)"',
+            f'{sys.executable} -c "import time; time.sleep(10)"',
             timeout=30
         )
 
@@ -576,7 +577,7 @@ class TestLongRunningCommands:
 
         # Create a command that outputs multiple lines over time
         task_id = await manager1.start_task(
-            'python -c "import time, sys; [print(f\'Progress {i}\', flush=True) or sys.stdout.flush() or time.sleep(0.3) for i in range(1, 20)]"',
+            f'{sys.executable} -c "import time, sys; [print(f\'Progress {i}\', flush=True) or sys.stdout.flush() or time.sleep(0.3) for i in range(1, 20)]"',
             timeout=30
         )
 
@@ -723,7 +724,7 @@ async def test_full_lifecycle_integration(test_dirs):
 
     # Task 1: Will complete successfully
     task1_id = await manager.start_task(
-        'python -c "import time; [print(f\'Build step {i}\') or time.sleep(0.2) for i in range(1, 4)]"',
+        f'{sys.executable} -c "import time; [print(f\'Build step {i}\') or time.sleep(0.2) for i in range(1, 4)]"',
         timeout=10
     )
     tasks.append(("build", task1_id))
@@ -731,7 +732,7 @@ async def test_full_lifecycle_integration(test_dirs):
 
     # Task 2: Will be cancelled (long running)
     task2_id = await manager.start_task(
-        'python -c "import time; [print(f\'Long process {i}\') or time.sleep(1) for i in range(1, 11)]"',
+        f'{sys.executable} -c "import time; [print(f\'Long process {i}\') or time.sleep(1) for i in range(1, 11)]"',
         timeout=30
     )
     tasks.append(("long_process", task2_id))
@@ -739,7 +740,7 @@ async def test_full_lifecycle_integration(test_dirs):
 
     # Task 3: Will fail
     task3_id = await manager.start_task(
-        'python -c "import sys, time; print(\'Starting tests\'); time.sleep(0.3); sys.exit(1)"',
+        f'{sys.executable} -c "import sys, time; print(\'Starting tests\'); time.sleep(0.3); sys.exit(1)"',
         timeout=10
     )
     tasks.append(("tests", task3_id))
@@ -776,9 +777,13 @@ async def test_full_lifecycle_integration(test_dirs):
     assert "Build step 3" in output1["output"]
     logger.info(f"✓ Build task completed successfully")
 
-    # Task 2 should be cancelled or completed (depending on timing)
-    status2 = manager.get_task_status(task2_id)
-    assert status2["status"] in ["cancelled", "running"]
+    # Task 2 should be cancelled — poll until terminal state
+    for _ in range(20):
+        status2 = manager.get_task_status(task2_id)
+        if status2["status"] in ["cancelled", "completed", "failed"]:
+            break
+        await asyncio.sleep(0.3)
+    assert status2["status"] == "cancelled", f"Expected cancelled, got {status2['status']}"
     logger.info(f"✓ Long process task status: {status2['status']}")
 
     # Task 3 should be failed

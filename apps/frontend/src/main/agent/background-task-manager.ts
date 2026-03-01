@@ -1,5 +1,4 @@
 import { spawn, ChildProcess } from 'child_process';
-import path from 'path';
 import { EventEmitter } from 'events';
 import { BackgroundTaskState, BackgroundTask, BackgroundTaskStatus } from './task-state';
 import { AgentProcessManager } from './agent-process';
