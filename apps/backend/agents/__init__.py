@@ -34,7 +34,9 @@ from .utils import find_phase_for_subtask as find_phase_for_subtask
 from .utils import find_subtask_in_plan as find_subtask_in_plan
 from .utils import get_commit_count as get_commit_count
 from .utils import get_latest_commit as get_latest_commit
+from .utils import get_workspace_project_dirs as get_workspace_project_dirs
 from .utils import load_implementation_plan as load_implementation_plan
+from .utils import load_workspace_context as load_workspace_context
 from .utils import sync_spec_to_source as sync_spec_to_source
 
 __all__ = [
@@ -58,6 +60,9 @@ __all__ = [
     "find_subtask_in_plan",
     "find_phase_for_subtask",
     "sync_spec_to_source",
+    # Workspace
+    "load_workspace_context",
+    "get_workspace_project_dirs",
 ]
 
 
@@ -65,6 +70,10 @@ def __getattr__(name):
     """Lazy imports for names that may cause circular dependencies."""
     if name in ("AUTO_CONTINUE_DELAY_SECONDS", "HUMAN_INTERVENTION_FILE"):
         from .base import AUTO_CONTINUE_DELAY_SECONDS, HUMAN_INTERVENTION_FILE
+
+        return locals()[name]
+    elif name in ("load_workspace_context", "get_workspace_project_dirs"):
+        from .utils import get_workspace_project_dirs, load_workspace_context
 
         return locals()[name]
     raise AttributeError(f"module 'agents' has no attribute '{name}'")
