@@ -111,7 +111,9 @@ class TestValidateInvalidJson:
         validator = ContextValidator(spec_dir)
         result = validator.validate()
 
-        assert any("regenerate" in fix.lower() or "fix" in fix.lower() for fix in result.fixes)
+        assert any(
+            "regenerate" in fix.lower() or "fix" in fix.lower() for fix in result.fixes
+        )
 
 
 class TestValidateMissingRequiredFields:
@@ -132,8 +134,8 @@ class TestValidateMissingRequiredFields:
 
     def test_error_for_all_required_fields_missing(self, spec_dir: Path):
         """Should list all missing required fields."""
-        from spec.validate_pkg.validators.context_validator import ContextValidator
         from spec.validate_pkg.schemas import CONTEXT_SCHEMA
+        from spec.validate_pkg.validators.context_validator import ContextValidator
 
         context_file = spec_dir / "context.json"
         context_file.write_text("{}", encoding="utf-8")
@@ -144,7 +146,9 @@ class TestValidateMissingRequiredFields:
         # Check that all required fields are mentioned in errors
         required_fields = CONTEXT_SCHEMA["required_fields"]
         for field in required_fields:
-            assert any(field in err for err in result.errors), f"Field {field} not in errors"
+            assert any(field in err for err in result.errors), (
+                f"Field {field} not in errors"
+            )
 
     def test_fixes_suggest_adding_missing_fields(self, spec_dir: Path):
         """Suggested fixes should include adding missing fields."""

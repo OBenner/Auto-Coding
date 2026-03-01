@@ -41,6 +41,10 @@
       "title": "Accounts",
       "description": "Claude accounts & API endpoints"
     },
+    "providers": {
+      "title": "AI Providers",
+      "description": "Configure AI model providers"
+    },
     "updates": {
       "title": "Updates",
       "description": "Auto-Coding updates"
@@ -754,6 +758,108 @@
       "saveSuccessDescription": "Agent model configuration has been saved successfully.",
       "saveFailed": "Failed to save agent models",
       "saveFailedDescription": "An error occurred while saving agent model configuration."
+    }
+  },
+  "aiProvider": {
+    "title": "AI Provider",
+    "description": "Select the AI backend to use for agent sessions",
+    "label": "AI Provider",
+    "selectProvider": "Select AI Provider",
+    "currentProvider": "Current Provider",
+    "providers": {
+      "claude": {
+        "name": "Claude Agent SDK",
+        "description": "Anthropic's Claude Agent SDK (default, recommended)"
+      },
+      "litellm": {
+        "name": "LiteLLM",
+        "description": "Unified interface supporting 100+ LLM providers"
+      },
+      "openrouter": {
+        "name": "OpenRouter",
+        "description": "Cloud multi-model routing with 400+ models"
+      },
+      "zhipuai": {
+        "name": "ZhipuAI (GLM)",
+        "description": "Zhipu AI GLM models (glm-4, glm-4-flash)"
+      }
+    },
+    "apiKeys": {
+      "title": "API Keys",
+      "openai": {
+        "label": "OpenAI API Key",
+        "placeholder": "sk-...",
+        "description": "Required for GPT-4 and other OpenAI models"
+      },
+      "google": {
+        "label": "Google AI API Key",
+        "placeholder": "AI...",
+        "description": "Required for Gemini models"
+      },
+      "openrouter": {
+        "label": "OpenRouter API Key",
+        "placeholder": "sk-or-...",
+        "description": "Required for OpenRouter multi-model routing"
+      },
+      "zhipuai": {
+        "label": "ZhipuAI API Key",
+        "placeholder": "Enter your ZhipuAI API key",
+        "description": "Required for GLM models (glm-4, glm-4-flash)"
+      }
+    },
+    "models": {
+      "title": "Model Selection",
+      "description": "Configure which models to use for each agent type",
+      "planner": {
+        "label": "Planner Model",
+        "placeholder": "e.g., gpt-4, gemini-pro, anthropic/claude-3-sonnet",
+        "description": "Model for creating implementation plans"
+      },
+      "coder": {
+        "label": "Coder Model",
+        "placeholder": "e.g., gpt-4, gemini-pro, anthropic/claude-3-sonnet",
+        "description": "Model for implementing code"
+      },
+      "qa": {
+        "label": "QA Model",
+        "placeholder": "e.g., gpt-4, gemini-pro, anthropic/claude-3-sonnet",
+        "description": "Model for quality assurance and validation"
+      }
+    },
+    "configuration": {
+      "title": "Provider Configuration",
+      "apiKey": "API Key",
+      "apiKeyPlaceholder": "Enter your API key",
+      "apiKeyDescription": "Required for LiteLLM and OpenRouter providers",
+      "model": "Model",
+      "modelPlaceholder": "e.g., gpt-4, claude-3-opus, anthropic/claude-3-sonnet",
+      "modelDescription": "Model identifier for the selected provider",
+      "baseUrl": "Base URL (Optional)",
+      "baseUrlPlaceholder": "https://api.example.com/v1",
+      "baseUrlDescription": "Custom API endpoint (leave empty for default)"
+    },
+    "validation": {
+      "apiKeyRequired": "API key is required for this provider",
+      "modelRequired": "Model selection is required"
+    },
+    "toast": {
+      "providerChanged": "AI Provider Changed",
+      "providerChangedDescription": "Now using {{provider}}",
+      "configSaved": "Configuration Saved",
+      "configSavedDescription": "Provider settings have been updated",
+      "configError": "Configuration Error",
+      "configErrorDescription": "Failed to save provider settings: {{error}}"
+    },
+    "hints": {
+      "envOverride": "This setting can be overridden by the AI_ENGINE_PROVIDER environment variable",
+      "requiresRestart": "Changes will take effect for new agent sessions",
+      "claudeDefault": "Claude Agent SDK is the default and most tested provider"
+    },
+    "status": {
+      "active": "Active",
+      "configured": "Configured",
+      "notConfigured": "Not Configured",
+      "requiresApiKey": "API Key Required"
     }
   },
   "mcp": {

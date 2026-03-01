@@ -252,8 +252,18 @@ def test_format_context_for_resume_limits_recent_rounds(temp_spec_dir):
     history = ConversationHistory(spec_dir=temp_spec_dir, subtask_id="test")
 
     # Add 10 rounds with unique word-based identifiers
-    words = ["alpha", "beta", "gamma", "delta", "epsilon",
-             "zeta", "eta", "theta", "iota", "kappa"]
+    words = [
+        "alpha",
+        "beta",
+        "gamma",
+        "delta",
+        "epsilon",
+        "zeta",
+        "eta",
+        "theta",
+        "iota",
+        "kappa",
+    ]
     for i, word in enumerate(words, 1):
         round_obj = history.add_round(f"Message using word {word}")
         round_obj.add_text(f"Response using word {word}")

@@ -387,6 +387,23 @@ export interface PlanSubtask {
   };
 }
 
+// Cost tracking types (from cost_tracking.py)
+export interface UsageRecord {
+  agent_type: string;
+  model: string;
+  input_tokens: number;
+  output_tokens: number;
+  cost: number;
+  timestamp: string;
+}
+
+export interface CostReport {
+  spec_dir: string;
+  total_cost: number;
+  records: UsageRecord[];
+  last_updated: string;
+}
+
 // Workspace management types (for human review)
 export interface WorktreeStatus {
   exists: boolean;

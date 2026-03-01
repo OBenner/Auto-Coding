@@ -42,6 +42,13 @@ def _make_async_client():
     return client
 
 
+def _make_session():
+    """Create a mock session object with a .client attribute."""
+    session = MagicMock()
+    session.client = _make_async_client()
+    return session
+
+
 def _make_scanner(*, raises=None):
     """Return (scanner_instance, scanner_class_mock).
 
@@ -89,7 +96,7 @@ def planner_mocks(*, session_result=None, extra_patches=None):
     all_patches = _PATCHES + [f"agents.planner.{n}" for n in extra_patches]
 
     with (
-        patch("agents.planner.create_client") as mock_create_client,
+        patch("agents.planner.create_planner_session") as mock_create_session,
         patch("agents.planner.get_followup_planner_prompt") as mock_prompt,
         patch(
             "agents.planner.run_agent_session", new_callable=AsyncMock
@@ -105,7 +112,7 @@ def planner_mocks(*, session_result=None, extra_patches=None):
             extra_mocks[name.split(".")[-1]] = stack.enter_context(patch(name))
 
         with stack:
-            mock_create_client.return_value = _make_async_client()
+            mock_create_session.return_value = _make_session()
             mock_prompt.return_value = "Test prompt"
             mock_session.return_value = session_result
 
@@ -113,7 +120,7 @@ def planner_mocks(*, session_result=None, extra_patches=None):
             mock_scanner_cls.return_value = scanner
 
             yield {
-                "create_client": mock_create_client,
+                "create_session": mock_create_session,
                 "prompt": mock_prompt,
                 "session": mock_session,
                 "scanner_cls": mock_scanner_cls,
@@ -167,9 +174,9 @@ class TestRunFollowupPlanner:
 
     @pytest.mark.asyncio
     async def test_requires_spec_dir(self, tmp_path):
-        """Test that run_followup_planner calls create_client and prompt."""
+        """Test that run_followup_planner calls create_planner_session and prompt."""
         _, mocks = await _run(tmp_path, plan_data=_EMPTY_PLAN)
-        assert mocks["create_client"].called
+        assert mocks["create_session"].called
         assert mocks["prompt"].called
 
     @pytest.mark.asyncio

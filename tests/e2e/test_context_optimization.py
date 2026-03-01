@@ -33,6 +33,7 @@ from api.context_viewer import (
     get_prioritization_scores,
     get_token_breakdown,
 )
+
 from apps.backend.context.builder import ContextBuilder
 from apps.backend.context.deduplicator import ContentDeduplicator
 from apps.backend.context.dependency_analyzer import DependencyAnalyzer
@@ -391,13 +392,9 @@ class TestContextBuilderIntegration:
         assert "budget" in stats
         assert "remaining" in stats
 
-    def test_build_context_with_prioritization(
-        self, temp_project, project_index
-    ):
+    def test_build_context_with_prioritization(self, temp_project, project_index):
         """Test that build_context applies prioritization."""
-        builder = ContextBuilder(
-            project_dir=temp_project, project_index=project_index
-        )
+        builder = ContextBuilder(project_dir=temp_project, project_index=project_index)
 
         context = builder.build_context(
             task="Implement user authentication",
@@ -411,13 +408,9 @@ class TestContextBuilderIntegration:
         assert hasattr(context, "files_to_modify")
         assert hasattr(context, "files_to_reference")
 
-    def test_build_context_with_semantic_search(
-        self, temp_project, project_index
-    ):
+    def test_build_context_with_semantic_search(self, temp_project, project_index):
         """Test that build_context works with semantic search."""
-        builder = ContextBuilder(
-            project_dir=temp_project, project_index=project_index
-        )
+        builder = ContextBuilder(project_dir=temp_project, project_index=project_index)
 
         # This should not raise
         context = builder.build_context(
@@ -431,9 +424,7 @@ class TestContextBuilderIntegration:
 
     def test_deduplicate_files_method(self, temp_project, project_index):
         """Test deduplicating files through ContextBuilder."""
-        builder = ContextBuilder(
-            project_dir=temp_project, project_index=project_index
-        )
+        builder = ContextBuilder(project_dir=temp_project, project_index=project_index)
 
         files = [
             {"path": "file1.py", "content": "same content"},

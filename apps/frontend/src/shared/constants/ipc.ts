@@ -184,6 +184,9 @@ export const IPC_CHANNELS = {
   SETTINGS_GET: 'settings:get',
   SETTINGS_SAVE: 'settings:save',
   SETTINGS_GET_CLI_TOOLS_INFO: 'settings:getCliToolsInfo',
+  SETTINGS_SAVE_PROVIDER: 'settings:saveProviderSettings',
+  SETTINGS_LOAD_PROVIDER: 'settings:loadProviderSettings',
+  SETTINGS_GET_AVAILABLE_MODELS: 'settings:getAvailableModels',
 
   // AI Provider Configuration (backend .env sync)
   PROVIDER_CONFIG_GET: 'provider:config:get',
@@ -592,6 +595,9 @@ export const IPC_CHANNELS = {
   GIT_DETECT_MAIN_BRANCH: 'git:detectMainBranch',
   GIT_CHECK_STATUS: 'git:checkStatus',
   GIT_INITIALIZE: 'git:initialize',
+
+  // Cost reporting
+  PROJECT_LOAD_COST_REPORT: 'project:loadCostReport',
 
   // App auto-update operations
   APP_UPDATE_CHECK: 'app-update:check',

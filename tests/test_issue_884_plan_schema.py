@@ -291,8 +291,21 @@ async def test_planner_session_does_not_trigger_post_session_processing_on_retry
         async def __aexit__(self, exc_type, exc, tb):
             return False
 
-    def fake_create_client(*_args, **_kwargs):
-        return DummyClient()
+    class DummySession:
+        """Fake session returned by the mock provider."""
+
+        client = DummyClient()
+
+    class DummyProvider:
+        """Fake provider that returns a DummySession."""
+
+        name = "claude"
+
+        def create_session(self, *_args, **_kwargs):
+            return DummySession()
+
+    def fake_create_engine_provider(*_args, **_kwargs):
+        return DummyProvider()
 
     async def fake_get_graphiti_context(*_args, **_kwargs):
         return None
@@ -315,7 +328,9 @@ async def test_planner_session_does_not_trigger_post_session_processing_on_retry
         assert phase == LogPhase.PLANNING
         return "error", "planner failed", None, None  # Add decision_tracker=None
 
-    monkeypatch.setattr("agents.coder.create_client", fake_create_client)
+    monkeypatch.setattr(
+        "agents.coder.create_engine_provider", fake_create_engine_provider
+    )
     monkeypatch.setattr("agents.coder.get_graphiti_context", fake_get_graphiti_context)
     monkeypatch.setattr("agents.coder.get_next_subtask", fake_get_next_subtask)
     monkeypatch.setattr(
@@ -359,8 +374,21 @@ async def test_worktree_planning_to_coding_sync_updates_source_phase_status(
         async def __aexit__(self, exc_type, exc, tb):
             return False
 
-    def fake_create_client(*_args, **_kwargs):
-        return DummyClient()
+    class DummySession:
+        """Fake session returned by the mock provider."""
+
+        client = DummyClient()
+
+    class DummyProvider:
+        """Fake provider that returns a DummySession."""
+
+        name = "claude"
+
+        def create_session(self, *_args, **_kwargs):
+            return DummySession()
+
+    def fake_create_engine_provider(*_args, **_kwargs):
+        return DummyProvider()
 
     async def fake_get_graphiti_context(*_args, **_kwargs):
         return None
@@ -408,7 +436,9 @@ async def test_worktree_planning_to_coding_sync_updates_source_phase_status(
         assert logs["phases"]["coding"]["status"] == "active"
         return "complete", "done", None, None  # Add decision_tracker=None
 
-    monkeypatch.setattr("agents.coder.create_client", fake_create_client)
+    monkeypatch.setattr(
+        "agents.coder.create_engine_provider", fake_create_engine_provider
+    )
     monkeypatch.setattr("agents.coder.get_graphiti_context", fake_get_graphiti_context)
     monkeypatch.setattr(
         "agents.coder.post_session_processing", fake_post_session_processing

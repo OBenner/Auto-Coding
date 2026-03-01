@@ -12,8 +12,6 @@ import re
 import subprocess
 from pathlib import Path
 
-from agents.templates.storage import load_template
-
 from .project_context import (
     detect_project_capabilities,
     get_mcp_tools_for_project,
@@ -698,6 +696,9 @@ def load_custom_template_prompt(template_name: str, project_dir: Path) -> str:
         FileNotFoundError: If the template doesn't exist
         ValueError: If the template is invalid or has no prompt
     """
+    # Lazy import to avoid circular: prompts_pkg → agents → coder/planner → prompts_pkg
+    from agents.templates.storage import load_template
+
     # Load template from storage
     template = load_template(template_name, project_dir)
 

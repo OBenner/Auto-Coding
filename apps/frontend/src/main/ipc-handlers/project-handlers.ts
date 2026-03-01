@@ -2,14 +2,15 @@ import { ipcMain, app } from 'electron';
 import { promises as fsPromises } from 'fs';
 import path from 'path';
 import { execFileSync } from 'child_process';
-import { IPC_CHANNELS } from '../../shared/constants';
+import { IPC_CHANNELS, getSpecsDir } from '../../shared/constants';
 import type {
   Project,
   ProjectSettings,
   IPCResult,
   InitializationResult,
   AutoBuildVersionInfo,
-  GitStatus
+  GitStatus,
+  CostReport
 } from '../../shared/types';
 import { projectStore } from '../project-store';
 import {
@@ -516,6 +517,58 @@ export function registerProjectHandlers(
         return {
           success: false,
           error: error instanceof Error ? error.message : 'Unknown error'
+        };
+      }
+    }
+  );
+
+  // ============================================
+  // Cost Reporting Operations
+  // ============================================
+
+  // Load cost report for a spec (loadCostReport)
+  ipcMain.handle(
+    IPC_CHANNELS.PROJECT_LOAD_COST_REPORT,
+    async (_, projectId: string, specId: string): Promise<IPCResult<CostReport>> => {
+      try {
+        const project = projectStore.getProject(projectId);
+        if (!project) {
+          return { success: false, error: 'Project not found' };
+        }
+
+        // Validate specId to prevent path traversal
+        if (!specId || /[/\\]|\.\./.test(specId)) {
+          return { success: false, error: 'Invalid spec ID' };
+        }
+
+        // Build path to cost_report.json - resolve against project root
+        const specsDir = path.resolve(project.path, getSpecsDir(project.autoBuildPath));
+        const costReportPath = path.join(specsDir, specId, 'cost_report.json');
+
+        // Ensure resolved path is within specs directory
+        const resolvedPath = path.resolve(costReportPath);
+        const resolvedSpecsDir = path.resolve(specsDir);
+        if (!resolvedPath.startsWith(resolvedSpecsDir)) {
+          return { success: false, error: 'Invalid spec ID' };
+        }
+
+        // Check if cost report exists
+        if (!(await fileExists(costReportPath))) {
+          return {
+            success: false,
+            error: 'Cost report not found for this spec'
+          };
+        }
+
+        // Read and parse cost report
+        const costReportContent = await fsPromises.readFile(costReportPath, 'utf-8');
+        const costReport: CostReport = JSON.parse(costReportContent);
+
+        return { success: true, data: costReport };
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Failed to load cost report'
         };
       }
     }

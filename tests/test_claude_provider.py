@@ -11,10 +11,10 @@ Tests the core.providers.adapters.claude module functionality including:
 """
 
 import asyncio
-import pytest
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 
 # =============================================================================
 # CLAUDE MODELS CONSTANT TESTS
@@ -330,7 +330,10 @@ class TestClaudeAgentProviderCreateSession:
 
     def test_create_session_dirs_from_extra(self):
         """Tests create_session gets both dirs from extra config."""
-        from core.providers.adapters.claude import ClaudeAgentProvider, ClaudeAgentSession
+        from core.providers.adapters.claude import (
+            ClaudeAgentProvider,
+            ClaudeAgentSession,
+        )
         from core.providers.base import SessionConfig
         from core.providers.config import ProviderConfig
 
@@ -358,7 +361,10 @@ class TestClaudeAgentProviderCreateSession:
 
     def test_create_session_success(self):
         """Tests create_session succeeds with valid params."""
-        from core.providers.adapters.claude import ClaudeAgentProvider, ClaudeAgentSession
+        from core.providers.adapters.claude import (
+            ClaudeAgentProvider,
+            ClaudeAgentSession,
+        )
         from core.providers.base import SessionConfig
         from core.providers.config import ProviderConfig
 
@@ -731,7 +737,7 @@ class TestClaudeAgentProviderSupportedModels:
 
     def test_get_supported_models_contains_expected_models(self):
         """Tests get_supported_models contains expected Claude models."""
-        from core.providers.adapters.claude import ClaudeAgentProvider, CLAUDE_MODELS
+        from core.providers.adapters.claude import CLAUDE_MODELS, ClaudeAgentProvider
         from core.providers.config import ProviderConfig
 
         config = ProviderConfig(provider="claude")
@@ -743,7 +749,7 @@ class TestClaudeAgentProviderSupportedModels:
 
     def test_get_supported_models_returns_copy(self):
         """Tests get_supported_models returns a copy, not original."""
-        from core.providers.adapters.claude import ClaudeAgentProvider, CLAUDE_MODELS
+        from core.providers.adapters.claude import CLAUDE_MODELS, ClaudeAgentProvider
         from core.providers.config import ProviderConfig
 
         config = ProviderConfig(provider="claude")

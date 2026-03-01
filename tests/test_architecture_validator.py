@@ -8,22 +8,23 @@ pattern consistency across the codebase.
 """
 
 import json
+
+# Add apps/backend to path for imports
+import sys
 import tempfile
 from pathlib import Path
 
 import pytest
 
-# Add apps/backend to path for imports
-import sys
 sys.path.insert(0, str(Path(__file__).parent.parent / "apps" / "backend"))
 
 from analysis.architecture_validator import (
+    ArchitecturalAnalysisResult,
     ArchitecturalIssue,
     ArchitecturalPattern,
-    ArchitecturalAnalysisResult,
     ArchitectureValidator,
-    validate_architecture,
     has_architectural_issues,
+    validate_architecture,
 )
 
 
@@ -76,34 +77,34 @@ class DataProcessor:
 @pytest.fixture
 def sample_python_file_with_bare_except():
     """Sample Python file with bare except clause."""
-    return '''
+    return """
 def risky_function():
     try:
         dangerous_operation()
     except:
         pass
-'''
+"""
 
 
 @pytest.fixture
 def sample_python_file_with_wildcard_import():
     """Sample Python file with wildcard import."""
-    return '''
+    return """
 from module import *
 
 def use_wildcard():
     return something()
-'''
+"""
 
 
 @pytest.fixture
 def sample_python_file_missing_docstring():
     """Sample Python file with class missing docstring."""
-    return '''
+    return """
 class MissingDocstring:
     def method(self):
         pass
-'''
+"""
 
 
 class TestArchitecturalIssue:
@@ -210,16 +211,23 @@ class TestArchitectureValidator:
 
         assert result.files_analyzed == 1
         # Should detect snake_case pattern
-        naming_patterns = [p for p in result.patterns if p.pattern_type == "naming_function"]
+        naming_patterns = [
+            p for p in result.patterns if p.pattern_type == "naming_function"
+        ]
         assert len(naming_patterns) > 0
 
     def test_analyze_with_camel_case_violation(
-        self, temp_project_dir, sample_python_file_camel_case, sample_python_file_snake_case
+        self,
+        temp_project_dir,
+        sample_python_file_camel_case,
+        sample_python_file_snake_case,
     ):
         """Test analyzing project with camelCase violations."""
         # Create multiple snake_case files to establish pattern
         for i in range(3):
-            (temp_project_dir / f"snake_{i}.py").write_text(sample_python_file_snake_case)
+            (temp_project_dir / f"snake_{i}.py").write_text(
+                sample_python_file_snake_case
+            )
         # Add one camelCase file
         (temp_project_dir / "camel.py").write_text(sample_python_file_camel_case)
 
@@ -250,7 +258,9 @@ class TestArchitectureValidator:
         self, temp_project_dir, sample_python_file_with_wildcard_import
     ):
         """Test analyzing file with wildcard import."""
-        (temp_project_dir / "module.py").write_text(sample_python_file_with_wildcard_import)
+        (temp_project_dir / "module.py").write_text(
+            sample_python_file_with_wildcard_import
+        )
 
         validator = ArchitectureValidator()
         result = validator.analyze(temp_project_dir)
@@ -265,14 +275,18 @@ class TestArchitectureValidator:
         self, temp_project_dir, sample_python_file_missing_docstring
     ):
         """Test analyzing file with missing class docstring."""
-        (temp_project_dir / "module.py").write_text(sample_python_file_missing_docstring)
+        (temp_project_dir / "module.py").write_text(
+            sample_python_file_missing_docstring
+        )
 
         validator = ArchitectureValidator()
         result = validator.analyze(temp_project_dir)
 
         assert result.files_analyzed == 1
         # Should detect missing docstring
-        structure_issues = [i for i in result.issues if i.issue_type == "structure_violation"]
+        structure_issues = [
+            i for i in result.issues if i.issue_type == "structure_violation"
+        ]
         assert len(structure_issues) > 0
         assert any("Missing docstring" in i.title for i in structure_issues)
 
@@ -299,9 +313,7 @@ class TestArchitectureValidator:
         (temp_project_dir / "module2.py").write_text(sample_python_file_snake_case)
 
         validator = ArchitectureValidator()
-        result = validator.analyze(
-            temp_project_dir, changed_files=["module1.py"]
-        )
+        result = validator.analyze(temp_project_dir, changed_files=["module1.py"])
 
         # Should only analyze specified file
         assert result.files_analyzed == 1
@@ -309,13 +321,13 @@ class TestArchitectureValidator:
     def test_has_critical_issues_detection(self, temp_project_dir):
         """Test detection of critical/high severity issues."""
         # Create file with bare except (high severity)
-        code = '''
+        code = """
 def func():
     try:
         pass
     except:
         pass
-'''
+"""
         (temp_project_dir / "module.py").write_text(code)
 
         validator = ArchitectureValidator()
@@ -399,18 +411,18 @@ def func():
 
     def test_discover_error_handling_patterns(self, temp_project_dir):
         """Test discovering error handling patterns."""
-        code1 = '''
+        code1 = """
 try:
     operation()
 except Exception as e:
     handle(e)
-'''
-        code2 = '''
+"""
+        code2 = """
 try:
     operation()
 except Exception as e:
     log(e)
-'''
+"""
         (temp_project_dir / "file1.py").write_text(code1)
         (temp_project_dir / "file2.py").write_text(code2)
 
@@ -418,24 +430,28 @@ except Exception as e:
         result = validator.analyze(temp_project_dir)
 
         # Should discover error handling pattern
-        error_patterns = [p for p in result.patterns if p.pattern_type == "error_handling"]
+        error_patterns = [
+            p for p in result.patterns if p.pattern_type == "error_handling"
+        ]
         assert len(error_patterns) > 0
 
     def test_discover_import_organization_patterns(self, temp_project_dir):
         """Test discovering import organization patterns."""
-        code = '''
+        code = """
 import os
 import sys
 
 from pathlib import Path
-'''
+"""
         (temp_project_dir / "file.py").write_text(code)
 
         validator = ArchitectureValidator()
         result = validator.analyze(temp_project_dir)
 
         # Should discover import organization pattern
-        import_patterns = [p for p in result.patterns if p.pattern_type == "import_organization"]
+        import_patterns = [
+            p for p in result.patterns if p.pattern_type == "import_organization"
+        ]
         # Pattern detection requires multiple files, so may not always detect
         assert result.files_analyzed == 1
 
@@ -443,7 +459,9 @@ from pathlib import Path
 class TestConvenienceFunctions:
     """Test convenience functions."""
 
-    def test_validate_architecture(self, temp_project_dir, sample_python_file_snake_case):
+    def test_validate_architecture(
+        self, temp_project_dir, sample_python_file_snake_case
+    ):
         """Test validate_architecture convenience function."""
         (temp_project_dir / "module.py").write_text(sample_python_file_snake_case)
 
@@ -503,7 +521,9 @@ class TestEdgeCases:
 
     def test_analyze_file_with_only_comments(self, temp_project_dir):
         """Test analyzing file with only comments."""
-        (temp_project_dir / "comments.py").write_text("# Just a comment\n# Another comment\n")
+        (temp_project_dir / "comments.py").write_text(
+            "# Just a comment\n# Another comment\n"
+        )
 
         validator = ArchitectureValidator()
         result = validator.analyze(temp_project_dir)

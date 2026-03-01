@@ -258,7 +258,7 @@ describe('shell-escape utilities', () => {
       const result = parseFileReferenceDrop(dt);
 
       expect(result).not.toBeNull();
-      expect(result!.isDirectory).toBe(true);
+      expect(result?.isDirectory).toBe(true);
     });
 
     it('should return null for empty data', () => {
@@ -304,7 +304,7 @@ describe('shell-escape utilities', () => {
       const result = parseFileReferenceDrop(dt);
 
       expect(result).not.toBeNull();
-      expect(result!.isDirectory).toBe(false);
+      expect(result?.isDirectory).toBe(false);
     });
   });
 });

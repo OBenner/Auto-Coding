@@ -16,7 +16,6 @@ Covers:
 import sys
 from pathlib import Path
 
-
 # Add auto-claude directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "apps" / "backend"))
 # Add tests directory to path for test_fixtures
@@ -25,8 +24,8 @@ sys.path.insert(0, str(Path(__file__).parent))
 from merge import ChangeType
 from test_fixtures import (
     SAMPLE_PYTHON_MODULE,
-    SAMPLE_PYTHON_WITH_NEW_IMPORT,
     SAMPLE_PYTHON_WITH_NEW_FUNCTION,
+    SAMPLE_PYTHON_WITH_NEW_IMPORT,
     SAMPLE_REACT_COMPONENT,
     SAMPLE_REACT_WITH_HOOK,
 )
@@ -66,8 +65,7 @@ class TestPythonAnalysis:
 
         assert len(analysis.changes) > 0
         import_additions = [
-            c for c in analysis.changes
-            if c.change_type == ChangeType.ADD_IMPORT
+            c for c in analysis.changes if c.change_type == ChangeType.ADD_IMPORT
         ]
         assert len(import_additions) >= 1
 
@@ -80,8 +78,7 @@ class TestPythonAnalysis:
         )
 
         func_additions = [
-            c for c in analysis.changes
-            if c.change_type == ChangeType.ADD_FUNCTION
+            c for c in analysis.changes if c.change_type == ChangeType.ADD_FUNCTION
         ]
         assert len(func_additions) >= 1
 
@@ -91,8 +88,7 @@ class TestPythonAnalysis:
 
         # Should identify existing functions as additions from empty
         func_additions = [
-            c for c in analysis.changes
-            if c.change_type == ChangeType.ADD_FUNCTION
+            c for c in analysis.changes if c.change_type == ChangeType.ADD_FUNCTION
         ]
         assert len(func_additions) >= 2  # hello, goodbye
 
@@ -101,10 +97,7 @@ class TestPythonAnalysis:
         analysis = semantic_analyzer.analyze_file("test.py", SAMPLE_PYTHON_MODULE)
 
         # Should detect the Greeter class
-        [
-            c for c in analysis.changes
-            if c.change_type == ChangeType.ADD_CLASS
-        ]
+        [c for c in analysis.changes if c.change_type == ChangeType.ADD_CLASS]
         # Depending on implementation, might detect class or its methods
         assert len(analysis.changes) > 0
 
@@ -122,12 +115,10 @@ class TestReactAnalysis:
 
         # Should detect import and hook call
         hook_changes = [
-            c for c in analysis.changes
-            if c.change_type == ChangeType.ADD_HOOK_CALL
+            c for c in analysis.changes if c.change_type == ChangeType.ADD_HOOK_CALL
         ]
         import_changes = [
-            c for c in analysis.changes
-            if c.change_type == ChangeType.ADD_IMPORT
+            c for c in analysis.changes if c.change_type == ChangeType.ADD_IMPORT
         ]
 
         assert len(hook_changes) >= 1 or len(import_changes) >= 1
@@ -152,8 +143,7 @@ class TestReactAnalysis:
 
         # Should detect the new import
         import_changes = [
-            c for c in analysis.changes
-            if c.change_type == ChangeType.ADD_IMPORT
+            c for c in analysis.changes if c.change_type == ChangeType.ADD_IMPORT
         ]
         assert len(import_changes) >= 1
 

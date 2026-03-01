@@ -23,9 +23,7 @@ import pytest
 
 # sys.path is set by conftest.py (apps/backend is already on the path)
 # Keep a local fallback for running this file directly using an absolute path
-_BACKEND_DIR = str(
-    (Path(__file__).resolve().parent.parent / "apps" / "backend")
-)
+_BACKEND_DIR = str(Path(__file__).resolve().parent.parent / "apps" / "backend")
 if _BACKEND_DIR not in sys.path:
     sys.path.insert(0, _BACKEND_DIR)
 from cli.exit_codes import ExitCode

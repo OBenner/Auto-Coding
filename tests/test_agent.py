@@ -21,7 +21,7 @@ def test_load_workspace_context(tmp_path):
         "projects": [
             {"name": "project1", "path": "/path/to/project1", "enabled": True},
             {"name": "project2", "path": "/path/to/project2", "enabled": True},
-        ]
+        ],
     }
 
     context_file = spec_dir / "workspace_context.json"
@@ -76,7 +76,7 @@ def test_get_workspace_project_dirs(tmp_path):
             {"name": "project1", "path": "/path/to/project1", "enabled": True},
             {"name": "project2", "path": "/path/to/project2", "enabled": True},
             {"name": "project3", "path": "/path/to/project3", "enabled": False},
-        ]
+        ],
     }
 
     # Get enabled project directories

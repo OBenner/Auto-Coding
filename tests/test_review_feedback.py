@@ -11,7 +11,6 @@ Tests for ReviewState feedback functionality:
 
 from pathlib import Path
 
-
 from review import ReviewState
 
 
@@ -56,7 +55,9 @@ class TestReviewStateFeedback:
         assert len(loaded.feedback) == 1
         assert "Saved feedback" in loaded.feedback[0]
 
-    def test_feedback_persistence_across_sessions(self, complete_spec_dir: Path) -> None:
+    def test_feedback_persistence_across_sessions(
+        self, complete_spec_dir: Path
+    ) -> None:
         """Test that feedback is preserved across review sessions."""
         # First session - add feedback
         state1 = ReviewState()
