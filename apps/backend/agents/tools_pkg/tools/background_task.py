@@ -10,6 +10,7 @@ import asyncio
 import json
 import logging
 import shlex
+import sys
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -244,7 +245,20 @@ class BackgroundTaskManager:
             # Using shlex.split() + create_subprocess_exec() instead of create_subprocess_shell()
             # This prevents command injection attacks like: echo "test" && rm -rf /
             try:
-                args = shlex.split(command)
+                if sys.platform == "win32":
+                    # On Windows, shlex.split() in POSIX mode (default) treats
+                    # backslashes as escape characters, mangling paths like
+                    # C:\Python\python.exe → C:Pythonpython.exe.
+                    # Use posix=False and strip outer quotes that it preserves.
+                    raw_args = shlex.split(command, posix=False)
+                    args = [
+                        a[1:-1]
+                        if len(a) >= 2 and a[0] == a[-1] and a[0] in ('"', "'")
+                        else a
+                        for a in raw_args
+                    ]
+                else:
+                    args = shlex.split(command)
             except ValueError as e:
                 raise ValueError(f"Invalid command syntax: {e}")
 

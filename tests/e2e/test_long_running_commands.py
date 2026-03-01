@@ -25,10 +25,12 @@ from pathlib import Path
 import pytest
 
 # Add apps/backend to path for imports
-import sys
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "apps" / "backend"))
 
-from agents.tools_pkg.tools.background_task import BackgroundTaskManager, PSUTIL_AVAILABLE
+from agents.tools_pkg.tools.background_task import (
+    PSUTIL_AVAILABLE,
+    BackgroundTaskManager,
+)
 from core.task_state_store import TaskStateStore
 
 # Import psutil if available (for cleanup in tests)
@@ -57,6 +59,7 @@ def test_dirs():
         # Clean up with ignore_errors for Windows compatibility
         try:
             import shutil
+
             shutil.rmtree(tmpdir, ignore_errors=True)
         except Exception:
             pass  # Ignore cleanup errors on Windows
@@ -100,12 +103,14 @@ class TestLongRunningCommands:
         - DEFAULT_TIMEOUT is at least 4 hours (14400 seconds)
         """
         # Verify default timeout is 4+ hours
-        assert manager.DEFAULT_TIMEOUT >= 14400, "DEFAULT_TIMEOUT should be at least 4 hours"
+        assert manager.DEFAULT_TIMEOUT >= 14400, (
+            "DEFAULT_TIMEOUT should be at least 4 hours"
+        )
 
         # Start a task with long timeout
         task_id = await manager.start_task(
             "echo 'Long running task'",
-            timeout=18000  # 5 hours
+            timeout=18000,  # 5 hours
         )
 
         # Verify timeout is stored correctly
@@ -127,8 +132,8 @@ class TestLongRunningCommands:
         # Create a task that runs for a few seconds
         # Use Python for cross-platform compatibility
         task_id = await manager.start_task(
-            f'{sys.executable} -c "import time; print(\'Starting\'); time.sleep(1); print(\'Done\')"',
-            timeout=10
+            f"{sys.executable} -c \"import time; print('Starting'); time.sleep(1); print('Done')\"",
+            timeout=10,
         )
 
         # Check initial state (should be pending or running)
@@ -136,23 +141,33 @@ class TestLongRunningCommands:
         assert status is not None
         assert status["status"] in ["pending", "running"]
 
-        # Wait a bit for task to start running
-        await asyncio.sleep(0.5)
+        # Wait for task to start running
+        for _ in range(10):
+            status = manager.get_task_status(task_id)
+            if status and status["status"] == "running":
+                break
+            await asyncio.sleep(0.3)
 
         # Check running state
-        status = manager.get_task_status(task_id)
         assert status is not None
-        assert status["status"] == "running"
+        assert status["status"] == "running", (
+            f"Expected running, got {status['status']}"
+        )
         assert status["started_at"] is not None
         assert status["pid"] is not None
 
-        # Wait for completion
-        await asyncio.sleep(2)
+        # Poll for completion
+        for _ in range(20):
+            status = manager.get_task_status(task_id)
+            if status and status["status"] in ["completed", "failed"]:
+                break
+            await asyncio.sleep(0.3)
 
         # Check final state
-        status = manager.get_task_status(task_id)
         assert status is not None
-        assert status["status"] == "completed"
+        assert status["status"] == "completed", (
+            f"Expected completed, got {status['status']}"
+        )
         assert status["completed_at"] is not None
         assert status["exit_code"] == 0
 
@@ -170,8 +185,8 @@ class TestLongRunningCommands:
         # Create a command that produces incremental output
         # Use Python for cross-platform compatibility
         task_id = await manager.start_task(
-            f'{sys.executable} -c "import time; [print(f\'Line {{i}}\') or time.sleep(0.2) for i in range(1, 6)]"',
-            timeout=10
+            f"{sys.executable} -c \"import time; [print(f'Line {{i}}') or time.sleep(0.2) for i in range(1, 6)]\"",
+            timeout=10,
         )
 
         # Wait for task to start
@@ -188,8 +203,12 @@ class TestLongRunningCommands:
         output_data_2 = manager.get_task_output(task_id)
         assert output_data_2 is not None
 
-        # Wait for completion
-        await asyncio.sleep(1.5)
+        # Poll for completion
+        for _ in range(20):
+            status = manager.get_task_status(task_id)
+            if status and status["status"] in ["completed", "failed"]:
+                break
+            await asyncio.sleep(0.3)
 
         # Final output should contain all lines
         final_output = manager.get_task_output(task_id)
@@ -212,8 +231,8 @@ class TestLongRunningCommands:
 
         # Create a task
         task_id = await manager.start_task(
-            f'{sys.executable} -c "import time; print(\'Testing persistence\'); time.sleep(0.5)"',
-            timeout=10
+            f"{sys.executable} -c \"import time; print('Testing persistence'); time.sleep(0.5)\"",
+            timeout=10,
         )
 
         # Wait for task to run
@@ -233,13 +252,16 @@ class TestLongRunningCommands:
         assert saved_state["timeout"] == 10
         assert "created_at" in saved_state
 
-        # Wait for completion
-        await asyncio.sleep(1)
+        # Poll for completion
+        for _ in range(20):
+            final_state = json.loads(state_file.read_text(encoding="utf-8"))
+            if final_state["status"] in ["completed", "failed"]:
+                break
+            await asyncio.sleep(0.3)
 
-        # Verify final state is persisted
-        final_state = json.loads(state_file.read_text(encoding="utf-8"))
-
-        assert final_state["status"] == "completed"
+        assert final_state["status"] == "completed", (
+            f"Expected completed, got {final_state['status']}"
+        )
         assert final_state["completed_at"] is not None
         assert final_state["exit_code"] == 0
 
@@ -257,17 +279,22 @@ class TestLongRunningCommands:
         """
         # Create a long-running task
         task_id = await manager.start_task(
-            f'{sys.executable} -c "import time; [print(f\'Iteration {{i}}\') or time.sleep(0.5) for i in range(1, 11)]"',
-            timeout=30
+            f"{sys.executable} -c \"import time; [print(f'Iteration {{i}}') or time.sleep(0.5) for i in range(1, 11)]\"",
+            timeout=30,
         )
 
         # Wait for task to start running
-        await asyncio.sleep(0.5)
+        for _ in range(10):
+            status = manager.get_task_status(task_id)
+            if status and status["status"] == "running":
+                break
+            await asyncio.sleep(0.3)
 
         # Verify task is running
-        status = manager.get_task_status(task_id)
         assert status is not None
-        assert status["status"] == "running"
+        assert status["status"] == "running", (
+            f"Expected running, got {status['status']}"
+        )
         pid = status["pid"]
         assert pid is not None
 
@@ -275,13 +302,18 @@ class TestLongRunningCommands:
         success = await manager.cancel_task(task_id)
         assert success is True
 
-        # Wait a moment for cleanup
-        await asyncio.sleep(0.3)
+        # Poll for cancelled state
+        for _ in range(10):
+            status = manager.get_task_status(task_id)
+            if status and status["status"] in ["cancelled", "failed"]:
+                break
+            await asyncio.sleep(0.3)
 
         # Verify task is cancelled
-        status = manager.get_task_status(task_id)
         assert status is not None
-        assert status["status"] == "cancelled"
+        assert status["status"] == "cancelled", (
+            f"Expected cancelled, got {status['status']}"
+        )
         assert status["completed_at"] is not None
 
         # Verify process is no longer in manager
@@ -301,16 +333,19 @@ class TestLongRunningCommands:
         # Create a task with short timeout
         task_id = await manager.start_task(
             f'{sys.executable} -c "import time; time.sleep(10)"',  # Will timeout
-            timeout=1  # 1 second timeout
+            timeout=1,  # 1 second timeout
         )
 
-        # Wait for timeout to occur
-        await asyncio.sleep(2)
+        # Poll for timeout to occur
+        for _ in range(20):
+            status = manager.get_task_status(task_id)
+            if status and status["status"] in ["failed", "completed"]:
+                break
+            await asyncio.sleep(0.3)
 
         # Verify task failed due to timeout
-        status = manager.get_task_status(task_id)
         assert status is not None
-        assert status["status"] == "failed"
+        assert status["status"] == "failed", f"Expected failed, got {status['status']}"
         assert "timed out" in status["error"].lower()
 
         # Verify error context includes timeout info
@@ -337,8 +372,8 @@ class TestLongRunningCommands:
         # Memory is checked every 50 lines (MEMORY_CHECK_INTERVAL = 5, checked every 10 * 5 lines)
         # We'll produce 100 lines with delays to ensure task runs long enough
         task_id = await manager.start_task(
-            f'{sys.executable} -c "import time; [print(f\'Output line {{i:04d}}\') or time.sleep(0.05) for i in range(1, 101)]"',
-            timeout=30
+            f"{sys.executable} -c \"import time; [print(f'Output line {{i:04d}}') or time.sleep(0.05) for i in range(1, 101)]\"",
+            timeout=30,
         )
 
         # Wait for task to start
@@ -355,14 +390,19 @@ class TestLongRunningCommands:
         if PSUTIL_AVAILABLE:
             # Memory stats should be captured initially
             # Note: May not be in state yet if output hasn't reached 50 lines
-            if "memory_stats" in status_start and status_start["memory_stats"] is not None:
+            if (
+                "memory_stats" in status_start
+                and status_start["memory_stats"] is not None
+            ):
                 initial_mem_stats = status_start["memory_stats"]
                 assert "percent" in initial_mem_stats
                 assert "available_mb" in initial_mem_stats
                 assert "total_mb" in initial_mem_stats
                 assert "used_mb" in initial_mem_stats
                 assert 0 <= initial_mem_stats["percent"] <= 100
-                logger.info(f"Initial memory: {initial_mem_stats['percent']}% used, {initial_mem_stats['available_mb']} MB available")
+                logger.info(
+                    f"Initial memory: {initial_mem_stats['percent']}% used, {initial_mem_stats['available_mb']} MB available"
+                )
         else:
             logger.info("Memory monitoring not available (psutil not installed)")
 
@@ -379,30 +419,46 @@ class TestLongRunningCommands:
         if PSUTIL_AVAILABLE:
             # After producing significant output, memory stats should be present
             # (task should have hit the 50-line checkpoint)
-            if "memory_stats" in status_during and status_during["memory_stats"] is not None:
+            if (
+                "memory_stats" in status_during
+                and status_during["memory_stats"] is not None
+            ):
                 during_mem_stats = status_during["memory_stats"]
                 assert "percent" in during_mem_stats
                 assert "available_mb" in during_mem_stats
                 assert "total_mb" in during_mem_stats
                 assert "used_mb" in during_mem_stats
                 assert 0 <= during_mem_stats["percent"] <= 100
-                logger.info(f"During execution memory: {during_mem_stats['percent']}% used")
+                logger.info(
+                    f"During execution memory: {during_mem_stats['percent']}% used"
+                )
 
                 # Verify memory stats are reasonable (no huge leak)
                 # Memory shouldn't jump by more than 50% during our small task
                 if initial_mem_stats:
-                    mem_increase = during_mem_stats["percent"] - initial_mem_stats["percent"]
-                    assert mem_increase < 50, f"Memory increased by {mem_increase}% - possible leak"
+                    mem_increase = (
+                        during_mem_stats["percent"] - initial_mem_stats["percent"]
+                    )
+                    assert mem_increase < 50, (
+                        f"Memory increased by {mem_increase}% - possible leak"
+                    )
                     logger.info(f"Memory change during execution: {mem_increase:+.2f}%")
 
         # === PHASE 3: Wait for completion ===
-        # Task should take ~5 seconds total (100 lines * 0.05s), wait up to 8 seconds
-        await asyncio.sleep(6.0)
+        # Task should take ~5 seconds total (100 lines * 0.05s)
+        # Poll for completion instead of fixed sleep (CI can be slow)
+        status_final = None
+        for _ in range(30):
+            status_final = manager.get_task_status(task_id)
+            if status_final and status_final["status"] in ["completed", "failed"]:
+                break
+            await asyncio.sleep(0.5)
 
         # === PHASE 4: Verify memory stats in final state ===
-        status_final = manager.get_task_status(task_id)
         assert status_final is not None
-        assert status_final["status"] == "completed"
+        assert status_final["status"] == "completed", (
+            f"Expected completed, got {status_final['status']}"
+        )
         assert status_final["exit_code"] == 0
 
         if PSUTIL_AVAILABLE:
@@ -420,11 +476,17 @@ class TestLongRunningCommands:
             # === PHASE 5: Verify no memory leaks ===
             # Compare initial and final memory (should be similar)
             if initial_mem_stats:
-                mem_total_change = final_mem_stats["percent"] - initial_mem_stats["percent"]
+                mem_total_change = (
+                    final_mem_stats["percent"] - initial_mem_stats["percent"]
+                )
                 # Memory shouldn't increase by more than 10% for this simple task
                 # (allowing some variance for system activity)
-                assert abs(mem_total_change) < 10, f"Memory leak detected: {mem_total_change:+.2f}% change"
-                logger.info(f"Total memory change: {mem_total_change:+.2f}% (no leak detected)")
+                assert abs(mem_total_change) < 10, (
+                    f"Memory leak detected: {mem_total_change:+.2f}% change"
+                )
+                logger.info(
+                    f"Total memory change: {mem_total_change:+.2f}% (no leak detected)"
+                )
 
             # === PHASE 6: Verify memory stats are persisted ===
             # Load state from disk to verify persistence
@@ -452,17 +514,20 @@ class TestLongRunningCommands:
         """
         # Create a task that will fail
         task_id = await manager.start_task(
-            f'{sys.executable} -c "import sys; print(\'About to fail\'); sys.exit(42)"',
-            timeout=10
+            f"{sys.executable} -c \"import sys; print('About to fail'); sys.exit(42)\"",
+            timeout=10,
         )
 
-        # Wait for task to fail
-        await asyncio.sleep(1)
+        # Poll for task to fail
+        for _ in range(20):
+            status = manager.get_task_status(task_id)
+            if status and status["status"] in ["completed", "failed"]:
+                break
+            await asyncio.sleep(0.3)
 
         # Verify task failed
-        status = manager.get_task_status(task_id)
         assert status is not None
-        assert status["status"] == "failed"
+        assert status["status"] == "failed", f"Expected failed, got {status['status']}"
 
         # Get error context
         error_context = manager.get_error_context(task_id)
@@ -487,16 +552,34 @@ class TestLongRunningCommands:
         - Tasks are sorted by creation time
         """
         # Create multiple tasks with different outcomes
-        task1_id = await manager.start_task(f'{sys.executable} -c "import time; print(\'Task 1\'); time.sleep(0.3)"', timeout=10)
+        task1_id = await manager.start_task(
+            f"{sys.executable} -c \"import time; print('Task 1'); time.sleep(0.3)\"",
+            timeout=10,
+        )
         await asyncio.sleep(0.1)
 
-        task2_id = await manager.start_task(f'{sys.executable} -c "import sys; print(\'Task 2\'); sys.exit(1)"', timeout=10)
+        task2_id = await manager.start_task(
+            f"{sys.executable} -c \"import sys; print('Task 2'); sys.exit(1)\"",
+            timeout=10,
+        )
         await asyncio.sleep(0.1)
 
-        task3_id = await manager.start_task(f'{sys.executable} -c "import time; time.sleep(5)"', timeout=10)
+        task3_id = await manager.start_task(
+            f'{sys.executable} -c "import time; time.sleep(5)"', timeout=10
+        )
 
-        # Wait for first two tasks to complete
-        await asyncio.sleep(0.5)
+        # Poll for first two tasks to reach terminal state
+        for _ in range(20):
+            s1 = manager.get_task_status(task1_id)
+            s2 = manager.get_task_status(task2_id)
+            if (
+                s1
+                and s1["status"] in ["completed", "failed"]
+                and s2
+                and s2["status"] in ["completed", "failed"]
+            ):
+                break
+            await asyncio.sleep(0.3)
 
         # List all tasks
         all_tasks = manager.list_tasks()
@@ -534,17 +617,21 @@ class TestLongRunningCommands:
 
         # Create a running task
         task_id = await manager.start_task(
-            f'{sys.executable} -c "import time; time.sleep(10)"',
-            timeout=30
+            f'{sys.executable} -c "import time; time.sleep(10)"', timeout=30
         )
 
-        # Wait for task to start
-        await asyncio.sleep(0.5)
+        # Wait for task to start running
+        for _ in range(10):
+            status = manager.get_task_status(task_id)
+            if status and status["status"] == "running":
+                break
+            await asyncio.sleep(0.3)
 
         # Verify task is running
-        status = manager.get_task_status(task_id)
         assert status is not None
-        assert status["status"] == "running"
+        assert status["status"] == "running", (
+            f"Expected running, got {status['status']}"
+        )
 
         # Simulate app restart by creating a new TaskStateStore
         store = TaskStateStore(spec_dir / ".background_tasks")
@@ -595,17 +682,23 @@ class TestLongRunningCommands:
 
         # Create a command that outputs multiple lines over time
         task_id = await manager1.start_task(
-            f'{sys.executable} -c "import time, sys; [print(f\'Progress {{i}}\', flush=True) or sys.stdout.flush() or time.sleep(0.3) for i in range(1, 20)]"',
-            timeout=30
+            f"{sys.executable} -c \"import time, sys; [print(f'Progress {{i}}', flush=True) or sys.stdout.flush() or time.sleep(0.3) for i in range(1, 20)]\"",
+            timeout=30,
         )
 
-        # Wait for task to start
-        await asyncio.sleep(0.5)
+        # Wait for task to start running
+        status_before = None
+        for _ in range(10):
+            status_before = manager1.get_task_status(task_id)
+            if status_before and status_before["status"] == "running":
+                break
+            await asyncio.sleep(0.3)
 
         # Verify task is running
-        status_before = manager1.get_task_status(task_id)
         assert status_before is not None
-        assert status_before["status"] == "running"
+        assert status_before["status"] == "running", (
+            f"Expected running, got {status_before['status']}"
+        )
         assert status_before["pid"] is not None
         logger.info(f"Task {task_id} started with PID {status_before['pid']}")
 
@@ -616,7 +709,9 @@ class TestLongRunningCommands:
         output_before = manager1.get_task_output(task_id)
         assert output_before is not None
         # Output might be empty if task just started, but the key is state is persisted
-        logger.info(f"Initial output captured: {len(output_before['output'])} characters")
+        logger.info(
+            f"Initial output captured: {len(output_before['output'])} characters"
+        )
 
         # === PHASE 2: Simulate app restart ===
         logger.info("Phase 2: Simulating app shutdown and restart...")
@@ -635,8 +730,12 @@ class TestLongRunningCommands:
         recovery_stats = store.recover_on_startup()
 
         logger.info(f"Recovery stats: {recovery_stats}")
-        assert recovery_stats["orphaned_count"] >= 1, "Should find at least one orphaned task"
-        assert recovery_stats["marked_count"] >= 1, "Should mark at least one task as orphaned"
+        assert recovery_stats["orphaned_count"] >= 1, (
+            "Should find at least one orphaned task"
+        )
+        assert recovery_stats["marked_count"] >= 1, (
+            "Should mark at least one task as orphaned"
+        )
 
         # === PHASE 3: Verify task state recovered ===
         logger.info("Phase 3: Verifying task state recovery...")
@@ -654,16 +753,25 @@ class TestLongRunningCommands:
         assert status_after["started_at"] == status_before["started_at"]
 
         # Task should be marked as failed/orphaned after recovery
-        assert status_after["status"] == "failed", "Orphaned task should be marked as failed"
-        assert status_after.get("orphaned") is True or "orphaned" in status_after.get("error", "").lower()
-        logger.info(f"✓ Task state recovered correctly: status={status_after['status']}, orphaned={status_after.get('orphaned')}")
+        assert status_after["status"] == "failed", (
+            "Orphaned task should be marked as failed"
+        )
+        assert (
+            status_after.get("orphaned") is True
+            or "orphaned" in status_after.get("error", "").lower()
+        )
+        logger.info(
+            f"✓ Task state recovered correctly: status={status_after['status']}, orphaned={status_after.get('orphaned')}"
+        )
 
         # === PHASE 4: Verify output still accessible ===
         logger.info("Phase 4: Verifying output accessibility...")
 
         # Output should still be accessible from persisted state
         output_after = manager2.get_task_output(task_id)
-        assert output_after is not None, "Task output should be accessible after restart"
+        assert output_after is not None, (
+            "Task output should be accessible after restart"
+        )
 
         # Output may be empty if task was just started when "restart" happened
         # The key verification is that output data structure is accessible
@@ -688,7 +796,9 @@ class TestLongRunningCommands:
         failed_tasks = manager2.list_tasks(status="failed")
         failed_ids = [t["id"] for t in failed_tasks]
         assert task_id in failed_ids, "Our orphaned task should be in failed list"
-        logger.info(f"✓ Task monitoring works: found {len(task_list)} total tasks, {len(failed_tasks)} failed")
+        logger.info(
+            f"✓ Task monitoring works: found {len(task_list)} total tasks, {len(failed_tasks)} failed"
+        )
 
         # === PHASE 6: Verify state file integrity ===
         logger.info("Phase 6: Verifying state file integrity...")
@@ -704,7 +814,7 @@ class TestLongRunningCommands:
         for field in required_fields:
             assert field in state_data, f"State should contain {field}"
 
-        logger.info(f"✓ State file integrity verified")
+        logger.info("✓ State file integrity verified")
 
         # === CLEANUP: Terminate any remaining processes ===
         # Try to terminate the orphaned process if it's still running
@@ -715,7 +825,9 @@ class TestLongRunningCommands:
                     proc.terminate()
                     logger.info(f"Cleaned up orphaned process {old_pid}")
         except Exception as e:
-            logger.debug(f"Cleanup of process {old_pid} not needed or already terminated: {e}")
+            logger.debug(
+                f"Cleanup of process {old_pid} not needed or already terminated: {e}"
+            )
 
         logger.info(f"✓ App restart recovery E2E test passed: {task_id}")
 
@@ -742,24 +854,24 @@ async def test_full_lifecycle_integration(test_dirs):
 
     # Task 1: Will complete successfully
     task1_id = await manager.start_task(
-        f'{sys.executable} -c "import time; [print(f\'Build step {{i}}\') or time.sleep(0.2) for i in range(1, 4)]"',
-        timeout=10
+        f"{sys.executable} -c \"import time; [print(f'Build step {{i}}') or time.sleep(0.2) for i in range(1, 4)]\"",
+        timeout=10,
     )
     tasks.append(("build", task1_id))
     await asyncio.sleep(1.1)  # Delay to ensure unique task IDs (second precision)
 
     # Task 2: Will be cancelled (long running)
     task2_id = await manager.start_task(
-        f'{sys.executable} -c "import time; [print(f\'Long process {{i}}\') or time.sleep(1) for i in range(1, 11)]"',
-        timeout=30
+        f"{sys.executable} -c \"import time; [print(f'Long process {{i}}') or time.sleep(1) for i in range(1, 11)]\"",
+        timeout=30,
     )
     tasks.append(("long_process", task2_id))
     await asyncio.sleep(1.1)  # Delay to ensure unique task IDs (second precision)
 
     # Task 3: Will fail
     task3_id = await manager.start_task(
-        f'{sys.executable} -c "import sys, time; print(\'Starting tests\'); time.sleep(0.3); sys.exit(1)"',
-        timeout=10
+        f"{sys.executable} -c \"import sys, time; print('Starting tests'); time.sleep(0.3); sys.exit(1)\"",
+        timeout=10,
     )
     tasks.append(("tests", task3_id))
     await asyncio.sleep(0.3)  # Small delay for stability
@@ -780,20 +892,33 @@ async def test_full_lifecycle_integration(test_dirs):
     if status2_before["status"] == "running":
         success = await manager.cancel_task(task2_id)
         assert success is True
-        logger.info(f"Cancelled long_process task")
+        logger.info("Cancelled long_process task")
     else:
-        logger.info(f"Long process task already {status2_before['status']}, skipping cancellation")
+        logger.info(
+            f"Long process task already {status2_before['status']}, skipping cancellation"
+        )
 
-    # Wait for remaining tasks to complete
-    await asyncio.sleep(1.5)
+    # Poll for remaining tasks to complete
+    for _ in range(20):
+        status1 = manager.get_task_status(task1_id)
+        status3 = manager.get_task_status(task3_id)
+        if (
+            status1
+            and status1["status"] in ["completed", "failed"]
+            and status3
+            and status3["status"] in ["completed", "failed"]
+        ):
+            break
+        await asyncio.sleep(0.3)
 
     # Verify final states
     # Task 1 should be completed
-    status1 = manager.get_task_status(task1_id)
-    assert status1["status"] == "completed"
+    assert status1["status"] == "completed", (
+        f"Expected completed, got {status1['status']}"
+    )
     output1 = manager.get_task_output(task1_id)
     assert "Build step 3" in output1["output"]
-    logger.info(f"✓ Build task completed successfully")
+    logger.info("✓ Build task completed successfully")
 
     # Task 2 should be cancelled — poll until terminal state
     for _ in range(20):
@@ -801,7 +926,9 @@ async def test_full_lifecycle_integration(test_dirs):
         if status2["status"] in ["cancelled", "completed", "failed"]:
             break
         await asyncio.sleep(0.3)
-    assert status2["status"] == "cancelled", f"Expected cancelled, got {status2['status']}"
+    assert status2["status"] == "cancelled", (
+        f"Expected cancelled, got {status2['status']}"
+    )
     logger.info(f"✓ Long process task status: {status2['status']}")
 
     # Task 3 should be failed
@@ -809,13 +936,13 @@ async def test_full_lifecycle_integration(test_dirs):
     assert status3["status"] == "failed"
     error_context = manager.get_error_context(task3_id)
     assert error_context is not None
-    logger.info(f"✓ Test task failed as expected")
+    logger.info("✓ Test task failed as expected")
 
     # Verify all states are persisted
     state_dir = spec_dir / ".background_tasks"
     state_files = list(state_dir.glob("*.json"))
     assert len(state_files) >= 3
-    logger.info(f"✓ All states persisted to disk")
+    logger.info("✓ All states persisted to disk")
 
     # Verify we can list tasks
     all_tasks = manager.list_tasks()
@@ -825,7 +952,9 @@ async def test_full_lifecycle_integration(test_dirs):
     cancelled = manager.list_tasks(status="cancelled")
     failed = manager.list_tasks(status="failed")
 
-    logger.info(f"Task summary: {len(completed)} completed, {len(cancelled)} cancelled, {len(failed)} failed")
+    logger.info(
+        f"Task summary: {len(completed)} completed, {len(cancelled)} cancelled, {len(failed)} failed"
+    )
 
     logger.info("✓ Full lifecycle integration test passed")
 
@@ -862,6 +991,7 @@ if __name__ == "__main__":
         time.sleep(1)
         try:
             import shutil
+
             shutil.rmtree(tmpdir, ignore_errors=True)
         except Exception:
             pass  # Ignore cleanup errors on Windows
