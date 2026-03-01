@@ -11,15 +11,16 @@ Tests the memory.py tools module functionality including:
 """
 
 import json
-import pytest
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock
 
+import pytest
+
 # Store original modules for cleanup
 _original_modules = {}
 _mocked_module_names = [
-    'claude_agent_sdk',
+    "claude_agent_sdk",
 ]
 
 for name in _mocked_module_names:
@@ -30,6 +31,7 @@ for name in _mocked_module_names:
 # The SDK isn't available in the test environment
 mock_agent_sdk = MagicMock()
 
+
 # Create a mock tool decorator that just returns the function
 def mock_tool_decorator(name, description, params):
     def decorator(func):
@@ -37,16 +39,24 @@ def mock_tool_decorator(name, description, params):
         func._tool_description = description
         func._tool_params = params
         return func
+
     return decorator
 
+
 mock_agent_sdk.tool = mock_tool_decorator
-sys.modules['claude_agent_sdk'] = mock_agent_sdk
+sys.modules["claude_agent_sdk"] = mock_agent_sdk
 
 import agents.tools_pkg.tools.memory as _memory_tools_mod
+
 # Ensure the memory tools module uses our mock tool decorator even if already imported
 _memory_tools_mod.tool = mock_tool_decorator
 _memory_tools_mod.SDK_TOOLS_AVAILABLE = True
 from agents.tools_pkg.tools.memory import create_memory_tools
+
+
+def _get_tool(tools, name):
+    """Locate a tool by its _tool_name attribute instead of fragile positional indexing."""
+    return next(t for t in tools if getattr(t, "_tool_name", None) == name)
 
 
 # Cleanup fixture to restore original modules after all tests in this module
@@ -65,15 +75,17 @@ def cleanup_mocked_modules():
 class TestCreateMemoryTools:
     """Tests for create_memory_tools function."""
 
-    def test_creates_four_tools(self, spec_dir: Path, project_dir: Path):
-        """create_memory_tools returns all four memory tools."""
+    def test_creates_five_tools(self, spec_dir: Path, project_dir: Path):
+        """create_memory_tools returns all five memory tools."""
         tools = create_memory_tools(spec_dir, project_dir)
 
-        assert len(tools) == 4
-        assert tools[0]._tool_name == "record_discovery"
-        assert tools[1]._tool_name == "record_gotcha"
-        assert tools[2]._tool_name == "get_session_context"
-        assert tools[3]._tool_name == "list_discoveries"
+        assert len(tools) == 5
+        tool_names = [t._tool_name for t in tools]
+        assert "record_discovery" in tool_names
+        assert "record_gotcha" in tool_names
+        assert "record_feedback" in tool_names
+        assert "get_session_context" in tool_names
+        assert "list_discoveries" in tool_names
 
 
 class TestListDiscoveries:
@@ -85,7 +97,7 @@ class TestListDiscoveries:
 
         # Get tools
         tools = create_memory_tools(spec_dir, project_dir)
-        list_discoveries = tools[3]
+        list_discoveries = _get_tool(tools, "list_discoveries")
 
         # Call the tool
         result = await list_discoveries({})
@@ -98,7 +110,9 @@ class TestListDiscoveries:
         assert "No discoveries found" in text
         assert "Use record_discovery to add codebase discoveries" in text
 
-    async def test_list_discoveries_empty_discoveries(self, spec_dir: Path, project_dir: Path):
+    async def test_list_discoveries_empty_discoveries(
+        self, spec_dir: Path, project_dir: Path
+    ):
         """list_discoveries handles empty discoveries object."""
         # Create codebase_map with empty discoveries
         memory_dir = spec_dir / "memory"
@@ -113,7 +127,7 @@ class TestListDiscoveries:
 
         # Get tools
         tools = create_memory_tools(spec_dir, project_dir)
-        list_discoveries = tools[3]
+        list_discoveries = _get_tool(tools, "list_discoveries")
 
         # Call the tool
         result = await list_discoveries({})
@@ -122,7 +136,9 @@ class TestListDiscoveries:
         text = result["content"][0]["text"]
         assert "No discoveries recorded yet" in text
 
-    async def test_list_discoveries_single_category(self, spec_dir: Path, project_dir: Path):
+    async def test_list_discoveries_single_category(
+        self, spec_dir: Path, project_dir: Path
+    ):
         """list_discoveries displays discoveries grouped by category."""
         # Create codebase_map with discoveries in one category
         memory_dir = spec_dir / "memory"
@@ -148,7 +164,7 @@ class TestListDiscoveries:
 
         # Get tools
         tools = create_memory_tools(spec_dir, project_dir)
-        list_discoveries = tools[3]
+        list_discoveries = _get_tool(tools, "list_discoveries")
 
         # Call the tool
         result = await list_discoveries({})
@@ -161,7 +177,9 @@ class TestListDiscoveries:
         assert "`app/routes/auth.py`: Handles authentication routes" in text
         assert "`app/models/user.py`: User model with OAuth fields" in text
 
-    async def test_list_discoveries_multiple_categories(self, spec_dir: Path, project_dir: Path):
+    async def test_list_discoveries_multiple_categories(
+        self, spec_dir: Path, project_dir: Path
+    ):
         """list_discoveries groups discoveries by multiple categories."""
         # Create codebase_map with discoveries in multiple categories
         memory_dir = spec_dir / "memory"
@@ -197,7 +215,7 @@ class TestListDiscoveries:
 
         # Get tools
         tools = create_memory_tools(spec_dir, project_dir)
-        list_discoveries = tools[3]
+        list_discoveries = _get_tool(tools, "list_discoveries")
 
         # Call the tool
         result = await list_discoveries({})
@@ -214,7 +232,9 @@ class TestListDiscoveries:
         assert "`app/models/user.py`: User model" in text
         assert "`docker-compose.yml`: Docker services config" in text
 
-    async def test_list_discoveries_filter_by_category(self, spec_dir: Path, project_dir: Path):
+    async def test_list_discoveries_filter_by_category(
+        self, spec_dir: Path, project_dir: Path
+    ):
         """list_discoveries filters discoveries by category."""
         # Create codebase_map with multiple categories
         memory_dir = spec_dir / "memory"
@@ -245,7 +265,7 @@ class TestListDiscoveries:
 
         # Get tools
         tools = create_memory_tools(spec_dir, project_dir)
-        list_discoveries = tools[3]
+        list_discoveries = _get_tool(tools, "list_discoveries")
 
         # Call the tool with category filter
         result = await list_discoveries({"category": "backend"})
@@ -260,7 +280,9 @@ class TestListDiscoveries:
         # Should NOT include frontend
         assert "Login.tsx" not in text
 
-    async def test_list_discoveries_filter_no_matches(self, spec_dir: Path, project_dir: Path):
+    async def test_list_discoveries_filter_no_matches(
+        self, spec_dir: Path, project_dir: Path
+    ):
         """list_discoveries returns message when category filter has no matches."""
         # Create codebase_map without the requested category
         memory_dir = spec_dir / "memory"
@@ -281,7 +303,7 @@ class TestListDiscoveries:
 
         # Get tools
         tools = create_memory_tools(spec_dir, project_dir)
-        list_discoveries = tools[3]
+        list_discoveries = _get_tool(tools, "list_discoveries")
 
         # Call the tool with category filter that doesn't match
         result = await list_discoveries({"category": "frontend"})
@@ -291,7 +313,9 @@ class TestListDiscoveries:
 
         assert "No discoveries found in category 'frontend'" in text
 
-    async def test_list_discoveries_missing_category_field(self, spec_dir: Path, project_dir: Path):
+    async def test_list_discoveries_missing_category_field(
+        self, spec_dir: Path, project_dir: Path
+    ):
         """list_discoveries handles discoveries without category field (defaults to 'general')."""
         # Create codebase_map with missing category
         memory_dir = spec_dir / "memory"
@@ -317,7 +341,7 @@ class TestListDiscoveries:
 
         # Get tools
         tools = create_memory_tools(spec_dir, project_dir)
-        list_discoveries = tools[3]
+        list_discoveries = _get_tool(tools, "list_discoveries")
 
         # Call the tool
         result = await list_discoveries({})
@@ -331,7 +355,9 @@ class TestListDiscoveries:
         assert "`README.md`: Project documentation" in text
         assert "`app/main.py`: Main application" in text
 
-    async def test_list_discoveries_invalid_json(self, spec_dir: Path, project_dir: Path):
+    async def test_list_discoveries_invalid_json(
+        self, spec_dir: Path, project_dir: Path
+    ):
         """list_discoveries handles corrupted codebase_map.json gracefully."""
         # Create invalid JSON file
         memory_dir = spec_dir / "memory"
@@ -342,7 +368,7 @@ class TestListDiscoveries:
 
         # Get tools
         tools = create_memory_tools(spec_dir, project_dir)
-        list_discoveries = tools[3]
+        list_discoveries = _get_tool(tools, "list_discoveries")
 
         # Call the tool
         result = await list_discoveries({})
@@ -351,7 +377,9 @@ class TestListDiscoveries:
         text = result["content"][0]["text"]
         assert "Error listing discoveries" in text
 
-    async def test_list_discoveries_categories_sorted_alphabetically(self, spec_dir: Path, project_dir: Path):
+    async def test_list_discoveries_categories_sorted_alphabetically(
+        self, spec_dir: Path, project_dir: Path
+    ):
         """list_discoveries displays categories in alphabetical order."""
         # Create codebase_map with categories that need sorting
         memory_dir = spec_dir / "memory"
@@ -382,7 +410,7 @@ class TestListDiscoveries:
 
         # Get tools
         tools = create_memory_tools(spec_dir, project_dir)
-        list_discoveries = tools[3]
+        list_discoveries = _get_tool(tools, "list_discoveries")
 
         # Call the tool
         result = await list_discoveries({})
@@ -397,7 +425,9 @@ class TestListDiscoveries:
 
         assert alpha_pos < beta_pos < zebra_pos
 
-    async def test_list_discoveries_missing_description(self, spec_dir: Path, project_dir: Path):
+    async def test_list_discoveries_missing_description(
+        self, spec_dir: Path, project_dir: Path
+    ):
         """list_discoveries handles discoveries without description field."""
         # Create codebase_map with missing description
         memory_dir = spec_dir / "memory"
@@ -418,7 +448,7 @@ class TestListDiscoveries:
 
         # Get tools
         tools = create_memory_tools(spec_dir, project_dir)
-        list_discoveries = tools[3]
+        list_discoveries = _get_tool(tools, "list_discoveries")
 
         # Call the tool
         result = await list_discoveries({})
@@ -432,18 +462,22 @@ class TestListDiscoveries:
 class TestRecordDiscovery:
     """Tests for record_discovery tool."""
 
-    async def test_record_discovery_creates_file(self, spec_dir: Path, project_dir: Path):
+    async def test_record_discovery_creates_file(
+        self, spec_dir: Path, project_dir: Path
+    ):
         """record_discovery creates codebase_map.json if it doesn't exist."""
         # Get tools
         tools = create_memory_tools(spec_dir, project_dir)
-        record_discovery = tools[0]
+        record_discovery = _get_tool(tools, "record_discovery")
 
         # Call the tool
-        result = await record_discovery({
-            "file_path": "app/main.py",
-            "description": "Main application entry point",
-            "category": "backend",
-        })
+        result = await record_discovery(
+            {
+                "file_path": "app/main.py",
+                "description": "Main application entry point",
+                "category": "backend",
+            }
+        )
 
         # Check result
         text = result["content"][0]["text"]
@@ -456,10 +490,15 @@ class TestRecordDiscovery:
         # Verify content
         codebase_map = json.loads(codebase_map_file.read_text())
         assert "app/main.py" in codebase_map["discovered_files"]
-        assert codebase_map["discovered_files"]["app/main.py"]["description"] == "Main application entry point"
+        assert (
+            codebase_map["discovered_files"]["app/main.py"]["description"]
+            == "Main application entry point"
+        )
         assert codebase_map["discovered_files"]["app/main.py"]["category"] == "backend"
 
-    async def test_record_discovery_appends_to_existing(self, spec_dir: Path, project_dir: Path):
+    async def test_record_discovery_appends_to_existing(
+        self, spec_dir: Path, project_dir: Path
+    ):
         """record_discovery appends to existing codebase_map.json."""
         # Create existing codebase_map
         memory_dir = spec_dir / "memory"
@@ -480,14 +519,16 @@ class TestRecordDiscovery:
 
         # Get tools
         tools = create_memory_tools(spec_dir, project_dir)
-        record_discovery = tools[0]
+        record_discovery = _get_tool(tools, "record_discovery")
 
         # Call the tool
-        result = await record_discovery({
-            "file_path": "app/models/user.py",
-            "description": "User model",
-            "category": "backend",
-        })
+        result = await record_discovery(
+            {
+                "file_path": "app/models/user.py",
+                "description": "User model",
+                "category": "backend",
+            }
+        )
 
         # Check result
         text = result["content"][0]["text"]
@@ -499,7 +540,9 @@ class TestRecordDiscovery:
         assert "app/routes/auth.py" in codebase_map["discovered_files"]
         assert "app/models/user.py" in codebase_map["discovered_files"]
 
-    async def test_record_discovery_updates_existing_entry(self, spec_dir: Path, project_dir: Path):
+    async def test_record_discovery_updates_existing_entry(
+        self, spec_dir: Path, project_dir: Path
+    ):
         """record_discovery updates existing entry for the same file."""
         # Create existing codebase_map
         memory_dir = spec_dir / "memory"
@@ -520,14 +563,16 @@ class TestRecordDiscovery:
 
         # Get tools
         tools = create_memory_tools(spec_dir, project_dir)
-        record_discovery = tools[0]
+        record_discovery = _get_tool(tools, "record_discovery")
 
         # Call the tool with updated info
-        result = await record_discovery({
-            "file_path": "app/main.py",
-            "description": "New description",
-            "category": "backend",
-        })
+        result = await record_discovery(
+            {
+                "file_path": "app/main.py",
+                "description": "New description",
+                "category": "backend",
+            }
+        )
 
         # Check result
         text = result["content"][0]["text"]
@@ -536,20 +581,27 @@ class TestRecordDiscovery:
         # Verify entry was updated
         codebase_map = json.loads(codebase_map_file.read_text())
         assert len(codebase_map["discovered_files"]) == 1
-        assert codebase_map["discovered_files"]["app/main.py"]["description"] == "New description"
+        assert (
+            codebase_map["discovered_files"]["app/main.py"]["description"]
+            == "New description"
+        )
         assert codebase_map["discovered_files"]["app/main.py"]["category"] == "backend"
 
-    async def test_record_discovery_default_category(self, spec_dir: Path, project_dir: Path):
+    async def test_record_discovery_default_category(
+        self, spec_dir: Path, project_dir: Path
+    ):
         """record_discovery defaults to 'general' category if not specified."""
         # Get tools
         tools = create_memory_tools(spec_dir, project_dir)
-        record_discovery = tools[0]
+        record_discovery = _get_tool(tools, "record_discovery")
 
         # Call the tool without category
-        result = await record_discovery({
-            "file_path": "README.md",
-            "description": "Project documentation",
-        })
+        result = await record_discovery(
+            {
+                "file_path": "README.md",
+                "description": "Project documentation",
+            }
+        )
 
         # Check result
         text = result["content"][0]["text"]
@@ -568,13 +620,15 @@ class TestRecordGotcha:
         """record_gotcha creates gotchas.md if it doesn't exist."""
         # Get tools
         tools = create_memory_tools(spec_dir, project_dir)
-        record_gotcha = tools[1]
+        record_gotcha = _get_tool(tools, "record_gotcha")
 
         # Call the tool
-        result = await record_gotcha({
-            "gotcha": "Database connections must be closed manually",
-            "context": "SQLAlchemy doesn't auto-close in worker threads",
-        })
+        result = await record_gotcha(
+            {
+                "gotcha": "Database connections must be closed manually",
+                "context": "SQLAlchemy doesn't auto-close in worker threads",
+            }
+        )
 
         # Check result
         text = result["content"][0]["text"]
@@ -589,24 +643,30 @@ class TestRecordGotcha:
         assert "Database connections must be closed manually" in content
         assert "Context: SQLAlchemy doesn't auto-close in worker threads" in content
 
-    async def test_record_gotcha_appends_to_existing(self, spec_dir: Path, project_dir: Path):
+    async def test_record_gotcha_appends_to_existing(
+        self, spec_dir: Path, project_dir: Path
+    ):
         """record_gotcha appends to existing gotchas.md."""
         # Create existing gotchas file
         memory_dir = spec_dir / "memory"
         memory_dir.mkdir(exist_ok=True)
 
         gotchas_file = memory_dir / "gotchas.md"
-        gotchas_file.write_text("# Gotchas & Pitfalls\n\n## [2024-01-15 10:00]\nFirst gotcha\n")
+        gotchas_file.write_text(
+            "# Gotchas & Pitfalls\n\n## [2024-01-15 10:00]\nFirst gotcha\n"
+        )
 
         # Get tools
         tools = create_memory_tools(spec_dir, project_dir)
-        record_gotcha = tools[1]
+        record_gotcha = _get_tool(tools, "record_gotcha")
 
         # Call the tool
-        result = await record_gotcha({
-            "gotcha": "Second gotcha",
-            "context": "Important context",
-        })
+        result = await record_gotcha(
+            {
+                "gotcha": "Second gotcha",
+                "context": "Important context",
+            }
+        )
 
         # Check result
         text = result["content"][0]["text"]
@@ -622,11 +682,13 @@ class TestRecordGotcha:
 class TestGetSessionContext:
     """Tests for get_session_context tool."""
 
-    async def test_get_session_context_no_memory(self, spec_dir: Path, project_dir: Path):
+    async def test_get_session_context_no_memory(
+        self, spec_dir: Path, project_dir: Path
+    ):
         """get_session_context returns message when no memory exists."""
         # Get tools
         tools = create_memory_tools(spec_dir, project_dir)
-        get_session_context = tools[2]
+        get_session_context = _get_tool(tools, "get_session_context")
 
         # Call the tool
         result = await get_session_context({})
@@ -636,7 +698,9 @@ class TestGetSessionContext:
         assert "No session memory found" in text
         assert "first session" in text
 
-    async def test_get_session_context_with_discoveries(self, spec_dir: Path, project_dir: Path):
+    async def test_get_session_context_with_discoveries(
+        self, spec_dir: Path, project_dir: Path
+    ):
         """get_session_context includes codebase discoveries."""
         # Create memory with discoveries
         memory_dir = spec_dir / "memory"
@@ -657,7 +721,7 @@ class TestGetSessionContext:
 
         # Get tools
         tools = create_memory_tools(spec_dir, project_dir)
-        get_session_context = tools[2]
+        get_session_context = _get_tool(tools, "get_session_context")
 
         # Call the tool
         result = await get_session_context({})
@@ -667,18 +731,22 @@ class TestGetSessionContext:
         assert "## Codebase Discoveries" in text
         assert "`app/main.py`: Main application" in text
 
-    async def test_get_session_context_with_gotchas(self, spec_dir: Path, project_dir: Path):
+    async def test_get_session_context_with_gotchas(
+        self, spec_dir: Path, project_dir: Path
+    ):
         """get_session_context includes gotchas."""
         # Create memory with gotchas
         memory_dir = spec_dir / "memory"
         memory_dir.mkdir(exist_ok=True)
 
         gotchas_file = memory_dir / "gotchas.md"
-        gotchas_file.write_text("# Gotchas & Pitfalls\n\n## [2024-01-15 10:00]\nDatabase connections\n")
+        gotchas_file.write_text(
+            "# Gotchas & Pitfalls\n\n## [2024-01-15 10:00]\nDatabase connections\n"
+        )
 
         # Get tools
         tools = create_memory_tools(spec_dir, project_dir)
-        get_session_context = tools[2]
+        get_session_context = _get_tool(tools, "get_session_context")
 
         # Call the tool
         result = await get_session_context({})
@@ -688,7 +756,9 @@ class TestGetSessionContext:
         assert "## Gotchas" in text
         assert "Database connections" in text
 
-    async def test_get_session_context_limits_discoveries(self, spec_dir: Path, project_dir: Path):
+    async def test_get_session_context_limits_discoveries(
+        self, spec_dir: Path, project_dir: Path
+    ):
         """get_session_context limits discoveries to 20 entries."""
         # Create memory with many discoveries
         memory_dir = spec_dir / "memory"
@@ -712,7 +782,7 @@ class TestGetSessionContext:
 
         # Get tools
         tools = create_memory_tools(spec_dir, project_dir)
-        get_session_context = tools[2]
+        get_session_context = _get_tool(tools, "get_session_context")
 
         # Call the tool
         result = await get_session_context({})
