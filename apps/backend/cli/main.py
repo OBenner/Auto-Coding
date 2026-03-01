@@ -1,8 +1,8 @@
 """
-Auto-Code CLI - Main Entry Point
-==================================
+Auto Code CLI - Main Entry Point
+=================================
 
-Command-line interface for the Auto-Code autonomous coding framework.
+Command-line interface for the Auto Code autonomous coding framework.
 """
 
 import argparse
@@ -61,7 +61,7 @@ from .workspace_commands import (
 def parse_args() -> argparse.Namespace:
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(
-        description="Auto-Code Framework - Autonomous multi-session coding agent",
+        description="Auto Code Framework - Autonomous multi-session coding agent",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -142,18 +142,6 @@ Environment Variables:
         "--verbose",
         action="store_true",
         help="Enable verbose output",
-    )
-
-    parser.add_argument(
-        "--ci",
-        action="store_true",
-        help="Enable CI/CD pipeline mode (non-interactive, structured output)",
-    )
-
-    parser.add_argument(
-        "--json",
-        action="store_true",
-        help="Enable JSON output mode for structured machine-readable output",
     )
 
     # Workspace options
@@ -496,10 +484,6 @@ def _run_cli() -> None:
     # Parse arguments
     args = parse_args()
 
-    # Wire --ci flag into CI mode env var so is_ci_mode() picks it up
-    if args.ci:
-        os.environ["AUTO_CLAUDE_CI"] = "1"
-
     # Import debug functions after environment setup
     from debug import debug, debug_error, debug_section, debug_success
 
@@ -755,7 +739,6 @@ def _run_cli() -> None:
         skip_qa=args.skip_qa,
         force_bypass_approval=args.force,
         base_branch=args.base_branch,
-        json_mode=args.json,
         restart_from=args.restart_from,
     )
 

@@ -2,7 +2,7 @@
 CLI Utilities
 ==============
 
-Shared utility functions for the Auto-Code CLI.
+Shared utility functions for the Auto Code CLI.
 """
 
 import os
@@ -72,36 +72,6 @@ from ui import (
 
 # Configuration - uses shorthand that resolves via API Profile if configured
 DEFAULT_MODEL = "sonnet"  # Changed from "opus" (fix #433)
-
-
-def is_ci_mode() -> bool:
-    """
-    Check if running in CI/CD mode.
-
-    CI mode is enabled when the AUTO_CLAUDE_CI environment variable is set to
-    'true', '1', 'yes', or 'on'. This enables headless operation with exit codes
-    and JSON output.
-
-    Returns:
-        True if in CI mode, False otherwise
-    """
-    ci_value = os.environ.get("AUTO_CLAUDE_CI", "").lower()
-    return ci_value in ("true", "1", "yes", "on")
-
-
-def is_json_output_enabled() -> bool:
-    """
-    Check if JSON output mode is enabled.
-
-    JSON output mode is enabled when the AUTO_CLAUDE_JSON_OUTPUT environment variable
-    is set to 'true', '1', 'yes', or 'on'. This enables structured JSON output for
-    programmatic consumption.
-
-    Returns:
-        True if JSON output is enabled, False otherwise
-    """
-    json_value = os.environ.get("AUTO_CLAUDE_JSON_OUTPUT", "").lower()
-    return json_value in ("true", "1", "yes", "on")
 
 
 def setup_environment() -> Path:
@@ -196,7 +166,7 @@ def validate_environment(spec_dir: Path) -> bool:
     # Check for OAuth token (API keys are not supported)
     if not get_auth_token():
         print("Error: No OAuth token found")
-        print("\nAuto-Code requires Claude Code OAuth authentication.")
+        print("\nAuto Code requires Claude Code OAuth authentication.")
         print("Direct API keys (ANTHROPIC_API_KEY) are not supported.")
         print("\nTo authenticate, run:")
         print("  claude setup-token")
@@ -236,14 +206,6 @@ def validate_environment(spec_dir: Path) -> bool:
             print("  Status: Will be initialized during planner session")
     else:
         print("Linear integration: DISABLED (set LINEAR_API_KEY to enable)")
-
-    # Check CI mode — write to stderr so CI mode status never corrupts JSON stdout output
-    if is_ci_mode():
-        print("CI/CD mode: ENABLED (AUTO_CLAUDE_CI=true)", file=sys.stderr)
-    else:
-        print(
-            "CI/CD mode: DISABLED (set AUTO_CLAUDE_CI=true to enable)", file=sys.stderr
-        )
 
     # Check Graphiti integration (optional but show status)
     # Lazy import to avoid triggering pywintypes import before validation (ACS-253)

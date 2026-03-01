@@ -14,7 +14,6 @@ REFACTORED: Service layer architecture - orchestrator delegates to specialized s
 
 from __future__ import annotations
 
-import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -22,8 +21,6 @@ from pathlib import Path
 try:
     # When imported as part of package
     from .bot_detection import BotDetector
-    from .command_executor import CommandExecutor, CommandResult
-    from .command_parser import CommandParser
     from .context_gatherer import PRContext, PRContextGatherer
     from .gh_client import GHClient
     from .models import (
@@ -53,8 +50,6 @@ try:
 except (ImportError, ValueError, SystemError):
     # When imported directly (runner.py adds github dir to path)
     from runners.github.bot_detection import BotDetector
-    from runners.github.command_executor import CommandExecutor, CommandResult
-    from runners.github.command_parser import CommandParser
     from runners.github.context_gatherer import PRContext, PRContextGatherer
     from runners.github.gh_client import GHClient
     from runners.github.models import (
@@ -1727,112 +1722,3 @@ class GitHubOrchestrator:
     async def process_pending_batches(self) -> int:
         """Process all pending batches."""
         return await self.batch_processor.process_pending_batches()
-
-    # =========================================================================
-    # COMMAND PROCESSING WORKFLOW
-    # =========================================================================
-
-    async def process_commands(
-        self,
-        comment_text: str,
-        pr_number: int,
-        username: str,
-    ) -> list[CommandResult]:
-        """
-        Process commands from a PR comment.
-
-        This method:
-        1. Parses the comment text to extract commands
-        2. Executes each command with permission validation
-        3. Returns the results of command execution
-
-        Supported commands:
-        - /merge [method] - Merge PR (optional method: merge, squash, rebase)
-        - /resolve - Attempt to resolve dependency conflicts
-        - /process - Process and summarize PR comments
-
-        Args:
-            comment_text: The PR comment text to parse for commands
-            pr_number: The PR number where the comment was posted
-            username: The GitHub username who posted the comment
-
-        Returns:
-            List of CommandResult objects (one per command executed)
-
-        Example:
-            >>> results = await orchestrator.process_commands(
-            ...     comment_text="Please /merge and then /resolve",
-            ...     pr_number=123,
-            ...     username="octocat"
-            ... )
-            >>> for result in results:
-            ...     print(f"{result.command_type}: {result.message}")
-        """
-        logger = logging.getLogger(__name__)
-        logger.info(f"Processing commands from user '{username}' on PR #{pr_number}")
-
-        self._report_progress(
-            "parsing_commands",
-            10,
-            f"Parsing commands from comment on PR #{pr_number}...",
-            pr_number=pr_number,
-        )
-
-        try:
-            # Parse commands from comment text
-            parser = CommandParser()
-            commands = parser.parse(comment_text)
-
-            if not commands:
-                logger.info(f"No commands found in comment on PR #{pr_number}")
-                return []
-
-            logger.info(
-                f"Found {len(commands)} command(s) in comment: "
-                f"{[c.type for c in commands]}"
-            )
-
-            self._report_progress(
-                "executing_commands",
-                20,
-                f"Executing {len(commands)} command(s) on PR #{pr_number}...",
-                pr_number=pr_number,
-            )
-
-            # Initialize command executor with gh_client and config
-            executor = CommandExecutor(
-                project_dir=self.project_dir,
-                gh_client=self.gh_client,
-                repo=self.config.repo,
-                allowed_roles=self.config.auto_fix_allowed_roles,
-            )
-
-            # Execute all commands (stops on first failure)
-            results = await executor.execute_all(
-                commands=commands,
-                pr_number=pr_number,
-                username=username,
-            )
-
-            # Report completion
-            successful = sum(1 for r in results if r.success)
-            total = len(results)
-
-            self._report_progress(
-                "complete",
-                100,
-                f"Command execution complete: {successful}/{total} succeeded",
-                pr_number=pr_number,
-            )
-
-            logger.info(
-                f"Command execution complete for PR #{pr_number}: "
-                f"{successful}/{total} succeeded"
-            )
-
-            return results
-
-        except Exception as e:
-            logger.error(f"Failed to process commands for PR #{pr_number}: {e}")
-            # Return empty list on error (caller can handle)
-            return []
