@@ -27,6 +27,7 @@ from .memory_manager import debug_memory_system_status as debug_memory_system_st
 from .memory_manager import get_graphiti_context as get_graphiti_context
 from .memory_manager import save_session_memory as save_session_memory
 from .memory_manager import save_session_to_graphiti as save_session_to_graphiti
+from .performance_profiler import run_performance_profiler as run_performance_profiler
 from .planner import run_followup_planner as run_followup_planner
 from .session import post_session_processing as post_session_processing
 from .session import run_agent_session as run_agent_session
@@ -73,10 +74,6 @@ def __getattr__(name):
         from .base import AUTO_CONTINUE_DELAY_SECONDS, HUMAN_INTERVENTION_FILE
 
         return locals()[name]
-    elif name == "run_performance_profiler":
-        from .performance_profiler import run_performance_profiler
-
-        return run_performance_profiler
     elif name in ("load_workspace_context", "get_workspace_project_dirs"):
         from .utils import get_workspace_project_dirs, load_workspace_context
 
