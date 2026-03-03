@@ -409,9 +409,8 @@ class LearningTracker:
         """Get predictions that don't have outcomes yet."""
         pending = []
         for outcome in self._outcomes.values():
-            if not outcome.is_complete:
-                if repo is None or outcome.repo == repo:
-                    pending.append(outcome)
+            if not outcome.is_complete and (repo is None or outcome.repo == repo):
+                pending.append(outcome)
         return pending
 
     def get_accuracy(

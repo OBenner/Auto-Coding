@@ -13,7 +13,6 @@ Tests for utility functions:
 from pathlib import Path
 
 import pytest
-
 from review import (
     ReviewChoice,
     ReviewState,
@@ -22,12 +21,11 @@ from review import (
     get_review_status_summary,
     truncate_text,
 )
-from tests.review_fixtures import review_spec_dir, complete_spec_dir
-
 
 # =============================================================================
 # TEXT HELPER FUNCTIONS
 # =============================================================================
+
 
 class TestTextHelpers:
     """Tests for text manipulation helper functions."""
@@ -112,6 +110,7 @@ Last content.
 # REVIEW STATUS SUMMARY
 # =============================================================================
 
+
 class TestReviewStatusSummary:
     """Tests for get_review_status_summary()."""
 
@@ -158,7 +157,9 @@ class TestReviewStatusSummary:
 
         assert summary["feedback_count"] == 3
 
-    def test_status_summary_reflects_current_state(self, complete_spec_dir: Path) -> None:
+    def test_status_summary_reflects_current_state(
+        self, complete_spec_dir: Path
+    ) -> None:
         """Test that get_review_status_summary() accurately reflects state."""
         # Not approved
         summary1 = get_review_status_summary(complete_spec_dir)
@@ -190,6 +191,7 @@ class TestReviewStatusSummary:
 # =============================================================================
 # REVIEW MENU OPTIONS
 # =============================================================================
+
 
 class TestReviewMenuOptions:
     """Tests for review menu configuration."""
