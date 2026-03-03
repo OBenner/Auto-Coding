@@ -366,9 +366,9 @@ class UserAPI:
             checks = [
                 ("Pattern extraction", len(patterns) > 0),
                 ("Pattern storage", graphiti_enabled and stored_count > 0),
-                ("Pattern querying", not graphiti_enabled or len(suggestions) >= 0),  # Accept 0 due to timing
+                ("Pattern querying", not graphiti_enabled or isinstance(suggestions, list)),
                 ("Team standard marking", not graphiti_enabled or team_standard_success),
-                ("Confidence updates", not graphiti_enabled or len(high_confidence_patterns) >= 0),
+                ("Confidence updates", not graphiti_enabled or isinstance(high_confidence_patterns, list)),
             ]
 
             passed = sum(1 for _, check in checks if check)

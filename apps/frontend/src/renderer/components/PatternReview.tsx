@@ -81,7 +81,7 @@ export function PatternReview({
     const uniqueCategories = new Set(
       patterns.map(p => (p.category && p.category.trim()) || 'uncategorized').filter(Boolean)
     );
-    return ['all', ...Array.from(uniqueCategories).sort()];
+    return ['all', ...Array.from(uniqueCategories).sort((a, b) => a.localeCompare(b))];
   }, [patterns]);
 
   // Count patterns by category
