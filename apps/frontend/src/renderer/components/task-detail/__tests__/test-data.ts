@@ -433,7 +433,7 @@ export function generateSpecializedTestLogs(
   const options: TestDataGeneratorOptions = {
     entryCount: count,
     startTimestamp: new Date(),
-    includeErrors: scenario === 'errors-only',
+    includeErrors: true,
     includeToolOutput: true,
     subtaskCount: 10
   };
@@ -442,7 +442,7 @@ export function generateSpecializedTestLogs(
 
   switch (scenario) {
     case 'errors-only':
-      return allEntries.filter(e => e.type === 'error' || e.type === 'text');
+      return allEntries.filter(e => e.type === 'error');
 
     case 'tools-only':
       return allEntries.filter(e => e.type === 'tool_start' || e.type === 'tool_end');

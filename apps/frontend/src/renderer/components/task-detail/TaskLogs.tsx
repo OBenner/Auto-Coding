@@ -21,17 +21,15 @@ import {
   X,
   Lightbulb,
   GitBranch,
-  Target,
-  TrendingUp,
-  Layers
 } from 'lucide-react';
 import { Badge } from '../ui/badge';
 import { cn } from '../../lib/utils';
 import type { Task, TaskLogs, TaskLogPhase, TaskPhaseLog, TaskLogEntry, TaskMetadata, DecisionPoint, Alternative } from '../../../shared/types';
-import type { PhaseModelConfig, PhaseThinkingConfig, ThinkingLevel, ModelTypeShort } from '../../../shared/types/settings';
+import type { PhaseModelConfig, ThinkingLevel, ModelTypeShort } from '../../../shared/types/settings';
 import { useVirtualizedLogs } from '../../hooks/useVirtualizedLogs';
 import { FeedbackButtons } from '../feedback/FeedbackButtons';
 import { getDecisionTypeMeta, getConfidenceMeta } from '../../../shared/constants/decision-meta';
+import { entryMatchesFilter, entryMatchesSearch, FILTER_LABELS, type LogFilterType } from './log-utils';
 
 interface TaskLogsProps {
   task: Task;
@@ -121,17 +119,6 @@ function getPhaseConfig(
 // Number of items to render outside the visible area for smoother scrolling
 const OVERSCAN = 5;
 
-// Filter types
-type LogFilterType = 'all' | 'errors' | 'tools' | 'info' | 'decisions';
-
-const FILTER_LABELS: Record<LogFilterType, string> = {
-  all: 'All',
-  errors: 'Errors',
-  tools: 'Tools',
-  info: 'Info',
-  decisions: 'Decisions'
-};
-
 export function TaskLogs({
   task,
   phaseLogs,
@@ -147,24 +134,6 @@ export function TaskLogs({
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<LogFilterType>('all');
 
-  // Helper function to check if an entry matches the current filter
-  const entryMatchesFilter = useCallback((entry: TaskLogEntry | undefined, filter: LogFilterType): boolean => {
-    if (!entry || filter === 'all') return true;
-    switch (filter) {
-      case 'errors':
-        return entry.type === 'error';
-      case 'tools':
-        return entry.type === 'tool_start' || entry.type === 'tool_end';
-      case 'info':
-        return entry.type === 'info' || entry.type === 'success' ||
-               entry.type === 'text' || entry.type === 'phase_start' || entry.type === 'phase_end';
-      case 'decisions':
-        return entry.type === 'decision';
-      default:
-        return true;
-    }
-  }, []);
-
   // Compute which phases have matching entries for current filter
   const phasesWithMatchingEntries = useMemo(() => {
     const phases = new Set<TaskLogPhase>();
@@ -178,7 +147,7 @@ export function TaskLogs({
       }
     }
     return phases;
-  }, [phaseLogs, filterType, entryMatchesFilter]);
+  }, [phaseLogs, filterType]);
 
   // Effective expanded phases: union of user-expanded and filter-matched phases
   const effectiveExpandedPhases = useMemo(() => {
@@ -212,28 +181,10 @@ export function TaskLogs({
 
     // Apply search query
     if (searchQuery.trim()) {
-      const lowerQuery = searchQuery.toLowerCase();
       items = items.filter(item => {
-        // Always show phase headers
         if (item.type === 'phase-header') return true;
-
-        // Search in log entries
-        const entry = item.entry;
-        if (!entry) return false;
-
-        // Search in content
-        if (entry.content?.toLowerCase().includes(lowerQuery)) return true;
-
-        // Search in detail
-        if (entry.detail?.toLowerCase().includes(lowerQuery)) return true;
-
-        // Search in tool name
-        if (entry.tool_name?.toLowerCase().includes(lowerQuery)) return true;
-
-        // Search in tool input
-        if (entry.tool_input?.toLowerCase().includes(lowerQuery)) return true;
-
-        return false;
+        if (!item.entry) return false;
+        return entryMatchesSearch(item.entry, searchQuery);
       });
     }
 

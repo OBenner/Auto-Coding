@@ -30,7 +30,6 @@ import React from 'react';
 import type { TaskLogs, TaskLogPhase } from '../../../../shared/types';
 import {
   generateTestTaskLogs,
-  generateTestLogEntries,
   generateSpecializedTestLogs
 } from './test-data';
 import { TaskLogs as TaskLogsComponent } from '../TaskLogs';
@@ -67,6 +66,27 @@ function createMockRefs() {
     logsEndRef: React.createRef<HTMLDivElement>(),
     logsContainerRef: React.createRef<HTMLDivElement>(),
   };
+}
+
+/**
+ * Render TaskLogs component with default props, reducing boilerplate across tests
+ */
+function renderTaskLogs(options: {
+  phaseLogs: TaskLogs;
+  expandedPhases?: Set<TaskLogPhase>;
+}) {
+  return render(
+    <TaskLogsComponent
+      task={createMockTask()}
+      phaseLogs={options.phaseLogs}
+      isLoadingLogs={false}
+      expandedPhases={options.expandedPhases ?? new Set<TaskLogPhase>(['planning', 'coding', 'validation'])}
+      isStuck={false}
+      {...createMockRefs()}
+      onLogsScroll={vi.fn()}
+      onTogglePhase={vi.fn()}
+    />
+  );
 }
 
 /**
@@ -147,20 +167,7 @@ describe('TaskLogs Performance Benchmarks', () => {
 
       expect(totalEntries).toBeGreaterThanOrEqual(1000);
 
-      const { result, duration } = measurePerformance(() => {
-        return render(
-          <TaskLogsComponent
-            task={createMockTask()}
-            phaseLogs={largeLogs}
-            isLoadingLogs={false}
-            expandedPhases={new Set<TaskLogPhase>(['planning', 'coding', 'validation'])}
-            isStuck={false}
-            {...createMockRefs()}
-            onLogsScroll={vi.fn()}
-            onTogglePhase={vi.fn()}
-          />
-        );
-      });
+      const { result, duration } = measurePerformance(() => renderTaskLogs({ phaseLogs: largeLogs }));
 
       // Verify render time is within acceptable limits
       expect(duration).toBeLessThan(100);
@@ -181,20 +188,7 @@ describe('TaskLogs Performance Benchmarks', () => {
 
       expect(totalEntries).toBeGreaterThanOrEqual(5000);
 
-      const { result, duration } = measurePerformance(() => {
-        return render(
-          <TaskLogsComponent
-            task={createMockTask()}
-            phaseLogs={veryLargeLogs}
-            isLoadingLogs={false}
-            expandedPhases={new Set<TaskLogPhase>(['planning', 'coding', 'validation'])}
-            isStuck={false}
-            {...createMockRefs()}
-            onLogsScroll={vi.fn()}
-            onTogglePhase={vi.fn()}
-          />
-        );
-      });
+      const { result, duration } = measurePerformance(() => renderTaskLogs({ phaseLogs: veryLargeLogs }));
 
       // For 5000 entries, we allow more time but should still be under 200ms
       expect(duration).toBeLessThan(200);
@@ -209,20 +203,8 @@ describe('TaskLogs Performance Benchmarks', () => {
 
       // Render the same component 5 times to measure consistency
       for (let i = 0; i < 5; i++) {
-        const { result, duration } = measurePerformance(
-          () =>
-            render(
-              <TaskLogsComponent
-                task={createMockTask()}
-                phaseLogs={largeLogs}
-                isLoadingLogs={false}
-                expandedPhases={new Set<TaskLogPhase>(['planning', 'coding', 'validation'])}
-                isStuck={false}
-                {...createMockRefs()}
-                onLogsScroll={vi.fn()}
-                onTogglePhase={vi.fn()}
-              />
-            ),
+        const { result } = measurePerformance(
+          () => renderTaskLogs({ phaseLogs: largeLogs }),
           measurements
         );
 
@@ -243,20 +225,7 @@ describe('TaskLogs Performance Benchmarks', () => {
     it('should switch between filters quickly with 1000 entries', async () => {
       const largeLogs = generateTestTaskLogs({ entryCount: 1000 });
 
-      const { result, duration: initialDuration } = measurePerformance(() => {
-        return render(
-          <TaskLogsComponent
-            task={createMockTask()}
-            phaseLogs={largeLogs}
-            isLoadingLogs={false}
-            expandedPhases={new Set<TaskLogPhase>(['planning', 'coding', 'validation'])}
-            isStuck={false}
-            {...createMockRefs()}
-            onLogsScroll={vi.fn()}
-            onTogglePhase={vi.fn()}
-          />
-        );
-      });
+      const { result } = measurePerformance(() => renderTaskLogs({ phaseLogs: largeLogs }));
 
       // Find and click filter buttons
       const filterButtons = result.container.querySelectorAll('button');
@@ -282,18 +251,7 @@ describe('TaskLogs Performance Benchmarks', () => {
     it('should handle rapid filter changes without performance degradation', async () => {
       const largeLogs = generateTestTaskLogs({ entryCount: 1000 });
 
-      const renderResult = render(
-        <TaskLogsComponent
-          task={createMockTask()}
-          phaseLogs={largeLogs}
-          isLoadingLogs={false}
-          expandedPhases={new Set<TaskLogPhase>(['planning', 'coding', 'validation'])}
-          isStuck={false}
-          {...createMockRefs()}
-          onLogsScroll={vi.fn()}
-          onTogglePhase={vi.fn()}
-        />
-      );
+      const renderResult = renderTaskLogs({ phaseLogs: largeLogs });
 
       const filterButtons = renderResult.container.querySelectorAll('button');
       const filterLabels = ['All', 'Errors', 'Tools', 'Info'];
@@ -329,18 +287,7 @@ describe('TaskLogs Performance Benchmarks', () => {
     it('should handle search input updates efficiently with 1000 entries', async () => {
       const largeLogs = generateTestTaskLogs({ entryCount: 1000 });
 
-      const renderResult = render(
-        <TaskLogsComponent
-          task={createMockTask()}
-          phaseLogs={largeLogs}
-          isLoadingLogs={false}
-          expandedPhases={new Set<TaskLogPhase>(['planning', 'coding', 'validation'])}
-          isStuck={false}
-          {...createMockRefs()}
-          onLogsScroll={vi.fn()}
-          onTogglePhase={vi.fn()}
-        />
-      );
+      const renderResult = renderTaskLogs({ phaseLogs: largeLogs });
 
       const searchInput = renderResult.container.querySelector('input[type="text"]') as HTMLInputElement | null;
       expect(searchInput).toBeDefined();
@@ -370,18 +317,7 @@ describe('TaskLogs Performance Benchmarks', () => {
     it('should handle complex search queries efficiently', async () => {
       const largeLogs = generateTestTaskLogs({ entryCount: 1000 });
 
-      const renderResult = render(
-        <TaskLogsComponent
-          task={createMockTask()}
-          phaseLogs={largeLogs}
-          isLoadingLogs={false}
-          expandedPhases={new Set<TaskLogPhase>(['planning', 'coding', 'validation'])}
-          isStuck={false}
-          {...createMockRefs()}
-          onLogsScroll={vi.fn()}
-          onTogglePhase={vi.fn()}
-        />
-      );
+      const renderResult = renderTaskLogs({ phaseLogs: largeLogs });
 
       const searchInput = renderResult.container.querySelector('input[type="text"]') as HTMLInputElement | null;
       expect(searchInput).toBeDefined();
@@ -420,18 +356,7 @@ describe('TaskLogs Performance Benchmarks', () => {
     it('should only render visible items with virtual scrolling', async () => {
       const largeLogs = generateTestTaskLogs({ entryCount: 1000 });
 
-      const renderResult = render(
-        <TaskLogsComponent
-          task={createMockTask()}
-          phaseLogs={largeLogs}
-          isLoadingLogs={false}
-          expandedPhases={new Set<TaskLogPhase>(['planning', 'coding', 'validation'])}
-          isStuck={false}
-          {...createMockRefs()}
-          onLogsScroll={vi.fn()}
-          onTogglePhase={vi.fn()}
-        />
-      );
+      const renderResult = renderTaskLogs({ phaseLogs: largeLogs });
 
       // Wait for component to fully render
       await waitFor(() => {
@@ -495,20 +420,8 @@ describe('TaskLogs Performance Benchmarks', () => {
           }
         };
 
-        const { result, duration } = measurePerformance(
-          () =>
-            render(
-              <TaskLogsComponent
-                task={createMockTask()}
-                phaseLogs={mockLogs}
-                isLoadingLogs={false}
-                expandedPhases={new Set<TaskLogPhase>(['coding'])}
-                isStuck={false}
-                {...createMockRefs()}
-                onLogsScroll={vi.fn()}
-                onTogglePhase={vi.fn()}
-              />
-            ),
+        const { result } = measurePerformance(
+          () => renderTaskLogs({ phaseLogs: mockLogs, expandedPhases: new Set<TaskLogPhase>(['coding']) }),
           measurements
         );
 
@@ -528,18 +441,7 @@ describe('TaskLogs Performance Benchmarks', () => {
       const largeLogs = generateTestTaskLogs({ entryCount: 1000 });
 
       // Start with all phases expanded
-      const renderResult = render(
-        <TaskLogsComponent
-          task={createMockTask()}
-          phaseLogs={largeLogs}
-          isLoadingLogs={false}
-          expandedPhases={new Set<TaskLogPhase>(['planning', 'coding', 'validation'])}
-          isStuck={false}
-          {...createMockRefs()}
-          onLogsScroll={vi.fn()}
-          onTogglePhase={vi.fn()}
-        />
-      );
+      const renderResult = renderTaskLogs({ phaseLogs: largeLogs });
 
       const measurements: number[] = [];
 
@@ -589,18 +491,7 @@ describe('TaskLogs Performance Benchmarks', () => {
 
       // Start with all phases collapsed
       const { result, duration } = measurePerformance(() => {
-        return render(
-          <TaskLogsComponent
-            task={createMockTask()}
-            phaseLogs={largeLogs}
-            isLoadingLogs={false}
-            expandedPhases={new Set<TaskLogPhase>()} // No phases expanded
-            isStuck={false}
-            {...createMockRefs()}
-            onLogsScroll={vi.fn()}
-            onTogglePhase={vi.fn()}
-          />
-        );
+        return renderTaskLogs({ phaseLogs: largeLogs, expandedPhases: new Set<TaskLogPhase>() });
       });
 
       // Initial render with collapsed phases should be very fast
@@ -619,18 +510,7 @@ describe('TaskLogs Performance Benchmarks', () => {
         const logs = generateTestTaskLogs({ entryCount: size });
 
         const startTime = performance.now();
-        const renderResult = render(
-          <TaskLogsComponent
-            task={createMockTask()}
-            phaseLogs={logs}
-            isLoadingLogs={false}
-            expandedPhases={new Set<TaskLogPhase>(['planning', 'coding', 'validation'])}
-            isStuck={false}
-            {...createMockRefs()}
-            onLogsScroll={vi.fn()}
-            onTogglePhase={vi.fn()}
-          />
-        );
+        const renderResult = renderTaskLogs({ phaseLogs: logs });
         const endTime = performance.now();
         const duration = endTime - startTime;
 
@@ -659,18 +539,7 @@ describe('TaskLogs Performance Benchmarks', () => {
 
       // Measure initial render
       const { result: initialResult, duration: initialDuration } = measurePerformance(() => {
-        return render(
-          <TaskLogsComponent
-            task={createMockTask()}
-            phaseLogs={largeLogs}
-            isLoadingLogs={false}
-            expandedPhases={new Set<TaskLogPhase>(['planning', 'coding', 'validation'])}
-            isStuck={false}
-            {...createMockRefs()}
-            onLogsScroll={vi.fn()}
-            onTogglePhase={vi.fn()}
-          />
-        );
+        return renderTaskLogs({ phaseLogs: largeLogs });
       });
 
       allDurations.push(initialDuration);

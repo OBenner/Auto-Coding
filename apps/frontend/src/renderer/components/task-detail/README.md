@@ -42,6 +42,7 @@ The `TaskLogs.tsx` component uses **@tanstack/react-virtual** to efficiently ren
 ### Key Components
 
 #### `useVirtualizedLogs` Hook
+
 Located at `apps/frontend/src/renderer/hooks/useVirtualizedLogs.ts`
 
 **Responsibilities:**
@@ -69,6 +70,7 @@ Located at `apps/frontend/src/renderer/hooks/useVirtualizedLogs.ts`
   - Detail sections: ~90 chars per line
 
 #### `TaskLogs` Component
+
 **Virtual Scrolling Features:**
 - **Overscan**: Renders 5 extra items above/below viewport for smoother scrolling
 - **Dynamic filtering**: All/Errors/Tools/Info with auto-expansion of matching phases
@@ -84,6 +86,7 @@ Located at `apps/frontend/src/renderer/hooks/useVirtualizedLogs.ts`
 - **Virtual scrolling**: Only ~20 items rendered at any time (visible + overscan)
 
 **Auto-Scroll Behavior:**
+
 ```typescript
 // Auto-scroll to bottom when new logs arrive for active tasks
 useEffect(() => {

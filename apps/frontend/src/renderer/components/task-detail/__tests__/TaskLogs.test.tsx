@@ -19,37 +19,19 @@
  * - Test edge cases and state transitions
  * - Verify performance with large datasets (1000+ entries)
  */
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import type { TaskLogEntry, TaskLogPhase, TaskLogs, TaskLogEntryType } from '../../../../shared/types';
 import {
   generateTestTaskLogs,
   generateTestLogEntries,
   generateSpecializedTestLogs
 } from './test-data';
-
-/**
- * Factory function to create a mock Task object
- */
-function createMockTask(overrides: Partial<any> = {}): any {
-  return {
-    id: 'task-1',
-    specId: 'spec-1',
-    projectId: 'project-1',
-    title: 'Test Task',
-    description: 'Test description',
-    status: 'in_progress',
-    subtasks: [],
-    logs: [],
-    createdAt: new Date('2025-01-01T10:00:00Z'),
-    updatedAt: new Date('2025-01-01T11:00:00Z'),
-    metadata: {
-      model: 'sonnet',
-      thinkingLevel: 'medium',
-      isAutoProfile: false
-    },
-    ...overrides,
-  };
-}
+import {
+  entryMatchesFilter,
+  entryMatchesSearch,
+  computePhasesWithMatchingEntries,
+  calculateTotalLogCount
+} from '../log-utils';
 
 /**
  * Factory function to create a minimal TaskLogs object
@@ -97,84 +79,6 @@ function createMockLogEntry(overrides: Partial<TaskLogEntry> = {}): TaskLogEntry
     phase: 'coding',
     ...overrides
   };
-}
-
-/**
- * Helper to simulate the entryMatchesFilter logic from TaskLogs.tsx
- * Note: In the actual component, the filtering is done inline with explicit !entry check
- */
-function entryMatchesFilter(entry: TaskLogEntry | undefined, filter: string): boolean {
-  if (!entry) {
-    // In the actual component, undefined entries are filtered out (return false)
-    // except when filter is 'all' where everything passes
-    return filter === 'all';
-  }
-
-  switch (filter) {
-    case 'errors':
-      return entry.type === 'error';
-    case 'tools':
-      return entry.type === 'tool_start' || entry.type === 'tool_end';
-    case 'info':
-      return entry.type === 'info' || entry.type === 'success' ||
-             entry.type === 'text' || entry.type === 'phase_start' || entry.type === 'phase_end';
-    default:
-      return true;
-  }
-}
-
-/**
- * Helper to simulate search filtering logic from TaskLogs.tsx
- */
-function entryMatchesSearch(entry: TaskLogEntry | undefined, query: string): boolean {
-  if (!entry || !query.trim()) return true;
-
-  const lowerQuery = query.toLowerCase();
-
-  // Search in content
-  if (entry.content?.toLowerCase().includes(lowerQuery)) return true;
-
-  // Search in detail
-  if (entry.detail?.toLowerCase().includes(lowerQuery)) return true;
-
-  // Search in tool name
-  if (entry.tool_name?.toLowerCase().includes(lowerQuery)) return true;
-
-  // Search in tool input
-  if (entry.tool_input?.toLowerCase().includes(lowerQuery)) return true;
-
-  return false;
-}
-
-/**
- * Helper to compute phases with matching entries for a filter
- */
-function computePhasesWithMatchingEntries(
-  phaseLogs: TaskLogs | null,
-  filter: string
-): Set<TaskLogPhase> {
-  const phases = new Set<TaskLogPhase>();
-  if (!phaseLogs || filter === 'all') return phases;
-
-  const phaseKeys: TaskLogPhase[] = ['planning', 'coding', 'validation'];
-  for (const phase of phaseKeys) {
-    const phaseLog = phaseLogs.phases[phase];
-    if (phaseLog?.entries?.some(entry => entryMatchesFilter(entry, filter))) {
-      phases.add(phase);
-    }
-  }
-  return phases;
-}
-
-/**
- * Helper to simulate total log count calculation
- */
-function calculateTotalLogCount(phaseLogs: TaskLogs | null): number {
-  if (!phaseLogs) return 0;
-  return Object.values(phaseLogs.phases).reduce(
-    (sum, phase) => sum + (phase?.entries?.length || 0),
-    0
-  );
 }
 
 describe('TaskLogs - Filter Logic', () => {
@@ -559,7 +463,7 @@ describe('TaskLogs - Integration Scenarios', () => {
       const entries = generateTestLogEntries({ entryCount: 1000 });
 
       const startTime = performance.now();
-      const matchingEntries = entries.filter(e => entryMatchesSearch(e, 'Read'));
+      entries.filter(e => entryMatchesSearch(e, 'Read'));
       const endTime = performance.now();
 
       const searchTime = endTime - startTime;
@@ -574,10 +478,10 @@ describe('TaskLogs - Integration Scenarios', () => {
       const entries = generateSpecializedTestLogs('errors-only', 100);
 
       const errorEntries = entries.filter(e => entryMatchesFilter(e, 'errors'));
-      const textEntries = entries.filter(e => e.type === 'text');
 
       expect(errorEntries.length).toBeGreaterThan(0);
-      expect(textEntries.length).toBeGreaterThan(0);
+      // errors-only should only contain error type entries
+      expect(entries.every(e => e.type === 'error')).toBe(true);
     });
 
     it('should generate tools-only scenario', () => {
