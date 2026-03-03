@@ -286,7 +286,7 @@ class PerformanceProfiler:
 
         for func_key, (cc, nc, tt, ct, callers) in sorted_items[:TOP_FUNCTIONS_COUNT]:
             # Format function name
-            filename, line, func_name = func_key
+            filename, _line, func_name = func_key
             if filename == "~":
                 name = func_name
             else:
