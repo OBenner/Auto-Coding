@@ -15,16 +15,14 @@ Covers:
 
 from datetime import datetime
 
-import pytest
-
 from merge import (
     ChangeType,
-    SemanticChange,
-    TaskSnapshot,
     ConflictRegion,
     ConflictSeverity,
-    MergeStrategy,
     MergeDecision,
+    MergeStrategy,
+    SemanticChange,
+    TaskSnapshot,
 )
 
 
@@ -222,7 +220,10 @@ class TestAIMergeRetryMechanism:
         assert "3-way merges" in AI_MERGE_SYSTEM_PROMPT
         # Note: The prompt focuses on "intelligently" and "task's intent" not "semantic understanding"
         assert "intelligently" in AI_MERGE_SYSTEM_PROMPT.lower()
-        assert "task's intent" in AI_MERGE_SYSTEM_PROMPT or "task intent" in AI_MERGE_SYSTEM_PROMPT
+        assert (
+            "task's intent" in AI_MERGE_SYSTEM_PROMPT
+            or "task intent" in AI_MERGE_SYSTEM_PROMPT
+        )
         assert "best-effort" in AI_MERGE_SYSTEM_PROMPT
         # Verify key merge strategies are documented
         assert "Preserve all functional changes" in AI_MERGE_SYSTEM_PROMPT

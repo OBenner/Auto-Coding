@@ -15,8 +15,6 @@ import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 # Add backend to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "apps" / "backend"))
 
@@ -139,20 +137,32 @@ class TestComplexityThresholds:
         """Description length thresholds increase in order."""
         from phase_config import COMPLEXITY_THRESHOLDS
 
-        assert COMPLEXITY_THRESHOLDS["description_short"] < COMPLEXITY_THRESHOLDS["description_medium"]
-        assert COMPLEXITY_THRESHOLDS["description_medium"] < COMPLEXITY_THRESHOLDS["description_long"]
+        assert (
+            COMPLEXITY_THRESHOLDS["description_short"]
+            < COMPLEXITY_THRESHOLDS["description_medium"]
+        )
+        assert (
+            COMPLEXITY_THRESHOLDS["description_medium"]
+            < COMPLEXITY_THRESHOLDS["description_long"]
+        )
 
     def test_file_thresholds_are_increasing(self):
         """File count thresholds increase in order."""
         from phase_config import COMPLEXITY_THRESHOLDS
 
-        assert COMPLEXITY_THRESHOLDS["files_simple"] < COMPLEXITY_THRESHOLDS["files_medium"]
+        assert (
+            COMPLEXITY_THRESHOLDS["files_simple"]
+            < COMPLEXITY_THRESHOLDS["files_medium"]
+        )
 
     def test_service_thresholds_are_increasing(self):
         """Service count thresholds increase in order."""
         from phase_config import COMPLEXITY_THRESHOLDS
 
-        assert COMPLEXITY_THRESHOLDS["services_simple"] < COMPLEXITY_THRESHOLDS["services_medium"]
+        assert (
+            COMPLEXITY_THRESHOLDS["services_simple"]
+            < COMPLEXITY_THRESHOLDS["services_medium"]
+        )
 
 
 class TestSuggestThinkingBudget:
@@ -188,7 +198,10 @@ class TestSuggestThinkingBudget:
 
         # Long description (~800 chars = score 2), many files (10 = score 2),
         # moderate services (2 = score 1) => total score 5 = "high"
-        description = "Implement a complete authentication system with OAuth and JWT tokens. " * 10
+        description = (
+            "Implement a complete authentication system with OAuth and JWT tokens. "
+            * 10
+        )
         result = suggest_thinking_budget(description, 10, 2)
         assert result == "high"
 
@@ -224,7 +237,9 @@ class TestSuggestThinkingBudget:
         multiple_services = suggest_thinking_budget("task", 5, 5)
 
         levels_order = ["low", "medium", "high", "ultrathink"]
-        assert levels_order.index(multiple_services) >= levels_order.index(single_service)
+        assert levels_order.index(multiple_services) >= levels_order.index(
+            single_service
+        )
 
     def test_returns_valid_thinking_level(self):
         """Always returns a valid thinking level string."""
@@ -243,7 +258,9 @@ class TestSuggestThinkingBudget:
 
         for desc, files, services in test_cases:
             result = suggest_thinking_budget(desc, files, services)
-            assert result in valid_levels, f"Invalid level '{result}' for {(desc[:20], files, services)}"
+            assert result in valid_levels, (
+                f"Invalid level '{result}' for {(desc[:20], files, services)}"
+            )
 
 
 class TestOutputConstraintTemplates:
@@ -255,14 +272,18 @@ class TestOutputConstraintTemplates:
 
         expected_types = ["summary", "brief", "concise", "strict"]
         for fmt_type in expected_types:
-            assert fmt_type in OUTPUT_CONSTRAINT_TEMPLATES, f"Missing format type: {fmt_type}"
+            assert fmt_type in OUTPUT_CONSTRAINT_TEMPLATES, (
+                f"Missing format type: {fmt_type}"
+            )
 
     def test_templates_contain_limit_placeholder(self):
         """All templates contain {limit} placeholder."""
         from phase_config import OUTPUT_CONSTRAINT_TEMPLATES
 
         for fmt_type, template in OUTPUT_CONSTRAINT_TEMPLATES.items():
-            assert "{limit}" in template, f"Template '{fmt_type}' missing {{limit}} placeholder"
+            assert "{limit}" in template, (
+                f"Template '{fmt_type}' missing {{limit}} placeholder"
+            )
 
 
 class TestGetOutputConstraint:
@@ -364,7 +385,10 @@ class TestCompactionLevel:
         from spec.compaction import CompactionLevel
 
         assert CompactionLevel.LIGHT.target_words > CompactionLevel.MEDIUM.target_words
-        assert CompactionLevel.MEDIUM.target_words > CompactionLevel.AGGRESSIVE.target_words
+        assert (
+            CompactionLevel.MEDIUM.target_words
+            > CompactionLevel.AGGRESSIVE.target_words
+        )
 
     def test_light_max_input_chars(self):
         """LIGHT level has highest max input chars."""
@@ -388,8 +412,14 @@ class TestCompactionLevel:
         """Max input chars decrease with aggressiveness."""
         from spec.compaction import CompactionLevel
 
-        assert CompactionLevel.LIGHT.max_input_chars > CompactionLevel.MEDIUM.max_input_chars
-        assert CompactionLevel.MEDIUM.max_input_chars > CompactionLevel.AGGRESSIVE.max_input_chars
+        assert (
+            CompactionLevel.LIGHT.max_input_chars
+            > CompactionLevel.MEDIUM.max_input_chars
+        )
+        assert (
+            CompactionLevel.MEDIUM.max_input_chars
+            > CompactionLevel.AGGRESSIVE.max_input_chars
+        )
 
 
 class TestFormatPhaseSummaries:

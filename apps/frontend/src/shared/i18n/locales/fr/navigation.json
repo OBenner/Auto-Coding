@@ -10,7 +10,11 @@
     "roadmap": "Feuille de route",
     "ideation": "Idéation",
     "changelog": "Journal des modifications",
+    "scheduler": "Planificateur",
     "context": "Contexte",
+    "analytics": "Analytique",
+    "productivity": "Productivité",
+    "sessionContext": "Contexte de session",
     "githubIssues": "Issues GitHub",
     "githubPRs": "PRs GitHub",
     "gitlabIssues": "Issues GitLab",
@@ -18,7 +22,9 @@
     "plugins": "Plugins",
     "worktrees": "Worktrees",
     "agentTools": "Aperçu MCP",
-    "mergeAnalytics": "Analyse des fusions"
+    "mergeAnalytics": "Analyse des fusions",
+    "sessions": "Relecture de session",
+    "feedback": "Retour d'information"
   },
   "actions": {
     "settings": "Paramètres",

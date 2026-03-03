@@ -5,10 +5,11 @@ Tests for Output Validator Module
 Tests validation, filtering, and enhancement of PR review findings.
 """
 
-import pytest
+import sys
 from pathlib import Path
 
-import sys
+import pytest
+
 backend_path = Path(__file__).parent.parent / "apps" / "backend"
 sys.path.insert(0, str(backend_path))
 
@@ -17,20 +18,18 @@ import importlib.util
 
 # Load file_lock first (models.py depends on it)
 file_lock_spec = importlib.util.spec_from_file_location(
-    "file_lock",
-    backend_path / "runners" / "github" / "file_lock.py"
+    "file_lock", backend_path / "runners" / "github" / "file_lock.py"
 )
 file_lock_module = importlib.util.module_from_spec(file_lock_spec)
-sys.modules['file_lock'] = file_lock_module  # Make it available for models imports
+sys.modules["file_lock"] = file_lock_module  # Make it available for models imports
 file_lock_spec.loader.exec_module(file_lock_module)
 
 # Load models next
 models_spec = importlib.util.spec_from_file_location(
-    "models",
-    backend_path / "runners" / "github" / "models.py"
+    "models", backend_path / "runners" / "github" / "models.py"
 )
 models_module = importlib.util.module_from_spec(models_spec)
-sys.modules['models'] = models_module  # Make it available for validator imports
+sys.modules["models"] = models_module  # Make it available for validator imports
 models_spec.loader.exec_module(models_module)
 PRReviewFinding = models_module.PRReviewFinding
 ReviewSeverity = models_module.ReviewSeverity
@@ -38,8 +37,7 @@ ReviewCategory = models_module.ReviewCategory
 
 # Now load validator (it will find models in sys.modules)
 validator_spec = importlib.util.spec_from_file_location(
-    "output_validator",
-    backend_path / "runners" / "github" / "output_validator.py"
+    "output_validator", backend_path / "runners" / "github" / "output_validator.py"
 )
 validator_module = importlib.util.module_from_spec(validator_spec)
 validator_spec.loader.exec_module(validator_module)
@@ -221,7 +219,9 @@ class TestLineNumberVerification:
             line=13,
         )
 
-        line_content = "query = f\"SELECT password FROM users WHERE username = '{username}'\""
+        line_content = (
+            "query = f\"SELECT password FROM users WHERE username = '{username}'\""
+        )
         assert validator._is_line_relevant(line_content, finding)
 
 
@@ -388,7 +388,7 @@ class TestConfidenceThreshold:
         # Score should be 0.5 (base) + 0.1 (file+line) + 0.1 (desc>50) = 0.7
         # But vague pattern makes it a false positive, so it should fail validation before threshold check
         # This test should check that the actionability score alone is insufficient
-        score = validator._score_actionability(finding)
+        validator._score_actionability(finding)
         # With no fix, short title, and low severity: 0.5 (base) + 0.1 (file+line) = 0.6
         # But this still meets 0.6 threshold for low severity
         # Let's check the finding gets filtered as false positive instead
@@ -495,7 +495,7 @@ class TestValidationStats:
         assert stats["total_findings"] == 3
         assert stats["kept_findings"] == 2  # One filtered
         assert stats["filtered_findings"] == 1
-        assert stats["filter_rate"] == pytest.approx(1/3)
+        assert stats["filter_rate"] == pytest.approx(1 / 3)
         assert stats["severity_distribution"]["critical"] == 1
         assert stats["category_distribution"]["security"] == 1
         assert stats["average_actionability"] > 0

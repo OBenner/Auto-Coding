@@ -236,8 +236,9 @@ For any technical claims in requirements.json:
 
 Output your findings:
 
-```bash
-cat > research.json << 'EOF'
+Use the **Write** tool to create `research.json` with the following structure:
+
+```json
 {
   "integrations_researched": [
     {
@@ -287,8 +288,9 @@ cat > research.json << 'EOF'
   ],
   "created_at": "[ISO timestamp]"
 }
-EOF
 ```
+
+**IMPORTANT**: Use the Write tool to create this file. Do NOT use `cat >`, heredoc (`<< EOF`), or bash redirection — these hang on Windows.
 
 ---
 

@@ -13,6 +13,7 @@ Tests the recovery system functionality including:
 import json
 import subprocess
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -20,7 +21,7 @@ import pytest
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from recovery import RecoveryManager, FailureType
+from recovery import FailureType, RecoveryManager
 
 
 @pytest.fixture
@@ -52,16 +53,20 @@ def test_initialization(test_env):
     temp_dir, spec_dir, project_dir = test_env
 
     # Initialize manager to trigger directory creation (manager instance not needed)
-    _manager = RecoveryManager(spec_dir, project_dir)
+    RecoveryManager(spec_dir, project_dir)
 
     # Check that memory directory was created
     assert (spec_dir / "memory").exists(), "Memory directory not created"
 
     # Check that attempt history file was created
-    assert (spec_dir / "memory" / "attempt_history.json").exists(), "attempt_history.json not created"
+    assert (spec_dir / "memory" / "attempt_history.json").exists(), (
+        "attempt_history.json not created"
+    )
 
     # Check that build commits file was created
-    assert (spec_dir / "memory" / "build_commits.json").exists(), "build_commits.json not created"
+    assert (spec_dir / "memory" / "build_commits.json").exists(), (
+        "build_commits.json not created"
+    )
 
     # Verify initial structure
     with open(spec_dir / "memory" / "attempt_history.json") as f:
@@ -83,7 +88,7 @@ def test_record_attempt(test_env):
         session=1,
         success=False,
         approach="First approach using async/await",
-        error="Import error - asyncio not found"
+        error="Import error - asyncio not found",
     )
 
     # Verify recorded
@@ -100,7 +105,7 @@ def test_record_attempt(test_env):
         session=2,
         success=True,
         approach="Second approach using callbacks",
-        error=None
+        error=None,
     )
 
     assert manager.get_attempt_count("subtask-1") == 2, "Second attempt not recorded"
@@ -118,20 +123,26 @@ def test_circular_fix_detection(test_env):
     manager = RecoveryManager(spec_dir, project_dir)
 
     # Record similar attempts
-    manager.record_attempt("subtask-1", 1, False, "Using async await pattern", "Error 1")
-    manager.record_attempt("subtask-1", 2, False, "Using async await with different import", "Error 2")
+    manager.record_attempt(
+        "subtask-1", 1, False, "Using async await pattern", "Error 1"
+    )
+    manager.record_attempt(
+        "subtask-1", 2, False, "Using async await with different import", "Error 2"
+    )
     manager.record_attempt("subtask-1", 3, False, "Trying async await again", "Error 3")
 
     # Check if circular fix is detected
-    is_circular = manager.is_circular_fix("subtask-1", "Using async await pattern once more")
+    is_circular = manager.is_circular_fix(
+        "subtask-1", "Using async await pattern once more"
+    )
 
     assert is_circular, "Circular fix not detected"
 
-    # Test with different approach
-    is_circular = manager.is_circular_fix("subtask-1", "Using completely different callback-based approach")
-
-    # This might be detected as circular if word overlap is high
-    # But "callback-based" is sufficiently different from "async await"
+    # Test with different approach - result intentionally not asserted as the
+    # behavior depends on word overlap heuristics ("callback-based" vs "async await")
+    manager.is_circular_fix(
+        "subtask-1", "Using completely different callback-based approach"
+    )
 
 
 def test_failure_classification(test_env):
@@ -145,8 +156,12 @@ def test_failure_classification(test_env):
     assert failure == FailureType.BROKEN_BUILD, "Broken build not detected"
 
     # Test verification failed detection
-    failure = manager.classify_failure("Verification failed: expected 200 got 500", "subtask-2")
-    assert failure == FailureType.VERIFICATION_FAILED, "Verification failure not detected"
+    failure = manager.classify_failure(
+        "Verification failed: expected 200 got 500", "subtask-2"
+    )
+    assert failure == FailureType.VERIFICATION_FAILED, (
+        "Verification failure not detected"
+    )
 
     # Test context exhaustion
     failure = manager.classify_failure("Context length exceeded", "subtask-3")
@@ -162,14 +177,18 @@ def test_recovery_action_determination(test_env):
     # Test verification failed with < 3 attempts
     manager.record_attempt("subtask-1", 1, False, "First try", "Error")
 
-    action = manager.determine_recovery_action(FailureType.VERIFICATION_FAILED, "subtask-1")
+    action = manager.determine_recovery_action(
+        FailureType.VERIFICATION_FAILED, "subtask-1"
+    )
     assert action.action == "retry", "Should retry for first verification failure"
 
     # Test verification failed with >= 3 attempts
     manager.record_attempt("subtask-1", 2, False, "Second try", "Error")
     manager.record_attempt("subtask-1", 3, False, "Third try", "Error")
 
-    action = manager.determine_recovery_action(FailureType.VERIFICATION_FAILED, "subtask-1")
+    action = manager.determine_recovery_action(
+        FailureType.VERIFICATION_FAILED, "subtask-1"
+    )
     assert action.action == "skip", "Should skip after 3 attempts"
 
     # Test circular fix
@@ -177,7 +196,9 @@ def test_recovery_action_determination(test_env):
     assert action.action == "skip", "Should skip for circular fix"
 
     # Test context exhausted
-    action = manager.determine_recovery_action(FailureType.CONTEXT_EXHAUSTED, "subtask-2")
+    action = manager.determine_recovery_action(
+        FailureType.CONTEXT_EXHAUSTED, "subtask-2"
+    )
     assert action.action == "continue", "Should continue for context exhaustion"
 
 
@@ -189,10 +210,7 @@ def test_good_commit_tracking(test_env):
 
     # Get current commit hash
     result = subprocess.run(
-        ["git", "rev-parse", "HEAD"],
-        cwd=project_dir,
-        capture_output=True,
-        text=True
+        ["git", "rev-parse", "HEAD"], cwd=project_dir, capture_output=True, text=True
     )
     commit_hash = result.stdout.strip()
 
@@ -207,13 +225,12 @@ def test_good_commit_tracking(test_env):
     test_file = project_dir / "test2.txt"
     test_file.write_text("Second content")
     subprocess.run(["git", "add", "."], cwd=project_dir, capture_output=True)
-    subprocess.run(["git", "commit", "-m", "Second commit"], cwd=project_dir, capture_output=True)
+    subprocess.run(
+        ["git", "commit", "-m", "Second commit"], cwd=project_dir, capture_output=True
+    )
 
     result = subprocess.run(
-        ["git", "rev-parse", "HEAD"],
-        cwd=project_dir,
-        capture_output=True,
-        text=True
+        ["git", "rev-parse", "HEAD"], cwd=project_dir, capture_output=True, text=True
     )
     commit_hash2 = result.stdout.strip()
 
@@ -241,7 +258,9 @@ def test_mark_subtask_stuck(test_env):
     # Verify stuck
     stuck_subtasks = manager.get_stuck_subtasks()
     assert len(stuck_subtasks) == 1, "Stuck subtask not recorded"
-    assert stuck_subtasks[0]["subtask_id"] == "subtask-1", "Wrong subtask marked as stuck"
+    assert stuck_subtasks[0]["subtask_id"] == "subtask-1", (
+        "Wrong subtask marked as stuck"
+    )
     assert "Circular fix" in stuck_subtasks[0]["reason"], "Reason not recorded"
 
     # Check subtask status
@@ -256,8 +275,12 @@ def test_recovery_hints(test_env):
     manager = RecoveryManager(spec_dir, project_dir)
 
     # Record some attempts
-    manager.record_attempt("subtask-1", 1, False, "Async/await approach", "Import error")
-    manager.record_attempt("subtask-1", 2, False, "Threading approach", "Thread safety error")
+    manager.record_attempt(
+        "subtask-1", 1, False, "Async/await approach", "Import error"
+    )
+    manager.record_attempt(
+        "subtask-1", 2, False, "Threading approach", "Thread safety error"
+    )
 
     # Get hints
     hints = manager.get_recovery_hints("subtask-1")
@@ -267,7 +290,9 @@ def test_recovery_hints(test_env):
 
     # Check for warning about different approach
     hint_text = " ".join(hints)
-    assert "DIFFERENT" in hint_text or "different" in hint_text, "Warning about different approach missing"
+    assert "DIFFERENT" in hint_text or "different" in hint_text, (
+        "Warning about different approach missing"
+    )
 
 
 def test_checkpoint_persistence_across_sessions(test_env):
@@ -282,29 +307,37 @@ def test_checkpoint_persistence_across_sessions(test_env):
         session=1,
         success=False,
         approach="First approach using REST API",
-        error="Connection timeout"
+        error="Connection timeout",
     )
     manager1.record_attempt(
         subtask_id="subtask-1",
         session=1,
         success=False,
         approach="Second approach using WebSocket",
-        error="Auth failure"
+        error="Auth failure",
     )
 
     # Verify state in session 1
-    assert manager1.get_attempt_count("subtask-1") == 2, "Session 1: attempts not recorded"
+    assert manager1.get_attempt_count("subtask-1") == 2, (
+        "Session 1: attempts not recorded"
+    )
 
     # Session 2: Create NEW manager instance (simulating session restart)
     manager2 = RecoveryManager(spec_dir, project_dir)
 
     # Verify checkpoint was restored
-    assert manager2.get_attempt_count("subtask-1") == 2, "Session 2: checkpoint not restored"
+    assert manager2.get_attempt_count("subtask-1") == 2, (
+        "Session 2: checkpoint not restored"
+    )
 
     history = manager2.get_subtask_history("subtask-1")
     assert len(history["attempts"]) == 2, "Session 2: attempt history missing"
-    assert history["attempts"][0]["approach"] == "First approach using REST API", "Session 2: first approach lost"
-    assert history["attempts"][1]["approach"] == "Second approach using WebSocket", "Session 2: second approach lost"
+    assert history["attempts"][0]["approach"] == "First approach using REST API", (
+        "Session 2: first approach lost"
+    )
+    assert history["attempts"][1]["approach"] == "Second approach using WebSocket", (
+        "Session 2: second approach lost"
+    )
     assert history["status"] == "failed", "Session 2: status not preserved"
 
 
@@ -321,10 +354,7 @@ def test_restoration_after_failure(test_env):
 
     # Get current commit
     result = subprocess.run(
-        ["git", "rev-parse", "HEAD"],
-        cwd=project_dir,
-        capture_output=True,
-        text=True
+        ["git", "rev-parse", "HEAD"], cwd=project_dir, capture_output=True, text=True
     )
     commit_hash = result.stdout.strip()
     manager1.record_good_commit(commit_hash, "subtask-2")
@@ -333,8 +363,12 @@ def test_restoration_after_failure(test_env):
     manager2 = RecoveryManager(spec_dir, project_dir)
 
     # Verify complete state restored
-    assert manager2.get_attempt_count("subtask-1") == 1, "subtask-1 attempts not restored"
-    assert manager2.get_attempt_count("subtask-2") == 1, "subtask-2 attempts not restored"
+    assert manager2.get_attempt_count("subtask-1") == 1, (
+        "subtask-1 attempts not restored"
+    )
+    assert manager2.get_attempt_count("subtask-2") == 1, (
+        "subtask-2 attempts not restored"
+    )
 
     subtask1_history = manager2.get_subtask_history("subtask-1")
     assert subtask1_history["status"] == "failed", "subtask-1 status not restored"
@@ -411,13 +445,15 @@ def test_restoration_with_build_commits(test_env):
         test_file = project_dir / f"test_file_{i}.txt"
         test_file.write_text(f"Content {i}")
         subprocess.run(["git", "add", "."], cwd=project_dir, capture_output=True)
-        subprocess.run(["git", "commit", "-m", f"Commit {i}"], cwd=project_dir, capture_output=True)
+        subprocess.run(
+            ["git", "commit", "-m", f"Commit {i}"], cwd=project_dir, capture_output=True
+        )
 
         result = subprocess.run(
             ["git", "rev-parse", "HEAD"],
             cwd=project_dir,
             capture_output=True,
-            text=True
+            text=True,
         )
         commit_hash = result.stdout.strip()
         commits.append(commit_hash)
@@ -432,7 +468,9 @@ def test_restoration_with_build_commits(test_env):
     assert last_good == commits[-1], "Last good commit not restored correctly"
 
     # Verify we can continue building from restored state
-    manager2.record_attempt("subtask-3", 1, False, "New work after restore", "New error")
+    manager2.record_attempt(
+        "subtask-3", 1, False, "New work after restore", "New error"
+    )
     assert manager2.get_attempt_count("subtask-3") == 1
 
 
@@ -444,14 +482,18 @@ def test_checkpoint_recovery_hints_restoration(test_env):
 
     # Record detailed attempt history
     manager1.record_attempt(
-        "subtask-1", 1, False,
+        "subtask-1",
+        1,
+        False,
         "Using synchronous database calls",
-        "Database connection pooling exhausted"
+        "Database connection pooling exhausted",
     )
     manager1.record_attempt(
-        "subtask-1", 2, False,
+        "subtask-1",
+        2,
+        False,
         "Using asynchronous database with asyncio",
-        "Event loop already running error"
+        "Event loop already running error",
     )
 
     # New session
@@ -465,10 +507,12 @@ def test_checkpoint_recovery_hints_restoration(test_env):
 
     # Verify attempt details are in hints
     hint_text = " ".join(hints)
-    assert "synchronous" in hint_text.lower() or "FAILED" in hint_text, "Previous approach not reflected in hints"
+    assert "synchronous" in hint_text.lower() or "FAILED" in hint_text, (
+        "Previous approach not reflected in hints"
+    )
 
     # Check circular fix detection with restored data
-    is_circular = manager2.is_circular_fix("subtask-1", "Using async database with asyncio again")
+    manager2.is_circular_fix("subtask-1", "Using async database with asyncio again")
     # Note: May or may not detect as circular depending on word overlap
 
 
@@ -482,7 +526,9 @@ def test_restoration_stuck_subtasks_list(test_env):
     for i in range(3):
         subtask_id = f"subtask-stuck-{i}"
         for j in range(3):
-            manager1.record_attempt(subtask_id, j + 1, False, f"Try {j + 1}", f"Error {j + 1}")
+            manager1.record_attempt(
+                subtask_id, j + 1, False, f"Try {j + 1}", f"Error {j + 1}"
+            )
         manager1.mark_subtask_stuck(subtask_id, f"Reason {i}: circular fix detected")
 
     # New session
@@ -533,6 +579,297 @@ def test_checkpoint_clear_and_reset(test_env):
     assert manager2.get_attempt_count("subtask-1") == 2, "subtask-1 history lost"
 
 
+# =============================================================================
+# TIME-WINDOW FILTERING TESTS (get_attempt_count)
+# =============================================================================
+
+
+def test_get_attempt_count_time_window_filtering(test_env):
+    """Test that get_attempt_count only counts attempts within the 2-hour window."""
+    from datetime import timedelta
+
+    temp_dir, spec_dir, project_dir = test_env
+    manager = RecoveryManager(spec_dir, project_dir)
+
+    old_time = (datetime.now(UTC) - timedelta(hours=3)).isoformat()
+    recent_time = (datetime.now(UTC) - timedelta(minutes=30)).isoformat()
+
+    history = manager._load_attempt_history()
+    history["subtasks"]["test-1"] = {
+        "attempts": [
+            {"timestamp": old_time, "approach": "old approach", "success": False},
+            {"timestamp": recent_time, "approach": "recent approach", "success": False},
+        ],
+        "status": "failed",
+    }
+    manager._save_attempt_history(history)
+
+    count = manager.get_attempt_count("test-1")
+    assert count == 1, "Should only count the recent attempt within 2-hour window"
+
+
+def test_get_attempt_count_boundary_just_inside_and_outside(test_env):
+    """Test attempts just inside and outside the 2-hour cutoff boundary."""
+    from datetime import timedelta
+
+    temp_dir, spec_dir, project_dir = test_env
+    manager = RecoveryManager(spec_dir, project_dir)
+
+    # Use a single base timestamp to avoid clock drift between calls
+    base_now = datetime.now(UTC)
+
+    # 10 minutes inside the window (1h 50m ago) - should be included
+    inside_time = (base_now - timedelta(minutes=110)).isoformat()
+    # 5 minutes outside the window (2h 5m ago) - should be excluded
+    outside_time = (base_now - timedelta(minutes=125)).isoformat()
+
+    history = manager._load_attempt_history()
+    history["subtasks"]["test-boundary"] = {
+        "attempts": [
+            {"timestamp": inside_time, "approach": "inside window", "success": False},
+            {"timestamp": outside_time, "approach": "outside window", "success": False},
+        ],
+        "status": "failed",
+    }
+    manager._save_attempt_history(history)
+
+    count = manager.get_attempt_count("test-boundary")
+    assert count == 1, "Attempt inside window should be counted, outside should not"
+
+
+def test_get_attempt_count_all_outside_window(test_env):
+    """Test that all attempts outside the time window returns 0."""
+    from datetime import timedelta
+
+    temp_dir, spec_dir, project_dir = test_env
+    manager = RecoveryManager(spec_dir, project_dir)
+
+    old_time_1 = (datetime.now(UTC) - timedelta(hours=5)).isoformat()
+    old_time_2 = (datetime.now(UTC) - timedelta(hours=4)).isoformat()
+    old_time_3 = (datetime.now(UTC) - timedelta(hours=3)).isoformat()
+
+    history = manager._load_attempt_history()
+    history["subtasks"]["test-old"] = {
+        "attempts": [
+            {"timestamp": old_time_1, "approach": "old 1", "success": False},
+            {"timestamp": old_time_2, "approach": "old 2", "success": False},
+            {"timestamp": old_time_3, "approach": "old 3", "success": False},
+        ],
+        "status": "failed",
+    }
+    manager._save_attempt_history(history)
+
+    count = manager.get_attempt_count("test-old")
+    assert count == 0, "All attempts outside window should result in count of 0"
+
+
+def test_get_attempt_count_all_recent(test_env):
+    """Test that all recent attempts are counted."""
+    from datetime import timedelta
+
+    temp_dir, spec_dir, project_dir = test_env
+    manager = RecoveryManager(spec_dir, project_dir)
+
+    times = [
+        (datetime.now(UTC) - timedelta(minutes=10)).isoformat(),
+        (datetime.now(UTC) - timedelta(minutes=30)).isoformat(),
+        (datetime.now(UTC) - timedelta(minutes=90)).isoformat(),
+    ]
+
+    history = manager._load_attempt_history()
+    history["subtasks"]["test-recent"] = {
+        "attempts": [
+            {"timestamp": times[0], "approach": "a1", "success": False},
+            {"timestamp": times[1], "approach": "a2", "success": False},
+            {"timestamp": times[2], "approach": "a3", "success": False},
+        ],
+        "status": "failed",
+    }
+    manager._save_attempt_history(history)
+
+    count = manager.get_attempt_count("test-recent")
+    assert count == 3, "All recent attempts should be counted"
+
+
+def test_get_attempt_count_missing_timestamp_backward_compat(test_env):
+    """Test backward compatibility: attempts without timestamps are counted as recent."""
+    temp_dir, spec_dir, project_dir = test_env
+    manager = RecoveryManager(spec_dir, project_dir)
+
+    history = manager._load_attempt_history()
+    history["subtasks"]["test-no-ts"] = {
+        "attempts": [
+            {"approach": "no timestamp", "success": False},
+            {"approach": "also no timestamp", "success": False},
+        ],
+        "status": "failed",
+    }
+    manager._save_attempt_history(history)
+
+    count = manager.get_attempt_count("test-no-ts")
+    assert count == 2, "Attempts without timestamps should be counted (backward compat)"
+
+
+def test_get_attempt_count_invalid_timestamp_backward_compat(test_env):
+    """Test backward compatibility: attempts with invalid timestamps are counted as recent."""
+    temp_dir, spec_dir, project_dir = test_env
+    manager = RecoveryManager(spec_dir, project_dir)
+
+    history = manager._load_attempt_history()
+    history["subtasks"]["test-bad-ts"] = {
+        "attempts": [
+            {"timestamp": "not-a-date", "approach": "bad ts", "success": False},
+            {
+                "timestamp": "2024-13-99T99:99:99",
+                "approach": "invalid ts",
+                "success": False,
+            },
+        ],
+        "status": "failed",
+    }
+    manager._save_attempt_history(history)
+
+    count = manager.get_attempt_count("test-bad-ts")
+    assert count == 2, (
+        "Attempts with invalid timestamps should be counted (backward compat)"
+    )
+
+
+def test_get_attempt_count_mixed_timestamps(test_env):
+    """Test mixed scenario: some attempts with timestamps, some without."""
+    from datetime import timedelta
+
+    temp_dir, spec_dir, project_dir = test_env
+    manager = RecoveryManager(spec_dir, project_dir)
+
+    old_time = (datetime.now(UTC) - timedelta(hours=5)).isoformat()
+    recent_time = (datetime.now(UTC) - timedelta(minutes=10)).isoformat()
+
+    history = manager._load_attempt_history()
+    history["subtasks"]["test-mixed"] = {
+        "attempts": [
+            {"timestamp": old_time, "approach": "old", "success": False},
+            {"timestamp": recent_time, "approach": "recent", "success": False},
+            {"approach": "no timestamp", "success": False},
+            {"timestamp": "garbage", "approach": "bad timestamp", "success": False},
+        ],
+        "status": "failed",
+    }
+    manager._save_attempt_history(history)
+
+    # old_time: excluded (outside window)
+    # recent_time: included (within window)
+    # no timestamp: included (backward compat)
+    # bad timestamp: included (backward compat)
+    count = manager.get_attempt_count("test-mixed")
+    assert count == 3, "Should count recent + missing/invalid timestamps, exclude old"
+
+
+# =============================================================================
+# ATTEMPT HISTORY TRIMMING TESTS (record_attempt)
+# =============================================================================
+
+
+def test_record_attempt_trimming_at_51(test_env):
+    """Test that recording the 51st attempt triggers trimming to 50."""
+    temp_dir, spec_dir, project_dir = test_env
+    manager = RecoveryManager(spec_dir, project_dir)
+
+    # Manually inject 50 attempts
+    history = manager._load_attempt_history()
+    history["subtasks"]["trim-test"] = {
+        "attempts": [
+            {
+                "session": i,
+                "timestamp": datetime.now(UTC).isoformat(),
+                "approach": f"approach-{i}",
+                "success": False,
+                "error": None,
+            }
+            for i in range(50)
+        ],
+        "status": "failed",
+    }
+    manager._save_attempt_history(history)
+
+    # Record the 51st attempt
+    manager.record_attempt("trim-test", 51, False, "approach-50", "error")
+
+    history = manager._load_attempt_history()
+    attempts = history["subtasks"]["trim-test"]["attempts"]
+    assert len(attempts) == 50, "Should trim to 50 after exceeding cap"
+
+
+def test_record_attempt_trimming_keeps_newest(test_env):
+    """Test that trimming keeps the newest 50 attempts, not the oldest."""
+    temp_dir, spec_dir, project_dir = test_env
+    manager = RecoveryManager(spec_dir, project_dir)
+
+    # Inject 50 attempts with identifiable approaches
+    history = manager._load_attempt_history()
+    history["subtasks"]["trim-order"] = {
+        "attempts": [
+            {
+                "session": i,
+                "timestamp": datetime.now(UTC).isoformat(),
+                "approach": f"old-approach-{i}",
+                "success": False,
+                "error": None,
+            }
+            for i in range(50)
+        ],
+        "status": "failed",
+    }
+    manager._save_attempt_history(history)
+
+    # Record new attempt (triggers trim)
+    manager.record_attempt("trim-order", 99, False, "newest-approach", "error")
+
+    history = manager._load_attempt_history()
+    attempts = history["subtasks"]["trim-order"]["attempts"]
+    assert len(attempts) == 50
+
+    # The oldest attempt (old-approach-0) should be gone
+    approaches = [a["approach"] for a in attempts]
+    assert "old-approach-0" not in approaches, "Oldest attempt should be trimmed"
+    # The newest attempt should be present
+    assert "newest-approach" in approaches, "Newest attempt should be kept"
+    # old-approach-1 should be the oldest remaining
+    assert "old-approach-1" in approaches, "Second oldest should now be first"
+
+
+def test_record_attempt_no_trimming_at_exactly_50(test_env):
+    """Test that exactly 50 attempts does not trigger trimming."""
+    temp_dir, spec_dir, project_dir = test_env
+    manager = RecoveryManager(spec_dir, project_dir)
+
+    # Inject 49 attempts
+    history = manager._load_attempt_history()
+    history["subtasks"]["no-trim"] = {
+        "attempts": [
+            {
+                "session": i,
+                "timestamp": datetime.now(UTC).isoformat(),
+                "approach": f"approach-{i}",
+                "success": False,
+                "error": None,
+            }
+            for i in range(49)
+        ],
+        "status": "failed",
+    }
+    manager._save_attempt_history(history)
+
+    # Record the 50th attempt (should NOT trigger trimming)
+    manager.record_attempt("no-trim", 50, False, "approach-49", "error")
+
+    history = manager._load_attempt_history()
+    attempts = history["subtasks"]["no-trim"]["attempts"]
+    assert len(attempts) == 50, "Exactly 50 should not trigger trimming"
+    # First attempt should still be present
+    assert attempts[0]["approach"] == "approach-0", "No attempts should be removed"
+
+
 def run_all_tests():
     """Run all tests."""
     print("=" * 70)
@@ -543,27 +880,10 @@ def run_all_tests():
     # Note: This manual runner is kept for backwards compatibility.
     # Prefer running tests with pytest: pytest tests/test_recovery.py -v
 
-    tests = [
-        ("test_initialization", test_initialization),
-        ("test_record_attempt", test_record_attempt),
-        ("test_circular_fix_detection", test_circular_fix_detection),
-        ("test_failure_classification", test_failure_classification),
-        ("test_recovery_action_determination", test_recovery_action_determination),
-        ("test_good_commit_tracking", test_good_commit_tracking),
-        ("test_mark_subtask_stuck", test_mark_subtask_stuck),
-        ("test_recovery_hints", test_recovery_hints),
-        # Session checkpoint and restoration tests
-        ("test_checkpoint_persistence_across_sessions", test_checkpoint_persistence_across_sessions),
-        ("test_restoration_after_failure", test_restoration_after_failure),
-        ("test_checkpoint_multiple_subtasks", test_checkpoint_multiple_subtasks),
-        ("test_restoration_with_build_commits", test_restoration_with_build_commits),
-        ("test_checkpoint_recovery_hints_restoration", test_checkpoint_recovery_hints_restoration),
-        ("test_restoration_stuck_subtasks_list", test_restoration_stuck_subtasks_list),
-        ("test_checkpoint_clear_and_reset", test_checkpoint_clear_and_reset),
-    ]
-
     print("Note: Running with manual test runner for backwards compatibility.")
-    print("For full pytest integration with fixtures, run: pytest tests/test_recovery.py -v")
+    print(
+        "For full pytest integration with fixtures, run: pytest tests/test_recovery.py -v"
+    )
     print()
     print("Manual test runner cannot use fixtures - please run with pytest.")
     return True
@@ -571,5 +891,6 @@ def run_all_tests():
 
 if __name__ == "__main__":
     import sys
+
     success = run_all_tests()
     sys.exit(0 if success else 1)

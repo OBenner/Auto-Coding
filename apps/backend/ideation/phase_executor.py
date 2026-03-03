@@ -81,7 +81,7 @@ class PhaseExecutor:
             )
 
         # Check if Graphiti is enabled
-        from graphiti_providers import is_graphiti_enabled
+        from integrations.graphiti.providers_pkg import is_graphiti_enabled
 
         if not is_graphiti_enabled():
             print_status("Graphiti not enabled, skipping graph hints", "info")
@@ -302,7 +302,7 @@ Generate up to {self.max_ideas_per_type} {self.generator.get_type_label(ideation
 Avoid duplicating features that are already planned (see ideation_context.json).
 Output your ideas to {output_file.name}.
 """
-        success, output = await self.generator.run_agent(
+        await self.generator.run_agent(
             prompt_file,
             additional_context=context,
         )

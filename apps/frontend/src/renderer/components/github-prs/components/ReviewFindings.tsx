@@ -16,6 +16,9 @@ import {
   CheckSquare,
   Square,
   Send,
+  ChevronDown,
+  ChevronRight,
+  ShieldQuestion,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '../../ui/button';
@@ -47,6 +50,7 @@ export function ReviewFindings({
   const [expandedSections, setExpandedSections] = useState<Set<SeverityGroup>>(
     new Set<SeverityGroup>(['critical', 'high']) // Critical and High expanded by default
   );
+  const [disputedExpanded, setDisputedExpanded] = useState(false);
 
   // Filter out posted findings - only show unposted findings for selection
   const unpostedFindings = useMemo(() =>
@@ -54,10 +58,24 @@ export function ReviewFindings({
     [findings, postedIds]
   );
 
+  // Split unposted findings into active vs disputed
+  const { activeFindings, disputedFindings } = useMemo(() => {
+    const active: PRReviewFinding[] = [];
+    const disputed: PRReviewFinding[] = [];
+    for (const finding of unpostedFindings) {
+      if (finding.validationStatus === 'dismissed_false_positive') {
+        disputed.push(finding);
+      } else {
+        active.push(finding);
+      }
+    }
+    return { activeFindings: active, disputedFindings: disputed };
+  }, [unpostedFindings]);
+
   // Check if all findings are posted
   const allFindingsPosted = findings.length > 0 && unpostedFindings.length === 0;
 
-  // Group unposted findings by severity (only show findings that haven't been posted)
+  // Group active (non-disputed) findings by severity
   const groupedFindings = useMemo(() => {
     const groups: Record<SeverityGroup, PRReviewFinding[]> = {
       critical: [],
@@ -66,7 +84,7 @@ export function ReviewFindings({
       low: [],
     };
 
-    for (const finding of unpostedFindings) {
+    for (const finding of activeFindings) {
       const severity = finding.severity as SeverityGroup;
       if (groups[severity]) {
         groups[severity].push(finding);
@@ -74,20 +92,20 @@ export function ReviewFindings({
     }
 
     return groups;
-  }, [unpostedFindings]);
+  }, [activeFindings]);
 
-  // Count by severity (unposted findings only)
+  // Count by severity (active findings only)
   const counts = useMemo(() => ({
     critical: groupedFindings.critical.length,
     high: groupedFindings.high.length,
     medium: groupedFindings.medium.length,
     low: groupedFindings.low.length,
-    total: unpostedFindings.length,
+    total: activeFindings.length,
     important: groupedFindings.critical.length + groupedFindings.high.length,
     posted: postedIds.size,
-  }), [groupedFindings, unpostedFindings.length, postedIds.size]);
+  }), [groupedFindings, activeFindings.length, postedIds.size]);
 
-  // Selection hooks - use unposted findings only
+  // Selection hooks - use active findings only
   const {
     toggleFinding,
     selectAll,
@@ -95,7 +113,7 @@ export function ReviewFindings({
     selectImportant,
     toggleSeverityGroup,
   } = useFindingSelection({
-    findings: unpostedFindings,
+    findings: activeFindings,
     selectedIds,
     onSelectionChange,
     groupedFindings,
@@ -131,10 +149,11 @@ export function ReviewFindings({
 
   return (
     <div className="space-y-4">
-      {/* Summary Stats Bar - show unposted findings only */}
+      {/* Summary Stats Bar - show active findings only */}
       <FindingsSummary
-        findings={unpostedFindings}
+        findings={activeFindings}
         selectedCount={selectedIds.size}
+        disputedCount={disputedFindings.length}
       />
 
       {/* Quick Select Actions */}
@@ -219,6 +238,44 @@ export function ReviewFindings({
           );
         })}
       </div>
+
+      {/* Disputed Findings Section */}
+      {disputedFindings.length > 0 && (
+        <div className="rounded-lg border border-purple-500/20 bg-purple-500/5">
+          <button
+            type="button"
+            aria-expanded={disputedExpanded}
+            aria-controls="disputed-findings"
+            onClick={() => setDisputedExpanded(!disputedExpanded)}
+            className="w-full flex items-center gap-2 p-3 text-sm font-medium text-purple-500 hover:bg-purple-500/10 transition-colors"
+          >
+            {disputedExpanded ? (
+              <ChevronDown className="h-4 w-4 shrink-0" />
+            ) : (
+              <ChevronRight className="h-4 w-4 shrink-0" />
+            )}
+            <ShieldQuestion className="h-4 w-4 shrink-0" />
+            <span>{t('prReview.disputedByValidator', { count: disputedFindings.length })}</span>
+          </button>
+          {disputedExpanded && (
+            <div id="disputed-findings" className="px-3 pb-3 space-y-2">
+              <p className="text-xs text-muted-foreground italic">
+                {t('prReview.disputedSectionHint')}
+              </p>
+              {disputedFindings.map((finding) => (
+                <FindingItem
+                  key={finding.id}
+                  finding={finding}
+                  selected={selectedIds.has(finding.id)}
+                  posted={false}
+                  disputed={true}
+                  onToggle={() => toggleFinding(finding.id)}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Empty State - no findings at all */}
       {findings.length === 0 && (

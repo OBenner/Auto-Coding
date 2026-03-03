@@ -23,17 +23,11 @@ logger = logging.getLogger(__name__)
 
 # Import debug utilities
 try:
-    from debug import debug, debug_error, debug_warning
+    from debug import debug_warning
 except ImportError:
 
-    def debug(*args, **kwargs):
-        pass
-
-    def debug_error(*args, **kwargs):
-        pass
-
     def debug_warning(*args, **kwargs):
-        pass
+        """No-op fallback when debug module is unavailable."""
 
 
 MODULE = "merge.timeline_git"
@@ -174,8 +168,8 @@ class TimelineGitHelper:
                     else None
                 )
 
-        except Exception:
-            pass
+        except (subprocess.SubprocessError, OSError, ValueError):
+            pass  # Git command failed, return partial info
 
         return info
 
@@ -306,8 +300,8 @@ class TimelineGitHelper:
                 if "/" in upstream:
                     return upstream.split("/", 1)[1]
                 return upstream
-        except Exception:
-            pass
+        except (subprocess.SubprocessError, OSError):
+            pass  # No upstream tracking branch found
 
         for branch in ["main", "master", "develop"]:
             try:
