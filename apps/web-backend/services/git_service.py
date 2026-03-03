@@ -6,7 +6,7 @@ Provides methods to list repositories, get repository details, and access reposi
 """
 
 import logging
-from typing import Dict, List, Optional
+
 import httpx
 
 logger = logging.getLogger(__name__)
@@ -35,7 +35,9 @@ class GitService:
             ValueError: If provider is not supported
         """
         if provider not in ["github", "gitlab"]:
-            raise ValueError(f"Unsupported provider: {provider}. Must be 'github' or 'gitlab'")
+            raise ValueError(
+                f"Unsupported provider: {provider}. Must be 'github' or 'gitlab'"
+            )
 
         self.provider = provider
         self.access_token = access_token
@@ -48,7 +50,7 @@ class GitService:
 
         logger.info(f"Initialized GitService for provider: {provider}")
 
-    def _get_headers(self) -> Dict[str, str]:
+    def _get_headers(self) -> dict[str, str]:
         """
         Get HTTP headers for API requests.
 
@@ -65,7 +67,7 @@ class GitService:
                 "Authorization": f"Bearer {self.access_token}",
             }
 
-    async def get_user_info(self) -> Dict:
+    async def get_user_info(self) -> dict:
         """
         Get authenticated user information.
 
@@ -99,8 +101,8 @@ class GitService:
         visibility: str = "all",
         sort: str = "updated",
         per_page: int = 30,
-        page: int = 1
-    ) -> List[Dict]:
+        page: int = 1,
+    ) -> list[dict]:
         """
         List user's repositories.
 
@@ -137,9 +139,7 @@ class GitService:
                     }
 
                 response = await client.get(
-                    url,
-                    headers=self._get_headers(),
-                    params=params
+                    url, headers=self._get_headers(), params=params
                 )
                 response.raise_for_status()
 
@@ -155,7 +155,7 @@ class GitService:
             logger.error(f"Failed to list repositories from {self.provider}: {e}")
             raise
 
-    async def get_repository(self, owner: str, repo: str) -> Dict:
+    async def get_repository(self, owner: str, repo: str) -> dict:
         """
         Get details for a specific repository.
 
@@ -192,7 +192,7 @@ class GitService:
             )
             raise
 
-    async def list_branches(self, owner: str, repo: str) -> List[Dict]:
+    async def list_branches(self, owner: str, repo: str) -> list[dict]:
         """
         List branches for a repository.
 
@@ -232,12 +232,8 @@ class GitService:
             raise
 
     async def get_file_content(
-        self,
-        owner: str,
-        repo: str,
-        path: str,
-        ref: Optional[str] = None
-    ) -> Dict:
+        self, owner: str, repo: str, path: str, ref: str | None = None
+    ) -> dict:
         """
         Get content of a file from repository.
 
@@ -264,9 +260,7 @@ class GitService:
                     params = {"ref": ref or "main"}
 
                 response = await client.get(
-                    url,
-                    headers=self._get_headers(),
-                    params=params
+                    url, headers=self._get_headers(), params=params
                 )
                 response.raise_for_status()
 
@@ -286,12 +280,8 @@ class GitService:
             raise
 
     async def search_repositories(
-        self,
-        query: str,
-        sort: str = "stars",
-        per_page: int = 30,
-        page: int = 1
-    ) -> Dict:
+        self, query: str, sort: str = "stars", per_page: int = 30, page: int = 1
+    ) -> dict:
         """
         Search for repositories.
 
@@ -328,16 +318,12 @@ class GitService:
                     }
 
                 response = await client.get(
-                    url,
-                    headers=self._get_headers(),
-                    params=params
+                    url, headers=self._get_headers(), params=params
                 )
                 response.raise_for_status()
 
                 results = response.json()
-                logger.info(
-                    f"Search for '{query}' on {self.provider} returned results"
-                )
+                logger.info(f"Search for '{query}' on {self.provider} returned results")
 
                 return results
 

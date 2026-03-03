@@ -21,6 +21,14 @@
       "title": "Developer Tools",
       "description": "IDE and terminal preferences"
     },
+    "provider": {
+      "title": "AI Provider",
+      "description": "Select your AI provider and models"
+    },
+    "cost": {
+      "title": "Cost Comparison",
+      "description": "Compare model pricing across providers"
+    },
     "agent": {
       "title": "Agent Settings",
       "description": "Default model and framework"
@@ -33,6 +41,10 @@
       "title": "Accounts",
       "description": "Claude accounts & API endpoints"
     },
+    "providers": {
+      "title": "AI Providers",
+      "description": "Configure AI model providers"
+    },
     "updates": {
       "title": "Updates",
       "description": "Auto-Coding updates"
@@ -41,9 +53,21 @@
       "title": "Notifications",
       "description": "Alert preferences"
     },
+    "feedback": {
+      "title": "Feedback",
+      "description": "User feedback collection settings"
+    },
     "debug": {
       "title": "Debug & Logs",
       "description": "Troubleshooting tools"
+    },
+    "keyboardShortcuts": {
+      "title": "Keyboard Shortcuts",
+      "description": "Customize keyboard shortcuts for common actions"
+    },
+    "envConfig": {
+      "title": "Environment Config",
+      "description": "Configure Claude authentication and environment tokens"
     }
   },
   "apiProfiles": {
@@ -52,10 +76,12 @@
     "addButton": "Add Profile",
     "presets": {
       "anthropic": "Anthropic",
+      "openai": "OpenAI",
       "openrouter": "OpenRouter",
       "groq": "Groq",
       "glmGlobal": "GLM (Global)",
-      "glmChina": "GLM (China)"
+      "glmChina": "GLM (China)",
+      "ollama": "Ollama (Local)"
     },
     "fields": {
       "name": "Name",
@@ -168,6 +194,33 @@
     "noResults": "No models match your search",
     "discoveryNotAvailable": "Model discovery not available. Enter model name manually."
   },
+  "costComparison": {
+    "title": "Cost Comparison",
+    "description": "Compare pricing across AI models and providers",
+    "providers": {
+      "anthropic": "Anthropic (Claude)",
+      "openai": "OpenAI",
+      "google": "Google Gemini",
+      "ollama": "Ollama (Local)"
+    },
+    "input": "Input",
+    "output": "Output",
+    "model": "model",
+    "models": "models",
+    "free": "FREE",
+    "cheapest": "Cheapest",
+    "localFree": "Local",
+    "infoTitle": "Pricing Information",
+    "infoDescription": "All prices shown are per 1 million tokens (USD). Local models via Ollama are free.",
+    "notesTitle": "Important Notes",
+    "note1": "Prices are per 1M tokens and may vary by provider",
+    "note2": "Local models (Ollama) run on your machine and have no API costs",
+    "note3": "Actual costs depend on input and output token usage",
+    "modelNames": {
+      "claude": "Claude {{family}} {{size}}",
+      "gemini": "Gemini {{name}}"
+    }
+  },
   "language": {
     "label": "Interface Language",
     "description": "Select the language for the application interface"
@@ -180,6 +233,14 @@
     "default": "Default",
     "comfortable": "Comfortable",
     "large": "Large"
+  },
+  "gpuAcceleration": {
+    "label": "GPU Acceleration",
+    "description": "Use WebGL for terminal rendering (experimental, faster with many terminals)",
+    "auto": "Auto (use WebGL when supported)",
+    "on": "Always on",
+    "off": "Off (default)",
+    "helperText": "Changes apply to new terminals only"
   },
   "general": {
     "otherAgentSettings": "Other Agent Settings",
@@ -215,6 +276,7 @@
     "sourceHomebrew": "Homebrew",
     "sourceNvm": "NVM",
     "sourceSystemPath": "System PATH",
+    "sourceWindowsWhere": "Windows Where",
     "sourceBundled": "Bundled",
     "sourceFallback": "Fallback",
     "notDetected": "Not detected",
@@ -307,6 +369,12 @@
     "sound": "Sound",
     "soundDescription": "Play sound with notifications"
   },
+  "feedback": {
+    "title": "Feedback Settings",
+    "description": "Configure feedback collection preferences",
+    "enableFeedback": "Enable Feedback Collection",
+    "enableFeedbackDescription": "Collect feedback after agent tasks complete to help improve the system"
+  },
   "actions": {
     "save": "Save Settings",
     "rerunWizard": "Re-run Wizard",
@@ -351,6 +419,27 @@
       "integrationDescription": "Configure persistent cross-session memory for agents",
       "syncDescription": "Configure persistent memory"
     }
+  },
+  "provider": {
+    "title": "AI Provider",
+    "description": "Select your AI provider and available models",
+    "selectProvider": "Select Provider",
+    "selectProviderPlaceholder": "Choose an AI provider",
+    "availableProviders": "Available Providers",
+    "selectedProvider": "Selected Provider",
+    "name": "Name",
+    "endpoint": "Endpoint",
+    "model": "model",
+    "models": "models",
+    "modelsAvailable": "Models available",
+    "autoDiscovery": "Auto-discovery",
+    "showModels": "Show available models",
+    "hideModels": "Hide models",
+    "fallbackModel": "Fallback Model",
+    "fallbackModelDescription": "Model to use if primary model is unavailable",
+    "selectFallbackModel": "Select fallback model",
+    "noFallback": "No fallback (use provider default)",
+    "fallbackInfo": "If your primary model becomes unavailable, the system will automatically fall back to this model."
   },
   "agentProfile": {
     "label": "Agent Profile",
@@ -671,6 +760,108 @@
       "saveFailedDescription": "An error occurred while saving agent model configuration."
     }
   },
+  "aiProvider": {
+    "title": "AI Provider",
+    "description": "Select the AI backend to use for agent sessions",
+    "label": "AI Provider",
+    "selectProvider": "Select AI Provider",
+    "currentProvider": "Current Provider",
+    "providers": {
+      "claude": {
+        "name": "Claude Agent SDK",
+        "description": "Anthropic's Claude Agent SDK (default, recommended)"
+      },
+      "litellm": {
+        "name": "LiteLLM",
+        "description": "Unified interface supporting 100+ LLM providers"
+      },
+      "openrouter": {
+        "name": "OpenRouter",
+        "description": "Cloud multi-model routing with 400+ models"
+      },
+      "zhipuai": {
+        "name": "ZhipuAI (GLM)",
+        "description": "Zhipu AI GLM models (glm-4, glm-4-flash)"
+      }
+    },
+    "apiKeys": {
+      "title": "API Keys",
+      "openai": {
+        "label": "OpenAI API Key",
+        "placeholder": "sk-...",
+        "description": "Required for GPT-4 and other OpenAI models"
+      },
+      "google": {
+        "label": "Google AI API Key",
+        "placeholder": "AI...",
+        "description": "Required for Gemini models"
+      },
+      "openrouter": {
+        "label": "OpenRouter API Key",
+        "placeholder": "sk-or-...",
+        "description": "Required for OpenRouter multi-model routing"
+      },
+      "zhipuai": {
+        "label": "ZhipuAI API Key",
+        "placeholder": "Enter your ZhipuAI API key",
+        "description": "Required for GLM models (glm-4, glm-4-flash)"
+      }
+    },
+    "models": {
+      "title": "Model Selection",
+      "description": "Configure which models to use for each agent type",
+      "planner": {
+        "label": "Planner Model",
+        "placeholder": "e.g., gpt-4, gemini-pro, anthropic/claude-3-sonnet",
+        "description": "Model for creating implementation plans"
+      },
+      "coder": {
+        "label": "Coder Model",
+        "placeholder": "e.g., gpt-4, gemini-pro, anthropic/claude-3-sonnet",
+        "description": "Model for implementing code"
+      },
+      "qa": {
+        "label": "QA Model",
+        "placeholder": "e.g., gpt-4, gemini-pro, anthropic/claude-3-sonnet",
+        "description": "Model for quality assurance and validation"
+      }
+    },
+    "configuration": {
+      "title": "Provider Configuration",
+      "apiKey": "API Key",
+      "apiKeyPlaceholder": "Enter your API key",
+      "apiKeyDescription": "Required for LiteLLM and OpenRouter providers",
+      "model": "Model",
+      "modelPlaceholder": "e.g., gpt-4, claude-3-opus, anthropic/claude-3-sonnet",
+      "modelDescription": "Model identifier for the selected provider",
+      "baseUrl": "Base URL (Optional)",
+      "baseUrlPlaceholder": "https://api.example.com/v1",
+      "baseUrlDescription": "Custom API endpoint (leave empty for default)"
+    },
+    "validation": {
+      "apiKeyRequired": "API key is required for this provider",
+      "modelRequired": "Model selection is required"
+    },
+    "toast": {
+      "providerChanged": "AI Provider Changed",
+      "providerChangedDescription": "Now using {{provider}}",
+      "configSaved": "Configuration Saved",
+      "configSavedDescription": "Provider settings have been updated",
+      "configError": "Configuration Error",
+      "configErrorDescription": "Failed to save provider settings: {{error}}"
+    },
+    "hints": {
+      "envOverride": "This setting can be overridden by the AI_ENGINE_PROVIDER environment variable",
+      "requiresRestart": "Changes will take effect for new agent sessions",
+      "claudeDefault": "Claude Agent SDK is the default and most tested provider"
+    },
+    "status": {
+      "active": "Active",
+      "configured": "Configured",
+      "notConfigured": "Not Configured",
+      "requiresApiKey": "API Key Required"
+    }
+  },
   "mcp": {
     "title": "MCP Server Overview",
     "titleWithProject": "MCP Server Overview for {{projectName}}",
@@ -768,6 +959,185 @@
       "createAnthropicKey": "Create Anthropic API Key",
       "openai": "This looks like an OpenAI API. You'll need an API key.",
       "createOpenaiKey": "Create OpenAI API Key"
+    }
+  },
+  "keyboardShortcuts": {
+    "title": "Keyboard Shortcuts",
+    "description": "Customize keyboard shortcuts for common actions",
+    "infoBanner": "Click on a shortcut to record a new key combination. Press Escape to cancel recording.",
+    "unsavedChanges": "You have unsaved changes",
+    "actions": {
+      "change": "Change",
+      "resetToDefaults": "Reset to Defaults",
+      "save": "Save Changes",
+      "saving": "Saving...",
+      "commandPalette": {
+        "label": "Open Command Palette",
+        "description": "Quickly search and execute commands"
+      },
+      "quickActions": {
+        "label": "Quick Actions",
+        "description": "Access recent actions and quick tasks"
+      },
+      "createTask": {
+        "label": "Create New Task",
+        "description": "Create a new task or spec"
+      },
+      "batchQA": {
+        "label": "Batch QA",
+        "description": "Run QA on multiple tasks at once"
+      },
+      "batchStatusUpdate": {
+        "label": "Batch Status Update",
+        "description": "Update status of multiple tasks"
+      }
+    },
+    "recording": {
+      "pressKeys": "Press keys...",
+      "cancel": "Cancel"
+    },
+    "toast": {
+      "resetTitle": "Shortcuts Reset",
+      "resetDescription": "All keyboard shortcuts have been reset to default values",
+      "savedTitle": "Shortcuts Saved",
+      "savedDescription": "Your keyboard shortcuts have been saved successfully",
+      "saveFailedTitle": "Save Failed",
+      "saveFailedDescription": "Failed to save keyboard shortcuts. Please try again."
+    }
+  },
+  "webhooks": {
+    "title": "Webhooks & Integrations",
+    "enableWebhooks": "Enable Webhooks",
+    "enableDescription": "Trigger builds from external events and send notifications",
+    "integrationOverviewTitle": "Webhook Integrations",
+    "integrationOverviewDescription": "Configure outgoing webhooks to send build notifications to Slack, Discord, Teams, or Jira. Set up incoming webhooks to trigger builds from GitHub or GitLab events.",
+    "integrationsConfigured": "{{count}} integration configured",
+    "integrationsConfigured_plural": "{{count}} integrations configured",
+    "outgoingTitle": "Outgoing Notifications",
+    "outgoingDescription": "Send build status updates to external services",
+    "incomingTitle": "Incoming Webhooks",
+    "incomingDescription": "Trigger builds from external events",
+    "logsHint": "View detailed webhook delivery logs and troubleshooting information in the Webhook Logs viewer.",
+    "status": {
+      "connected": "Connected",
+      "notConfigured": "Not configured",
+      "active": "Active",
+      "configError": "Configuration error",
+      "enabled": "Enabled"
+    },
+    "actions": {
+      "configure": "Configure",
+      "setup": "Setup",
+      "configureAriaLabel": "Configure {{integration}} integration"
+    },
+    "integrations": {
+      "slack": "Slack",
+      "discord": "Discord",
+      "teams": "Microsoft Teams",
+      "jira": "Jira",
+      "github": "GitHub",
+      "gitlab": "GitLab",
+      "generic": "Generic Webhook"
+    },
+    "logs": {
+      "title": "Webhook Delivery Logs",
+      "filterByStatus": "Filter by status",
+      "filterByEvent": "Filter by event",
+      "allStatuses": "All Statuses",
+      "allEvents": "All Events",
+      "loading": "Loading logs...",
+      "empty": "No webhook logs yet",
+      "emptyDescription": "Webhook delivery logs will appear here once webhooks are triggered",
+      "noMatch": "No logs match the selected filters",
+      "clearFilters": "Clear Filters",
+      "attempt": "Attempt {{current}}/{{max}}",
+      "request": "Request",
+      "response": "Response",
+      "eventData": "Event Data",
+      "url": "URL:",
+      "headers": "Headers:",
+      "body": "Body:",
+      "statusLabel": "Status:",
+      "id": "ID:",
+      "webhookId": "Webhook ID:",
+      "completed": "Completed:",
+      "statusBadge": {
+        "success": "Success",
+        "failed": "Failed",
+        "retrying": "Retrying",
+        "pending": "Pending"
+      },
+      "timeAgo": {
+        "justNow": "Just now",
+        "minutesAgo": "{{count}}m ago",
+        "hoursAgo": "{{count}}h ago",
+        "daysAgo": "{{count}}d ago"
+      },
+      "duration": {
+        "unavailable": "N/A"
+      }
+    },
+    "events": {
+      "build_started": "Build Started",
+      "build_completed": "Build Completed",
+      "build_failed": "Build Failed",
+      "subtask_started": "Subtask Started",
+      "subtask_completed": "Subtask Completed",
+      "subtask_failed": "Subtask Failed",
+      "pr_opened": "PR Opened",
+      "pr_merged": "PR Merged",
+      "pr_closed": "PR Closed",
+      "custom": "Custom"
+    }
+  },
+  "agentPreferences": {
+    "title": "Agent Behavior Preferences",
+    "description": "Configure how agents adapt their behavior to match your preferences",
+    "verbosity": {
+      "label": "Response Verbosity",
+      "description": "Control how detailed agent explanations should be",
+      "minimal": "Very brief",
+      "concise": "Short",
+      "normal": "Standard",
+      "detailed": "Thorough",
+      "verbose": "Very detailed"
+    },
+    "riskTolerance": {
+      "label": "Risk Tolerance",
+      "description": "How cautious agents should be when making changes",
+      "cautious": "Safe first",
+      "balanced": "Moderate",
+      "aggressive": "Move fast"
+    },
+    "projectType": {
+      "label": "Project Type",
+      "description": "Project maturity level affecting risk decisions",
+      "greenfield": "New project",
+      "established": "Stable",
+      "legacy": "Old codebase"
+    },
+    "codingStyle": {
+      "label": "Coding Style Preferences",
+      "description": "Learn and match project conventions automatically",
+      "indentation": "Indentation",
+      "quoteStyle": "Quote Style",
+      "namingConvention": "Naming Convention",
+      "commentDensity": "Comment Density",
+      "typeHints": "Use Type Hints",
+      "typeHintsDescription": "Add type annotations to code",
+      "auto": "Auto-detect",
+      "spaces": "Spaces",
+      "tabs": "Tabs",
+      "single": "Single quotes",
+      "double": "Double quotes",
+      "minimal": "Minimal",
+      "normalComments": "Normal",
+      "verbose": "Verbose"
+    },
+    "userInstructions": {
+      "label": "Custom Instructions",
+      "description": "Add explicit preferences like 'be more cautious' or 'use TypeScript'",
+      "placeholder": "e.g., 'be more cautious' or 'prefer functional style'"
     }
   }
 }

@@ -22,21 +22,21 @@ if str(_github_dir) not in sys.path:
 if str(_backend_dir) not in sys.path:
     sys.path.insert(0, str(_backend_dir))
 
-from models import (
-    PRReviewResult,
-    PRReviewFinding,
-    ReviewSeverity,
-    ReviewCategory,
-    MergeVerdict,
-    GitHubRunnerConfig,
-    FollowupReviewContext,
-)
 from bot_detection import BotDetector
-
+from models import (
+    FollowupReviewContext,
+    GitHubRunnerConfig,
+    MergeVerdict,
+    PRReviewFinding,
+    PRReviewResult,
+    ReviewCategory,
+    ReviewSeverity,
+)
 
 # ============================================================================
 # Fixtures
 # ============================================================================
+
 
 @pytest.fixture
 def temp_github_dir(tmp_path):
@@ -104,11 +104,14 @@ def sample_review_with_findings():
 # E2E Test: Review Result Persistence
 # ============================================================================
 
+
 class TestReviewResultE2E:
     """Test review result save/load flow end-to-end."""
 
     @pytest.mark.asyncio
-    async def test_save_load_review_with_findings(self, temp_github_dir, sample_review_with_findings):
+    async def test_save_load_review_with_findings(
+        self, temp_github_dir, sample_review_with_findings
+    ):
         """Test saving and loading a complete review result."""
         # Save the review
         await sample_review_with_findings.save(temp_github_dir)
@@ -132,7 +135,9 @@ class TestReviewResultE2E:
         assert len(loaded.posted_finding_ids) == 2
 
     @pytest.mark.asyncio
-    async def test_review_result_json_format(self, temp_github_dir, sample_review_with_findings):
+    async def test_review_result_json_format(
+        self, temp_github_dir, sample_review_with_findings
+    ):
         """Test that saved JSON has correct format."""
         await sample_review_with_findings.save(temp_github_dir)
 
@@ -152,6 +157,7 @@ class TestReviewResultE2E:
 # ============================================================================
 # E2E Test: Follow-up Review Flow
 # ============================================================================
+
 
 class TestFollowupReviewE2E:
     """Test follow-up review context and result flow."""
@@ -204,7 +210,9 @@ class TestFollowupReviewE2E:
         assert "finding-002" in loaded.unresolved_findings
 
     @pytest.mark.asyncio
-    async def test_followup_context_with_error(self, temp_github_dir, sample_review_with_findings):
+    async def test_followup_context_with_error(
+        self, temp_github_dir, sample_review_with_findings
+    ):
         """Test follow-up context when there's an error."""
         await sample_review_with_findings.save(temp_github_dir)
 
@@ -241,6 +249,7 @@ class TestFollowupReviewE2E:
 # E2E Test: Bot Detection Flow
 # ============================================================================
 
+
 class TestBotDetectionE2E:
     """Test bot detection end-to-end."""
 
@@ -249,7 +258,9 @@ class TestBotDetectionE2E:
         state_dir = tmp_path / "github"
         state_dir.mkdir(parents=True)
 
-        with patch.object(BotDetector, "_get_bot_username", return_value="auto-claude[bot]"):
+        with patch.object(
+            BotDetector, "_get_bot_username", return_value="auto-claude[bot]"
+        ):
             detector = BotDetector(
                 state_dir=state_dir,
                 bot_token="ghp_bot_token",
@@ -326,6 +337,7 @@ class TestBotDetectionE2E:
 # E2E Test: Blocker Generation Flow
 # ============================================================================
 
+
 class TestBlockerGenerationE2E:
     """Test blocker generation from findings."""
 
@@ -397,6 +409,7 @@ class TestBlockerGenerationE2E:
 # E2E Test: Complete Review Lifecycle
 # ============================================================================
 
+
 class TestReviewLifecycleE2E:
     """Test the complete review lifecycle."""
 
@@ -439,15 +452,8 @@ class TestReviewLifecycleE2E:
         assert loaded.has_posted_findings is True
 
         # Step 3: Contributor fixes the issue, new commit
-        # Note: Context shown for documentation; test validates result persistence
-        _followup_context = FollowupReviewContext(
-            pr_number=42,
-            previous_review=loaded,
-            previous_commit_sha="commit_1",
-            current_commit_sha="commit_2",
-            files_changed_since_review=["src/auth.py"],
-            diff_since_review="- vulnerable_code()\n+ secure_code()",
-        )
+        # FollowupReviewContext would be created here with pr_number=42,
+        # previous_review=loaded, commit_1->commit_2, files=["src/auth.py"]
 
         # Step 4: Follow-up review finds issue resolved
         followup_result = PRReviewResult(

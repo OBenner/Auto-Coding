@@ -1,50 +1,43 @@
 {
-  "files_to_modify": {},
+  "files_to_modify": {
+    "backend": [
+      "apps/backend/cli/main.py",
+      "apps/backend/cli/build_commands.py",
+      "apps/backend/cli/utils.py"
+    ]
+  },
   "files_to_create": {
-    "frontend": [
-      "apps/frontend/src/renderer/components/ui/__tests__/button.test.tsx",
-      "apps/frontend/src/renderer/components/ui/__tests__/input.test.tsx",
-      "apps/frontend/src/renderer/components/ui/__tests__/dialog.test.tsx",
-      "apps/frontend/src/renderer/components/ui/__tests__/badge.test.tsx",
-      "apps/frontend/src/renderer/components/__tests__/TaskCard.test.tsx",
-      "apps/frontend/src/renderer/components/__tests__/AddProjectModal.test.tsx",
-      "apps/frontend/src/renderer/components/__tests__/AgentProfileSelector.test.tsx",
-      "apps/frontend/src/renderer/stores/__tests__/settings-store.test.ts",
-      "apps/frontend/src/renderer/stores/__tests__/auth-failure-store.test.ts",
-      "apps/frontend/src/renderer/hooks/__tests__/useIpc.test.ts",
-      "apps/frontend/src/renderer/hooks/__tests__/useResolvedAgentSettings.test.ts"
+    "backend": [
+      "apps/backend/cli/exit_codes.py",
+      "apps/backend/cli/json_output.py",
+      "apps/backend/cli/artifacts.py",
+      "tests/test_cli_exit_codes.py",
+      "tests/test_json_output.py",
+      "tests/test_artifacts.py"
+    ],
+    "root": [
+      ".github/workflows/auto-claude-build.yml",
+      "guides/ci-cd-integration.md"
     ]
   },
   "files_to_reference": [
-    "apps/frontend/src/renderer/components/AuthStatusIndicator.test.tsx",
-    "apps/frontend/src/renderer/components/github-prs/components/__tests__/PRDetail.test.tsx",
-    "apps/frontend/src/__tests__/setup.ts"
+    "apps/backend/cli/workspace_commands.py",
+    "apps/backend/ui/status.py",
+    "apps/backend/agents/utils.py",
+    ".github/workflows/ci.yml"
   ],
   "patterns": {
-    "test_file_pattern": "Use @vitest-environment jsdom directive, Testing Library render/screen, factory functions for test data",
-    "mock_pattern": "Mock Zustand stores with vi.mock(), mock i18n with react-i18next, mock window.electronAPI",
-    "assertion_pattern": "Use @testing-library/jest-dom matchers (toBeInTheDocument, toHaveAttribute, etc.)",
-    "naming_pattern": "Describe blocks for component name, nested describes for features, it() for specific behaviors"
+    "cli_argument_pattern": "All CLI flags are added to argparse.ArgumentParser in cli/main.py with proper help text and examples",
+    "exit_code_pattern": "Use sys.exit() with specific codes - currently using 0 (success), 1 (error), 130 (Ctrl+C)",
+    "json_output_pattern": "JSON output already used in workspace_commands.py: print(json.dumps(result))",
+    "env_var_pattern": "Environment variables read via os.getenv() in utils.py - e.g., DEFAULT_BRANCH, AUTO_BUILD_MODEL",
+    "artifact_pattern": "Status and build data tracked in ui/status.py with BuildState enum and StatusManager"
   },
   "existing_implementations": {
-    "description": "Found 18 existing React test files with established patterns",
-    "test_coverage": "6% (18 tests / 295 components)",
-    "relevant_files": [
-      "apps/frontend/src/renderer/components/AuthStatusIndicator.test.tsx",
-      "apps/frontend/src/renderer/components/ProfileBadge.test.tsx",
-      "apps/frontend/src/renderer/components/github-prs/components/__tests__/PRDetail.test.tsx"
-    ],
-    "test_infrastructure": {
-      "framework": "Vitest",
-      "library": "Testing Library (React)",
-      "setup_file": "apps/frontend/src/__tests__/setup.ts",
-      "mocks": ["electron", "localStorage", "scrollIntoView", "requestAnimationFrame"]
-    }
-  },
-  "component_categories": {
-    "ui_components": "20+ reusable UI components (button, input, dialog, etc.)",
-    "feature_components": "100+ feature-specific components (TaskCard, ProfileBadge, etc.)",
-    "stores": "10+ Zustand stores for state management",
-    "hooks": "8+ custom React hooks"
+    "cli_structure": "CLI entry point is apps/backend/run.py which imports cli.main. argparse used for argument parsing in cli/main.py",
+    "exit_codes": "Current exit codes: 0 (success), 1 (various errors), 130 (KeyboardInterrupt). No specific codes for build/QA failure",
+    "json_output": "JSON output pattern exists in workspace_commands.py for --merge-preview and --create-pr commands",
+    "build_states": "BuildState enum in ui/status.py: IDLE, PLANNING, BUILDING, QA, COMPLETE, PAUSED, ERROR",
+    "github_actions": "Existing CI workflow: .github/workflows/ci.yml with cross-platform testing (Linux, Windows, macOS)"
   }
 }

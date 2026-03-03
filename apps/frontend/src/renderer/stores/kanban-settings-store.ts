@@ -24,11 +24,35 @@ export interface ColumnPreferences {
 export type KanbanColumnPreferences = Record<TaskStatusColumn, ColumnPreferences>;
 
 /**
+ * Sort mode for task ordering
+ */
+export type SortMode = 'manual' | 'priority' | 'created' | 'updated';
+
+/**
+ * Sort order direction
+ */
+export type SortOrder = 'asc' | 'desc';
+
+/**
+ * Filter state for kanban board
+ */
+export interface KanbanFilters {
+  /** Search query to filter tasks by title/description */
+  searchQuery: string;
+  /** Sort mode for task ordering */
+  sortBy: SortMode;
+  /** Sort order direction */
+  sortOrder: SortOrder;
+}
+
+/**
  * Kanban settings store state
  */
 interface KanbanSettingsState {
   /** Column preferences for each status column */
   columnPreferences: KanbanColumnPreferences | null;
+  /** Filter state for kanban board */
+  filters: KanbanFilters | null;
 
   // Actions
   /** Initialize column preferences (call on mount) */
@@ -51,14 +75,29 @@ interface KanbanSettingsState {
   resetPreferences: (projectId: string) => void;
   /** Get preferences for a single column */
   getColumnPreferences: (column: TaskStatusColumn) => ColumnPreferences;
+  /** Set search query filter */
+  setSearchQuery: (searchQuery: string) => void;
+  /** Set sort mode */
+  setSortBy: (sortBy: SortMode) => void;
+  /** Set sort order */
+  setSortOrder: (sortOrder: SortOrder) => void;
+  /** Load filters from localStorage */
+  loadFilters: (projectId: string) => void;
+  /** Save filters to localStorage */
+  saveFilters: (projectId: string) => boolean;
+  /** Reset filters to defaults */
+  resetFilters: (projectId: string) => void;
 }
 
 // ============================================
 // Constants
 // ============================================
 
-/** localStorage key prefix for kanban settings persistence */
+/** localStorage key prefix for kanban column preferences persistence */
 const KANBAN_SETTINGS_KEY_PREFIX = 'kanban-column-prefs';
+
+/** localStorage key prefix for kanban filters persistence */
+const KANBAN_FILTERS_KEY_PREFIX = 'kanban-filters';
 
 /** Default column width in pixels */
 export const DEFAULT_COLUMN_WIDTH = 320;
@@ -84,6 +123,13 @@ function getKanbanSettingsKey(projectId: string): string {
 }
 
 /**
+ * Get the localStorage key for a project's kanban filters
+ */
+function getKanbanFiltersKey(projectId: string): string {
+  return `${KANBAN_FILTERS_KEY_PREFIX}-${projectId}`;
+}
+
+/**
  * Create default column preferences for all columns
  */
 function createDefaultPreferences(): KanbanColumnPreferences {
@@ -98,6 +144,17 @@ function createDefaultPreferences(): KanbanColumnPreferences {
   }
 
   return preferences as KanbanColumnPreferences;
+}
+
+/**
+ * Create default filter state
+ */
+function createDefaultFilters(): KanbanFilters {
+  return {
+    searchQuery: '',
+    sortBy: 'manual',
+    sortOrder: 'asc'
+  };
 }
 
 /**
@@ -136,6 +193,37 @@ function validatePreferences(data: unknown): data is KanbanColumnPreferences {
 }
 
 /**
+ * Validate filter state structure
+ * Returns true if valid, false if invalid/incomplete
+ */
+function validateFilters(data: unknown): data is KanbanFilters {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    return false;
+  }
+
+  const filters = data as Record<string, unknown>;
+
+  // Validate searchQuery is a string
+  if (typeof filters.searchQuery !== 'string') {
+    return false;
+  }
+
+  // Validate sortBy is a valid sort mode
+  const validSortModes: SortMode[] = ['manual', 'priority', 'created', 'updated'];
+  if (typeof filters.sortBy !== 'string' || !validSortModes.includes(filters.sortBy as SortMode)) {
+    return false;
+  }
+
+  // Validate sortOrder is a valid sort order
+  const validSortOrders: SortOrder[] = ['asc', 'desc'];
+  if (typeof filters.sortOrder !== 'string' || !validSortOrders.includes(filters.sortOrder as SortOrder)) {
+    return false;
+  }
+
+  return true;
+}
+
+/**
  * Clamp a width value to valid bounds
  */
 function clampWidth(width: number): number {
@@ -148,11 +236,22 @@ function clampWidth(width: number): number {
 
 export const useKanbanSettingsStore = create<KanbanSettingsState>((set, get) => ({
   columnPreferences: null,
+  filters: null,
 
   initializePreferences: () => {
     const state = get();
+    const updates: Partial<KanbanSettingsState> = {};
+
     if (!state.columnPreferences) {
-      set({ columnPreferences: createDefaultPreferences() });
+      updates.columnPreferences = createDefaultPreferences();
+    }
+
+    if (!state.filters) {
+      updates.filters = createDefaultFilters();
+    }
+
+    if (Object.keys(updates).length > 0) {
+      set(updates);
     }
   },
 
@@ -307,6 +406,97 @@ export const useKanbanSettingsStore = create<KanbanSettingsState>((set, get) => 
     }
 
     return state.columnPreferences[column];
+  },
+
+  setSearchQuery: (searchQuery) => {
+    set((state) => {
+      if (!state.filters) return state;
+
+      return {
+        filters: {
+          ...state.filters,
+          searchQuery
+        }
+      };
+    });
+  },
+
+  setSortBy: (sortBy) => {
+    set((state) => {
+      if (!state.filters) return state;
+
+      return {
+        filters: {
+          ...state.filters,
+          sortBy
+        }
+      };
+    });
+  },
+
+  setSortOrder: (sortOrder) => {
+    set((state) => {
+      if (!state.filters) return state;
+
+      return {
+        filters: {
+          ...state.filters,
+          sortOrder
+        }
+      };
+    });
+  },
+
+  loadFilters: (projectId) => {
+    try {
+      const key = getKanbanFiltersKey(projectId);
+      const stored = localStorage.getItem(key);
+
+      if (stored) {
+        const parsed = JSON.parse(stored);
+
+        // Validate structure before using
+        if (validateFilters(parsed)) {
+          set({ filters: parsed });
+          return;
+        }
+
+        // Invalid data structure, use defaults
+        console.warn('[KanbanSettingsStore] Invalid filters in localStorage, using defaults');
+      }
+
+      // No stored filters or invalid, use defaults
+      set({ filters: createDefaultFilters() });
+    } catch (error) {
+      console.error('[KanbanSettingsStore] Failed to load filters:', error);
+      set({ filters: createDefaultFilters() });
+    }
+  },
+
+  saveFilters: (projectId) => {
+    try {
+      const state = get();
+      if (!state.filters) {
+        return false;
+      }
+
+      const key = getKanbanFiltersKey(projectId);
+      localStorage.setItem(key, JSON.stringify(state.filters));
+      return true;
+    } catch (error) {
+      console.error('[KanbanSettingsStore] Failed to save filters:', error);
+      return false;
+    }
+  },
+
+  resetFilters: (projectId) => {
+    try {
+      const key = getKanbanFiltersKey(projectId);
+      localStorage.removeItem(key);
+      set({ filters: createDefaultFilters() });
+    } catch (error) {
+      console.error('[KanbanSettingsStore] Failed to reset filters:', error);
+    }
   }
 }));
 

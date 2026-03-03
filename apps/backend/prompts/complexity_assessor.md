@@ -187,10 +187,9 @@ discovery → requirements → research → context → spec_writing → self_cr
 
 ## PHASE 3: OUTPUT ASSESSMENT
 
-Create `complexity_assessment.json`:
+Write `complexity_assessment.json` using the **Write** tool (NOT bash cat/heredoc which hangs on Windows):
 
-```bash
-cat > complexity_assessment.json << 'EOF'
+```json
 {
   "complexity": "[simple|standard|complex]",
   "workflow_type": "[feature|refactor|investigation|migration|simple]",
@@ -253,8 +252,9 @@ cat > complexity_assessment.json << 'EOF'
 
   "created_at": "[ISO timestamp]"
 }
-EOF
 ```
+
+**IMPORTANT**: Use the Write tool to create this file. Do NOT use `cat >`, heredoc (`<< EOF`), or bash redirection to write files — these commands hang on Windows.
 
 ---
 

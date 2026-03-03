@@ -55,7 +55,7 @@ export async function loadGraphitiStateFromSpecs(
     }
   }
 
-  specDirs.sort().reverse();
+  specDirs.sort((a, b) => b.localeCompare(a));
 
   for (const specDir of specDirs) {
     const statePath = path.join(specsDir, specDir, AUTO_BUILD_PATHS.GRAPHITI_STATE);

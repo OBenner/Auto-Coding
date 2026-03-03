@@ -1,0 +1,36 @@
+{
+  "title": "Revue de Code",
+  "runReview": "Lancer la Revue",
+  "reviewInProgress": "Revue en Cours",
+  "reviewComplete": "Revue Terminée",
+  "noFindings": "Aucun problème trouvé",
+  "findingsCount_zero": "Aucun résultat",
+  "findingsCount_one": "{{count}} résultat",
+  "findingsCount_other": "{{count}} résultats",
+  "status": {
+    "idle": "Prêt",
+    "analyzing": "Analyse...",
+    "complete": "Terminé",
+    "failed": "Échec"
+  },
+  "categories": {
+    "security": "Sécurité",
+    "performance": "Performance",
+    "style": "Style",
+    "bestPractices": "Bonnes Pratiques"
+  },
+  "severity": {
+    "critical": "Critique",
+    "high": "Élevé",
+    "medium": "Moyen",
+    "low": "Faible"
+  },
+  "actions": {
+    "viewFindings": "Voir les Résultats",
+    "dismiss": "Ignorer"
+  },
+  "empty": {
+    "title": "Aucune revue active",
+    "description": "Lancez une revue de code pour analyser les changements"
+  }
+}

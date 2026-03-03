@@ -4,6 +4,9 @@ import type { Task, TaskStatus, SubtaskStatus, ImplementationPlan, Subtask, Task
 import { debugLog } from '../../shared/utils/debug-logger';
 import { isTerminalPhase } from '../../shared/constants/phase-protocol';
 
+/** Maximum log entries stored per task to prevent renderer OOM */
+export const MAX_LOG_ENTRIES = 5000;
+
 interface TaskState {
   tasks: Task[];
   selectedTaskId: string | null;
@@ -589,7 +592,7 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       return {
         tasks: updateTaskAtIndex(state.tasks, index, (t) => ({
           ...t,
-          logs: [...(t.logs || []), log]
+          logs: [...(t.logs || []).slice(-(MAX_LOG_ENTRIES - 1)), log]
         }))
       };
     }),
@@ -604,7 +607,7 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       return {
         tasks: updateTaskAtIndex(state.tasks, index, (t) => ({
           ...t,
-          logs: [...(t.logs || []), ...logs]
+          logs: [...(t.logs || []).slice(-(MAX_LOG_ENTRIES - logs.length)), ...logs].slice(-MAX_LOG_ENTRIES)
         }))
       };
     }),
@@ -866,7 +869,7 @@ export interface PersistStatusResult {
 export async function persistTaskStatus(
   taskId: string,
   status: TaskStatus,
-  options?: { forceCleanup?: boolean }
+  options?: { forceCleanup?: boolean; keepWorktree?: boolean }
 ): Promise<PersistStatusResult> {
   const store = useTaskStore.getState();
 

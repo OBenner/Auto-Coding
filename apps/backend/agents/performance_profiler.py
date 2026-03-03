@@ -120,20 +120,33 @@ async def run_performance_profiler(
         # Save token statistics for performance profiling phase
         if usage_metadata:
             try:
+                input_tokens = usage_metadata.get("input_tokens", 0)
+                output_tokens = usage_metadata.get("output_tokens", 0)
+
+                if (
+                    "input_tokens" not in usage_metadata
+                    or "output_tokens" not in usage_metadata
+                ):
+                    logger.debug(
+                        "Usage metadata missing expected token keys; defaulting to 0s: %s",
+                        usage_metadata,
+                    )
+
                 saved = save_token_stats(
                     spec_dir,
                     "performance_profiling",
-                    usage_metadata["input_tokens"],
-                    usage_metadata["output_tokens"],
+                    input_tokens,
+                    output_tokens,
                 )
                 if saved:
                     logger.debug(
-                        f"Performance profiling token stats saved: {usage_metadata['input_tokens']} in, "
-                        f"{usage_metadata['output_tokens']} out"
+                        "Performance profiling token stats saved: %d in, %d out",
+                        input_tokens,
+                        output_tokens,
                     )
             except Exception as e:
                 logger.warning(
-                    f"Failed to save performance profiling token stats: {e}"
+                    "Failed to save performance profiling token stats: %s", e
                 )
 
         # End profiling phase in task logger

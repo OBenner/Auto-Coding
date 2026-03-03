@@ -9,7 +9,6 @@ Tests the iteration tracking functionality of qa/report.py including:
 - Iteration statistics tracking
 """
 
-import json
 import sys
 from pathlib import Path
 
@@ -19,22 +18,20 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent))
 
 # Setup mocks before importing auto-claude modules
-from qa_report_helpers import setup_qa_report_mocks, cleanup_qa_report_mocks
+from qa_report_helpers import cleanup_qa_report_mocks, setup_qa_report_mocks
 
 # Setup mocks
 setup_qa_report_mocks()
 
 # Import report functions after mocking
-from qa.report import (
-    get_iteration_history,
-    record_iteration,
-)
-
 from qa.criteria import (
     load_implementation_plan,
     save_implementation_plan,
 )
-
+from qa.report import (
+    get_iteration_history,
+    record_iteration,
+)
 
 # =============================================================================
 # FIXTURES
@@ -81,7 +78,7 @@ class TestGetIterationHistory:
             "qa_iteration_history": [
                 {"iteration": 1, "status": "rejected", "issues": []},
                 {"iteration": 2, "status": "approved", "issues": []},
-            ]
+            ],
         }
         save_implementation_plan(spec_dir, plan)
 
@@ -122,8 +119,12 @@ class TestRecordIteration:
 
     def test_updates_qa_stats(self, spec_with_plan: Path) -> None:
         """Test that recording updates qa_stats."""
-        record_iteration(spec_with_plan, 1, "rejected", [{"title": "Error", "type": "error"}])
-        record_iteration(spec_with_plan, 2, "rejected", [{"title": "Warning", "type": "warning"}])
+        record_iteration(
+            spec_with_plan, 1, "rejected", [{"title": "Error", "type": "error"}]
+        )
+        record_iteration(
+            spec_with_plan, 2, "rejected", [{"title": "Warning", "type": "warning"}]
+        )
 
         plan = load_implementation_plan(spec_with_plan)
         stats = plan.get("qa_stats", {})
@@ -168,11 +169,16 @@ class TestRecordIteration:
 
     def test_counts_issues_by_type(self, spec_with_plan: Path) -> None:
         """Test that issues are counted by type."""
-        record_iteration(spec_with_plan, 1, "rejected", [
-            {"title": "Error 1", "type": "error"},
-            {"title": "Error 2", "type": "error"},
-            {"title": "Warning 1", "type": "warning"},
-        ])
+        record_iteration(
+            spec_with_plan,
+            1,
+            "rejected",
+            [
+                {"title": "Error 1", "type": "error"},
+                {"title": "Error 2", "type": "error"},
+                {"title": "Warning 1", "type": "warning"},
+            ],
+        )
 
         plan = load_implementation_plan(spec_with_plan)
         assert plan["qa_stats"]["issues_by_type"]["error"] == 2
@@ -180,9 +186,14 @@ class TestRecordIteration:
 
     def test_unknown_issue_type(self, spec_with_plan: Path) -> None:
         """Test issues without type are counted as unknown."""
-        record_iteration(spec_with_plan, 1, "rejected", [
-            {"title": "Issue without type"},
-        ])
+        record_iteration(
+            spec_with_plan,
+            1,
+            "rejected",
+            [
+                {"title": "Issue without type"},
+            ],
+        )
 
         plan = load_implementation_plan(spec_with_plan)
         assert plan["qa_stats"]["issues_by_type"]["unknown"] == 1
