@@ -15,14 +15,11 @@ Detects external service integrations based on dependencies:
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 from typing import Any
 
 from ..base import BaseAnalyzer
-
-# Compiled regex pattern for performance
-_DEPENDENCY_PATTERN = re.compile(r"^([a-zA-Z0-9_-]+)", re.MULTILINE)
+from .patterns import DEPENDENCY_NAME_PATTERN
 
 
 class ServicesDetector(BaseAnalyzer):
@@ -147,7 +144,7 @@ class ServicesDetector(BaseAnalyzer):
         # Python dependencies
         if self._exists("requirements.txt"):
             content = self._read_file("requirements.txt")
-            all_deps.update(_DEPENDENCY_PATTERN.findall(content))
+            all_deps.update(DEPENDENCY_NAME_PATTERN.findall(content))
 
         # Node.js dependencies
         pkg = self._read_json("package.json")

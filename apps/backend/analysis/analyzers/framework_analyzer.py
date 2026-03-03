@@ -14,7 +14,6 @@ from typing import Any
 
 from .base import BaseAnalyzer
 
-
 # Compiled regex patterns for framework detection
 # Swift Package Manager patterns
 PATTERN_SPM_PACKAGE_URL = re.compile(r'\.package\s*\([^)]*url:\s*"([^"]+)"')

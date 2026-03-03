@@ -24,8 +24,12 @@ _DOCKER_COMPOSE_PATTERN = re.compile(r"^\s*-\s*([A-Z_][A-Z0-9_]*)")
 
 # Python environment variable patterns
 _PYTHON_GETENV_PATTERN = re.compile(r'os\.getenv\(["\']([A-Z_][A-Z0-9_]*)["\']')
-_PYTHON_ENVIRON_GET_PATTERN = re.compile(r'os\.environ\.get\(["\']([A-Z_][A-Z0-9_]*)["\']')
-_PYTHON_ENVIRON_BRACKET_PATTERN = re.compile(r'os\.environ\[["\']([A-Z_][A-Z0-9_]*)["\']')
+_PYTHON_ENVIRON_GET_PATTERN = re.compile(
+    r'os\.environ\.get\(["\']([A-Z_][A-Z0-9_]*)["\']'
+)
+_PYTHON_ENVIRON_BRACKET_PATTERN = re.compile(
+    r'os\.environ\[["\']([A-Z_][A-Z0-9_]*)["\']'
+)
 
 # JavaScript environment variable pattern
 _JS_PROCESS_ENV_PATTERN = re.compile(r"process\.env\.([A-Z_][A-Z0-9_]*)")

@@ -14,7 +14,6 @@ from typing import Any
 
 from .base import BaseAnalyzer
 
-
 # Compiled regex patterns for port detection
 # Entry point patterns
 PATTERN_UVICORN_RUN = re.compile(r"uvicorn\.run\([^)]*port\s*=\s*(\d+)")
@@ -23,9 +22,13 @@ PATTERN_PORT_ASSIGNMENT = re.compile(r"^\s*[Pp][Oo][Rr][Tt]\s*=\s*(\d+)", re.MUL
 PATTERN_GETENV_PORT = re.compile(r'getenv\(\s*["\']PORT["\']\s*,\s*(\d+)')
 PATTERN_ENVIRON_GET_PORT = re.compile(r'environ\.get\(\s*["\']PORT["\']\s*,\s*(\d+)')
 PATTERN_APP_LISTEN = re.compile(r"\.listen\(\s*(\d+)")
-PATTERN_JS_PORT_ASSIGNMENT = re.compile(r"(?:const|let|var)\s+[Pp][Oo][Rr][Tt]\s*=\s*(\d+)")
+PATTERN_JS_PORT_ASSIGNMENT = re.compile(
+    r"(?:const|let|var)\s+[Pp][Oo][Rr][Tt]\s*=\s*(\d+)"
+)
 PATTERN_PROCESS_ENV_PORT = re.compile(r"process\.env\.PORT\s*\|\|\s*(\d+)")
-PATTERN_PROCESS_ENV_PORT_NUMBER = re.compile(r"Number\(process\.env\.PORT\)\s*\|\|\s*(\d+)")
+PATTERN_PROCESS_ENV_PORT_NUMBER = re.compile(
+    r"Number\(process\.env\.PORT\)\s*\|\|\s*(\d+)"
+)
 PATTERN_GO_PORT = re.compile(r':\s*(\d+)(?:["\s]|$)')
 PATTERN_RUST_BIND = re.compile(r'\.bind\(["\'][\d.]+:(\d+)')
 

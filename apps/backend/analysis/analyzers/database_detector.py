@@ -14,7 +14,6 @@ from pathlib import Path
 
 from .base import BaseAnalyzer
 
-
 # Compiled regex patterns for database model detection
 # SQLAlchemy patterns
 PATTERN_SQLALCHEMY_CLASS = re.compile(

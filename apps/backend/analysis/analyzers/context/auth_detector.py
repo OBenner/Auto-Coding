@@ -13,15 +13,11 @@ Detects authentication and authorization patterns:
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 from typing import Any
 
 from ..base import BaseAnalyzer
-
-# Compiled regex patterns for performance
-_DEPENDENCY_PATTERN = re.compile(r"^([a-zA-Z0-9_-]+)", re.MULTILINE)
-_AUTH_DECORATOR_PATTERN = re.compile(r"@(\w*(?:require|auth|login)\w*)")
+from .patterns import AUTH_DECORATOR_PATTERN, DEPENDENCY_NAME_PATTERN
 
 
 class AuthDetector(BaseAnalyzer):
@@ -83,7 +79,7 @@ class AuthDetector(BaseAnalyzer):
 
         if self._exists("requirements.txt"):
             content = self._read_file("requirements.txt")
-            all_deps.update(_DEPENDENCY_PATTERN.findall(content))
+            all_deps.update(DEPENDENCY_NAME_PATTERN.findall(content))
 
         pkg = self._read_json("package.json")
         if pkg:
@@ -137,7 +133,7 @@ class AuthDetector(BaseAnalyzer):
                     or "@login_required" in content
                     or "@authenticate" in content
                 ):
-                    decorators = _AUTH_DECORATOR_PATTERN.findall(content)
+                    decorators = AUTH_DECORATOR_PATTERN.findall(content)
                     auth_decorators.update(decorators)
             except (OSError, UnicodeDecodeError):
                 continue
