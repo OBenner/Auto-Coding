@@ -8,10 +8,16 @@ Supports Python, Node.js/TypeScript, Go, Rust, Ruby, and PHP frameworks.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
 from .base import BaseAnalyzer
+
+# Compiled regex patterns for framework detection
+# Swift Package Manager patterns
+PATTERN_SPM_PACKAGE_URL = re.compile(r'\.package\s*\([^)]*url:\s*"([^"]+)"')
+PATTERN_SPM_REPOSITORY_URL = re.compile(r'repositoryURL\s*=\s*"([^"]+)"')
 
 
 class FrameworkAnalyzer(BaseAnalyzer):
@@ -418,9 +424,7 @@ class FrameworkAnalyzer(BaseAnalyzer):
         if self._exists("Package.swift"):
             content = self._read_file("Package.swift")
             # Look for .package(url: "...", patterns
-            import re
-
-            urls = re.findall(r'\.package\s*\([^)]*url:\s*"([^"]+)"', content)
+            urls = PATTERN_SPM_PACKAGE_URL.findall(content)
             for url in urls:
                 # Extract package name from URL
                 name = url.rstrip("/").split("/")[-1].replace(".git", "")
@@ -433,10 +437,8 @@ class FrameworkAnalyzer(BaseAnalyzer):
             if pbxproj.exists():
                 try:
                     content = pbxproj.read_text(encoding="utf-8", errors="ignore")
-                    import re
-
                     # Match repositoryURL patterns
-                    urls = re.findall(r'repositoryURL\s*=\s*"([^"]+)"', content)
+                    urls = PATTERN_SPM_REPOSITORY_URL.findall(content)
                     for url in urls:
                         name = url.rstrip("/").split("/")[-1].replace(".git", "")
                         if name and name not in dependencies:

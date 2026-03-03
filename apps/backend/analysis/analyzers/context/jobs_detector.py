@@ -11,11 +11,11 @@ Detects background job and task queue systems:
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 from typing import Any
 
 from ..base import BaseAnalyzer
+from .patterns import CELERY_TASK_PATTERN
 
 
 class JobsDetector(BaseAnalyzer):
@@ -54,8 +54,7 @@ class JobsDetector(BaseAnalyzer):
             try:
                 content = task_file.read_text(encoding="utf-8")
                 # Find @celery.task or @shared_task decorators
-                task_pattern = r"@(?:celery\.task|shared_task|app\.task)\s*(?:\([^)]*\))?\s*def\s+(\w+)"
-                task_matches = re.findall(task_pattern, content)
+                task_matches = CELERY_TASK_PATTERN.findall(content)
 
                 for task_name in task_matches:
                     tasks.append(
