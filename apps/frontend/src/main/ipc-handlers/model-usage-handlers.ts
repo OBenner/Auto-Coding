@@ -42,7 +42,8 @@ async function executePythonScript(
   projectPath: string,
   scriptRelPath: string,
   args: string[] = [],
-  parseJson = true
+  parseJson = true,
+  timeoutMs = 60_000
 ): Promise<any> {
   return new Promise((resolve, reject) => {
     const pythonCmd = getConfiguredPythonPath();
@@ -53,6 +54,11 @@ async function executePythonScript(
       cwd: projectPath,
       env: getAugmentedEnv(),
     });
+
+    const timer = setTimeout(() => {
+      proc.kill();
+      reject(new Error(`Python script timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
 
     let stdout = '';
     let stderr = '';
@@ -66,6 +72,7 @@ async function executePythonScript(
     });
 
     proc.on('close', (code) => {
+      clearTimeout(timer);
       if (code !== 0) {
         reject(new Error(`Python script failed (code ${code}): ${stderr || stdout}`));
         return;
@@ -118,9 +125,11 @@ export function registerModelUsageHandlers(): void {
         const analyticsDir = path.join(project.path, '.auto-claude', 'analytics');
 
         // Include date filters in cache key to avoid returning stale results
+        // Sanitize inputs to prevent path traversal attacks
+        const sanitize = (v: string): string => v.replace(/[^a-zA-Z0-9._:-]/g, '_');
         const cacheKeyParts = ['model_usage_summary'];
-        if (startDate) cacheKeyParts.push(`from_${startDate}`);
-        if (endDate) cacheKeyParts.push(`to_${endDate}`);
+        if (startDate) cacheKeyParts.push(`from_${sanitize(startDate)}`);
+        if (endDate) cacheKeyParts.push(`to_${sanitize(endDate)}`);
         const summaryFile = path.join(analyticsDir, `${cacheKeyParts.join('__')}.json`);
 
         // Check if cached file exists and is recent (< 5 minutes old)

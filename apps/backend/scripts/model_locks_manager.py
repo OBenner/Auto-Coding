@@ -46,6 +46,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from phase_config import (
+    AGENT_DEFAULT_MODELS,
     ModelLockConfig,
     is_agent_model_locked,
     is_phase_model_locked,
@@ -60,40 +61,13 @@ from phase_config import (
 # Valid phases for locking
 VALID_PHASES = ["spec", "planning", "coding", "qa", "test_generation"]
 
-# Valid agent types for locking (from AGENT_DEFAULT_MODELS in phase_config.py)
-VALID_AGENTS = [
-    # Spec creation agents
-    "spec_gatherer",
-    "spec_researcher",
-    "spec_writer",
-    "spec_critic",
-    "spec_discovery",
-    "spec_context",
-    "spec_validation",
-    "spec_compaction",
-    # Build agents
-    "planner",
-    "coder",
-    # QA agents
-    "qa_reviewer",
-    "qa_fixer",
-    # Utility agents
-    "insights",
-    "merge_resolver",
-    "commit_message",
-    # PR agents
-    "pr_reviewer",
-    "pr_orchestrator_parallel",
-    "pr_followup_parallel",
-    # Analysis agents
-    "analysis",
-    "batch_analysis",
-    "batch_validation",
-    # Roadmap & Ideation agents
-    "roadmap_discovery",
-    "competitor_analysis",
-    "ideation",
-]
+# Derive valid agent types from phase_config (single source of truth)
+VALID_AGENTS = (
+    sorted(AGENT_DEFAULT_MODELS.keys())
+    + [
+        # Additional agent types not in AGENT_DEFAULT_MODELS
+    ]
+)
 
 
 def print_locks(locks: ModelLockConfig) -> None:
@@ -162,6 +136,10 @@ def cmd_lock_phase(spec_dir: str, phase: str, model_id: str) -> int:
     Returns:
         Exit code (0 for success, 1 for error)
     """
+    if not model_id or not model_id.strip():
+        print("❌ Error: model_id must not be empty", file=sys.stderr)
+        return 1
+
     if phase not in VALID_PHASES:
         print(
             f"❌ Error: Invalid phase '{phase}'. Valid phases: {', '.join(VALID_PHASES)}",
@@ -206,6 +184,10 @@ def cmd_lock_agent(spec_dir: str, agent_type: str, model_id: str) -> int:
     Returns:
         Exit code (0 for success, 1 for error)
     """
+    if not model_id or not model_id.strip():
+        print("❌ Error: model_id must not be empty", file=sys.stderr)
+        return 1
+
     if agent_type not in VALID_AGENTS:
         print(
             f"❌ Error: Invalid agent type '{agent_type}'. "

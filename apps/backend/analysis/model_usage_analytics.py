@@ -471,6 +471,19 @@ def aggregate_model_usage(
     )
 
 
+def _round_to_period_start(timestamp: datetime, granularity: str) -> datetime:
+    """Round a timestamp to the start of the containing period."""
+    if granularity == "weekly":
+        days_since_monday = timestamp.weekday()
+        return timestamp.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(
+            days=days_since_monday
+        )
+    if granularity == "monthly":
+        return timestamp.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    # daily (default)
+    return timestamp.replace(hour=0, minute=0, second=0, microsecond=0)
+
+
 def get_model_usage_trends(
     project_dir: Path, window_days: int = 30, granularity: str = "daily"
 ) -> list[dict[str, Any]]:
@@ -524,20 +537,7 @@ def get_model_usage_trends(
                 continue
 
             # Round timestamp to period start
-            if granularity == "daily":
-                period_key = timestamp.replace(
-                    hour=0, minute=0, second=0, microsecond=0
-                )
-            elif granularity == "weekly":
-                # Round to Monday
-                days_since_monday = timestamp.weekday()
-                period_key = timestamp.replace(
-                    hour=0, minute=0, second=0, microsecond=0
-                ) - timedelta(days=days_since_monday)
-            else:  # monthly
-                period_key = timestamp.replace(
-                    day=1, hour=0, minute=0, second=0, microsecond=0
-                )
+            period_key = _round_to_period_start(timestamp, granularity)
 
             if period_key not in time_records:
                 time_records[period_key] = []
@@ -549,17 +549,7 @@ def get_model_usage_trends(
         period_end = current_date + period_delta
 
         # Round to appropriate period boundary
-        if granularity == "daily":
-            period_key = current_date.replace(hour=0, minute=0, second=0, microsecond=0)
-        elif granularity == "weekly":
-            days_since_monday = current_date.weekday()
-            period_key = current_date.replace(
-                hour=0, minute=0, second=0, microsecond=0
-            ) - timedelta(days=days_since_monday)
-        else:
-            period_key = current_date.replace(
-                day=1, hour=0, minute=0, second=0, microsecond=0
-            )
+        period_key = _round_to_period_start(current_date, granularity)
 
         # Get records for this period
         period_records = time_records.get(period_key, [])

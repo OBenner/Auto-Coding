@@ -352,7 +352,10 @@ def load_model_locks(spec_dir: Path) -> ModelLockConfig:
 
     try:
         with open(locks_path, encoding="utf-8") as f:
-            return json.load(f)
+            data = json.load(f)
+        if not isinstance(data, dict):
+            return {}
+        return data
     except (json.JSONDecodeError, OSError):
         return {}
 
