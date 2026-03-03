@@ -447,11 +447,9 @@ export function ImprovementTracker({ projectId = '.' }: ImprovementTrackerProps)
       <ScrollArea className="flex-1">
         <div className="p-6 space-y-4">
           {hasData ? (
-            <>
-              {filteredImprovements.map((improvement) => (
+            filteredImprovements.map((improvement) => (
                 <ImprovementItem key={improvement.improvement_id} improvement={improvement} />
-              ))}
-            </>
+              ))
           ) : (
             <EmptyState
               icon={AlertCircle}

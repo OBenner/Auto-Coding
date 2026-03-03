@@ -95,7 +95,6 @@ export function TaskOverview({ task }: TaskOverviewProps) {
         return <Badge variant="info" className="text-xs status-running">{t('common:status.inProgress')}</Badge>;
       case 'failed':
         return <Badge variant="destructive" className="text-xs">{t('common:status.failed')}</Badge>;
-      case 'pending':
       default:
         return <Badge variant="muted" className="text-xs">{t('common:status.pending')}</Badge>;
     }
