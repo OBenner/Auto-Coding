@@ -50,11 +50,15 @@ import { Sidebar, type SidebarView } from '@/components/Sidebar';
 - `@/stores/settings-store` - Zustand store for sidebar state
 
 **Optional:**
+- `motion/react` (Framer Motion) - Animation support for nav indicator and transitions
 - `@/components/AddProjectModal` - Modal for adding new projects
 - `@/components/GitSetupModal` - Modal for Git repository setup
 - `@/components/RateLimitIndicator` - Shows Claude API rate limit status
 - `@/components/ClaudeCodeStatusBadge` - Shows connection status
 - `@/components/UpdateBanner` - Shows available app updates
+- `@/components/SessionContextIndicator` - Shows active session context
+- `@/components/NavIndicator` - Animated active view indicator
+- `@/stores/auth-failure-store` - Auth failure state for Settings badge
 
 ---
 
@@ -107,7 +111,11 @@ export type SidebarView =
   | 'worktrees'           // Git worktree management
   | 'agent-tools'         // MCP agent tools
   | 'plugins'             // Plugin management
-  | 'merge-analytics';    // Merge analytics dashboard
+  | 'analytics'           // Analytics dashboard
+  | 'merge-analytics'     // Merge analytics dashboard
+  | 'sessions'            // Session management
+  | 'scheduler'           // Task scheduler
+  | 'feedback';           // Feedback submission
 
 interface SidebarProps {
   onSettingsClick: () => void;
@@ -228,11 +236,15 @@ These navigation items are always visible:
 | `roadmap` | `navigation:items.roadmap` | Map | `D` | Project roadmap |
 | `ideation` | `navigation:items.ideation` | Lightbulb | `I` | Ideation workspace |
 | `changelog` | `navigation:items.changelog` | FileText | `L` | Project changelog |
+| `scheduler` | `navigation:items.scheduler` | Calendar | `S` | Task scheduler |
 | `context` | `navigation:items.context` | BookOpen | `C` | Context explorer |
 | `agent-tools` | `navigation:items.agentTools` | Wrench | `M` | MCP agent tools |
 | `plugins` | `navigation:items.plugins` | Puzzle | `U` | Plugin management |
 | `worktrees` | `navigation:items.worktrees` | GitBranch | `W` | Git worktree management |
+| `analytics` | `navigation:items.analytics` | Activity | `T` | Analytics dashboard |
 | `merge-analytics` | `navigation:items.mergeAnalytics` | BarChart3 | `Y` | Merge analytics dashboard |
+| `sessions` | `navigation:items.sessions` | Play | - | Session management |
+| `feedback` | `navigation:items.feedback` | MessageSquare | `F` | Feedback submission |
 
 ### GitHub Navigation Items
 
@@ -273,11 +285,14 @@ Shown when `GITLAB_ENABLED=true` in project `.env`:
 | `D` | Roadmap | Jump to project roadmap |
 | `I` | Ideation | Jump to ideation workspace |
 | `L` | Changelog | Jump to changelog |
+| `S` | Scheduler | Jump to task scheduler |
 | `C` | Context | Jump to context explorer |
 | `M` | Agent Tools | Jump to MCP tools |
 | `U` | Plugins | Jump to plugin management |
 | `W` | Worktrees | Jump to worktree management |
+| `T` | Analytics | Jump to analytics dashboard |
 | `Y` | Merge Analytics | Jump to merge analytics |
+| `F` | Feedback | Jump to feedback submission |
 | `G` | GitHub Issues | Jump to GitHub issues (if enabled) |
 | `P` | GitHub PRs | Jump to GitHub pull requests (if enabled) |
 | `B` | GitLab Issues | Jump to GitLab issues (if enabled) |
@@ -290,11 +305,12 @@ The keyboard shortcuts are implemented using a global `keydown` event listener:
 ```typescript
 useEffect(() => {
   const handleKeyDown = (e: KeyboardEvent) => {
-    // Skip if typing in any input-like element (includes contenteditable)
+    // Skip if typing in any input-like element (includes contenteditable and select)
     const target = e.target as HTMLElement;
     if (
       target instanceof HTMLInputElement ||
       target instanceof HTMLTextAreaElement ||
+      target instanceof HTMLSelectElement ||
       target?.isContentEditable
     ) {
       return;
@@ -326,7 +342,7 @@ useEffect(() => {
 
 ### Zustand Stores
 
-The Sidebar component integrates with two Zustand stores:
+The Sidebar component integrates with three Zustand stores:
 
 #### Project Store (`project-store`)
 
@@ -378,6 +394,58 @@ const toggleSidebar = () => {
 | `pendingProject` | `Project \| null` | Project awaiting initialization |
 | `isInitializing` | `boolean` | Project initialization in progress |
 | `envConfig` | `ProjectEnvConfig \| null` | Project environment config (GitHub/GitLab enabled) |
+| `indicatorPosition` | `{ top: number; height: number; opacity: number }` | Animated nav indicator position |
+
+#### Auth Failure Store (`auth-failure-store`)
+
+```typescript
+import { useAuthFailureStore } from '@/stores/auth-failure-store';
+
+const hasPendingAuthFailure = useAuthFailureStore((state) => state.hasPendingAuthFailure);
+```
+
+**Used for:**
+- Displaying a red indicator dot on the Settings button when auth has failed
+- Prompting the user to re-authenticate
+
+### Animated Navigation Indicator
+
+The sidebar uses a `NavIndicator` component with ResizeObserver-based position tracking for a smooth animated indicator on the active navigation item:
+
+```typescript
+<NavIndicator
+  activeView={activeView}
+  containerRef={navContainerRef}
+  itemRefs={navItemRefs}
+  position={indicatorPosition}
+/>
+```
+
+The indicator position is updated via a `ResizeObserver` that watches the nav container and all nav item elements, recalculating position on layout changes and scroll events.
+
+### Session Context Indicator
+
+Below the status badge, a `SessionContextIndicator` shows the active session context:
+
+```typescript
+<SessionContextIndicator
+  projectId={selectedProjectId ?? undefined}
+  taskId={selectedProject?.autoBuildPath ?? undefined}
+/>
+```
+
+### Auth Failure Badge
+
+When `hasPendingAuthFailure` is true, a red dot appears on the Settings button:
+
+```typescript
+{hasPendingAuthFailure && (
+  <span
+    className="absolute top-1 right-1 h-2 w-2 rounded-full bg-destructive"
+    aria-label={t('common:auth.failure.badgeTooltip')}
+  />
+)}
+```
 
 ---
 

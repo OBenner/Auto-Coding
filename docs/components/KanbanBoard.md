@@ -101,11 +101,13 @@ The KanbanBoard internally manages these interactions through store updates:
 | `handleArchiveAll` | Archives all done tasks | `task-store` |
 | `handleQueueAll` | Moves all backlog tasks to queue | `task-store` + queue system |
 | `handleToggleColumnCollapsed` | Collapses/expands column | `kanban-settings-store` |
-| `handleResizeStart/Move/End` | Resizes column width | `kanban-settings-store` |
+| `handleResizeStart/Move/End` | Resizes column width (mouse + touch) | `kanban-settings-store` |
 | `handleToggleColumnLocked` | Locks/unlocks column from resizing | `kanban-settings-store` |
+| `handleExpandAll` | Expands all collapsed columns at once | `kanban-settings-store` |
 | `toggleTaskSelection` | Selects/deselects task for bulk actions | Local state |
 | `selectAllTasks` | Selects all tasks in Human Review | Local state |
 | `deselectAllTasks` | Clears all task selections | Local state |
+| `processQueue` | Auto-promotes queued tasks (FIFO) with safety limits | `task-store` |
 
 ---
 
@@ -156,6 +158,8 @@ interface DroppableColumnProps {
   onToggleLocked?: () => void;
   // Loading state
   isLoading?: boolean;
+  // Drag disabled when auto-sort is active
+  isDragDisabled?: boolean;
 }
 
 // Task type (from shared/types/task.ts)
@@ -309,6 +313,7 @@ The KanbanBoard uses [@dnd-kit](https://dndkit.com/) for drag-and-drop functiona
 - Drop zones highlight on hover
 - Empty columns show drop target indicator
 - Keyboard navigation support
+- **Automatically disabled** when auto-sort is active (non-manual sort mode)
 
 **Task Movement:**
 - Drag between columns to change status
@@ -352,14 +357,40 @@ The queue system enforces parallel task limits with automatic FIFO promotion:
 - Persisted per project
 
 ```typescript
-// Queue processing (FIFO order)
+// Queue processing (FIFO order) with safety limits
 const processQueue = async () => {
-  const queuedTasks = tasks
-    .filter((t) => t.status === 'queue')
-    .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+  if (isProcessingQueueRef.current) return; // Mutex: prevent concurrent executions
+  isProcessingQueueRef.current = true;
 
-  if (inProgressCount < maxParallelTasks && queuedTasks.length > 0) {
-    await persistTaskStatus(queuedTasks[0].id, 'in_progress');
+  try {
+    const attemptedTaskIds = new Set<string>();
+    let consecutiveFailures = 0;
+    const MAX_CONSECUTIVE_FAILURES = 10;
+
+    while (true) {
+      const currentTasks = useTaskStore.getState().tasks;
+      const inProgressCount = currentTasks.filter(t => t.status === 'in_progress' && !t.metadata?.archivedAt).length;
+      const queuedTasks = currentTasks.filter(t =>
+        t.status === 'queue' && !t.metadata?.archivedAt && !attemptedTaskIds.has(t.id)
+      );
+
+      if (inProgressCount >= maxParallelTasks || queuedTasks.length === 0) break;
+      if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) break;
+
+      const nextTask = queuedTasks.sort((a, b) =>
+        new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+      )[0];
+
+      const result = await persistTaskStatus(nextTask.id, 'in_progress');
+      if (result.success) {
+        consecutiveFailures = 0;
+      } else {
+        attemptedTaskIds.add(nextTask.id);
+        consecutiveFailures++;
+      }
+    }
+  } finally {
+    isProcessingQueueRef.current = false;
   }
 };
 ```
@@ -389,16 +420,18 @@ const toggleColumnCollapsed = (status: TaskStatus) => {
 
 #### Resize
 
-- Drag right edge of column to resize
-- Width constrained between `MIN_COLUMN_WIDTH` (300px) and `MAX_COLUMN_WIDTH` (800px)
+- Drag right edge of column to resize (mouse and touch supported)
+- Width constrained between `MIN_COLUMN_WIDTH` (180px) and `MAX_COLUMN_WIDTH` (600px)
 - Resize persisted per project
 - Cannot resize when column is locked
+- Touch events use `touch-none` CSS to prevent scroll interference
+- ProjectId captured at resize start to avoid stale closures in save callback
 
 ```typescript
-// Column width constants
-const MIN_COLUMN_WIDTH = 300;
-const MAX_COLUMN_WIDTH = 800;
-const DEFAULT_COLUMN_WIDTH = 400;
+// Column width constants (from kanban-settings-store)
+const MIN_COLUMN_WIDTH = 180;
+const MAX_COLUMN_WIDTH = 600;
+const DEFAULT_COLUMN_WIDTH = 320;
 const COLLAPSED_COLUMN_WIDTH = 48;
 ```
 
@@ -523,6 +556,53 @@ newTasks.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 grouped[status] = [...newTasks, ...orderedTasks];
 ```
 
+### 9. Task Filtering & Search
+
+The board header includes a `KanbanFilters` component for search, sort, and filter:
+
+**KanbanFilters Component** (`KanbanFilters.tsx`):
+
+```typescript
+interface KanbanFiltersProps {
+  projectId: string | undefined;
+}
+```
+
+**Features:**
+- **Search** - Filter tasks by title/description (debounced 300ms save)
+- **Sort mode** - Choose from `manual`, `priority`, `created`, `updated`
+- **Sort order** - Toggle ascending/descending (hidden when sort is `manual`)
+- **Clear filters** - Reset all filters with active filter count badge
+- All filter state managed via `useKanbanSettingsStore` and persisted to localStorage
+
+**useTaskFiltering Hook** (`hooks/useTaskFiltering.ts`):
+
+```typescript
+const {
+  filteredTasks,      // Tasks after applying search and filters
+  filterState,        // Current filter state
+  hasActiveFilters,   // Whether any filter is active
+  setSearchQuery,     // Set search text
+  clearFilters        // Reset all filters
+} = useTaskFiltering(tasks);
+```
+
+### 10. Auto-Sort
+
+When a non-manual sort mode is selected, drag-and-drop is automatically disabled:
+
+```typescript
+const isAutoSortActive = useMemo(() => {
+  const sortBy = filters?.sortBy ?? 'manual';
+  return sortBy !== 'manual';
+}, [filters?.sortBy]);
+
+// Drag handlers disabled when auto-sort active
+onDragStart={isAutoSortActive ? undefined : handleDragStart}
+```
+
+When `isAutoSortActive` is true, the `isDragDisabled` prop is passed to `DroppableColumn` and `SortableTaskCard`, which shows a tooltip explaining that drag is disabled while auto-sort is active.
+
 ---
 
 ## Store Integration
@@ -571,7 +651,8 @@ await updateProjectSettings(projectId, { maxParallelTasks: 5 });
 
 **Responsibilities:**
 - Manages column preferences (collapsed, width, locked)
-- Persists preferences per project
+- Manages filter/sort state (search query, sort mode, sort order)
+- Persists preferences and filters per project
 - Provides constants for column dimensions
 
 ```typescript
@@ -659,7 +740,7 @@ const taskCards = useMemo(() => {
       // ...
     />
   ));
-}, [tasks, selectedTaskIds]);
+}, [tasks, selectedTaskIds, isDragDisabled]);
 ```
 
 ### 4. Efficient Task Grouping

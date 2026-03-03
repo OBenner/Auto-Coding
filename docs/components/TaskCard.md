@@ -63,6 +63,7 @@ import { SortableTaskCard } from '@/renderer/components/SortableTaskCard';
 **Optional (for SortableTaskCard):**
 - `@dnd-kit/sortable` - Sortable drag-and-drop integration
 - `@dnd-kit/utilities` - CSS transform utilities
+- `motion/react` (Framer Motion) - Smooth drag animations (scale, opacity, shadow)
 
 ---
 
@@ -153,30 +154,49 @@ interface SortableTaskCardProps {
   onToggleSelect?: () => void;
 }
 
-// Task type (simplified - see ../../shared/types for full definition)
+// Task type (from @/shared/types/task)
 interface Task {
   id: string;
+  specId: string;
   projectId: string;
   title: string;
-  description?: string;
+  description: string;
   status: TaskStatus;
-  createdAt: Date;
-  updatedAt: Date;
   reviewReason?: ReviewReason;
   subtasks: Subtask[];
-  executionProgress?: {
-    phase?: ExecutionPhase;
-    phaseProgress?: number;
-  };
-  metadata?: {
-    category?: TaskCategory;
-    complexity?: TaskComplexity;
-    priority?: TaskPriority;
-    impact?: TaskImpact;
-    securitySeverity?: SecuritySeverity;
-    archivedAt?: string;
-    prUrl?: string;
-  };
+  qaReport?: QAReport;
+  logs: string[];
+  metadata?: TaskMetadata;
+  executionProgress?: ExecutionProgress;
+  releasedInVersion?: string;
+  stagedInMainProject?: boolean;
+  stagedAt?: string;
+  location?: 'main' | 'worktree';
+  specsPath?: string;
+  tokenStats?: TaskTokenStats;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// ExecutionProgress (from @/shared/types/task)
+interface ExecutionProgress {
+  phase: ExecutionPhase;
+  phaseProgress: number;       // 0-100 within current phase
+  overallProgress: number;     // 0-100 overall
+  currentSubtask?: string;
+  message?: string;
+  startedAt?: Date;
+  sequenceNumber?: number;     // Monotonically increasing counter for stale update detection
+  completedPhases?: CompletablePhase[];
+  // Resource usage metrics (from backend)
+  cpu_percent?: number;
+  memory_mb?: number;
+  memory_percent?: number;
+  elapsed_seconds?: number;
+  // Timing estimates
+  estimated_seconds?: number;
+  confidence?: 'high' | 'medium' | 'low';
+  sample_size?: number;
 }
 
 // Task status (from @/shared/types/task)
@@ -186,13 +206,16 @@ type TaskStatus = 'backlog' | 'queue' | 'in_progress' | 'ai_review' | 'human_rev
 type ReviewReason = 'completed' | 'errors' | 'qa_rejected' | 'plan_review';
 
 // Execution phase
-type ExecutionPhase = 'idle' | 'planning' | 'implementation' | 'qa' | 'fixing' | 'complete' | 'failed';
+type ExecutionPhase = 'idle' | 'planning' | 'coding' | 'qa_review' | 'qa_fixing' | 'complete' | 'failed';
+
+// Subtask status
+type SubtaskStatus = 'pending' | 'in_progress' | 'completed' | 'failed';
 
 // Task category
 type TaskCategory = 'feature' | 'bug_fix' | 'refactoring' | 'documentation' | 'security' | 'performance' | 'ui_ux' | 'infrastructure' | 'testing';
 
-// Task complexity
-type TaskComplexity = 'simple' | 'standard' | 'complex';
+// Task complexity (5 levels)
+type TaskComplexity = 'trivial' | 'small' | 'medium' | 'large' | 'complex';
 
 // Task priority
 type TaskPriority = 'low' | 'medium' | 'high' | 'urgent';
@@ -215,22 +238,43 @@ Both TaskCard and SortableTaskCard use custom `React.memo` comparators to preven
 **TaskCard:**
 ```typescript
 function taskCardPropsAreEqual(prevProps: TaskCardProps, nextProps: TaskCardProps): boolean {
-  // Fast path: same reference
-  if (prevTask === nextTask && prevProps.onClick === nextProps.onClick) {
+  const prevTask = prevProps.task;
+  const nextTask = nextProps.task;
+
+  // Fast path: same reference (include selectable props)
+  if (
+    prevTask === nextTask &&
+    prevProps.onClick === nextProps.onClick &&
+    prevProps.onStatusChange === nextProps.onStatusChange &&
+    prevProps.isSelectable === nextProps.isSelectable &&
+    prevProps.isSelected === nextProps.isSelected &&
+    prevProps.onToggleSelect === nextProps.onToggleSelect
+  ) {
     return true;
   }
 
-  // Compare only fields that affect rendering
-  const isEqual = (
+  // Check selectable props first (cheap comparison)
+  if (prevProps.isSelectable !== nextProps.isSelectable || prevProps.isSelected !== nextProps.isSelected) {
+    return false;
+  }
+
+  // Compare only the fields that affect rendering
+  return (
     prevTask.id === nextTask.id &&
     prevTask.status === nextTask.status &&
     prevTask.title === nextTask.title &&
+    prevTask.description === nextTask.description &&
     prevTask.updatedAt === nextTask.updatedAt &&
+    prevTask.reviewReason === nextTask.reviewReason &&
     prevTask.executionProgress?.phase === nextTask.executionProgress?.phase &&
-    // ... other comparison logic
+    prevTask.executionProgress?.phaseProgress === nextTask.executionProgress?.phaseProgress &&
+    prevTask.subtasks.length === nextTask.subtasks.length &&
+    prevTask.metadata?.category === nextTask.metadata?.category &&
+    prevTask.metadata?.complexity === nextTask.metadata?.complexity &&
+    prevTask.metadata?.archivedAt === nextTask.metadata?.archivedAt &&
+    prevTask.metadata?.prUrl === nextTask.metadata?.prUrl &&
+    prevTask.subtasks.every((s, i) => s.status === nextTask.subtasks[i]?.status)
   );
-
-  return isEqual;
 }
 
 export const TaskCard = memo(function TaskCard({ ... }) { ... }, taskCardPropsAreEqual);
@@ -387,12 +431,27 @@ Displays rich task metadata with color-coded badges:
 3. **Archived indicator** - `📦 Archived` (task has been released)
 4. **Execution phase** - `🔄 Planning/Implementation/QA/Fixing` (animated spinner)
 5. **Status badge** - `Pending/Running/Needs Review/Complete`
-6. **Review reason** - `✅ Completed/❌ Has Errors/⚠ QA Issues/📝 Approve Plan`
-7. **Category** - `🎯 Feature/🐛 Bug Fix/🔧 Refactoring/📄 Docs/🛡️ Security/⚡ Performance/🎨 UI/UX`
+6. **Review reason** - `✅ Completed/❌ Has Errors/⚠ QA Issues/📝 Approve Plan` (variant-colored badges)
+7. **Category & Complexity** - Shown in an expandable **Popover** (click "More Info" badge to expand)
 8. **Impact** - `High Impact/Critical` (only show high/critical)
-9. **Complexity** - `Simple/Standard/Complex`
-10. **Priority** - `Urgent/High` (only show urgent/high)
-11. **Security severity** - `Low/Medium/High/Critical Severity`
+9. **Priority** - `Urgent/High` (only show urgent/high)
+10. **Security severity** - `Low/Medium/High/Critical Severity` (always shown)
+
+**Review Reason Badges:**
+```typescript
+const getReviewReasonLabel = (reason?: ReviewReason) => {
+  switch (reason) {
+    case 'completed':   return { label: t('reviewReason.completed'), variant: 'success' };
+    case 'errors':      return { label: t('reviewReason.hasErrors'), variant: 'destructive' };
+    case 'qa_rejected': return { label: t('reviewReason.qaIssues'), variant: 'warning' };
+    case 'plan_review': return { label: t('reviewReason.approvePlan'), variant: 'warning' };
+  }
+};
+```
+
+**Expandable Metadata Popover:**
+
+Category and complexity badges are shown inside a Radix UI `Popover` triggered by a "More Info" badge. This keeps the card compact while providing detail on demand. Category badges include icons via `renderCategoryIcon()`.
 
 **Badge constants:**
 ```typescript
@@ -495,6 +554,28 @@ const handleArchive = async (e: React.MouseEvent) => {
   )}
 >
 ```
+
+### 8. SortableTaskCard Animations (Framer Motion)
+
+SortableTaskCard wraps TaskCard with smooth drag animations via `motion/react`:
+
+```typescript
+<motion.div
+  animate={{
+    scale: isDragging ? 1.05 : 1,
+    opacity: isDragging ? 0.8 : 1,
+    boxShadow: isDragging
+      ? '0 10px 40px -10px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(0, 0, 0, 0.05)'
+      : '0 0 0 0 rgba(0, 0, 0, 0)',
+  }}
+  transition={{ type: 'spring', stiffness: 300, damping: 25, mass: 0.5 }}
+>
+```
+
+**Visual feedback:**
+- **Dragging**: Card scales up (1.05x), reduces opacity (0.8), gains shadow
+- **Over drop target**: Ring glow effect (`ring-2 ring-primary/30`)
+- **Auto-sort disabled**: When `isDragDisabled` is true, card shows tooltip explaining drag is disabled and applies `cursor-not-allowed`
 
 ---
 

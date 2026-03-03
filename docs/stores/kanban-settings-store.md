@@ -20,10 +20,12 @@ The Kanban Settings Store manages per-project column preferences for the Kanban 
 - **Column Width Management:** Adjust column widths within 180-600px range with automatic clamping
 - **Collapse State:** Toggle columns between full width and collapsed (48px vertical strip)
 - **Lock State:** Prevent accidental column width changes by locking columns
-- **localStorage Persistence:** Auto-save preferences per project with validation
+- **localStorage Persistence:** Auto-save preferences and filters per project with validation
 - **Safe Defaults:** Automatic fallback to defaults on invalid/missing data
 - **Width Constraints:** Enforce minimum (180px) and maximum (600px) column widths
-- **Validation:** Type-safe preference validation before applying stored data
+- **Validation:** Type-safe preference and filter validation before applying stored data
+- **Task Filtering:** Search tasks by title/description with persisted state
+- **Task Sorting:** Sort by manual order, priority, created date, or updated date
 
 ### Use Cases
 
@@ -47,7 +49,13 @@ import { useKanbanSettingsStore } from '@/renderer/stores/kanban-settings-store'
 ### Type and Constant Imports
 
 ```typescript
-import type { ColumnPreferences, KanbanColumnPreferences } from '@/renderer/stores/kanban-settings-store';
+import type {
+  ColumnPreferences,
+  KanbanColumnPreferences,
+  KanbanFilters,
+  SortMode,
+  SortOrder
+} from '@/renderer/stores/kanban-settings-store';
 import {
   DEFAULT_COLUMN_WIDTH,
   MIN_COLUMN_WIDTH,
@@ -75,8 +83,9 @@ import {
 interface KanbanSettingsState {
   // Core state
   columnPreferences: KanbanColumnPreferences | null; // Preferences for all columns (null until initialized)
+  filters: KanbanFilters | null;                     // Filter/sort state (null until initialized)
 
-  // Actions
+  // Column preference actions
   initializePreferences: () => void;
   setColumnWidth: (column: TaskStatusColumn, width: number) => void;
   toggleColumnCollapsed: (column: TaskStatusColumn) => void;
@@ -87,6 +96,14 @@ interface KanbanSettingsState {
   savePreferences: (projectId: string) => boolean;
   resetPreferences: (projectId: string) => void;
   getColumnPreferences: (column: TaskStatusColumn) => ColumnPreferences;
+
+  // Filter/sort actions
+  setSearchQuery: (searchQuery: string) => void;
+  setSortBy: (sortBy: SortMode) => void;
+  setSortOrder: (sortOrder: SortOrder) => void;
+  loadFilters: (projectId: string) => void;
+  saveFilters: (projectId: string) => boolean;
+  resetFilters: (projectId: string) => void;
 }
 ```
 
@@ -454,6 +471,28 @@ type TaskStatusColumn =
  * - 'pr_created' → rendered in 'done' column
  * - 'error' → rendered in 'human_review' column
  */
+
+/**
+ * Sort mode for task ordering
+ */
+type SortMode = 'manual' | 'priority' | 'created' | 'updated';
+
+/**
+ * Sort order direction
+ */
+type SortOrder = 'asc' | 'desc';
+
+/**
+ * Filter state for kanban board
+ */
+interface KanbanFilters {
+  /** Search query to filter tasks by title/description */
+  searchQuery: string;
+  /** Sort mode for task ordering */
+  sortBy: SortMode;
+  /** Sort order direction */
+  sortOrder: SortOrder;
+}
 ```
 
 ---
@@ -483,7 +522,87 @@ export const COLLAPSED_COLUMN_WIDTH = 48;
 const KANBAN_SETTINGS_KEY_PREFIX = 'kanban-column-prefs';
 
 // Actual key: `kanban-column-prefs-{projectId}`
+
+/** localStorage key prefix for kanban filters persistence */
+const KANBAN_FILTERS_KEY_PREFIX = 'kanban-filters';
+
+// Actual key: `kanban-filters-{projectId}`
 ```
+
+### Default Filter Values
+
+```typescript
+function createDefaultFilters(): KanbanFilters {
+  return {
+    searchQuery: '',
+    sortBy: 'manual',
+    sortOrder: 'asc'
+  };
+}
+```
+
+---
+
+## Filter/Sort Actions
+
+### `setSearchQuery(searchQuery: string)`
+
+**Description:** Set the search query to filter tasks by title/description.
+
+**Parameters:**
+- `searchQuery` (string) - Text to search for
+
+**Returns:** void
+
+### `setSortBy(sortBy: SortMode)`
+
+**Description:** Set the sort mode for task ordering. When set to anything other than `manual`, drag-and-drop is disabled.
+
+**Parameters:**
+- `sortBy` (SortMode) - `'manual'` | `'priority'` | `'created'` | `'updated'`
+
+**Returns:** void
+
+### `setSortOrder(sortOrder: SortOrder)`
+
+**Description:** Set the sort order direction (only applies when sort mode is not `manual`).
+
+**Parameters:**
+- `sortOrder` (SortOrder) - `'asc'` | `'desc'`
+
+**Returns:** void
+
+### `loadFilters(projectId: string)`
+
+**Description:** Load filters from localStorage for a project. Falls back to defaults on missing or invalid data.
+
+**Parameters:**
+- `projectId` (string) - Project identifier
+
+**Returns:** void
+
+**Behavior:**
+- Reads from localStorage key `kanban-filters-{projectId}`
+- Validates structure with `validateFilters()` before applying
+- Falls back to `createDefaultFilters()` on any error
+
+### `saveFilters(projectId: string)`
+
+**Description:** Persist current filters to localStorage.
+
+**Parameters:**
+- `projectId` (string) - Project identifier
+
+**Returns:** `boolean` - `true` on success, `false` on failure
+
+### `resetFilters(projectId: string)`
+
+**Description:** Reset filters to defaults and clear from localStorage.
+
+**Parameters:**
+- `projectId` (string) - Project identifier
+
+**Returns:** void
 
 ---
 

@@ -86,6 +86,32 @@ import {
 **Optional:**
 - None (all dependencies are required)
 
+### Constants
+
+```typescript
+/** Maximum log entries stored per task to prevent renderer OOM */
+export const MAX_LOG_ENTRIES = 5000;
+```
+
+### Internal Helpers
+
+```typescript
+/** Find task by id or specId */
+function findTaskIndex(tasks: Task[], taskId: string): number;
+
+/** Efficiently update a single task without recreating the entire array (if no change) */
+function updateTaskAtIndex(tasks: Task[], index: number, updater: (task: Task) => Task): Task[];
+
+/** Validate plan data structure before processing */
+function validatePlanData(plan: ImplementationPlan): boolean;
+
+/** Create empty task order with all columns */
+function createEmptyTaskOrder(): TaskOrderState;
+
+/** Async fetch and update token stats for a task */
+function fetchAndUpdateTokenStats(taskId: string): Promise<void>;
+```
+
 ---
 
 ## Store State
@@ -146,11 +172,17 @@ interface Task {
   description: string;                     // Task description
   status: TaskStatus;                      // Current workflow status
   reviewReason?: ReviewReason;             // Reason for human review (errors, qa_rejected, completed)
-  subtasks?: Subtask[];                    // Implementation plan subtasks
-  logs?: string[];                         // Execution logs
+  subtasks: Subtask[];                     // Implementation plan subtasks
+  qaReport?: QAReport;                     // QA review report
+  logs: string[];                          // Execution logs (capped at MAX_LOG_ENTRIES)
   executionProgress?: ExecutionProgress;   // Real-time execution progress
   tokenStats?: TaskTokenStats;             // Token usage statistics
   metadata?: TaskMetadata;                 // Additional metadata (GitHub issue, priority, etc.)
+  releasedInVersion?: string;              // Version in which task was released
+  stagedInMainProject?: boolean;           // True if worktree merged with --no-commit
+  stagedAt?: string;                       // ISO timestamp when changes were staged
+  location?: 'main' | 'worktree';         // Where task was loaded from
+  specsPath?: string;                      // Full path to specs directory
   createdAt: Date;                         // Creation timestamp
   updatedAt: Date;                         // Last update timestamp
 }
@@ -174,10 +206,23 @@ type TaskStatus =
 
 ```typescript
 interface ExecutionProgress {
-  phase: ExecutionPhase;        // Current execution phase
-  phaseProgress: number;        // Progress within phase (0-100)
-  overallProgress: number;      // Overall task progress (0-100)
-  sequenceNumber?: number;      // Sequence number to prevent out-of-order updates
+  phase: ExecutionPhase;            // Current execution phase
+  phaseProgress: number;            // Progress within phase (0-100)
+  overallProgress: number;          // Overall task progress (0-100)
+  currentSubtask?: string;          // Current subtask being processed
+  message?: string;                 // Current status message
+  startedAt?: Date;                 // When execution started
+  sequenceNumber?: number;          // Monotonically increasing counter for stale update detection
+  completedPhases?: CompletablePhase[]; // Phases that have successfully completed
+  // Resource metrics (from backend resource_tracker.py)
+  cpu_percent?: number;
+  memory_mb?: number;
+  memory_percent?: number;
+  elapsed_seconds?: number;
+  // Timing estimates (from backend timing_history.py)
+  estimated_seconds?: number;
+  confidence?: 'high' | 'medium' | 'low';
+  sample_size?: number;
 }
 
 type ExecutionPhase =
@@ -286,10 +331,15 @@ store.updateTaskStatus(taskId, 'done');
 - `plan` (ImplementationPlan) - Implementation plan object
 
 **Side Effects:**
-- Validates plan data structure before processing
-- Flattens phases into subtasks array
-- Recalculates task status based on subtask states (unless in active/terminal phase/status)
-- Blocks invalid terminal status transitions (when subtasks don't support it)
+- Validates plan data structure before processing (`validatePlanData()`)
+- Flattens phases into subtasks array (uses `crypto.randomUUID()` for IDs with fallback)
+- Recalculates task status based on subtask states with multiple safety guards:
+  - **Active phase guard:** Skips status recalculation during `planning`, `coding`, `qa_review`, `qa_fixing` phases
+  - **Terminal phase guard:** Skips during `complete` or `failed` phases
+  - **Terminal status guard:** Never recalculates `pr_created`, `done`, or `error` statuses (finalized workflow states)
+  - **Explicit human_review:** Respects `plan.status === 'human_review'` without overriding
+  - **ACS-203 validation:** Blocks invalid terminal transitions (e.g., moving to `done` with incomplete subtasks)
+  - **Flip-flop prevention:** Won't downgrade from `human_review`/`done` to `ai_review`
 
 **Example:**
 ```typescript
