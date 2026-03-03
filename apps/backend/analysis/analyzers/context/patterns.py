@@ -18,5 +18,5 @@ AUTH_DECORATOR_PATTERN = re.compile(r"@(\w*(?:require|auth|login)\w*)")
 
 # Celery task decorator pattern - finds Celery task definitions
 CELERY_TASK_PATTERN = re.compile(
-    r"@(?:celery\.task|shared_task|app\.task)\s*(?:\([^)]*\))?\s*def\s+(\w+)"
+    r"@(?:celery\.task|shared_task|app\.task)\s*(?:\([^)]*\)\s*)?def\s+(\w+)"
 )

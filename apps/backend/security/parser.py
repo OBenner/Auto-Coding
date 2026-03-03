@@ -19,15 +19,15 @@ from pathlib import PurePosixPath, PureWindowsPath
 
 # Compiled regex patterns for performance
 # These patterns are used throughout the module for parsing shell commands
-_SHELL_OPERATORS_PATTERN = re.compile(r"\s*(?:&&|\|\||\|)\s*|;\s*")
+_SHELL_OPERATORS_PATTERN = re.compile(r"[ \t]*(?:&&|\|\||\|)[ \t]*|;[ \t]*")
 _VARIABLE_ASSIGNMENT_PATTERN = re.compile(
     r"""^[A-Za-z_][A-Za-z0-9_]*=(?:"[^"]*"|'[^']*'|\S+)\s+"""
 )
 _FIRST_TOKEN_PATTERN = re.compile(r'^(?:"([^"]+)"|\'([^\']+)\'|([^\s]+))')
 _WINDOWS_EXTENSION_PATTERN = re.compile(r"\.(exe|cmd|bat|ps1|sh)$", flags=re.IGNORECASE)
 _LEADING_QUOTES_SLASHES_PATTERN = re.compile(r'^["\'\\/]+')
-_COMMAND_CHAINING_PATTERN = re.compile(r"\s*(?:&&|\|\|)\s*")
-_SEMICOLON_SPLIT_PATTERN = re.compile(r'(?<!["\'])\s*;\s*(?!["\'])')
+_COMMAND_CHAINING_PATTERN = re.compile(r"[ \t]*(?:&&|\|\|)[ \t]*")
+_SEMICOLON_SPLIT_PATTERN = re.compile(r'(?<!["\'"])[ \t]*;[ \t]*(?!["\'])')
 _WINDOWS_PATH_PATTERN = re.compile(r"[A-Za-z]:\\|\\[A-Za-z][A-Za-z0-9_\\/]")
 
 

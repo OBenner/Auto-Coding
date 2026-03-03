@@ -17,7 +17,7 @@ from .base import BaseAnalyzer
 # Compiled regex patterns for database model detection
 # SQLAlchemy patterns
 PATTERN_SQLALCHEMY_CLASS = re.compile(
-    r"class\s+(\w+)\([^)]*(?:Base|db\.Model|DeclarativeBase)[^)]*\):"
+    r"class\s+(\w+)\([^)]*?(?:Base|db\.Model|DeclarativeBase)[^)]*\):"
 )
 PATTERN_SQLALCHEMY_TABLENAME = re.compile(r'__tablename__\s*=\s*["\'](\w+)["\']')
 PATTERN_SQLALCHEMY_COLUMN = re.compile(r"(\w+)\s*=\s*Column\((.*?)\)")
