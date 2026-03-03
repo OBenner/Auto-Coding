@@ -11,26 +11,26 @@ Tests cover:
 """
 
 import json
-import tempfile
-from pathlib import Path
-from unittest.mock import patch, MagicMock
-
-import pytest
 
 # Add auto-claude to path for imports
 import sys
+import tempfile
+from pathlib import Path
+from unittest.mock import MagicMock, patch
+
+import pytest
+
 sys.path.insert(0, str(Path(__file__).parent.parent / "apps" / "backend"))
 
 from analysis.security_scanner import (
-    SecurityVulnerability,
-    SecurityScanResult,
-    SecurityScanner,
-    scan_for_security_issues,
-    has_security_issues,
-    scan_secrets_only,
     HAS_SECRETS_SCANNER,
+    SecurityScanner,
+    SecurityScanResult,
+    SecurityVulnerability,
+    has_security_issues,
+    scan_for_security_issues,
+    scan_secrets_only,
 )
-
 
 # =============================================================================
 # FIXTURES
@@ -61,10 +61,9 @@ def python_project(temp_dir):
 @pytest.fixture
 def node_project(temp_dir):
     """Create a simple Node.js project structure."""
-    (temp_dir / "package.json").write_text(json.dumps({
-        "name": "test",
-        "dependencies": {"express": "^4.18.0"}
-    }))
+    (temp_dir / "package.json").write_text(
+        json.dumps({"name": "test", "dependencies": {"express": "^4.18.0"}})
+    )
     return temp_dir
 
 
@@ -202,7 +201,9 @@ class TestSecretsDetection:
         """Test detecting an API key in code."""
         # Create a file with a fake API key
         code_file = temp_dir / "config.py"
-        code_file.write_text('API_KEY = "sk-test1234567890abcdefghij1234567890abcdefghij"')
+        code_file.write_text(
+            'API_KEY = "sk-test1234567890abcdefghij1234567890abcdefghij"'
+        )
 
         result = scanner.scan(temp_dir, run_sast=False, run_dependency_audit=False)
 
@@ -392,7 +393,7 @@ class TestEdgeCases:
                 return False
             return _original_exists(self)
 
-        with patch.object(Path, 'exists', _selective_exists):
+        with patch.object(Path, "exists", _selective_exists):
             result = scanner.scan(fake_dir)
             assert isinstance(result, SecurityScanResult)
 
@@ -454,17 +455,19 @@ class TestSASTIntegration:
     def test_bandit_output_parsing(self, mock_run, scanner, python_project):
         """Test parsing Bandit JSON output."""
         mock_run.return_value = MagicMock(
-            stdout=json.dumps({
-                "results": [
-                    {
-                        "issue_severity": "HIGH",
-                        "issue_text": "Test issue",
-                        "filename": "app.py",
-                        "line_number": 10,
-                        "issue_cwe": {"id": "CWE-89"},
-                    }
-                ]
-            }),
+            stdout=json.dumps(
+                {
+                    "results": [
+                        {
+                            "issue_severity": "HIGH",
+                            "issue_text": "Test issue",
+                            "filename": "app.py",
+                            "line_number": 10,
+                            "issue_cwe": {"id": "CWE-89"},
+                        }
+                    ]
+                }
+            ),
             returncode=0,
         )
 
@@ -483,14 +486,16 @@ class TestSASTIntegration:
     def test_npm_audit_output_parsing(self, mock_run, scanner, node_project):
         """Test parsing npm audit JSON output."""
         mock_run.return_value = MagicMock(
-            stdout=json.dumps({
-                "vulnerabilities": {
-                    "lodash": {
-                        "severity": "critical",
-                        "via": [{"title": "Prototype Pollution"}],
+            stdout=json.dumps(
+                {
+                    "vulnerabilities": {
+                        "lodash": {
+                            "severity": "critical",
+                            "via": [{"title": "Prototype Pollution"}],
+                        }
                     }
                 }
-            }),
+            ),
             returncode=0,
         )
 

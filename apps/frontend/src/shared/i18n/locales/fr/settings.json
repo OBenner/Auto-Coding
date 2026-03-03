@@ -41,6 +41,10 @@
       "title": "Comptes",
       "description": "Comptes Claude & endpoints API"
     },
+    "providers": {
+      "title": "Fournisseurs IA",
+      "description": "Configurer les fournisseurs de modèles IA"
+    },
     "updates": {
       "title": "Mises à jour",
       "description": "Mises à jour Auto-Coding"
@@ -722,6 +726,52 @@
       "openrouter": {
         "name": "OpenRouter",
         "description": "Routage multi-modèles cloud avec plus de 400 modèles"
+      },
+      "zhipuai": {
+        "name": "ZhipuAI (GLM)",
+        "description": "Modèles GLM de Zhipu AI (glm-4, glm-4-flash)"
+      }
+    },
+    "apiKeys": {
+      "title": "Clés API",
+      "openai": {
+        "label": "Clé API OpenAI",
+        "placeholder": "sk-...",
+        "description": "Requise pour GPT-4 et autres modèles OpenAI"
+      },
+      "google": {
+        "label": "Clé API Google AI",
+        "placeholder": "AI...",
+        "description": "Requise pour les modèles Gemini"
+      },
+      "openrouter": {
+        "label": "Clé API OpenRouter",
+        "placeholder": "sk-or-...",
+        "description": "Requise pour le routage multi-modèles OpenRouter"
+      },
+      "zhipuai": {
+        "label": "Clé API ZhipuAI",
+        "placeholder": "Entrez votre clé API ZhipuAI",
+        "description": "Requise pour les modèles GLM (glm-4, glm-4-flash)"
+      }
+    },
+    "models": {
+      "title": "Sélection du modèle",
+      "description": "Configurez les modèles à utiliser pour chaque type d'agent",
+      "planner": {
+        "label": "Modèle Planificateur",
+        "placeholder": "ex: gpt-4, gemini-pro, anthropic/claude-3-sonnet",
+        "description": "Modèle pour créer les plans d'implémentation"
+      },
+      "coder": {
+        "label": "Modèle Codeur",
+        "placeholder": "ex: gpt-4, gemini-pro, anthropic/claude-3-sonnet",
+        "description": "Modèle pour implémenter le code"
+      },
+      "qa": {
+        "label": "Modèle QA",
+        "placeholder": "ex: gpt-4, gemini-pro, anthropic/claude-3-sonnet",
+        "description": "Modèle pour l'assurance qualité et la validation"
       }
     },
     "configuration": {

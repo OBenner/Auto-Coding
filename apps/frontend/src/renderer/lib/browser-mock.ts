@@ -665,7 +665,37 @@ const browserMockAPI: ElectronAPI = {
     success: true as const,
     data: { total_failures: 0 } as import('../../shared/types').FailureMetrics
   }),
-  exportProductivityAnalytics: async () => ({ success: true as const, data: '/mock/export/productivity' })
+  exportProductivityAnalytics: async () => ({ success: true as const, data: '/mock/export/productivity' }),
+
+  // Agent performance analytics (nested API)
+  analytics: {
+    getSummary: async () => ({
+      success: true as const,
+      data: {
+        total_specs: 0, completed_specs: 0, failed_specs: 0, in_progress_specs: 0,
+        overall_success_rate: 0, total_cost: 0, total_tokens: 0,
+        agent_stats: {}, complexity_stats: {},
+        qa_stats: { total_reviews: 0, approved: 0, rejected: 0, rejection_rate: 0, common_issues: {} },
+        last_updated: new Date().toISOString(),
+      }
+    }),
+    getAgentStats: async () => ({ success: true as const, data: {} }),
+    getTrends: async () => ({ success: true as const, data: [] }),
+    getReport: async () => ({
+      success: true as const,
+      data: {
+        summary: {
+          total_specs: 0, completed_specs: 0, failed_specs: 0, in_progress_specs: 0,
+          overall_success_rate: 0, total_cost: 0, total_tokens: 0,
+          agent_stats: {}, complexity_stats: {},
+          qa_stats: { total_reviews: 0, approved: 0, rejected: 0, rejection_rate: 0, common_issues: {} },
+          last_updated: new Date().toISOString(),
+        },
+        trends: [],
+        generated_at: new Date().toISOString(),
+      }
+    }),
+  }
 };
 
 /**

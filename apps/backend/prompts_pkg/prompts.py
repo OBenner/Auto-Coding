@@ -12,8 +12,6 @@ import re
 import subprocess
 from pathlib import Path
 
-from agents.templates.storage import load_template
-
 from .project_context import (
     detect_project_capabilities,
     get_mcp_tools_for_project,
@@ -652,6 +650,85 @@ The project root is: `{project_dir}`
     return spec_context + base_prompt
 
 
+def _get_project_root_from_spec(spec_dir: Path) -> Path:
+    """
+    Compute the project root from a spec directory by walking up the tree
+    looking for common project markers.
+
+    Falls back to the three-parent heuristic (.auto-claude/specs/XXX/) if
+    no markers are found.
+
+    Args:
+        spec_dir: Spec directory path
+
+    Returns:
+        Project root directory
+    """
+    markers = {"pyproject.toml", "package.json", ".git"}
+    current = spec_dir
+    for _ in range(5):
+        if any((current / m).exists() for m in markers):
+            return current
+        if current.parent == current:
+            break
+        current = current.parent
+    # Fallback to previous heuristic
+    return spec_dir.parent.parent.parent
+
+
+def get_performance_profiler_prompt(
+    spec_dir: Path, project_dir: Path | None = None
+) -> str:
+    """
+    Load the performance profiler agent prompt with spec path and key files injected.
+
+    Args:
+        spec_dir: Directory containing the spec and profiling results
+        project_dir: Root directory of the project. If None, auto-detected
+                     by walking up from spec_dir looking for .auto-claude/.
+
+    Returns:
+        The performance profiler prompt content with paths injected
+    """
+    prompt_file = PROMPTS_DIR / "performance_profiler.md"
+
+    if not prompt_file.exists():
+        raise FileNotFoundError(
+            f"Performance profiler prompt not found at {prompt_file}\n"
+            "Make sure the apps/backend/prompts/performance_profiler.md file exists."
+        )
+
+    prompt = prompt_file.read_text(encoding="utf-8")
+
+    # Resolve project_dir: use explicit value, or walk up to find .auto-claude/
+    if project_dir is None:
+        project_dir = _get_project_root_from_spec(spec_dir)
+
+    # Inject spec directory information at the beginning
+    spec_context = f"""## YOUR ENVIRONMENT
+
+**Working Directory:** {project_dir}
+**Spec Location:** `{spec_dir}/`
+
+**Important Files:**
+- Spec: `{spec_dir}/spec.md`
+- Implementation plan: `{spec_dir}/implementation_plan.json`
+- Performance history: `{spec_dir}/performance_history.json`
+- Project index: `{spec_dir}/project_index.json`
+
+**Your task:**
+1. Profile the codebase to identify performance bottlenecks
+2. Analyze runtime and memory usage
+3. Suggest optimizations with measurable impact
+4. Implement optimizations with user approval
+5. Validate improvements with before/after comparisons
+
+---
+
+"""
+    return spec_context + prompt
+
+
 def get_code_review_prompt(spec_dir: Path, project_dir: Path) -> str:
     """
     Load the code review agent prompt with spec paths injected.
@@ -698,6 +775,9 @@ def load_custom_template_prompt(template_name: str, project_dir: Path) -> str:
         FileNotFoundError: If the template doesn't exist
         ValueError: If the template is invalid or has no prompt
     """
+    # Lazy import to avoid circular: prompts_pkg → agents → coder/planner → prompts_pkg
+    from agents.templates.storage import load_template
+
     # Load template from storage
     template = load_template(template_name, project_dir)
 

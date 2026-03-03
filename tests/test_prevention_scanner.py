@@ -8,22 +8,23 @@ issue detection scanners for comprehensive analysis.
 """
 
 import json
+
+# Add apps/backend to path for imports
+import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-# Add apps/backend to path for imports
-import sys
 sys.path.insert(0, str(Path(__file__).parent.parent / "apps" / "backend"))
 
-from analysis.prevention_scanner import (
-    PreventionScanResult,
-    PreventionScanner,
-    scan_for_issues,
-    has_blocking_issues,
-)
 from analysis.prevention_config import PreventionConfig
+from analysis.prevention_scanner import (
+    PreventionScanner,
+    PreventionScanResult,
+    has_blocking_issues,
+    scan_for_issues,
+)
 
 
 class TestPreventionScanResult:
@@ -182,7 +183,9 @@ class TestPreventionScanner:
         scanner = PreventionScanner(config=config)
 
         # Mock security scanner to raise exception
-        with patch.object(scanner.security_scanner, 'scan', side_effect=Exception("Test error")):
+        with patch.object(
+            scanner.security_scanner, "scan", side_effect=Exception("Test error")
+        ):
             result = scanner.scan(tmp_path)
 
             # Should capture error but not crash
@@ -199,7 +202,9 @@ class TestPreventionScanner:
         scanner = PreventionScanner(config=config)
 
         # Mock security scanner to raise exception
-        with patch.object(scanner.security_scanner, 'scan', side_effect=Exception("Test error")):
+        with patch.object(
+            scanner.security_scanner, "scan", side_effect=Exception("Test error")
+        ):
             with pytest.raises(RuntimeError, match="Security scan failed"):
                 scanner.scan(tmp_path)
 
@@ -212,10 +217,10 @@ class TestPreventionScanner:
         )
 
         # Create files to trigger some issues
-        (tmp_path / "test.py").write_text('''
+        (tmp_path / "test.py").write_text("""
 for user in users:
     posts = session.query(Post).all()
-''')
+""")
 
         scanner = PreventionScanner(config=config)
         result = scanner.scan(tmp_path)
@@ -237,20 +242,23 @@ for user in users:
 
         # Mock a critical security issue
         from analysis.security_scanner import SecurityScanResult, SecurityVulnerability
+
         mock_result = SecurityScanResult(
             secrets=["fake_secret"],
-            vulnerabilities=[SecurityVulnerability(
-                severity="critical",
-                source="test",
-                title="SQL Injection",
-                description="SQL injection detected",
-                file="test.py",
-                line=1,
-                cwe="CWE-89",
-            )],
+            vulnerabilities=[
+                SecurityVulnerability(
+                    severity="critical",
+                    source="test",
+                    title="SQL Injection",
+                    description="SQL injection detected",
+                    file="test.py",
+                    line=1,
+                    cwe="CWE-89",
+                )
+            ],
         )
 
-        with patch.object(scanner.security_scanner, 'scan', return_value=mock_result):
+        with patch.object(scanner.security_scanner, "scan", return_value=mock_result):
             result = scanner.scan(tmp_path)
 
             # Should block due to critical vulnerability
@@ -312,6 +320,7 @@ for user in users:
 
         # Create a result with some data
         from analysis.security_scanner import SecurityScanResult
+
         result = PreventionScanResult(
             security=SecurityScanResult(secrets=[], vulnerabilities=[]),
             summary={
@@ -396,12 +405,12 @@ class TestConvenienceFunctions:
     def test_has_blocking_issues_returns_true_when_blocking(self, tmp_path):
         """Test has_blocking_issues returns True when issues should block."""
         # Create file with critical issue
-        (tmp_path / "test.py").write_text('''
+        (tmp_path / "test.py").write_text("""
 try:
     pass
 except:
     pass
-''')
+""")
 
         # Bare except is high severity in architecture validator
         has_blocking = has_blocking_issues(tmp_path)
@@ -466,7 +475,7 @@ class TestEdgeCases:
     def test_summary_severity_counts(self, tmp_path):
         """Test that summary correctly counts issues by severity."""
         # Create file with issues of different severities
-        (tmp_path / "test.py").write_text('''
+        (tmp_path / "test.py").write_text("""
 # Bare except (high)
 try:
     pass
@@ -476,7 +485,7 @@ except:
 # N+1 query (high)
 for user in users:
     posts = session.query(Post).all()
-''')
+""")
 
         config = PreventionConfig(
             security_enabled=False,

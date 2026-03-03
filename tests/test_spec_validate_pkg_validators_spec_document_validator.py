@@ -18,7 +18,9 @@ class TestSpecDocumentValidatorInit:
 
     def test_initialization_with_path(self, spec_dir: Path):
         """SpecDocumentValidator initializes with spec_dir path."""
-        from spec.validate_pkg.validators.spec_document_validator import SpecDocumentValidator
+        from spec.validate_pkg.validators.spec_document_validator import (
+            SpecDocumentValidator,
+        )
 
         validator = SpecDocumentValidator(spec_dir)
 
@@ -27,7 +29,9 @@ class TestSpecDocumentValidatorInit:
 
     def test_converts_string_to_path(self, spec_dir: Path):
         """SpecDocumentValidator converts string path to Path object."""
-        from spec.validate_pkg.validators.spec_document_validator import SpecDocumentValidator
+        from spec.validate_pkg.validators.spec_document_validator import (
+            SpecDocumentValidator,
+        )
 
         validator = SpecDocumentValidator(str(spec_dir))
 
@@ -40,18 +44,25 @@ class TestValidateFileNotFound:
 
     def test_returns_error_when_file_missing(self, spec_dir: Path):
         """Should return ValidationResult with error when spec.md missing."""
-        from spec.validate_pkg.validators.spec_document_validator import SpecDocumentValidator
+        from spec.validate_pkg.validators.spec_document_validator import (
+            SpecDocumentValidator,
+        )
 
         validator = SpecDocumentValidator(spec_dir)
         result = validator.validate()
 
         assert result.valid is False
         assert result.checkpoint == "spec"
-        assert any("not found" in err.lower() or "spec.md" in err.lower() for err in result.errors)
+        assert any(
+            "not found" in err.lower() or "spec.md" in err.lower()
+            for err in result.errors
+        )
 
     def test_error_message_includes_filename(self, spec_dir: Path):
         """Error message should mention spec.md."""
-        from spec.validate_pkg.validators.spec_document_validator import SpecDocumentValidator
+        from spec.validate_pkg.validators.spec_document_validator import (
+            SpecDocumentValidator,
+        )
 
         validator = SpecDocumentValidator(spec_dir)
         result = validator.validate()
@@ -60,7 +71,9 @@ class TestValidateFileNotFound:
 
     def test_fix_suggests_creation(self, spec_dir: Path):
         """Suggested fix should mention creating spec.md."""
-        from spec.validate_pkg.validators.spec_document_validator import SpecDocumentValidator
+        from spec.validate_pkg.validators.spec_document_validator import (
+            SpecDocumentValidator,
+        )
 
         validator = SpecDocumentValidator(spec_dir)
         result = validator.validate()
@@ -73,7 +86,9 @@ class TestValidateRequiredSections:
 
     def test_error_when_overview_missing(self, spec_dir: Path):
         """Should error when required section 'Overview' is missing."""
-        from spec.validate_pkg.validators.spec_document_validator import SpecDocumentValidator
+        from spec.validate_pkg.validators.spec_document_validator import (
+            SpecDocumentValidator,
+        )
 
         spec_file = spec_dir / "spec.md"
         spec_file.write_text("# Other Section\n\nContent here.\n", encoding="utf-8")
@@ -86,8 +101,10 @@ class TestValidateRequiredSections:
 
     def test_error_for_all_required_sections_missing(self, spec_dir: Path):
         """Should list all missing required sections."""
-        from spec.validate_pkg.validators.spec_document_validator import SpecDocumentValidator
         from spec.validate_pkg.schemas import SPEC_REQUIRED_SECTIONS
+        from spec.validate_pkg.validators.spec_document_validator import (
+            SpecDocumentValidator,
+        )
 
         spec_file = spec_dir / "spec.md"
         spec_file.write_text("# Other\n\nContent.\n", encoding="utf-8")
@@ -97,12 +114,15 @@ class TestValidateRequiredSections:
 
         # Check that all required sections are mentioned in errors
         for section in SPEC_REQUIRED_SECTIONS:
-            assert any(section.lower() in err.lower() for err in result.errors), \
+            assert any(section.lower() in err.lower() for err in result.errors), (
                 f"Section {section} not in errors"
+            )
 
     def test_accepts_hash_hash_format(self, spec_dir: Path):
         """Should accept ## Section format (double hash)."""
-        from spec.validate_pkg.validators.spec_document_validator import SpecDocumentValidator
+        from spec.validate_pkg.validators.spec_document_validator import (
+            SpecDocumentValidator,
+        )
 
         spec_file = spec_dir / "spec.md"
         content = "## Overview\n\nContent\n\n## Workflow Type\n\nFeature\n\n"
@@ -117,7 +137,9 @@ class TestValidateRequiredSections:
 
     def test_accepts_single_hash_format(self, spec_dir: Path):
         """Should accept # Section format (single hash)."""
-        from spec.validate_pkg.validators.spec_document_validator import SpecDocumentValidator
+        from spec.validate_pkg.validators.spec_document_validator import (
+            SpecDocumentValidator,
+        )
 
         spec_file = spec_dir / "spec.md"
         content = "# Overview\n\nContent\n\n# Workflow Type\n\nFeature\n\n"
@@ -131,7 +153,9 @@ class TestValidateRequiredSections:
 
     def test_case_insensitive_section_matching(self, spec_dir: Path):
         """Should match sections case-insensitively."""
-        from spec.validate_pkg.validators.spec_document_validator import SpecDocumentValidator
+        from spec.validate_pkg.validators.spec_document_validator import (
+            SpecDocumentValidator,
+        )
 
         spec_file = spec_dir / "spec.md"
         content = "## OVERVIEW\n\nContent\n\n## workflow type\n\nFeature\n\n"
@@ -145,7 +169,9 @@ class TestValidateRequiredSections:
 
     def test_fixes_suggest_adding_sections(self, spec_dir: Path):
         """Suggested fixes should include adding missing sections."""
-        from spec.validate_pkg.validators.spec_document_validator import SpecDocumentValidator
+        from spec.validate_pkg.validators.spec_document_validator import (
+            SpecDocumentValidator,
+        )
 
         spec_file = spec_dir / "spec.md"
         spec_file.write_text("# Other\n\nContent.\n", encoding="utf-8")
@@ -162,7 +188,9 @@ class TestValidateRecommendedSections:
 
     def test_warns_when_files_to_modify_missing(self, spec_dir: Path):
         """Should warn when 'Files to Modify' section is missing."""
-        from spec.validate_pkg.validators.spec_document_validator import SpecDocumentValidator
+        from spec.validate_pkg.validators.spec_document_validator import (
+            SpecDocumentValidator,
+        )
 
         spec_file = spec_dir / "spec.md"
         content = "## Overview\n\nContent\n\n## Workflow Type\n\nFeature\n\n"
@@ -177,7 +205,9 @@ class TestValidateRecommendedSections:
 
     def test_warns_for_multiple_missing_recommended(self, spec_dir: Path):
         """Should warn for all missing recommended sections."""
-        from spec.validate_pkg.validators.spec_document_validator import SpecDocumentValidator
+        from spec.validate_pkg.validators.spec_document_validator import (
+            SpecDocumentValidator,
+        )
 
         spec_file = spec_dir / "spec.md"
         content = "## Overview\n\nContent\n\n## Workflow Type\n\nFeature\n\n"
@@ -192,8 +222,10 @@ class TestValidateRecommendedSections:
 
     def test_no_warnings_with_all_recommended(self, spec_dir: Path):
         """Should not warn when all recommended sections present."""
-        from spec.validate_pkg.validators.spec_document_validator import SpecDocumentValidator
         from spec.validate_pkg.schemas import SPEC_RECOMMENDED_SECTIONS
+        from spec.validate_pkg.validators.spec_document_validator import (
+            SpecDocumentValidator,
+        )
 
         spec_file = spec_dir / "spec.md"
         content = "## Overview\n\nThis is a comprehensive overview of the feature that we are building.\n\n"
@@ -219,7 +251,9 @@ class TestValidateContentLength:
 
     def test_warns_when_content_too_short(self, spec_dir: Path):
         """Should warn when spec.md is less than 500 characters."""
-        from spec.validate_pkg.validators.spec_document_validator import SpecDocumentValidator
+        from spec.validate_pkg.validators.spec_document_validator import (
+            SpecDocumentValidator,
+        )
 
         spec_file = spec_dir / "spec.md"
         content = "## Overview\n\nShort.\n\n## Workflow Type\n\nX\n\n"
@@ -233,7 +267,9 @@ class TestValidateContentLength:
 
     def test_no_warning_for_adequate_length(self, spec_dir: Path):
         """Should not warn when spec.md has adequate length."""
-        from spec.validate_pkg.validators.spec_document_validator import SpecDocumentValidator
+        from spec.validate_pkg.validators.spec_document_validator import (
+            SpecDocumentValidator,
+        )
 
         spec_file = spec_dir / "spec.md"
         # Create content longer than 500 characters
@@ -250,7 +286,9 @@ class TestValidateContentLength:
 
     def test_content_check_counts_all_characters(self, spec_dir: Path):
         """Content length check should count all characters including whitespace."""
-        from spec.validate_pkg.validators.spec_document_validator import SpecDocumentValidator
+        from spec.validate_pkg.validators.spec_document_validator import (
+            SpecDocumentValidator,
+        )
 
         spec_file = spec_dir / "spec.md"
         # Create content exactly over 500 characters with mixed content
@@ -272,11 +310,15 @@ class TestValidateValidSpec:
 
     def test_returns_valid_for_minimal_spec(self, spec_dir: Path):
         """Should return valid with minimal required sections."""
-        from spec.validate_pkg.validators.spec_document_validator import SpecDocumentValidator
+        from spec.validate_pkg.validators.spec_document_validator import (
+            SpecDocumentValidator,
+        )
 
         spec_file = spec_dir / "spec.md"
         content = "## Overview\n\nImplement feature.\n\n## Workflow Type\n\nFeature\n\n"
-        content += "## Task Scope\n\nAdd user auth.\n\n## Success Criteria\n\nTests pass.\n"
+        content += (
+            "## Task Scope\n\nAdd user auth.\n\n## Success Criteria\n\nTests pass.\n"
+        )
         spec_file.write_text(content, encoding="utf-8")
 
         validator = SpecDocumentValidator(spec_dir)
@@ -288,8 +330,13 @@ class TestValidateValidSpec:
 
     def test_returns_valid_with_comprehensive_spec(self, spec_dir: Path):
         """Should return valid with comprehensive spec document."""
-        from spec.validate_pkg.validators.spec_document_validator import SpecDocumentValidator
-        from spec.validate_pkg.schemas import SPEC_REQUIRED_SECTIONS, SPEC_RECOMMENDED_SECTIONS
+        from spec.validate_pkg.schemas import (
+            SPEC_RECOMMENDED_SECTIONS,
+            SPEC_REQUIRED_SECTIONS,
+        )
+        from spec.validate_pkg.validators.spec_document_validator import (
+            SpecDocumentValidator,
+        )
 
         spec_file = spec_dir / "spec.md"
         content = ""
@@ -320,7 +367,9 @@ class TestValidationResultStructure:
 
     def test_result_has_all_fields(self, spec_dir: Path):
         """ValidationResult should have all expected fields."""
-        from spec.validate_pkg.validators.spec_document_validator import SpecDocumentValidator
+        from spec.validate_pkg.validators.spec_document_validator import (
+            SpecDocumentValidator,
+        )
 
         spec_file = spec_dir / "spec.md"
         spec_file.write_text("## Overview\n\nContent\n", encoding="utf-8")
@@ -336,7 +385,9 @@ class TestValidationResultStructure:
 
     def test_checkpoint_is_spec(self, spec_dir: Path):
         """Checkpoint field should always be 'spec'."""
-        from spec.validate_pkg.validators.spec_document_validator import SpecDocumentValidator
+        from spec.validate_pkg.validators.spec_document_validator import (
+            SpecDocumentValidator,
+        )
 
         spec_file = spec_dir / "spec.md"
         spec_file.write_text("## Overview\n\nContent\n", encoding="utf-8")
@@ -348,7 +399,9 @@ class TestValidationResultStructure:
 
     def test_lists_are_initialized(self, spec_dir: Path):
         """Errors, warnings, and fixes should always be lists."""
-        from spec.validate_pkg.validators.spec_document_validator import SpecDocumentValidator
+        from spec.validate_pkg.validators.spec_document_validator import (
+            SpecDocumentValidator,
+        )
 
         spec_file = spec_dir / "spec.md"
         spec_file.write_text("## Overview\n\nContent\n", encoding="utf-8")
@@ -366,7 +419,9 @@ class TestEdgeCases:
 
     def test_handles_unicode_in_spec(self, spec_dir: Path):
         """Should handle unicode characters in spec.md."""
-        from spec.validate_pkg.validators.spec_document_validator import SpecDocumentValidator
+        from spec.validate_pkg.validators.spec_document_validator import (
+            SpecDocumentValidator,
+        )
 
         spec_file = spec_dir / "spec.md"
         content = "## Overview\n\n添加用户认证功能\n\n## Workflow Type\n\nFeature\n\n"
@@ -380,7 +435,9 @@ class TestEdgeCases:
 
     def test_handles_extra_whitespace(self, spec_dir: Path):
         """Should handle extra whitespace in sections."""
-        from spec.validate_pkg.validators.spec_document_validator import SpecDocumentValidator
+        from spec.validate_pkg.validators.spec_document_validator import (
+            SpecDocumentValidator,
+        )
 
         spec_file = spec_dir / "spec.md"
         content = "##  Overview  \n\nContent\n\n## Workflow Type\n\nFeature\n\n"
@@ -395,7 +452,9 @@ class TestEdgeCases:
 
     def test_handles_mixed_heading_levels(self, spec_dir: Path):
         """Should handle spec with various heading levels."""
-        from spec.validate_pkg.validators.spec_document_validator import SpecDocumentValidator
+        from spec.validate_pkg.validators.spec_document_validator import (
+            SpecDocumentValidator,
+        )
 
         spec_file = spec_dir / "spec.md"
         content = "## Overview\n\nContent\n\n### Subsection\n\nDetails\n\n"
@@ -410,7 +469,9 @@ class TestEdgeCases:
 
     def test_section_pattern_excludes_subsections(self, spec_dir: Path):
         """Should not match subsections (###) as main sections."""
-        from spec.validate_pkg.validators.spec_document_validator import SpecDocumentValidator
+        from spec.validate_pkg.validators.spec_document_validator import (
+            SpecDocumentValidator,
+        )
 
         spec_file = spec_dir / "spec.md"
         # Only has subsections, not main sections
@@ -425,7 +486,9 @@ class TestEdgeCases:
 
     def test_handles_empty_spec_file(self, spec_dir: Path):
         """Should handle empty spec.md file."""
-        from spec.validate_pkg.validators.spec_document_validator import SpecDocumentValidator
+        from spec.validate_pkg.validators.spec_document_validator import (
+            SpecDocumentValidator,
+        )
 
         spec_file = spec_dir / "spec.md"
         spec_file.write_text("", encoding="utf-8")
@@ -439,7 +502,9 @@ class TestEdgeCases:
 
     def test_handles_spec_with_only_whitespace(self, spec_dir: Path):
         """Should handle spec.md with only whitespace."""
-        from spec.validate_pkg.validators.spec_document_validator import SpecDocumentValidator
+        from spec.validate_pkg.validators.spec_document_validator import (
+            SpecDocumentValidator,
+        )
 
         spec_file = spec_dir / "spec.md"
         spec_file.write_text("   \n\n   \n", encoding="utf-8")
@@ -456,7 +521,9 @@ class TestSectionMatching:
 
     def test_matches_section_with_trailing_colon(self, spec_dir: Path):
         """Should match sections with trailing colon."""
-        from spec.validate_pkg.validators.spec_document_validator import SpecDocumentValidator
+        from spec.validate_pkg.validators.spec_document_validator import (
+            SpecDocumentValidator,
+        )
 
         spec_file = spec_dir / "spec.md"
         content = "## Overview:\n\nContent\n\n## Workflow Type:\n\nFeature\n\n"
@@ -471,7 +538,9 @@ class TestSectionMatching:
 
     def test_matches_section_with_special_chars(self, spec_dir: Path):
         """Should match sections with special characters."""
-        from spec.validate_pkg.validators.spec_document_validator import SpecDocumentValidator
+        from spec.validate_pkg.validators.spec_document_validator import (
+            SpecDocumentValidator,
+        )
 
         spec_file = spec_dir / "spec.md"
         content = "## Overview (v2.0)\n\nContent\n\n## Workflow Type\n\nFeature\n\n"

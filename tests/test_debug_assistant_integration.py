@@ -41,14 +41,14 @@ class TestErrorPatternMemoryStructure:
         from integrations.graphiti.queries_pkg.queries import GraphitiQueries
 
         # Verify method exists
-        assert hasattr(GraphitiQueries, 'add_error_pattern')
+        assert hasattr(GraphitiQueries, "add_error_pattern")
 
     def test_graphiti_search_has_similar_errors_method(self):
         """Test that GraphitiSearch has search_similar_errors method."""
         from integrations.graphiti.queries_pkg.search import GraphitiSearch
 
         # Verify method exists
-        assert hasattr(GraphitiSearch, 'search_similar_errors')
+        assert hasattr(GraphitiSearch, "search_similar_errors")
 
 
 class TestDebugAssistantWithMockedMemory:
@@ -57,6 +57,7 @@ class TestDebugAssistantWithMockedMemory:
     @pytest.fixture
     def mock_memory_search(self):
         """Create a mock for GraphitiSearch.search_similar_errors."""
+
         async def mock_search(error_message, error_type=None, min_score=0.0, limit=5):
             # Return similar errors based on type
             if "KeyError" in error_type or "KeyError" in error_message:
@@ -68,7 +69,7 @@ class TestDebugAssistantWithMockedMemory:
                         "solution": "Check if key exists in dict before accessing",
                         "resolution": "Added key validation with .get() method",
                         "score": 0.92,
-                        "timestamp": "2024-01-15T10:30:00Z"
+                        "timestamp": "2024-01-15T10:30:00Z",
                     }
                 ]
             elif "ValueError" in error_type or "ValueError" in error_message:
@@ -80,7 +81,7 @@ class TestDebugAssistantWithMockedMemory:
                         "solution": "Validate input type before conversion",
                         "resolution": "Added try/except block with proper error message",
                         "score": 0.78,
-                        "timestamp": "2024-01-12T09:15:00Z"
+                        "timestamp": "2024-01-12T09:15:00Z",
                     }
                 ]
             return []
@@ -97,8 +98,8 @@ class TestDebugAssistantWithMockedMemory:
         # Patch the search function
         with patch.object(
             integrations.graphiti.queries_pkg.search.GraphitiSearch,
-            'search_similar_errors',
-            side_effect=mock_memory_search
+            "search_similar_errors",
+            side_effect=mock_memory_search,
         ):
             yield assistant
 
@@ -132,7 +133,9 @@ KeyError: 'user_id'
         # Note: In mocked test setup, historical errors may not be populated
         # because _get_historical_errors creates a new GraphitiSearch instance
 
-    def test_debug_valueerror_retrieves_different_solutions(self, debug_assistant_with_memory):
+    def test_debug_valueerror_retrieves_different_solutions(
+        self, debug_assistant_with_memory
+    ):
         """Test that ValueError retrieves different historical solutions."""
         assistant = debug_assistant_with_memory
 
@@ -217,8 +220,8 @@ class TestMemoryErrorHandling:
 
         with patch.object(
             integrations.graphiti.queries_pkg.search.GraphitiSearch,
-            'search_similar_errors',
-            side_effect=mock_search_error
+            "search_similar_errors",
+            side_effect=mock_search_error,
         ):
             error_trace = "KeyError: 'test'"
 
@@ -243,9 +246,7 @@ class TestErrorPatternStorageWorkflow:
         # Create mock client
         mock_client = MagicMock()
         queries = GraphitiQueries(
-            client=mock_client,
-            group_id="test-group",
-            spec_context_id="test-spec"
+            client=mock_client, group_id="test-group", spec_context_id="test-spec"
         )
 
         # Mock the add_error_pattern method
@@ -254,27 +255,25 @@ class TestErrorPatternStorageWorkflow:
             error_message: str,
             file_path: str,
             solution: str,
-            context: str = None
+            context: str = None,
         ):
             return {
                 "success": True,
                 "error_type": error_type,
-                "stored_at": "2024-01-15T10:30:00Z"
+                "stored_at": "2024-01-15T10:30:00Z",
             }
 
-        with patch.object(
-            queries,
-            'add_error_pattern',
-            side_effect=mock_add_pattern
-        ):
+        with patch.object(queries, "add_error_pattern", side_effect=mock_add_pattern):
             # Test storing error pattern
-            result = asyncio.run(queries.add_error_pattern(
-                error_type="AttributeError",
-                error_message="'NoneType' object has no attribute 'user'",
-                file_path="app/models.py",
-                solution="Add null check before accessing attribute",
-                context="Function: get_user, Code: return user.name"
-            ))
+            result = asyncio.run(
+                queries.add_error_pattern(
+                    error_type="AttributeError",
+                    error_message="'NoneType' object has no attribute 'user'",
+                    file_path="app/models.py",
+                    solution="Add null check before accessing attribute",
+                    context="Function: get_user, Code: return user.name",
+                )
+            )
 
             # Verify it was called correctly
             assert result["success"] is True
@@ -312,9 +311,9 @@ class User:
     def assistant_with_project(self, temp_project_with_code):
         """Create assistant for test project."""
         from analysis.debug_assistant import DebugAssistant
+
         return DebugAssistant(
-            project_dir=temp_project_with_code,
-            spec_dir=temp_project_with_code
+            project_dir=temp_project_with_code, spec_dir=temp_project_with_code
         )
 
     def test_explain_keyerror_in_project_code(self, assistant_with_project):
@@ -348,12 +347,11 @@ ValueError: invalid literal for int() with base 10
             "failing_code": "self.id = int(data['id'])",
             "language": "Python",
             "file": "src/models.py",
-            "line": 5
+            "line": 5,
         }
 
         result = assistant_with_project.debug_error(
-            error_trace,
-            code_context=code_context
+            error_trace, code_context=code_context
         )
 
         # Should include fix suggestions
@@ -373,8 +371,7 @@ ValueError: invalid literal for int() with base 10
 """
 
         explanation = assistant_with_project.explain_error(
-            error_trace,
-            detail_level="detailed"
+            error_trace, detail_level="detailed"
         )
 
         # Should include stack frames

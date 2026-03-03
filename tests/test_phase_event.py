@@ -14,7 +14,6 @@ import json
 import sys
 from pathlib import Path
 
-
 # Add backend to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "apps" / "backend"))
 
@@ -340,6 +339,7 @@ class TestErrorHandling:
         monkeypatch.setenv("DEBUG", "true")
 
         import importlib
+
         from core import phase_event
 
         importlib.reload(phase_event)

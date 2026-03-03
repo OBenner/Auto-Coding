@@ -7,6 +7,7 @@ import { AgentAPI, createAgentAPI } from './agent-api';
 import { TemplateAPI, createTemplateAPI } from './template-api';
 import type { IdeationAPI } from './modules/ideation-api';
 import type { InsightsAPI } from './modules/insights-api';
+import type { AnalyticsAPI } from './modules/analytics-api';
 import { AppUpdateAPI, createAppUpdateAPI } from './app-update-api';
 import { GitHubAPI, createGitHubAPI } from './modules/github-api';
 import type { GitLabAPI } from './modules/gitlab-api';
@@ -81,7 +82,7 @@ export const createElectronAPI = (): ElectronAPI => ({
 });
 
 // Export individual API creators for potential use in tests or specialized contexts
-// Note: IdeationAPI, InsightsAPI, and GitLabAPI are included in AgentAPI
+// Note: IdeationAPI, InsightsAPI, AnalyticsAPI, and GitLabAPI are included in AgentAPI
 export {
   createProjectAPI,
   createTerminalAPI,
@@ -116,6 +117,7 @@ export type {
   TemplateAPI,
   IdeationAPI,
   InsightsAPI,
+  AnalyticsAPI,
   AppUpdateAPI,
   ProfileAPI,
   GitHubAPI,

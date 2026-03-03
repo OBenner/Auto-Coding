@@ -17,6 +17,23 @@ from typing import Any
 
 from ..base import BaseAnalyzer
 
+# Compiled regex patterns for performance
+_ENV_VAR_PATTERN = re.compile(r"^([A-Z_][A-Z0-9_]*)[ \t]*=(.*)$")
+_ENV_EXAMPLE_PATTERN = re.compile(r"^([A-Z_][A-Z0-9_]*)\s*=")
+_DOCKER_COMPOSE_PATTERN = re.compile(r"^\s*-\s*([A-Z_][A-Z0-9_]*)")
+
+# Python environment variable patterns
+_PYTHON_GETENV_PATTERN = re.compile(r'os\.getenv\(["\']([A-Z_][A-Z0-9_]*)["\']')
+_PYTHON_ENVIRON_GET_PATTERN = re.compile(
+    r'os\.environ\.get\(["\']([A-Z_][A-Z0-9_]*)["\']'
+)
+_PYTHON_ENVIRON_BRACKET_PATTERN = re.compile(
+    r'os\.environ\[["\']([A-Z_][A-Z0-9_]*)["\']'
+)
+
+# JavaScript environment variable pattern
+_JS_PROCESS_ENV_PATTERN = re.compile(r"process\.env\.([A-Z_][A-Z0-9_]*)")
+
 
 class EnvironmentDetector(BaseAnalyzer):
     """Detects environment variables and their configurations."""
@@ -81,7 +98,7 @@ class EnvironmentDetector(BaseAnalyzer):
                     continue
 
                 # Parse KEY=value or KEY="value" or KEY='value'
-                match = re.match(r"^([A-Z_][A-Z0-9_]*)\s*=\s*(.*)$", line)
+                match = _ENV_VAR_PATTERN.match(line)
                 if match:
                     key = match.group(1)
                     value = match.group(2).strip().strip('"').strip("'")
@@ -114,7 +131,7 @@ class EnvironmentDetector(BaseAnalyzer):
             if not line or line.startswith("#"):
                 continue
 
-            match = re.match(r"^([A-Z_][A-Z0-9_]*)\s*=", line)
+            match = _ENV_EXAMPLE_PATTERN.match(line)
             if match:
                 key = match.group(1)
                 required_vars.add(key)
@@ -149,7 +166,7 @@ class EnvironmentDetector(BaseAnalyzer):
                         continue
 
                     # Parse - KEY=value or - KEY
-                    match = re.match(r"^\s*-\s*([A-Z_][A-Z0-9_]*)", line)
+                    match = _DOCKER_COMPOSE_PATTERN.match(line)
                     if match:
                         key = match.group(1)
                         if key not in env_vars:
@@ -182,20 +199,16 @@ class EnvironmentDetector(BaseAnalyzer):
             if not content:
                 continue
 
-            # Python: os.getenv("VAR") or os.environ.get("VAR")
-            python_patterns = [
-                r'os\.getenv\(["\']([A-Z_][A-Z0-9_]*)["\']',
-                r'os\.environ\.get\(["\']([A-Z_][A-Z0-9_]*)["\']',
-                r'os\.environ\[["\']([A-Z_][A-Z0-9_]*)["\']',
+            # Use compiled patterns for better performance
+            patterns = [
+                _PYTHON_GETENV_PATTERN,
+                _PYTHON_ENVIRON_GET_PATTERN,
+                _PYTHON_ENVIRON_BRACKET_PATTERN,
+                _JS_PROCESS_ENV_PATTERN,
             ]
 
-            # JavaScript: process.env.VAR
-            js_patterns = [
-                r"process\.env\.([A-Z_][A-Z0-9_]*)",
-            ]
-
-            for pattern in python_patterns + js_patterns:
-                matches = re.findall(pattern, content)
+            for pattern in patterns:
+                matches = pattern.findall(content)
                 for var_name in matches:
                     if var_name not in env_vars:
                         optional_vars.add(var_name)

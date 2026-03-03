@@ -38,6 +38,8 @@
     "recovering": "Recovering...",
     "needsRecovery": "Needs Recovery",
     "needsResume": "Needs Resume",
+    "failed": "Failed",
+    "cancelled": "Cancelled",
     "moreInfo": "More"
   },
   "reviewReason": {
@@ -222,6 +224,17 @@
   "images": {
     "removeImageAriaLabel": "Remove image {{filename}}",
     "pasteHint": "Tip: Paste screenshots directly with {{shortcut}} to add reference images."
+  },
+  "backgroundTask": {
+    "duration": "Duration:",
+    "memory": "Memory:",
+    "exitCode": "Exit Code:",
+    "timeout": "Timeout:",
+    "cancelTitle": "Cancel Task",
+    "cancelConfirmation": "Are you sure you want to cancel this running task?",
+    "cancelWarning": "This will terminate the process immediately. Any unsaved progress will be lost.",
+    "cancelling": "Cancelling...",
+    "cancelAction": "Cancel Task"
   },
   "notifications": {
     "backgroundTaskTitle": "Task continues in background",

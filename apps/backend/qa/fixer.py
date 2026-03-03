@@ -22,6 +22,9 @@ from agents.memory_manager import (
 from claude_agent_sdk import ClaudeSDKClient
 from core.client import create_client
 from core.model_fallback import MODEL_FALLBACK_CHAIN
+from core.providers import create_engine_provider
+from core.providers.base import SessionConfig
+from core.providers.config import ProviderConfig
 from debug import debug, debug_detailed, debug_error, debug_section, debug_success
 from phase_config import resolve_model_id
 from security.tool_input_validator import get_safe_tool_input
@@ -711,3 +714,86 @@ async def run_qa_fixer_session(
         error=final_error,
     )
     return "stuck", f"Fixer stuck after exhausting all recovery attempts: {final_error}"
+
+
+# =============================================================================
+# QA FIXER FACTORY FUNCTION (Provider Pattern)
+# =============================================================================
+
+
+def create_qa_fixer_session(
+    project_dir: Path,
+    spec_dir: Path,
+    model: str | None = None,
+    max_thinking_tokens: int | None = None,
+):
+    """
+    Create a QA fixer agent session using the configured AI engine provider.
+
+    Args:
+        project_dir: Root directory for the project
+        spec_dir: Directory containing the spec
+        model: Model to use (overrides provider config)
+        max_thinking_tokens: Token budget for extended thinking
+
+    Returns:
+        AgentSession with a .client property containing the SDK client
+
+    Raises:
+        ProviderError: If provider creation or session creation fails
+    """
+    config = ProviderConfig.from_env(agent_type="qa_fixer")
+    provider = create_engine_provider(config)
+
+    if provider.name == "claude":
+        session = provider.create_session(
+            config=SessionConfig(
+                name="qa-fixer-session",
+                model=model,
+            ),
+            project_dir=project_dir,
+            spec_dir=spec_dir,
+            agent_type="qa_fixer",
+            max_thinking_tokens=max_thinking_tokens,
+        )
+    else:
+        session = provider.create_session(
+            SessionConfig(
+                name="qa-fixer-session",
+                model=model,
+            )
+        )
+
+    return session
+
+
+async def run_qa_fixer(
+    project_dir: Path,
+    spec_dir: Path,
+    fix_session: int,
+    model: str | None = None,
+    verbose: bool = False,
+    max_thinking_tokens: int | None = None,
+) -> tuple[str, str]:
+    """
+    Run a QA fixer session using the configured AI engine provider.
+
+    Creates a session using the factory pattern and delegates to run_qa_fixer_session.
+    """
+    session = create_qa_fixer_session(
+        project_dir=project_dir,
+        spec_dir=spec_dir,
+        model=model,
+        max_thinking_tokens=max_thinking_tokens,
+    )
+
+    client = session.client
+
+    async with client:
+        return await run_qa_fixer_session(
+            client=client,
+            spec_dir=spec_dir,
+            fix_session=fix_session,
+            verbose=verbose,
+            project_dir=project_dir,
+        )

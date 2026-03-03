@@ -12,9 +12,10 @@ import os
 from pathlib import Path
 
 from context.constants import SKIP_DIRS
-from core.client import create_client
 from core.file_utils import write_json_atomic
 from core.model_fallback import MODEL_FALLBACK_CHAIN
+from core.providers.config import ProviderConfig
+from core.providers.factory import create_engine_provider
 from linear_updater import (
     LinearTaskState,
     is_linear_enabled,
@@ -42,7 +43,6 @@ from prompts_pkg.prompt_generator import (
     generate_subtask_prompt,
     load_subtask_context,
 )
-from prompts_pkg.prompts import is_first_run
 from recovery import RecoveryAction, RecoveryManager
 from security.constants import PROJECT_DIR_ENV_VAR
 from task_logger import (
@@ -629,6 +629,9 @@ async def run_autonomous_agent(
             print()
 
     # Check if this is a fresh start or continuation
+    # Lazy import to avoid circular import: prompts_pkg → agents → coder → prompts_pkg
+    from prompts_pkg.prompts import is_first_run
+
     first_run = is_first_run(spec_dir)
 
     # Restore provider config if restarting
@@ -862,15 +865,13 @@ async def run_autonomous_agent(
 
         phase_thinking_budget = get_phase_thinking_budget(spec_dir, current_phase)
 
-        # Create client (fresh context) with phase-specific model and thinking
         # Use appropriate agent_type for correct tool permissions and thinking budget
-        client = create_client(
-            project_dir,
-            spec_dir,
-            phase_model,
-            agent_type="planner" if first_run else "coder",
-            max_thinking_tokens=phase_thinking_budget,
-        )
+        agent_type_for_session = "planner" if first_run else "coder"
+
+        # Defer provider/session creation until we know process isolation is not used.
+        # When process isolation is enabled the subprocess creates its own client,
+        # so building one here would be wasted work.
+        client = None
 
         # Generate appropriate prompt
         if first_run:
@@ -1072,6 +1073,40 @@ async def run_autonomous_agent(
                 limits=None,  # Use default ResourceLimits
             )
         else:
+            # Create provider/session now (deferred to avoid wasted work when
+            # process isolation is enabled).
+            provider_config = ProviderConfig.from_env(agent_type=agent_type_for_session)
+            provider = create_engine_provider(provider_config)
+
+            from core.providers.base import SessionConfig
+
+            session_config = SessionConfig(
+                name=f"{agent_type_for_session}-session-{iteration}",
+                model=phase_model,
+                extra={
+                    "agent_type": agent_type_for_session,
+                    "max_thinking_tokens": phase_thinking_budget,
+                },
+            )
+
+            if provider.name == "claude":
+                session = provider.create_session(
+                    session_config,
+                    project_dir=project_dir,
+                    spec_dir=spec_dir,
+                    agent_type=agent_type_for_session,
+                    max_thinking_tokens=phase_thinking_budget,
+                )
+            else:
+                session = provider.create_session(session_config)
+
+            if not hasattr(session, "client"):
+                raise AttributeError(
+                    f"Provider {provider.name} session missing 'client' attribute"
+                )
+
+            client = session.client
+
             # Run in current process (legacy mode)
             async with client:
                 (

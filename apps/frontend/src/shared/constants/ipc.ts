@@ -69,6 +69,21 @@ export const IPC_CHANNELS = {
   // Task token statistics
   TASK_TOKEN_STATS_GET: 'task:tokenStats:get',
 
+  // Background task operations (long-running commands)
+  BACKGROUND_TASK_START: 'backgroundTask:start',
+  BACKGROUND_TASK_CANCEL: 'backgroundTask:cancel',
+  BACKGROUND_TASK_GET_STATUS: 'backgroundTask:getStatus',
+  BACKGROUND_TASK_GET_OUTPUT: 'backgroundTask:getOutput',
+  BACKGROUND_TASK_LIST_RUNNING: 'backgroundTask:listRunning',
+  BACKGROUND_TASK_LIST_BY_STATUS: 'backgroundTask:listByStatus',
+
+  // Background task events (main -> renderer)
+  BACKGROUND_TASK_CREATED: 'backgroundTask:created',
+  BACKGROUND_TASK_STARTED: 'backgroundTask:started',
+  BACKGROUND_TASK_PROGRESS: 'backgroundTask:progress',
+  BACKGROUND_TASK_COMPLETE: 'backgroundTask:complete',
+  BACKGROUND_TASK_ERROR: 'backgroundTask:error',
+
   // Batch operations
   TASK_BATCH_RUN_QA: 'task:batchRunQA',
 
@@ -169,6 +184,9 @@ export const IPC_CHANNELS = {
   SETTINGS_GET: 'settings:get',
   SETTINGS_SAVE: 'settings:save',
   SETTINGS_GET_CLI_TOOLS_INFO: 'settings:getCliToolsInfo',
+  SETTINGS_SAVE_PROVIDER: 'settings:saveProviderSettings',
+  SETTINGS_LOAD_PROVIDER: 'settings:loadProviderSettings',
+  SETTINGS_GET_AVAILABLE_MODELS: 'settings:getAvailableModels',
 
   // AI Provider Configuration (backend .env sync)
   PROVIDER_CONFIG_GET: 'provider:config:get',
@@ -566,6 +584,12 @@ export const IPC_CHANNELS = {
   INSIGHTS_STATUS: 'insights:status',
   INSIGHTS_ERROR: 'insights:error',
 
+  // Analytics operations
+  ANALYTICS_GET_SUMMARY: 'analytics:getSummary',
+  ANALYTICS_GET_AGENT_STATS: 'analytics:getAgentStats',
+  ANALYTICS_GET_TRENDS: 'analytics:getTrends',
+  ANALYTICS_GET_REPORT: 'analytics:getReport',
+
   // File explorer operations
   FILE_EXPLORER_LIST: 'fileExplorer:list',
   FILE_EXPLORER_READ: 'fileExplorer:read',
@@ -577,6 +601,9 @@ export const IPC_CHANNELS = {
   GIT_DETECT_MAIN_BRANCH: 'git:detectMainBranch',
   GIT_CHECK_STATUS: 'git:checkStatus',
   GIT_INITIALIZE: 'git:initialize',
+
+  // Cost reporting
+  PROJECT_LOAD_COST_REPORT: 'project:loadCostReport',
 
   // App auto-update operations
   APP_UPDATE_CHECK: 'app-update:check',

@@ -739,7 +739,6 @@ class TestRunTestGeneratorSession:
             side_effect=RuntimeError("API Error")
         )
 
-
         analysis = {"functions": [], "classes": []}
         result = await run_test_generator_session(project_dir, spec_dir, analysis)
 
@@ -761,7 +760,6 @@ class TestRunTestGeneratorSession:
         monkeypatch.setattr(
             "agents.test_generator.validate_generated_tests", lambda x, y, z: True
         )
-
 
         analysis = {"functions": [], "classes": []}
         result = await run_test_generator_session(project_dir, spec_dir, analysis)

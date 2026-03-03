@@ -120,16 +120,32 @@ class ProviderConfig:
     ollama_api_key: str = ""
 
     @classmethod
-    def from_env(cls) -> "ProviderConfig":
-        """Create config from environment variables."""
-        # Provider selection (default: claude)
-        provider = os.environ.get("AI_ENGINE_PROVIDER", DEFAULT_PROVIDER).lower()
+    def from_env(cls, agent_type: str | None = None) -> "ProviderConfig":
+        """Create config from environment variables.
+
+        Args:
+            agent_type: Optional agent type for per-agent provider/model overrides.
+                        If provided, checks AGENT_PROVIDER_<TYPE> and AGENT_MODEL_<TYPE>
+                        env vars before falling back to global settings.
+        """
+        # Per-agent provider override (e.g. AGENT_PROVIDER_PLANNER=litellm)
+        provider = None
+        if agent_type:
+            provider = os.environ.get(f"AGENT_PROVIDER_{agent_type.upper()}")
+        if not provider:
+            provider = os.environ.get("AI_ENGINE_PROVIDER", DEFAULT_PROVIDER)
+        provider = provider.lower()
 
         # Validate provider
         valid_providers = [p.value for p in AIEngineProvider]
         if provider not in valid_providers:
             # Fall back to default if invalid
             provider = DEFAULT_PROVIDER
+
+        # Per-agent model override (e.g. AGENT_MODEL_PLANNER=claude-opus-4-20250514)
+        agent_model = None
+        if agent_type:
+            agent_model = os.environ.get(f"AGENT_MODEL_{agent_type.upper()}")
 
         # Claude Agent SDK settings
         anthropic_api_key = os.environ.get("ANTHROPIC_API_KEY", "")
@@ -164,6 +180,23 @@ class ProviderConfig:
         ollama_model = os.environ.get("OLLAMA_MODEL", "")
         ollama_base_url = os.environ.get("OLLAMA_BASE_URL", DEFAULT_OLLAMA_BASE_URL)
         ollama_api_key = os.environ.get("OLLAMA_API_KEY", "")
+
+        # Apply per-agent model override to the selected provider's model field
+        if agent_model:
+            if provider == AIEngineProvider.CLAUDE.value:
+                claude_model = agent_model
+            elif provider == AIEngineProvider.OPENAI.value:
+                openai_model = agent_model
+            elif provider == AIEngineProvider.GOOGLE.value:
+                google_model = agent_model
+            elif provider == AIEngineProvider.LITELLM.value:
+                litellm_model = agent_model
+            elif provider == AIEngineProvider.OPENROUTER.value:
+                openrouter_model = agent_model
+            elif provider == AIEngineProvider.ZHIPUAI.value:
+                zhipuai_model = agent_model
+            elif provider == AIEngineProvider.OLLAMA.value:
+                ollama_model = agent_model
 
         return cls(
             provider=provider,

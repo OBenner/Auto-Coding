@@ -7,9 +7,13 @@ generate valid specs, and have proper parameter validation.
 """
 
 import pytest
-from apps.backend.spec.templates.builtin import get_builtin_templates, register_builtin_templates
-from apps.backend.spec.templates.registry import TemplateRegistry
+
+from apps.backend.spec.templates.builtin import (
+    get_builtin_templates,
+    register_builtin_templates,
+)
 from apps.backend.spec.templates.generator import SpecGenerator
+from apps.backend.spec.templates.registry import TemplateRegistry
 
 
 class TestBuiltinTemplatesRegistry:
@@ -61,20 +65,40 @@ class TestBuiltinTemplatesInstantiation:
         """Test that all templates have non-empty descriptions."""
         for template in templates:
             assert template.description, f"Template {template.name} has no description"
-            assert len(template.description) > 10, f"Template {template.name} description too short"
+            assert len(template.description) > 10, (
+                f"Template {template.name} description too short"
+            )
 
     def test_all_templates_have_categories(self, templates):
         """Test that all templates have categories."""
-        valid_categories = ["api", "ui", "database", "infrastructure", "testing", "documentation", "security", "performance", "integration", "file", "notification", "data", "feature"]
+        valid_categories = [
+            "api",
+            "ui",
+            "database",
+            "infrastructure",
+            "testing",
+            "documentation",
+            "security",
+            "performance",
+            "integration",
+            "file",
+            "notification",
+            "data",
+            "feature",
+        ]
 
         for template in templates:
             assert template.category, f"Template {template.name} has no category"
-            assert template.category in valid_categories, f"Template {template.name} has invalid category: {template.category}"
+            assert template.category in valid_categories, (
+                f"Template {template.name} has invalid category: {template.category}"
+            )
 
     def test_all_templates_have_parameters(self, templates):
         """Test that all templates have parameter definitions."""
         for template in templates:
-            assert isinstance(template.parameters, dict), f"Template {template.name} parameters must be a dict"
+            assert isinstance(template.parameters, dict), (
+                f"Template {template.name} parameters must be a dict"
+            )
 
 
 class TestBuiltinTemplatesSpecGeneration:
@@ -94,7 +118,10 @@ class TestBuiltinTemplatesSpecGeneration:
         "database_migration": {
             "migration_type": "add_table",
             "table_name": "users",
-            "changes": ["add column name varchar(255)", "add column email varchar(255)"],
+            "changes": [
+                "add column name varchar(255)",
+                "add column email varchar(255)",
+            ],
         },
         "ui_component": {
             "component_name": "UserCard",
@@ -196,7 +223,9 @@ class TestBuiltinTemplatesSpecGeneration:
             # Generate spec content
             try:
                 spec_content = template.generate(params)
-                assert isinstance(spec_content, dict), f"Template {template.name} must return dict"
+                assert isinstance(spec_content, dict), (
+                    f"Template {template.name} must return dict"
+                )
             except KeyError as e:
                 # Skip templates with missing required params in our test data
                 pytest.skip(f"Template {template.name} requires parameter: {e}")
@@ -218,8 +247,12 @@ class TestBuiltinTemplatesSpecGeneration:
                 spec_content = template.generate(params)
 
                 for field in required_fields:
-                    assert field in spec_content, f"Template {template.name} missing field: {field}"
-                    assert spec_content[field], f"Template {template.name} has empty field: {field}"
+                    assert field in spec_content, (
+                        f"Template {template.name} missing field: {field}"
+                    )
+                    assert spec_content[field], (
+                        f"Template {template.name} has empty field: {field}"
+                    )
             except KeyError:
                 # Skip templates with missing required params
                 pytest.skip(f"Template {template.name} missing required params")
@@ -236,8 +269,12 @@ class TestBuiltinTemplatesSpecGeneration:
             try:
                 spec_content = template.generate(params)
 
-                assert isinstance(spec_content["acceptance_criteria"], list), f"Template {template.name} acceptance_criteria must be list"
-                assert len(spec_content["acceptance_criteria"]) > 0, f"Template {template.name} has empty acceptance_criteria"
+                assert isinstance(spec_content["acceptance_criteria"], list), (
+                    f"Template {template.name} acceptance_criteria must be list"
+                )
+                assert len(spec_content["acceptance_criteria"]) > 0, (
+                    f"Template {template.name} has empty acceptance_criteria"
+                )
             except KeyError:
                 # Skip templates with missing required params
                 pytest.skip(f"Template {template.name} missing required params")
@@ -256,11 +293,15 @@ class TestBuiltinTemplatesSpecGeneration:
                 spec_content = generator.generate_spec(params, spec_dir=None)
 
                 errors = generator.validate_generated_spec(spec_content)
-                assert len(errors) == 0, f"Template {template.name} failed validation: {errors}"
+                assert len(errors) == 0, (
+                    f"Template {template.name} failed validation: {errors}"
+                )
             except ValueError as e:
                 # Skip templates with missing/invalid required params
                 if "Invalid parameters" in str(e):
-                    pytest.skip(f"Template {template.name} has validation issues with test params")
+                    pytest.skip(
+                        f"Template {template.name} has validation issues with test params"
+                    )
                 raise
 
 
@@ -282,16 +323,20 @@ class TestKeyTemplatesParameterValidation:
         assert len(errors) == 2
 
         # All required params present
-        errors = template.validate_params({
-            "resource_name": "User",
-            "resource_name_plural": "Users",
-            "fields": ["name", "email"],
-        })
+        errors = template.validate_params(
+            {
+                "resource_name": "User",
+                "resource_name_plural": "Users",
+                "fields": ["name", "email"],
+            }
+        )
         assert len(errors) == 0
 
     def test_authentication_validates_required_params(self):
         """Test Authentication template validates required parameters."""
-        from apps.backend.spec.templates.builtin.authentication import AuthenticationTemplate
+        from apps.backend.spec.templates.builtin.authentication import (
+            AuthenticationTemplate,
+        )
 
         template = AuthenticationTemplate()
 
@@ -309,7 +354,9 @@ class TestKeyTemplatesParameterValidation:
 
     def test_database_migration_validates_required_params(self):
         """Test Database Migration template validates required parameters."""
-        from apps.backend.spec.templates.builtin.database_migration import DatabaseMigrationTemplate
+        from apps.backend.spec.templates.builtin.database_migration import (
+            DatabaseMigrationTemplate,
+        )
 
         template = DatabaseMigrationTemplate()
 
@@ -378,7 +425,9 @@ class TestTemplateSpecGeneration:
 
     def test_authentication_generates_complete_spec(self, tmp_path):
         """Test Authentication template generates a complete spec."""
-        from apps.backend.spec.templates.builtin.authentication import AuthenticationTemplate
+        from apps.backend.spec.templates.builtin.authentication import (
+            AuthenticationTemplate,
+        )
 
         template = AuthenticationTemplate()
         generator = SpecGenerator(template)
@@ -393,7 +442,10 @@ class TestTemplateSpecGeneration:
 
         # Check result structure
         assert "title" in result
-        assert "authentication" in result["title"].lower() or "auth" in result["title"].lower()
+        assert (
+            "authentication" in result["title"].lower()
+            or "auth" in result["title"].lower()
+        )
         assert "description" in result
         assert "acceptance_criteria" in result
 

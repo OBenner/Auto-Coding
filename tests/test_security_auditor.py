@@ -13,6 +13,9 @@ Tests cover:
 """
 
 import json
+
+# Add auto-claude to path for imports
+import sys
 import tempfile
 from datetime import datetime
 from pathlib import Path
@@ -20,18 +23,15 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-# Add auto-claude to path for imports
-import sys
 sys.path.insert(0, str(Path(__file__).parent.parent / "apps" / "backend"))
 
 from agents.security_auditor import (
     SecurityAuditAgent,
     SecurityFinding,
     SecurityReport,
-    run_security_audit,
     has_critical_security_issues,
+    run_security_audit,
 )
-
 
 # =============================================================================
 # FIXTURES
@@ -175,7 +175,14 @@ class TestSecurityReport:
 
         assert report.project_dir == str(temp_dir)
         assert report.findings == []
-        assert report.summary_counts == {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0, "total": 0}
+        assert report.summary_counts == {
+            "critical": 0,
+            "high": 0,
+            "medium": 0,
+            "low": 0,
+            "info": 0,
+            "total": 0,
+        }
 
     def test_add_finding(self, sample_report, sample_finding):
         """Test adding a finding to report."""
@@ -188,9 +195,21 @@ class TestSecurityReport:
     def test_add_multiple_findings(self, sample_report):
         """Test adding multiple findings."""
         findings = [
-            SecurityFinding(category="auth", severity="critical", title="Critical issue", description="Test"),
-            SecurityFinding(category="auth", severity="high", title="High issue", description="Test"),
-            SecurityFinding(category="auth", severity="medium", title="Medium issue", description="Test"),
+            SecurityFinding(
+                category="auth",
+                severity="critical",
+                title="Critical issue",
+                description="Test",
+            ),
+            SecurityFinding(
+                category="auth", severity="high", title="High issue", description="Test"
+            ),
+            SecurityFinding(
+                category="auth",
+                severity="medium",
+                title="Medium issue",
+                description="Test",
+            ),
         ]
 
         for finding in findings:
@@ -205,9 +224,18 @@ class TestSecurityReport:
     def test_get_critical_findings(self, sample_report):
         """Test getting critical and high severity findings."""
         findings = [
-            SecurityFinding(category="auth", severity="critical", title="Critical", description="Test"),
-            SecurityFinding(category="auth", severity="high", title="High", description="Test"),
-            SecurityFinding(category="auth", severity="medium", title="Medium", description="Test"),
+            SecurityFinding(
+                category="auth",
+                severity="critical",
+                title="Critical",
+                description="Test",
+            ),
+            SecurityFinding(
+                category="auth", severity="high", title="High", description="Test"
+            ),
+            SecurityFinding(
+                category="auth", severity="medium", title="Medium", description="Test"
+            ),
         ]
 
         for finding in findings:
@@ -225,13 +253,17 @@ class TestSecurityReport:
 
         # Add medium severity - should not block
         sample_report.add_finding(
-            SecurityFinding(category="auth", severity="medium", title="Test", description="Test")
+            SecurityFinding(
+                category="auth", severity="medium", title="Test", description="Test"
+            )
         )
         assert sample_report.has_blocking_issues() is False
 
         # Add critical severity - should block
         sample_report.add_finding(
-            SecurityFinding(category="auth", severity="critical", title="Test", description="Test")
+            SecurityFinding(
+                category="auth", severity="critical", title="Test", description="Test"
+            )
         )
         assert sample_report.has_blocking_issues() is True
 
@@ -398,7 +430,9 @@ class TestSecurityAuditAgent:
         mock_scanner.scan.return_value = mock_scan_result
         agent._security_scanner = mock_scanner
 
-        report = SecurityReport(project_dir=str(temp_dir), timestamp=datetime.now().isoformat())
+        report = SecurityReport(
+            project_dir=str(temp_dir), timestamp=datetime.now().isoformat()
+        )
         agent._scan_secrets(temp_dir, report)
 
         assert len(report.findings) == 1
@@ -427,7 +461,9 @@ class TestSecurityAuditAgent:
         mock_scanner.scan.return_value = mock_scan_result
         agent._security_scanner = mock_scanner
 
-        report = SecurityReport(project_dir=str(temp_dir), timestamp=datetime.now().isoformat())
+        report = SecurityReport(
+            project_dir=str(temp_dir), timestamp=datetime.now().isoformat()
+        )
         agent._scan_dependencies(temp_dir, report)
 
         assert len(report.findings) == 1
@@ -588,8 +624,12 @@ def login():
     def test_generate_report(self, agent, temp_dir):
         """Test generating a security report."""
         findings = [
-            SecurityFinding(category="auth", severity="critical", title="Test", description="Test"),
-            SecurityFinding(category="secret", severity="high", title="Test", description="Test"),
+            SecurityFinding(
+                category="auth", severity="critical", title="Test", description="Test"
+            ),
+            SecurityFinding(
+                category="secret", severity="high", title="Test", description="Test"
+            ),
         ]
 
         report = agent.generate_report(findings=findings, project_dir=temp_dir)
@@ -707,7 +747,9 @@ class TestConvenienceFunctions:
     @patch("agents.security_auditor.SecurityAuditAgent.run_full_audit")
     def test_run_security_audit(self, mock_run_full_audit, temp_dir):
         """Test run_security_audit convenience function."""
-        mock_report = SecurityReport(project_dir=str(temp_dir), timestamp=datetime.now().isoformat())
+        mock_report = SecurityReport(
+            project_dir=str(temp_dir), timestamp=datetime.now().isoformat()
+        )
         mock_run_full_audit.return_value = mock_report
 
         report = run_security_audit(temp_dir)
@@ -718,9 +760,13 @@ class TestConvenienceFunctions:
     @patch("agents.security_auditor.SecurityAuditAgent.run_full_audit")
     def test_has_critical_security_issues_true(self, mock_run_full_audit, temp_dir):
         """Test has_critical_security_issues when issues exist."""
-        mock_report = SecurityReport(project_dir=str(temp_dir), timestamp=datetime.now().isoformat())
+        mock_report = SecurityReport(
+            project_dir=str(temp_dir), timestamp=datetime.now().isoformat()
+        )
         mock_report.add_finding(
-            SecurityFinding(category="auth", severity="critical", title="Test", description="Test")
+            SecurityFinding(
+                category="auth", severity="critical", title="Test", description="Test"
+            )
         )
         mock_run_full_audit.return_value = mock_report
 
@@ -731,7 +777,9 @@ class TestConvenienceFunctions:
     @patch("agents.security_auditor.SecurityAuditAgent.run_full_audit")
     def test_has_critical_security_issues_false(self, mock_run_full_audit, temp_dir):
         """Test has_critical_security_issues when no issues exist."""
-        mock_report = SecurityReport(project_dir=str(temp_dir), timestamp=datetime.now().isoformat())
+        mock_report = SecurityReport(
+            project_dir=str(temp_dir), timestamp=datetime.now().isoformat()
+        )
         mock_run_full_audit.return_value = mock_report
 
         has_issues = has_critical_security_issues(temp_dir)
@@ -765,7 +813,9 @@ class TestEdgeCases:
 
     def test_report_with_no_findings(self, temp_dir):
         """Test report generation with no findings."""
-        report = SecurityReport(project_dir=str(temp_dir), timestamp=datetime.now().isoformat())
+        report = SecurityReport(
+            project_dir=str(temp_dir), timestamp=datetime.now().isoformat()
+        )
 
         assert report.has_blocking_issues() is False
         assert len(report.get_critical_findings()) == 0
@@ -773,7 +823,9 @@ class TestEdgeCases:
 
     def test_report_markdown_with_empty_recommendations(self, temp_dir):
         """Test markdown generation with no recommendations."""
-        report = SecurityReport(project_dir=str(temp_dir), timestamp=datetime.now().isoformat())
+        report = SecurityReport(
+            project_dir=str(temp_dir), timestamp=datetime.now().isoformat()
+        )
 
         markdown = report.to_markdown()
 

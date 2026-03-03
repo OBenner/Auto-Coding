@@ -22,6 +22,12 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from core.workspace import (
+    find_workspace_for_project,
+    get_workspace_config,
+    get_workspace_manager,
+    list_workspaces,
+)
 
 # Import workspace components
 from core.workspace_config import (
@@ -32,12 +38,6 @@ from core.workspace_config import (
 from core.workspace_manager import (
     ProjectState,
     WorkspaceManager,
-)
-from core.workspace import (
-    get_workspace_config,
-    get_workspace_manager,
-    find_workspace_for_project,
-    list_workspaces,
 )
 from core.worktree import WorktreeManager
 

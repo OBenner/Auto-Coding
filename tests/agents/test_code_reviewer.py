@@ -42,9 +42,7 @@ def test_env(temp_git_repo: Path):
     spec_dir.mkdir(parents=True, exist_ok=True)
 
     # Create spec.md
-    (spec_dir / "spec.md").write_text(
-        "# Test Spec\n\nTest feature for code review"
-    )
+    (spec_dir / "spec.md").write_text("# Test Spec\n\nTest feature for code review")
 
     yield temp_dir, spec_dir, project_dir
 
@@ -66,9 +64,7 @@ class TestSuccessfulReview:
     """Tests for successful code review scenarios."""
 
     @pytest.mark.asyncio
-    async def test_approved_review_returns_approved_status(
-        self, test_env, mock_client
-    ):
+    async def test_approved_review_returns_approved_status(self, test_env, mock_client):
         """Test that approved review returns ('approved', response)."""
         from agents.code_reviewer import run_code_review_session
 
@@ -86,13 +82,15 @@ All checks passed.
         (spec_dir / "code_review_report.md").write_text(report_content)
 
         # Mock agent session to return success
-        with patch(
-            "agents.code_reviewer.run_agent_session", new_callable=AsyncMock
-        ) as mock_session, patch(
-            "agents.code_reviewer.get_graphiti_context",
-            new_callable=AsyncMock,
-        ) as mock_context:
-
+        with (
+            patch(
+                "agents.code_reviewer.run_agent_session", new_callable=AsyncMock
+            ) as mock_session,
+            patch(
+                "agents.code_reviewer.get_graphiti_context",
+                new_callable=AsyncMock,
+            ) as mock_context,
+        ):
             mock_session.return_value = (
                 "success",
                 "Review completed successfully",
@@ -124,13 +122,15 @@ The code review found no critical issues.
 """
         (spec_dir / "code_review_report.md").write_text(report_content)
 
-        with patch(
-            "agents.code_reviewer.run_agent_session", new_callable=AsyncMock
-        ) as mock_session, patch(
-            "agents.code_reviewer.get_graphiti_context",
-            new_callable=AsyncMock,
-        ) as mock_context:
-
+        with (
+            patch(
+                "agents.code_reviewer.run_agent_session", new_callable=AsyncMock
+            ) as mock_session,
+            patch(
+                "agents.code_reviewer.get_graphiti_context",
+                new_callable=AsyncMock,
+            ) as mock_context,
+        ):
             mock_session.return_value = ("success", "Review completed")
             mock_context.return_value = None
 
@@ -153,9 +153,7 @@ class TestIssuesFound:
     """Tests for code review scenarios where issues are found."""
 
     @pytest.mark.asyncio
-    async def test_review_with_issues_returns_issues_found(
-        self, test_env, mock_client
-    ):
+    async def test_review_with_issues_returns_issues_found(self, test_env, mock_client):
         """Test that review with issues returns ('issues_found', response)."""
         from agents.code_reviewer import run_code_review_session
 
@@ -172,13 +170,15 @@ Issues found:
 """
         (spec_dir / "code_review_report.md").write_text(report_content)
 
-        with patch(
-            "agents.code_reviewer.run_agent_session", new_callable=AsyncMock
-        ) as mock_session, patch(
-            "agents.code_reviewer.get_graphiti_context",
-            new_callable=AsyncMock,
-        ) as mock_context:
-
+        with (
+            patch(
+                "agents.code_reviewer.run_agent_session", new_callable=AsyncMock
+            ) as mock_session,
+            patch(
+                "agents.code_reviewer.get_graphiti_context",
+                new_callable=AsyncMock,
+            ) as mock_context,
+        ):
             mock_session.return_value = ("success", "Review found issues")
             mock_context.return_value = None
 
@@ -189,9 +189,7 @@ Issues found:
                 review_session=1,
             )
 
-            assert (
-                status == "issues_found"
-            ), "Should return issues_found status"
+            assert status == "issues_found", "Should return issues_found status"
             assert "Review found issues" in response
 
     @pytest.mark.asyncio
@@ -203,13 +201,15 @@ Issues found:
 
         # Don't create any report file
 
-        with patch(
-            "agents.code_reviewer.run_agent_session", new_callable=AsyncMock
-        ) as mock_session, patch(
-            "agents.code_reviewer.get_graphiti_context",
-            new_callable=AsyncMock,
-        ) as mock_context:
-
+        with (
+            patch(
+                "agents.code_reviewer.run_agent_session", new_callable=AsyncMock
+            ) as mock_session,
+            patch(
+                "agents.code_reviewer.get_graphiti_context",
+                new_callable=AsyncMock,
+            ) as mock_context,
+        ):
             mock_session.return_value = ("success", "Session completed")
             mock_context.return_value = None
 
@@ -220,9 +220,9 @@ Issues found:
                 review_session=1,
             )
 
-            assert (
-                status == "issues_found"
-            ), "Should default to issues_found when no report"
+            assert status == "issues_found", (
+                "Should default to issues_found when no report"
+            )
 
 
 # =============================================================================
@@ -234,21 +234,21 @@ class TestErrorHandling:
     """Tests for error handling in code review sessions."""
 
     @pytest.mark.asyncio
-    async def test_session_error_returns_error_status(
-        self, test_env, mock_client
-    ):
+    async def test_session_error_returns_error_status(self, test_env, mock_client):
         """Test that session errors return ('error', error_message)."""
         from agents.code_reviewer import run_code_review_session
 
         temp_dir, spec_dir, project_dir = test_env
 
-        with patch(
-            "agents.code_reviewer.run_agent_session", new_callable=AsyncMock
-        ) as mock_session, patch(
-            "agents.code_reviewer.get_graphiti_context",
-            new_callable=AsyncMock,
-        ) as mock_context:
-
+        with (
+            patch(
+                "agents.code_reviewer.run_agent_session", new_callable=AsyncMock
+            ) as mock_session,
+            patch(
+                "agents.code_reviewer.get_graphiti_context",
+                new_callable=AsyncMock,
+            ) as mock_context,
+        ):
             mock_session.return_value = ("error", "API timeout")
             mock_context.return_value = None
 
@@ -263,21 +263,21 @@ class TestErrorHandling:
             assert "API timeout" in response
 
     @pytest.mark.asyncio
-    async def test_exception_handling_returns_error(
-        self, test_env, mock_client
-    ):
+    async def test_exception_handling_returns_error(self, test_env, mock_client):
         """Test that exceptions are caught and returned as errors."""
         from agents.code_reviewer import run_code_review_session
 
         temp_dir, spec_dir, project_dir = test_env
 
-        with patch(
-            "agents.code_reviewer.run_agent_session", new_callable=AsyncMock
-        ) as mock_session, patch(
-            "agents.code_reviewer.get_graphiti_context",
-            new_callable=AsyncMock,
-        ) as mock_context:
-
+        with (
+            patch(
+                "agents.code_reviewer.run_agent_session", new_callable=AsyncMock
+            ) as mock_session,
+            patch(
+                "agents.code_reviewer.get_graphiti_context",
+                new_callable=AsyncMock,
+            ) as mock_context,
+        ):
             mock_session.side_effect = Exception("Unexpected error")
             mock_context.return_value = None
 
@@ -314,13 +314,15 @@ Previous security patterns:
 - XSS vulnerability in template rendering
 """
 
-        with patch(
-            "agents.code_reviewer.run_agent_session", new_callable=AsyncMock
-        ) as mock_session, patch(
-            "agents.code_reviewer.get_graphiti_context",
-            new_callable=AsyncMock,
-        ) as mock_context:
-
+        with (
+            patch(
+                "agents.code_reviewer.run_agent_session", new_callable=AsyncMock
+            ) as mock_session,
+            patch(
+                "agents.code_reviewer.get_graphiti_context",
+                new_callable=AsyncMock,
+            ) as mock_context,
+        ):
             mock_context.return_value = memory_context
             mock_session.return_value = ("success", "Review completed")
 
@@ -353,13 +355,15 @@ Previous security patterns:
 
         temp_dir, spec_dir, project_dir = test_env
 
-        with patch(
-            "agents.code_reviewer.run_agent_session", new_callable=AsyncMock
-        ) as mock_session, patch(
-            "agents.code_reviewer.get_graphiti_context",
-            new_callable=AsyncMock,
-        ) as mock_context:
-
+        with (
+            patch(
+                "agents.code_reviewer.run_agent_session", new_callable=AsyncMock
+            ) as mock_session,
+            patch(
+                "agents.code_reviewer.get_graphiti_context",
+                new_callable=AsyncMock,
+            ) as mock_context,
+        ):
             mock_context.return_value = None  # No memory available
             mock_session.return_value = ("success", "Review completed")
 
@@ -391,13 +395,15 @@ class TestReportFileParsing:
 
         temp_dir, spec_dir, project_dir = test_env
 
-        with patch(
-            "agents.code_reviewer.run_agent_session", new_callable=AsyncMock
-        ) as mock_session, patch(
-            "agents.code_reviewer.get_graphiti_context",
-            new_callable=AsyncMock,
-        ) as mock_context:
-
+        with (
+            patch(
+                "agents.code_reviewer.run_agent_session", new_callable=AsyncMock
+            ) as mock_session,
+            patch(
+                "agents.code_reviewer.get_graphiti_context",
+                new_callable=AsyncMock,
+            ) as mock_context,
+        ):
             mock_session.return_value = ("success", "Review completed")
             mock_context.return_value = None
 
@@ -415,26 +421,24 @@ class TestReportFileParsing:
             assert report_path.exists(), "Report should be created in spec_dir"
 
     @pytest.mark.asyncio
-    async def test_report_parsing_case_insensitive(
-        self, test_env, mock_client
-    ):
+    async def test_report_parsing_case_insensitive(self, test_env, mock_client):
         """Test that report status parsing is case-insensitive."""
         from agents.code_reviewer import run_code_review_session
 
         temp_dir, spec_dir, project_dir = test_env
 
         # Test lowercase
-        (spec_dir / "code_review_report.md").write_text(
-            "Status: approved\n\nAll good!"
-        )
+        (spec_dir / "code_review_report.md").write_text("Status: approved\n\nAll good!")
 
-        with patch(
-            "agents.code_reviewer.run_agent_session", new_callable=AsyncMock
-        ) as mock_session, patch(
-            "agents.code_reviewer.get_graphiti_context",
-            new_callable=AsyncMock,
-        ) as mock_context:
-
+        with (
+            patch(
+                "agents.code_reviewer.run_agent_session", new_callable=AsyncMock
+            ) as mock_session,
+            patch(
+                "agents.code_reviewer.get_graphiti_context",
+                new_callable=AsyncMock,
+            ) as mock_context,
+        ):
             mock_session.return_value = ("success", "Review completed")
             mock_context.return_value = None
 
@@ -445,9 +449,7 @@ class TestReportFileParsing:
                 review_session=1,
             )
 
-            assert (
-                status == "approved"
-            ), "Should detect approval regardless of case"
+            assert status == "approved", "Should detect approval regardless of case"
 
 
 # =============================================================================
@@ -467,13 +469,15 @@ class TestSessionParameters:
 
         target_files = ["src/app.py", "src/utils.py"]
 
-        with patch(
-            "agents.code_reviewer.run_agent_session", new_callable=AsyncMock
-        ) as mock_session, patch(
-            "agents.code_reviewer.get_graphiti_context",
-            new_callable=AsyncMock,
-        ) as mock_context:
-
+        with (
+            patch(
+                "agents.code_reviewer.run_agent_session", new_callable=AsyncMock
+            ) as mock_session,
+            patch(
+                "agents.code_reviewer.get_graphiti_context",
+                new_callable=AsyncMock,
+            ) as mock_context,
+        ):
             mock_session.return_value = ("success", "Review completed")
             mock_context.return_value = None
 
@@ -501,13 +505,15 @@ class TestSessionParameters:
 
         temp_dir, spec_dir, project_dir = test_env
 
-        with patch(
-            "agents.code_reviewer.run_agent_session", new_callable=AsyncMock
-        ) as mock_session, patch(
-            "agents.code_reviewer.get_graphiti_context",
-            new_callable=AsyncMock,
-        ) as mock_context:
-
+        with (
+            patch(
+                "agents.code_reviewer.run_agent_session", new_callable=AsyncMock
+            ) as mock_session,
+            patch(
+                "agents.code_reviewer.get_graphiti_context",
+                new_callable=AsyncMock,
+            ) as mock_context,
+        ):
             mock_session.return_value = ("success", "Review completed")
             mock_context.return_value = None
 
@@ -534,13 +540,15 @@ class TestSessionParameters:
 
         temp_dir, spec_dir, project_dir = test_env
 
-        with patch(
-            "agents.code_reviewer.run_agent_session", new_callable=AsyncMock
-        ) as mock_session, patch(
-            "agents.code_reviewer.get_graphiti_context",
-            new_callable=AsyncMock,
-        ) as mock_context:
-
+        with (
+            patch(
+                "agents.code_reviewer.run_agent_session", new_callable=AsyncMock
+            ) as mock_session,
+            patch(
+                "agents.code_reviewer.get_graphiti_context",
+                new_callable=AsyncMock,
+            ) as mock_context,
+        ):
             mock_session.return_value = ("success", "Review completed")
             mock_context.return_value = None
 
@@ -581,13 +589,15 @@ class TestSelfCorrection:
             "consecutive_errors": 1,
         }
 
-        with patch(
-            "agents.code_reviewer.run_agent_session", new_callable=AsyncMock
-        ) as mock_session, patch(
-            "agents.code_reviewer.get_graphiti_context",
-            new_callable=AsyncMock,
-        ) as mock_context:
-
+        with (
+            patch(
+                "agents.code_reviewer.run_agent_session", new_callable=AsyncMock
+            ) as mock_session,
+            patch(
+                "agents.code_reviewer.get_graphiti_context",
+                new_callable=AsyncMock,
+            ) as mock_context,
+        ):
             mock_session.return_value = ("success", "Review completed")
             mock_context.return_value = None
 

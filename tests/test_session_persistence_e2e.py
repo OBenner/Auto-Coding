@@ -27,7 +27,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "apps" / "backend"))
 from agents.session import ConversationHistory, ConversationRound
 
 
-def create_test_round(round_number: int, base_message: str = "Implement feature") -> ConversationRound:
+def create_test_round(
+    round_number: int, base_message: str = "Implement feature"
+) -> ConversationRound:
     """
     Create a test conversation round with realistic data.
 
@@ -43,14 +45,18 @@ def create_test_round(round_number: int, base_message: str = "Implement feature"
     round_obj.add_text(f"I'll implement part {round_number} of the feature.\n")
 
     # Simulate tool calls (Read, Edit, Write operations)
-    round_obj.add_tool_call("Read", {"file_path": f"src/feature/module_{round_number % 5}.py"})
+    round_obj.add_tool_call(
+        "Read", {"file_path": f"src/feature/module_{round_number % 5}.py"}
+    )
     round_obj.add_tool_call("Grep", {"pattern": "class Test", "path": "tests/"})
-    round_obj.add_tool_call("Edit", {"file_path": f"src/feature/feature_{round_number % 3}.py"})
+    round_obj.add_tool_call(
+        "Edit", {"file_path": f"src/feature/feature_{round_number % 3}.py"}
+    )
 
     # Set token usage (growing with round number to simulate longer conversations)
     round_obj.set_usage(
         input_tokens=1000 + (round_number * 50),
-        output_tokens=2000 + (round_number * 100)
+        output_tokens=2000 + (round_number * 100),
     )
 
     return round_obj
@@ -58,9 +64,9 @@ def create_test_round(round_number: int, base_message: str = "Implement feature"
 
 def test_conversation_history_persistence(spec_dir: Path):
     """Test that conversation history persists across 50+ rounds."""
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("TEST 1: Conversation History Persistence (50+ rounds)")
-    print("="*70)
+    print("=" * 70)
 
     subtask_id = "test-subtask-persistence"
 
@@ -91,17 +97,17 @@ def test_conversation_history_persistence(spec_dir: Path):
     # Final save
     success = history.save()
     if not success:
-        print(f"✗ FAILED: Could not save final history")
+        print("✗ FAILED: Could not save final history")
         return False
 
     elapsed = time.time() - start_time
     print(f"\n✓ Completed {num_rounds} rounds in {elapsed:.2f} seconds")
-    print(f"✓ Average time per round: {elapsed/num_rounds:.3f} seconds")
+    print(f"✓ Average time per round: {elapsed / num_rounds:.3f} seconds")
 
     # Verify file was created
     history_dir = spec_dir / "conversation_history"
     if not history_dir.exists():
-        print(f"✗ FAILED: History directory not created")
+        print("✗ FAILED: History directory not created")
         return False
 
     history_files = list(history_dir.glob("*.json"))
@@ -112,7 +118,7 @@ def test_conversation_history_persistence(spec_dir: Path):
     print(f"✓ History file created: {history_files[0].name}")
 
     # Verify file contents
-    with open(history_files[0], 'r') as f:
+    with open(history_files[0]) as f:
         data = json.load(f)
 
     if data.get("total_rounds") != num_rounds:
@@ -124,7 +130,7 @@ def test_conversation_history_persistence(spec_dir: Path):
     # Verify token totals
     total_input, total_output = history.get_total_tokens()
     if total_input == 0 or total_output == 0:
-        print(f"✗ FAILED: Token totals not calculated correctly")
+        print("✗ FAILED: Token totals not calculated correctly")
         return False
 
     print(f"✓ Total tokens: {total_input:,} input, {total_output:,} output")
@@ -132,23 +138,23 @@ def test_conversation_history_persistence(spec_dir: Path):
     # Verify code references
     code_refs = history.get_all_code_references()
     if len(code_refs) == 0:
-        print(f"✗ FAILED: No code references extracted")
+        print("✗ FAILED: No code references extracted")
         return False
 
     print(f"✓ Extracted {len(code_refs)} unique code references")
 
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("✓ TEST 1 PASSED: Conversation history persists across 50+ rounds")
-    print("="*70)
+    print("=" * 70)
 
     return True, history_files[0]
 
 
 def test_session_restart_and_restore(spec_dir: Path):
     """Test that session context can be restored after restart."""
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("TEST 2: Session Restart and Context Restore")
-    print("="*70)
+    print("=" * 70)
 
     subtask_id = "test-subtask-persistence"
 
@@ -158,7 +164,7 @@ def test_session_restart_and_restore(spec_dir: Path):
     # Debug: Check what files exist
     history_dir = spec_dir / "conversation_history"
     if not history_dir.exists():
-        print(f"✗ FAILED: conversation_history directory does not exist")
+        print("✗ FAILED: conversation_history directory does not exist")
         return False
 
     existing_files = list(history_dir.glob("*.json"))
@@ -173,7 +179,7 @@ def test_session_restart_and_restore(spec_dir: Path):
         print("✗ FAILED: Could not load conversation history after restart")
         return False
 
-    print(f"✓ Loaded conversation history from disk")
+    print("✓ Loaded conversation history from disk")
     print(f"  Session ID: {loaded_history.session_id}")
     print(f"  Total rounds: {len(loaded_history.rounds)}")
 
@@ -187,7 +193,9 @@ def test_session_restart_and_restore(spec_dir: Path):
     # Verify round data integrity
     for i, round_obj in enumerate(loaded_history.rounds, 1):
         if round_obj.round_number != i:
-            print(f"✗ FAILED: Round {i} has incorrect round_number: {round_obj.round_number}")
+            print(
+                f"✗ FAILED: Round {i} has incorrect round_number: {round_obj.round_number}"
+            )
             return False
 
         if not round_obj.user_message:
@@ -210,12 +218,12 @@ def test_session_restart_and_restore(spec_dir: Path):
             print(f"✗ FAILED: Round {i} missing token usage")
             return False
 
-    print(f"✓ All round data verified (user messages, responses, tools, refs, tokens)")
+    print("✓ All round data verified (user messages, responses, tools, refs, tokens)")
 
     # Verify code references persisted across all rounds
     code_refs = loaded_history.get_all_code_references()
     if len(code_refs) == 0:
-        print(f"✗ FAILED: No code references found after restart")
+        print("✗ FAILED: No code references found after restart")
         return False
 
     print(f"✓ Code references persisted: {len(code_refs)} unique files")
@@ -223,23 +231,23 @@ def test_session_restart_and_restore(spec_dir: Path):
     # Verify token usage persisted
     total_input, total_output = loaded_history.get_total_tokens()
     if total_input == 0 or total_output == 0:
-        print(f"✗ FAILED: Token usage not persisted correctly")
+        print("✗ FAILED: Token usage not persisted correctly")
         return False
 
     print(f"✓ Token usage persisted: {total_input:,} input, {total_output:,} output")
 
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("✓ TEST 2 PASSED: Session context survives restart")
-    print("="*70)
+    print("=" * 70)
 
     return True, loaded_history
 
 
 def test_context_formatting_for_resume(history: ConversationHistory):
     """Test that context can be formatted for session resumption."""
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("TEST 3: Context Formatting for Session Resume")
-    print("="*70)
+    print("=" * 70)
 
     from agents.session import format_context_for_resume
 
@@ -268,7 +276,7 @@ def test_context_formatting_for_resume(history: ConversationHistory):
         print(f"✗ FAILED: Missing sections: {missing_sections}")
         return False
 
-    print(f"✓ All required sections present")
+    print("✓ All required sections present")
 
     # Verify last 5 rounds are included
     recent_rounds = history.rounds[-5:]
@@ -277,7 +285,7 @@ def test_context_formatting_for_resume(history: ConversationHistory):
             print(f"✗ FAILED: Round {round_obj.round_number} not in context")
             return False
 
-    print(f"✓ Last 5 rounds included in context")
+    print("✓ Last 5 rounds included in context")
 
     # Verify code references are included
     code_refs = history.get_all_code_references()
@@ -286,28 +294,28 @@ def test_context_formatting_for_resume(history: ConversationHistory):
         print(f"✗ FAILED: Code reference {sample_ref} not in context")
         return False
 
-    print(f"✓ Code references included in context")
+    print("✓ Code references included in context")
 
     # Verify token usage is included
     total_input, total_output = history.get_total_tokens()
     if f"{total_input:,}" not in context:
-        print(f"✗ FAILED: Token usage not formatted correctly")
+        print("✗ FAILED: Token usage not formatted correctly")
         return False
 
-    print(f"✓ Token usage formatted correctly")
+    print("✓ Token usage formatted correctly")
 
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("✓ TEST 3 PASSED: Context can be formatted for resume")
-    print("="*70)
+    print("=" * 70)
 
     return True
 
 
 def test_session_resume_functionality(history: ConversationHistory, spec_dir: Path):
     """Test that session can be resumed with full context."""
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("TEST 4: Session Resume with Full Context")
-    print("="*70)
+    print("=" * 70)
 
     import asyncio
 
@@ -336,21 +344,21 @@ def test_session_resume_functionality(history: ConversationHistory, spec_dir: Pa
             print("✗ FAILED: Resume context not in formatted message")
             return False
 
-        print(f"✓ Formatted message includes resume context")
+        print("✓ Formatted message includes resume context")
 
         # Verify new message is preserved
         if new_message not in formatted_message:
             print("✗ FAILED: New message not in formatted message")
             return False
 
-        print(f"✓ New message preserved in formatted message")
+        print("✓ New message preserved in formatted message")
 
         # Verify formatted message ends with new message
         if not formatted_message.endswith(new_message):
             print("✗ FAILED: Formatted message doesn't end with new message")
             return False
 
-        print(f"✓ Formatted message properly formatted")
+        print("✓ Formatted message properly formatted")
 
         return True
 
@@ -360,23 +368,24 @@ def test_session_resume_functionality(history: ConversationHistory, spec_dir: Pa
         if not result:
             return False
 
-        print("\n" + "="*70)
+        print("\n" + "=" * 70)
         print("✓ TEST 4 PASSED: Session can be resumed with full context")
-        print("="*70)
+        print("=" * 70)
 
         return True
     except Exception as e:
         print(f"✗ FAILED: Error during resume test: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
 
 def test_long_running_session_simulation():
     """Test simulating a long-running session (4+ hours equivalent)."""
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("TEST 5: Long-Running Session Simulation (4+ hours equivalent)")
-    print("="*70)
+    print("=" * 70)
 
     import tempfile
 
@@ -388,7 +397,9 @@ def test_long_running_session_simulation():
         rounds_per_session = 15
         total_rounds = session_count * rounds_per_session
 
-        print(f"\nSimulating {session_count} sessions with {rounds_per_session} rounds each...")
+        print(
+            f"\nSimulating {session_count} sessions with {rounds_per_session} rounds each..."
+        )
         print(f"Total rounds: {total_rounds} (exceeds 50+ requirement)")
 
         subtask_id = "test-long-running-session"
@@ -416,11 +427,15 @@ def test_long_running_session_simulation():
                 print(f"✗ FAILED: Could not save history after session {session_num}")
                 return False
 
-            print(f"  ✓ Session {session_num}/{session_count} - Total rounds: {len(history.rounds)}")
+            print(
+                f"  ✓ Session {session_num}/{session_count} - Total rounds: {len(history.rounds)}"
+            )
 
         # Verify final state
         if len(history.rounds) != total_rounds:
-            print(f"✗ FAILED: Expected {total_rounds} rounds, got {len(history.rounds)}")
+            print(
+                f"✗ FAILED: Expected {total_rounds} rounds, got {len(history.rounds)}"
+            )
             return False
 
         print(f"\n✓ Completed {total_rounds} rounds across {session_count} sessions")
@@ -435,12 +450,12 @@ def test_long_running_session_simulation():
                 print(f"✗ FAILED: Round {i} has no code_references (data degradation)")
                 return False
 
-        print(f"✓ No data degradation detected across all rounds")
+        print("✓ No data degradation detected across all rounds")
 
         # Verify code references accumulated
         code_refs = history.get_all_code_references()
         if len(code_refs) == 0:
-            print(f"✗ FAILED: No code references found after long session")
+            print("✗ FAILED: No code references found after long session")
             return False
 
         print(f"✓ Code references accumulated: {len(code_refs)} unique files")
@@ -448,23 +463,25 @@ def test_long_running_session_simulation():
         # Verify token tracking
         total_input, total_output = history.get_total_tokens()
         if total_input == 0 or total_output == 0:
-            print(f"✗ FAILED: Token tracking failed over long session")
+            print("✗ FAILED: Token tracking failed over long session")
             return False
 
-        print(f"✓ Token tracking sustained: {total_input:,} input, {total_output:,} output")
+        print(
+            f"✓ Token tracking sustained: {total_input:,} input, {total_output:,} output"
+        )
 
-        print("\n" + "="*70)
+        print("\n" + "=" * 70)
         print("✓ TEST 5 PASSED: Long-running session (4+ hours equivalent) stable")
-        print("="*70)
+        print("=" * 70)
 
         return True
 
 
 def main():
     """Run all end-to-end tests."""
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("END-TO-END SESSION PERSISTENCE TEST SUITE")
-    print("="*70)
+    print("=" * 70)
     print("\nThis test suite validates:")
     print("✓ Conversation history persists across 50+ rounds")
     print("✓ Session context survives app restart")
@@ -528,9 +545,9 @@ def main():
                 return False
 
             # All tests passed
-            print("\n" + "="*70)
+            print("\n" + "=" * 70)
             print("✓✓✓ ALL END-TO-END TESTS PASSED ✓✓✓")
-            print("="*70)
+            print("=" * 70)
             print("\nSession persistence is working correctly!")
             print("✓ 50+ conversation rounds supported")
             print("✓ Context persists across restarts")
@@ -543,6 +560,7 @@ def main():
         except Exception as e:
             print(f"\n✗ FATAL ERROR: {e}")
             import traceback
+
             traceback.print_exc()
             return False
 

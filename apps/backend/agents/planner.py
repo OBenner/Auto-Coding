@@ -9,8 +9,9 @@ import logging
 from pathlib import Path
 
 from analysis.prevention_scanner import PreventionScanner
-from core.client import create_client
-from core.providers.config import get_provider_config
+from core.providers import create_engine_provider
+from core.providers.base import SessionConfig
+from core.providers.config import ProviderConfig, get_provider_config
 from implementation_plan import ImplementationPlan
 from phase_config import get_phase_model, get_phase_thinking_budget
 from phase_event import ExecutionPhase, emit_phase
@@ -34,6 +35,56 @@ from ui import (
 from .session import run_agent_session, save_token_stats
 
 logger = logging.getLogger(__name__)
+
+
+def create_planner_session(
+    project_dir: Path,
+    spec_dir: Path,
+    model: str | None = None,
+    max_thinking_tokens: int | None = None,
+):
+    """
+    Create a planner agent session using the configured AI engine provider.
+
+    This function is used by both the follow-up planner and verification tests.
+
+    Args:
+        project_dir: Root directory for the project
+        spec_dir: Directory containing the spec
+        model: Model to use (overrides provider config)
+        max_thinking_tokens: Token budget for extended thinking
+
+    Returns:
+        AgentSession with a .client property containing the SDK client
+
+    Raises:
+        ProviderError: If provider creation or session creation fails
+    """
+    # Create provider from environment configuration (with per-agent overrides)
+    config = ProviderConfig.from_env(agent_type="planner")
+    provider = create_engine_provider(config)
+
+    # For Claude provider, pass provider-specific kwargs
+    if provider.name == "claude":
+        session = provider.create_session(
+            config=SessionConfig(
+                name="planner-session",
+                model=model,
+            ),
+            project_dir=project_dir,
+            spec_dir=spec_dir,
+            agent_type="planner",
+            max_thinking_tokens=max_thinking_tokens,
+        )
+    else:
+        session = provider.create_session(
+            SessionConfig(
+                name="planner-session",
+                model=model,
+            )
+        )
+
+    return session
 
 
 async def run_followup_planner(
@@ -96,12 +147,17 @@ async def run_followup_planner(
     # Respects task_metadata.json configuration when no CLI override
     planning_model = get_phase_model(spec_dir, "planning", model)
     planning_thinking_budget = get_phase_thinking_budget(spec_dir, "planning")
-    client = create_client(
+
+    # Create session using provider factory
+    session = create_planner_session(
         project_dir,
         spec_dir,
-        planning_model,
+        model=planning_model,
         max_thinking_tokens=planning_thinking_budget,
     )
+
+    # Get the underlying SDK client from the session
+    client = session.client
 
     # Generate follow-up planner prompt
     prompt = get_followup_planner_prompt(spec_dir)
