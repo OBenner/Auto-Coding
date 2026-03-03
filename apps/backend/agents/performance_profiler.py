@@ -105,7 +105,7 @@ async def run_performance_profiler(
     )
 
     # Generate performance profiler prompt
-    prompt = get_performance_profiler_prompt(spec_dir)
+    prompt = get_performance_profiler_prompt(spec_dir, project_dir)
 
     print_status("Running performance profiler...", "progress")
     print()
@@ -120,21 +120,22 @@ async def run_performance_profiler(
         # Save token statistics for performance profiling phase
         if usage_metadata:
             try:
+                input_tokens = usage_metadata.get("input_tokens", 0)
+                output_tokens = usage_metadata.get("output_tokens", 0)
                 saved = save_token_stats(
                     spec_dir,
                     "performance_profiling",
-                    usage_metadata["input_tokens"],
-                    usage_metadata["output_tokens"],
+                    input_tokens,
+                    output_tokens,
                 )
                 if saved:
                     logger.debug(
-                        f"Performance profiling token stats saved: {usage_metadata['input_tokens']} in, "
-                        f"{usage_metadata['output_tokens']} out"
+                        "Performance profiling token stats saved: %d in, %d out",
+                        input_tokens,
+                        output_tokens,
                     )
             except Exception as e:
-                logger.warning(
-                    f"Failed to save performance profiling token stats: {e}"
-                )
+                logger.warning(f"Failed to save performance profiling token stats: {e}")
 
         # End profiling phase in task logger
         if task_logger:

@@ -19,14 +19,17 @@ from __future__ import annotations
 import cProfile
 import io
 import json
+import logging
 import pstats
-import sys
 import time
 import tracemalloc
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
+
+logger = logging.getLogger(__name__)
 
 # =============================================================================
 # CONFIGURATION
@@ -172,6 +175,9 @@ class PerformanceProfiler:
         Args:
             enable_memory: Whether to enable memory profiling
         """
+        # Record wall-clock start time
+        self._start_time = time.monotonic()
+
         # Start CPU profiling
         self._profiler = cProfile.Profile()
         self._profiler.enable()
@@ -188,6 +194,11 @@ class PerformanceProfiler:
         Returns:
             ProfileResult with profiling data
         """
+        # Calculate wall-clock duration
+        wall_duration = time.monotonic() - getattr(
+            self, "_start_time", time.monotonic()
+        )
+
         # Stop CPU profiling
         if self._profiler:
             self._profiler.disable()
@@ -211,7 +222,7 @@ class PerformanceProfiler:
         # Create result
         result = ProfileResult(
             timestamp=datetime.now(UTC).isoformat(),
-            duration=sum(fp.total_time for fp in function_profiles),
+            duration=round(wall_duration, 4),
             function_profiles=function_profiles,
             memory_profile=memory_profile,
             bottlenecks=bottlenecks,
@@ -257,18 +268,18 @@ class PerformanceProfiler:
         # Get stats
         stream = io.StringIO()
         stats = pstats.Stats(self._profiler, stream=stream)
-        stats.sort_stats(pstats.SortKey.CUMULATIVE)
 
-        # Extract top functions
+        # Extract top functions - sort explicitly by cumulative time (descending)
         profiles = []
         total_time = 0.0
 
         for func_key, (cc, nc, tt, ct, callers) in stats.stats.items():
             total_time += tt
 
-        for func_key, (cc, nc, tt, ct, callers) in list(stats.stats.items())[
-            :TOP_FUNCTIONS_COUNT
-        ]:
+        sorted_items = sorted(
+            stats.stats.items(), key=lambda item: item[1][3], reverse=True
+        )
+        for func_key, (cc, nc, tt, ct, callers) in sorted_items[:TOP_FUNCTIONS_COUNT]:
             # Format function name
             filename, line, func_name = func_key
             if filename == "~":
@@ -307,7 +318,9 @@ class PerformanceProfiler:
         for stat in top_stats[:TOP_FUNCTIONS_COUNT]:
             allocations.append(
                 {
-                    "file": str(stat.traceback.format()[0]) if stat.traceback else "unknown",
+                    "file": str(stat.traceback.format()[0])
+                    if stat.traceback
+                    else "unknown",
                     "size_bytes": stat.size,
                     "size_mb": round(stat.size / (1024 * 1024), 2),
                     "count": stat.count,
@@ -390,10 +403,14 @@ class PerformanceProfiler:
             suggestions.append("Consider caching or memoization")
 
         if profile.time_per_call > 0.01:
-            suggestions.append("Function is slow per call - review algorithm complexity")
+            suggestions.append(
+                "Function is slow per call - review algorithm complexity"
+            )
 
         if profile.percent_time > 20:
-            suggestions.append("Function dominates execution time - prioritize optimization")
+            suggestions.append(
+                "Function dominates execution time - prioritize optimization"
+            )
 
         return " | ".join(suggestions) if suggestions else "Review and optimize logic"
 
@@ -487,8 +504,8 @@ class PerformanceProfiler:
         try:
             with open(history_file, "w", encoding="utf-8") as f:
                 json.dump(history, f, indent=2)
-        except OSError:
-            pass  # Fail silently if can't save
+        except OSError as e:
+            logger.warning("Failed to save performance history: %s", e)
 
     def _result_to_dict(self, result: ProfileResult) -> dict[str, Any]:
         """Convert ProfileResult to dictionary."""
@@ -595,14 +612,19 @@ class PerformanceProfiler:
         comparison["bottlenecks_fixed"] = max(0, before_bottlenecks - after_bottlenecks)
 
         # Overall assessment
-        if comparison["runtime_improvement"] > 10 or comparison["memory_improvement"] > 10:
+        if (
+            comparison["runtime_improvement"] > 10
+            or comparison["memory_improvement"] > 10
+        ):
             comparison["overall_improvement"] = "significant"
         elif (
-            comparison["runtime_improvement"] > 5 or comparison["memory_improvement"] > 5
+            comparison["runtime_improvement"] > 5
+            or comparison["memory_improvement"] > 5
         ):
             comparison["overall_improvement"] = "moderate"
         elif (
-            comparison["runtime_improvement"] > 0 or comparison["memory_improvement"] > 0
+            comparison["runtime_improvement"] > 0
+            or comparison["memory_improvement"] > 0
         ):
             comparison["overall_improvement"] = "minor"
 
@@ -629,7 +651,8 @@ def profile_code_string(code: str, enable_memory: bool = True) -> ProfileResult:
     profiler.start_profiling(enable_memory=enable_memory)
 
     try:
-        exec(code)
+        # Use isolated namespace to prevent code from polluting the current scope
+        exec(code, {"__builtins__": __builtins__}, {})  # noqa: S102
     finally:
         result = profiler.stop_profiling()
 
@@ -659,9 +682,7 @@ def get_performance_trends(spec_dir: Path | str) -> dict[str, Any]:
     # Calculate trends
     runtimes = [r["duration"] for r in history]
     memories = [
-        r["memory_profile"]["peak_bytes"]
-        for r in history
-        if r.get("memory_profile")
+        r["memory_profile"]["peak_bytes"] for r in history if r.get("memory_profile")
     ]
 
     trends = {
@@ -696,10 +717,7 @@ def get_performance_trends(spec_dir: Path | str) -> dict[str, Any]:
             trends["memory_trend"] = "declining"
 
     # Overall trend
-    if (
-        trends["runtime_trend"] == "improving"
-        or trends["memory_trend"] == "improving"
-    ):
+    if trends["runtime_trend"] == "improving" or trends["memory_trend"] == "improving":
         trends["trend"] = "improving"
     elif (
         trends["runtime_trend"] == "declining" or trends["memory_trend"] == "declining"
