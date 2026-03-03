@@ -211,43 +211,41 @@ export function registerModelUsageHandlers(): void {
     }
   );
 
+  // Helper to run an analytics script command for a project
+  async function runAnalyticsCommand<T>(
+    projectId: string,
+    args: string[],
+    errorLabel: string
+  ): Promise<IPCResult<T>> {
+    const project = projectStore.getProject(projectId);
+    if (!project) {
+      return { success: false, error: 'Project not found' };
+    }
+
+    try {
+      const data = await executePythonScript(
+        project.path,
+        'apps/backend/analysis/model_usage_analytics.py',
+        args
+      );
+      return { success: true, data };
+    } catch (error) {
+      debugError(`[Model Usage] ${errorLabel}:`, error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      return { success: false, error: `${errorLabel}: ${errorMessage}` };
+    }
+  }
+
   /**
    * Get metrics for a specific model
    */
   ipcMain.handle(
     IPC_CHANNELS.MODEL_USAGE_GET_MODEL_METRICS,
-    async (
-      _,
-      projectId: string,
-      model: string,
-      startDate?: string,
-      endDate?: string
-    ): Promise<IPCResult<ModelMetrics>> => {
-      const project = projectStore.getProject(projectId);
-      if (!project) {
-        return { success: false, error: 'Project not found' };
-      }
-
-      try {
-        const args = ['--get-model-metrics', '--model', model];
-        if (startDate) args.push('--start-date', startDate);
-        if (endDate) args.push('--end-date', endDate);
-
-        const metrics = await executePythonScript(
-          project.path,
-          'apps/backend/analysis/model_usage_analytics.py',
-          args
-        );
-
-        return { success: true, data: metrics };
-      } catch (error) {
-        debugError('[Model Usage] Failed to get model metrics:', error);
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        return {
-          success: false,
-          error: `Failed to get model metrics: ${errorMessage}`,
-        };
-      }
+    async (_, projectId: string, model: string, startDate?: string, endDate?: string): Promise<IPCResult<ModelMetrics>> => {
+      const args = ['--get-model-metrics', '--model', model];
+      if (startDate) args.push('--start-date', startDate);
+      if (endDate) args.push('--end-date', endDate);
+      return runAnalyticsCommand(projectId, args, 'Failed to get model metrics');
     }
   );
 
@@ -256,38 +254,11 @@ export function registerModelUsageHandlers(): void {
    */
   ipcMain.handle(
     IPC_CHANNELS.MODEL_USAGE_GET_AGENT_METRICS,
-    async (
-      _,
-      projectId: string,
-      agentType: string,
-      startDate?: string,
-      endDate?: string
-    ): Promise<IPCResult<AgentMetrics>> => {
-      const project = projectStore.getProject(projectId);
-      if (!project) {
-        return { success: false, error: 'Project not found' };
-      }
-
-      try {
-        const args = ['--get-agent-metrics', '--agent-type', agentType];
-        if (startDate) args.push('--start-date', startDate);
-        if (endDate) args.push('--end-date', endDate);
-
-        const metrics = await executePythonScript(
-          project.path,
-          'apps/backend/analysis/model_usage_analytics.py',
-          args
-        );
-
-        return { success: true, data: metrics };
-      } catch (error) {
-        debugError('[Model Usage] Failed to get agent metrics:', error);
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        return {
-          success: false,
-          error: `Failed to get agent metrics: ${errorMessage}`,
-        };
-      }
+    async (_, projectId: string, agentType: string, startDate?: string, endDate?: string): Promise<IPCResult<AgentMetrics>> => {
+      const args = ['--get-agent-metrics', '--agent-type', agentType];
+      if (startDate) args.push('--start-date', startDate);
+      if (endDate) args.push('--end-date', endDate);
+      return runAnalyticsCommand(projectId, args, 'Failed to get agent metrics');
     }
   );
 
@@ -385,156 +356,50 @@ export function registerModelUsageHandlers(): void {
     }
   );
 
-  /**
-   * Lock a phase to a specific model
-   */
-  ipcMain.handle(
-    IPC_CHANNELS.MODEL_LOCK_PHASE,
-    async (
-      _,
-      projectId: string,
-      phase: string,
-      modelId: string
-    ): Promise<IPCResult<{ success: boolean }>> => {
-      const project = projectStore.getProject(projectId);
-      if (!project) {
-        return { success: false, error: 'Project not found' };
-      }
-
-      try {
-        const specDir = path.join(project.path, '.auto-claude', 'specs', projectId);
-        await executePythonScript(project.path, 'apps/backend/scripts/model_locks_manager.py', ['lock-phase', specDir, phase, modelId], false);
-
-        return { success: true, data: { success: true } };
-      } catch (error) {
-        debugError('[Model Lock] Failed to lock phase:', error);
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        return {
-          success: false,
-          error: `Failed to lock phase: ${errorMessage}`,
-        };
-      }
+  // Helper to run a model lock manager command for a project
+  async function runLockCommand(
+    projectId: string,
+    commandArgs: string[],
+    errorLabel: string
+  ): Promise<IPCResult<{ success: boolean }>> {
+    const project = projectStore.getProject(projectId);
+    if (!project) {
+      return { success: false, error: 'Project not found' };
     }
+
+    try {
+      const specDir = path.join(project.path, '.auto-claude', 'specs', projectId);
+      await executePythonScript(
+        project.path,
+        'apps/backend/scripts/model_locks_manager.py',
+        [...commandArgs.slice(0, 1), specDir, ...commandArgs.slice(1)],
+        false
+      );
+      return { success: true, data: { success: true } };
+    } catch (error) {
+      debugError(`[Model Lock] ${errorLabel}:`, error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      return { success: false, error: `${errorLabel}: ${errorMessage}` };
+    }
+  }
+
+  ipcMain.handle(IPC_CHANNELS.MODEL_LOCK_PHASE, async (_, projectId: string, phase: string, modelId: string) =>
+    runLockCommand(projectId, ['lock-phase', phase, modelId], 'Failed to lock phase')
   );
 
-  /**
-   * Lock an agent type to a specific model
-   */
-  ipcMain.handle(
-    IPC_CHANNELS.MODEL_LOCK_AGENT,
-    async (
-      _,
-      projectId: string,
-      agentType: string,
-      modelId: string
-    ): Promise<IPCResult<{ success: boolean }>> => {
-      const project = projectStore.getProject(projectId);
-      if (!project) {
-        return { success: false, error: 'Project not found' };
-      }
-
-      try {
-        const specDir = path.join(project.path, '.auto-claude', 'specs', projectId);
-        await executePythonScript(project.path, 'apps/backend/scripts/model_locks_manager.py', ['lock-agent', specDir, agentType, modelId], false);
-
-        return { success: true, data: { success: true } };
-      } catch (error) {
-        debugError('[Model Lock] Failed to lock agent:', error);
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        return {
-          success: false,
-          error: `Failed to lock agent: ${errorMessage}`,
-        };
-      }
-    }
+  ipcMain.handle(IPC_CHANNELS.MODEL_LOCK_AGENT, async (_, projectId: string, agentType: string, modelId: string) =>
+    runLockCommand(projectId, ['lock-agent', agentType, modelId], 'Failed to lock agent')
   );
 
-  /**
-   * Unlock a phase
-   */
-  ipcMain.handle(
-    IPC_CHANNELS.MODEL_UNLOCK_PHASE,
-    async (
-      _,
-      projectId: string,
-      phase: string
-    ): Promise<IPCResult<{ success: boolean }>> => {
-      const project = projectStore.getProject(projectId);
-      if (!project) {
-        return { success: false, error: 'Project not found' };
-      }
-
-      try {
-        const specDir = path.join(project.path, '.auto-claude', 'specs', projectId);
-        await executePythonScript(project.path, 'apps/backend/scripts/model_locks_manager.py', ['unlock-phase', specDir, phase], false);
-
-        return { success: true, data: { success: true } };
-      } catch (error) {
-        debugError('[Model Lock] Failed to unlock phase:', error);
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        return {
-          success: false,
-          error: `Failed to unlock phase: ${errorMessage}`,
-        };
-      }
-    }
+  ipcMain.handle(IPC_CHANNELS.MODEL_UNLOCK_PHASE, async (_, projectId: string, phase: string) =>
+    runLockCommand(projectId, ['unlock-phase', phase], 'Failed to unlock phase')
   );
 
-  /**
-   * Unlock an agent type
-   */
-  ipcMain.handle(
-    IPC_CHANNELS.MODEL_UNLOCK_AGENT,
-    async (
-      _,
-      projectId: string,
-      agentType: string
-    ): Promise<IPCResult<{ success: boolean }>> => {
-      const project = projectStore.getProject(projectId);
-      if (!project) {
-        return { success: false, error: 'Project not found' };
-      }
-
-      try {
-        const specDir = path.join(project.path, '.auto-claude', 'specs', projectId);
-        await executePythonScript(project.path, 'apps/backend/scripts/model_locks_manager.py', ['unlock-agent', specDir, agentType], false);
-
-        return { success: true, data: { success: true } };
-      } catch (error) {
-        debugError('[Model Lock] Failed to unlock agent:', error);
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        return {
-          success: false,
-          error: `Failed to unlock agent: ${errorMessage}`,
-        };
-      }
-    }
+  ipcMain.handle(IPC_CHANNELS.MODEL_UNLOCK_AGENT, async (_, projectId: string, agentType: string) =>
+    runLockCommand(projectId, ['unlock-agent', agentType], 'Failed to unlock agent')
   );
 
-  /**
-   * Clear all model locks
-   */
-  ipcMain.handle(
-    IPC_CHANNELS.MODEL_LOCK_CLEAR,
-    async (_, projectId: string): Promise<IPCResult<{ success: boolean }>> => {
-      const project = projectStore.getProject(projectId);
-      if (!project) {
-        return { success: false, error: 'Project not found' };
-      }
-
-      try {
-        const specDir = path.join(project.path, '.auto-claude', 'specs', projectId);
-        await executePythonScript(project.path, 'apps/backend/scripts/model_locks_manager.py', ['clear', specDir], false);
-
-        return { success: true, data: { success: true } };
-      } catch (error) {
-        debugError('[Model Lock] Failed to clear locks:', error);
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        return {
-          success: false,
-          error: `Failed to clear locks: ${errorMessage}`,
-        };
-      }
-    }
+  ipcMain.handle(IPC_CHANNELS.MODEL_LOCK_CLEAR, async (_, projectId: string) =>
+    runLockCommand(projectId, ['clear'], 'Failed to clear locks')
   );
 }

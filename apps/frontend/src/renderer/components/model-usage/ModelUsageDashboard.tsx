@@ -8,6 +8,7 @@ import { CostChart } from './CostChart';
 import type {
   ModelUsageSummary,
   ModelUsageTrendPoint,
+  ModelMetrics,
   ModelUsageExportOptions,
   ModelUsageFilter
 } from '../../../shared/types/model-usage';
@@ -17,6 +18,45 @@ interface ModelUsageDashboardProps {
 }
 
 type TimeRange = 'all' | '7d' | '30d' | '90d';
+
+function ModelRow({ model }: { model: ModelMetrics }) {
+  return (
+    <div className="flex justify-between items-center p-2 rounded hover:bg-muted/50">
+      <div className="flex flex-col">
+        <span className="text-sm font-medium">{model.model}</span>
+        <span className="text-xs text-muted-foreground">{model.provider}</span>
+      </div>
+      <div className="flex items-center gap-4">
+        <div className="text-right">
+          <p className="text-sm font-semibold">{model.total_usage_count} calls</p>
+          <p className="text-xs text-muted-foreground">
+            {Number(model.total_tokens).toLocaleString()} tokens
+          </p>
+        </div>
+        <div className="text-right w-24">
+          <p className="text-sm font-semibold text-green-600">
+            ${Number(model.total_cost).toFixed(2)}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ModelListSection({ title, models, limit }: { title: string; models: ModelMetrics[]; limit?: number }) {
+  if (!models || models.length === 0) return null;
+  const displayModels = limit ? models.slice(0, limit) : models;
+  return (
+    <div className="rounded-lg border border-border bg-card p-6">
+      <h2 className="text-lg font-semibold mb-4">{title}</h2>
+      <div className="space-y-2">
+        {displayModels.map((model) => (
+          <ModelRow key={model.model} model={model} />
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export function ModelUsageDashboard({ projectId }: ModelUsageDashboardProps) {
   const { toast } = useToast();
@@ -317,94 +357,13 @@ export function ModelUsageDashboard({ projectId }: ModelUsageDashboardProps) {
           )}
 
           {/* Top Models by Usage */}
-          {summary && summary.top_models_by_usage && summary.top_models_by_usage.length > 0 && (
-            <div className="rounded-lg border border-border bg-card p-6">
-              <h2 className="text-lg font-semibold mb-4">Top Models by Usage</h2>
-              <div className="space-y-2">
-                {summary.top_models_by_usage.slice(0, 5).map((model) => (
-                  <div key={model.model} className="flex justify-between items-center p-2 rounded hover:bg-muted/50">
-                    <div className="flex flex-col">
-                      <span className="text-sm font-medium">{model.model}</span>
-                      <span className="text-xs text-muted-foreground">{model.provider}</span>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <div className="text-right">
-                        <p className="text-sm font-semibold">{model.total_usage_count} calls</p>
-                        <p className="text-xs text-muted-foreground">
-                          {Number(model.total_tokens).toLocaleString()} tokens
-                        </p>
-                      </div>
-                      <div className="text-right w-24">
-                        <p className="text-sm font-semibold text-green-600">
-                          ${Number(model.total_cost).toFixed(2)}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+          {summary && <ModelListSection title="Top Models by Usage" models={summary.top_models_by_usage} limit={5} />}
 
           {/* Top Models by Cost */}
-          {summary && summary.top_models_by_cost && summary.top_models_by_cost.length > 0 && (
-            <div className="rounded-lg border border-border bg-card p-6">
-              <h2 className="text-lg font-semibold mb-4">Top Models by Cost</h2>
-              <div className="space-y-2">
-                {summary.top_models_by_cost.slice(0, 5).map((model) => (
-                  <div key={model.model} className="flex justify-between items-center p-2 rounded hover:bg-muted/50">
-                    <div className="flex flex-col">
-                      <span className="text-sm font-medium">{model.model}</span>
-                      <span className="text-xs text-muted-foreground">{model.provider}</span>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <div className="text-right">
-                        <p className="text-sm font-semibold">{model.total_usage_count} calls</p>
-                        <p className="text-xs text-muted-foreground">
-                          {Number(model.total_tokens).toLocaleString()} tokens
-                        </p>
-                      </div>
-                      <div className="text-right w-24">
-                        <p className="text-sm font-semibold text-green-600">
-                          ${Number(model.total_cost).toFixed(2)}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+          {summary && <ModelListSection title="Top Models by Cost" models={summary.top_models_by_cost} limit={5} />}
 
           {/* All Models Details */}
-          {summary && summary.models && summary.models.length > 0 && (
-            <div className="rounded-lg border border-border bg-card p-6">
-              <h2 className="text-lg font-semibold mb-4">All Models</h2>
-              <div className="space-y-2">
-                {summary.models.map((model) => (
-                  <div key={model.model} className="flex justify-between items-center p-2 rounded hover:bg-muted/50">
-                    <div className="flex flex-col">
-                      <span className="text-sm font-medium">{model.model}</span>
-                      <span className="text-xs text-muted-foreground">{model.provider}</span>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <div className="text-right">
-                        <p className="text-sm font-semibold">{model.total_usage_count} calls</p>
-                        <p className="text-xs text-muted-foreground">
-                          {Number(model.total_tokens).toLocaleString()} tokens
-                        </p>
-                      </div>
-                      <div className="text-right w-24">
-                        <p className="text-sm font-semibold text-green-600">
-                          ${Number(model.total_cost).toFixed(2)}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+          {summary && <ModelListSection title="All Models" models={summary.models} />}
 
           {/* Cost Trends Chart */}
           <CostChart trends={trends} />

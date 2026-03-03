@@ -2,8 +2,7 @@ import { useMemo } from 'react';
 import { Cpu, Lock } from 'lucide-react';
 import { Badge } from '../ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
-import { getModelTierLabel, MODEL_ID_MAP } from '../../../shared/constants';
-import { getAgentLabel } from './model-utils';
+import { parseModelId, getAgentLabel } from './model-utils';
 
 /**
  * Agent groupings for organized display
@@ -52,32 +51,6 @@ const AGENT_GROUPS: AgentGroup[] = [
     agents: ['roadmap_discovery', 'competitor_analysis', 'ideation'],
   },
 ];
-
-/**
- * Parse model ID to get tier and version
- * e.g., "claude-sonnet-4-5-20250929" -> { tier: "sonnet", version: "4.5" }
- */
-function parseModelId(modelId: string): { tier: string; version: string; name: string } {
-  // Check if it's a tier shorthand (opus, sonnet, haiku)
-  if (['opus', 'sonnet', 'haiku'].includes(modelId)) {
-    const fullModelId = MODEL_ID_MAP[modelId] || modelId;
-    return parseModelId(fullModelId);
-  }
-
-  // Parse full model ID
-  const parts = modelId.split('-');
-  const tier = parts[1] || 'unknown'; // e.g., "sonnet" from "claude-sonnet-4-5-20250929"
-  const version = parts.slice(2, 5).join('.').replace(/\.+/g, '.'); // e.g., "4.5"
-
-  // Get display name from constants
-  const tierName = getModelTierLabel(tier as 'opus' | 'sonnet' | 'haiku');
-
-  return {
-    tier: tierName,
-    version: version || 'latest',
-    name: tierName,
-  };
-}
 
 interface AgentModelDisplayProps {
   /**

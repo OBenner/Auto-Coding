@@ -37,6 +37,16 @@ const CHART_METRICS: ChartMetric[] = [
   },
 ];
 
+function ChartHeader({ children }: { children?: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-2 mb-4">
+      <DollarSign className="h-5 w-5 text-accent" />
+      <h2 className="text-lg font-semibold text-foreground">Cost Trends Over Time</h2>
+      {children}
+    </div>
+  );
+}
+
 export function CostChart({ trends, isLoading = false }: CostChartProps) {
   // Calculate chart dimensions and data
   const chartData = useMemo(() => {
@@ -106,10 +116,7 @@ export function CostChart({ trends, isLoading = false }: CostChartProps) {
   if (isLoading) {
     return (
       <div className="rounded-lg border border-border bg-card p-6">
-        <div className="flex items-center gap-2 mb-4">
-          <DollarSign className="h-5 w-5 text-accent" />
-          <h2 className="text-lg font-semibold text-foreground">Cost Trends Over Time</h2>
-        </div>
+        <ChartHeader />
         <div className="h-80 flex items-center justify-center">
           <div className="flex flex-col items-center gap-2">
             <div className="h-8 w-8 animate-spin rounded-full border-4 border-border border-t-accent" />
@@ -123,10 +130,7 @@ export function CostChart({ trends, isLoading = false }: CostChartProps) {
   if (!trends || trends.length === 0 || !chartData) {
     return (
       <div className="rounded-lg border border-border bg-card p-6">
-        <div className="flex items-center gap-2 mb-4">
-          <DollarSign className="h-5 w-5 text-accent" />
-          <h2 className="text-lg font-semibold text-foreground">Cost Trends Over Time</h2>
-        </div>
+        <ChartHeader />
         <div className="h-80 flex items-center justify-center">
           <div className="flex flex-col items-center gap-2 text-muted-foreground">
             <Calendar className="h-12 w-12 opacity-50" />
@@ -140,12 +144,9 @@ export function CostChart({ trends, isLoading = false }: CostChartProps) {
 
   return (
     <div className="rounded-lg border border-border bg-card p-6">
-      {/* Header */}
+      {/* Header with Legend */}
       <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-2">
-          <DollarSign className="h-5 w-5 text-accent" />
-          <h2 className="text-lg font-semibold text-foreground">Cost Trends Over Time</h2>
-        </div>
+        <ChartHeader />
 
         {/* Legend */}
         <div className="flex items-center gap-4">

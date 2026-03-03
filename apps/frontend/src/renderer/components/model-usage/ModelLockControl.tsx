@@ -41,6 +41,12 @@ interface ModelLockControlProps {
   compact?: boolean;
 }
 
+function LockStatusIcon({ isUpdating, isLocked }: { isUpdating: boolean; isLocked: boolean }) {
+  if (isUpdating) return <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />;
+  if (isLocked) return <Lock className="h-4 w-4 text-primary" />;
+  return <Unlock className="h-4 w-4 text-muted-foreground" />;
+}
+
 /**
  * ModelLockControl Component
  *
@@ -107,13 +113,7 @@ export function ModelLockControl({
         <Tooltip>
           <TooltipTrigger asChild>
             <div className="flex items-center gap-2">
-              {isUpdating ? (
-                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-              ) : isLocked ? (
-                <Lock className="h-4 w-4 text-primary" />
-              ) : (
-                <Unlock className="h-4 w-4 text-muted-foreground" />
-              )}
+              <LockStatusIcon isUpdating={isUpdating} isLocked={isLocked} />
               <Switch
                 checked={isLocked}
                 onCheckedChange={handleLockToggle}
@@ -143,13 +143,7 @@ export function ModelLockControl({
   return (
     <div className="flex items-center justify-between py-2">
       <div className="flex items-center gap-2">
-        {isUpdating ? (
-          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-        ) : isLocked ? (
-          <Lock className="h-4 w-4 text-primary" />
-        ) : (
-          <Unlock className="h-4 w-4 text-muted-foreground" />
-        )}
+        <LockStatusIcon isUpdating={isUpdating} isLocked={isLocked} />
 
         <div className="space-y-0.5">
           <Label className="font-normal text-foreground">
