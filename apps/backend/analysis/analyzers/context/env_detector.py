@@ -18,7 +18,7 @@ from typing import Any
 from ..base import BaseAnalyzer
 
 # Compiled regex patterns for performance
-_ENV_VAR_PATTERN = re.compile(r"^([A-Z_][A-Z0-9_]*)[ \t]*=[ \t]*(.*)$")
+_ENV_VAR_PATTERN = re.compile(r"^([A-Z_][A-Z0-9_]*)[ \t]*=(.*)$")
 _ENV_EXAMPLE_PATTERN = re.compile(r"^([A-Z_][A-Z0-9_]*)\s*=")
 _DOCKER_COMPOSE_PATTERN = re.compile(r"^\s*-\s*([A-Z_][A-Z0-9_]*)")
 

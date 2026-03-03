@@ -16,9 +16,7 @@ from .base import BaseAnalyzer
 
 # Compiled regex patterns for database model detection
 # SQLAlchemy patterns
-PATTERN_SQLALCHEMY_CLASS = re.compile(
-    r"class\s+(\w+)\([^)]*?(?:Base|db\.Model|DeclarativeBase)[^)]*\):"
-)
+PATTERN_SQLALCHEMY_CLASS = re.compile(r"class\s+(\w+)\(([^)]+)\):")
 PATTERN_SQLALCHEMY_TABLENAME = re.compile(r'__tablename__\s*=\s*["\'](\w+)["\']')
 PATTERN_SQLALCHEMY_COLUMN = re.compile(r"(\w+)\s*=\s*Column\((.*?)\)")
 PATTERN_SQLALCHEMY_COLUMN_TYPE = re.compile(
@@ -90,9 +88,13 @@ class DatabaseDetector(BaseAnalyzer):
                 continue
 
             # Find class definitions that inherit from Base or db.Model
+            _SQLALCHEMY_BASES = ("Base", "db.Model", "DeclarativeBase")
             matches = PATTERN_SQLALCHEMY_CLASS.finditer(content)
 
             for match in matches:
+                bases = match.group(2)
+                if not any(base in bases for base in _SQLALCHEMY_BASES):
+                    continue
                 model_name = match.group(1)
 
                 # Extract table name if defined

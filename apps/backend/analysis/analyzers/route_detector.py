@@ -30,7 +30,7 @@ class RouteDetector(BaseAnalyzer):
         re.MULTILINE,
     )
     _FASTAPI_API_ROUTE_PATTERN = re.compile(
-        r'@(?:app|router)\.api_route\(["\']([^"\']+)["\'][^)]*?methods\s*=\s*\[([^\]]+)\]',
+        r'@(?:app|router)\.api_route\(["\']([^"\']+)["\'],\s*methods\s*=\s*\[([^\]]+)\]',
         re.MULTILINE,
     )
 
