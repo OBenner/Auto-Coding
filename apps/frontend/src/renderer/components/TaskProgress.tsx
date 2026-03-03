@@ -233,7 +233,6 @@ export function TaskProgress({ taskId, onClose }: TaskProgressProps) {
         return 'bg-red-500/10 text-red-500';
       case 'cancelled':
         return 'bg-yellow-500/10 text-yellow-500';
-      case 'pending':
       default:
         return 'bg-gray-500/10 text-gray-500';
     }
@@ -252,7 +251,6 @@ export function TaskProgress({ taskId, onClose }: TaskProgressProps) {
         return t('tasks:labels.failed');
       case 'cancelled':
         return t('tasks:labels.cancelled');
-      case 'pending':
       default:
         return t('tasks:labels.pending');
     }

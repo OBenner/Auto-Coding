@@ -17,6 +17,7 @@ export * from './roadmap';
 export * from './integrations';
 export * from './app-update';
 export * from './cli';
+export * from './analytics';
 export * from './merge-analytics';
 export * from './workspace';
 export * from './session-context';

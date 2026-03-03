@@ -27,6 +27,7 @@ import { registerGitlabHandlers } from './gitlab-handlers';
 import { registerIdeationHandlers } from './ideation-handlers';
 import { registerChangelogHandlers } from './changelog-handlers';
 import { registerInsightsHandlers } from './insights-handlers';
+import { registerAgentAnalyticsHandlers } from './agent-analytics-handlers';
 import { registerMemoryHandlers } from './memory-handlers';
 import { registerSessionContextHandlers } from './session-context-handlers';
 import { registerSchedulerHandlers } from './scheduler-handlers';
@@ -119,6 +120,9 @@ export function setupIpcHandlers(
   // Insights handlers
   registerInsightsHandlers(getMainWindow);
 
+  // Agent analytics handlers (Python-based agent performance metrics)
+  registerAgentAnalyticsHandlers(getMainWindow);
+
   // Memory & infrastructure handlers (for Graphiti/LadybugDB)
   registerMemoryHandlers();
 
@@ -192,6 +196,7 @@ export {
   registerIdeationHandlers,
   registerChangelogHandlers,
   registerInsightsHandlers,
+  registerAgentAnalyticsHandlers,
   registerMemoryHandlers,
   registerSessionContextHandlers,
   registerAppUpdateHandlers,
