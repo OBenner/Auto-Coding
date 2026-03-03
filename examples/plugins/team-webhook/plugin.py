@@ -25,7 +25,7 @@ Example usage:
 import json
 import logging
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 from urllib import request
 from urllib.error import HTTPError, URLError
 
@@ -50,7 +50,7 @@ class CustomWebhookPlugin(IntegrationPlugin):
     def __init__(self, metadata: PluginMetadata):
         """Initialize the team webhook plugin."""
         super().__init__(metadata)
-        self.webhook_url: Optional[str] = None
+        self.webhook_url: str | None = None
         self.notify_subtasks: bool = False
         self.webhook_format: str = "generic"
         logger.debug("CustomWebhookPlugin initialized")
@@ -87,17 +87,23 @@ class CustomWebhookPlugin(IntegrationPlugin):
             return
 
         # Load optional configuration
-        notify_subtasks_str = self.get_config_value("TEAM_WEBHOOK_NOTIFY_SUBTASKS", "false")
+        notify_subtasks_str = self.get_config_value(
+            "TEAM_WEBHOOK_NOTIFY_SUBTASKS", "false"
+        )
         self.notify_subtasks = notify_subtasks_str.lower() in ("true", "1", "yes")
 
-        self.webhook_format = self.get_config_value("TEAM_WEBHOOK_FORMAT", "generic").lower()
+        self.webhook_format = self.get_config_value(
+            "TEAM_WEBHOOK_FORMAT", "generic"
+        ).lower()
         if self.webhook_format not in ("slack", "discord", "teams", "generic"):
             logger.warning(
                 f"team-webhook: Unknown format '{self.webhook_format}', using 'generic'"
             )
             self.webhook_format = "generic"
 
-        logger.info(f"team-webhook: Configuration loaded (format: {self.webhook_format}, subtasks: {self.notify_subtasks})")
+        logger.info(
+            f"team-webhook: Configuration loaded (format: {self.webhook_format}, subtasks: {self.notify_subtasks})"
+        )
 
     def on_disable(self) -> None:
         """Called when plugin is disabled."""
@@ -117,7 +123,9 @@ class CustomWebhookPlugin(IntegrationPlugin):
         """
         return self.is_enabled and self.webhook_url is not None
 
-    def _format_message(self, title: str, message: str, color: str = "info") -> dict[str, Any]:
+    def _format_message(
+        self, title: str, message: str, color: str = "info"
+    ) -> dict[str, Any]:
         """
         Format a notification message for the configured webhook format.
 
@@ -137,7 +145,7 @@ class CustomWebhookPlugin(IntegrationPlugin):
                 "success": "good",
                 "error": "danger",
                 "warning": "warning",
-                "info": "#36a64f"
+                "info": "#36a64f",
             }
             return {
                 "attachments": [
@@ -146,7 +154,7 @@ class CustomWebhookPlugin(IntegrationPlugin):
                         "text": message,
                         "color": color_map.get(color, "#36a64f"),
                         "footer": "Auto Code",
-                        "ts": int(datetime.now().timestamp())
+                        "ts": int(datetime.now().timestamp()),
                     }
                 ]
             }
@@ -155,9 +163,9 @@ class CustomWebhookPlugin(IntegrationPlugin):
             # Discord webhook format
             color_map = {
                 "success": 3066993,  # Green
-                "error": 15158332,   # Red
-                "warning": 16776960, # Yellow
-                "info": 3447003      # Blue
+                "error": 15158332,  # Red
+                "warning": 16776960,  # Yellow
+                "info": 3447003,  # Blue
             }
             return {
                 "embeds": [
@@ -166,7 +174,7 @@ class CustomWebhookPlugin(IntegrationPlugin):
                         "description": message,
                         "color": color_map.get(color, 3447003),
                         "footer": {"text": "Auto Code"},
-                        "timestamp": timestamp
+                        "timestamp": timestamp,
                     }
                 ]
             }
@@ -177,7 +185,7 @@ class CustomWebhookPlugin(IntegrationPlugin):
                 "success": "00FF00",
                 "error": "FF0000",
                 "warning": "FFA500",
-                "info": "0078D4"
+                "info": "0078D4",
             }
             return {
                 "@type": "MessageCard",
@@ -185,7 +193,7 @@ class CustomWebhookPlugin(IntegrationPlugin):
                 "summary": title,
                 "themeColor": color_map.get(color, "0078D4"),
                 "title": title,
-                "text": message
+                "text": message,
             }
 
         else:
@@ -195,7 +203,7 @@ class CustomWebhookPlugin(IntegrationPlugin):
                 "message": message,
                 "color": color,
                 "timestamp": timestamp,
-                "source": "auto-code"
+                "source": "auto-code",
             }
 
     def _send_webhook(self, payload: dict[str, Any]) -> bool:
@@ -218,22 +226,30 @@ class CustomWebhookPlugin(IntegrationPlugin):
                 self.webhook_url,
                 data=data,
                 headers={"Content-Type": "application/json"},
-                method="POST"
+                method="POST",
             )
 
             with request.urlopen(req, timeout=10) as response:
                 if response.status >= 200 and response.status < 300:
-                    logger.debug(f"team-webhook: Notification sent successfully (status: {response.status})")
+                    logger.debug(
+                        f"team-webhook: Notification sent successfully (status: {response.status})"
+                    )
                     return True
                 else:
-                    logger.warning(f"team-webhook: Webhook returned status {response.status}")
+                    logger.warning(
+                        f"team-webhook: Webhook returned status {response.status}"
+                    )
                     return False
 
         except HTTPError as e:
-            logger.error(f"team-webhook: HTTP error sending notification: {e.code} {e.reason}")
+            logger.error(
+                f"team-webhook: HTTP error sending notification: {e.code} {e.reason}"
+            )
             return False
         except URLError as e:
-            logger.error(f"team-webhook: Network error sending notification: {e.reason}")
+            logger.error(
+                f"team-webhook: Network error sending notification: {e.reason}"
+            )
             return False
         except Exception as e:
             logger.error(f"team-webhook: Unexpected error sending notification: {e}")
@@ -265,7 +281,9 @@ class CustomWebhookPlugin(IntegrationPlugin):
 
         # Save state
         context.set_state("build_start_time", datetime.now().isoformat())
-        context.set_state("notifications_sent", context.get_state("notifications_sent", 0) + 1)
+        context.set_state(
+            "notifications_sent", context.get_state("notifications_sent", 0) + 1
+        )
         self.save_state(context)
 
     def on_build_complete(self, context: IntegrationContext, success: bool) -> None:
@@ -303,6 +321,7 @@ class CustomWebhookPlugin(IntegrationPlugin):
                 else:
                     duration_str = f"{seconds}s"
             except (ValueError, TypeError):
+                # Failed to parse build start time; fall back to "unknown" duration
                 pass
 
         title = f"{emoji} Build {status.capitalize()}: {context.spec_name}"
@@ -320,7 +339,9 @@ class CustomWebhookPlugin(IntegrationPlugin):
         # Update state
         context.set_state("build_end_time", datetime.now().isoformat())
         context.set_state("build_success", success)
-        context.set_state("notifications_sent", context.get_state("notifications_sent", 0) + 1)
+        context.set_state(
+            "notifications_sent", context.get_state("notifications_sent", 0) + 1
+        )
         self.save_state(context)
 
     def on_subtask_update(
@@ -346,7 +367,7 @@ class CustomWebhookPlugin(IntegrationPlugin):
             "pending": "⏳",
             "in_progress": "🔄",
             "completed": "✅",
-            "failed": "❌"
+            "failed": "❌",
         }
         emoji = status_emoji.get(status, "📝")
 
@@ -355,7 +376,7 @@ class CustomWebhookPlugin(IntegrationPlugin):
             "pending": "info",
             "in_progress": "info",
             "completed": "success",
-            "failed": "error"
+            "failed": "error",
         }
         color = status_color.get(status, "info")
 
@@ -370,5 +391,7 @@ class CustomWebhookPlugin(IntegrationPlugin):
         self._send_webhook(payload)
 
         # Update state
-        context.set_state("notifications_sent", context.get_state("notifications_sent", 0) + 1)
+        context.set_state(
+            "notifications_sent", context.get_state("notifications_sent", 0) + 1
+        )
         self.save_state(context)

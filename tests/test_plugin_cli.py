@@ -14,25 +14,26 @@ Tests for plugin CLI commands including:
 import json
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
+
 import pytest
 
 # Ensure apps/backend is in path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "apps" / "backend"))
 
+from plugins.base import PluginType
 from plugins.cli import (
-    create_parser,
-    cmd_list,
-    cmd_enable,
     cmd_disable,
-    cmd_install,
+    cmd_enable,
     cmd_info,
+    cmd_install,
+    cmd_list,
     cmd_uninstall,
+    create_parser,
     main,
 )
-from plugins.base import PluginType
+from plugins.loader import PluginValidationError
 from plugins.registry import PluginRegistry
-from plugins.loader import PluginLoadError, PluginValidationError
 
 
 class TestPluginCLIParser:
@@ -44,8 +45,9 @@ class TestPluginCLIParser:
 
         # Get subparsers from parser - look for _SubParsersAction
         subparsers_actions = [
-            action for action in parser._actions
-            if hasattr(action, 'choices') and action.choices is not None
+            action
+            for action in parser._actions
+            if hasattr(action, "choices") and action.choices is not None
         ]
         assert len(subparsers_actions) > 0, "Parser should have subparsers"
 
@@ -54,7 +56,14 @@ class TestPluginCLIParser:
         choices = list(subparsers_action.choices.keys())
 
         # Verify all expected commands exist
-        expected_commands = ["list", "enable", "disable", "install", "info", "uninstall"]
+        expected_commands = [
+            "list",
+            "enable",
+            "disable",
+            "install",
+            "info",
+            "uninstall",
+        ]
         for cmd in expected_commands:
             assert cmd in choices, f"Command '{cmd}' should be in parser"
 
@@ -110,7 +119,9 @@ class TestPluginCLIParser:
         """Test that install command parses --url argument."""
         parser = create_parser()
 
-        args = parser.parse_args(["install", "--url", "https://github.com/user/plugin.git"])
+        args = parser.parse_args(
+            ["install", "--url", "https://github.com/user/plugin.git"]
+        )
         assert args.command == "install"
         assert args.url == "https://github.com/user/plugin.git"
         assert args.path is None
@@ -239,8 +250,7 @@ class TestListCommand:
             # Verify registry was called with enabled_only=True (may be called twice)
             calls = mock_registry.list_plugins.call_args_list
             assert any(
-                call[1] == {"plugin_type": None, "enabled_only": True}
-                for call in calls
+                call[1] == {"plugin_type": None, "enabled_only": True} for call in calls
             ), f"Expected correct filter call, got: {calls}"
 
             captured = capsys.readouterr()
@@ -285,7 +295,9 @@ class TestListCommand:
 
             assert result == 1
             # Check caplog for error message
-            assert any("Failed to list plugins" in record.message for record in caplog.records)
+            assert any(
+                "Failed to list plugins" in record.message for record in caplog.records
+            )
 
 
 class TestEnableCommand:
@@ -331,7 +343,10 @@ class TestEnableCommand:
 
             assert result == 1
             # Check caplog for error message
-            assert any("Plugin not found: nonexistent" in record.message for record in caplog.records)
+            assert any(
+                "Plugin not found: nonexistent" in record.message
+                for record in caplog.records
+            )
 
     def test_enable_loads_plugins_if_empty(self):
         """Test that enable command loads plugins if registry is empty."""
@@ -363,7 +378,9 @@ class TestEnableCommand:
 
             assert result == 1
             # Check caplog for error message
-            assert any("Failed to enable plugin" in record.message for record in caplog.records)
+            assert any(
+                "Failed to enable plugin" in record.message for record in caplog.records
+            )
 
 
 class TestDisableCommand:
@@ -409,7 +426,10 @@ class TestDisableCommand:
 
             assert result == 1
             # Check caplog for error message
-            assert any("Plugin not found: nonexistent" in record.message for record in caplog.records)
+            assert any(
+                "Plugin not found: nonexistent" in record.message
+                for record in caplog.records
+            )
 
     def test_disable_handles_exception(self, caplog):
         """Test that disable command handles exceptions gracefully."""
@@ -425,7 +445,10 @@ class TestDisableCommand:
 
             assert result == 1
             # Check caplog for error message
-            assert any("Failed to disable plugin" in record.message for record in caplog.records)
+            assert any(
+                "Failed to disable plugin" in record.message
+                for record in caplog.records
+            )
 
 
 class TestInstallCommand:
@@ -519,7 +542,9 @@ class TestInstallCommand:
             target_dir = user_plugins_dir / "test-plugin"
             assert not target_dir.exists()
 
-    def test_install_from_path_with_security_warnings(self, mock_plugin_dir, temp_dir, capsys):
+    def test_install_from_path_with_security_warnings(
+        self, mock_plugin_dir, temp_dir, capsys
+    ):
         """Test installation with security warnings (but not blocked)."""
         user_plugins_dir = temp_dir / "user_plugins"
         user_plugins_dir.mkdir()
@@ -535,7 +560,7 @@ class TestInstallCommand:
             # Plugin is safe but has warnings
             mock_loader.validate_plugin_security.return_value = (
                 True,
-                ["Suspicious import detected: subprocess"]
+                ["Suspicious import detected: subprocess"],
             )
             mock_loader.user_plugins_dir = user_plugins_dir
             mock_loader_class.return_value = mock_loader
@@ -554,7 +579,9 @@ class TestInstallCommand:
             assert "Suspicious import" in captured.out
             assert "installed successfully" in captured.out
 
-    def test_install_from_path_security_blocked(self, mock_plugin_dir, temp_dir, caplog):
+    def test_install_from_path_security_blocked(
+        self, mock_plugin_dir, temp_dir, caplog
+    ):
         """Test that installation is blocked when security validation fails."""
         user_plugins_dir = temp_dir / "user_plugins"
         user_plugins_dir.mkdir()
@@ -569,7 +596,7 @@ class TestInstallCommand:
             # Plugin fails security validation
             mock_loader.validate_plugin_security.return_value = (
                 False,
-                ["Critical security issue: malicious code detected"]
+                ["Critical security issue: malicious code detected"],
             )
             mock_loader.user_plugins_dir = user_plugins_dir
             mock_loader_class.return_value = mock_loader
@@ -584,7 +611,10 @@ class TestInstallCommand:
 
             assert result == 1
             # Check caplog for error message
-            assert any("failed security validation" in record.message for record in caplog.records)
+            assert any(
+                "failed security validation" in record.message
+                for record in caplog.records
+            )
 
     def test_install_from_path_nonexistent(self, temp_dir, caplog):
         """Test installation from nonexistent path."""
@@ -600,7 +630,9 @@ class TestInstallCommand:
 
         assert result == 1
         # Check caplog for error message
-        assert any("Source path not found" in record.message for record in caplog.records)
+        assert any(
+            "Source path not found" in record.message for record in caplog.records
+        )
 
     def test_install_from_path_not_directory(self, temp_dir, caplog):
         """Test installation from a file instead of directory."""
@@ -619,7 +651,9 @@ class TestInstallCommand:
         # Check caplog for error message
         assert any("not a directory" in record.message for record in caplog.records)
 
-    def test_install_from_path_force_overwrite(self, mock_plugin_dir, temp_dir, caplog, capsys):
+    def test_install_from_path_force_overwrite(
+        self, mock_plugin_dir, temp_dir, caplog, capsys
+    ):
         """Test force overwrite of existing plugin."""
         user_plugins_dir = temp_dir / "user_plugins"
         user_plugins_dir.mkdir()
@@ -651,11 +685,16 @@ class TestInstallCommand:
 
             assert result == 0
             # Check caplog for warning message
-            assert any("Removing existing plugin" in record.message for record in caplog.records)
+            assert any(
+                "Removing existing plugin" in record.message
+                for record in caplog.records
+            )
             captured = capsys.readouterr()
             assert "installed successfully" in captured.out
 
-    def test_install_from_path_without_force_fails(self, mock_plugin_dir, temp_dir, caplog):
+    def test_install_from_path_without_force_fails(
+        self, mock_plugin_dir, temp_dir, caplog
+    ):
         """Test that installation fails if plugin exists and --force is not used."""
         user_plugins_dir = temp_dir / "user_plugins"
         user_plugins_dir.mkdir()
@@ -685,14 +724,17 @@ class TestInstallCommand:
 
             assert result == 1
             # Check caplog for error message
-            assert any("already installed" in record.message for record in caplog.records)
+            assert any(
+                "already installed" in record.message for record in caplog.records
+            )
             assert any("--force" in record.message for record in caplog.records)
 
     def test_install_from_url_success(self, mock_plugin_dir, temp_dir, capsys):
         """Test successful installation from remote URL."""
-        with patch("plugins.cli.run_git") as mock_run_git, \
-             patch("plugins.cli._install_from_path") as mock_install_from_path:
-
+        with (
+            patch("plugins.cli.run_git") as mock_run_git,
+            patch("plugins.cli._install_from_path") as mock_install_from_path,
+        ):
             # Mock successful git clone
             mock_result = MagicMock()
             mock_result.returncode = 0
@@ -734,7 +776,10 @@ class TestInstallCommand:
 
             assert result == 1
             # Check caplog for error message
-            assert any("Failed to clone repository" in record.message for record in caplog.records)
+            assert any(
+                "Failed to clone repository" in record.message
+                for record in caplog.records
+            )
 
     def test_install_from_path_invalid_manifest(self, temp_dir, caplog):
         """Test installation with invalid plugin.json manifest."""
@@ -747,7 +792,9 @@ class TestInstallCommand:
 
         with patch("plugins.cli.PluginLoader") as mock_loader_class:
             mock_loader = MagicMock()
-            mock_loader._load_metadata.side_effect = PluginValidationError("Invalid manifest")
+            mock_loader._load_metadata.side_effect = PluginValidationError(
+                "Invalid manifest"
+            )
             mock_loader_class.return_value = mock_loader
 
             args = MagicMock(
@@ -796,8 +843,10 @@ class TestMainFunction:
 
     def test_main_dispatches_list_command(self):
         """Test that main function dispatches to list command."""
-        with patch("plugins.cli.cmd_list") as mock_cmd_list, \
-             patch("sys.argv", ["cli.py", "list"]):
+        with (
+            patch("plugins.cli.cmd_list") as mock_cmd_list,
+            patch("sys.argv", ["cli.py", "list"]),
+        ):
             mock_cmd_list.return_value = 0
 
             result = main()
@@ -807,8 +856,10 @@ class TestMainFunction:
 
     def test_main_dispatches_enable_command(self):
         """Test that main function dispatches to enable command."""
-        with patch("plugins.cli.cmd_enable") as mock_cmd_enable, \
-             patch("sys.argv", ["cli.py", "enable", "test-plugin"]):
+        with (
+            patch("plugins.cli.cmd_enable") as mock_cmd_enable,
+            patch("sys.argv", ["cli.py", "enable", "test-plugin"]),
+        ):
             mock_cmd_enable.return_value = 0
 
             result = main()
@@ -818,8 +869,10 @@ class TestMainFunction:
 
     def test_main_dispatches_disable_command(self):
         """Test that main function dispatches to disable command."""
-        with patch("plugins.cli.cmd_disable") as mock_cmd_disable, \
-             patch("sys.argv", ["cli.py", "disable", "test-plugin"]):
+        with (
+            patch("plugins.cli.cmd_disable") as mock_cmd_disable,
+            patch("sys.argv", ["cli.py", "disable", "test-plugin"]),
+        ):
             mock_cmd_disable.return_value = 0
 
             result = main()
@@ -829,8 +882,10 @@ class TestMainFunction:
 
     def test_main_dispatches_install_command(self):
         """Test that main function dispatches to install command."""
-        with patch("plugins.cli.cmd_install") as mock_cmd_install, \
-             patch("sys.argv", ["cli.py", "install", "--path", "/some/path"]):
+        with (
+            patch("plugins.cli.cmd_install") as mock_cmd_install,
+            patch("sys.argv", ["cli.py", "install", "--path", "/some/path"]),
+        ):
             mock_cmd_install.return_value = 0
 
             result = main()
@@ -840,8 +895,10 @@ class TestMainFunction:
 
     def test_main_dispatches_info_command(self):
         """Test that main function dispatches to info command."""
-        with patch("plugins.cli.cmd_info") as mock_cmd_info, \
-             patch("sys.argv", ["cli.py", "info", "test-plugin"]):
+        with (
+            patch("plugins.cli.cmd_info") as mock_cmd_info,
+            patch("sys.argv", ["cli.py", "info", "test-plugin"]),
+        ):
             mock_cmd_info.return_value = 0
 
             result = main()
@@ -851,8 +908,10 @@ class TestMainFunction:
 
     def test_main_dispatches_uninstall_command(self):
         """Test that main function dispatches to uninstall command."""
-        with patch("plugins.cli.cmd_uninstall") as mock_cmd_uninstall, \
-             patch("sys.argv", ["cli.py", "uninstall", "test-plugin"]):
+        with (
+            patch("plugins.cli.cmd_uninstall") as mock_cmd_uninstall,
+            patch("sys.argv", ["cli.py", "uninstall", "test-plugin"]),
+        ):
             mock_cmd_uninstall.return_value = 0
 
             result = main()

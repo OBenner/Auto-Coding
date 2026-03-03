@@ -85,9 +85,9 @@ from .utils import (
 
 # Import plugin system for agent lifecycle hooks
 try:
+    from plugins.base import PluginType
     from plugins.registry import PluginRegistry
     from plugins.sdk.agent import AgentContext
-    from plugins.base import PluginType
 
     PLUGINS_AVAILABLE = True
 except ImportError:
@@ -1078,7 +1078,8 @@ async def run_autonomous_agent(
                         metadata={
                             "subtask_id": subtask_id,
                             "iteration": iteration,
-                            "attempt": recovery_manager.get_attempt_count(subtask_id) + 1
+                            "attempt": recovery_manager.get_attempt_count(subtask_id)
+                            + 1
                             if subtask_id
                             else 1,
                         },
@@ -1088,7 +1089,9 @@ async def run_autonomous_agent(
                     for plugin in agent_plugins:
                         try:
                             plugin.before_session(agent_context)
-                            logger.debug(f"Called before_session for plugin: {plugin.name}")
+                            logger.debug(
+                                f"Called before_session for plugin: {plugin.name}"
+                            )
                         except Exception as e:
                             logger.warning(
                                 f"Plugin {plugin.name} before_session hook failed: {e}"
@@ -1193,7 +1196,9 @@ async def run_autonomous_agent(
                     for plugin in agent_plugins:
                         try:
                             plugin.after_session(agent_context, success=session_success)
-                            logger.debug(f"Called after_session for plugin: {plugin.name}")
+                            logger.debug(
+                                f"Called after_session for plugin: {plugin.name}"
+                            )
                         except Exception as e:
                             logger.warning(
                                 f"Plugin {plugin.name} after_session hook failed: {e}"

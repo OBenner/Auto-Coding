@@ -19,7 +19,6 @@ import json
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
 
 from plugins.base import PluginMetadata
 from plugins.sdk.integration import IntegrationContext, IntegrationPlugin
@@ -163,9 +162,7 @@ class MockLLMClient:
         tokens_used += len(response_message["content"].split())
 
         # Record usage
-        self._record_request(
-            user_message, response_message["content"], tokens_used
-        )
+        self._record_request(user_message, response_message["content"], tokens_used)
 
         logger.info(f"Generated chat response: {tokens_used} tokens")
 
@@ -198,7 +195,7 @@ class CustomLLMProviderPlugin(IntegrationPlugin):
     def __init__(self, metadata: PluginMetadata):
         """Initialize the custom LLM provider plugin."""
         super().__init__(metadata)
-        self.client: Optional[MockLLMClient] = None
+        self.client: MockLLMClient | None = None
         logger.debug("CustomLLMProviderPlugin initialized")
 
     def on_load(self) -> None:
@@ -313,9 +310,7 @@ class CustomLLMProviderPlugin(IntegrationPlugin):
             Returns:
                 Dict with response message, tokens used, and metadata
             """
-            logger.info(
-                f"custom-llm-provider: Chat with {len(messages)} messages"
-            )
+            logger.info(f"custom-llm-provider: Chat with {len(messages)} messages")
             result = self.client.chat(messages, max_tokens=max_tokens)
             return result
 
@@ -398,9 +393,7 @@ class CustomLLMProviderPlugin(IntegrationPlugin):
         logger.info(f"custom-llm-provider: Created {len(tools)} MCP tools")
         return tools
 
-    def on_build_start(
-        self, context: IntegrationContext, spec_name: str
-    ) -> None:
+    def on_build_start(self, context: IntegrationContext, spec_name: str) -> None:
         """
         Called when a build starts.
 
@@ -408,9 +401,7 @@ class CustomLLMProviderPlugin(IntegrationPlugin):
             context: Integration context
             spec_name: Name of the spec being built
         """
-        logger.info(
-            f"custom-llm-provider: Build started for spec '{spec_name}'"
-        )
+        logger.info(f"custom-llm-provider: Build started for spec '{spec_name}'")
 
     def on_build_complete(
         self, context: IntegrationContext, spec_name: str, success: bool
@@ -424,9 +415,7 @@ class CustomLLMProviderPlugin(IntegrationPlugin):
             success: Whether the build succeeded
         """
         status = "succeeded" if success else "failed"
-        logger.info(
-            f"custom-llm-provider: Build {status} for spec '{spec_name}'"
-        )
+        logger.info(f"custom-llm-provider: Build {status} for spec '{spec_name}'")
 
         # Log usage statistics at end of build
         if self.client:
@@ -451,6 +440,4 @@ class CustomLLMProviderPlugin(IntegrationPlugin):
             subtask_id: ID of the subtask
             status: New status (pending, in_progress, completed, failed)
         """
-        logger.debug(
-            f"custom-llm-provider: Subtask {subtask_id} -> {status}"
-        )
+        logger.debug(f"custom-llm-provider: Subtask {subtask_id} -> {status}")

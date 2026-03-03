@@ -17,7 +17,6 @@ import logging
 import re
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
 
 from plugins.base import PluginMetadata
 from plugins.sdk.integration import IntegrationContext, IntegrationPlugin
@@ -331,9 +330,13 @@ class FileTemplatesPlugin(IntegrationPlugin):
     def on_enable(self) -> None:
         """Called when plugin is enabled."""
         logger.info("file-templates: Plugin enabled")
-        logger.info(f"file-templates: {len(BUILTIN_TEMPLATES)} built-in templates available")
+        logger.info(
+            f"file-templates: {len(BUILTIN_TEMPLATES)} built-in templates available"
+        )
         if self.custom_templates:
-            logger.info(f"file-templates: {len(self.custom_templates)} custom templates loaded")
+            logger.info(
+                f"file-templates: {len(self.custom_templates)} custom templates loaded"
+            )
 
     def on_disable(self) -> None:
         """Called when plugin is disabled."""
@@ -369,9 +372,7 @@ class FileTemplatesPlugin(IntegrationPlugin):
         """Get all templates (built-in + custom)."""
         return {**BUILTIN_TEMPLATES, **self.custom_templates}
 
-    def _substitute_variables(
-        self, template: str, variables: dict[str, str]
-    ) -> str:
+    def _substitute_variables(self, template: str, variables: dict[str, str]) -> str:
         """
         Substitute variables in template.
 
@@ -487,18 +488,20 @@ class FileTemplatesPlugin(IntegrationPlugin):
             for var in template_data.get("variables", []):
                 lines.append(f"  • {var}")
 
-            lines.extend([
-                "",
-                "Automatic Variables:",
-                "  • timestamp - Current timestamp",
-                "  • date - Current date",
-                "  • year - Current year",
-                "",
-                "Note: Variables support auto-conversion:",
-                "  {{VarName}} → direct value",
-                "  {{var-name}} → kebab-case",
-                "  {{var_name}} → snake-case",
-            ])
+            lines.extend(
+                [
+                    "",
+                    "Automatic Variables:",
+                    "  • timestamp - Current timestamp",
+                    "  • date - Current date",
+                    "  • year - Current year",
+                    "",
+                    "Note: Variables support auto-conversion:",
+                    "  {{VarName}} → direct value",
+                    "  {{var-name}} → kebab-case",
+                    "  {{var_name}} → snake-case",
+                ]
+            )
 
             logger.info(f"Retrieved template info: {template_id}")
             return "\n".join(lines)
@@ -521,7 +524,9 @@ class FileTemplatesPlugin(IntegrationPlugin):
 
             if template_id not in templates:
                 available = ", ".join(templates.keys())
-                return f"Error: Template '{template_id}' not found. Available: {available}"
+                return (
+                    f"Error: Template '{template_id}' not found. Available: {available}"
+                )
 
             # Parse variables
             try:

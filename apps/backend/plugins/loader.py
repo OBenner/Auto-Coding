@@ -20,7 +20,7 @@ import sys
 from pathlib import Path
 
 from packaging.specifiers import SpecifierSet
-from packaging.version import Version, InvalidVersion
+from packaging.version import InvalidVersion, Version
 
 from .base import PluginBase, PluginMetadata, PluginType
 from .isolation import PluginSandbox, ResourceLimits
@@ -158,9 +158,9 @@ class PluginLoader:
         self.system_plugins_dir.mkdir(parents=True, exist_ok=True)
 
         logger.debug("PluginLoader initialized:")
-        debug_verbose("loader", f"  User plugins: {self.user_plugins_dir}")
-        debug_verbose("loader", f"  System plugins: {self.system_plugins_dir}")
-        debug_verbose("loader", f"  Default limits: {self.default_limits.to_dict()}")
+        _debug_verbose(f"  User plugins: {self.user_plugins_dir}")
+        _debug_verbose(f"  System plugins: {self.system_plugins_dir}")
+        _debug_verbose(f"  Default limits: {self.default_limits.to_dict()}")
 
     @staticmethod
     def _get_auto_claude_version() -> str:
@@ -226,8 +226,7 @@ class PluginLoader:
         """
         # No requirement specified - always compatible
         if not required_version:
-            debug_verbose(
-                "loader",
+            _debug_verbose(
                 f"Plugin '{plugin_name}' has no version requirement - compatible"
             )
             return True, None
@@ -265,8 +264,7 @@ class PluginLoader:
             specifier = SpecifierSet(version_spec)
 
             if current in specifier:
-                debug_verbose(
-                    "loader",
+                _debug_verbose(
                     f"Plugin '{plugin_name}' version requirement '{required_version}' "
                     f"is compatible with Auto Claude {current_version}"
                 )
@@ -276,13 +274,11 @@ class PluginLoader:
                     f"Plugin '{plugin_name}' requires Auto Claude {required_version}, "
                     f"but current version is {current_version}"
                 )
-                debug_warning("loader", error_msg)
+                _debug_warning(error_msg)
                 return False, error_msg
 
         except InvalidVersion as e:
-            error_msg = (
-                f"Plugin '{plugin_name}' has invalid version requirement '{required_version}': {e}"
-            )
+            error_msg = f"Plugin '{plugin_name}' has invalid version requirement '{required_version}': {e}"
             logger.warning(error_msg)
             return False, error_msg
 
@@ -320,12 +316,10 @@ class PluginLoader:
 
                         # Check version compatibility (non-blocking for discovery)
                         is_compatible, error_msg = self._check_version_compatibility(
-                            metadata.name,
-                            metadata.auto_claude_version
+                            metadata.name, metadata.auto_claude_version
                         )
                         if not is_compatible:
-                            debug_warning(
-                                "loader",
+                            _debug_warning(
                                 f"  Found incompatible system plugin {plugin_dir.name}: {error_msg}"
                             )
                             logger.warning(
@@ -352,12 +346,10 @@ class PluginLoader:
 
                         # Check version compatibility (non-blocking for discovery)
                         is_compatible, error_msg = self._check_version_compatibility(
-                            metadata.name,
-                            metadata.auto_claude_version
+                            metadata.name, metadata.auto_claude_version
                         )
                         if not is_compatible:
-                            debug_warning(
-                                "loader",
+                            _debug_warning(
                                 f"  Found incompatible user plugin {plugin_dir.name}: {error_msg}"
                             )
                             logger.warning(
@@ -426,8 +418,7 @@ class PluginLoader:
 
         # Check version compatibility
         is_compatible, error_msg = self._check_version_compatibility(
-            metadata.name,
-            metadata.auto_claude_version
+            metadata.name, metadata.auto_claude_version
         )
         if not is_compatible:
             raise PluginValidationError(error_msg)
@@ -491,7 +482,7 @@ class PluginLoader:
         warnings = []
         is_safe = True
 
-        debug_verbose("security", f"Validating security for plugin in: {plugin_dir}")
+        _debug_verbose(f"Validating security for plugin in: {plugin_dir}")
 
         # Find all Python files in plugin directory
         python_files = list(plugin_dir.rglob("*.py"))
@@ -518,7 +509,9 @@ class PluginLoader:
             try:
                 ast.parse(content)
             except SyntaxError as e:
-                warnings.append(f"Syntax error in {py_file.name} (line {e.lineno}): {e.msg}")
+                warnings.append(
+                    f"Syntax error in {py_file.name} (line {e.lineno}): {e.msg}"
+                )
                 is_safe = False
                 continue
 
@@ -541,11 +534,11 @@ class PluginLoader:
                 is_safe = False  # Block plugins with hardcoded secrets
 
         if not warnings:
-            debug_success("security", "Plugin passed all security checks")
+            _debug_success("Plugin passed all security checks")
         else:
-            debug_warning("security", f"Found {len(warnings)} security concerns")
+            _debug_warning(f"Found {len(warnings)} security concerns")
             for warning in warnings:
-                debug_warning("security", f"  - {warning}")
+                _debug_warning(f"  - {warning}")
 
         return is_safe, warnings
 
@@ -555,7 +548,10 @@ class PluginLoader:
 
         # Patterns for suspicious imports
         suspicious_patterns = [
-            (r"import\s+subprocess", "Imports subprocess module (shell command execution)"),
+            (
+                r"import\s+subprocess",
+                "Imports subprocess module (shell command execution)",
+            ),
             (r"from\s+subprocess\s+import", "Imports from subprocess module"),
             (r"import\s+os\b", "Imports os module (filesystem access)"),
             (r"from\s+os\s+import", "Imports from os module"),
@@ -606,10 +602,14 @@ class PluginLoader:
             (r"AKIA[0-9A-Z]{16}", "AWS Access Key ID"),
             (r"AIza[0-9A-Za-z_-]{35}", "Google API Key"),
             # Generic patterns
-            (r'(?:api[_-]?key|apikey|api_secret)\s*[:=]\s*["\']([a-zA-Z0-9_-]{32,})["\']',
-             "API key assignment"),
-            (r'(?:access[_-]?token|auth[_-]?token)\s*[:=]\s*["\']([a-zA-Z0-9_-]{32,})["\']',
-             "Token assignment"),
+            (
+                r'(?:api[_-]?key|apikey|api_secret)\s*[:=]\s*["\']([a-zA-Z0-9_-]{32,})["\']',
+                "API key assignment",
+            ),
+            (
+                r'(?:access[_-]?token|auth[_-]?token)\s*[:=]\s*["\']([a-zA-Z0-9_-]{32,})["\']',
+                "Token assignment",
+            ),
             (r"-----BEGIN\s+(RSA\s+)?PRIVATE\s+KEY-----", "Private key"),
         ]
 

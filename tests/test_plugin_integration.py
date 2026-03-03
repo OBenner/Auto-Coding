@@ -16,15 +16,15 @@ import logging
 import shutil
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import MagicMock
+
 import pytest
 
 # Ensure apps/backend is in path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "apps" / "backend"))
 
-from plugins.registry import PluginRegistry
-from plugins.loader import PluginLoader
 from plugins.base import PluginType
+from plugins.registry import PluginRegistry
 from plugins.sdk.agent import AgentContext
 
 
@@ -99,7 +99,7 @@ class TestPluginIntegration:
             "required_permissions": [],
             "dependencies": [],
             "homepage": "https://example.com/test-plugin",
-            "license": "MIT"
+            "license": "MIT",
         }
         (plugin_dir / "plugin.json").write_text(json.dumps(manifest, indent=2))
 
@@ -184,7 +184,9 @@ class TestAgentPlugin(_agent_sdk.AgentPlugin):
         assert plugin.version == "1.0.0"
         assert plugin.plugin_type == PluginType.AGENT
 
-    def test_plugin_lifecycle_hooks(self, user_plugins_dir, install_test_plugin, caplog):
+    def test_plugin_lifecycle_hooks(
+        self, user_plugins_dir, install_test_plugin, caplog
+    ):
         """Test that plugin lifecycle hooks are called correctly."""
         # Enable debug logging to capture plugin messages
         caplog.set_level(logging.INFO)
@@ -208,12 +210,7 @@ class TestAgentPlugin(_agent_sdk.AgentPlugin):
         assert any("Plugin enabled" in record.message for record in caplog.records)
 
     def test_agent_session_hooks(
-        self,
-        user_plugins_dir,
-        install_test_plugin,
-        project_dir,
-        spec_dir,
-        caplog
+        self, user_plugins_dir, install_test_plugin, project_dir, spec_dir, caplog
     ):
         """Test that agent session hooks (before_session, after_session) are called."""
         # Enable debug logging
@@ -221,8 +218,7 @@ class TestAgentPlugin(_agent_sdk.AgentPlugin):
 
         # Create registry and load plugins
         registry = PluginRegistry.get_instance(
-            user_plugins_dir=user_plugins_dir,
-            project_dir=project_dir
+            user_plugins_dir=user_plugins_dir, project_dir=project_dir
         )
         registry.load_all_plugins()
 
@@ -239,7 +235,7 @@ class TestAgentPlugin(_agent_sdk.AgentPlugin):
             spec_dir=spec_dir,
             session_id="test-session-001",
             phase="implementation",
-            metadata={}
+            metadata={},
         )
 
         # Clear previous log records
@@ -249,7 +245,9 @@ class TestAgentPlugin(_agent_sdk.AgentPlugin):
         plugin.before_session(context)
 
         # Verify before_session was called and logged
-        before_session_logs = [r for r in caplog.records if "Starting session" in r.message]
+        before_session_logs = [
+            r for r in caplog.records if "Starting session" in r.message
+        ]
         assert len(before_session_logs) > 0, "before_session should log session start"
 
         # Verify session count incremented
@@ -264,12 +262,7 @@ class TestAgentPlugin(_agent_sdk.AgentPlugin):
         assert len(after_session_logs) > 0, "after_session should log session success"
 
     def test_full_agent_plugin_lifecycle_e2e(
-        self,
-        user_plugins_dir,
-        install_test_plugin,
-        project_dir,
-        spec_dir,
-        caplog
+        self, user_plugins_dir, install_test_plugin, project_dir, spec_dir, caplog
     ):
         """
         End-to-end test of full agent plugin lifecycle:
@@ -284,8 +277,7 @@ class TestAgentPlugin(_agent_sdk.AgentPlugin):
 
         # Step 1: Create registry and discover plugins
         registry = PluginRegistry.get_instance(
-            user_plugins_dir=user_plugins_dir,
-            project_dir=project_dir
+            user_plugins_dir=user_plugins_dir, project_dir=project_dir
         )
 
         # Step 2: Load all plugins
@@ -296,7 +288,9 @@ class TestAgentPlugin(_agent_sdk.AgentPlugin):
         assert len(all_plugins) > 0, "At least one plugin should be loaded"
 
         plugin_names = [p.name for p in all_plugins]
-        assert "test-agent-plugin" in plugin_names, "test-agent-plugin should be in loaded plugins"
+        assert "test-agent-plugin" in plugin_names, (
+            "test-agent-plugin should be in loaded plugins"
+        )
 
         # Step 3: Enable the plugin
         registry.enable_plugin("test-agent-plugin")
@@ -311,8 +305,12 @@ class TestAgentPlugin(_agent_sdk.AgentPlugin):
         assert any("Plugin enabled" in r.message for r in caplog.records)
 
         # Step 4: Get enabled agent plugins (simulating what agent session does)
-        enabled_agent_plugins = registry.list_plugins(plugin_type=PluginType.AGENT, enabled_only=True)
-        assert len(enabled_agent_plugins) > 0, "Should have at least one enabled agent plugin"
+        enabled_agent_plugins = registry.list_plugins(
+            plugin_type=PluginType.AGENT, enabled_only=True
+        )
+        assert len(enabled_agent_plugins) > 0, (
+            "Should have at least one enabled agent plugin"
+        )
         assert plugin in enabled_agent_plugins
 
         # Step 5: Simulate agent session
@@ -321,7 +319,7 @@ class TestAgentPlugin(_agent_sdk.AgentPlugin):
             spec_dir=spec_dir,
             session_id="integration-test-001",
             phase="coder",
-            metadata={"test": "integration"}
+            metadata={"test": "integration"},
         )
 
         # Clear previous logs
@@ -356,19 +354,14 @@ class TestAgentPlugin(_agent_sdk.AgentPlugin):
         assert plugin.is_enabled
 
     def test_plugin_disable(
-        self,
-        user_plugins_dir,
-        install_test_plugin,
-        project_dir,
-        caplog
+        self, user_plugins_dir, install_test_plugin, project_dir, caplog
     ):
         """Test that disabling a plugin works correctly."""
         caplog.set_level(logging.INFO)
 
         # Create registry and load plugins
         registry = PluginRegistry.get_instance(
-            user_plugins_dir=user_plugins_dir,
-            project_dir=project_dir
+            user_plugins_dir=user_plugins_dir, project_dir=project_dir
         )
         registry.load_all_plugins()
 
@@ -388,17 +381,12 @@ class TestAgentPlugin(_agent_sdk.AgentPlugin):
         assert any("Plugin disabled" in r.message for r in caplog.records)
 
     def test_plugin_failure_handling(
-        self,
-        user_plugins_dir,
-        install_test_plugin,
-        project_dir,
-        spec_dir
+        self, user_plugins_dir, install_test_plugin, project_dir, spec_dir
     ):
         """Test that plugin hook failures are handled gracefully."""
         # Create registry and load plugins
         registry = PluginRegistry.get_instance(
-            user_plugins_dir=user_plugins_dir,
-            project_dir=project_dir
+            user_plugins_dir=user_plugins_dir, project_dir=project_dir
         )
         registry.load_all_plugins()
         registry.enable_plugin("test-agent-plugin")
@@ -411,7 +399,7 @@ class TestAgentPlugin(_agent_sdk.AgentPlugin):
             spec_dir=spec_dir,
             session_id="test-failure",
             phase="test",
-            metadata={}
+            metadata={},
         )
 
         # Simulate after_session with failure
@@ -422,23 +410,20 @@ class TestAgentPlugin(_agent_sdk.AgentPlugin):
         assert plugin.is_enabled
 
     def test_multiple_plugins(
-        self,
-        user_plugins_dir,
-        system_plugins_dir,
-        install_test_plugin,
-        project_dir
+        self, user_plugins_dir, system_plugins_dir, install_test_plugin, project_dir
     ):
         """Test that multiple plugins can coexist."""
         # Install another example plugin if available
         custom_integration_src = system_plugins_dir / "custom-integration"
         if custom_integration_src.exists():
             custom_integration_dst = user_plugins_dir / "custom-integration"
-            shutil.copytree(custom_integration_src, custom_integration_dst, dirs_exist_ok=True)
+            shutil.copytree(
+                custom_integration_src, custom_integration_dst, dirs_exist_ok=True
+            )
 
         # Create registry and load all plugins
         registry = PluginRegistry.get_instance(
-            user_plugins_dir=user_plugins_dir,
-            project_dir=project_dir
+            user_plugins_dir=user_plugins_dir, project_dir=project_dir
         )
         registry.load_all_plugins()
 
@@ -478,7 +463,7 @@ class TestPluginContextAccess:
             spec_dir=spec_dir,
             session_id="test-001",
             phase="planner",
-            metadata={"key": "value"}
+            metadata={"key": "value"},
         )
 
         # Verify all fields are accessible
@@ -510,7 +495,7 @@ class TestPluginContextAccess:
             session_id="test-002",
             client=mock_client,
             phase="coder",
-            metadata={}
+            metadata={},
         )
 
         # Verify client is accessible

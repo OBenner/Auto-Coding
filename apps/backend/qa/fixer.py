@@ -38,9 +38,9 @@ from task_logger import (
 
 # Import plugin system for agent lifecycle hooks
 try:
+    from plugins.base import PluginType
     from plugins.registry import PluginRegistry
     from plugins.sdk.agent import AgentContext
-    from plugins.base import PluginType
 
     PLUGINS_AVAILABLE = True
 except ImportError:
@@ -501,7 +501,10 @@ async def run_qa_fixer_session(
                             session_id=f"qa_fixer_{fix_session}",
                             client=client,
                             phase="validation",
-                            metadata={"fix_session": fix_session, "iteration": fixer_iteration},
+                            metadata={
+                                "fix_session": fix_session,
+                                "iteration": fixer_iteration,
+                            },
                         )
 
                         # Determine session success (will be updated after validation)
@@ -511,8 +514,12 @@ async def run_qa_fixer_session(
                         # Call after_session for each enabled agent plugin
                         for plugin in agent_plugins:
                             try:
-                                plugin.after_session(agent_context, success=session_success)
-                                logger.debug(f"Called after_session for plugin: {plugin.name}")
+                                plugin.after_session(
+                                    agent_context, success=session_success
+                                )
+                                logger.debug(
+                                    f"Called after_session for plugin: {plugin.name}"
+                                )
                             except Exception as e:
                                 logger.warning(
                                     f"Plugin {plugin.name} after_session hook failed: {e}"
@@ -633,7 +640,9 @@ async def run_qa_fixer_session(
                         for plugin in agent_plugins:
                             try:
                                 plugin.after_session(agent_context, success=False)
-                                logger.debug(f"Called after_session for plugin: {plugin.name}")
+                                logger.debug(
+                                    f"Called after_session for plugin: {plugin.name}"
+                                )
                             except Exception as hook_error:
                                 logger.warning(
                                     f"Plugin {plugin.name} after_session hook failed: {hook_error}"

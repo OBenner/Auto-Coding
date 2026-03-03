@@ -16,18 +16,16 @@ This test suite verifies that:
 
 import json
 import logging
-import shutil
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, Mock, patch
+
 import pytest
 
 # Ensure apps/backend is in path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "apps" / "backend"))
 
-from plugins.registry import PluginRegistry
-from plugins.loader import PluginLoader
 from plugins.base import PluginType
+from plugins.registry import PluginRegistry
 from plugins.sdk.integration import IntegrationContext
 
 # Get logger for tests
@@ -92,16 +90,16 @@ class TestIntegrationPluginMCPTools:
                         {
                             "id": "subtask-1-1",
                             "description": "Test subtask 1",
-                            "status": "pending"
+                            "status": "pending",
                         },
                         {
                             "id": "subtask-1-2",
                             "description": "Test subtask 2",
-                            "status": "in_progress"
-                        }
-                    ]
+                            "status": "in_progress",
+                        },
+                    ],
                 }
-            ]
+            ],
         }
         plan_file = spec_dir / "implementation_plan.json"
         plan_file.write_text(json.dumps(plan, indent=2))
@@ -130,7 +128,7 @@ class TestIntegrationPluginMCPTools:
             "required_permissions": ["read_files", "write_files"],
             "dependencies": [],
             "homepage": "https://example.com/test-plugin",
-            "license": "MIT"
+            "license": "MIT",
         }
         (plugin_dir / "plugin.json").write_text(json.dumps(manifest, indent=2))
 
@@ -327,7 +325,7 @@ class TestIntegrationPlugin(integration_sdk.IntegrationPlugin):
             spec_dir=spec_dir,
             config={"TEST_INTEGRATION_DATA_DIR": str(data_dir)},
             state={},
-            metadata={}
+            metadata={},
         )
 
         return context
@@ -337,7 +335,7 @@ class TestIntegrationPlugin(integration_sdk.IntegrationPlugin):
         user_plugins_dir,
         install_test_integration_plugin,
         integration_context,
-        caplog
+        caplog,
     ):
         """Test that integration plugins create MCP tools correctly."""
         caplog.set_level(logging.INFO)
@@ -345,7 +343,7 @@ class TestIntegrationPlugin(integration_sdk.IntegrationPlugin):
         # Create registry and load plugins
         registry = PluginRegistry.get_instance(
             user_plugins_dir=user_plugins_dir,
-            project_dir=integration_context.project_dir
+            project_dir=integration_context.project_dir,
         )
         registry.load_all_plugins()
 
@@ -361,7 +359,10 @@ class TestIntegrationPlugin(integration_sdk.IntegrationPlugin):
         # Set config on plugin instance
         plugin.set_config_value(
             "TEST_INTEGRATION_DATA_DIR",
-            integration_context.config.get("TEST_INTEGRATION_DATA_DIR", integration_context.config.get("TEST_INTEGRATION_DATA_DIR"))
+            integration_context.config.get(
+                "TEST_INTEGRATION_DATA_DIR",
+                integration_context.config.get("TEST_INTEGRATION_DATA_DIR"),
+            ),
         )
 
         # Trigger on_enable to initialize the data store
@@ -385,16 +386,13 @@ class TestIntegrationPlugin(integration_sdk.IntegrationPlugin):
         logger.info(f"Discovered MCP tools: {tool_names}")
 
     def test_mcp_tool_invocation(
-        self,
-        user_plugins_dir,
-        install_test_integration_plugin,
-        integration_context
+        self, user_plugins_dir, install_test_integration_plugin, integration_context
     ):
         """Test that MCP tools can be invoked and return expected results."""
         # Create registry and load plugins
         registry = PluginRegistry.get_instance(
             user_plugins_dir=user_plugins_dir,
-            project_dir=integration_context.project_dir
+            project_dir=integration_context.project_dir,
         )
         registry.load_all_plugins()
 
@@ -402,7 +400,7 @@ class TestIntegrationPlugin(integration_sdk.IntegrationPlugin):
         plugin = registry.get_plugin("test-integration-plugin")
         plugin.set_config_value(
             "TEST_INTEGRATION_DATA_DIR",
-            integration_context.config["TEST_INTEGRATION_DATA_DIR"]
+            integration_context.config["TEST_INTEGRATION_DATA_DIR"],
         )
         registry.enable_plugin("test-integration-plugin")
         plugin.on_enable()
@@ -433,7 +431,9 @@ class TestIntegrationPlugin(integration_sdk.IntegrationPlugin):
 
         assert isinstance(result_data, list), "list_items should return a list"
         assert len(result_data) >= 1, "Should have at least one item"
-        assert any(t["id"] == item_id for t in result_data), "Created item should be in list"
+        assert any(t["id"] == item_id for t in result_data), (
+            "Created item should be in list"
+        )
 
         # Test 3: Update item value
         update_item = tool_dict.get("update_item")
@@ -457,16 +457,13 @@ class TestIntegrationPlugin(integration_sdk.IntegrationPlugin):
         assert result_data["name"] == "Test Item"
 
     def test_mcp_tool_state_persistence(
-        self,
-        user_plugins_dir,
-        install_test_integration_plugin,
-        integration_context
+        self, user_plugins_dir, install_test_integration_plugin, integration_context
     ):
         """Test that MCP tools can persist state across invocations."""
         # Create registry and load plugins
         registry = PluginRegistry.get_instance(
             user_plugins_dir=user_plugins_dir,
-            project_dir=integration_context.project_dir
+            project_dir=integration_context.project_dir,
         )
         registry.load_all_plugins()
 
@@ -474,7 +471,7 @@ class TestIntegrationPlugin(integration_sdk.IntegrationPlugin):
         plugin = registry.get_plugin("test-integration-plugin")
         plugin.set_config_value(
             "TEST_INTEGRATION_DATA_DIR",
-            integration_context.config["TEST_INTEGRATION_DATA_DIR"]
+            integration_context.config["TEST_INTEGRATION_DATA_DIR"],
         )
         registry.enable_plugin("test-integration-plugin")
         plugin.on_enable()
@@ -497,7 +494,9 @@ class TestIntegrationPlugin(integration_sdk.IntegrationPlugin):
         assert last_create is not None, "last_create timestamp should be set"
 
         # Verify state file was created
-        state_file = integration_context.spec_dir / ".test-integration-plugin_state.json"
+        state_file = (
+            integration_context.spec_dir / ".test-integration-plugin_state.json"
+        )
         assert state_file.exists(), "State file should be created"
 
         # Load state file and verify contents
@@ -508,16 +507,13 @@ class TestIntegrationPlugin(integration_sdk.IntegrationPlugin):
         assert "last_create" in saved_state
 
     def test_mcp_tool_error_handling(
-        self,
-        user_plugins_dir,
-        install_test_integration_plugin,
-        integration_context
+        self, user_plugins_dir, install_test_integration_plugin, integration_context
     ):
         """Test that MCP tools handle errors gracefully."""
         # Create registry and load plugins
         registry = PluginRegistry.get_instance(
             user_plugins_dir=user_plugins_dir,
-            project_dir=integration_context.project_dir
+            project_dir=integration_context.project_dir,
         )
         registry.load_all_plugins()
 
@@ -525,7 +521,7 @@ class TestIntegrationPlugin(integration_sdk.IntegrationPlugin):
         plugin = registry.get_plugin("test-integration-plugin")
         plugin.set_config_value(
             "TEST_INTEGRATION_DATA_DIR",
-            integration_context.config["TEST_INTEGRATION_DATA_DIR"]
+            integration_context.config["TEST_INTEGRATION_DATA_DIR"],
         )
         registry.enable_plugin("test-integration-plugin")
         plugin.on_enable()
@@ -550,16 +546,13 @@ class TestIntegrationPlugin(integration_sdk.IntegrationPlugin):
         assert "error" in result_data, "Should return error for non-existent item"
 
     def test_mcp_server_creation(
-        self,
-        user_plugins_dir,
-        install_test_integration_plugin,
-        integration_context
+        self, user_plugins_dir, install_test_integration_plugin, integration_context
     ):
         """Test that plugins can create MCP servers from their tools."""
         # Create registry and load plugins
         registry = PluginRegistry.get_instance(
             user_plugins_dir=user_plugins_dir,
-            project_dir=integration_context.project_dir
+            project_dir=integration_context.project_dir,
         )
         registry.load_all_plugins()
 
@@ -567,7 +560,7 @@ class TestIntegrationPlugin(integration_sdk.IntegrationPlugin):
         plugin = registry.get_plugin("test-integration-plugin")
         plugin.set_config_value(
             "TEST_INTEGRATION_DATA_DIR",
-            integration_context.config["TEST_INTEGRATION_DATA_DIR"]
+            integration_context.config["TEST_INTEGRATION_DATA_DIR"],
         )
         registry.enable_plugin("test-integration-plugin")
         plugin.on_enable()
@@ -586,10 +579,7 @@ class TestIntegrationPlugin(integration_sdk.IntegrationPlugin):
             pytest.skip("Claude SDK not available for MCP server creation")
 
     def test_multiple_mcp_tool_contexts(
-        self,
-        user_plugins_dir,
-        install_test_integration_plugin,
-        temp_dir
+        self, user_plugins_dir, install_test_integration_plugin, temp_dir
     ):
         """Test that plugins can create tools for different contexts independently."""
         # Create registry
@@ -613,7 +603,7 @@ class TestIntegrationPlugin(integration_sdk.IntegrationPlugin):
             spec_dir=context1_spec,
             config={"TEST_INTEGRATION_DATA_DIR": str(data_dir1)},
             state={},
-            metadata={}
+            metadata={},
         )
 
         context2_dir = temp_dir / "context2"
@@ -628,7 +618,7 @@ class TestIntegrationPlugin(integration_sdk.IntegrationPlugin):
             spec_dir=context2_spec,
             config={"TEST_INTEGRATION_DATA_DIR": str(data_dir2)},
             state={},
-            metadata={}
+            metadata={},
         )
 
         # Set config and enable for context 1
@@ -642,7 +632,7 @@ class TestIntegrationPlugin(integration_sdk.IntegrationPlugin):
         # Create item in context 1
         create_item1 = tool_dict1["create_item"]
         result1 = create_item1("Context1 Item", "Item in context 1")
-        item1_data = json.loads(result1)
+        _item1_data = json.loads(result1)  # noqa: F841
 
         # Re-enable with context 2 config
         plugin.on_disable()
@@ -656,7 +646,7 @@ class TestIntegrationPlugin(integration_sdk.IntegrationPlugin):
         # Create item in context 2
         create_item2 = tool_dict2["create_item"]
         result2 = create_item2("Context2 Item", "Item in context 2")
-        item2_data = json.loads(result2)
+        _item2_data = json.loads(result2)  # noqa: F841
 
         # List items in context 2 (should only have context 2 item)
         list_items2 = tool_dict2["list_items"]
@@ -689,7 +679,7 @@ class TestIntegrationPlugin(integration_sdk.IntegrationPlugin):
         user_plugins_dir,
         install_test_integration_plugin,
         integration_context,
-        temp_dir
+        temp_dir,
     ):
         """Test that is_available() correctly reports plugin availability."""
         # Use a fresh data directory for this test
@@ -699,7 +689,7 @@ class TestIntegrationPlugin(integration_sdk.IntegrationPlugin):
         # Create registry and load plugins
         registry = PluginRegistry.get_instance(
             user_plugins_dir=user_plugins_dir,
-            project_dir=integration_context.project_dir
+            project_dir=integration_context.project_dir,
         )
         registry.load_all_plugins()
 
@@ -714,10 +704,7 @@ class TestIntegrationPlugin(integration_sdk.IntegrationPlugin):
         assert not plugin.is_available(), "Plugin should not be available before enable"
 
         # Enable plugin
-        plugin.set_config_value(
-            "TEST_INTEGRATION_DATA_DIR",
-            str(fresh_data_dir)
-        )
+        plugin.set_config_value("TEST_INTEGRATION_DATA_DIR", str(fresh_data_dir))
         registry.enable_plugin("test-integration-plugin")
         plugin.on_enable()
 

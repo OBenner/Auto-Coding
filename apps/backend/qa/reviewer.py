@@ -38,9 +38,9 @@ from ui import print_status
 
 # Import plugin system for agent lifecycle hooks
 try:
+    from plugins.base import PluginType
     from plugins.registry import PluginRegistry
     from plugins.sdk.agent import AgentContext
-    from plugins.base import PluginType
 
     PLUGINS_AVAILABLE = True
 except ImportError:
@@ -51,7 +51,6 @@ from .coverage_validator import (
     format_validation_summary,
     validate_coverage,
 )
-from .criteria import get_qa_signoff_status
 
 logger = logging.getLogger(__name__)
 
@@ -734,7 +733,9 @@ This is attempt {previous_error.get("consecutive_errors", 1) + 1}. If you fail t
                     for plugin in agent_plugins:
                         try:
                             plugin.after_session(agent_context, success=session_success)
-                            logger.debug(f"Called after_session for plugin: {plugin.name}")
+                            logger.debug(
+                                f"Called after_session for plugin: {plugin.name}"
+                            )
                         except Exception as e:
                             logger.warning(
                                 f"Plugin {plugin.name} after_session hook failed: {e}"
@@ -865,7 +866,9 @@ This is attempt {previous_error.get("consecutive_errors", 1) + 1}. If you fail t
                     for plugin in agent_plugins:
                         try:
                             plugin.after_session(agent_context, success=False)
-                            logger.debug(f"Called after_session for plugin: {plugin.name}")
+                            logger.debug(
+                                f"Called after_session for plugin: {plugin.name}"
+                            )
                         except Exception as hook_error:
                             logger.warning(
                                 f"Plugin {plugin.name} after_session hook failed: {hook_error}"

@@ -234,7 +234,9 @@ def cmd_list(args: argparse.Namespace) -> int:
         type_width = max(max_type_len, 12)  # Minimum width for header
 
         # Print header
-        print(f"{'Name':<{name_width}}  {'Type':<{type_width}}  {'Version':<10}  {'Status':<10}  {'Description'}")
+        print(
+            f"{'Name':<{name_width}}  {'Type':<{type_width}}  {'Version':<10}  {'Status':<10}  {'Description'}"
+        )
         print("-" * (name_width + type_width + 10 + 10 + 40))
 
         # Print plugins
@@ -420,8 +422,7 @@ def _install_from_path(source_path: str, force: bool, dry_run: bool = False) -> 
         if not is_safe:
             logger.error(
                 "\n❌ Plugin failed security validation and cannot be installed.\n"
-                "Security issues detected:\n" +
-                "\n".join(f"  - {w}" for w in warnings)
+                "Security issues detected:\n" + "\n".join(f"  - {w}" for w in warnings)
             )
             return 1
 
@@ -436,7 +437,9 @@ def _install_from_path(source_path: str, force: bool, dry_run: bool = False) -> 
 
         # Dry run mode - stop here
         if dry_run:
-            print(f"[DRY RUN] Would install plugin: {metadata.name} v{metadata.version}")
+            print(
+                f"[DRY RUN] Would install plugin: {metadata.name} v{metadata.version}"
+            )
             print(f"  Source: {source_dir}")
             print(f"  Target: {target_dir}")
             print(f"  Description: {metadata.description}")

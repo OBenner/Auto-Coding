@@ -131,9 +131,11 @@ export interface PluginOperationResult {
  */
 export interface PluginInstallSource {
   /** Type of installation source */
-  type: 'directory' | 'zip' | 'marketplace';
+  type: 'directory' | 'zip' | 'marketplace' | 'remote';
   /** Path to directory or zip file */
   path?: string;
   /** Marketplace plugin ID */
   marketplace_id?: string;
+  /** Remote URL for plugin installation */
+  url?: string;
 }

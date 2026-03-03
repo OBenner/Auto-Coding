@@ -36,9 +36,9 @@ from .session import run_agent_session, save_token_stats
 
 # Import plugin system for agent lifecycle hooks
 try:
+    from plugins.base import PluginType
     from plugins.registry import PluginRegistry
     from plugins.sdk.agent import AgentContext
-    from plugins.base import PluginType
 
     PLUGINS_AVAILABLE = True
 except ImportError:
@@ -248,7 +248,9 @@ async def run_followup_planner(
                     for plugin in agent_plugins:
                         try:
                             plugin.after_session(agent_context, success=session_success)
-                            logger.debug(f"Called after_session for plugin: {plugin.name}")
+                            logger.debug(
+                                f"Called after_session for plugin: {plugin.name}"
+                            )
                         except Exception as e:
                             logger.warning(
                                 f"Plugin {plugin.name} after_session hook failed: {e}"
