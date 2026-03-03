@@ -420,7 +420,7 @@ function AgentsView({
                 <div>
                   <div className="text-sm text-muted-foreground">{t('analytics:agents.totalCost')}</div>
                   <div className="text-2xl font-bold">{formatCurrency(stats.total_cost)}</div>
-                  <div className="text-xs text-muted-foreground">{formatNumber(stats.total_tokens)} tokens</div>
+                  <div className="text-xs text-muted-foreground">{formatNumber(stats.total_tokens)} {t('analytics:overview.tokens')}</div>
                 </div>
                 <div>
                   <div className="text-sm text-muted-foreground">{t('analytics:agents.avgTime')}</div>
@@ -555,7 +555,7 @@ function QAView({
             <p className="text-xs text-muted-foreground mt-2">
               {qaStats.total_reviews > 0
                 ? formatPercentage((qaStats.approved / qaStats.total_reviews) * 100)
-                : '0%'
+                : formatPercentage(0)
               } {t('analytics:qa.approvalRate')}
             </p>
           </CardContent>

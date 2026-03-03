@@ -17,7 +17,7 @@ The analytics service aggregates data from:
 
 ### Core Components
 
-```
+```text
 analytics.py (19KB)
 ├── AnalyticsService - Main service class for data aggregation
 ├── MetricsSummary - Overall performance metrics
@@ -30,6 +30,7 @@ analytics.py (19KB)
 ## Data Models
 
 ### MetricsSummary
+
 Overall performance metrics across all tasks:
 - **total_specs**: Total number of task specs processed
 - **successful_specs**: Number of successfully completed specs
@@ -41,6 +42,7 @@ Overall performance metrics across all tasks:
 - **avg_qa_iterations**: Average QA cycles per task
 
 ### AgentStats
+
 Performance metrics for each agent type (Planner, Coder, QA):
 - **agent_type**: Agent identifier (e.g., "planner_agent", "coder_agent")
 - **total_attempts**: Number of times agent was invoked
@@ -52,6 +54,7 @@ Performance metrics for each agent type (Planner, Coder, QA):
 - **error_patterns**: Dictionary of error types and frequencies
 
 ### TaskComplexityStats
+
 Performance breakdown by task complexity:
 - **complexity**: Task complexity level (simple, standard, complex)
 - **count**: Number of tasks at this complexity
@@ -60,6 +63,7 @@ Performance breakdown by task complexity:
 - **avg_cost**: Average API cost per task
 
 ### QAStats
+
 Quality assurance metrics:
 - **total_qa_sessions**: Total QA validation sessions
 - **rejection_rate**: Percentage of tasks initially rejected
@@ -67,6 +71,7 @@ Quality assurance metrics:
 - **common_issues**: List of most frequent QA findings
 
 ### TrendDataPoint
+
 Time-series performance data:
 - **date**: ISO date string
 - **success_rate**: Success rate on this date
@@ -120,6 +125,7 @@ python cli/analytics_cli.py
 ```
 
 Returns JSON output with all analytics data:
+
 ```json
 {
   "summary": {
@@ -140,7 +146,7 @@ Returns JSON output with all analytics data:
 
 Analytics data flows from backend to UI:
 
-1. **IPC Handlers** (`analytics-handlers.ts`) - Spawn Python CLI and parse JSON
+1. **IPC Handlers** (`agent-analytics-handlers.ts`) - Spawn Python CLI and parse JSON
 2. **Preload API** (`analytics-api.ts`) - Expose IPC channels to renderer
 3. **Frontend Component** (`Analytics.tsx`) - Display charts and metrics
 
@@ -149,24 +155,28 @@ Analytics data flows from backend to UI:
 ### Dashboard Views
 
 #### Overview View
+
 - Overall success/failure rate
 - Total cost and token usage
 - Average completion time
 - QA iteration statistics
 
 #### Agents View
+
 - Per-agent performance breakdown
 - Success rates by agent type
 - Cost and token distribution
 - Error pattern analysis
 
 #### Trends View
+
 - Historical performance over time (7, 30, 90 days)
 - Success rate trends
 - Cost trends
 - Token usage trends
 
 #### QA View
+
 - QA rejection rates
 - Common issues found by QA
 - Average iterations to approval
@@ -175,6 +185,7 @@ Analytics data flows from backend to UI:
 ## Data Processing
 
 ### Spec Discovery
+
 The service scans `.auto-claude/specs/` for all task directories and loads:
 - `implementation_plan.json` - Primary metadata source
 - `cost_report.json` - Cost and token data
@@ -182,6 +193,7 @@ The service scans `.auto-claude/specs/` for all task directories and loads:
 - `qa_report.md` - QA findings
 
 ### Metric Aggregation
+
 1. **Load all spec data** from filesystem
 2. **Parse JSON/Markdown** files with error handling
 3. **Aggregate metrics** across all specs
@@ -189,6 +201,7 @@ The service scans `.auto-claude/specs/` for all task directories and loads:
 5. **Return structured data** via dataclass models
 
 ### Error Handling
+
 - Missing files are skipped gracefully
 - JSON parse errors are logged and ignored
 - Invalid data is filtered out
@@ -257,7 +270,7 @@ Potential improvements:
 ## Related Documentation
 
 - **Frontend Component**: `apps/frontend/src/renderer/components/Analytics.tsx`
-- **IPC Handlers**: `apps/frontend/src/main/ipc-handlers/analytics-handlers.ts`
+- **IPC Handlers**: `apps/frontend/src/main/ipc-handlers/agent-analytics-handlers.ts`
 - **TypeScript Types**: `apps/frontend/src/shared/types/analytics.ts`
 - **Preload API**: `apps/frontend/src/preload/api/modules/analytics-api.ts`
 - **Backend CLI**: `apps/backend/cli/analytics_cli.py`

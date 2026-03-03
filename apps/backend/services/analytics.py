@@ -426,10 +426,10 @@ class AnalyticsService:
                             stats.failed_attempts += 1
                 else:
                     # Fallback: align successes/failures with usage count
-                    if plan_data["completed_subtasks"] > 0:
-                        stats.successful_attempts += usage["count"]
                     if plan_data["failed_subtasks"] > 0:
                         stats.failed_attempts += usage["count"]
+                    elif plan_data["completed_subtasks"] > 0:
+                        stats.successful_attempts += usage["count"]
 
             # Update complexity stats
             complexity = self._extract_complexity(spec_dir)
@@ -528,6 +528,12 @@ class AnalyticsService:
                     except OSError:
                         continue
                 spec_date = datetime.fromtimestamp(mtime, tz=timezone.utc)
+
+            # Ensure spec_date is timezone-aware UTC for comparison
+            if spec_date.tzinfo is None:
+                spec_date = spec_date.replace(tzinfo=timezone.utc)
+            else:
+                spec_date = spec_date.astimezone(timezone.utc)
 
             if spec_date < cutoff_date:
                 continue

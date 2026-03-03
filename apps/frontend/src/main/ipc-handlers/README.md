@@ -89,9 +89,10 @@ AI insights chat system:
 - `INSIGHTS_CREATE_TASK` - Create task from insights
 - Session management (list, new, switch, delete, rename)
 
-#### `analytics-handlers.ts`
+#### `agent-analytics-handlers.ts`
+
 Agent performance analytics:
-- `ANALYTICS_GET` - Get analytics summary
+- `ANALYTICS_GET_SUMMARY` - Get analytics summary
 - `ANALYTICS_GET_AGENT_STATS` - Get per-agent statistics
 - `ANALYTICS_GET_TRENDS` - Get trend data over time
 - `ANALYTICS_GET_REPORT` - Generate analytics report

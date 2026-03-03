@@ -1098,7 +1098,7 @@ export function App() {
                     specId={sessionFilterSpecId}
                   />
                 )}
-                {activeView === 'analytics' && (activeProjectId || selectedProjectId) && (
+                {activeView === 'productivity' && (activeProjectId || selectedProjectId) && (
                   <ProductivityDashboard projectId={activeProjectId || selectedProjectId!} />
                 )}
                 {activeView === 'merge-analytics' && (activeProjectId || selectedProjectId) && (

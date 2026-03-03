@@ -52,6 +52,16 @@ async function executeAnalyticsCommand(
 
     let stdout = '';
     let stderr = '';
+    let finished = false;
+
+    const TIMEOUT_MS = 60_000;
+    const timer = setTimeout(() => {
+      if (!finished) {
+        finished = true;
+        pythonProcess.kill();
+        reject(new Error(`Analytics command '${command}' timed out after ${TIMEOUT_MS / 1000}s`));
+      }
+    }, TIMEOUT_MS);
 
     pythonProcess.stdout?.on('data', (data) => {
       stdout += data.toString();
@@ -62,6 +72,9 @@ async function executeAnalyticsCommand(
     });
 
     pythonProcess.on('close', (code) => {
+      clearTimeout(timer);
+      if (finished) return;
+      finished = true;
       if (code !== 0) {
         debugError(`[Agent Analytics] Command failed with code ${code}:`, stderr);
         reject(new Error(stderr || `Process exited with code ${code}`));
@@ -77,6 +90,9 @@ async function executeAnalyticsCommand(
     });
 
     pythonProcess.on('error', (error) => {
+      clearTimeout(timer);
+      if (finished) return;
+      finished = true;
       debugError('[Agent Analytics] Process error:', error);
       reject(error);
     });
@@ -92,25 +108,23 @@ async function getAnalytics(projectPath: string, autoBuildPath?: string): Promis
 
   if (!(await fileExists(specsDir))) {
     return {
-      summary: {
-        total_specs: 0,
-        completed_specs: 0,
-        failed_specs: 0,
-        in_progress_specs: 0,
-        overall_success_rate: 0,
-        total_cost: 0,
-        total_tokens: 0,
-        agent_stats: {},
-        complexity_stats: {},
-        qa_stats: {
-          total_reviews: 0,
-          approved: 0,
-          rejected: 0,
-          rejection_rate: 0,
-          common_issues: {},
-        },
-        last_updated: new Date().toISOString(),
+      total_specs: 0,
+      completed_specs: 0,
+      failed_specs: 0,
+      in_progress_specs: 0,
+      overall_success_rate: 0,
+      total_cost: 0,
+      total_tokens: 0,
+      agent_stats: {},
+      complexity_stats: {},
+      qa_stats: {
+        total_reviews: 0,
+        approved: 0,
+        rejected: 0,
+        rejection_rate: 0,
+        common_issues: {},
       },
+      last_updated: new Date().toISOString(),
     };
   }
 
@@ -187,25 +201,23 @@ async function getReport(projectPath: string, autoBuildPath?: string): Promise<a
 
   if (!(await fileExists(specsDir))) {
     return {
-      summary: {
-        total_specs: 0,
-        completed_specs: 0,
-        failed_specs: 0,
-        in_progress_specs: 0,
-        overall_success_rate: 0,
-        total_cost: 0,
-        total_tokens: 0,
-        agent_stats: {},
-        complexity_stats: {},
-        qa_stats: {
-          total_reviews: 0,
-          approved: 0,
-          rejected: 0,
-          rejection_rate: 0,
-          common_issues: {},
-        },
-        last_updated: new Date().toISOString(),
+      total_specs: 0,
+      completed_specs: 0,
+      failed_specs: 0,
+      in_progress_specs: 0,
+      overall_success_rate: 0,
+      total_cost: 0,
+      total_tokens: 0,
+      agent_stats: {},
+      complexity_stats: {},
+      qa_stats: {
+        total_reviews: 0,
+        approved: 0,
+        rejected: 0,
+        rejection_rate: 0,
+        common_issues: {},
       },
+      last_updated: new Date().toISOString(),
       trends: [],
       generated_at: new Date().toISOString(),
     };

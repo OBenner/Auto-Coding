@@ -13,6 +13,7 @@
     "scheduler": "Scheduler",
     "context": "Context",
     "analytics": "Analytics",
+    "productivity": "Productivity",
     "sessionContext": "Session Context",
     "githubIssues": "GitHub Issues",
     "githubPRs": "GitHub PRs",
