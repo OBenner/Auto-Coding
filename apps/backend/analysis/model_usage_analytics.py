@@ -22,6 +22,11 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+from analysis.analytics_utils import (
+    normalize_boundary,
+    parse_timestamp,
+)
+
 # =============================================================================
 # DATA MODELS
 # =============================================================================
@@ -231,36 +236,8 @@ class ModelUsageSummary:
 # =============================================================================
 
 
-def _parse_timestamp(ts: str | None) -> datetime | None:
-    """Parse ISO timestamp string to timezone-aware UTC datetime.
-
-    Returns None for invalid or missing timestamps.
-    """
-    if not ts:
-        return None
-    try:
-        if ts.endswith("Z"):
-            dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
-        else:
-            dt = datetime.fromisoformat(ts)
-
-        # Ensure timezone-aware in UTC
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=UTC)
-        else:
-            dt = dt.astimezone(UTC)
-        return dt
-    except (ValueError, AttributeError):
-        return None
-
-
-def _normalize_boundary(dt: datetime | None) -> datetime | None:
-    """Normalize start/end boundary datetimes to timezone-aware UTC."""
-    if dt is None:
-        return None
-    if dt.tzinfo is None:
-        return dt.replace(tzinfo=UTC)
-    return dt.astimezone(UTC)
+_parse_timestamp = parse_timestamp
+_normalize_boundary = normalize_boundary
 
 
 def _extract_cost_records(spec_dir: Path) -> list[dict[str, Any]]:
@@ -689,72 +666,23 @@ def main() -> None:
     import argparse
     import sys
 
+    from analysis.analytics_utils import add_common_cli_args, parse_date_args
+
     parser = argparse.ArgumentParser(description="Model Usage Analytics Aggregator")
     parser.add_argument(
-        "--get-summary",
-        action="store_true",
-        help="Get model usage summary",
+        "--get-summary", action="store_true", help="Get model usage summary"
     )
     parser.add_argument(
-        "--get-trends",
-        action="store_true",
-        help="Get model usage trends over time",
+        "--get-trends", action="store_true", help="Get model usage trends over time"
     )
     parser.add_argument(
-        "--export",
-        action="store_true",
-        help="Export model usage data to file",
+        "--export", action="store_true", help="Export model usage data to file"
     )
-    parser.add_argument(
-        "--format",
-        choices=["json", "csv"],
-        default="json",
-        help="Export format (default: json)",
-    )
-    parser.add_argument(
-        "--output",
-        type=str,
-        help="Output file path (default: auto-generated in analytics dir)",
-    )
-    parser.add_argument(
-        "--start-date",
-        type=str,
-        help="Start date filter (ISO format)",
-    )
-    parser.add_argument(
-        "--end-date",
-        type=str,
-        help="End date filter (ISO format)",
-    )
-    parser.add_argument(
-        "--window-days",
-        type=int,
-        default=30,
-        help="Number of days to look back for trends (default: 30)",
-    )
-    parser.add_argument(
-        "--granularity",
-        choices=["daily", "weekly", "monthly"],
-        default="daily",
-        help="Time granularity for trends (default: daily)",
-    )
+    add_common_cli_args(parser)
 
     args = parser.parse_args()
-
-    # Determine project directory (current working directory)
     project_dir = Path.cwd()
-
-    def _parse_date_arg(value: str | None, label: str) -> datetime | None:
-        if not value:
-            return None
-        try:
-            return datetime.fromisoformat(value)
-        except ValueError:
-            print(f"Error: Invalid {label} date format: {value}", file=sys.stderr)
-            sys.exit(1)
-
-    start_date = _parse_date_arg(args.start_date, "start")
-    end_date = _parse_date_arg(args.end_date, "end")
+    start_date, end_date = parse_date_args(args)
 
     # Execute requested operation
     if args.get_summary:

@@ -288,28 +288,17 @@ export function ModelUsageDashboard({ projectId }: ModelUsageDashboardProps) {
             <div className="rounded-lg border border-border bg-card p-6">
               <h2 className="text-lg font-semibold mb-4">Summary Metrics</h2>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div>
-                  <p className="text-sm text-muted-foreground">Total API Calls</p>
-                  <p className="text-2xl font-bold">{summary.total_usage_count ?? 0}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Total Tokens</p>
-                  <p className="text-2xl font-bold">
-                    {Number(summary.total_tokens ?? 0).toLocaleString()}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Total Cost</p>
-                  <p className="text-2xl font-bold text-green-600">
-                    ${Number(summary.total_cost ?? 0).toFixed(2)}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Models Used</p>
-                  <p className="text-2xl font-bold">
-                    {summary.models?.length ?? 0}
-                  </p>
-                </div>
+                {[
+                  { label: 'Total API Calls', value: String(summary.total_usage_count ?? 0) },
+                  { label: 'Total Tokens', value: Number(summary.total_tokens ?? 0).toLocaleString() },
+                  { label: 'Total Cost', value: `$${Number(summary.total_cost ?? 0).toFixed(2)}`, className: 'text-green-600' },
+                  { label: 'Models Used', value: String(summary.models?.length ?? 0) },
+                ].map((stat) => (
+                  <div key={stat.label}>
+                    <p className="text-sm text-muted-foreground">{stat.label}</p>
+                    <p className={`text-2xl font-bold ${stat.className ?? ''}`}>{stat.value}</p>
+                  </div>
+                ))}
               </div>
             </div>
           )}
