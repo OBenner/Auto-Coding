@@ -407,7 +407,7 @@ Enable checkbox-based selection for bulk operations:
 Integrates with `PhaseProgressIndicator` for animated progress:
 
 **Progress data sources:**
-- `task.executionProgress.phase` - Current execution phase (planning, implementation, qa, fixing)
+- `task.executionProgress.phase` - Current execution phase (planning, coding, qa_review, qa_fixing)
 - `task.executionProgress.phaseProgress` - Phase completion percentage (0-100)
 - `task.subtasks` - Array of subtasks with individual status tracking
 
@@ -608,11 +608,11 @@ function TaskList() {
 
 ```tsx
 import { TaskCard } from '@/renderer/components/TaskCard';
-import { updateTaskStatus } from '@/stores/task-store';
+import { persistTaskStatus } from '@/stores/task-store';
 
 function TaskList() {
-  const handleStatusChange = (task: Task, newStatus: TaskStatus) => {
-    updateTaskStatus(task.id, newStatus);
+  const handleStatusChange = async (task: Task, newStatus: TaskStatus) => {
+    await persistTaskStatus(task.id, newStatus);
   };
 
   return (
@@ -932,12 +932,12 @@ describe('TaskCard', () => {
   it('displays execution phase badge for running tasks', () => {
     const task = createMockTask({
       status: 'in_progress',
-      executionProgress: { phase: 'implementation', phaseProgress: 45 }
+      executionProgress: { phase: 'coding', phaseProgress: 45 }
     });
 
     render(<TaskCard task={task} onClick={() => {}} />);
 
-    expect(screen.getByText('Implementation')).toBeInTheDocument();
+    expect(screen.getByText('Coding')).toBeInTheDocument();
   });
 });
 ```

@@ -94,8 +94,8 @@ import { useTaskStore } from '@/renderer/stores/task-store';
 
 function MyComponent() {
   const tasks = useTaskStore(state => state.tasks);
-  const selectedTask = useTaskStore(state => state.selectedTask);
-  const setSelectedTask = useTaskStore(state => state.setSelectedTask);
+  const selectedTaskId = useTaskStore(state => state.selectedTaskId);
+  const selectTask = useTaskStore(state => state.selectTask);
 
   // Use tasks...
 }
@@ -106,8 +106,8 @@ function MyComponent() {
 import { useKanbanSettingsStore } from '@/renderer/stores/kanban-settings-store';
 
 function MyComponent() {
-  const columnWidth = useKanbanSettingsStore(state =>
-    state.getColumnWidth('in_progress')
+  const prefs = useKanbanSettingsStore(state =>
+    state.getColumnPreferences('in_progress')
   );
   const setColumnWidth = useKanbanSettingsStore(state => state.setColumnWidth);
 

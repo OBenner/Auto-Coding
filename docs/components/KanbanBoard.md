@@ -671,7 +671,7 @@ const width = columnPreferences?.['backlog']?.width ?? DEFAULT_COLUMN_WIDTH;
 
 // Toggle collapsed state
 toggleColumnCollapsed('backlog');
-saveKanbanPreferences(projectId);
+savePreferences(projectId);
 ```
 
 ### View State Context (`ViewStateContext`)
