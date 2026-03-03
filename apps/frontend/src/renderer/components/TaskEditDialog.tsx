@@ -34,7 +34,7 @@ import { TaskModalLayout } from './task-form/TaskModalLayout';
 import { TaskFormFields } from './task-form/TaskFormFields';
 import { type FileReferenceData } from './task-form/useImageUpload';
 import { persistUpdateTask } from '../stores/task-store';
-import type { Task, ImageAttachment, TaskCategory, TaskPriority, TaskComplexity, TaskImpact, ModelType, ThinkingLevel } from '../../shared/types';
+import type { Task, ImageAttachment, TaskCategory, TaskPriority, TaskComplexity, TaskImpact, ModelType, ThinkingLevel, AIProvider } from '../../shared/types';
 import {
   DEFAULT_AGENT_PROFILES,
   DEFAULT_PHASE_MODELS,
@@ -63,7 +63,7 @@ export function TaskEditDialog({ task, open, onOpenChange, onSaved }: TaskEditDi
   const { settings } = useSettingsStore();
   const selectedProfile = DEFAULT_AGENT_PROFILES.find(
     p => p.id === settings.selectedAgentProfile
-  ) || DEFAULT_AGENT_PROFILES.find(p => p.id === 'auto')!;
+  ) ?? DEFAULT_AGENT_PROFILES.find(p => p.id === 'auto') ?? DEFAULT_AGENT_PROFILES[0];
 
   // Form state
   const [title, setTitle] = useState(task.title);
@@ -102,6 +102,12 @@ export function TaskEditDialog({ task, open, onOpenChange, onSaved }: TaskEditDi
   );
   const [phaseThinking, setPhaseThinking] = useState<PhaseThinkingConfig | undefined>(
     task.metadata?.phaseThinking || selectedProfile.phaseThinking || DEFAULT_PHASE_THINKING
+  );
+
+  // Provider settings
+  const [provider, setProvider] = useState<AIProvider>(task.metadata?.provider || 'claude');
+  const [providerModel, setProviderModel] = useState<string>(
+    task.metadata?.providerModel || 'claude-sonnet-4-5-20250929'
   );
 
   // Image attachments
@@ -152,6 +158,8 @@ export function TaskEditDialog({ task, open, onOpenChange, onSaved }: TaskEditDi
 
       setImages(task.metadata?.attachedImages || []);
       setRequireReviewBeforeCoding(task.metadata?.requireReviewBeforeCoding ?? false);
+      setProvider(task.metadata?.provider || 'claude');
+      setProviderModel(task.metadata?.providerModel || 'claude-sonnet-4-5-20250929');
       setError(null);
 
       // Auto-expand classification if it has content
@@ -195,6 +203,8 @@ export function TaskEditDialog({ task, open, onOpenChange, onSaved }: TaskEditDi
       impact !== (task.metadata?.impact || '') ||
       model !== (task.metadata?.model || '') ||
       thinkingLevel !== (task.metadata?.thinkingLevel || '') ||
+      provider !== (task.metadata?.provider || 'claude') ||
+      providerModel !== (task.metadata?.providerModel || '') ||
       requireReviewBeforeCoding !== (task.metadata?.requireReviewBeforeCoding ?? false) ||
       JSON.stringify(images) !== JSON.stringify(task.metadata?.attachedImages || []) ||
       JSON.stringify(phaseModels) !== JSON.stringify(task.metadata?.phaseModels || DEFAULT_PHASE_MODELS) ||
@@ -221,6 +231,9 @@ export function TaskEditDialog({ task, open, onOpenChange, onSaved }: TaskEditDi
       metadataUpdates.phaseModels = phaseModels;
       metadataUpdates.phaseThinking = phaseThinking;
     }
+    // Persist provider and model settings
+    if (provider && provider !== 'claude') metadataUpdates.provider = provider;
+    if (providerModel) metadataUpdates.providerModel = providerModel;
     // Always set attachedImages to persist removal when all images are deleted
     metadataUpdates.attachedImages = images.length > 0 ? images : [];
     metadataUpdates.requireReviewBeforeCoding = requireReviewBeforeCoding;
@@ -287,6 +300,10 @@ export function TaskEditDialog({ task, open, onOpenChange, onSaved }: TaskEditDi
         onThinkingLevelChange={setThinkingLevel}
         onPhaseModelsChange={setPhaseModels}
         onPhaseThinkingChange={setPhaseThinking}
+        provider={provider}
+        onProviderChange={setProvider}
+        providerModel={providerModel}
+        onProviderModelChange={setProviderModel}
         category={category}
         priority={priority}
         complexity={complexity}

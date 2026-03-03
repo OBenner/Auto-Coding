@@ -1,5 +1,5 @@
 """
-Authentication helpers for Auto Claude.
+Authentication helpers for Auto Code.
 
 Provides centralized authentication token resolution with fallback support
 for multiple environment variables, and SDK environment variable passthrough
@@ -33,7 +33,7 @@ else:
 
 # Priority order for auth token resolution
 # NOTE: We intentionally do NOT fall back to ANTHROPIC_API_KEY.
-# Auto Claude is designed to use Claude Code OAuth tokens only.
+# Auto Code is designed to use Claude Code OAuth tokens only.
 # This prevents silent billing to user's API credits when OAuth fails.
 AUTH_TOKEN_ENV_VARS = [
     "CLAUDE_CODE_OAUTH_TOKEN",  # OAuth token from Claude Code CLI
@@ -402,7 +402,7 @@ def _get_token_from_macos_keychain() -> str | None:
 
         return token
 
-    except (subprocess.TimeoutExpired, json.JSONDecodeError, KeyError, Exception):
+    except Exception:
         return None
 
 
@@ -430,7 +430,7 @@ def _get_token_from_windows_credential_files() -> str | None:
 
         return None
 
-    except (json.JSONDecodeError, KeyError, FileNotFoundError, Exception):
+    except Exception:
         return None
 
 
@@ -548,7 +548,7 @@ def _get_token_from_config_dir(config_dir: str) -> str | None:
                 ):
                     logger.debug(f"Found token in {cred_path}")
                     return token
-            except (json.JSONDecodeError, KeyError, Exception) as e:
+            except Exception as e:
                 logger.debug(f"Failed to read {cred_path}: {e}")
                 continue
 
@@ -647,7 +647,7 @@ def require_auth_token(config_dir: str | None = None) -> str:
     if not token:
         error_msg = (
             "No OAuth token found.\n\n"
-            "Auto Claude requires Claude Code OAuth authentication.\n"
+            "Auto Code requires Claude Code OAuth authentication.\n"
             "Direct API keys (ANTHROPIC_API_KEY) are not supported.\n\n"
         )
         # Provide platform-specific guidance
@@ -719,7 +719,7 @@ def _find_git_bash_path() -> str | None:
             git_paths = result.stdout.strip().splitlines()
             if git_paths:
                 git_path = git_paths[0].strip()
-    except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.SubprocessError):
+    except (FileNotFoundError, subprocess.SubprocessError):
         # Intentionally suppress errors - best-effort detection with fallback to common paths
         pass
 
@@ -790,7 +790,7 @@ def get_sdk_env_vars() -> dict[str, str]:
     # Explicitly unset PYTHONPATH in SDK subprocess environment to prevent
     # pollution of agent subprocess environments. This fixes ACS-251 where
     # external projects with different Python versions would fail due to
-    # inheriting Auto-Claude's PYTHONPATH (which points to Python 3.12 packages).
+    # inheriting Auto-Code's PYTHONPATH (which points to Python 3.12 packages).
     #
     # The SDK merges os.environ with the env dict we provide, so setting
     # PYTHONPATH to an empty string here overrides any inherited value.
@@ -954,6 +954,19 @@ def _trigger_login_windows() -> bool:
     except Exception as e:
         print(f"\nLogin failed: {e}")
         return False
+
+
+def emit_rate_limit_marker(reset_time: str | None = None) -> None:
+    """Print a structured marker that the frontend can detect for rate-limit handling.
+
+    The frontend ``rate-limit-detector.ts`` scans process output for rate-limit
+    patterns.  This function prints a canonical marker line so the detection is
+    reliable regardless of the upstream error format.
+    """
+    parts = ["[RATE_LIMITED]"]
+    if reset_time:
+        parts.append(f"reset_time={reset_time}")
+    print(" ".join(parts), flush=True)
 
 
 def ensure_authenticated() -> str:

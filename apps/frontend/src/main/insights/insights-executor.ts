@@ -1,5 +1,6 @@
 import { spawn, ChildProcess } from 'child_process';
-import { existsSync, writeFileSync, unlinkSync } from 'fs';
+import { existsSync, writeFileSync, mkdtempSync, rmSync, unlinkSync } from 'fs';
+import { writeFile } from 'fs/promises';
 import path from 'path';
 import os from 'os';
 import { EventEmitter } from 'events';
@@ -8,11 +9,22 @@ import type {
   InsightsChatStatus,
   InsightsStreamChunk,
   InsightsToolUsage,
-  InsightsModelConfig
+  InsightsModelConfig,
+  ImageAttachment
 } from '../../shared/types';
-import { MODEL_ID_MAP } from '../../shared/constants';
+import { MODEL_ID_MAP, MAX_IMAGES_PER_TASK, MAX_IMAGE_SIZE } from '../../shared/constants';
 import { InsightsConfig } from './config';
 import { detectRateLimit, createSDKRateLimitInfo } from '../rate-limit-detector';
+
+// Safe extension map for image MIME types — prevents path traversal via crafted mimeType
+// SVG excluded: contains active script content and is unsupported by Claude Vision API
+const SAFE_EXT_MAP: Record<string, string> = {
+  'image/png': 'png',
+  'image/jpeg': 'jpg',
+  'image/jpg': 'jpg',
+  'image/gif': 'gif',
+  'image/webp': 'webp'
+};
 
 /**
  * Message processor result
@@ -63,14 +75,15 @@ export class InsightsExecutor extends EventEmitter {
     projectPath: string,
     message: string,
     conversationHistory: Array<{ role: string; content: string }>,
-    modelConfig?: InsightsModelConfig
+    modelConfig?: InsightsModelConfig,
+    images?: ImageAttachment[]
   ): Promise<ProcessorResult> {
     // Cancel any existing session
     this.cancelSession(projectId);
 
     const autoBuildSource = this.config.getAutoBuildSourcePath();
     if (!autoBuildSource) {
-      throw new Error('Auto Claude source not found');
+      throw new Error('Auto Code source not found');
     }
 
     const runnerPath = path.join(autoBuildSource, 'runners', 'insights_runner.py');
@@ -88,10 +101,9 @@ export class InsightsExecutor extends EventEmitter {
     const processEnv = await this.config.getProcessEnv();
 
     // Write conversation history to temp file to avoid Windows command-line length limit
-    const historyFile = path.join(
-      os.tmpdir(),
-      `insights-history-${projectId}-${Date.now()}.json`
-    );
+    // Use mkdtempSync for secure temp directory creation (prevents predictable temp paths)
+    const historyTmpDir = mkdtempSync(path.join(os.tmpdir(), 'insights-history-'));
+    const historyFile = path.join(historyTmpDir, `history-${projectId}.json`);
 
     let historyFileCreated = false;
     try {
@@ -102,6 +114,68 @@ export class InsightsExecutor extends EventEmitter {
       throw new Error('Failed to write conversation history to temp file');
     }
 
+    // Write image files and manifest if images are provided
+    const imagesTempFiles: string[] = [];
+    let imagesManifestFile: string | undefined;
+
+    // Defense-in-depth: cap image count and filter oversized images in the executor
+    if (images && images.length > MAX_IMAGES_PER_TASK) {
+      images = images.slice(0, MAX_IMAGES_PER_TASK);
+    }
+    if (images) {
+      images = images.filter(img => !img.data || Buffer.byteLength(img.data, 'base64') <= MAX_IMAGE_SIZE);
+    }
+
+    if (images && images.length > 0) {
+      try {
+        const manifest: Array<{ path: string; mimeType: string }> = [];
+        const timestamp = Date.now();
+
+        for (let i = 0; i < images.length; i++) {
+          const image = images[i];
+          if (!image.data) continue;
+
+          // Validate mimeType against allowlist (defense-in-depth for main process)
+          const ext = SAFE_EXT_MAP[image.mimeType];
+          if (!ext) {
+            console.warn(`[Insights] Skipping image with invalid mimeType: ${image.mimeType}`);
+            continue;
+          }
+
+          const imagePath = path.join(
+            historyTmpDir,
+            `image-${timestamp}-${i}.${ext}`
+          );
+          await writeFile(imagePath, Buffer.from(image.data, 'base64'), { mode: 0o600 });
+          imagesTempFiles.push(imagePath);
+          manifest.push({ path: imagePath, mimeType: image.mimeType });
+        }
+
+        // Only write manifest file if we actually wrote any images
+        if (manifest.length > 0) {
+          imagesManifestFile = path.join(
+            historyTmpDir,
+            `images-manifest-${timestamp}.json`
+          );
+          imagesTempFiles.push(imagesManifestFile);
+          await writeFile(imagesManifestFile, JSON.stringify(manifest), { encoding: 'utf-8', mode: 0o600 });
+        }
+      } catch (err) {
+        // Clean up any already-written image files
+        for (const tmpFile of imagesTempFiles) {
+          try {
+            if (existsSync(tmpFile)) unlinkSync(tmpFile);
+          } catch { /* ignore cleanup errors */ }
+        }
+        // Also clean up the history temp dir
+        if (existsSync(historyTmpDir)) {
+          try { rmSync(historyTmpDir, { recursive: true, force: true }); } catch { /* ignore */ }
+        }
+        console.error('[Insights] Failed to write image files:', err);
+        throw new Error('Failed to write image files to temp directory');
+      }
+    }
+
     // Build command arguments
     const args = [
       runnerPath,
@@ -110,10 +184,16 @@ export class InsightsExecutor extends EventEmitter {
       '--history-file', historyFile
     ];
 
+    // Add images manifest file if images were provided
+    if (imagesManifestFile) {
+      args.push('--images-file', imagesManifestFile);
+    }
+
     // Add model config if provided
     if (modelConfig) {
       const modelId = MODEL_ID_MAP[modelConfig.model] || MODEL_ID_MAP['sonnet'];
       args.push('--model', modelId);
+      args.push('--provider', modelConfig.provider);
       args.push('--thinking-level', modelConfig.thinkingLevel);
     }
 
@@ -169,12 +249,12 @@ export class InsightsExecutor extends EventEmitter {
       proc.on('close', (code) => {
         this.activeSessions.delete(projectId);
 
-        // Cleanup temp file
-        if (historyFileCreated && existsSync(historyFile)) {
+        // Cleanup temp directory and file
+        if (historyFileCreated && existsSync(historyTmpDir)) {
           try {
-            unlinkSync(historyFile);
+            rmSync(historyTmpDir, { recursive: true, force: true });
           } catch (cleanupErr) {
-            console.error('[Insights] Failed to cleanup history file:', cleanupErr);
+            console.error('[Insights] Failed to cleanup history temp dir:', cleanupErr);
           }
         }
 
@@ -216,12 +296,12 @@ export class InsightsExecutor extends EventEmitter {
       proc.on('error', (err) => {
         this.activeSessions.delete(projectId);
 
-        // Cleanup temp file
-        if (historyFileCreated && existsSync(historyFile)) {
+        // Cleanup temp directory and file
+        if (historyFileCreated && existsSync(historyTmpDir)) {
           try {
-            unlinkSync(historyFile);
+            rmSync(historyTmpDir, { recursive: true, force: true });
           } catch (cleanupErr) {
-            console.error('[Insights] Failed to cleanup history file:', cleanupErr);
+            console.error('[Insights] Failed to cleanup history temp dir:', cleanupErr);
           }
         }
 

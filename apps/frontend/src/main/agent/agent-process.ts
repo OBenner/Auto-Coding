@@ -137,6 +137,7 @@ export class AgentProcessManager {
     }
     if (autoBuildSourcePath) {
       this.autoBuildSourcePath = autoBuildSourcePath;
+      console.warn(`[AgentProcess] configure() set autoBuildSourcePath: ${autoBuildSourcePath}`);
     }
   }
 
@@ -352,8 +353,14 @@ export class AgentProcessManager {
     };
 
     // If manually configured AND valid, use that
-    if (this.autoBuildSourcePath && await validatePath(this.autoBuildSourcePath)) {
-      return this.autoBuildSourcePath;
+    if (this.autoBuildSourcePath) {
+      const isValid = await validatePath(this.autoBuildSourcePath);
+      console.warn(`[AgentProcess] Configured autoBuildSourcePath: ${this.autoBuildSourcePath}, valid: ${isValid}`);
+      if (isValid) {
+        return this.autoBuildSourcePath;
+      }
+    } else {
+      console.warn('[AgentProcess] No autoBuildSourcePath configured, using auto-detect');
     }
 
     // Auto-detect from app location (configured path was invalid or not set)
@@ -608,7 +615,7 @@ export class AgentProcessManager {
         if (phaseChanged && currentPhase !== 'idle' && currentPhase !== phaseUpdate.phase) {
           // Type guard to narrow currentPhase to CompletablePhase
           const isCompletablePhase = (phase: ExecutionProgressData['phase']): phase is CompletablePhase => {
-            return ['planning', 'coding', 'qa_review', 'qa_fixing'].includes(phase);
+            return ['planning', 'coding', 'test_generation', 'qa_review', 'qa_fixing'].includes(phase);
           };
           if (isCompletablePhase(currentPhase) && !completedPhases.includes(currentPhase)) {
             completedPhases.push(currentPhase);
@@ -646,7 +653,13 @@ export class AgentProcessManager {
           currentSubtask,
           message: lastMessage,
           sequenceNumber: ++sequenceNumber,
-          completedPhases: [...completedPhases]
+          completedPhases: [...completedPhases],
+          ...(phaseUpdate.resources && {
+            cpu_percent: phaseUpdate.resources.cpu_percent,
+            memory_mb: phaseUpdate.resources.memory_mb,
+            memory_percent: phaseUpdate.resources.memory_percent,
+            elapsed_seconds: phaseUpdate.resources.elapsed_seconds
+          })
         });
       }
     };

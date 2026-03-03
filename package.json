@@ -1,17 +1,18 @@
 {
   "name": "auto-claude",
-  "version": "2.7.5",
-  "description": "Autonomous multi-agent coding framework powered by Claude AI",
+  "version": "3.0.0",
+  "description": "Auto-Coding: Autonomous multi-agent coding framework powered by Claude AI",
   "license": "AGPL-3.0",
-  "author": "Auto Claude Team",
+  "author": "Auto-Coding Team",
   "workspaces": [
     "apps/*",
     "libs/*"
   ],
   "scripts": {
     "install:backend": "node scripts/install-backend.js",
+    "install:web-backend": "node scripts/install-web-backend.js",
     "install:frontend": "cd apps/frontend && npm install",
-    "install:all": "npm run install:backend && npm run install:frontend",
+    "install:all": "npm run install:backend && npm run install:web-backend && npm run install:frontend",
     "start": "cd apps/frontend && npm run build && npm run start",
     "dev": "cd apps/frontend && npm run dev",
     "dev:debug": "cd apps/frontend && npm run dev:debug",
@@ -31,7 +32,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/AndyMik90/Auto-Claude.git"
+    "url": "https://github.com/OBenner/Auto-Coding.git"
   },
   "keywords": [
     "ai",
@@ -45,6 +46,10 @@
     "jsdom": "^27.4.0"
   },
   "dependencies": {
+    "cmdk": "^1.1.1",
     "lucide-react": "^0.562.0"
+  },
+  "overrides": {
+    "minimatch": ">=10.2.1"
   }
 }

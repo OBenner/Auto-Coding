@@ -14,7 +14,12 @@ import type {
   SupportedTerminal,
   WorktreeCreatePROptions,
   WorktreeCreatePRResult,
-  ImageAttachment
+  ImageAttachment,
+  MergeOperationRecord,
+  MergeAnalytics,
+  ConflictPattern,
+  MergeAnalyticsFilter,
+  MergeAnalyticsExportOptions
 } from '../../shared/types';
 
 export interface TaskAPI {
@@ -25,6 +30,11 @@ export interface TaskAPI {
     title: string,
     description: string,
     metadata?: TaskMetadata
+  ) => Promise<IPCResult<Task>>;
+  createTaskFromTemplate: (
+    projectId: string,
+    templateName: string,
+    parameters: Record<string, unknown>
   ) => Promise<IPCResult<Task>>;
   deleteTask: (taskId: string) => Promise<IPCResult>;
   updateTask: (
@@ -42,7 +52,7 @@ export interface TaskAPI {
   updateTaskStatus: (
     taskId: string,
     status: TaskStatus,
-    options?: { forceCleanup?: boolean }
+    options?: { forceCleanup?: boolean; keepWorktree?: boolean }
   ) => Promise<IPCResult & { worktreeExists?: boolean; worktreePath?: string }>;
   recoverStuckTask: (
     taskId: string,
@@ -63,7 +73,9 @@ export interface TaskAPI {
   worktreeDetectTools: () => Promise<IPCResult<{ ides: Array<{ id: string; name: string; path: string; installed: boolean }>; terminals: Array<{ id: string; name: string; path: string; installed: boolean }> }>>;
   archiveTasks: (projectId: string, taskIds: string[], version?: string) => Promise<IPCResult<boolean>>;
   unarchiveTasks: (projectId: string, taskIds: string[]) => Promise<IPCResult<boolean>>;
+  exportTask: (projectId: string, taskId: string) => Promise<IPCResult<string>>;
   createWorktreePR: (taskId: string, options?: WorktreeCreatePROptions) => Promise<IPCResult<WorktreeCreatePRResult>>;
+  batchRunQA: (taskId: string) => Promise<IPCResult<{ success: boolean; issues?: Array<{ message: string; file?: string }> }>>;
 
   // Task Event Listeners
   // Note: projectId is optional for backward compatibility - events without projectId will still work
@@ -81,6 +93,23 @@ export interface TaskAPI {
   unwatchTaskLogs: (specId: string) => Promise<IPCResult>;
   onTaskLogsChanged: (callback: (specId: string, logs: TaskLogs) => void) => () => void;
   onTaskLogsStream: (callback: (specId: string, chunk: TaskLogStreamChunk) => void) => () => void;
+
+  // Task Token Stats
+  getTokenStats: (projectPath: string, specId: string) => Promise<IPCResult<import('../../shared/types').TaskTokenStats | null>>;
+
+  // Task Spec File Reading (for task overview display)
+  getImplementationPlan: (taskId: string) => Promise<IPCResult<ImplementationPlan | null>>;
+  getQAReport: (taskId: string) => Promise<IPCResult<string | null>>;
+  getQAEscalation: (taskId: string) => Promise<IPCResult<import('../../shared/types').QAEscalation | null>>;
+
+  // Merge Analytics
+  getMergeHistory: (projectId: string, filter?: MergeAnalyticsFilter) => Promise<IPCResult<MergeOperationRecord[]>>;
+  getMergeSummary: (projectId: string, filter?: MergeAnalyticsFilter) => Promise<IPCResult<MergeAnalytics>>;
+  getConflictPatterns: (projectId: string, limit?: number) => Promise<IPCResult<ConflictPattern[]>>;
+  exportMergeAnalytics: (projectId: string, options: MergeAnalyticsExportOptions) => Promise<IPCResult<{ path: string }>>;
+
+  // Scheduler API (available as a separate property)
+  scheduler?: import('./scheduler-api').SchedulerAPI;
 }
 
 export const createTaskAPI = (): TaskAPI => ({
@@ -95,6 +124,13 @@ export const createTaskAPI = (): TaskAPI => ({
     metadata?: TaskMetadata
   ): Promise<IPCResult<Task>> =>
     ipcRenderer.invoke(IPC_CHANNELS.TASK_CREATE, projectId, title, description, metadata),
+
+  createTaskFromTemplate: (
+    projectId: string,
+    templateName: string,
+    parameters: Record<string, unknown>
+  ): Promise<IPCResult<Task>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.TASK_CREATE_FROM_TEMPLATE, projectId, templateName, parameters),
 
   deleteTask: (taskId: string): Promise<IPCResult> =>
     ipcRenderer.invoke(IPC_CHANNELS.TASK_DELETE, taskId),
@@ -122,7 +158,7 @@ export const createTaskAPI = (): TaskAPI => ({
   updateTaskStatus: (
     taskId: string,
     status: TaskStatus,
-    options?: { forceCleanup?: boolean }
+    options?: { forceCleanup?: boolean; keepWorktree?: boolean }
   ): Promise<IPCResult & { worktreeExists?: boolean; worktreePath?: string }> =>
     ipcRenderer.invoke(IPC_CHANNELS.TASK_UPDATE_STATUS, taskId, status, options),
 
@@ -172,8 +208,14 @@ export const createTaskAPI = (): TaskAPI => ({
   unarchiveTasks: (projectId: string, taskIds: string[]): Promise<IPCResult<boolean>> =>
     ipcRenderer.invoke(IPC_CHANNELS.TASK_UNARCHIVE, projectId, taskIds),
 
+  exportTask: (projectId: string, taskId: string): Promise<IPCResult<string>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.TASK_EXPORT, projectId, taskId),
+
   createWorktreePR: (taskId: string, options?: WorktreeCreatePROptions): Promise<IPCResult<WorktreeCreatePRResult>> =>
     ipcRenderer.invoke(IPC_CHANNELS.TASK_WORKTREE_CREATE_PR, taskId, options),
+
+  batchRunQA: (taskId: string): Promise<IPCResult<{ success: boolean; issues?: Array<{ message: string; file?: string }> }>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.TASK_BATCH_RUN_QA, taskId),
 
   // Task Event Listeners
   onTaskProgress: (
@@ -301,5 +343,32 @@ export const createTaskAPI = (): TaskAPI => ({
     return () => {
       ipcRenderer.removeListener(IPC_CHANNELS.TASK_LOGS_STREAM, handler);
     };
-  }
+  },
+
+  // Task Token Stats
+  getTokenStats: (projectPath: string, specId: string): Promise<IPCResult<import('../../shared/types').TaskTokenStats | null>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.TASK_TOKEN_STATS_GET, projectPath, specId),
+
+  // Task Spec File Reading
+  getImplementationPlan: (taskId: string): Promise<IPCResult<ImplementationPlan | null>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.TASK_SPEC_IMPLEMENTATION_PLAN_GET, taskId),
+
+  getQAReport: (taskId: string): Promise<IPCResult<string | null>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.TASK_SPEC_QA_REPORT_GET, taskId),
+
+  getQAEscalation: (taskId: string): Promise<IPCResult<import('../../shared/types').QAEscalation | null>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.TASK_SPEC_QA_ESCALATION_GET, taskId),
+
+  // Merge Analytics
+  getMergeHistory: (projectId: string, filter?: MergeAnalyticsFilter): Promise<IPCResult<MergeOperationRecord[]>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.MERGE_ANALYTICS_GET_HISTORY, projectId, filter),
+
+  getMergeSummary: (projectId: string, filter?: MergeAnalyticsFilter): Promise<IPCResult<MergeAnalytics>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.MERGE_ANALYTICS_GET_SUMMARY, projectId, filter),
+
+  getConflictPatterns: (projectId: string, limit?: number): Promise<IPCResult<ConflictPattern[]>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.MERGE_ANALYTICS_GET_PATTERNS, projectId, limit),
+
+  exportMergeAnalytics: (projectId: string, options: MergeAnalyticsExportOptions): Promise<IPCResult<{ path: string }>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.MERGE_ANALYTICS_EXPORT, projectId, options)
 });

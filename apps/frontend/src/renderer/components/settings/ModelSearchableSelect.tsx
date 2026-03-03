@@ -194,6 +194,7 @@ export function ModelSearchableSelect({
   );
 
   // Click-outside detection for closing dropdown
+  // biome-ignore lint/correctness/useExhaustiveDependencies: handleClose is stable, only depends on state setters
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
@@ -208,7 +209,7 @@ export function ModelSearchableSelect({
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [isOpen, handleClose]);
+  }, [isOpen]);
 
   // Cleanup on unmount
   useEffect(() => {

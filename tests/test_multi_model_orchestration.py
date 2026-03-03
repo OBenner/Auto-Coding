@@ -16,7 +16,6 @@ import json
 import logging
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -50,7 +49,9 @@ def test_env(temp_git_repo: Path):
 # =============================================================================
 
 
-def create_task_metadata(spec_dir: Path, agent_models: dict[str, str] | None = None) -> Path:
+def create_task_metadata(
+    spec_dir: Path, agent_models: dict[str, str] | None = None
+) -> Path:
     """Create a task_metadata.json with agentModels configuration."""
     metadata = {
         "taskDescription": "Test multi-model orchestration",
@@ -108,7 +109,7 @@ class TestAgentModelResolution:
 
     def test_get_agent_model_uses_defaults_when_no_config(self, test_env):
         """Test that get_agent_model() falls back to defaults without task_metadata.json."""
-        from phase_config import get_agent_model, AGENT_DEFAULT_MODELS
+        from phase_config import AGENT_DEFAULT_MODELS, get_agent_model
 
         temp_dir, spec_dir, project_dir = test_env
 
@@ -117,9 +118,9 @@ class TestAgentModelResolution:
         # Should use default from AGENT_DEFAULT_MODELS
         coder_model = get_agent_model(spec_dir, "coder")
         expected_default = AGENT_DEFAULT_MODELS["coder"]
-        assert (
-            expected_default.lower() in coder_model.lower()
-        ), f"Should use default {expected_default}, got {coder_model}"
+        assert expected_default.lower() in coder_model.lower(), (
+            f"Should use default {expected_default}, got {coder_model}"
+        )
 
     def test_get_agent_model_cli_override(self, test_env):
         """Test that CLI model argument overrides task_metadata.json."""
@@ -148,7 +149,9 @@ class TestAgentModelResolution:
 
         # Should use environment variable
         coder_model = get_agent_model(spec_dir, "coder")
-        assert "haiku" in coder_model, f"Env var override should use haiku, got {coder_model}"
+        assert "haiku" in coder_model, (
+            f"Env var override should use haiku, got {coder_model}"
+        )
 
     def test_agent_model_priority_resolution(self, test_env, monkeypatch):
         """Test priority: CLI > env var > task_metadata > defaults."""
@@ -210,7 +213,7 @@ class TestCostTracking:
 
     def test_cost_tracker_calculates_correctly(self, test_env):
         """Test that cost calculations are accurate."""
-        from core.cost_tracking import CostTracker, MODEL_PRICING
+        from core.cost_tracking import MODEL_PRICING, CostTracker
 
         temp_dir, spec_dir, project_dir = test_env
 
@@ -306,7 +309,14 @@ class TestCostTracking:
         # Models might be abbreviated in summary
         assert any(
             model_name in summary
-            for model_name in ["sonnet", "opus", "haiku", "claude-sonnet", "claude-opus", "claude-haiku"]
+            for model_name in [
+                "sonnet",
+                "opus",
+                "haiku",
+                "claude-sonnet",
+                "claude-opus",
+                "claude-haiku",
+            ]
         ), "Should show model costs"
 
 
@@ -318,11 +328,18 @@ class TestCostTracking:
 class TestModelFallback:
     """Tests for model fallback when models are unavailable."""
 
+    @pytest.fixture(autouse=True)
+    def _reset_breakers(self):
+        """Reset circuit breakers between tests to avoid cross-test state."""
+        from core.model_fallback import reset_circuit_breakers
+
+        reset_circuit_breakers()
+        yield
+        reset_circuit_breakers()
+
     def test_fallback_chain_defined(self, test_env):
         """Test that MODEL_FALLBACK_CHAIN is properly defined."""
         from core.model_fallback import MODEL_FALLBACK_CHAIN
-
-        temp_dir, spec_dir, project_dir = test_env
 
         # Verify fallback chain exists
         assert "opus" in MODEL_FALLBACK_CHAIN, "Should have opus fallback chain"
@@ -339,16 +356,12 @@ class TestModelFallback:
         """Test that retry_with_fallback() function is implemented."""
         from core.model_fallback import retry_with_fallback
 
-        temp_dir, spec_dir, project_dir = test_env
-
         # Function should be importable and callable
         assert callable(retry_with_fallback), "retry_with_fallback should be callable"
 
     def test_fallback_logging(self, test_env, caplog):
         """Test that fallback attempts are logged."""
         from core.model_fallback import retry_with_fallback
-
-        temp_dir, spec_dir, project_dir = test_env
 
         # Mock function that fails once then succeeds
         call_count = 0
@@ -357,8 +370,8 @@ class TestModelFallback:
             nonlocal call_count
             call_count += 1
             if call_count == 1:
-                # First call with opus fails
-                raise Exception("Model unavailable")
+                # First call with opus fails (must be a retryable error)
+                raise Exception("Rate limit exceeded - too many requests")
             # Second call with sonnet succeeds
             return f"Success with {model}"
 
@@ -373,14 +386,13 @@ class TestModelFallback:
         # Verify logging
         log_messages = caplog.text
         assert any(
-            "fallback" in msg.lower() or "retry" in msg.lower() for msg in log_messages.split("\n")
+            "fallback" in msg.lower() or "retry" in msg.lower()
+            for msg in log_messages.split("\n")
         ), "Should log fallback attempts"
 
     def test_fallback_on_rate_limit_error(self, test_env, caplog):
         """Test that rate limit errors trigger fallback to degraded model."""
         from core.model_fallback import retry_with_fallback
-
-        temp_dir, spec_dir, project_dir = test_env
 
         # Mock function that simulates rate limit error
         call_count = 0
@@ -399,7 +411,9 @@ class TestModelFallback:
             result = retry_with_fallback(mock_fn, "opus", max_retries_per_model=1)
 
         # Verify fallback occurred
-        assert "sonnet" in str(result).lower(), f"Should fall back to sonnet, got: {result}"
+        assert "sonnet" in str(result).lower(), (
+            f"Should fall back to sonnet, got: {result}"
+        )
 
         # Verify fallback logging with [FALLBACK] tag
         log_messages = caplog.text
@@ -409,8 +423,6 @@ class TestModelFallback:
     def test_fallback_on_connection_error(self, test_env, caplog):
         """Test that connection errors trigger fallback."""
         from core.model_fallback import retry_with_fallback
-
-        temp_dir, spec_dir, project_dir = test_env
 
         # Mock function that simulates connection error
         def mock_fn(model: str):
@@ -429,12 +441,12 @@ class TestModelFallback:
         """Test that server overload errors (503) trigger fallback."""
         from core.model_fallback import retry_with_fallback
 
-        temp_dir, spec_dir, project_dir = test_env
-
         # Mock function that simulates server overload
         def mock_fn(model: str):
             if "opus" in model.lower():
-                raise Exception("503 Service Temporarily Unavailable - Server overloaded")
+                raise Exception(
+                    "503 Service Temporarily Unavailable - Server overloaded"
+                )
             return f"Success with {model}"
 
         with caplog.at_level(logging.WARNING):
@@ -448,8 +460,6 @@ class TestModelFallback:
         """Test that non-retryable errors don't trigger fallback."""
         from core.model_fallback import retry_with_fallback
 
-        temp_dir, spec_dir, project_dir = test_env
-
         # Mock function that raises non-retryable error
         def mock_fn(model: str):
             # Validation error is not retryable
@@ -461,13 +471,13 @@ class TestModelFallback:
 
         # Should not log fallback (error should be raised immediately)
         log_messages = caplog.text
-        assert "[FALLBACK]" not in log_messages, "Should not attempt fallback for non-retryable errors"
+        assert "[FALLBACK]" not in log_messages, (
+            "Should not attempt fallback for non-retryable errors"
+        )
 
     def test_fallback_chain_opus_to_haiku(self, test_env, caplog):
         """Test complete fallback chain: opus -> sonnet -> haiku."""
         from core.model_fallback import retry_with_fallback
-
-        temp_dir, spec_dir, project_dir = test_env
 
         # Mock function that fails for opus and sonnet, succeeds with haiku
         def mock_fn(model: str):
@@ -482,17 +492,19 @@ class TestModelFallback:
             result = retry_with_fallback(mock_fn, "opus", max_retries_per_model=1)
 
         # Should eventually fall back to haiku
-        assert "haiku" in str(result).lower(), f"Should fall back to haiku, got: {result}"
+        assert "haiku" in str(result).lower(), (
+            f"Should fall back to haiku, got: {result}"
+        )
 
         # Verify logging shows both fallback attempts
         log_messages = caplog.text
-        assert log_messages.count("[FALLBACK]") >= 2, "Should log both fallback attempts (opus->sonnet, sonnet->haiku)"
+        assert log_messages.count("[FALLBACK]") >= 2, (
+            "Should log both fallback attempts (opus->sonnet, sonnet->haiku)"
+        )
 
     def test_fallback_exhausted_all_models(self, test_env, caplog):
         """Test that all models exhausted raises final exception."""
         from core.model_fallback import retry_with_fallback
-
-        temp_dir, spec_dir, project_dir = test_env
 
         # Mock function that fails for all models
         def mock_fn(model: str):
@@ -511,8 +523,6 @@ class TestModelFallback:
     def test_fallback_max_retries_per_model(self, test_env, caplog):
         """Test that max_retries_per_model is respected."""
         from core.model_fallback import retry_with_fallback
-
-        temp_dir, spec_dir, project_dir = test_env
 
         # Mock function that counts retries
         retry_counts = {"opus": 0, "sonnet": 0}
@@ -541,8 +551,6 @@ class TestModelFallback:
         """Test fallback chain from sonnet (not opus)."""
         from core.model_fallback import retry_with_fallback
 
-        temp_dir, spec_dir, project_dir = test_env
-
         # Start with sonnet, fall back to haiku
         def mock_fn(model: str):
             if "sonnet" in model.lower():
@@ -558,9 +566,7 @@ class TestModelFallback:
 
     def test_fallback_haiku_no_fallback(self, test_env, caplog):
         """Test that haiku has no fallback (final model in chain)."""
-        from core.model_fallback import retry_with_fallback, MODEL_FALLBACK_CHAIN
-
-        temp_dir, spec_dir, project_dir = test_env
+        from core.model_fallback import MODEL_FALLBACK_CHAIN, retry_with_fallback
 
         # Verify haiku has no fallback
         assert MODEL_FALLBACK_CHAIN["haiku"] == [], "Haiku should have no fallback"
@@ -576,8 +582,6 @@ class TestModelFallback:
     def test_fallback_success_logging(self, test_env, caplog):
         """Test that successful fallback logs [SUCCESS] tag."""
         from core.model_fallback import retry_with_fallback
-
-        temp_dir, spec_dir, project_dir = test_env
 
         # Mock function that fails once then succeeds
         def mock_fn(model: str):
@@ -610,8 +614,8 @@ class TestE2EMultiModelOrchestration:
         3. cost_report.json is created with tracking data
         4. Logs show model selection process
         """
-        from phase_config import get_agent_model
         from core.cost_tracking import CostTracker
+        from phase_config import get_agent_model
 
         temp_dir, spec_dir, project_dir = test_env
 
@@ -700,8 +704,8 @@ class TestE2EMultiModelOrchestration:
 
     def test_e2e_environment_variable_override(self, test_env, monkeypatch):
         """Test that environment variables override task_metadata.json."""
-        from phase_config import get_agent_model
         from core.cost_tracking import CostTracker
+        from phase_config import get_agent_model
 
         temp_dir, spec_dir, project_dir = test_env
 
@@ -721,13 +725,15 @@ class TestE2EMultiModelOrchestration:
 
         # Verify haiku model is tracked
         cost_report = get_cost_report(spec_dir)
-        coder_record = next(r for r in cost_report["records"] if r["agent_type"] == "coder")
+        coder_record = next(
+            r for r in cost_report["records"] if r["agent_type"] == "coder"
+        )
         assert "haiku" in coder_record["model"], "Should track haiku model"
 
     def test_e2e_default_models_when_no_config(self, test_env):
         """Test that default models are used when no configuration exists."""
-        from phase_config import get_agent_model, AGENT_DEFAULT_MODELS
         from core.cost_tracking import CostTracker
+        from phase_config import AGENT_DEFAULT_MODELS, get_agent_model
 
         temp_dir, spec_dir, project_dir = test_env
 

@@ -1,4 +1,5 @@
-import { User, MessageCircle, Tag, Sparkles } from 'lucide-react';
+import { User, MessageCircle, Tag, Sparkles, FilePlus } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { Badge } from '../../ui/badge';
 import { Button } from '../../ui/button';
 import {
@@ -7,8 +8,16 @@ import {
 } from '../../../../shared/constants';
 import type { IssueListItemProps } from '../types';
 
-export function IssueListItem({ issue, isSelected, onClick, onInvestigate }: IssueListItemProps) {
+export function IssueListItem({ issue, isSelected, onClick, onInvestigate, onQuickCreate }: IssueListItemProps) {
+  const { t } = useTranslation(['common', 'tasks']);
+
+  const handleQuickCreate = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onQuickCreate?.();
+  };
+
   return (
+    // biome-ignore lint/a11y/useSemanticElements: Using div with role="button" for complex clickable card layout
     <div
       role="button"
       tabIndex={0}
@@ -58,17 +67,29 @@ export function IssueListItem({ issue, isSelected, onClick, onInvestigate }: Iss
             )}
           </div>
         </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="opacity-0 group-hover:opacity-100 transition-opacity h-8 w-8"
-          onClick={(e) => {
-            e.stopPropagation();
-            onInvestigate();
-          }}
-        >
-          <Sparkles className="h-4 w-4" />
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="opacity-0 group-hover:opacity-100 transition-opacity h-8 w-8"
+            onClick={handleQuickCreate}
+            title={t('tasks:githubIssues.quickCreateSpec', 'Quick Create Spec')}
+          >
+            <FilePlus className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="opacity-0 group-hover:opacity-100 transition-opacity h-8 w-8"
+            onClick={(e) => {
+              e.stopPropagation();
+              onInvestigate();
+            }}
+            title={t('tasks:githubIssues.investigate', 'Investigate')}
+          >
+            <Sparkles className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
     </div>
   );

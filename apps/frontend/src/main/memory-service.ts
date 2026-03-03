@@ -87,6 +87,32 @@ interface StatusResult {
   error?: string | null;
 }
 
+export interface GraphNode {
+  id: string;
+  label: string;
+  type: 'episodic' | 'entity';
+  timestamp: string;
+  data: {
+    content?: string;
+    description?: string;
+    summary?: string;
+  };
+}
+
+export interface GraphEdge {
+  id: string;
+  source: string;
+  target: string;
+  type: string;
+}
+
+export interface GraphDataResult {
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+  node_count: number;
+  edge_count: number;
+}
+
 /**
  * Get the default database path
  * Uses XDG-compliant paths on Linux for AppImage/Flatpak/Snap support
@@ -517,6 +543,31 @@ export class MemoryService {
   }
 
   /**
+   * Get graph data (nodes and edges) for visualization
+   */
+  async getGraphData(limit: number = 50): Promise<GraphDataResult> {
+    const result = await executeQuery('get-graph-data', [
+      this.config.dbPath,
+      this.config.database,
+      '--limit',
+      String(limit),
+    ]);
+
+    if (!result.success || !result.data) {
+      console.error('Failed to get graph data:', result.error);
+      return {
+        nodes: [],
+        edges: [],
+        node_count: 0,
+        edge_count: 0,
+      };
+    }
+
+    const data = result.data as GraphDataResult;
+    return data;
+  }
+
+  /**
    * Search memories in the database (keyword search)
    */
   async searchMemories(searchQuery: string, limit: number = 20): Promise<MemoryEpisode[]> {
@@ -673,6 +724,74 @@ export class MemoryService {
 
     const data = result.data as { id: string; name: string; type: string; timestamp: string };
     return { success: true, id: data.id };
+  }
+
+  /**
+   * Delete a memory by ID
+   *
+   * @param memoryId The UUID of the memory to delete
+   * @returns Promise with success status and optional error message
+   */
+  async deleteMemory(memoryId: string): Promise<{ success: boolean; error?: string }> {
+    const args = [
+      this.config.dbPath,
+      this.config.database,
+      '--id',
+      memoryId
+    ];
+
+    const result = await executeQuery('delete-memory', args);
+
+    if (!result.success) {
+      console.error('Failed to delete memory:', result.error);
+      return { success: false, error: result.error };
+    }
+
+    return { success: true };
+  }
+
+  /**
+   * Export memories to a JSON file
+   *
+   * Exports all episodic memories and entities to the specified file path.
+   * The export includes metadata (timestamp, database name, counts).
+   *
+   * @param outputPath The file path where the export should be saved
+   * @returns Promise with success status, total count, and optional error message
+   */
+  async exportMemories(outputPath: string): Promise<{
+    success: boolean;
+    episodicCount?: number;
+    entityCount?: number;
+    totalCount?: number;
+    error?: string;
+  }> {
+    const args = [
+      this.config.dbPath,
+      this.config.database,
+      '--output',
+      outputPath
+    ];
+
+    const result = await executeQuery('export-memories', args);
+
+    if (!result.success) {
+      console.error('Failed to export memories:', result.error);
+      return { success: false, error: result.error };
+    }
+
+    const data = result.data as {
+      episodic_count: number;
+      entity_count: number;
+      total_count: number;
+    };
+
+    return {
+      success: true,
+      episodicCount: data.episodic_count,
+      entityCount: data.entity_count,
+      totalCount: data.total_count
+    };
   }
 
   /**

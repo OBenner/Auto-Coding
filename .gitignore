@@ -53,7 +53,7 @@ lerna-debug.log*
 .worktrees/
 
 # ===========================
-# Auto Claude Generated
+# Auto Code Generated
 # ===========================
 .auto-claude/
 .planning/
@@ -164,11 +164,10 @@ dev/
 _bmad/
 _bmad-output/
 .claude/
-/docs
 OPUS_ANALYSIS_AND_IDEAS.md
 /.github/agents
 
-# Auto Claude generated files
+# Auto Code generated files
 .security-key
 /shared_docs
 logs/security/

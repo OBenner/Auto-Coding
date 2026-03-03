@@ -162,8 +162,7 @@ class MetricsSummary:
                 name: stats.to_dict() for name, stats in self.agent_stats.items()
             },
             "complexity_stats": {
-                name: stats.to_dict()
-                for name, stats in self.complexity_stats.items()
+                name: stats.to_dict() for name, stats in self.complexity_stats.items()
             },
             "qa_stats": self.qa_stats.to_dict(),
             "last_updated": self.last_updated,
@@ -214,7 +213,9 @@ class AnalyticsService:
 
         # Get all directories in specs folder
         return [
-            d for d in self.specs_dir.iterdir() if d.is_dir() and not d.name.startswith(".")
+            d
+            for d in self.specs_dir.iterdir()
+            if d.is_dir() and not d.name.startswith(".")
         ]
 
     def _load_json_file(self, file_path: Path) -> dict[str, Any] | None:
@@ -262,10 +263,21 @@ class AnalyticsService:
         }
 
     def _parse_attempt_history(self, spec_dir: Path) -> dict[str, Any]:
-        """Parse attempt_history.json from a spec directory."""
+        """Parse attempt_history.json from a spec directory.
+
+        Supports both legacy and new locations:
+          - <spec_dir>/attempt_history.json
+          - <spec_dir>/memory/attempt_history.json
+        """
+        # Preferred new location
         memory_dir = spec_dir / "memory"
         attempt_file = memory_dir / "attempt_history.json"
         data = self._load_json_file(attempt_file)
+
+        if not data:
+            # Fallback: legacy location at spec root
+            legacy_file = spec_dir / "attempt_history.json"
+            data = self._load_json_file(legacy_file)
 
         if not data:
             return {"subtasks": {}, "stuck_subtasks": []}
@@ -366,9 +378,7 @@ class AnalyticsService:
         Returns:
             MetricsSummary with aggregated metrics
         """
-        summary = MetricsSummary(
-            last_updated=datetime.utcnow().isoformat() + "Z"
-        )
+        summary = MetricsSummary(last_updated=datetime.utcnow().isoformat() + "Z")
 
         spec_dirs = self._get_all_spec_dirs()
         summary.total_specs = len(spec_dirs)
@@ -394,6 +404,8 @@ class AnalyticsService:
             summary.total_tokens += cost_data["total_tokens"]
 
             # Update agent stats
+            attempt_subtasks = attempt_data.get("subtasks", {})
+
             for agent_type, usage in cost_data["agent_usage"].items():
                 if agent_type not in summary.agent_stats:
                     summary.agent_stats[agent_type] = AgentStats(agent_type=agent_type)
@@ -403,11 +415,21 @@ class AnalyticsService:
                 stats.total_cost += usage["cost"]
                 stats.total_tokens += usage["tokens"]
 
-                # Count successes/failures based on subtask completion
-                if plan_data["completed_subtasks"] > 0:
-                    stats.successful_attempts += 1
-                if plan_data["failed_subtasks"] > 0:
-                    stats.failed_attempts += 1
+                # Prefer attempt_history for per-agent outcome data
+                agent_attempts = attempt_subtasks.get(agent_type)
+                if isinstance(agent_attempts, list):
+                    for attempt in agent_attempts:
+                        outcome = attempt.get("status") or attempt.get("outcome")
+                        if outcome == "success":
+                            stats.successful_attempts += 1
+                        elif outcome in {"failed", "error"}:
+                            stats.failed_attempts += 1
+                else:
+                    # Fallback: align successes/failures with usage count
+                    if plan_data["completed_subtasks"] > 0:
+                        stats.successful_attempts += usage["count"]
+                    if plan_data["failed_subtasks"] > 0:
+                        stats.failed_attempts += usage["count"]
 
             # Update complexity stats
             complexity = self._extract_complexity(spec_dir)
@@ -468,9 +490,7 @@ class AnalyticsService:
         """
         # Group specs by date (using last_updated or created_at)
         cutoff_date = datetime.now(timezone.utc) - timedelta(days=days)
-        daily_data = defaultdict(
-            lambda: {"total": 0, "completed": 0, "cost": 0.0}
-        )
+        daily_data = defaultdict(lambda: {"total": 0, "completed": 0, "cost": 0.0})
 
         spec_dirs = self._get_all_spec_dirs()
 
@@ -485,27 +505,41 @@ class AnalyticsService:
                 continue
 
             # Get date from updated_at or metadata
-            date_str = plan_json.get("updated_at") or plan_json.get(
-                "metadata", {}
-            ).get("created_at")
-            if not date_str:
+            date_str = plan_json.get("updated_at") or plan_json.get("metadata", {}).get(
+                "created_at"
+            )
+
+            # Parse spec date, falling back to filesystem mtime
+            spec_date = None
+            if date_str:
+                try:
+                    spec_date = datetime.fromisoformat(
+                        str(date_str).replace("Z", "+00:00")
+                    )
+                except (TypeError, ValueError):
+                    pass
+
+            if spec_date is None:
+                try:
+                    mtime = plan_file.stat().st_mtime
+                except OSError:
+                    try:
+                        mtime = spec_dir.stat().st_mtime
+                    except OSError:
+                        continue
+                spec_date = datetime.fromtimestamp(mtime, tz=timezone.utc)
+
+            if spec_date < cutoff_date:
                 continue
 
-            try:
-                spec_date = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
-                if spec_date < cutoff_date:
-                    continue
+            # Group by date (YYYY-MM-DD)
+            date_key = spec_date.strftime("%Y-%m-%d")
 
-                # Group by date (YYYY-MM-DD)
-                date_key = spec_date.strftime("%Y-%m-%d")
+            daily_data[date_key]["total"] += 1
+            daily_data[date_key]["cost"] += cost_data["total_cost"]
 
-                daily_data[date_key]["total"] += 1
-                daily_data[date_key]["cost"] += cost_data["total_cost"]
-
-                if plan_data["status"] == "completed":
-                    daily_data[date_key]["completed"] += 1
-            except (ValueError, AttributeError):
-                continue
+            if plan_data["status"] == "completed":
+                daily_data[date_key]["completed"] += 1
 
         # Convert to TrendDataPoint list
         trend_points = []

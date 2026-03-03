@@ -51,6 +51,7 @@ export function LanguageSettings({ settings, onSettingsChange }: LanguageSetting
               const isSelected = currentLanguage === lang.value;
               return (
                 <button
+                  type="button"
                   key={lang.value}
                   onClick={() => handleLanguageChange(lang.value)}
                   className={cn(

@@ -14,7 +14,7 @@ Provides:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
@@ -32,62 +32,74 @@ class GitHubClientProtocol(Protocol):
         state: str = "open",
         limit: int = 100,
         json_fields: list[str] | None = None,
-    ) -> list[dict[str, Any]]: ...
+    ) -> list[dict[str, Any]]:
+        pass  # Protocol method - no implementation needed
 
     async def pr_get(
         self,
         pr_number: int,
         json_fields: list[str] | None = None,
-    ) -> dict[str, Any]: ...
+    ) -> dict[str, Any]:
+        pass  # Protocol method - no implementation needed
 
-    async def pr_diff(self, pr_number: int) -> str: ...
+    async def pr_diff(self, pr_number: int) -> str:
+        pass  # Protocol method - no implementation needed
 
     async def pr_review(
         self,
         pr_number: int,
         body: str,
         event: str = "comment",
-    ) -> int: ...
+    ) -> int:
+        pass  # Protocol method - no implementation needed
 
     async def issue_list(
         self,
         state: str = "open",
         limit: int = 100,
         json_fields: list[str] | None = None,
-    ) -> list[dict[str, Any]]: ...
+    ) -> list[dict[str, Any]]:
+        pass  # Protocol method - no implementation needed
 
     async def issue_get(
         self,
         issue_number: int,
         json_fields: list[str] | None = None,
-    ) -> dict[str, Any]: ...
+    ) -> dict[str, Any]:
+        pass  # Protocol method - no implementation needed
 
-    async def issue_comment(self, issue_number: int, body: str) -> None: ...
+    async def issue_comment(self, issue_number: int, body: str) -> None:
+        pass  # Protocol method - no implementation needed
 
-    async def issue_add_labels(self, issue_number: int, labels: list[str]) -> None: ...
+    async def issue_add_labels(self, issue_number: int, labels: list[str]) -> None:
+        pass  # Protocol method - no implementation needed
 
-    async def issue_remove_labels(
-        self, issue_number: int, labels: list[str]
-    ) -> None: ...
+    async def issue_remove_labels(self, issue_number: int, labels: list[str]) -> None:
+        pass  # Protocol method - no implementation needed
 
     async def api_get(
         self,
         endpoint: str,
         params: dict[str, Any] | None = None,
-    ) -> dict[str, Any]: ...
+    ) -> dict[str, Any]:
+        pass  # Protocol method - no implementation needed
 
 
 @runtime_checkable
 class ClaudeClientProtocol(Protocol):
     """Protocol for Claude AI clients."""
 
-    async def query(self, prompt: str) -> None: ...
+    async def query(self, prompt: str) -> None:
+        pass  # Protocol method - no implementation needed
 
-    async def receive_response(self): ...
+    async def receive_response(self):
+        pass  # Protocol method - no implementation needed
 
-    async def __aenter__(self) -> ClaudeClientProtocol: ...
+    async def __aenter__(self) -> ClaudeClientProtocol:
+        pass  # Protocol method - no implementation needed
 
-    async def __aexit__(self, *args) -> None: ...
+    async def __aexit__(self, *args) -> None:
+        pass  # Protocol method - no implementation needed
 
 
 # ============================================================================
@@ -126,7 +138,7 @@ class MockGitHubClient:
         self.call_log.append(
             {
                 "method": method,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
                 **kwargs,
             }
         )
@@ -183,7 +195,7 @@ class MockGitHubClient:
             "state": state,
             "author": {"login": author},
             "labels": [{"name": label} for label in (labels or [])],
-            "createdAt": created_at or datetime.now(timezone.utc).isoformat(),
+            "createdAt": created_at or datetime.now(UTC).isoformat(),
         }
 
     def set_api_response(self, endpoint: str, response: Any) -> None:

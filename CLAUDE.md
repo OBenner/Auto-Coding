@@ -4,9 +4,21 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Auto Claude is a multi-agent autonomous coding framework that builds software through coordinated AI agent sessions. It uses the Claude Agent SDK to run agents in isolated workspaces with security controls.
+Auto Code is a multi-agent autonomous coding framework that builds software through coordinated AI agent sessions. It uses the Claude Agent SDK to run agents in isolated workspaces with security controls.
 
 **CRITICAL: All AI interactions use the Claude Agent SDK (`claude-agent-sdk` package), NOT the Anthropic API directly.**
+
+## Search & Navigation
+
+**Looking for something specific?**
+
+- **[📖 Search Index](docs/search/INDEX.md)** - Comprehensive searchable index with keywords
+- **[🔍 Search Guide](docs/search/SEARCH-GUIDE.md)** - Learn effective search strategies
+
+**Quick links:**
+- [Quick Start Guide](guides/QUICK-START.md) - New to Auto Code? Start here
+- [Troubleshooting Guide](guides/TROUBLESHOOTING.md) - Having issues?
+- [Contributing Guide](CONTRIBUTING.md) - How to contribute
 
 ## Project Structure
 
@@ -19,8 +31,15 @@ autonomous-coding/
 │   │   ├── spec_agents/   # Spec creation agents
 │   │   ├── integrations/  # Graphiti, Linear, GitHub
 │   │   └── prompts/       # Agent system prompts
+│   ├── web-backend/       # Python FastAPI server for web-based access
+│   │   ├── api/           # REST API routes and WebSocket handlers
+│   │   ├── core/          # Configuration and security
+│   │   └── services/      # Business logic and agent runner
 │   └── frontend/          # Electron desktop UI
-├── guides/                # Documentation
+├── docs/                  # Documentation templates and style guide
+│   ├── templates/         # Reusable templates for features, architecture, APIs
+│   └── STYLE_GUIDE.md     # Documentation writing conventions
+├── guides/                # User and developer guides
 ├── tests/                 # Test suite
 └── scripts/               # Build and utility scripts
 ```
@@ -37,6 +56,14 @@ autonomous-coding/
 - When bug fixing or implementing features, use the Electron MCP server for automated testing
 - See "End-to-End Testing" section below for details
 
+**Documentation:**
+- `docs/` - Documentation templates and writing style guide
+- `docs/templates/` - Reusable templates for feature docs, architecture, and API documentation
+- `docs/STYLE_GUIDE.md` - Documentation writing conventions and best practices
+- `guides/` - User and developer guides for the project
+- Use templates from `docs/templates/` when documenting new features, modules, or APIs
+- Follow the style guide for consistent documentation across the project
+
 ## Commands
 
 ### Setup
@@ -52,6 +79,9 @@ npm run install:all
 # Or install separately:
 # Backend (from apps/backend/)
 cd apps/backend && uv venv && uv pip install -r requirements.txt
+
+# Web Backend (from apps/web-backend/)
+cd apps/web-backend && uv venv && uv pip install -r requirements.txt
 
 # Frontend (from apps/frontend/)
 cd apps/frontend && npm install
@@ -153,6 +183,151 @@ gh pr create --base main
 
 See [RELEASE.md](RELEASE.md) for detailed release process documentation.
 
+### CI/CD Integration
+
+Auto Code supports headless CI/CD mode for automated builds triggered by git events. This enables DevOps automation where AI agents validate code, run tests, and generate artifacts without human interaction.
+
+**Key Features:**
+- **Non-interactive operation** - No prompts or UI, fully automated
+- **Exit code handling** - Standard codes for build status (0=success, 1=build failed, 2=QA failed, 3=system error)
+- **JSON output** - Structured output for parsing in automation scripts
+- **Artifact generation** - Build logs, test reports, coverage reports
+- **GitHub Actions integration** - Example workflow provided
+
+**Configuration:**
+
+Enable CI mode via environment variables:
+
+```bash
+# Enable CI mode (non-interactive)
+export AUTO_CLAUDE_CI=true
+
+# Enable JSON output
+export AUTO_CLAUDE_JSON_OUTPUT=true
+
+# Required: Claude OAuth token (NOT ANTHROPIC_API_KEY — that is not supported)
+# Generate with: claude setup-token --print
+export CLAUDE_CODE_OAUTH_TOKEN=your_oauth_token_here
+
+# Optional: Configure model
+export CLAUDE_MODEL=claude-sonnet-4-5-20250929
+
+# Optional: Enable Graphiti memory
+export GRAPHITI_ENABLED=true
+export GRAPHITI_LLM_PROVIDER=openai
+export OPENAI_API_KEY=your_openai_key
+```
+
+**Usage in CI/CD:**
+
+```bash
+# Run a spec in CI mode
+python run.py --spec 001 --ci --json
+
+# Run from task description in CI mode
+python run.py --task "Fix login bug" --ci --json
+
+# Exit codes:
+# 0 = Success (build passed, QA approved)
+# 1 = Build failed (implementation errors)
+# 2 = QA failed (validation rejected)
+# 3 = System error (configuration, auth, etc.)
+```
+
+**JSON Output Format:**
+
+```json
+{
+  "status": "success",
+  "exit_code": 0,
+  "duration": "5m 23s",
+  "spec_id": "001",
+  "changed_files": ["src/auth.js", "tests/auth.test.js"],
+  "test_results": {
+    "passed": 42,
+    "failed": 0,
+    "coverage": "87%"
+  },
+  "qa_status": "approved",
+  "artifacts": [
+    ".auto-claude/specs/001/artifacts/build-log.json",
+    ".auto-claude/specs/001/artifacts/test-report.json"
+  ]
+}
+```
+
+**GitHub Actions Example:**
+
+See `.github/workflows/auto-claude-build.yml` for a complete example workflow. Key features:
+
+```yaml
+on:
+  # The provided workflow uses workflow_dispatch (manual trigger).
+  # The pull_request trigger below is an optional customization you can add:
+  # pull_request:
+  #   branches: [main, develop]
+  #   paths: ['apps/**', 'tests/**']
+  workflow_dispatch:
+    inputs:
+      spec_number:
+        description: 'Spec number to build'
+        required: false
+        default: '001'
+
+env:
+  AUTO_CLAUDE_CI: 'true'
+  AUTO_CLAUDE_JSON_OUTPUT: 'true'
+  # Use Claude OAuth token — ANTHROPIC_API_KEY is not supported
+  CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+
+jobs:
+  auto-claude-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Python
+        uses: ./.github/actions/setup-python-backend
+      - name: Run Auto Claude
+        run: python run.py --spec 001 --ci --json
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: auto-claude-results
+          path: .auto-claude/specs/**/artifacts/
+```
+
+**Generated Artifacts:**
+
+CI mode generates the following artifacts in `.auto-claude/specs/XXX/artifacts/`:
+- `build-log.json` - Structured build log with status, duration, errors
+- `test-report.json` - Test results with pass/fail counts and coverage
+- `qa-report.md` - QA validation results
+- `coverage-report.json` - Code coverage metrics (if tests run)
+
+**Best Practices:**
+
+1. **Use matrix builds** - Test on multiple OS platforms (Ubuntu, Windows, macOS)
+2. **Cache dependencies** - Speed up builds by caching Python packages
+3. **Fail fast** - Use `fail-fast: false` to allow all platforms to complete
+4. **Comment on PRs** - Post build results as PR comments for visibility
+5. **Set resource limits** - Add timeout to prevent runaway agent sessions
+6. **Secure secrets** - Never commit API keys, use GitHub Secrets
+
+**Exit Code Handling:**
+
+```bash
+# In your CI script
+python run.py --spec 001 --ci --json
+EXIT_CODE=$?
+
+case $EXIT_CODE in
+  0) echo "✅ Build succeeded";;
+  1) echo "❌ Build failed - check implementation";;
+  2) echo "⚠️ QA rejected - validation issues";;
+  3) echo "🔥 System error - check configuration";;
+esac
+```
+
 ## Architecture
 
 ### Core Pipeline
@@ -228,15 +403,15 @@ Each spec in `.auto-claude/specs/XXX-name/` contains:
 
 ### Branching & Worktree Strategy
 
-Auto Claude uses git worktrees for isolated builds. All branches stay LOCAL until user explicitly pushes:
+Auto Code uses git worktrees for isolated builds. All branches stay LOCAL until user explicitly pushes:
 
 ```
 main (user's branch)
-└── auto-claude/{spec-name}  ← spec branch (isolated worktree)
+└── auto-code/{spec-name}  ← spec branch (isolated worktree)
 ```
 
 **Key principles:**
-- ONE branch per spec (`auto-claude/{spec-name}`)
+- ONE branch per spec (`auto-code/{spec-name}`)
 - Parallel work uses subagents (agent decides when to spawn)
 - NO automatic pushes to GitHub - user controls when to push
 - User reviews in spec worktree (`.worktrees/{spec-name}/`)
@@ -251,14 +426,14 @@ main (user's branch)
 
 ### Contributing to Upstream
 
-**CRITICAL: When submitting PRs to AndyMik90/Auto-Claude, always target the `develop` branch, NOT `main`.**
+**CRITICAL: When submitting PRs to OBenner/Auto-Coding, always target the `develop` branch, NOT `main`.**
 
 **Correct workflow for contributions:**
 1. Fetch upstream: `git fetch upstream`
 2. Create feature branch from upstream/develop: `git checkout -b fix/my-fix upstream/develop`
 3. Make changes and commit with sign-off: `git commit -s -m "fix: description"`
 4. Push to your fork: `git push origin fix/my-fix`
-5. Create PR targeting `develop`: `gh pr create --repo AndyMik90/Auto-Claude --base develop`
+5. Create PR targeting `develop`: `gh pr create --repo OBenner/Auto-Coding --base develop`
 
 **Verify before PR:**
 ```bash
@@ -277,7 +452,7 @@ Security profile cached in `.auto-claude-security.json`.
 
 ### Claude Agent SDK Integration
 
-**CRITICAL: Auto Claude uses the Claude Agent SDK for ALL AI interactions. Never use the Anthropic API directly.**
+**CRITICAL: Auto Code uses the Claude Agent SDK for ALL AI interactions. Never use the Anthropic API directly.**
 
 **Client Location:** `apps/backend/core/client.py`
 
@@ -325,7 +500,7 @@ response = client.create_agent_session(
 
 **Graphiti Memory (Mandatory)** - `integrations/graphiti/`
 
-Auto Claude uses Graphiti as its primary memory system with embedded LadybugDB (no Docker required):
+Auto Code uses Graphiti as its primary memory system with embedded LadybugDB (no Docker required):
 
 - **Graph database with semantic search** - Knowledge graph for cross-session context
 - **Session insights** - Patterns, gotchas, discoveries automatically extracted

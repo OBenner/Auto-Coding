@@ -20,8 +20,13 @@ import json
 import sys
 from pathlib import Path
 
-# Add parent directory to Python path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent))
+# Ensure the backend package root is on sys.path so that
+# `services.analytics` resolves correctly when invoked as a script.
+# This is necessary because the frontend spawns this file directly
+# (not via `python -m`).
+_backend_root = str(Path(__file__).resolve().parent.parent)
+if _backend_root not in sys.path:
+    sys.path.insert(0, _backend_root)
 
 from services.analytics import AnalyticsService
 
@@ -63,20 +68,30 @@ def main() -> None:
 
     # Summary command
     parser_summary = subparsers.add_parser("summary", help="Get metrics summary")
-    parser_summary.add_argument("--specs-dir", required=True, help="Path to specs directory")
+    parser_summary.add_argument(
+        "--specs-dir", required=True, help="Path to specs directory"
+    )
 
     # Agent stats command
     parser_agent = subparsers.add_parser("agent-stats", help="Get agent statistics")
-    parser_agent.add_argument("--specs-dir", required=True, help="Path to specs directory")
+    parser_agent.add_argument(
+        "--specs-dir", required=True, help="Path to specs directory"
+    )
 
     # Trends command
     parser_trends = subparsers.add_parser("trends", help="Get trend data")
-    parser_trends.add_argument("--specs-dir", required=True, help="Path to specs directory")
-    parser_trends.add_argument("--days", type=int, default=30, help="Number of days (default: 30)")
+    parser_trends.add_argument(
+        "--specs-dir", required=True, help="Path to specs directory"
+    )
+    parser_trends.add_argument(
+        "--days", type=int, default=30, help="Number of days (default: 30)"
+    )
 
     # Report command
     parser_report = subparsers.add_parser("report", help="Get comprehensive report")
-    parser_report.add_argument("--specs-dir", required=True, help="Path to specs directory")
+    parser_report.add_argument(
+        "--specs-dir", required=True, help="Path to specs directory"
+    )
 
     args = parser.parse_args()
 

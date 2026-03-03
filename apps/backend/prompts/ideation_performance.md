@@ -106,6 +106,94 @@ Identify performance opportunities across these categories:
    - Review payload sizes
    - Identify caching opportunities
 
+### Research Performance Optimization Techniques (Using WebSearch)
+
+**WebSearch should be used AFTER local performance analysis to validate optimization approaches and discover proven techniques.**
+
+After identifying performance bottlenecks locally, use web search to research optimization strategies and proven solutions. This helps validate your approach and discover best practices.
+
+#### Step 1: Search for Optimization Best Practices
+
+When you identify a performance issue, search for established optimization patterns:
+
+```
+Tool: WebSearch
+Query: "[performance issue type] optimization best practices [tech stack] 2026"
+```
+
+**Example searches:**
+- `"bundle size reduction best practices React 2026"` - For bundle optimizations
+- `"React rendering performance optimization 2026"` - For render optimizations
+- `"database query optimization PostgreSQL 2026"` - For query performance
+- `"memory leak prevention JavaScript 2026"` - For memory issues
+- `"API response caching strategies Node.js 2026"` - For caching patterns
+- `"lazy loading implementation React 2026"` - For code splitting
+- `"image optimization web performance 2026"` - For asset optimization
+
+**What to verify:**
+1. **Proven techniques** - What are the standard optimization approaches?
+2. **Measurement tools** - How to measure before/after performance?
+3. **Trade-offs** - What are the costs of each optimization?
+4. **Browser support** - What optimizations work across browsers?
+5. **Framework-specific** - What optimizations are framework-specific?
+
+#### Step 2: Search for Optimization Examples
+
+Find real-world examples to understand the implementation:
+
+```
+Tool: WebSearch
+Query: "[optimization technique] implementation example 2026"
+```
+
+**Example searches:**
+- `"React.memo useMemo implementation example 2026"` - See memoization patterns
+- `"code splitting dynamic import example React 2026"` - Learn code splitting
+- `"virtual scrolling implementation example 2026"` - See virtualization
+- `"service worker caching example 2026"` - Understand caching
+- `"database index optimization example PostgreSQL 2026"` - See indexing
+- `"bundle analyzer webpack configuration 2026"` - Learn analysis tools
+- `"prefetching data React Query example 2026"` - See prefetch patterns
+
+**What to extract:**
+1. **Code patterns** - How is the optimization implemented?
+2. **Configuration** - What settings are needed?
+3. **Measurement approach** - How is improvement measured?
+4. **Integration points** - How does it fit into existing code?
+5. **Dependencies** - What libraries/tools are needed?
+
+#### Step 3: Search for Common Performance Pitfalls
+
+Research problems others encountered during similar optimizations:
+
+```
+Tool: WebSearch
+Query: "[optimization type] common mistakes pitfalls 2026"
+```
+
+**Example searches:**
+- `"React memoization over-optimization issues 2026"` - Avoid premature optimization
+- `"code splitting performance pitfalls 2026"` - Learn splitting gotchas
+- `"caching invalidation problems 2026"` - Handle cache correctly
+- `"lazy loading SEO issues 2026"` - Balance performance and SEO
+- `"database index performance overhead 2026"` - Understand index costs
+- `"bundle splitting configuration mistakes 2026"` - Avoid misconfigurations
+- `"memory optimization garbage collection issues 2026"` - Handle memory correctly
+
+**What to document:**
+1. **Premature optimization** - When is optimization too early?
+2. **Measurement importance** - Why measure before optimizing?
+3. **Complexity trade-offs** - Does optimization add complexity?
+4. **Maintenance burden** - Will this be harder to maintain?
+5. **Edge cases** - What edge cases does optimization introduce?
+
+**Integration into analysis:**
+- Use search results to validate your optimization suggestions
+- Include measurable metrics in your `expectedImprovement` field
+- Document trade-offs in your `tradeoffs` field
+- Reference performance tools and measurement approaches
+- Suggest profiling before/after optimization
+
 ## Output Format
 
 Write your findings to `{output_dir}/performance_optimizations_ideas.json`:

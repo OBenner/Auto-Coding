@@ -4,6 +4,7 @@ const mockGetAPIProfileEnv = vi.fn();
 const mockGetOAuthModeClearVars = vi.fn();
 const mockGetPythonEnv = vi.fn();
 const mockGetBestAvailableProfileEnv = vi.fn();
+const mockGetGitHubTokenForSubprocess = vi.fn();
 
 vi.mock('../../../../services/profile', () => ({
   getAPIProfileEnv: (...args: unknown[]) => mockGetAPIProfileEnv(...args),
@@ -23,11 +24,17 @@ vi.mock('../../../../rate-limit-detector', () => ({
   getBestAvailableProfileEnv: () => mockGetBestAvailableProfileEnv(),
 }));
 
+vi.mock('../utils', () => ({
+  getGitHubTokenForSubprocess: () => mockGetGitHubTokenForSubprocess(),
+}));
+
 import { getRunnerEnv } from '../runner-env';
 
 describe('getRunnerEnv', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Default mock for GitHub token - returns null (no gh CLI needed)
+    mockGetGitHubTokenForSubprocess.mockResolvedValue(null);
     // Default mock for Python env - minimal env for testing
     mockGetPythonEnv.mockReturnValue({
       PYTHONDONTWRITEBYTECODE: '1',

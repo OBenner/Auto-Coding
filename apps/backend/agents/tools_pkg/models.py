@@ -10,7 +10,7 @@ the Claude Agent SDK client. Tool lists are organized by category:
 - Base tools: Core file operations (Read, Write, Edit, etc.)
 - Web tools: Documentation and research (WebFetch, WebSearch)
 - MCP tools: External integrations (Context7, Linear, Graphiti, etc.)
-- Auto-Claude tools: Custom build management tools
+- Auto-Code tools: Custom build management tools
 """
 
 import os
@@ -28,16 +28,23 @@ BASE_WRITE_TOOLS = ["Write", "Edit", "Bash"]
 WEB_TOOLS = ["WebFetch", "WebSearch"]
 
 # =============================================================================
-# Auto-Claude MCP Tools (Custom build management)
+# Auto-Code MCP Tools (Custom build management)
 # =============================================================================
 
-# Auto-Claude MCP tool names (prefixed with mcp__auto-claude__)
+# Auto-Code MCP tool names (prefixed with mcp__auto-claude__)
 TOOL_UPDATE_SUBTASK_STATUS = "mcp__auto-claude__update_subtask_status"
 TOOL_GET_BUILD_PROGRESS = "mcp__auto-claude__get_build_progress"
 TOOL_RECORD_DISCOVERY = "mcp__auto-claude__record_discovery"
 TOOL_RECORD_GOTCHA = "mcp__auto-claude__record_gotcha"
 TOOL_GET_SESSION_CONTEXT = "mcp__auto-claude__get_session_context"
 TOOL_UPDATE_QA_STATUS = "mcp__auto-claude__update_qa_status"
+TOOL_GET_SPEC_STATISTICS = "mcp__auto-claude__get_spec_statistics"
+
+# Background task management tools
+TOOL_START_BACKGROUND = "mcp__auto-claude__start_background_command"
+TOOL_GET_TASK_STATUS = "mcp__auto-claude__get_task_status"
+TOOL_GET_TASK_OUTPUT = "mcp__auto-claude__get_task_output"
+TOOL_CANCEL_TASK = "mcp__auto-claude__cancel_task"
 
 # =============================================================================
 # External MCP Tools
@@ -99,8 +106,11 @@ PUPPETEER_TOOLS = [
 ]
 
 # Electron MCP tools for desktop app automation (when ELECTRON_MCP_ENABLED is set)
-# Uses electron-mcp-server to connect to Electron apps via Chrome DevTools Protocol.
-# Electron app must be started with --remote-debugging-port=9222 (or ELECTRON_DEBUG_PORT).
+# Two modes supported:
+#   1. CDP mode (default): Uses electron-mcp-server package via Chrome DevTools Protocol
+#      Requires Electron app with --remote-debugging-port=9222 (or ELECTRON_DEBUG_PORT)
+#   2. Embedded mode: MCP server runs inside Electron process with stdio transport
+#      Backend spawns Electron app directly with ELECTRON_MCP_ENABLED=true
 # These tools are only available to QA agents (qa_reviewer, qa_fixer), not Coder/Planner.
 # NOTE: Screenshots must be compressed to stay under Claude SDK's 1MB JSON message buffer limit.
 ELECTRON_TOOLS = [
@@ -120,8 +130,11 @@ def is_electron_mcp_enabled() -> bool:
     Check if Electron MCP server integration is enabled.
 
     Requires ELECTRON_MCP_ENABLED to be set to 'true'.
-    When enabled, QA agents can use Electron MCP tools to connect to Electron apps
-    via Chrome DevTools Protocol on the configured debug port.
+    When enabled, QA agents can use Electron MCP tools to connect to Electron apps.
+
+    Two modes supported (controlled by ELECTRON_MCP_MODE):
+    - CDP mode (default): Connects via Chrome DevTools Protocol
+    - Embedded mode: MCP server runs inside Electron process
     """
     return os.environ.get("ELECTRON_MCP_ENABLED", "").lower() == "true"
 
@@ -156,9 +169,10 @@ AGENT_CONFIGS = {
     },
     "spec_critic": {
         "tools": BASE_READ_TOOLS,
-        "mcp_servers": [],  # Self-critique, no external tools
+        "mcp_servers": [],  # No required MCP; actor-critic-thinking added dynamically when enabled
         "auto_claude_tools": [],
         "thinking_default": "ultrathink",
+        "actor-critic-thinking": True,  # Enables actor-critic MCP server when available
     },
     "spec_discovery": {
         "tools": BASE_READ_TOOLS + WEB_TOOLS,
@@ -175,6 +189,30 @@ AGENT_CONFIGS = {
     "spec_validation": {
         "tools": BASE_READ_TOOLS,
         "mcp_servers": [],
+        "auto_claude_tools": [],
+        "thinking_default": "high",
+    },
+    "spec_requirements": {
+        "tools": BASE_READ_TOOLS + WEB_TOOLS,
+        "mcp_servers": [],  # Requirements gathering - reads project
+        "auto_claude_tools": [],
+        "thinking_default": "medium",
+    },
+    "spec_research": {
+        "tools": BASE_READ_TOOLS + WEB_TOOLS,
+        "mcp_servers": ["context7"],  # Needs docs lookup
+        "auto_claude_tools": [],
+        "thinking_default": "medium",
+    },
+    "spec_writing": {
+        "tools": BASE_READ_TOOLS + BASE_WRITE_TOOLS,
+        "mcp_servers": [],  # Writes spec.md
+        "auto_claude_tools": [],
+        "thinking_default": "high",
+    },
+    "spec_planning": {
+        "tools": BASE_READ_TOOLS + BASE_WRITE_TOOLS,
+        "mcp_servers": [],  # Creates implementation_plan.json
         "auto_claude_tools": [],
         "thinking_default": "high",
     },
@@ -241,6 +279,30 @@ AGENT_CONFIGS = {
         "thinking_default": "medium",
     },
     # ═══════════════════════════════════════════════════════════════════════
+    # TEST GENERATION AGENT TYPES (QA-phase agents, not standalone phases)
+    # These share the QA model/thinking config via get_phase_model(spec, "qa")
+    # ═══════════════════════════════════════════════════════════════════════
+    "test_generator": {
+        "tools": BASE_READ_TOOLS + BASE_WRITE_TOOLS + WEB_TOOLS,
+        "mcp_servers": ["context7", "graphiti", "auto-claude"],
+        "mcp_servers_optional": [],
+        "auto_claude_tools": [
+            TOOL_GET_BUILD_PROGRESS,
+            TOOL_GET_SESSION_CONTEXT,
+        ],
+        "thinking_default": "high",
+    },
+    "e2e_generator": {
+        "tools": BASE_READ_TOOLS + BASE_WRITE_TOOLS + WEB_TOOLS,
+        "mcp_servers": ["context7", "graphiti", "auto-claude", "browser"],
+        "mcp_servers_optional": [],
+        "auto_claude_tools": [
+            TOOL_GET_BUILD_PROGRESS,
+            TOOL_GET_SESSION_CONTEXT,
+        ],
+        "thinking_default": "high",
+    },
+    # ═══════════════════════════════════════════════════════════════════════
     # UTILITY PHASES (Minimal, no MCP)
     # ═══════════════════════════════════════════════════════════════════════
     "insights": {
@@ -263,6 +325,12 @@ AGENT_CONFIGS = {
         "auto_claude_tools": [],
         "thinking_default": "low",
     },
+    "pattern_categorizer": {
+        "tools": [],  # Text-only classification
+        "mcp_servers": [],
+        "auto_claude_tools": [],
+        "thinking_default": "none",  # Haiku model doesn't support thinking
+    },
     "pr_reviewer": {
         "tools": BASE_READ_TOOLS + WEB_TOOLS,  # Read-only
         "mcp_servers": ["context7"],
@@ -281,6 +349,14 @@ AGENT_CONFIGS = {
         "mcp_servers": ["context7"],
         "auto_claude_tools": [],
         "thinking_default": "high",
+    },
+    "pr_followup_extraction": {
+        # Lightweight extraction call for recovering data when structured output fails
+        # Pure structured output extraction, no tools needed
+        "tools": [],
+        "mcp_servers": [],
+        "auto_claude_tools": [],
+        "thinking_default": "low",
     },
     # ═══════════════════════════════════════════════════════════════════════
     # ANALYSIS PHASES
@@ -323,6 +399,20 @@ AGENT_CONFIGS = {
         "mcp_servers": [],
         "auto_claude_tools": [],
         "thinking_default": "high",
+    },
+    # ═══════════════════════════════════════════════════════════════════════
+    # DOCUMENTATION GENERATION
+    # ═══════════════════════════════════════════════════════════════════════
+    "documentation_generator": {
+        "tools": BASE_READ_TOOLS + BASE_WRITE_TOOLS + WEB_TOOLS,
+        "mcp_servers": ["context7", "graphiti", "auto-claude"],
+        "mcp_servers_optional": [],
+        "auto_claude_tools": [
+            TOOL_GET_BUILD_PROGRESS,
+            TOOL_RECORD_DISCOVERY,
+            TOOL_GET_SESSION_CONTEXT,
+        ],
+        "thinking_default": "medium",
     },
 }
 
@@ -377,6 +467,7 @@ def _map_mcp_server_name(
         "electron": "electron",
         "puppeteer": "puppeteer",
         "auto-claude": "auto-claude",
+        "actor-critic-thinking": "actor-critic-thinking",
     }
     # Check if it's a known mapping
     mapped = mappings.get(name.lower().strip())
@@ -453,14 +544,25 @@ def get_required_mcp_servers(
             ):
                 servers.append("electron")
             # Puppeteer: enabled by project config (no global env var)
-            elif is_web_frontend and not is_electron:
-                if str(puppeteer_enabled).lower() == "true":
-                    servers.append("puppeteer")
+            elif (
+                is_web_frontend
+                and not is_electron
+                and str(puppeteer_enabled).lower() == "true"
+            ):
+                servers.append("puppeteer")
 
     # Filter graphiti if not enabled
-    if "graphiti" in servers:
-        if not os.environ.get("GRAPHITI_MCP_URL"):
-            servers = [s for s in servers if s != "graphiti"]
+    if "graphiti" in servers and not os.environ.get("GRAPHITI_MCP_URL"):
+        servers = [s for s in servers if s != "graphiti"]
+
+    # Handle actor-critic-thinking for agents that have it enabled
+    # This is a special marker in agent configs that adds the server when enabled
+    # Unlike "linear" which is in mcp_servers_optional list, this is a boolean flag
+    if config.get("actor-critic-thinking", False):
+        from core.actor_critic_config import is_actor_critic_enabled
+
+        if is_actor_critic_enabled():
+            servers.append("actor-critic-thinking")
 
     # ========== Apply per-agent MCP overrides ==========
     # Format: AGENT_MCP_<agent_type>_ADD=server1,server2

@@ -48,7 +48,7 @@ interface GitHubSetupModalProps {
 type SetupStep = 'github-auth' | 'claude-auth' | 'repo-confirm' | 'repo' | 'branch' | 'complete';
 
 /**
- * Setup Modal - Required setup flow after Auto Claude initialization
+ * Setup Modal - Required setup flow after Auto Code initialization
  *
  * Flow:
  * 1. Authenticate with GitHub (via gh CLI OAuth) - for repo operations
@@ -87,72 +87,6 @@ export function GitHubSetupModal({
   const [organizations, setOrganizations] = useState<Array<{ login: string; avatarUrl?: string }>>([]);
   const [selectedOwner, setSelectedOwner] = useState<string | null>(null);
   const [isLoadingOrgs, setIsLoadingOrgs] = useState(false);
-
-  // Reset state and check existing auth when modal opens
-  useEffect(() => {
-    if (open) {
-      // Reset all state first
-      setGithubToken(null);
-      setGithubRepo(null);
-      setDetectedRepo(null);
-      setBranches([]);
-      setSelectedBranch(null);
-      setRecommendedBranch(null);
-      setError(null);
-      // Reset repo setup state
-      setRepoAction(null);
-      setNewRepoName(project.name.replace(/[^A-Za-z0-9_.-]/g, '-'));
-      setIsPrivateRepo(true);
-      setExistingRepoName('');
-      setIsCreatingRepo(false);
-      // Reset organization state
-      setGithubUsername(null);
-      setOrganizations([]);
-      setSelectedOwner(null);
-      setIsLoadingOrgs(false);
-
-      // Check for existing authentication and skip to appropriate step
-      const checkExistingAuth = async () => {
-        try {
-          // Check for existing GitHub token
-          const ghTokenResult = await window.electronAPI.getGitHubToken();
-          const hasGitHubAuth = ghTokenResult.success && ghTokenResult.data?.token;
-
-          // Check for existing Claude authentication
-          const profilesResult = await window.electronAPI.getClaudeProfiles();
-          let hasClaudeAuth = false;
-          if (profilesResult.success && profilesResult.data) {
-            const activeProfile = profilesResult.data.profiles.find(
-              (p) => p.id === profilesResult.data?.activeProfileId
-            );
-            hasClaudeAuth = !!(activeProfile?.oauthToken || (activeProfile?.isDefault && activeProfile?.configDir));
-          }
-
-          // Determine starting step based on existing auth
-          if (hasGitHubAuth && hasClaudeAuth) {
-            // Both authenticated, go directly to repo detection
-            setGithubToken(ghTokenResult.data?.token);
-            // detectRepository will be called and set the step
-            setStep('repo'); // Temporary, detectRepository will update
-            await detectRepository();
-          } else if (hasGitHubAuth) {
-            // Only GitHub authenticated, go to Claude auth
-            setGithubToken(ghTokenResult.data?.token);
-            setStep('claude-auth');
-          } else {
-            // No auth, start from beginning
-            setStep('github-auth');
-          }
-        } catch (err) {
-          console.error('Failed to check existing auth:', err);
-          // On error, start from beginning
-          setStep('github-auth');
-        }
-      };
-
-      checkExistingAuth();
-    }
-  }, [open, detectRepository, project.name.replace]);
 
   // Load user info and organizations
   const loadUserAndOrgs = async () => {
@@ -204,6 +138,73 @@ export function GitHubSetupModal({
     }
   };
 
+  // Reset state and check existing auth when modal opens
+  useEffect(() => {
+    if (open) {
+      // Reset all state first
+      setGithubToken(null);
+      setGithubRepo(null);
+      setDetectedRepo(null);
+      setBranches([]);
+      setSelectedBranch(null);
+      setRecommendedBranch(null);
+      setError(null);
+      // Reset repo setup state
+      setRepoAction(null);
+      setNewRepoName(project.name.replace(/[^A-Za-z0-9_.-]/g, '-'));
+      setIsPrivateRepo(true);
+      setExistingRepoName('');
+      setIsCreatingRepo(false);
+      // Reset organization state
+      setGithubUsername(null);
+      setOrganizations([]);
+      setSelectedOwner(null);
+      setIsLoadingOrgs(false);
+
+      // Check for existing authentication and skip to appropriate step
+      const checkExistingAuth = async () => {
+        try {
+          // Check for existing GitHub token
+          const ghTokenResult = await window.electronAPI.getGitHubToken();
+          const hasGitHubAuth = ghTokenResult.success && ghTokenResult.data?.token;
+
+          // Check for existing Claude authentication
+          const profilesResult = await window.electronAPI.getClaudeProfiles();
+          let hasClaudeAuth = false;
+          if (profilesResult.success && profilesResult.data) {
+            const activeProfile = profilesResult.data.profiles.find(
+              (p) => p.id === profilesResult.data?.activeProfileId
+            );
+            hasClaudeAuth = !!(activeProfile?.oauthToken || (activeProfile?.isDefault && activeProfile?.configDir));
+          }
+
+          // Determine starting step based on existing auth
+          if (hasGitHubAuth && hasClaudeAuth) {
+            // Both authenticated, go directly to repo detection
+            setGithubToken(ghTokenResult.data?.token ?? null);
+            // detectRepository will be called and set the step
+            setStep('repo'); // Temporary, detectRepository will update
+            await detectRepository();
+          } else if (hasGitHubAuth) {
+            // Only GitHub authenticated, go to Claude auth
+            setGithubToken(ghTokenResult.data?.token ?? null);
+            setStep('claude-auth');
+          } else {
+            // No auth, start from beginning
+            setStep('github-auth');
+          }
+        } catch (err) {
+          console.error('Failed to check existing auth:', err);
+          // On error, start from beginning
+          setStep('github-auth');
+        }
+      };
+
+      checkExistingAuth();
+    }
+    // biome-ignore lint/correctness/useExhaustiveDependencies: detectRepository is intentionally not wrapped in useCallback
+  }, [open, detectRepository, project.name.replace]);
+
   // Load branches from GitHub
   const loadBranches = async (repo: string) => {
     setIsLoadingBranches(true);
@@ -211,7 +212,8 @@ export function GitHubSetupModal({
 
     try {
       // Get branches from GitHub API
-      const result = await window.electronAPI.getGitHubBranches(repo, githubToken!);
+      const token = githubToken ?? '';
+      const result = await window.electronAPI.getGitHubBranches(repo, token);
       if (result.success && result.data) {
         setBranches(result.data);
 
@@ -486,6 +488,7 @@ export function GitHubSetupModal({
               {!repoAction && (
                 <div className="grid grid-cols-2 gap-3">
                   <button
+                    type="button"
                     onClick={() => setRepoAction('create')}
                     className="flex flex-col items-center gap-2 p-4 rounded-lg border-2 border-dashed hover:border-primary hover:bg-primary/5 transition-colors"
                     aria-label={t('githubSetup.createRepoAriaLabel')}
@@ -497,6 +500,7 @@ export function GitHubSetupModal({
                     </span>
                   </button>
                   <button
+                    type="button"
                     onClick={() => setRepoAction('link')}
                     className="flex flex-col items-center gap-2 p-4 rounded-lg border-2 border-dashed hover:border-primary hover:bg-primary/5 transition-colors"
                     aria-label={t('githubSetup.linkRepoAriaLabel')}
@@ -515,6 +519,7 @@ export function GitHubSetupModal({
                 <div className="space-y-4">
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <button
+                      type="button"
                       onClick={() => setRepoAction(null)}
                       className="text-primary hover:underline"
                       aria-label={t('githubSetup.goBackAriaLabel')}
@@ -536,7 +541,9 @@ export function GitHubSetupModal({
                       <div className="flex flex-wrap gap-2" role="radiogroup" aria-label={t('common:accessibility.repositoryOwnerAriaLabel')}>
                         {/* Personal account */}
                         {githubUsername && (
+                          /* biome-ignore lint/a11y/useSemanticElements: Using button with role="radio" for styled radio-like selection */
                           <button
+                            type="button"
                             onClick={() => setSelectedOwner(githubUsername)}
                             className={`flex items-center gap-2 px-3 py-2 rounded-md border ${
                               selectedOwner === githubUsername
@@ -554,7 +561,9 @@ export function GitHubSetupModal({
                         )}
                         {/* Organizations */}
                         {organizations.map((org) => (
+                          /* biome-ignore lint/a11y/useSemanticElements: Using button with role="radio" for styled radio-like selection */
                           <button
+                            type="button"
                             key={org.login}
                             onClick={() => setSelectedOwner(org.login)}
                             className={`flex items-center gap-2 px-3 py-2 rounded-md border ${
@@ -600,7 +609,9 @@ export function GitHubSetupModal({
                   <div className="space-y-2">
                     <Label>Visibility</Label>
                     <div className="flex gap-2" role="radiogroup" aria-label={t('common:accessibility.repositoryVisibilityAriaLabel')}>
+                      {/* biome-ignore lint/a11y/useSemanticElements: Using button with role="radio" for styled radio-like selection */}
                       <button
+                        type="button"
                         onClick={() => setIsPrivateRepo(true)}
                         className={`flex items-center gap-2 px-3 py-2 rounded-md border ${
                           isPrivateRepo
@@ -615,7 +626,9 @@ export function GitHubSetupModal({
                         <Lock className="h-4 w-4" />
                         <span className="text-sm">Private</span>
                       </button>
+                      {/* biome-ignore lint/a11y/useSemanticElements: Using button with role="radio" for styled radio-like selection */}
                       <button
+                        type="button"
                         onClick={() => setIsPrivateRepo(false)}
                         className={`flex items-center gap-2 px-3 py-2 rounded-md border ${
                           !isPrivateRepo
@@ -640,6 +653,7 @@ export function GitHubSetupModal({
                 <div className="space-y-4">
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <button
+                      type="button"
                       onClick={() => setRepoAction(null)}
                       className="text-primary hover:underline"
                       aria-label={t('githubSetup.goBackAriaLabel')}
@@ -733,7 +747,7 @@ export function GitHubSetupModal({
                 Select Base Branch
               </DialogTitle>
               <DialogDescription>
-                Choose which branch Auto Claude should use as the base for creating task branches.
+                Choose which branch Auto Code should use as the base for creating task branches.
               </DialogDescription>
             </DialogHeader>
 
@@ -800,7 +814,7 @@ export function GitHubSetupModal({
                   <div className="text-xs text-muted-foreground">
                     <p className="font-medium text-foreground">Why select a branch?</p>
                     <p className="mt-1">
-                      Auto Claude creates isolated workspaces for each task. Selecting the right base branch ensures
+                      Auto Code creates isolated workspaces for each task. Selecting the right base branch ensures
                       your tasks start with the latest code from your main development line.
                     </p>
                   </div>
@@ -846,7 +860,7 @@ export function GitHubSetupModal({
                 <CheckCircle2 className="h-8 w-8 text-success" />
               </div>
               <p className="text-sm text-muted-foreground text-center">
-                Auto Claude is ready to use! You can now create tasks that will be
+                Auto Code is ready to use! You can now create tasks that will be
                 automatically based on <code className="px-1 bg-muted rounded">{selectedBranch}</code>.
               </p>
             </div>
@@ -877,7 +891,7 @@ export function GitHubSetupModal({
     return (
       <div className="flex items-center justify-center gap-2 mb-4">
         {steps.map((s, index) => (
-          <div key={index} className="flex items-center">
+          <div key={s.label} className="flex items-center">
             <div
               className={`flex items-center justify-center w-6 h-6 rounded-full text-xs font-medium ${
                 index < currentIndex

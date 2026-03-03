@@ -11,7 +11,6 @@ rather than line-level diffs.
 
 from __future__ import annotations
 
-import logging
 from pathlib import Path
 
 from .types import FileAnalysis
@@ -20,26 +19,21 @@ from .types import FileAnalysis
 try:
     from debug import (
         debug,
-        debug_detailed,
         debug_success,
         debug_verbose,
     )
 except ImportError:
     # Fallback if debug module not available
     def debug(*args, **kwargs):
-        pass
-
-    def debug_detailed(*args, **kwargs):
-        pass
+        """No-op fallback when debug module is unavailable."""
 
     def debug_verbose(*args, **kwargs):
-        pass
+        """No-op fallback when debug module is unavailable."""
 
     def debug_success(*args, **kwargs):
-        pass
+        """No-op fallback when debug module is unavailable."""
 
 
-logger = logging.getLogger(__name__)
 MODULE = "merge.semantic_analyzer"
 
 # Import regex-based analyzer

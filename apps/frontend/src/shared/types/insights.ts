@@ -2,7 +2,7 @@
  * Insights and ideation types
  */
 
-import type { TaskMetadata } from './task';
+import type { TaskMetadata, ImageAttachment } from './task';
 
 // ============================================
 // Ideation Types
@@ -160,10 +160,13 @@ import type { ThinkingLevel } from './settings';
 import type { ModelType } from './task';
 
 // Model configuration for insights sessions
+export type InsightsProvider = 'claude' | 'litellm' | 'openrouter' | 'openai' | 'ollama';
+
 export interface InsightsModelConfig {
   profileId: string;           // 'complex' | 'balanced' | 'quick' | 'custom'
   model: ModelType;            // 'haiku' | 'sonnet' | 'opus'
   thinkingLevel: ThinkingLevel;
+  provider: InsightsProvider;  // 'claude' | 'litellm' | 'openrouter' | 'openai'
 }
 
 export type InsightsChatRole = 'user' | 'assistant';
@@ -186,6 +189,8 @@ export interface InsightsChatMessage {
     description: string;
     metadata?: TaskMetadata;
   };
+  // Image attachments (screenshots, pasted images)
+  images?: ImageAttachment[];
   // Tools used during this response (assistant messages only)
   toolsUsed?: InsightsToolUsage[];
 }
@@ -198,6 +203,7 @@ export interface InsightsSession {
   modelConfig?: InsightsModelConfig; // Per-session model configuration
   createdAt: Date;
   updatedAt: Date;
+  archivedAt?: Date;
 }
 
 // Summary of a session for the history list (without full messages)
@@ -209,6 +215,7 @@ export interface InsightsSessionSummary {
   modelConfig?: InsightsModelConfig; // For displaying model indicator in sidebar
   createdAt: Date;
   updatedAt: Date;
+  archivedAt?: Date;
 }
 
 export interface InsightsChatStatus {

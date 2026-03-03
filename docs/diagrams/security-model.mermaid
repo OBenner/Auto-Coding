@@ -1,0 +1,134 @@
+flowchart TB
+    subgraph Agent["AI Agent Session"]
+        A1[Agent attempts Bash tool use]
+        A2[Command string generated]
+    end
+
+    subgraph SDK["Claude Agent SDK"]
+        S1[Pre-tool-use hook triggered]
+        S2{Tool name = 'Bash'?}
+        S3[bash_security_hook invoked]
+    end
+
+    subgraph Parser["Command Parser"]
+        P1[Extract commands from string]
+        P2[Split into segments]
+        P3[Handle pipes, chains, redirects]
+    end
+
+    subgraph Profile["Security Profile Loading"]
+        PR1{Profile cached?}
+        PR2[Load from cache]
+        PR3[Analyze project structure]
+        PR4[Detect tech stack]
+        PR5[Build profile & cache]
+        PR6[Load custom allowlist]
+    end
+
+    subgraph Allowlist["Three-Layer Allowlist"]
+        AL1["Layer 1: Base Commands<br/>(Always allowed)<br/>ls, cd, git, grep, etc."]
+        AL2["Layer 2: Stack Commands<br/>(Detected from project)<br/>npm, python, docker, etc."]
+        AL3["Layer 3: Custom Commands<br/>(User-defined)<br/>.auto-claude-allowlist.txt"]
+    end
+
+    subgraph Validation["Command Validation"]
+        V1{Command in allowlist?}
+        V2{Requires special validation?}
+        V3[Run command-specific validator]
+        V4{Validator passes?}
+    end
+
+    subgraph Validators["Special Validators"]
+        VAL1["rm - Block dangerous patterns<br/>(-rf /, -rf ~, etc.)"]
+        VAL2["git - Block destructive ops<br/>(--force, reset --hard, etc.)"]
+        VAL3["chmod - Validate permissions"]
+        VAL4["kill/pkill - Validate signals"]
+        VAL5["Database commands<br/>(dropdb, mongosh, psql)"]
+    end
+
+    subgraph Layers["Three-Layer Defense"]
+        L1["Layer 1: OS Sandbox<br/>Bash command isolation<br/>via subprocess"]
+        L2["Layer 2: Filesystem Permissions<br/>Restricted to project directory<br/>via cwd enforcement"]
+        L3["Layer 3: Command Allowlist<br/>Dynamic allowlist based on<br/>project analysis"]
+    end
+
+    subgraph Result["Enforcement"]
+        R1{Decision}
+        R2[✓ Allow execution]
+        R3[✗ Block with error]
+        R4[Return to agent with reason]
+    end
+
+    subgraph Cache["Security Cache"]
+        C1[".auto-claude-security.json<br/>Cached profile with:<br/>- Base commands<br/>- Stack commands<br/>- Detected stack<br/>- Custom scripts"]
+        C2["In-memory profile cache<br/>Invalidated on:<br/>- File mtime change<br/>- Project dir change"]
+    end
+
+    %% Flow connections
+    A1 --> A2
+    A2 --> S1
+    S1 --> S2
+    S2 -->|Yes| S3
+    S2 -->|No| R2
+    S3 --> P1
+    P1 --> P2
+    P2 --> P3
+    P3 --> PR1
+
+    PR1 -->|Cache hit & valid| PR2
+    PR1 -->|Cache miss/expired| PR3
+    PR3 --> PR4
+    PR4 --> PR5
+    PR5 --> PR6
+    PR6 --> PR2
+    PR2 --> AL1
+
+    AL1 --> AL2
+    AL2 --> AL3
+    AL3 --> V1
+
+    V1 -->|Yes| V2
+    V1 -->|No| R3
+    V2 -->|Yes| V3
+    V2 -->|No| R2
+    V3 --> VAL1 & VAL2 & VAL3 & VAL4 & VAL5
+    VAL1 & VAL2 & VAL3 & VAL4 & VAL5 --> V4
+    V4 -->|Pass| R2
+    V4 -->|Fail| R3
+
+    R2 --> R1
+    R3 --> R1
+    R1 -->|Allowed| L1
+    R1 -->|Blocked| R4
+    L1 --> L2
+    L2 --> L3
+    L3 --> R4
+
+    PR5 --> C1
+    PR2 --> C2
+
+    %% Styling
+    style Agent fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    style SDK fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+    style Parser fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    style Profile fill:#e8f5e9,stroke:#388e3c,stroke-width:2px
+    style Allowlist fill:#fff9c4,stroke:#f9a825,stroke-width:2px
+    style Validation fill:#fce4ec,stroke:#c2185b,stroke-width:2px
+    style Validators fill:#ffebee,stroke:#d32f2f,stroke-width:2px
+    style Layers fill:#e0f2f1,stroke:#00796b,stroke-width:2px
+    style Result fill:#f1f8e9,stroke:#689f38,stroke-width:2px
+    style Cache fill:#ede7f6,stroke:#512da8,stroke-width:2px
+
+    style AL1 fill:#c8e6c9,stroke:#388e3c
+    style AL2 fill:#fff59d,stroke:#f9a825
+    style AL3 fill:#ffccbc,stroke:#f57c00
+
+    style L1 fill:#b2dfdb,stroke:#00796b
+    style L2 fill:#b2ebf2,stroke:#0097a7
+    style L3 fill:#c5cae9,stroke:#3f51b5
+
+    style R2 fill:#a5d6a7,stroke:#388e3c,stroke-width:3px
+    style R3 fill:#ef9a9a,stroke:#d32f2f,stroke-width:3px
+
+    style C1 fill:#e1bee7,stroke:#7b1fa2
+    style C2 fill:#ce93d8,stroke:#8e24aa

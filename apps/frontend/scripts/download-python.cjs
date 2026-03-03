@@ -756,7 +756,7 @@ __path__ = [os.path.dirname(__file__)]
   // location) caused intermittent failures depending on Python version and how
   // the process was spawned. Bundle size trade-off is acceptable for reliability.
   //
-  // See: https://github.com/AndyMik90/Auto-Claude/issues/810
+  // See: https://github.com/OBenner/Auto-Coding/issues/810
   const dllFiles = fs.readdirSync(pywin32System32).filter(f => f.endsWith('.dll'));
   for (const dll of dllFiles) {
     const srcPath = path.join(pywin32System32, dll);
@@ -1098,7 +1098,8 @@ async function downloadAllPlatforms() {
     try {
       await downloadPython(platform, arch);
     } catch (error) {
-      console.error(`[download-python] Failed for ${platform}-${arch}: ${error.message}`);
+      const safeMsg = String(error.message || '').replace(/[\x00-\x1f\x7f\n\r]/g, ' ').slice(0, 200);
+      console.error('[download-python] Failed for ' + platform + '-' + arch + ': ' + safeMsg);
       throw error;
     }
   }
@@ -1177,7 +1178,8 @@ Examples:
     }
     console.log('[download-python] Done!');
   } catch (error) {
-    console.error(`[download-python] Error: ${error.message}`);
+    const safeMsg = String(error.message || '').replace(/[\x00-\x1f\x7f\n\r]/g, ' ').slice(0, 200);
+    console.error('[download-python] Error: ' + safeMsg);
     process.exit(1);
   }
 }

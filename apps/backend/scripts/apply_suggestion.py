@@ -35,27 +35,29 @@ def parse_suggestion_from_comment(comment: dict, project_dir: str) -> dict:
     line = comment.get("line", 1)
 
     # Extract suggested code from ```suggestion``` block
-    suggestion_match = re.search(r'```suggestion\s*\n([\s\S]*?)\n```', body)
+    suggestion_match = re.search(r"```suggestion\s*\n([\s\S]*?)\n```", body)
     if not suggestion_match:
         raise ValueError("No suggestion block found in comment body")
 
     suggested_code = suggestion_match.group(1)
 
     # Extract reasoning (text before the suggestion block)
-    reasoning_text = body.split('```suggestion')[0].strip()
-    reasoning = reasoning_text if reasoning_text else "Apply suggested change from code review"
+    reasoning_text = body.split("```suggestion")[0].strip()
+    reasoning = (
+        reasoning_text if reasoning_text else "Apply suggested change from code review"
+    )
 
     # Read the original file to get the code being replaced
     file_path = Path(project_dir) / path
     if not file_path.exists():
         raise FileNotFoundError(f"File not found: {file_path}")
 
-    with open(file_path, 'r', encoding='utf-8') as f:
+    with open(file_path, encoding="utf-8") as f:
         lines = f.readlines()
 
     # Determine line range based on suggestion length
     # If suggestion has N lines, replace N lines starting from comment.line
-    suggested_lines = suggested_code.split('\n')
+    suggested_lines = suggested_code.split("\n")
     num_lines = len(suggested_lines)
 
     start_line = line
@@ -64,7 +66,7 @@ def parse_suggestion_from_comment(comment: dict, project_dir: str) -> dict:
     # Get original code
     if start_line <= len(lines):
         end_line = min(end_line, len(lines))
-        original_code = ''.join(lines[start_line-1:end_line])
+        original_code = "".join(lines[start_line - 1 : end_line])
     else:
         original_code = ""
 
@@ -74,7 +76,7 @@ def parse_suggestion_from_comment(comment: dict, project_dir: str) -> dict:
         "end_line": end_line,
         "original_code": original_code,
         "suggested_code": suggested_code,
-        "reasoning": reasoning
+        "reasoning": reasoning,
     }
 
 
@@ -107,11 +109,15 @@ def main():
     try:
         suggestion = parse_suggestion_from_comment(comment, project_dir)
     except Exception as e:
-        print(json.dumps({"success": False, "error": f"Failed to parse suggestion: {e}"}))
+        print(
+            json.dumps({"success": False, "error": f"Failed to parse suggestion: {e}"})
+        )
         sys.exit(1)
 
     # Run the async function
-    result = asyncio.run(apply_suggestion(project_dir, pr_number, suggestion, commit_message))
+    result = asyncio.run(
+        apply_suggestion(project_dir, pr_number, suggestion, commit_message)
+    )
 
     # Print result as JSON
     print(json.dumps(result))
@@ -121,7 +127,10 @@ def main():
 
 
 async def apply_suggestion(
-    project_dir: str, pr_number: int, suggestion: dict, commit_message: str | None = None
+    project_dir: str,
+    pr_number: int,
+    suggestion: dict,
+    commit_message: str | None = None,
 ) -> dict:
     """
     Apply a suggested change to a PR.

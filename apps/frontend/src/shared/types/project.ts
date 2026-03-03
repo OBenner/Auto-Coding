@@ -10,6 +10,7 @@ export interface Project {
   settings: ProjectSettings;
   createdAt: Date;
   updatedAt: Date;
+  workspaceName?: string;  // Optional workspace this project belongs to
 }
 
 export interface ProjectSettings {
@@ -279,6 +280,23 @@ export interface ContextSearchResult {
   type: string;
 }
 
+export interface PatternSuggestion {
+  /** Pattern description */
+  pattern: string;
+  /** Pattern category (e.g., "state-management", "error-handling") */
+  category: string;
+  /** Categorization confidence (0.0-1.0) */
+  confidence: number;
+  /** Reasoning for categorization */
+  reasoning: string;
+  /** Semantic search relevance score (0.0-1.0) */
+  score: number;
+  /** Spec ID where pattern originated */
+  spec_id: string;
+  /** When pattern was created */
+  timestamp: string;
+}
+
 export interface ProjectContextData {
   projectIndex: ProjectIndex | null;
   memoryStatus: GraphitiMemoryStatus | null;
@@ -441,7 +459,7 @@ export interface McpTestConnectionResult {
   responseTime?: number;
 }
 
-// Auto Claude Initialization Types
+// Auto Code Initialization Types
 export interface AutoBuildVersionInfo {
   isInitialized: boolean;
   updateAvailable: boolean; // Always false - .auto-claude only contains data, no code to update
@@ -463,6 +481,33 @@ export interface CreateProjectFolderResult {
   path: string;
   name: string;
   gitInitialized: boolean;
+}
+
+// Memory Graph Types (used by MemoriesTab and MemoryGraph components)
+export interface GraphNode {
+  id: string;
+  label: string;
+  type: 'episodic' | 'entity';
+  timestamp: string;
+  data: {
+    content?: string;
+    description?: string;
+    summary?: string;
+  };
+}
+
+export interface GraphEdge {
+  id: string;
+  source: string;
+  target: string;
+  type: string;
+}
+
+export interface GraphDataResult {
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+  node_count: number;
+  edge_count: number;
 }
 
 // File Explorer Types

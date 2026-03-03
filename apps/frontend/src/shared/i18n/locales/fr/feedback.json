@@ -1,0 +1,106 @@
+{
+  "dialog": {
+    "title": "Évaluer la sortie de l'agent",
+    "description": "Aidez-nous à améliorer en évaluant la qualité du travail de l'agent.",
+    "ratingLabel": "Comment évalueriez-vous cette sortie ?",
+    "positive": "Bien",
+    "negative": "À améliorer",
+    "commentLabel": "Commentaires supplémentaires",
+    "commentPlaceholder": "Dites-nous ce qui pourrait être amélioré...",
+    "submitting": "Envoi en cours...",
+    "submit": "Soumettre le retour"
+  },
+  "issue": {
+    "reportTitle": "Signaler un problème",
+    "reportDescription": "Fournissez des détails sur le problème ou la suggestion pour nous aider à améliorer.",
+    "title": "Titre",
+    "titlePlaceholder": "Résumé bref du problème...",
+    "description": "Description",
+    "descriptionPlaceholder": "Description détaillée du problème, y compris les étapes pour reproduire si applicable...",
+    "severity": "Gravité",
+    "submitReport": "Soumettre le rapport"
+  },
+  "severity": {
+    "low": "Suggestion",
+    "lowDesc": "À considérer",
+    "medium": "Recommandé",
+    "mediumDesc": "Améliorer la qualité",
+    "high": "Requis",
+    "highDesc": "Devrait corriger",
+    "critical": "Bloquant",
+    "criticalDesc": "Doit corriger"
+  },
+  "status": {
+    "accept": "Accepter",
+    "reject": "Rejeter",
+    "modified": "Modifié",
+    "acceptTooltip": "Accepter cette sortie d'agent",
+    "rejectTooltip": "Rejeter cette sortie d'agent",
+    "modifiedTooltip": "Accepté avec modifications"
+  },
+  "messages": {
+    "submitted": "Retour soumis avec succès",
+    "submitError": "Échec de la soumission du retour : {{error}}",
+    "notAvailable": "Retour non disponible",
+    "notAvailableDescription": "Le système de retour n'est pas encore entièrement configuré",
+    "titleRequired": "Le titre est requis",
+    "descriptionRequired": "La description est requise"
+  },
+  "dashboard": {
+    "title": "Tableau de bord des retours",
+    "description": "Voir les tendances des retours et les principaux problèmes",
+    "metrics": "Métriques",
+    "trends": "Tendances",
+    "topIssues": "Principaux problèmes",
+    "recentFeedback": "Retours récents",
+    "satisfactionScore": "Score de satisfaction",
+    "totalFeedback": "Total des retours",
+    "positiveRate": "Taux positif",
+    "negativeRate": "Taux négatif",
+    "averageRating": "Note moyenne",
+    "feedbackCount": "Nombre de retours",
+    "noFeedback": "Aucun retour pour le moment",
+    "noFeedbackDescription": "Les retours apparaîtront ici une fois que les utilisateurs commenceront à soumettre des avis",
+    "viewDetails": "Voir les détails",
+    "exportData": "Exporter les données"
+  },
+  "improvement": {
+    "title": "Suivi des améliorations",
+    "description": "Voir comment les retours ont amélioré le système",
+    "before": "Avant",
+    "after": "Après",
+    "change": "Changement",
+    "improvement": "Amélioration",
+    "noImprovements": "Aucune amélioration suivie pour le moment",
+    "noImprovementsDescription": "Les améliorations apparaîtront ici une fois que les retours seront traités",
+    "basedOnFeedback": "Basé sur {{count}} rapports de retour",
+    "metric": "Métrique",
+    "value": "Valeur",
+    "delta": "Delta",
+    "percentChange": "% de changement"
+  },
+  "settings": {
+    "title": "Paramètres de retour",
+    "description": "Configurer les préférences de collecte de retours",
+    "enableFeedback": "Activer la collecte de retours",
+    "enableFeedbackDescription": "Collecter les retours après la fin des tâches de l'agent",
+    "autoPrompt": "Demande automatique de retour",
+    "autoPromptDescription": "Afficher automatiquement la boîte de dialogue de retour après la fin de la tâche",
+    "optOut": "Désactiver les retours",
+    "optOutDescription": "Désactiver toute collecte de retours et invites",
+    "anonymousFeedback": "Retours anonymes",
+    "anonymousFeedbackDescription": "Soumettre des retours sans informations d'identification",
+    "notifyOnImprovements": "Notification des améliorations",
+    "notifyOnImprovementsDescription": "Être notifié lorsque vos retours entraînent des améliorations"
+  },
+  "analytics": {
+    "sentimentDistribution": "Distribution des sentiments",
+    "feedbackOverTime": "Retours au fil du temps",
+    "issuesByType": "Problèmes par type",
+    "issuesBySeverity": "Problèmes par gravité",
+    "resolutionRate": "Taux de résolution",
+    "responseTime": "Temps de réponse",
+    "userEngagement": "Engagement des utilisateurs",
+    "mostRequestedFeatures": "Fonctionnalités les plus demandées"
+  }
+}

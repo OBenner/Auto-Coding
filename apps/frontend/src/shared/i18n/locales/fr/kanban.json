@@ -1,0 +1,20 @@
+{
+  "filters": {
+    "searchPlaceholder": "Rechercher des tâches...",
+    "searchAriaLabel": "Rechercher des tâches par titre ou description",
+    "sortByLabel": "Trier par",
+    "sortModes": {
+      "manual": "Manuel",
+      "priority": "Priorité",
+      "created": "Date de création",
+      "updated": "Date de modification"
+    },
+    "sortOrderToggle": "Basculer l'ordre de tri",
+    "sortOrder": {
+      "ascending": "Croissant (faible à élevé, ancien à récent)",
+      "descending": "Décroissant (élevé à faible, récent à ancien)"
+    },
+    "clearFilters": "Effacer les filtres",
+    "clearFiltersAriaLabel": "Effacer tous les filtres actifs"
+  }
+}

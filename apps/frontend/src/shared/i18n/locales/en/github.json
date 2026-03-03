@@ -1,0 +1,10 @@
+{
+  "investigation": {
+    "progress": {
+      "fetchingIssue": "Fetching issue details...",
+      "analyzingIssue": "AI is analyzing the issue...",
+      "creatingTask": "Creating task from investigation...",
+      "complete": "Investigation complete!"
+    }
+  }
+}

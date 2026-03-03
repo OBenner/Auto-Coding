@@ -3,7 +3,7 @@ Claude Agent SDK Provider Adapter
 =================================
 
 Wraps the Claude Agent SDK client to implement the AIEngineProvider interface.
-This is the default and recommended provider for Auto-Claude.
+This is the default and recommended provider for Auto-Code.
 
 The adapter delegates to the existing create_client() function from core.client
 to preserve all existing functionality including:
@@ -14,11 +14,11 @@ to preserve all existing functionality including:
 - Extended thinking
 """
 
-import asyncio
 import logging
 import uuid
+from collections.abc import AsyncIterator
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, AsyncIterator, Optional
+from typing import TYPE_CHECKING, Any
 
 from core.providers.base import AgentSession, AIEngineProvider, SessionConfig
 from core.providers.exceptions import ProviderConfigError, ProviderError
@@ -145,7 +145,7 @@ class ClaudeAgentProvider(AIEngineProvider):
             config: Provider configuration with credentials
         """
         self._config = config
-        self._active_session: Optional[ClaudeAgentSession] = None
+        self._active_session: ClaudeAgentSession | None = None
         self._validation_errors: list[str] = []
 
     @property
@@ -161,12 +161,12 @@ class ClaudeAgentProvider(AIEngineProvider):
     def create_session(
         self,
         config: SessionConfig,
-        project_dir: Optional[Path] = None,
-        spec_dir: Optional[Path] = None,
+        project_dir: Path | None = None,
+        spec_dir: Path | None = None,
         agent_type: str = "coder",
-        max_thinking_tokens: Optional[int] = None,
-        output_format: Optional[dict] = None,
-        agents: Optional[dict] = None,
+        max_thinking_tokens: int | None = None,
+        output_format: dict | None = None,
+        agents: dict | None = None,
     ) -> ClaudeAgentSession:
         """Create a new Claude agent session.
 
@@ -359,7 +359,7 @@ class ClaudeAgentProvider(AIEngineProvider):
             # If auth check fails, we might still work with API key
             return bool(self._config.anthropic_api_key)
 
-    def get_active_session(self) -> Optional[ClaudeAgentSession]:
+    def get_active_session(self) -> ClaudeAgentSession | None:
         """Get the currently active session, if any.
 
         Returns:

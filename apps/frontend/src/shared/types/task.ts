@@ -4,6 +4,7 @@
 
 import type { ThinkingLevel, PhaseModelConfig, PhaseThinkingConfig } from './settings';
 import type { ExecutionPhase as ExecutionPhaseType, CompletablePhase } from '../constants/phase-protocol';
+import type { AIProvider } from './common';
 
 export type TaskStatus = 'backlog' | 'queue' | 'in_progress' | 'ai_review' | 'human_review' | 'done' | 'pr_created' | 'error';
 
@@ -34,6 +35,17 @@ export interface ExecutionProgress {
   // When a phase completes, it's added to this array before transitioning to the next phase
   // This ensures that planning is marked complete before coding starts, etc.
   completedPhases?: CompletablePhase[];  // Phases that have successfully completed
+
+  // Resource usage metrics (from backend resource_tracker.py)
+  cpu_percent?: number;  // CPU usage percentage
+  memory_mb?: number;  // Memory usage in megabytes
+  memory_percent?: number;  // Memory usage percentage
+  elapsed_seconds?: number;  // Elapsed time since phase started
+
+  // Timing estimates (from backend timing_history.py)
+  estimated_seconds?: number;  // Estimated time to completion
+  confidence?: 'high' | 'medium' | 'low';  // Estimate confidence level
+  sample_size?: number;  // Number of historical samples used for estimate
 }
 
 export interface Subtask {
@@ -63,10 +75,43 @@ export interface QAIssue {
   line?: number;
 }
 
+// QA Escalation types - for QA_ESCALATION.md parsing
+export interface QAEscalation {
+  generated: string;  // ISO timestamp
+  iteration: number;
+  maxIterations: number;
+  reason: string;
+  summary: QAEscalationSummary;
+  recurringIssues: QARecurringIssue[];
+  mostCommonIssues: QACommonIssue[];
+}
+
+export interface QAEscalationSummary {
+  totalIterations: number;
+  totalIssues: number;
+  uniqueIssues: number;
+  fixSuccessRate: number;  // 0-1 (percentage as decimal)
+}
+
+export interface QARecurringIssue {
+  title: string;
+  file?: string;
+  line?: number;
+  type?: string;
+  occurrences: number;
+  description: string;
+}
+
+export interface QACommonIssue {
+  title: string;
+  file?: string;
+  occurrences: number;
+}
+
 // Task Log Types - for persistent, phase-based logging
 export type TaskLogPhase = 'planning' | 'coding' | 'validation';
 export type TaskLogPhaseStatus = 'pending' | 'active' | 'completed' | 'failed';
-export type TaskLogEntryType = 'text' | 'tool_start' | 'tool_end' | 'phase_start' | 'phase_end' | 'error' | 'success' | 'info';
+export type TaskLogEntryType = 'text' | 'tool_start' | 'tool_end' | 'phase_start' | 'phase_end' | 'error' | 'success' | 'info' | 'decision';
 
 export interface TaskLogEntry {
   timestamp: string;
@@ -81,6 +126,8 @@ export interface TaskLogEntry {
   detail?: string;  // Full content that can be expanded (e.g., file contents, command output)
   subphase?: string;  // Subphase grouping (e.g., "PROJECT DISCOVERY", "CONTEXT GATHERING")
   collapsed?: boolean;  // Whether to show collapsed by default in UI
+  // Decision data for decision log entries
+  decision_data?: Record<string, unknown>;  // DecisionPoint data (imported separately to avoid circular deps)
 }
 
 export interface TaskPhaseLog {
@@ -104,7 +151,7 @@ export interface TaskLogs {
 
 // Streaming markers from Python (similar to InsightsStreamChunk)
 export interface TaskLogStreamChunk {
-  type: 'text' | 'tool_start' | 'tool_end' | 'phase_start' | 'phase_end' | 'error';
+  type: 'text' | 'tool_start' | 'tool_end' | 'phase_start' | 'phase_end' | 'error' | 'decision';
   content?: string;
   phase?: TaskLogPhase;
   timestamp?: string;
@@ -114,6 +161,30 @@ export interface TaskLogStreamChunk {
     success?: boolean;
   };
   subtask_id?: string;
+  decision_data?: Record<string, unknown>;  // DecisionPoint data for decision entries
+}
+
+// Log filtering and search types
+export interface LogFilterState {
+  searchQuery: string;
+  phases: TaskLogPhase[];  // Empty array = all phases
+  entryTypes: TaskLogEntryType[];  // Empty array = all types
+  tools: string[];  // Empty array = all tools (e.g., 'Read', 'Write', 'Bash')
+  showToolOutput: boolean;  // Whether to show tool_start/tool_end entries
+}
+
+export interface LogSearchResult {
+  phase: TaskLogPhase;
+  entryIndex: number;
+  matchType: 'content' | 'tool_name' | 'tool_input' | 'detail';
+  matchText: string;  // The actual text that matched
+}
+
+export interface LogSearchState {
+  query: string;
+  results: LogSearchResult[];
+  currentResultIndex: number;  // For navigating through results
+  isSearching: boolean;
 }
 
 // Image attachment types for task creation
@@ -155,6 +226,9 @@ export interface TaskDraft {
   referencedFiles: ReferencedFile[];
   requireReviewBeforeCoding?: boolean;
   agentModels?: Record<string, string>;  // Agent-specific model overrides
+  provider?: AIProvider;  // AI provider selection
+  providerModel?: string;  // Provider-specific model ID
+  customTemplateId?: string;  // Custom agent template ID
   savedAt: Date;
 }
 
@@ -178,7 +252,7 @@ export type TaskCategory =
 
 export interface TaskMetadata {
   // Origin tracking
-  sourceType?: 'ideation' | 'manual' | 'imported' | 'insights' | 'roadmap' | 'linear' | 'github' | 'gitlab';
+  sourceType?: 'ideation' | 'manual' | 'imported' | 'insights' | 'roadmap' | 'linear' | 'github' | 'gitlab' | 'template';
   ideationType?: string;  // e.g., 'code_improvements', 'security_hardening'
   ideaId?: string;  // Reference to original idea if converted
   featureId?: string;  // Reference to roadmap feature if from roadmap
@@ -191,6 +265,8 @@ export interface TaskMetadata {
   githubBatchTheme?: string;  // Theme/title of the GitHub issue batch
   gitlabIssueIid?: number;  // Reference to GitLab issue IID if from GitLab
   gitlabUrl?: string;  // GitLab issue URL
+  templateName?: string;  // Template name if created from template
+  customTemplateId?: string;  // Custom agent template ID if using custom template
 
   // Classification
   category?: TaskCategory;
@@ -242,6 +318,10 @@ export interface TaskMetadata {
   // Multi-model agent orchestration
   agentModels?: Record<string, string>;  // Agent-specific model overrides (e.g., { coder: 'haiku', planner: 'sonnet' })
 
+  // Provider selection
+  provider?: AIProvider;  // AI engine provider (claude, litellm, openrouter, zhipuai)
+  providerModel?: string;  // Provider-specific model ID
+
   // Archive status
   archivedAt?: string;  // ISO date when task was archived
   archivedInVersion?: string;  // Version in which task was archived (from changelog)
@@ -265,6 +345,7 @@ export interface Task {
   stagedAt?: string;  // ISO timestamp when changes were staged
   location?: 'main' | 'worktree';  // Where task was loaded from (main project or worktree)
   specsPath?: string;  // Full path to specs directory for this task
+  tokenStats?: TaskTokenStats;  // Token usage statistics from token_stats.json
   createdAt: Date;
   updatedAt: Date;
 }
@@ -304,6 +385,23 @@ export interface PlanSubtask {
     run?: string;
     scenario?: string;
   };
+}
+
+// Cost tracking types (from cost_tracking.py)
+export interface UsageRecord {
+  agent_type: string;
+  model: string;
+  input_tokens: number;
+  output_tokens: number;
+  cost: number;
+  timestamp: string;
+}
+
+export interface CostReport {
+  spec_dir: string;
+  total_cost: number;
+  records: UsageRecord[];
+  last_updated: string;
 }
 
 // Workspace management types (for human review)
@@ -493,4 +591,47 @@ export interface TaskStartOptions {
   workers?: number;
   model?: string;
   baseBranch?: string; // Override base branch for worktree creation
+}
+
+// Token statistics types (mirrors Python core/token_stats.py)
+export interface PhaseTokenStats {
+  phase: 'planning' | 'coding' | 'validation';
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
+  session_count: number;
+  updated_at: string;
+}
+
+export interface TaskTokenStats {
+  phases: Record<string, PhaseTokenStats>;
+  total_input_tokens: number;
+  total_output_tokens: number;
+  total_tokens: number;
+  created_at: string;
+  updated_at: string;
+}
+
+// Background task types (long-running commands)
+export type BackgroundTaskStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
+
+export interface BackgroundTask {
+  id: string;
+  command: string;
+  workingDir: string;
+  status: BackgroundTaskStatus;
+  createdAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+  timeout: number;
+  output: string;
+  error: string | null;
+  exitCode: number | null;
+  pid: number | null;
+  memoryStats?: {
+    percent: number;
+    availableMb: number;
+    totalMb: number;
+    usedMb: number;
+  };
 }

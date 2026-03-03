@@ -1,5 +1,6 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import {
   BarChart3,
   TrendingUp,
@@ -20,11 +21,21 @@ import { cn } from '../lib/utils';
 import type {
   AnalyticsReport,
   AnalyticsView,
-  AgentStats,
-  TaskComplexityStats,
-  QAStats,
+  AgentStats as AgentStatsType,
+  MetricsSummary,
+  QAStats as QAStatsType,
   TrendDataPoint
 } from '../../shared/types';
+
+// Reuse a single formatter to avoid repeated Intl.NumberFormat allocation
+const usdFormatter = new Intl.NumberFormat('en-US', {
+  style: 'currency',
+  currency: 'USD',
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+const numberFormatter = new Intl.NumberFormat('en-US');
 
 interface AnalyticsProps {
   projectId: string;
@@ -69,29 +80,15 @@ export function Analytics({ projectId }: AnalyticsProps) {
     loadAnalytics();
   };
 
-  // Format helpers
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    }).format(amount);
-  };
-
-  const formatPercentage = (value: number) => {
-    return `${value.toFixed(1)}%`;
-  };
-
-  const formatDuration = (seconds: number) => {
+  // Format helpers (using memoized formatters)
+  const formatCurrency = useCallback((amount: number) => usdFormatter.format(amount), []);
+  const formatPercentage = useCallback((value: number) => `${value.toFixed(1)}%`, []);
+  const formatDuration = useCallback((seconds: number) => {
     if (seconds < 60) return `${seconds.toFixed(0)}s`;
     if (seconds < 3600) return `${(seconds / 60).toFixed(1)}m`;
     return `${(seconds / 3600).toFixed(1)}h`;
-  };
-
-  const formatNumber = (num: number) => {
-    return new Intl.NumberFormat('en-US').format(num);
-  };
+  }, []);
+  const formatNumber = useCallback((num: number) => numberFormatter.format(num), []);
 
   // Render loading state
   if (loading && !report) {
@@ -244,13 +241,21 @@ export function Analytics({ projectId }: AnalyticsProps) {
 }
 
 // Overview View Component
+interface OverviewViewProps {
+  summary: MetricsSummary;
+  formatCurrency: (amount: number) => string;
+  formatPercentage: (value: number) => string;
+  formatNumber: (value: number) => string;
+  t: TFunction;
+}
+
 function OverviewView({
   summary,
   formatCurrency,
   formatPercentage,
   formatNumber,
   t
-}: any) {
+}: OverviewViewProps) {
   return (
     <div className="space-y-6">
       {/* Summary Stats */}
@@ -336,7 +341,7 @@ function OverviewView({
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {Object.entries(summary.complexity_stats).map(([complexity, stats]: [string, any]) => (
+            {Object.entries(summary.complexity_stats).map(([complexity, stats]) => (
               <div key={complexity} className="space-y-2">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -369,6 +374,15 @@ function OverviewView({
 }
 
 // Agents View Component
+interface AgentsViewProps {
+  agentStats: Record<string, AgentStatsType>;
+  formatCurrency: (amount: number) => string;
+  formatPercentage: (value: number) => string;
+  formatDuration: (seconds: number) => string;
+  formatNumber: (value: number) => string;
+  t: TFunction;
+}
+
 function AgentsView({
   agentStats,
   formatCurrency,
@@ -376,11 +390,11 @@ function AgentsView({
   formatDuration,
   formatNumber,
   t
-}: any) {
+}: AgentsViewProps) {
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 gap-6">
-        {Object.entries(agentStats).map(([agentType, stats]: [string, any]) => (
+        {Object.entries(agentStats).map(([agentType, stats]) => (
           <Card key={agentType}>
             <CardHeader>
               <CardTitle className="flex items-center justify-between">
@@ -420,9 +434,9 @@ function AgentsView({
                   <h4 className="text-sm font-semibold mb-2">{t('analytics:agents.errorPatterns')}</h4>
                   <div className="space-y-2">
                     {Object.entries(stats.error_patterns)
-                      .sort(([, a]: any, [, b]: any) => b - a)
+                      .sort(([, a], [, b]) => (b as number) - (a as number))
                       .slice(0, 5)
-                      .map(([error, count]: [string, any]) => (
+                      .map(([error, count]) => (
                         <div key={error} className="flex items-center justify-between text-sm">
                           <span className="text-muted-foreground truncate flex-1">{error}</span>
                           <Badge variant="outline">{count}</Badge>
@@ -449,13 +463,21 @@ function AgentsView({
 }
 
 // Trends View Component
+interface TrendsViewProps {
+  trends: TrendDataPoint[];
+  formatCurrency: (amount: number) => string;
+  formatPercentage: (value: number) => string;
+  formatNumber: (value: number) => string;
+  t: TFunction;
+}
+
 function TrendsView({
   trends,
   formatCurrency,
   formatPercentage,
   formatNumber,
   t
-}: any) {
+}: TrendsViewProps) {
   return (
     <div className="space-y-6">
       <Card>
@@ -494,12 +516,19 @@ function TrendsView({
 }
 
 // QA View Component
+interface QAViewProps {
+  qaStats: QAStatsType;
+  formatPercentage: (value: number) => string;
+  formatNumber: (value: number) => string;
+  t: TFunction;
+}
+
 function QAView({
   qaStats,
   formatPercentage,
   formatNumber,
   t
-}: any) {
+}: QAViewProps) {
   return (
     <div className="space-y-6">
       {/* QA Summary */}
@@ -563,7 +592,7 @@ function QAView({
             <div className="space-y-3">
               {Object.entries(qaStats.common_issues)
                 .sort(([, a]: any, [, b]: any) => b - a)
-                .map(([issue, count]: [string, any]) => (
+                .map(([issue, count]) => (
                   <div key={issue} className="flex items-center justify-between">
                     <div className="flex items-center gap-2 flex-1">
                       <AlertCircle className="w-4 h-4 text-muted-foreground" />

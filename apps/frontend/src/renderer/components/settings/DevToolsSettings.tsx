@@ -268,7 +268,7 @@ export function DevToolsSettings({ settings, onSettingsChange }: DevToolsSetting
             </SelectContent>
           </Select>
           <p className="text-xs text-muted-foreground">
-            {t('devtools.ide.description', 'Auto Claude will open worktrees in this editor')}
+            {t('devtools.ide.description', 'Auto Code will open worktrees in this editor')}
           </p>
 
           {/* Custom IDE Path */}
@@ -330,7 +330,7 @@ export function DevToolsSettings({ settings, onSettingsChange }: DevToolsSetting
             </SelectContent>
           </Select>
           <p className="text-xs text-muted-foreground">
-            {t('devtools.terminal.description', 'Auto Claude will open terminal sessions here')}
+            {t('devtools.terminal.description', 'Auto Code will open terminal sessions here')}
           </p>
 
           {/* Custom Terminal Path */}

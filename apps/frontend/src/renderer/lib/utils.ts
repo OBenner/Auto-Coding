@@ -24,7 +24,7 @@ export function calculateProgress(subtasks: { status: string }[]): number {
  * @param date Date to format
  * @returns Relative time string (e.g., "2 hours ago")
  */
-export function formatRelativeTime(date: Date): string {
+export function formatRelativeTime(date: Date | string): string {
   const now = new Date();
   const diffMs = now.getTime() - new Date(date).getTime();
   const diffMins = Math.floor(diffMs / 60000);
@@ -121,7 +121,7 @@ export function shallowEqual(objA: any, objB: any): boolean {
 
   // Compare each property value using strict equality
   for (const key of keysA) {
-    if (!Object.prototype.hasOwnProperty.call(objB, key) || objA[key] !== objB[key]) {
+    if (!Object.hasOwn(objB, key) || objA[key] !== objB[key]) {
       return false;
     }
   }

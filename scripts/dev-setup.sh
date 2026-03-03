@@ -1,7 +1,7 @@
 #!/bin/bash
 
 ###############################################################################
-# Auto Claude - Development Environment Setup Script (Unix)
+# Auto Code - Development Environment Setup Script (Unix)
 ###############################################################################
 #
 # PURPOSE:
@@ -36,7 +36,7 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 ERRORS=0
 
 echo -e "${BLUE}╔════════════════════════════════════════════════════════════════╗${NC}"
-echo -e "${BLUE}║           Auto Claude - Development Setup                      ║${NC}"
+echo -e "${BLUE}║           Auto Code - Development Setup                      ║${NC}"
 echo -e "${BLUE}╚════════════════════════════════════════════════════════════════╝${NC}"
 echo ""
 

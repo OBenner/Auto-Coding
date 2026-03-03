@@ -18,8 +18,19 @@ MODEL_ID_MAP: dict[str, str] = {
     "haiku": "claude-haiku-4-5-20251001",
 }
 
+# Complexity thresholds for determining task complexity level
+COMPLEXITY_THRESHOLDS: dict[str, int] = {
+    "description_short": 100,  # Short task description (characters)
+    "description_medium": 500,  # Medium task description
+    "description_long": 1500,  # Long/complex task description
+    "files_simple": 3,  # Few files affected
+    "files_medium": 10,  # Moderate number of files
+    "services_simple": 1,  # Single service
+    "services_medium": 3,  # Multiple services
+}
+
 # Thinking level to budget tokens mapping (None = no extended thinking)
-# Values must match auto-claude-ui/src/shared/constants/models.ts THINKING_BUDGET_MAP
+# Values must match auto-code-ui/src/shared/constants/models.ts THINKING_BUDGET_MAP
 THINKING_BUDGET_MAP: dict[str, int | None] = {
     "none": None,
     "low": 1024,
@@ -53,6 +64,7 @@ DEFAULT_PHASE_MODELS: dict[str, str] = {
     "planning": "sonnet",  # Changed from "opus" (fix #433)
     "coding": "sonnet",
     "qa": "sonnet",
+    "test_generation": "sonnet",
 }
 
 DEFAULT_PHASE_THINKING: dict[str, str] = {
@@ -60,6 +72,7 @@ DEFAULT_PHASE_THINKING: dict[str, str] = {
     "planning": "high",
     "coding": "medium",
     "qa": "high",
+    "test_generation": "medium",
 }
 
 # Agent-level default model mapping
@@ -113,12 +126,64 @@ AGENT_DEFAULT_MODELS: dict[str, str] = {
     "ideation": "sonnet",
 }
 
+# Agent-level default provider mapping
+# Maps each agent type to a default AI provider
+# Used for multi-provider orchestration where different agents can use different providers
+AGENT_DEFAULT_PROVIDERS: dict[str, str] = {
+    # ═══════════════════════════════════════════════════════════════════════
+    # SPEC CREATION AGENTS (Use claude as default provider)
+    # ═══════════════════════════════════════════════════════════════════════
+    "spec_gatherer": "claude",
+    "spec_researcher": "claude",
+    "spec_writer": "claude",
+    "spec_critic": "claude",
+    "spec_discovery": "claude",
+    "spec_context": "claude",
+    "spec_validation": "claude",
+    "spec_compaction": "claude",
+    # ═══════════════════════════════════════════════════════════════════════
+    # BUILD AGENTS (Use claude as default provider)
+    # ═══════════════════════════════════════════════════════════════════════
+    "planner": "claude",
+    "coder": "claude",
+    # ═══════════════════════════════════════════════════════════════════════
+    # QA AGENTS (Use claude as default provider)
+    # ═══════════════════════════════════════════════════════════════════════
+    "qa_reviewer": "claude",
+    "qa_fixer": "claude",
+    # ═══════════════════════════════════════════════════════════════════════
+    # UTILITY AGENTS (Use claude as default provider)
+    # ═══════════════════════════════════════════════════════════════════════
+    "insights": "claude",
+    "merge_resolver": "claude",
+    "commit_message": "claude",
+    # ═══════════════════════════════════════════════════════════════════════
+    # PR AGENTS (Use claude as default provider)
+    # ═══════════════════════════════════════════════════════════════════════
+    "pr_reviewer": "claude",
+    "pr_orchestrator_parallel": "claude",
+    "pr_followup_parallel": "claude",
+    # ═══════════════════════════════════════════════════════════════════════
+    # ANALYSIS AGENTS (Use claude as default provider)
+    # ═══════════════════════════════════════════════════════════════════════
+    "analysis": "claude",
+    "batch_analysis": "claude",
+    "batch_validation": "claude",
+    # ═══════════════════════════════════════════════════════════════════════
+    # ROADMAP & IDEATION (Use claude as default provider)
+    # ═══════════════════════════════════════════════════════════════════════
+    "roadmap_discovery": "claude",
+    "competitor_analysis": "claude",
+    "ideation": "claude",
+}
+
 
 class PhaseModelConfig(TypedDict, total=False):
     spec: str
     planning: str
     coding: str
     qa: str
+    test_generation: str
 
 
 class PhaseThinkingConfig(TypedDict, total=False):
@@ -126,6 +191,7 @@ class PhaseThinkingConfig(TypedDict, total=False):
     planning: str
     coding: str
     qa: str
+    test_generation: str
 
 
 class AgentModelConfig(TypedDict, total=False):
@@ -175,7 +241,7 @@ class TaskMetadataConfig(TypedDict, total=False):
     thinkingLevel: str
 
 
-Phase = Literal["spec", "planning", "coding", "qa"]
+Phase = Literal["spec", "planning", "coding", "qa", "test_generation"]
 
 
 def resolve_model_id(model: str) -> str:
@@ -441,6 +507,83 @@ def get_phase_config(
     return model_id, thinking_level, thinking_budget
 
 
+# Output constraint templates for controlling response length
+OUTPUT_CONSTRAINT_TEMPLATES: dict[str, str] = {
+    "summary": "Respond in {limit} words or less",
+    "brief": "Keep your response under {limit} words",
+    "concise": "Provide a concise response in {limit} words or fewer",
+    "strict": "Your response MUST NOT exceed {limit} words",
+}
+
+
+def get_output_constraint(format_type: str, word_limit: int) -> str:
+    """
+    Get a formatted output constraint string.
+
+    Args:
+        format_type: Type of constraint format (summary, brief, concise, strict)
+        word_limit: Maximum word count
+
+    Returns:
+        Formatted constraint string
+    """
+    template = OUTPUT_CONSTRAINT_TEMPLATES.get(
+        format_type, OUTPUT_CONSTRAINT_TEMPLATES["summary"]
+    )
+    return template.format(limit=word_limit)
+
+
+def suggest_thinking_budget(
+    description: str, file_count: int, service_count: int
+) -> str:
+    """
+    Suggest thinking level based on task complexity.
+
+    Uses COMPLEXITY_THRESHOLDS to score description length, file count,
+    and service count, then maps the total score to a thinking level.
+
+    Args:
+        description: Task description text
+        file_count: Number of files affected
+        service_count: Number of services involved
+
+    Returns:
+        Thinking level string: "low", "medium", "high", or "ultrathink"
+    """
+    score = 0
+
+    # Score based on description length
+    desc_len = len(description)
+    if desc_len >= COMPLEXITY_THRESHOLDS["description_long"]:
+        score += 3
+    elif desc_len >= COMPLEXITY_THRESHOLDS["description_medium"]:
+        score += 2
+    elif desc_len >= COMPLEXITY_THRESHOLDS["description_short"]:
+        score += 1
+
+    # Score based on file count
+    if file_count >= COMPLEXITY_THRESHOLDS["files_medium"]:
+        score += 2
+    elif file_count >= COMPLEXITY_THRESHOLDS["files_simple"]:
+        score += 1
+
+    # Score based on service count
+    if service_count >= COMPLEXITY_THRESHOLDS["services_medium"]:
+        score += 2
+    elif service_count > COMPLEXITY_THRESHOLDS["services_simple"]:
+        score += 1
+
+    # Map score to thinking level
+    if score >= 6:
+        return "ultrathink"
+    elif score >= 4:
+        return "high"
+    elif score >= 2:
+        return "medium"
+    else:
+        return "low"
+
+
 def get_spec_phase_thinking_budget(phase_name: str) -> int | None:
     """
     Get the thinking budget for a specific spec runner phase.
@@ -456,3 +599,38 @@ def get_spec_phase_thinking_budget(phase_name: str) -> int | None:
     """
     thinking_level = SPEC_PHASE_THINKING_LEVELS.get(phase_name, "medium")
     return get_thinking_budget(thinking_level)
+
+
+def get_provider_for_agent(agent_type: str) -> str:
+    """
+    Get the AI provider to use for a specific agent.
+
+    Priority:
+    1. Environment variable AGENT_PROVIDER_<agent_type> (if set)
+    2. Global AI_ENGINE_PROVIDER environment variable (if set)
+    3. AGENT_DEFAULT_PROVIDERS mapping (if agent_type has a default)
+    4. Default to 'claude'
+
+    Args:
+        agent_type: The agent type (e.g., 'coder', 'planner', 'qa_reviewer')
+
+    Returns:
+        Provider name ('claude', 'litellm', or 'openrouter')
+    """
+    # 1. Check for agent-specific environment variable override
+    env_var_name = f"AGENT_PROVIDER_{agent_type.upper()}"
+    env_provider = os.environ.get(env_var_name)
+    if env_provider:
+        return env_provider
+
+    # 2. Global AI_ENGINE_PROVIDER env var overrides the hardcoded defaults
+    global_provider = os.environ.get("AI_ENGINE_PROVIDER")
+    if global_provider:
+        return global_provider
+
+    # 3. Check agent default providers mapping
+    default_provider = AGENT_DEFAULT_PROVIDERS.get(agent_type)
+    if default_provider:
+        return default_provider
+
+    return "claude"

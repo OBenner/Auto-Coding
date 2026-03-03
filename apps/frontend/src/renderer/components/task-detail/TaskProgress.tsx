@@ -1,6 +1,7 @@
-import { Zap, Loader2 } from 'lucide-react';
+import { Zap, Loader2, Clock } from 'lucide-react';
 import { Progress } from '../ui/progress';
 import { cn, calculateProgress } from '../../lib/utils';
+import { formatElapsedTime, formatRemainingTime } from '../../../shared/progress';
 import { EXECUTION_PHASE_BADGE_COLORS, EXECUTION_PHASE_LABELS } from '../../../shared/constants';
 import type { Task, ExecutionPhase } from '../../../shared/types';
 
@@ -42,6 +43,25 @@ export function TaskProgress({ task, isRunning, hasActiveExecution, executionPha
               <p className="text-xs mt-0.5 opacity-70">
                 Subtask: {task.executionProgress.currentSubtask}
               </p>
+            )}
+            {/* Time Estimation Display */}
+            {(task.executionProgress?.elapsed_seconds !== undefined || task.executionProgress?.estimated_seconds !== undefined) && (
+              <div className="flex items-center gap-3 mt-2 pt-2 border-t border-current/10">
+                {task.executionProgress.elapsed_seconds !== undefined && (
+                  <div className="flex items-center gap-1.5 text-xs opacity-70">
+                    <Clock className="h-3 w-3" />
+                    <span>Elapsed: {formatElapsedTime(task.executionProgress.elapsed_seconds)}</span>
+                  </div>
+                )}
+                {task.executionProgress.estimated_seconds !== undefined && task.executionProgress.estimated_seconds > 0 && (
+                  <div className="flex items-center gap-1.5 text-xs opacity-70">
+                    <span>•</span>
+                    <span>
+                      Est. remaining: {formatRemainingTime(task.executionProgress.estimated_seconds, task.executionProgress.confidence)}
+                    </span>
+                  </div>
+                )}
+              </div>
             )}
           </div>
         </div>

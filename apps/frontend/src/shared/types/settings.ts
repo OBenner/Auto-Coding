@@ -6,6 +6,33 @@ import type { NotificationSettings, GraphitiEmbeddingProvider } from './project'
 import type { ChangelogFormat, ChangelogAudience, ChangelogEmojiLevel } from './changelog';
 import type { SupportedLanguage } from '../constants/i18n';
 
+// ============================================
+// Recent Actions Types
+// ============================================
+
+/**
+ * Recent action entry for quick actions menu
+ */
+export interface RecentAction {
+  /** Unique identifier for this action instance */
+  id: string;
+  /** Type of action performed */
+  type: 'batch_qa' | 'batch_status_update' | 'create_task' | 'start_task' | 'stop_task';
+  /** Display label for the action */
+  label: string;
+  /** Timestamp when the action was performed */
+  timestamp: Date;
+  /** Number of items affected (for batch operations) */
+  itemCount?: number;
+  /** Target status (for status updates) */
+  targetStatus?: string;
+  /** Project ID where the action was performed */
+  projectId?: string;
+}
+
+// GPU acceleration mode for terminal WebGL rendering
+export type GpuAcceleration = 'auto' | 'on' | 'off';
+
 // Color theme types for multi-theme support
 export type ColorTheme = 'default' | 'dusk' | 'lime' | 'ocean' | 'retro' | 'neo' | 'forest';
 
@@ -200,6 +227,25 @@ export interface FeatureThinkingConfig {
   utility: ThinkingLevel;
 }
 
+// Agent verbosity level for explanations and responses
+export type AgentVerbosityLevel = 'minimal' | 'concise' | 'normal' | 'detailed' | 'verbose';
+
+// Agent risk tolerance for decision-making
+export type AgentRiskTolerance = 'cautious' | 'balanced' | 'aggressive';
+
+// Project maturity level affecting risk decisions
+export type AgentProjectType = 'greenfield' | 'established' | 'legacy';
+
+// Coding style preferences learned from project conventions
+export interface AgentCodingStylePreferences {
+  indentation?: 'spaces' | 'tabs' | 'auto';
+  quoteStyle?: 'single' | 'double' | 'auto';
+  lineLength?: number | null;
+  namingConvention?: 'snake_case' | 'camelCase' | 'PascalCase' | 'auto';
+  commentDensity?: 'minimal' | 'normal' | 'verbose';
+  typeHints?: boolean;
+}
+
 // Agent profile for preset model/thinking configurations
 // All profiles have per-phase configuration (phaseModels/phaseThinking)
 export interface AgentProfile {
@@ -254,6 +300,10 @@ export interface AppSettings {
   graphitiMcpUrl?: string;
   // Onboarding wizard completion state
   onboardingCompleted?: boolean;
+  // Selected AI provider (anthropic, openrouter, groq, etc.)
+  selectedProviderId?: string;
+  // Fallback model ID to use if primary model unavailable
+  fallbackModelId?: string;
   // Selected agent profile for preset model/thinking configurations
   selectedAgentProfile?: string;
   // Custom phase configuration for Auto profile (overrides defaults)
@@ -280,6 +330,12 @@ export interface AppSettings {
   customIDEPath?: string;      // For 'custom' IDE
   preferredTerminal?: SupportedTerminal;
   customTerminalPath?: string; // For 'custom' terminal
+  // Agent behavior preferences (adaptive personality system)
+  agentVerbosity?: AgentVerbosityLevel;
+  agentRiskTolerance?: AgentRiskTolerance;
+  agentProjectType?: AgentProjectType;
+  agentCodingStyle?: AgentCodingStylePreferences;
+  agentUserInstructions?: string[]; // Explicit user preferences (e.g., "be more cautious")
   // YOLO mode: invoke Claude with --dangerously-skip-permissions flag
   dangerouslySkipPermissions?: boolean;
   // Anonymous error reporting (Sentry) - enabled by default to help improve the app
@@ -290,9 +346,21 @@ export interface AppSettings {
   seenVersionWarnings?: string[];
   // Sidebar collapsed state (icons only when true)
   sidebarCollapsed?: boolean;
+  // Keyboard shortcuts customization
+  keyboardShortcuts?: Record<KeyboardShortcutAction, KeyCombination>;
+  // Recent actions for quick actions menu (persisted between sessions)
+  recentActions?: RecentAction[];
+  /**
+   * Whether feedback collection is enabled.
+   * Defaults to `true` (opt-out model: feedback is collected unless the user disables it).
+   * When `undefined`, callers should treat it as `true`.
+   */
+  feedbackEnabled?: boolean;
+  /** GPU acceleration mode for terminal WebGL rendering */
+  gpuAcceleration?: GpuAcceleration;
 }
 
-// Auto-Claude Source Environment Configuration (for auto-claude repo .env)
+// Auto-Code Source Environment Configuration (for auto-claude repo .env)
 export interface SourceEnvConfig {
   // Claude Authentication (required for ideation, roadmap generation, etc.)
   hasClaudeToken: boolean;
@@ -307,4 +375,83 @@ export interface SourceEnvCheckResult {
   hasToken: boolean;
   sourcePath?: string;
   error?: string;
+}
+
+// Provider Settings for Multi-Model Support (used by ProviderSettingsSection)
+export interface ProviderSettings {
+  provider?: AIEngineProvider;
+  openaiApiKey?: string;
+  googleApiKey?: string;
+  openrouterApiKey?: string;
+  plannerModel?: string;
+  coderModel?: string;
+  qaModel?: string;
+}
+
+// ============================================
+// Keyboard Shortcuts Types
+// ============================================
+
+export type KeyboardShortcutAction =
+  | 'commandPalette'
+  | 'quickActions'
+  | 'createTask'
+  | 'batchQA'
+  | 'batchStatusUpdate';
+
+export type KeyCombination = string;
+
+export interface KeyboardShortcut {
+  action: KeyboardShortcutAction;
+  keyCombination: KeyCombination;
+  description: string;
+}
+
+export interface KeyboardShortcuts {
+  shortcuts: Record<KeyboardShortcutAction, KeyCombination>;
+}
+
+export const DEFAULT_KEYBOARD_SHORTCUTS: Record<KeyboardShortcutAction, KeyCombination> = {
+  commandPalette: 'Cmd+K',
+  quickActions: 'Cmd+.',
+  createTask: 'Cmd+N',
+  batchQA: 'Cmd+Shift+Q',
+  batchStatusUpdate: 'Cmd+Shift+S'
+};
+
+// ============================================
+// AI Provider Configuration (Backend .env sync)
+// ============================================
+
+export type AIEngineProvider = 'claude' | 'openai' | 'google' | 'litellm' | 'openrouter' | 'zhipuai' | 'ollama';
+
+export interface AIProviderConfig {
+  provider: AIEngineProvider;
+  anthropicApiKey?: string;
+  claudeModel?: string;
+  openaiApiKey?: string;
+  openaiModel?: string;
+  openaiBaseUrl?: string;
+  googleApiKey?: string;
+  googleModel?: string;
+  litellmModel?: string;
+  litellmApiBase?: string;
+  litellmApiKey?: string;
+  openrouterApiKey?: string;
+  openrouterModel?: string;
+  openrouterBaseUrl?: string;
+  zhipuaiApiKey?: string;
+  zhipuaiModel?: string;
+  ollamaModel?: string;
+  ollamaBaseUrl?: string;
+  // Per-agent model overrides
+  plannerModel?: string;
+  coderModel?: string;
+  qaModel?: string;
+}
+
+export interface ProviderConfigValidation {
+  isValid: boolean;
+  errors: string[];
+  availableProviders: AIEngineProvider[];
 }

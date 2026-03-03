@@ -12,6 +12,7 @@ import { PythonEnvManager } from '../python-env-manager';
 
 // Import all handler registration functions
 import { registerProjectHandlers } from './project-handlers';
+import { registerWorkspaceHandlers } from './workspace-handlers';
 import { registerTaskHandlers } from './task-handlers';
 import { registerTerminalHandlers } from './terminal-handlers';
 import { registerAgenteventsHandlers } from './agent-events-handlers';
@@ -26,8 +27,10 @@ import { registerGitlabHandlers } from './gitlab-handlers';
 import { registerIdeationHandlers } from './ideation-handlers';
 import { registerChangelogHandlers } from './changelog-handlers';
 import { registerInsightsHandlers } from './insights-handlers';
-import { registerAnalyticsHandlers } from './analytics-handlers';
+import { registerAgentAnalyticsHandlers } from './agent-analytics-handlers';
 import { registerMemoryHandlers } from './memory-handlers';
+import { registerSessionContextHandlers } from './session-context-handlers';
+import { registerSchedulerHandlers } from './scheduler-handlers';
 import { registerAppUpdateHandlers } from './app-update-handlers';
 import { registerDebugHandlers } from './debug-handlers';
 import { registerClaudeCodeHandlers } from './claude-code-handlers';
@@ -35,7 +38,16 @@ import { registerMcpHandlers } from './mcp-handlers';
 import { registerProfileHandlers } from './profile-handlers';
 import { registerScreenshotHandlers } from './screenshot-handlers';
 import { registerTerminalWorktreeIpcHandlers } from './terminal';
+import { registerMergeAnalyticsHandlers } from './merge-analytics-handlers';
+import { registerAnalyticsHandlers } from './analytics-handlers';
+import { registerTokenStatsHandlers } from './token-stats-handler';
+import { registerTemplateHandlers } from './template-handlers';
+import { registerWebhookHandlers } from './webhooks-handlers';
+import { registerPatternHandlers } from './pattern-handlers';
+import { registerSessionReplayHandlers } from './session-replay-handlers';
+import { registerFeedbackHandlers } from './feedback-handlers';
 import { notificationService } from '../notification-service';
+import { setAgentManagerRef } from './utils';
 
 /**
  * Setup all IPC handlers across all domains
@@ -54,8 +66,14 @@ export function setupIpcHandlers(
   // Initialize notification service
   notificationService.initialize(getMainWindow);
 
+  // Wire up agent manager for circuit breaker cleanup
+  setAgentManagerRef(agentManager);
+
   // Project handlers (including Python environment setup)
   registerProjectHandlers(pythonEnvManager, agentManager, getMainWindow);
+
+  // Workspace handlers (multi-codebase orchestration)
+  registerWorkspaceHandlers();
 
   // Task handlers
   registerTaskHandlers(agentManager, pythonEnvManager, getMainWindow);
@@ -102,11 +120,14 @@ export function setupIpcHandlers(
   // Insights handlers
   registerInsightsHandlers(getMainWindow);
 
-  // Analytics handlers
-  registerAnalyticsHandlers(getMainWindow);
+  // Agent analytics handlers (Python-based agent performance metrics)
+  registerAgentAnalyticsHandlers(getMainWindow);
 
   // Memory & infrastructure handlers (for Graphiti/LadybugDB)
   registerMemoryHandlers();
+
+  // Session context handlers (conversation history tracking)
+  registerSessionContextHandlers(getMainWindow);
 
   // App auto-update handlers
   registerAppUpdateHandlers();
@@ -126,12 +147,40 @@ export function setupIpcHandlers(
   // Screenshot capture handlers
   registerScreenshotHandlers();
 
+  // Merge analytics handlers
+  registerMergeAnalyticsHandlers();
+
+  // Productivity analytics handlers
+  registerAnalyticsHandlers();
+
+  // Token statistics handlers
+  registerTokenStatsHandlers();
+
+  // Template library handlers
+  registerTemplateHandlers();
+
+  // Webhook integration handlers
+  registerWebhookHandlers(agentManager, getMainWindow);
+
+  // Pattern learning handlers
+  registerPatternHandlers();
+
+  // Session replay handlers
+  registerSessionReplayHandlers();
+
+  // Feedback handlers (adaptive agent learning)
+  registerFeedbackHandlers(getMainWindow);
+
+  // Scheduler handlers (build scheduling and queue management)
+  registerSchedulerHandlers(getMainWindow);
+
   console.warn('[IPC] All handler modules registered successfully');
 }
 
 // Re-export all individual registration functions for potential custom usage
 export {
   registerProjectHandlers,
+  registerWorkspaceHandlers,
   registerTaskHandlers,
   registerTerminalHandlers,
   registerTerminalWorktreeIpcHandlers,
@@ -147,12 +196,22 @@ export {
   registerIdeationHandlers,
   registerChangelogHandlers,
   registerInsightsHandlers,
-  registerAnalyticsHandlers,
+  registerAgentAnalyticsHandlers,
   registerMemoryHandlers,
+  registerSessionContextHandlers,
   registerAppUpdateHandlers,
   registerDebugHandlers,
   registerClaudeCodeHandlers,
   registerMcpHandlers,
   registerProfileHandlers,
-  registerScreenshotHandlers
+  registerScreenshotHandlers,
+  registerMergeAnalyticsHandlers,
+  registerAnalyticsHandlers,
+  registerTokenStatsHandlers,
+  registerTemplateHandlers,
+  registerWebhookHandlers,
+  registerPatternHandlers,
+  registerSessionReplayHandlers,
+  registerFeedbackHandlers,
+  registerSchedulerHandlers
 };

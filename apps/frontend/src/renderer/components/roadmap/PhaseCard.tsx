@@ -1,4 +1,5 @@
-import { CheckCircle2, Circle, ExternalLink, Play, TrendingUp } from 'lucide-react';
+import { Archive, CheckCircle2, Circle, ExternalLink, Play, TrendingUp } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
@@ -13,7 +14,9 @@ export function PhaseCard({
   onFeatureSelect,
   onConvertToSpec,
   onGoToTask,
+  onArchive,
 }: PhaseCardProps) {
+  const { t } = useTranslation('common');
   const completedCount = features.filter((f) => f.status === 'done').length;
   const progress = features.length > 0 ? (completedCount / features.length) * 100 : 0;
 
@@ -86,7 +89,27 @@ export function PhaseCard({
       <div>
         <h4 className="text-sm font-medium mb-2">Features ({features.length})</h4>
         <div className="grid gap-2">
-          {features.slice(0, 5).map((feature) => (
+          {features.slice(0, 5).map((feature) => {
+            const isDone = feature.status === 'done';
+            const archiveButton = isDone && onArchive && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 px-2"
+                title={t('roadmap.archiveFeature')}
+                aria-label={t('accessibility.archiveFeatureAriaLabel')}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onArchive(feature.id);
+                }}
+              >
+                <Archive className="h-3 w-3" />
+              </Button>
+            );
+            return (
+            // biome-ignore lint/a11y/noNoninteractiveElementInteractions: Clickable feature card
+            // biome-ignore lint/a11y/noStaticElementInteractions: Clickable feature card
+            // biome-ignore lint/a11y/useKeyWithClickEvents: Feature selection card
             <div
               key={feature.id}
               className="flex items-center justify-between p-2 rounded-md bg-muted/50 hover:bg-muted cursor-pointer transition-colors"
@@ -104,8 +127,11 @@ export function PhaseCard({
                   <TrendingUp className="h-3 w-3 text-primary flex-shrink-0" />
                 )}
               </div>
-              {feature.status === 'done' ? (
-                <CheckCircle2 className="h-4 w-4 text-success flex-shrink-0" />
+              {isDone ? (
+                <span className="flex items-center gap-1 flex-shrink-0">
+                  <CheckCircle2 className="h-4 w-4 text-success" />
+                  {archiveButton}
+                </span>
               ) : feature.linkedSpecId ? (
                 <Button
                   variant="ghost"
@@ -113,11 +139,11 @@ export function PhaseCard({
                   className="h-6 px-2"
                   onClick={(e) => {
                     e.stopPropagation();
-                    onGoToTask(feature.linkedSpecId!);
+                    if (feature.linkedSpecId) onGoToTask(feature.linkedSpecId);
                   }}
                 >
                   <ExternalLink className="h-3 w-3 mr-1" />
-                  View Task
+                  {t('roadmap.viewTask')}
                 </Button>
               ) : (
                 <Button
@@ -130,11 +156,12 @@ export function PhaseCard({
                   }}
                 >
                   <Play className="h-3 w-3 mr-1" />
-                  Build
+                  {t('roadmap.build')}
                 </Button>
               )}
             </div>
-          ))}
+            );
+          })}
           {features.length > 5 && (
             <div className="text-sm text-muted-foreground text-center py-1">
               +{features.length - 5} more features

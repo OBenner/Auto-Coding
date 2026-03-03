@@ -51,10 +51,14 @@ interface SelectPRTestParams {
     newCommitsCheck: NewCommitsCheck | null;
   } | null;
   diskReviewResult: PRReviewResult | null;
-  mockCheckNewCommits: (projectId: string, prNumber: number) => Promise<NewCommitsCheck>;
-  mockGetPRReview: (projectId: string, prNumber: number) => Promise<PRReviewResult | null>;
-  mockSetNewCommitsCheck: (projectId: string, prNumber: number, check: NewCommitsCheck) => void;
-  mockSetPRReviewResult: (projectId: string, result: PRReviewResult) => void;
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
+  mockCheckNewCommits: Function;
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
+  mockGetPRReview: Function;
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
+  mockSetNewCommitsCheck: Function;
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
+  mockSetPRReviewResult: Function;
   abortSignal?: AbortSignal;
 }
 
@@ -146,14 +150,10 @@ async function simulateSelectPR(params: SelectPRTestParams): Promise<SelectPRTes
 }
 
 describe('useGitHubPRs - selectPR triggering checkNewCommits', () => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let mockCheckNewCommits: any;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let mockGetPRReview: any;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let mockSetNewCommitsCheck: any;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let mockSetPRReviewResult: any;
+  let mockCheckNewCommits: ReturnType<typeof vi.fn>;
+  let mockGetPRReview: ReturnType<typeof vi.fn>;
+  let mockSetNewCommitsCheck: ReturnType<typeof vi.fn>;
+  let mockSetPRReviewResult: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     mockCheckNewCommits = vi.fn().mockResolvedValue(createMockNewCommitsCheck());
@@ -507,8 +507,7 @@ describe('useGitHubPRs - selectPR triggering checkNewCommits', () => {
 });
 
 describe('useGitHubPRs - checkNewCommits result handling', () => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let mockSetNewCommitsCheck: any;
+  let mockSetNewCommitsCheck: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     mockSetNewCommitsCheck = vi.fn();

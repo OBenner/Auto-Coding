@@ -9,8 +9,14 @@ uvicorn[standard]>=0.32.0
 python-dotenv>=1.0.0
 
 # JWT authentication
-pyjwt>=2.9.0
+python-jose[cryptography]>=3.3.0
 passlib[bcrypt]>=1.7.4
+
+# OAuth client for GitHub/GitLab integration
+authlib>=1.3.0
+
+# Session management for OAuth state (required by SessionMiddleware)
+itsdangerous>=2.1.0
 
 # CORS middleware (included in FastAPI but explicit for clarity)
 # fastapi includes starlette which has CORS support
@@ -21,3 +27,22 @@ passlib[bcrypt]>=1.7.4
 # Pydantic for data validation (included with FastAPI)
 pydantic>=2.0.0
 pydantic-settings>=2.0.0
+email-validator>=2.0.0
+
+# Database - PostgreSQL and SQLAlchemy ORM
+sqlalchemy>=2.0.0
+psycopg2-binary>=2.9.9
+alembic>=1.13.0
+
+# Redis for caching and usage tracking
+redis>=5.0.0
+
+# PTY handling for terminal WebSocket (Unix/Linux/macOS only - optional)
+# Windows uses subprocess fallback, Unix systems get full PTY support with ptyprocess
+ptyprocess>=0.7.0; sys_platform != "win32"
+
+# Testing dependencies
+pytest>=8.0.0
+pytest-asyncio>=0.23.0
+httpx>=0.27.0  # For TestClient in async tests
+fakeredis>=2.21.0  # In-memory Redis for testing
