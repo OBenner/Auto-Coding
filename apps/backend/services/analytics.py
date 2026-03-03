@@ -30,7 +30,7 @@ import json
 import re
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -378,7 +378,7 @@ class AnalyticsService:
         Returns:
             MetricsSummary with aggregated metrics
         """
-        summary = MetricsSummary(last_updated=datetime.now(timezone.utc).isoformat())
+        summary = MetricsSummary(last_updated=datetime.now(UTC).isoformat())
 
         spec_dirs = self._get_all_spec_dirs()
         summary.total_specs = len(spec_dirs)
@@ -489,7 +489,7 @@ class AnalyticsService:
             List of TrendDataPoint for each day
         """
         # Group specs by date (using last_updated or created_at)
-        cutoff_date = datetime.now(timezone.utc) - timedelta(days=days)
+        cutoff_date = datetime.now(UTC) - timedelta(days=days)
         daily_data = defaultdict(lambda: {"total": 0, "completed": 0, "cost": 0.0})
 
         spec_dirs = self._get_all_spec_dirs()
@@ -527,13 +527,13 @@ class AnalyticsService:
                         mtime = spec_dir.stat().st_mtime
                     except OSError:
                         continue
-                spec_date = datetime.fromtimestamp(mtime, tz=timezone.utc)
+                spec_date = datetime.fromtimestamp(mtime, tz=UTC)
 
             # Ensure spec_date is timezone-aware UTC for comparison
             if spec_date.tzinfo is None:
-                spec_date = spec_date.replace(tzinfo=timezone.utc)
+                spec_date = spec_date.replace(tzinfo=UTC)
             else:
-                spec_date = spec_date.astimezone(timezone.utc)
+                spec_date = spec_date.astimezone(UTC)
 
             if spec_date < cutoff_date:
                 continue
@@ -578,5 +578,5 @@ class AnalyticsService:
         return {
             "summary": summary.to_dict(),
             "trends": [t.to_dict() for t in trends],
-            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "generated_at": datetime.now(UTC).isoformat(),
         }
