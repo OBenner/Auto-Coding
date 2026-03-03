@@ -4,6 +4,7 @@
  * Reusable chart renderer used by CostChart, TrendsChart, and QualityTrendChart
  * to eliminate duplicated SVG rendering code.
  */
+import { useTranslation } from 'react-i18next';
 import { Calendar } from 'lucide-react';
 import type { ProcessedMetric, ChartDimensions, ChartMetricConfig } from './chart-utils';
 
@@ -71,17 +72,21 @@ export function SVGLineChart<K extends string = string>({
   metricConfigs,
   header,
   isLoading = false,
-  loadingText = 'Loading chart data...',
-  emptyText = 'No data available',
-  emptySubtext = 'Run more tasks to see trends over time',
+  loadingText,
+  emptyText,
+  emptySubtext,
   latestValues,
 }: SVGLineChartProps<K>) {
+  const { t } = useTranslation(['model-usage']);
+  const resolvedLoadingText = loadingText ?? t('model-usage:chart.loading');
+  const resolvedEmptyText = emptyText ?? t('model-usage:chart.emptyTitle');
+  const resolvedEmptySubtext = emptySubtext ?? t('model-usage:chart.emptySubtitle');
   if (isLoading) {
     return (
       <ChartCardShell header={header}>
         <CenteredMessage>
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-border border-t-accent" />
-          <p className="text-sm">{loadingText}</p>
+          <p className="text-sm">{resolvedLoadingText}</p>
         </CenteredMessage>
       </ChartCardShell>
     );
@@ -92,8 +97,8 @@ export function SVGLineChart<K extends string = string>({
       <ChartCardShell header={header}>
         <CenteredMessage>
           <Calendar className="h-12 w-12 opacity-50" />
-          <p className="text-sm">{emptyText}</p>
-          <p className="text-xs">{emptySubtext}</p>
+          <p className="text-sm">{resolvedEmptyText}</p>
+          <p className="text-xs">{resolvedEmptySubtext}</p>
         </CenteredMessage>
       </ChartCardShell>
     );

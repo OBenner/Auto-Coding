@@ -31,6 +31,64 @@ async function fileExists(filePath: string): Promise<boolean> {
 }
 
 /**
+ * Transform raw backend summary (dicts) into the frontend ModelUsageSummary shape (arrays).
+ * The backend returns metrics_by_model and metrics_by_agent as Record<string, T>.
+ * The frontend expects models[], agents[], top_models_by_usage[], top_models_by_cost[].
+ */
+function transformSummary(raw: Record<string, unknown>): ModelUsageSummary {
+  // Convert metrics_by_model dict → models array
+  const metricsByModel = (raw.metrics_by_model ?? {}) as Record<string, ModelMetrics>;
+  const models: ModelMetrics[] = Object.values(metricsByModel);
+
+  // Convert metrics_by_agent dict → agents array
+  const metricsByAgent = (raw.metrics_by_agent ?? {}) as Record<string, AgentMetrics>;
+  const agents: AgentMetrics[] = Object.values(metricsByAgent);
+
+  // Compute top models
+  const top_models_by_usage = [...models].sort((a, b) => b.total_usage_count - a.total_usage_count).slice(0, 10);
+  const top_models_by_cost = [...models].sort((a, b) => b.total_cost - a.total_cost).slice(0, 10);
+
+  return {
+    period_start: raw.period_start as string,
+    period_end: raw.period_end as string,
+    total_usage_count: (raw.total_usage_count ?? raw.total_usage_records ?? 0) as number,
+    total_tokens: (raw.total_tokens ?? 0) as number,
+    total_cost: (raw.total_cost ?? 0) as number,
+    models,
+    agents,
+    top_models_by_usage,
+    top_models_by_cost,
+  };
+}
+
+/**
+ * Validate that a parsed object looks like a ModelUsageSummary.
+ */
+function isValidSummary(obj: unknown): obj is ModelUsageSummary {
+  if (!obj || typeof obj !== 'object') return false;
+  const s = obj as Record<string, unknown>;
+  return (
+    typeof s.period_start === 'string' &&
+    typeof s.period_end === 'string' &&
+    typeof s.total_usage_count === 'number' &&
+    Array.isArray(s.models) &&
+    Array.isArray(s.agents)
+  );
+}
+
+/**
+ * Validate that a parsed object looks like a ModelLockConfig.
+ */
+function isValidLockConfig(obj: unknown): obj is ModelLockConfig {
+  if (!obj || typeof obj !== 'object') return false;
+  const c = obj as Record<string, unknown>;
+  // phaseModels and agentModels should be objects (or undefined)
+  if (c.phaseModels !== undefined && (typeof c.phaseModels !== 'object' || Array.isArray(c.phaseModels))) return false;
+  if (c.agentModels !== undefined && (typeof c.agentModels !== 'object' || Array.isArray(c.agentModels))) return false;
+  return true;
+}
+
+/**
  * Execute a Python script and return the result.
  *
  * @param projectPath - Project root directory
@@ -177,13 +235,42 @@ export function registerModelUsageHandlers(): void {
         let summary: ModelUsageSummary;
 
         if (useCached) {
-          summary = JSON.parse(await fsPromises.readFile(summaryFile, 'utf-8'));
+          try {
+            const cached = JSON.parse(await fsPromises.readFile(summaryFile, 'utf-8'));
+            if (isValidSummary(cached)) {
+              summary = cached;
+            } else {
+              // Cache has wrong shape (possibly from older version) — regenerate
+              debugError('[Model Usage] Cached summary has invalid shape, regenerating');
+              useCached = false;
+              const raw = await executePythonScript(
+                project.path,
+                'apps/backend/analysis/model_usage_analytics.py',
+                withDateFilters(['--get-summary'], startDate, endDate)
+              );
+              summary = transformSummary(raw);
+              await fsPromises.mkdir(analyticsDir, { recursive: true });
+              await fsPromises.writeFile(summaryFile, JSON.stringify(summary, null, 2), 'utf-8');
+            }
+          } catch {
+            // Malformed cache file — regenerate
+            debugError('[Model Usage] Failed to parse cached summary, regenerating');
+            const raw = await executePythonScript(
+              project.path,
+              'apps/backend/analysis/model_usage_analytics.py',
+              withDateFilters(['--get-summary'], startDate, endDate)
+            );
+            summary = transformSummary(raw);
+            await fsPromises.mkdir(analyticsDir, { recursive: true });
+            await fsPromises.writeFile(summaryFile, JSON.stringify(summary, null, 2), 'utf-8');
+          }
         } else {
-          summary = await executePythonScript(
+          const raw = await executePythonScript(
             project.path,
             'apps/backend/analysis/model_usage_analytics.py',
             withDateFilters(['--get-summary'], startDate, endDate)
           );
+          summary = transformSummary(raw);
           await fsPromises.mkdir(analyticsDir, { recursive: true });
           await fsPromises.writeFile(summaryFile, JSON.stringify(summary, null, 2), 'utf-8');
         }
@@ -277,8 +364,11 @@ export function registerModelUsageHandlers(): void {
         if (!(await fileExists(locksPath))) {
           return { success: true, data: { phaseModels: {}, agentModels: {} } };
         }
-        const locks: ModelLockConfig = JSON.parse(await fsPromises.readFile(locksPath, 'utf-8'));
-        return { success: true, data: locks };
+        const parsed = JSON.parse(await fsPromises.readFile(locksPath, 'utf-8'));
+        if (!isValidLockConfig(parsed)) {
+          return { success: false, error: 'Invalid lock file format' };
+        }
+        return { success: true, data: parsed };
       } catch (error) {
         debugError('[Model Lock] Failed to list locks:', error);
         const errorMessage = error instanceof Error ? error.message : String(error);

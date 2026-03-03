@@ -319,6 +319,24 @@ def aggregate_model_usage(
     model_metrics: dict[str, ModelMetrics] = {}
     agent_metrics: dict[str, AgentMetrics] = {}
 
+    def _safe_int(val: Any) -> int:
+        """Coerce a value to int, falling back to 0."""
+        if val is None:
+            return 0
+        try:
+            return int(val)
+        except (ValueError, TypeError):
+            return 0
+
+    def _safe_float(val: Any) -> float:
+        """Coerce a value to float, falling back to 0.0."""
+        if val is None:
+            return 0.0
+        try:
+            return float(val)
+        except (ValueError, TypeError):
+            return 0.0
+
     # Process each spec
     for spec_dir in specs_dir.iterdir():
         if not spec_dir.is_dir():
@@ -329,7 +347,7 @@ def aggregate_model_usage(
         if not records:
             continue
 
-        total_specs += 1
+        spec_had_records = False
 
         # Process each record
         for record_dict in records:
@@ -344,21 +362,25 @@ def aggregate_model_usage(
             if end_date and timestamp > end_date:
                 continue
 
+            spec_had_records = True
             all_timestamps.append(timestamp)
             total_usage_records += 1
 
-            # Extract record data
+            # Extract record data (coerce types for safety)
             model = record_dict.get("model", "unknown")
             provider = record_dict.get("provider", "anthropic")
             agent_type = record_dict.get("agent_type", "unknown")
-            input_tokens = record_dict.get("input_tokens", 0)
-            output_tokens = record_dict.get("output_tokens", 0)
-            cost = record_dict.get("cost", 0.0)
+            input_tokens = _safe_int(record_dict.get("input_tokens", 0))
+            output_tokens = _safe_int(record_dict.get("output_tokens", 0))
+            cost = _safe_float(record_dict.get("cost", 0.0))
+
+            # Key by (provider, model) to avoid collisions across providers
+            model_key = f"{provider}:{model}"
 
             # Initialize model metrics if needed
-            if model not in model_metrics:
-                model_metrics[model] = ModelMetrics(model=model, provider=provider)
-            model_metric = model_metrics[model]
+            if model_key not in model_metrics:
+                model_metrics[model_key] = ModelMetrics(model=model, provider=provider)
+            model_metric = model_metrics[model_key]
 
             # Update model metrics
             _accumulate_tokens(model_metric, input_tokens, output_tokens, cost)
@@ -380,6 +402,10 @@ def aggregate_model_usage(
             # Update agent metrics
             _accumulate_tokens(agent_metric, input_tokens, output_tokens, cost)
             agent_metric.models_used[model] = agent_metric.models_used.get(model, 0) + 1
+
+        # Only count spec if it had records passing filters
+        if spec_had_records:
+            total_specs += 1
 
     # Determine primary model for each agent
     for agent_metric in agent_metrics.values():
@@ -462,14 +488,22 @@ def get_model_usage_trends(
     # Group usage by time period
     trends = []
 
-    if granularity == "daily":
-        period_delta = timedelta(days=1)
-    elif granularity == "weekly":
-        period_delta = timedelta(weeks=1)
-    elif granularity == "monthly":
-        period_delta = timedelta(days=30)
-    else:
-        period_delta = timedelta(days=1)
+    def _advance_period(dt: datetime, gran: str) -> datetime:
+        """Advance a datetime by one period based on granularity."""
+        if gran == "weekly":
+            return dt + timedelta(weeks=1)
+        if gran == "monthly":
+            # Advance by one calendar month
+            month = dt.month % 12 + 1
+            year = dt.year + (1 if dt.month == 12 else 0)
+            # Clamp day to valid range for target month
+            import calendar
+
+            max_day = calendar.monthrange(year, month)[1]
+            day = min(dt.day, max_day)
+            return dt.replace(year=year, month=month, day=day)
+        # daily (default)
+        return dt + timedelta(days=1)
 
     # Collect all records with timestamps for grouping
     specs_dir = project_dir / ".auto-claude" / "specs"
@@ -503,7 +537,7 @@ def get_model_usage_trends(
     # Generate trend data points
     current_date = start_date
     while current_date <= end_date:
-        period_end = current_date + period_delta
+        period_end = _advance_period(current_date, granularity)
 
         # Round to appropriate period boundary
         period_key = _round_to_period_start(current_date, granularity)

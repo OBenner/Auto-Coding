@@ -40,7 +40,9 @@ from __future__ import annotations
 
 import json
 import sys
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -114,10 +116,13 @@ def cmd_list(spec_dir: str) -> int:
 
 
 def _validate_spec_dir(spec_dir: str) -> Path | None:
-    """Validate spec directory exists. Returns Path or None on error."""
+    """Validate spec directory exists and is a directory. Returns Path or None on error."""
     spec_path = Path(spec_dir)
     if not spec_path.exists():
         print(f"❌ Error: Spec directory not found: {spec_dir}", file=sys.stderr)
+        return None
+    if not spec_path.is_dir():
+        print(f"❌ Error: Spec path is not a directory: {spec_dir}", file=sys.stderr)
         return None
     return spec_path
 
@@ -139,8 +144,8 @@ def _validate_target(
 
 def _run_lock_command(
     spec_dir: str,
-    lock_fn: object,
-    verify_fn: object,
+    lock_fn: Callable[[Path, str, str], Any],
+    verify_fn: Callable[[Path, str], bool],
     target: str,
     model_id: str,
     label: str,
@@ -150,16 +155,28 @@ def _run_lock_command(
         print("❌ Error: model_id must not be empty", file=sys.stderr)
         return 1
 
+    model_id = model_id.strip()
+
     spec_path = _validate_spec_dir(spec_dir)
     if not spec_path:
         return 1
 
     try:
-        lock_fn(spec_path, target, model_id)  # type: ignore[operator]
+        lock_fn(spec_path, target, model_id)
         print(f"✅ Locked {label} '{target}' to model '{model_id}'")
 
-        if verify_fn(spec_path, target):  # type: ignore[operator]
-            print_locks(load_model_locks(spec_path))
+        if verify_fn(spec_path, target):
+            # Verify the persisted lock matches the normalized model_id
+            locks = load_model_locks(spec_path)
+            section = "phaseModels" if label == "phase" else "agentModels"
+            saved_id = (locks.get(section) or {}).get(target)
+            if saved_id != model_id:
+                print(
+                    f"⚠️  Warning: Saved model ID '{saved_id}' does not match '{model_id}'",
+                    file=sys.stderr,
+                )
+                return 1
+            print_locks(locks)
             return 0
         print(
             "⚠️  Warning: Lock was created but verification failed",
@@ -173,7 +190,7 @@ def _run_lock_command(
 
 def _run_unlock_command(
     spec_dir: str,
-    unlock_fn: object,
+    unlock_fn: Callable[[Path, str], Any],
     target: str,
     label: str,
 ) -> int:
@@ -183,7 +200,7 @@ def _run_unlock_command(
         return 1
 
     try:
-        unlock_fn(spec_path, target)  # type: ignore[operator]
+        unlock_fn(spec_path, target)
         print(f"✅ Unlocked {label} '{target}'")
         print_locks(load_model_locks(spec_path))
         return 0
@@ -253,8 +270,10 @@ def cmd_clear(spec_dir: str) -> int:
 
 def print_usage() -> None:
     """Print usage information."""
+    phases_str = ", ".join(VALID_PHASES)
+    agents_str = ", ".join(VALID_AGENTS)
     print(
-        """Usage: model_locks_manager.py <command> <args>
+        f"""Usage: model_locks_manager.py <command> <args>
 
 Commands:
     list <spec_dir>                    List all model locks
@@ -265,14 +284,10 @@ Commands:
     clear <spec_dir>                    Clear all locks
 
 Valid Phases:
-    spec, planning, coding, qa, test_generation
+    {phases_str}
 
 Valid Agents:
-    planner, coder, qa_reviewer, qa_fixer, spec_gatherer, spec_writer,
-    spec_researcher, spec_critic, insights, merge_resolver, commit_message,
-    pr_reviewer, pr_orchestrator_parallel, pr_followup_parallel, analysis,
-    batch_analysis, batch_validation, roadmap_discovery, competitor_analysis,
-    ideation
+    {agents_str}
 
 Examples:
     # List all locks

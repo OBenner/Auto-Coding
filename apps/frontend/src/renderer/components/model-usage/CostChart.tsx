@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { DollarSign } from 'lucide-react';
 import type { ModelUsageTrendPoint } from '../../../shared/types/model-usage';
 import type { ChartMetricConfig } from '../analytics/chart-utils';
@@ -12,53 +13,57 @@ interface CostChartProps {
 
 type MetricType = 'total_cost' | 'total_tokens' | 'usage_count';
 
-const CHART_METRICS: ChartMetricConfig<MetricType>[] = [
-  {
-    key: 'total_cost',
-    label: 'Cost ($)',
-    color: 'rgb(34, 197, 94)',
-    formatValue: (value: number) => `$${value.toFixed(2)}`,
-  },
-  {
-    key: 'total_tokens',
-    label: 'Tokens',
-    color: 'rgb(59, 130, 246)',
-    formatValue: (value: number) => value.toLocaleString(),
-  },
-  {
-    key: 'usage_count',
-    label: 'API Calls',
-    color: 'rgb(168, 85, 247)',
-    formatValue: (value: number) => value.toFixed(0),
-  },
-];
-
 function ChartHeader() {
+  const { t } = useTranslation(['model-usage']);
   return (
     <div className="flex items-center gap-2 mb-4">
       <DollarSign className="h-5 w-5 text-accent" />
-      <h2 className="text-lg font-semibold text-foreground">Cost Trends Over Time</h2>
+      <h2 className="text-lg font-semibold text-foreground">{t('model-usage:costChart.title')}</h2>
     </div>
   );
 }
 
 export function CostChart({ trends, isLoading = false }: CostChartProps) {
+  const { t, i18n } = useTranslation(['model-usage']);
+
+  const chartMetrics: ChartMetricConfig<MetricType>[] = useMemo(() => [
+    {
+      key: 'total_cost',
+      label: t('model-usage:costChart.cost'),
+      color: 'rgb(34, 197, 94)',
+      formatValue: (value: number) => `$${value.toFixed(2)}`,
+    },
+    {
+      key: 'total_tokens',
+      label: t('model-usage:costChart.tokens'),
+      color: 'rgb(59, 130, 246)',
+      formatValue: (value: number) => value.toLocaleString(),
+    },
+    {
+      key: 'usage_count',
+      label: t('model-usage:costChart.apiCalls'),
+      color: 'rgb(168, 85, 247)',
+      formatValue: (value: number) => value.toFixed(0),
+    },
+  ], [t]);
+
   const chartData = useMemo(() => {
     if (!trends || trends.length === 0) return null;
 
     const dims = createChartDimensions();
-    const metrics = CHART_METRICS.map((metric) => {
+    const metrics = chartMetrics.map((metric) => {
       const values = trends.map((point) => point[metric.key] as number);
       return buildMetricPaths(metric, values, dims);
     });
 
+    const locale = i18n.language || 'en-US';
     const dateLabels = trends.map((point) => {
       const date = new Date(point.date);
-      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      return date.toLocaleDateString(locale, { month: 'short', day: 'numeric' });
     });
 
     return { dims, metrics, dateLabels };
-  }, [trends]);
+  }, [trends, chartMetrics, i18n.language]);
 
   const latestValues = useMemo(() => {
     if (!trends || trends.length === 0) return undefined;
@@ -74,12 +79,12 @@ export function CostChart({ trends, isLoading = false }: CostChartProps) {
     <SVGLineChart
       data={chartData}
       dataLength={trends?.length ?? 0}
-      metricConfigs={CHART_METRICS}
+      metricConfigs={chartMetrics}
       header={<ChartHeader />}
       isLoading={isLoading}
-      loadingText="Loading cost trends..."
-      emptyText="No cost trend data available"
-      emptySubtext="Run more tasks to see cost trends over time"
+      loadingText={t('model-usage:costChart.loading')}
+      emptyText={t('model-usage:costChart.empty')}
+      emptySubtext={t('model-usage:costChart.emptySubtext')}
       latestValues={latestValues}
     />
   );

@@ -30,5 +30,71 @@
     "confirm": "Confirmer le Changement",
     "cancel": "Annuler",
     "changing": "Changement en cours..."
+  },
+  "dashboard": {
+    "title": "Analytiques d'utilisation des modèles",
+    "subtitle": "Suivre l'utilisation des modèles IA, les coûts et la transparence de configuration",
+    "loadingAnalytics": "Chargement des analytiques d'utilisation des modèles...",
+    "summaryMetrics": "Métriques récapitulatives",
+    "totalApiCalls": "Total appels API",
+    "totalTokens": "Total jetons",
+    "totalCost": "Coût total",
+    "modelsUsed": "Modèles utilisés",
+    "usageByAgent": "Utilisation par agent",
+    "topByUsage": "Top modèles par utilisation",
+    "topByCost": "Top modèles par coût",
+    "allModels": "Tous les modèles",
+    "calls": "appels",
+    "tokens": "jetons",
+    "refresh": "Actualiser",
+    "exportJson": "Exporter JSON",
+    "exportCsv": "Exporter CSV",
+    "timeRange": {
+      "all": "Tout"
+    },
+    "empty": {
+      "title": "Aucune donnée d'utilisation des modèles disponible",
+      "description": "Exécutez des tâches pour voir vos analytiques d'utilisation des modèles"
+    },
+    "toast": {
+      "refreshed": "Analytiques actualisées",
+      "refreshedDescription": "Les données analytiques d'utilisation des modèles ont été mises à jour.",
+      "warning": "Avertissement",
+      "summaryFailed": "Échec du chargement du résumé d'utilisation des modèles.",
+      "exportSuccess": "Exportation réussie",
+      "exportSuccessDescription": "Analytiques d'utilisation des modèles exportées vers {{path}}",
+      "exportFailed": "Échec de l'exportation",
+      "exportFailedDescription": "Échec de l'exportation des analytiques",
+      "exportError": "Erreur d'exportation",
+      "exportErrorDescription": "Une erreur est survenue lors de l'exportation des analytiques.",
+      "error": "Erreur",
+      "loadError": "Échec du chargement des données analytiques d'utilisation des modèles."
+    }
+  },
+  "costChart": {
+    "title": "Tendances des coûts au fil du temps",
+    "cost": "Coût ($)",
+    "tokens": "Jetons",
+    "apiCalls": "Appels API",
+    "loading": "Chargement des tendances de coûts...",
+    "empty": "Aucune donnée de tendance de coûts disponible",
+    "emptySubtext": "Exécutez plus de tâches pour voir les tendances de coûts"
+  },
+  "card": {
+    "model": "modèle",
+    "models": "modèles",
+    "preferredModel": "Modèle principal",
+    "apiCalls": "Appels API",
+    "totalTokens": "Total jetons",
+    "totalCost": "Coût total",
+    "modelsUsed": "Modèles utilisés",
+    "modelBreakdown": "Répartition par modèle",
+    "calls": "appels"
+  },
+  "chart": {
+    "loading": "Chargement des données du graphique...",
+    "emptyTitle": "Aucune donnée disponible",
+    "emptySubtitle": "Exécutez plus de tâches pour voir les tendances",
+    "rangeLatest": "Plage"
   }
 }

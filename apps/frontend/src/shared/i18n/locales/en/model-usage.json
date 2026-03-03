@@ -30,5 +30,71 @@
     "confirm": "Confirm Change",
     "cancel": "Cancel",
     "changing": "Changing..."
+  },
+  "dashboard": {
+    "title": "Model Usage Analytics",
+    "subtitle": "Track AI model usage, costs, and configuration transparency",
+    "loadingAnalytics": "Loading model usage analytics...",
+    "summaryMetrics": "Summary Metrics",
+    "totalApiCalls": "Total API Calls",
+    "totalTokens": "Total Tokens",
+    "totalCost": "Total Cost",
+    "modelsUsed": "Models Used",
+    "usageByAgent": "Model Usage by Agent",
+    "topByUsage": "Top Models by Usage",
+    "topByCost": "Top Models by Cost",
+    "allModels": "All Models",
+    "calls": "calls",
+    "tokens": "tokens",
+    "refresh": "Refresh",
+    "exportJson": "Export JSON",
+    "exportCsv": "Export CSV",
+    "timeRange": {
+      "all": "All"
+    },
+    "empty": {
+      "title": "No model usage data available",
+      "description": "Run some tasks to see your model usage analytics"
+    },
+    "toast": {
+      "refreshed": "Analytics Refreshed",
+      "refreshedDescription": "Model usage analytics data has been updated.",
+      "warning": "Warning",
+      "summaryFailed": "Failed to load model usage summary.",
+      "exportSuccess": "Export Successful",
+      "exportSuccessDescription": "Model usage analytics exported to {{path}}",
+      "exportFailed": "Export Failed",
+      "exportFailedDescription": "Failed to export analytics",
+      "exportError": "Export Error",
+      "exportErrorDescription": "An error occurred while exporting analytics.",
+      "error": "Error",
+      "loadError": "Failed to load model usage analytics data."
+    }
+  },
+  "costChart": {
+    "title": "Cost Trends Over Time",
+    "cost": "Cost ($)",
+    "tokens": "Tokens",
+    "apiCalls": "API Calls",
+    "loading": "Loading cost trends...",
+    "empty": "No cost trend data available",
+    "emptySubtext": "Run more tasks to see cost trends over time"
+  },
+  "card": {
+    "model": "model",
+    "models": "models",
+    "preferredModel": "Primary Model",
+    "apiCalls": "API Calls",
+    "totalTokens": "Total Tokens",
+    "totalCost": "Total Cost",
+    "modelsUsed": "Models Used",
+    "modelBreakdown": "Model Breakdown",
+    "calls": "calls"
+  },
+  "chart": {
+    "loading": "Loading chart data...",
+    "emptyTitle": "No data available",
+    "emptySubtitle": "Run more tasks to see trends over time",
+    "rangeLatest": "Range"
   }
 }

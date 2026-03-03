@@ -43,10 +43,16 @@
   },
 
   "trends": {
-    "title": "Tendances de performance",
+    "title": "Tendances au fil du temps",
     "description": "Données de performance historiques au fil du temps",
     "tasks": "tâches",
-    "noData": "Aucune donnée de tendance disponible"
+    "noData": "Aucune donnée de tendance disponible",
+    "loading": "Chargement des tendances...",
+    "empty": "Aucune donnée de tendance disponible",
+    "emptySubtext": "Complétez plus de tâches pour voir les tendances",
+    "completedSpecs": "Spécifications terminées",
+    "timeSaved": "Temps économisé (heures)",
+    "successRate": "Taux de réussite (%)"
   },
 
   "qa": {

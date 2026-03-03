@@ -84,7 +84,11 @@ def parse_date_args(args: object) -> tuple[datetime | None, datetime | None]:
             print(f"Error: Invalid {label} date format: {value}", file=sys.stderr)
             sys.exit(1)
 
-    return (
-        _parse(getattr(args, "start_date", None), "start"),
-        _parse(getattr(args, "end_date", None), "end"),
-    )
+    start = _parse(getattr(args, "start_date", None), "start")
+    end = _parse(getattr(args, "end_date", None), "end")
+
+    if start is not None and end is not None and start > end:
+        print("Error: start date must be <= end date", file=sys.stderr)
+        sys.exit(1)
+
+    return (start, end)

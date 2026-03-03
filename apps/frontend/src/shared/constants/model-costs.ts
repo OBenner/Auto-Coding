@@ -293,6 +293,7 @@ export function getCheapestModel(
   estimatedInputTokens: number,
   estimatedOutputTokens: number
 ): string {
+  if (models.length === 0) return '';
   const comparison = compareCosts(models, estimatedInputTokens, estimatedOutputTokens);
   return comparison[0]?.model ?? models[0];
 }

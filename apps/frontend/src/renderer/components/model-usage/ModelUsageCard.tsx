@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Cpu, DollarSign, Hash, Zap } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Badge } from '../ui/badge';
@@ -43,6 +44,8 @@ function StatCard({
 }
 
 export function ModelUsageCard({ agent, showRank = false, rank }: ModelUsageCardProps) {
+  const { t } = useTranslation(['model-usage']);
+
   const stats = useMemo(() => {
     return {
       totalCalls: agent.total_usage_count,
@@ -53,8 +56,8 @@ export function ModelUsageCard({ agent, showRank = false, rank }: ModelUsageCard
   }, [agent]);
 
   const modelInfo = useMemo(() => {
-    return parseModelId(agent.preferred_model);
-  }, [agent.preferred_model]);
+    return parseModelId(agent.primary_model);
+  }, [agent.primary_model]);
 
   return (
     <Card className="bg-muted/30 border-border/50">
@@ -72,46 +75,46 @@ export function ModelUsageCard({ agent, showRank = false, rank }: ModelUsageCard
             </CardTitle>
           </div>
           <Badge variant="secondary" className="text-xs">
-            {stats.modelsUsed} {stats.modelsUsed === 1 ? 'model' : 'models'}
+            {stats.modelsUsed} {stats.modelsUsed === 1 ? t('model-usage:card.model') : t('model-usage:card.models')}
           </Badge>
         </div>
       </CardHeader>
       <CardContent>
-        {/* Preferred Model */}
+        {/* Primary Model */}
         <div className="mb-4 p-3 rounded-lg bg-background/50 border border-border/50">
-          <p className="text-xs text-muted-foreground mb-1">Preferred Model</p>
+          <p className="text-xs text-muted-foreground mb-1">{t('model-usage:card.preferredModel')}</p>
           <div className="flex items-center gap-2">
             <p className="text-sm font-semibold">{modelInfo.name}</p>
             <Badge variant="outline" className="text-xs">
               {modelInfo.version}
             </Badge>
           </div>
-          <p className="text-xs text-muted-foreground mt-1 truncate">{agent.preferred_model}</p>
+          <p className="text-xs text-muted-foreground mt-1 truncate">{agent.primary_model}</p>
         </div>
 
         {/* Stats Grid */}
         <div className="grid grid-cols-2 gap-3">
           <StatCard
             icon={Hash}
-            label="API Calls"
+            label={t('model-usage:card.apiCalls')}
             value={formatNumber(stats.totalCalls)}
             variant="default"
           />
           <StatCard
             icon={Zap}
-            label="Total Tokens"
+            label={t('model-usage:card.totalTokens')}
             value={formatNumber(stats.totalTokens)}
             variant="default"
           />
           <StatCard
             icon={DollarSign}
-            label="Total Cost"
+            label={t('model-usage:card.totalCost')}
             value={formatCurrency(stats.totalCost)}
             variant={stats.totalCost > 10 ? 'warning' : 'success'}
           />
           <StatCard
             icon={Cpu}
-            label="Models Used"
+            label={t('model-usage:card.modelsUsed')}
             value={stats.modelsUsed}
             variant="default"
           />
@@ -120,7 +123,7 @@ export function ModelUsageCard({ agent, showRank = false, rank }: ModelUsageCard
         {/* Model Breakdown */}
         {Object.keys(agent.models_used).length > 1 && (
           <div className="mt-4 pt-4 border-t border-border/50">
-            <p className="text-xs text-muted-foreground mb-2">Model Breakdown</p>
+            <p className="text-xs text-muted-foreground mb-2">{t('model-usage:card.modelBreakdown')}</p>
             <div className="space-y-1">
               {Object.entries(agent.models_used)
                 .sort(([, a], [, b]) => b - a)
@@ -133,7 +136,7 @@ export function ModelUsageCard({ agent, showRank = false, rank }: ModelUsageCard
                         {model}
                       </span>
                       <div className="flex items-center gap-2">
-                        <span className="text-muted-foreground">{count} calls</span>
+                        <span className="text-muted-foreground">{count} {t('model-usage:card.calls')}</span>
                         <span className="font-medium">{percentage}%</span>
                       </div>
                     </div>

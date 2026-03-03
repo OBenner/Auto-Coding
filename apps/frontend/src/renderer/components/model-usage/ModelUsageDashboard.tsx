@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Download, Loader2, RefreshCw, FileText, Calendar, Cpu } from 'lucide-react';
 import { Button } from '../ui/button';
 import { ScrollArea } from '../ui/scroll-area';
@@ -20,6 +21,7 @@ interface ModelUsageDashboardProps {
 type TimeRange = 'all' | '7d' | '30d' | '90d';
 
 function ModelRow({ model }: { model: ModelMetrics }) {
+  const { t } = useTranslation(['model-usage']);
   return (
     <div className="flex justify-between items-center p-2 rounded hover:bg-muted/50">
       <div className="flex flex-col">
@@ -28,9 +30,9 @@ function ModelRow({ model }: { model: ModelMetrics }) {
       </div>
       <div className="flex items-center gap-4">
         <div className="text-right">
-          <p className="text-sm font-semibold">{model.total_usage_count} calls</p>
+          <p className="text-sm font-semibold">{model.total_usage_count} {t('model-usage:dashboard.calls')}</p>
           <p className="text-xs text-muted-foreground">
-            {Number(model.total_tokens).toLocaleString()} tokens
+            {Number(model.total_tokens).toLocaleString()} {t('model-usage:dashboard.tokens')}
           </p>
         </div>
         <div className="text-right w-24">
@@ -51,7 +53,7 @@ function ModelListSection({ title, models, limit }: { title: string; models: Mod
       <h2 className="text-lg font-semibold mb-4">{title}</h2>
       <div className="space-y-2">
         {displayModels.map((model) => (
-          <ModelRow key={model.model} model={model} />
+          <ModelRow key={`${model.provider}:${model.model}`} model={model} />
         ))}
       </div>
     </div>
@@ -59,6 +61,7 @@ function ModelListSection({ title, models, limit }: { title: string; models: Mod
 }
 
 export function ModelUsageDashboard({ projectId }: ModelUsageDashboardProps) {
+  const { t } = useTranslation(['model-usage']);
   const { toast } = useToast();
 
   // State
@@ -103,6 +106,7 @@ export function ModelUsageDashboard({ projectId }: ModelUsageDashboardProps) {
       loadingState(true);
 
       const dateFilter = getDateFilter();
+      let allSucceeded = true;
 
       // Load summary analytics
       const summaryResult = await window.electronAPI.getModelUsageSummary(
@@ -113,10 +117,11 @@ export function ModelUsageDashboard({ projectId }: ModelUsageDashboardProps) {
       if (summaryResult.success && summaryResult.data) {
         setSummary(summaryResult.data);
       } else {
+        allSucceeded = false;
         console.error('Failed to load model usage summary:', summaryResult.error);
         toast({
-          title: 'Warning',
-          description: summaryResult.error || 'Failed to load model usage summary.',
+          title: t('model-usage:dashboard.toast.warning'),
+          description: summaryResult.error || t('model-usage:dashboard.toast.summaryFailed'),
           variant: 'destructive',
         });
       }
@@ -130,27 +135,28 @@ export function ModelUsageDashboard({ projectId }: ModelUsageDashboardProps) {
       if (trendsResult.success && trendsResult.data) {
         setTrends(trendsResult.data);
       } else {
+        allSucceeded = false;
         console.error('Failed to load model usage trends:', trendsResult.error);
       }
 
-      if (showRefreshToast) {
+      if (showRefreshToast && allSucceeded) {
         toast({
-          title: 'Analytics Refreshed',
-          description: 'Model usage analytics data has been updated.',
+          title: t('model-usage:dashboard.toast.refreshed'),
+          description: t('model-usage:dashboard.toast.refreshedDescription'),
         });
       }
     } catch (error) {
       console.error('Error loading model usage data:', error);
       toast({
-        title: 'Error',
-        description: 'Failed to load model usage analytics data.',
+        title: t('model-usage:dashboard.toast.error'),
+        description: t('model-usage:dashboard.toast.loadError'),
         variant: 'destructive',
       });
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, [projectId, timeRange, getDateFilter, toast]);
+  }, [projectId, timeRange, getDateFilter, toast, t]);
 
   // Initial load
   useEffect(() => {
@@ -177,27 +183,27 @@ export function ModelUsageDashboard({ projectId }: ModelUsageDashboardProps) {
 
       if (result.success && result.data) {
         toast({
-          title: 'Export Successful',
-          description: `Model usage analytics exported to ${result.data}`,
+          title: t('model-usage:dashboard.toast.exportSuccess'),
+          description: t('model-usage:dashboard.toast.exportSuccessDescription', { path: result.data }),
         });
       } else {
         toast({
-          title: 'Export Failed',
-          description: result.error || 'Failed to export analytics',
+          title: t('model-usage:dashboard.toast.exportFailed'),
+          description: result.error || t('model-usage:dashboard.toast.exportFailedDescription'),
           variant: 'destructive',
         });
       }
     } catch (error) {
       console.error('Error exporting analytics:', error);
       toast({
-        title: 'Export Error',
-        description: 'An error occurred while exporting analytics.',
+        title: t('model-usage:dashboard.toast.exportError'),
+        description: t('model-usage:dashboard.toast.exportErrorDescription'),
         variant: 'destructive',
       });
     } finally {
       setIsExporting(false);
     }
-  }, [projectId, getDateFilter, toast]);
+  }, [projectId, getDateFilter, toast, t]);
 
   // Handle time range change
   const handleTimeRangeChange = useCallback((range: TimeRange) => {
@@ -209,7 +215,7 @@ export function ModelUsageDashboard({ projectId }: ModelUsageDashboardProps) {
       <div className="flex h-full items-center justify-center">
         <div className="flex flex-col items-center gap-3">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-          <p className="text-sm text-muted-foreground">Loading model usage analytics...</p>
+          <p className="text-sm text-muted-foreground">{t('model-usage:dashboard.loadingAnalytics')}</p>
         </div>
       </div>
     );
@@ -223,9 +229,9 @@ export function ModelUsageDashboard({ projectId }: ModelUsageDashboardProps) {
           <div className="flex items-center gap-3">
             <Cpu className="h-6 w-6 text-accent" />
             <div>
-              <h1 className="text-2xl font-semibold text-foreground">Model Usage Analytics</h1>
+              <h1 className="text-2xl font-semibold text-foreground">{t('model-usage:dashboard.title')}</h1>
               <p className="text-sm text-muted-foreground">
-                Track AI model usage, costs, and configuration transparency
+                {t('model-usage:dashboard.subtitle')}
               </p>
             </div>
           </div>
@@ -242,7 +248,7 @@ export function ModelUsageDashboard({ projectId }: ModelUsageDashboardProps) {
                   className="h-7"
                 >
                   {range !== 'all' && <Calendar className="h-3 w-3 mr-1" />}
-                  {range === 'all' ? 'All' : range}
+                  {range === 'all' ? t('model-usage:dashboard.timeRange.all') : range}
                 </Button>
               ))}
             </div>
@@ -254,7 +260,7 @@ export function ModelUsageDashboard({ projectId }: ModelUsageDashboardProps) {
               disabled={isRefreshing}
             >
               <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
-              Refresh
+              {t('model-usage:dashboard.refresh')}
             </Button>
 
             <Button
@@ -264,7 +270,7 @@ export function ModelUsageDashboard({ projectId }: ModelUsageDashboardProps) {
               disabled={isExporting}
             >
               <FileText className="h-4 w-4 mr-2" />
-              Export JSON
+              {t('model-usage:dashboard.exportJson')}
             </Button>
 
             <Button
@@ -274,7 +280,7 @@ export function ModelUsageDashboard({ projectId }: ModelUsageDashboardProps) {
               disabled={isExporting}
             >
               <Download className="h-4 w-4 mr-2" />
-              Export CSV
+              {t('model-usage:dashboard.exportCsv')}
             </Button>
           </div>
         </div>
@@ -286,13 +292,13 @@ export function ModelUsageDashboard({ projectId }: ModelUsageDashboardProps) {
           {/* Summary Metrics Card */}
           {summary && (
             <div className="rounded-lg border border-border bg-card p-6">
-              <h2 className="text-lg font-semibold mb-4">Summary Metrics</h2>
+              <h2 className="text-lg font-semibold mb-4">{t('model-usage:dashboard.summaryMetrics')}</h2>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {[
-                  { label: 'Total API Calls', value: String(summary.total_usage_count ?? 0) },
-                  { label: 'Total Tokens', value: Number(summary.total_tokens ?? 0).toLocaleString() },
-                  { label: 'Total Cost', value: `$${Number(summary.total_cost ?? 0).toFixed(2)}`, className: 'text-green-600' },
-                  { label: 'Models Used', value: String(summary.models?.length ?? 0) },
+                  { label: t('model-usage:dashboard.totalApiCalls'), value: String(summary.total_usage_count ?? 0) },
+                  { label: t('model-usage:dashboard.totalTokens'), value: Number(summary.total_tokens ?? 0).toLocaleString() },
+                  { label: t('model-usage:dashboard.totalCost'), value: `$${Number(summary.total_cost ?? 0).toFixed(2)}`, className: 'text-green-600' },
+                  { label: t('model-usage:dashboard.modelsUsed'), value: String(summary.models?.length ?? 0) },
                 ].map((stat) => (
                   <div key={stat.label}>
                     <p className="text-sm text-muted-foreground">{stat.label}</p>
@@ -306,9 +312,9 @@ export function ModelUsageDashboard({ projectId }: ModelUsageDashboardProps) {
           {/* Model Usage by Agent */}
           {summary && summary.agents && summary.agents.length > 0 && (
             <div className="rounded-lg border border-border bg-card p-6">
-              <h2 className="text-lg font-semibold mb-4">Model Usage by Agent</h2>
+              <h2 className="text-lg font-semibold mb-4">{t('model-usage:dashboard.usageByAgent')}</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {summary.agents
+                {[...summary.agents]
                   .sort((a, b) => b.total_usage_count - a.total_usage_count)
                   .map((agent, index) => (
                     <ModelUsageCard
@@ -323,13 +329,13 @@ export function ModelUsageDashboard({ projectId }: ModelUsageDashboardProps) {
           )}
 
           {/* Top Models by Usage */}
-          {summary && <ModelListSection title="Top Models by Usage" models={summary.top_models_by_usage} limit={5} />}
+          {summary && <ModelListSection title={t('model-usage:dashboard.topByUsage')} models={summary.top_models_by_usage} limit={5} />}
 
           {/* Top Models by Cost */}
-          {summary && <ModelListSection title="Top Models by Cost" models={summary.top_models_by_cost} limit={5} />}
+          {summary && <ModelListSection title={t('model-usage:dashboard.topByCost')} models={summary.top_models_by_cost} limit={5} />}
 
           {/* All Models Details */}
-          {summary && <ModelListSection title="All Models" models={summary.models} />}
+          {summary && <ModelListSection title={t('model-usage:dashboard.allModels')} models={summary.models} />}
 
           {/* Cost Trends Chart */}
           <CostChart trends={trends} />
@@ -338,8 +344,8 @@ export function ModelUsageDashboard({ projectId }: ModelUsageDashboardProps) {
           {(!summary || summary.total_usage_count === 0) && (
             <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
               <Cpu className="h-16 w-16 mb-4 opacity-50" />
-              <p className="text-lg font-medium">No model usage data available</p>
-              <p className="text-sm">Run some tasks to see your model usage analytics</p>
+              <p className="text-lg font-medium">{t('model-usage:dashboard.empty.title')}</p>
+              <p className="text-sm">{t('model-usage:dashboard.empty.description')}</p>
             </div>
           )}
         </div>

@@ -39,7 +39,7 @@ export interface ModelMetrics extends BaseUsageMetrics {
 export interface AgentMetrics extends BaseUsageMetrics {
   agent_type: string;
   models_used: Record<string, number>;  // model_id -> count
-  preferred_model: string;
+  primary_model: string;
 }
 
 // ============================================
@@ -48,6 +48,9 @@ export interface AgentMetrics extends BaseUsageMetrics {
 
 /**
  * Aggregated model usage metrics across all specs.
+ *
+ * The backend returns metrics_by_model and metrics_by_agent as dicts.
+ * The IPC handler transforms them into arrays and computes top_models lists.
  */
 export interface ModelUsageSummary {
   // Time period
@@ -59,13 +62,13 @@ export interface ModelUsageSummary {
   total_tokens: number;
   total_cost: number;
 
-  // Model breakdown
+  // Model breakdown (transformed from backend dict to array in IPC handler)
   models: ModelMetrics[];
 
-  // Agent breakdown
+  // Agent breakdown (transformed from backend dict to array in IPC handler)
   agents: AgentMetrics[];
 
-  // Top models
+  // Top models (computed in IPC handler from models array)
   top_models_by_usage: ModelMetrics[];
   top_models_by_cost: ModelMetrics[];
 }
