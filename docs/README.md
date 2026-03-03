@@ -23,6 +23,8 @@ This directory contains comprehensive documentation for understanding, extending
 | Directory | Purpose |
 |-----------|---------|
 | **[templates/](templates/)** | Reusable documentation templates for features, architecture, APIs, and guides |
+| **[components/](components/)** | Frontend component API documentation (React components, Zustand stores) |
+| **[stores/](stores/)** | Zustand store documentation (task-store, kanban-settings-store) |
 | **modules/** | Per-module architecture documentation (backend, frontend, memory system, security) |
 | **diagrams/** | Architecture diagrams (system overview, spec pipeline, agent workflow) |
 | **STYLE_GUIDE.md** | Writing style, formatting conventions, and documentation best practices |
@@ -83,6 +85,18 @@ cp docs/templates/architecture/module-architecture.md docs/modules/my-module.md
 # Document an API endpoint
 cp docs/templates/api/endpoint-documentation.md docs/api/my-endpoint.md
 ```
+
+## Frontend Documentation
+
+Comprehensive API documentation for React components and Zustand stores:
+
+| Category | Documentation |
+|----------|---------------|
+| **Components** | [KanbanBoard](components/KanbanBoard.md), [Sidebar](components/Sidebar.md), [TaskCard](components/TaskCard.md) |
+| **Stores** | [task-store](stores/task-store.md), [kanban-settings-store](stores/kanban-settings-store.md) |
+| **Component Index** | [components/README.md](components/README.md) - Full component documentation index |
+
+See **[components/README.md](components/README.md)** for complete frontend component documentation including usage examples, type definitions, and integration patterns.
 
 ## Documentation Locations
 
