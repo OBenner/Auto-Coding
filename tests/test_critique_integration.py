@@ -14,14 +14,14 @@ from pathlib import Path
 # Add auto-claude directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "apps" / "backend"))
 
-from critique import (
+from implementation_plan import Subtask, SubtaskStatus
+from spec.critique import (
+    CritiqueResult,
+    format_critique_summary,
     generate_critique_prompt,
     parse_critique_response,
     should_proceed,
-    format_critique_summary,
-    CritiqueResult,
 )
-from implementation_plan import Subtask, SubtaskStatus
 
 
 def test_critique_data_structures():
@@ -182,7 +182,9 @@ def test_complete_workflow():
     }
 
     # 2. Generate critique prompt
-    prompt = generate_critique_prompt(chunk, ["app/workflow.py"], chunk["patterns_from"])
+    prompt = generate_critique_prompt(
+        chunk, ["app/workflow.py"], chunk["patterns_from"]
+    )
     assert len(prompt) > 0
 
     # 3. Simulate agent response
@@ -266,9 +268,9 @@ def test_summary_formatting():
 
 def main():
     """Run all tests."""
-    print("="*70)
+    print("=" * 70)
     print("Self-Critique System Integration Tests")
-    print("="*70)
+    print("=" * 70)
 
     try:
         test_critique_data_structures()
@@ -278,9 +280,9 @@ def main():
         test_complete_workflow()
         test_summary_formatting()
 
-        print("\n" + "="*70)
+        print("\n" + "=" * 70)
         print("All tests passed! ✓")
-        print("="*70)
+        print("=" * 70)
         print("\nSelf-Critique System is ready for use.")
         print("\nKey components:")
         print("  - critique.py: Core critique logic")
@@ -293,6 +295,7 @@ def main():
     except Exception as e:
         print(f"\n✗ Unexpected error: {e}")
         import traceback
+
         traceback.print_exc()
         return 1
 

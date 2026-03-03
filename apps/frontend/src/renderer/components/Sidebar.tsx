@@ -25,9 +25,12 @@ import {
   PanelLeftClose,
   Puzzle,
   BarChart3,
+  TrendingUp,
+  Play,
   Calendar,
   Activity,
-  Database
+  Database,
+  MessageSquare
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { ScrollArea } from './ui/scroll-area';
@@ -57,12 +60,13 @@ import { AddProjectModal } from './AddProjectModal';
 import { GitSetupModal } from './GitSetupModal';
 import { RateLimitIndicator } from './RateLimitIndicator';
 import { ClaudeCodeStatusBadge } from './ClaudeCodeStatusBadge';
+import { useAuthFailureStore } from '../stores/auth-failure-store';
 import { UpdateBanner } from './UpdateBanner';
 import { SessionContextIndicator } from './SessionContextIndicator';
 import { NavIndicator } from './NavIndicator';
 import type { Project, AutoBuildVersionInfo, GitStatus, ProjectEnvConfig } from '../../shared/types';
 
-export type SidebarView = 'kanban' | 'terminals' | 'roadmap' | 'context' | 'ideation' | 'github-issues' | 'gitlab-issues' | 'github-prs' | 'gitlab-merge-requests' | 'changelog' | 'insights' | 'worktrees' | 'agent-tools' | 'plugins' | 'analytics' | 'merge-analytics' | 'scheduler' | 'model-usage';
+export type SidebarView = 'kanban' | 'terminals' | 'roadmap' | 'context' | 'ideation' | 'github-issues' | 'gitlab-issues' | 'github-prs' | 'gitlab-merge-requests' | 'changelog' | 'insights' | 'worktrees' | 'agent-tools' | 'plugins' | 'analytics' | 'productivity' | 'merge-analytics' | 'sessions' | 'scheduler' | 'feedback' | 'model-usage';
 
 interface SidebarProps {
   onSettingsClick: () => void;
@@ -88,18 +92,21 @@ const baseNavItems: NavItem[] = [
   { id: 'changelog', labelKey: 'navigation:items.changelog', icon: FileText, shortcut: 'L' },
   { id: 'scheduler', labelKey: 'navigation:items.scheduler', icon: Calendar, shortcut: 'S' },
   { id: 'context', labelKey: 'navigation:items.context', icon: BookOpen, shortcut: 'C' },
+  { id: 'analytics', labelKey: 'navigation:items.analytics', icon: BarChart3, shortcut: 'Y' },
+  { id: 'productivity', labelKey: 'navigation:items.productivity', icon: TrendingUp, shortcut: 'P' },
   { id: 'agent-tools', labelKey: 'navigation:items.agentTools', icon: Wrench, shortcut: 'M' },
   { id: 'plugins', labelKey: 'navigation:items.plugins', icon: Puzzle, shortcut: 'U' },
   { id: 'worktrees', labelKey: 'navigation:items.worktrees', icon: GitBranch, shortcut: 'W' },
-  { id: 'analytics', labelKey: 'navigation:items.analytics', icon: Activity, shortcut: 'T' },
-  { id: 'merge-analytics', labelKey: 'navigation:items.mergeAnalytics', icon: BarChart3, shortcut: 'Y' },
+  { id: 'merge-analytics', labelKey: 'navigation:items.mergeAnalytics', icon: Activity, shortcut: 'T' },
+  { id: 'sessions', labelKey: 'navigation:items.sessions', icon: Play },
+  { id: 'feedback', labelKey: 'navigation:items.feedback', icon: MessageSquare, shortcut: 'F' },
   { id: 'model-usage', labelKey: 'navigation:items.modelUsage', icon: Database, shortcut: 'O' }
 ];
 
 // GitHub nav items shown when GitHub is enabled
 const githubNavItems: NavItem[] = [
   { id: 'github-issues', labelKey: 'navigation:items.githubIssues', icon: Github, shortcut: 'G' },
-  { id: 'github-prs', labelKey: 'navigation:items.githubPRs', icon: GitPullRequest, shortcut: 'P' }
+  { id: 'github-prs', labelKey: 'navigation:items.githubPRs', icon: GitPullRequest, shortcut: 'H' }
 ];
 
 // GitLab nav items shown when GitLab is enabled
@@ -118,6 +125,7 @@ export function Sidebar({
   const projects = useProjectStore((state) => state.projects);
   const selectedProjectId = useProjectStore((state) => state.selectedProjectId);
   const settings = useSettingsStore((state) => state.settings);
+  const hasPendingAuthFailure = useAuthFailureStore((state) => state.hasPendingAuthFailure);
 
   const [showAddProjectModal, setShowAddProjectModal] = useState(false);
   const [showInitDialog, setShowInitDialog] = useState(false);
@@ -465,26 +473,29 @@ export function Sidebar({
         <ScrollArea className="flex-1">
           <div className={cn("py-4 transition-all duration-300", isCollapsed ? "px-2" : "px-3")}>
             {/* Project Section */}
-            <div className="relative">
+            <div>
               {!isCollapsed && (
                 <h3 className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   {t('sections.project')}
                 </h3>
               )}
-              {/* Animated indicator for active nav item */}
-              {selectedProjectId && (
-                <NavIndicator
-                  activeView={activeView}
-                  containerRef={navContainerRef}
-                  itemRefs={navItemRefs}
-                  position={indicatorPosition}
-                />
-              )}
-              <nav ref={navContainerRef} className="space-y-1">
-                <AnimatePresence mode="popLayout">
-                  {visibleNavItems.map((item) => renderNavItem(item))}
-                </AnimatePresence>
-              </nav>
+              {/* relative wrapper starts here so NavIndicator top:0 aligns with nav top */}
+              <div className="relative">
+                {/* Animated indicator for active nav item */}
+                {selectedProjectId && (
+                  <NavIndicator
+                    activeView={activeView}
+                    containerRef={navContainerRef}
+                    itemRefs={navItemRefs}
+                    position={indicatorPosition}
+                  />
+                )}
+                <nav ref={navContainerRef} className="space-y-1">
+                  <AnimatePresence mode="popLayout">
+                    {visibleNavItems.map((item) => renderNavItem(item))}
+                  </AnimatePresence>
+                </nav>
+              </div>
             </div>
           </div>
         </ScrollArea>
@@ -515,14 +526,25 @@ export function Sidebar({
                 <Button
                   variant="ghost"
                   size={isCollapsed ? "icon" : "sm"}
-                  className={isCollapsed ? "" : "flex-1 justify-start gap-2"}
+                  className={cn(isCollapsed ? "relative" : "relative flex-1 justify-start gap-2")}
                   onClick={onSettingsClick}
+                  aria-label={isCollapsed ? t('actions.settings') : undefined}
                 >
                   <Settings className="h-4 w-4" />
                   {!isCollapsed && t('actions.settings')}
+                  {hasPendingAuthFailure && (
+                    <span
+                      className="absolute top-1 right-1 h-2 w-2 rounded-full bg-destructive"
+                      aria-label={t('common:auth.failure.badgeTooltip')}
+                    />
+                  )}
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side={isCollapsed ? "right" : "top"}>{t('tooltips.settings')}</TooltipContent>
+              <TooltipContent side={isCollapsed ? "right" : "top"}>
+                {hasPendingAuthFailure
+                  ? t('common:auth.failure.badgeTooltip')
+                  : t('tooltips.settings')}
+              </TooltipContent>
             </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>

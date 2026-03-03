@@ -7,7 +7,6 @@ import type {
   ModelMetrics,
   AgentMetrics,
   ModelUsageExportOptions,
-  ModelUsageFilter,
   ModelLockConfig,
 } from '../../shared/types';
 import { promises as fsPromises } from 'fs';
@@ -32,23 +31,23 @@ async function fileExists(filePath: string): Promise<boolean> {
 }
 
 /**
- * Execute Python script for model usage analytics
+ * Execute a Python script and return the result.
+ *
+ * @param projectPath - Project root directory
+ * @param scriptRelPath - Script path relative to projectPath (e.g., "apps/backend/analysis/model_usage_analytics.py")
+ * @param args - Additional arguments passed to the script
+ * @param parseJson - Whether to parse stdout as JSON (default: true). Set to false for scripts that output plain text.
  */
-async function executeModelUsageScript(
+async function executePythonScript(
   projectPath: string,
-  scriptName: string,
-  args: string[] = []
+  scriptRelPath: string,
+  args: string[] = [],
+  parseJson = true
 ): Promise<any> {
   return new Promise((resolve, reject) => {
     const pythonCmd = getConfiguredPythonPath();
     const [pythonCommand, pythonBaseArgs] = parsePythonCommand(pythonCmd);
-    const scriptPath = path.join(
-      projectPath,
-      'apps',
-      'backend',
-      'analysis',
-      scriptName
-    );
+    const scriptPath = path.join(projectPath, ...scriptRelPath.split('/'));
 
     const proc = spawn(pythonCommand, [...pythonBaseArgs, scriptPath, ...args], {
       cwd: projectPath,
@@ -68,69 +67,19 @@ async function executeModelUsageScript(
 
     proc.on('close', (code) => {
       if (code !== 0) {
-        reject(new Error(`Python script failed: ${stderr}`));
-        return;
-      }
-
-      try {
-        const result = JSON.parse(stdout);
-        resolve(result);
-      } catch (error) {
-        reject(new Error(`Failed to parse Python output: ${error}`));
-      }
-    });
-
-    proc.on('error', (error) => {
-      reject(new Error(`Failed to spawn Python process: ${error.message}`));
-    });
-  });
-}
-
-/**
- * Execute Python script for model lock management
- */
-async function executeModelLockScript(
-  projectPath: string,
-  args: string[]
-): Promise<any> {
-  return new Promise((resolve, reject) => {
-    const pythonCmd = getConfiguredPythonPath();
-    const [pythonCommand, pythonBaseArgs] = parsePythonCommand(pythonCmd);
-    const scriptPath = path.join(
-      projectPath,
-      'apps',
-      'backend',
-      'scripts',
-      'model_locks_manager.py'
-    );
-
-    const proc = spawn(pythonCommand, [...pythonBaseArgs, scriptPath, ...args], {
-      cwd: projectPath,
-      env: getAugmentedEnv(),
-    });
-
-    let stdout = '';
-    let stderr = '';
-
-    proc.stdout.on('data', (data) => {
-      stdout += data.toString();
-    });
-
-    proc.stderr.on('data', (data) => {
-      stderr += data.toString();
-    });
-
-    proc.on('close', (code) => {
-      if (code !== 0) {
-        // Model lock script outputs to stdout for list operations
-        // stderr contains error messages
         reject(new Error(`Python script failed (code ${code}): ${stderr || stdout}`));
         return;
       }
 
-      // For list operations, return stdout (human-readable output)
-      // For lock/unlock operations, the script doesn't output JSON
-      resolve({ success: true, output: stdout });
+      if (parseJson) {
+        try {
+          resolve(JSON.parse(stdout));
+        } catch (error) {
+          reject(new Error(`Failed to parse Python output: ${error}`));
+        }
+      } else {
+        resolve({ success: true, output: stdout });
+      }
     });
 
     proc.on('error', (error) => {
@@ -194,9 +143,9 @@ export function registerModelUsageHandlers(): void {
           if (startDate) args.push('--start-date', startDate);
           if (endDate) args.push('--end-date', endDate);
 
-          summary = await executeModelUsageScript(
+          summary = await executePythonScript(
             project.path,
-            'model_usage_analytics.py',
+            'apps/backend/analysis/model_usage_analytics.py',
             args
           );
 
@@ -235,9 +184,9 @@ export function registerModelUsageHandlers(): void {
 
       try {
         // Call Python backend to get trends
-        const trends = await executeModelUsageScript(
+        const trends = await executePythonScript(
           project.path,
-          'model_usage_analytics.py',
+          'apps/backend/analysis/model_usage_analytics.py',
           ['--get-trends', '--window-days', String(windowDays), '--granularity', granularity]
         );
 
@@ -275,9 +224,9 @@ export function registerModelUsageHandlers(): void {
         if (startDate) args.push('--start-date', startDate);
         if (endDate) args.push('--end-date', endDate);
 
-        const metrics = await executeModelUsageScript(
+        const metrics = await executePythonScript(
           project.path,
-          'model_usage_analytics.py',
+          'apps/backend/analysis/model_usage_analytics.py',
           args
         );
 
@@ -315,9 +264,9 @@ export function registerModelUsageHandlers(): void {
         if (startDate) args.push('--start-date', startDate);
         if (endDate) args.push('--end-date', endDate);
 
-        const metrics = await executeModelUsageScript(
+        const metrics = await executePythonScript(
           project.path,
-          'model_usage_analytics.py',
+          'apps/backend/analysis/model_usage_analytics.py',
           args
         );
 
@@ -370,9 +319,9 @@ export function registerModelUsageHandlers(): void {
           args.push('--output', options.output_path);
         }
 
-        const result = await executeModelUsageScript(
+        const result = await executePythonScript(
           project.path,
-          'model_usage_analytics.py',
+          'apps/backend/analysis/model_usage_analytics.py',
           args
         );
 
@@ -445,7 +394,7 @@ export function registerModelUsageHandlers(): void {
 
       try {
         const specDir = path.join(project.path, '.auto-claude', 'specs', projectId);
-        await executeModelLockScript(project.path, ['lock-phase', specDir, phase, modelId]);
+        await executePythonScript(project.path, 'apps/backend/scripts/model_locks_manager.py', ['lock-phase', specDir, phase, modelId], false);
 
         return { success: true, data: { success: true } };
       } catch (error) {
@@ -477,7 +426,7 @@ export function registerModelUsageHandlers(): void {
 
       try {
         const specDir = path.join(project.path, '.auto-claude', 'specs', projectId);
-        await executeModelLockScript(project.path, ['lock-agent', specDir, agentType, modelId]);
+        await executePythonScript(project.path, 'apps/backend/scripts/model_locks_manager.py', ['lock-agent', specDir, agentType, modelId], false);
 
         return { success: true, data: { success: true } };
       } catch (error) {
@@ -508,7 +457,7 @@ export function registerModelUsageHandlers(): void {
 
       try {
         const specDir = path.join(project.path, '.auto-claude', 'specs', projectId);
-        await executeModelLockScript(project.path, ['unlock-phase', specDir, phase]);
+        await executePythonScript(project.path, 'apps/backend/scripts/model_locks_manager.py', ['unlock-phase', specDir, phase], false);
 
         return { success: true, data: { success: true } };
       } catch (error) {
@@ -539,7 +488,7 @@ export function registerModelUsageHandlers(): void {
 
       try {
         const specDir = path.join(project.path, '.auto-claude', 'specs', projectId);
-        await executeModelLockScript(project.path, ['unlock-agent', specDir, agentType]);
+        await executePythonScript(project.path, 'apps/backend/scripts/model_locks_manager.py', ['unlock-agent', specDir, agentType], false);
 
         return { success: true, data: { success: true } };
       } catch (error) {
@@ -566,7 +515,7 @@ export function registerModelUsageHandlers(): void {
 
       try {
         const specDir = path.join(project.path, '.auto-claude', 'specs', projectId);
-        await executeModelLockScript(project.path, ['clear', specDir]);
+        await executePythonScript(project.path, 'apps/backend/scripts/model_locks_manager.py', ['clear', specDir], false);
 
         return { success: true, data: { success: true } };
       } catch (error) {

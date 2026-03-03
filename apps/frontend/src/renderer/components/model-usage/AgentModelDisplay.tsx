@@ -1,9 +1,9 @@
 import { useMemo } from 'react';
-import { useTranslation } from 'react-i18next';
 import { Cpu, Lock } from 'lucide-react';
 import { Badge } from '../ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { getModelTierLabel, MODEL_ID_MAP } from '../../../shared/constants';
+import { getAgentLabel } from './model-utils';
 
 /**
  * Agent groupings for organized display
@@ -54,16 +54,6 @@ const AGENT_GROUPS: AgentGroup[] = [
 ];
 
 /**
- * Get display label for agent type
- */
-function getAgentLabel(agentType: string): string {
-  return agentType
-    .split('_')
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ');
-}
-
-/**
  * Parse model ID to get tier and version
  * e.g., "claude-sonnet-4-5-20250929" -> { tier: "sonnet", version: "4.5" }
  */
@@ -109,8 +99,6 @@ interface AgentModelDisplayProps {
  * Shows agent groups with their assigned models and lock status.
  */
 export function AgentModelDisplay({ agentModels = {}, lockedModels = {} }: AgentModelDisplayProps) {
-  const { t } = useTranslation('model-usage');
-
   // Group agents by category
   const agentGroups = useMemo(() => {
     return AGENT_GROUPS.map((group) => ({

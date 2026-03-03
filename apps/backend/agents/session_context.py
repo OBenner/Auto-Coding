@@ -779,7 +779,7 @@ class SessionContext:
                             "relevance_score": relevance_score,
                         }
                     )
-            except (json.JSONDecodeError, ValueError, KeyError) as e:
+            except (ValueError, KeyError) as e:
                 debug_warning(
                     "session_context",
                     f"Failed to parse episode data: {e}",

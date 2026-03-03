@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Download, Loader2, RefreshCw, BarChart3, FileText, Calendar, Cpu } from 'lucide-react';
+import { Download, Loader2, RefreshCw, FileText, Calendar, Cpu } from 'lucide-react';
 import { Button } from '../ui/button';
 import { ScrollArea } from '../ui/scroll-area';
 import { useToast } from '../../hooks/use-toast';

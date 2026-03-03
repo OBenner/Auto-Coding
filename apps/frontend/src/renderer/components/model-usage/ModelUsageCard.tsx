@@ -3,6 +3,7 @@ import { Cpu, DollarSign, Hash, Zap } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Badge } from '../ui/badge';
 import type { AgentMetrics } from '../../../shared/types/model-usage';
+import { parseModelId, formatNumber, formatCurrency } from './model-utils';
 
 interface ModelUsageCardProps {
   agent: AgentMetrics;
@@ -41,29 +42,6 @@ function StatCard({
   );
 }
 
-function formatNumber(num: number): string {
-  return num.toLocaleString();
-}
-
-function formatCurrency(amount: number): string {
-  return `$${amount.toFixed(2)}`;
-}
-
-function getModelVersion(model: string): { name: string; version: string } {
-  // Parse model name and version (e.g., "claude-sonnet-4-5-20250929" -> "Claude Sonnet", "4.5")
-  const parts = model.split('-');
-  const name = parts.slice(0, 2).join(' '); // e.g., "claude sonnet"
-  const version = parts.slice(2).join('.').replace(/\./g, '.').substring(0, 3); // e.g., "4.5"
-
-  return {
-    name: name
-      .split(' ')
-      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(' '),
-    version: version || 'latest'
-  };
-}
-
 export function ModelUsageCard({ agent, showRank = false, rank }: ModelUsageCardProps) {
   const stats = useMemo(() => {
     return {
@@ -75,7 +53,7 @@ export function ModelUsageCard({ agent, showRank = false, rank }: ModelUsageCard
   }, [agent]);
 
   const modelInfo = useMemo(() => {
-    return getModelVersion(agent.preferred_model);
+    return parseModelId(agent.preferred_model);
   }, [agent.preferred_model]);
 
   return (

@@ -6,11 +6,16 @@ Main autonomous agent loop that runs the coder agent to implement subtasks.
 """
 
 import asyncio
+import json
 import logging
 import os
 from pathlib import Path
 
-from core.client import create_client
+from context.constants import SKIP_DIRS
+from core.file_utils import write_json_atomic
+from core.model_fallback import MODEL_FALLBACK_CHAIN
+from core.providers.config import ProviderConfig
+from core.providers.factory import create_engine_provider
 from linear_updater import (
     LinearTaskState,
     is_linear_enabled,
@@ -18,7 +23,8 @@ from linear_updater import (
     linear_task_started,
     linear_task_stuck,
 )
-from phase_config import get_phase_model, get_phase_thinking_budget
+from notifications import notify_stuck_subtask
+from phase_config import get_phase_model, get_phase_thinking_budget, resolve_model_id
 from phase_event import ExecutionPhase, emit_phase
 from progress import (
     count_subtasks,
@@ -29,15 +35,15 @@ from progress import (
     print_build_complete_banner,
     print_progress_summary,
     print_session_header,
+    reset_subtask_to_pending,
 )
-from prompt_generator import (
+from prompts_pkg.prompt_generator import (
     format_context_for_prompt,
     generate_planner_prompt,
     generate_subtask_prompt,
     load_subtask_context,
 )
-from prompts import is_first_run
-from recovery import RecoveryManager
+from recovery import RecoveryAction, RecoveryManager
 from security.constants import PROJECT_DIR_ENV_VAR
 from task_logger import (
     LogPhase,
@@ -57,17 +63,507 @@ from ui import (
 )
 
 from .base import AUTO_CONTINUE_DELAY_SECONDS, HUMAN_INTERVENTION_FILE
-from .memory_manager import debug_memory_system_status, get_graphiti_context
-from .session import post_session_processing, run_agent_session, save_token_stats
+from .memory_manager import (
+    debug_memory_system_status,
+    get_graphiti_context,
+    get_pattern_suggestions,
+)
+from .session import (
+    post_session_processing,
+    run_agent_session,
+    run_agent_session_isolated,
+    save_token_stats,
+)
 from .utils import (
     find_phase_for_subtask,
+    find_subtask_in_plan,
     get_commit_count,
     get_latest_commit,
     load_implementation_plan,
     sync_spec_to_source,
 )
 
+# Import for context window usage display
+try:
+    from context.token_estimator import TokenEstimator
+
+    TOKEN_ESTIMATOR_AVAILABLE = True
+except ImportError:
+    TOKEN_ESTIMATOR_AVAILABLE = False
+
 logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# FILE VALIDATION UTILITIES
+# =============================================================================
+
+# Directories to exclude from file path search — extends context.constants.SKIP_DIRS
+_EXCLUDE_DIRS = frozenset(SKIP_DIRS | {".auto-claude", ".tox", "out"})
+
+
+def _build_file_index(
+    project_dir: Path, suffixes: set[str]
+) -> dict[str, list[tuple[str, Path]]]:
+    """Build an index of project files grouped by basename, scanning the tree once.
+
+    Also indexes index.{ext} files under their parent directory name as a
+    secondary key (e.g., api/index.ts is indexed under both "index.ts" and
+    "api" as directory-stem).
+    """
+    index: dict[str, list[tuple[str, Path]]] = {}
+    resolved_str = str(project_dir.resolve())
+
+    for root, dirs, files in os.walk(project_dir.resolve()):
+        dirs[:] = [d for d in dirs if d not in _EXCLUDE_DIRS]
+
+        for filename in files:
+            ext_idx = filename.rfind(".")
+            if ext_idx == -1:
+                continue
+            file_suffix = filename[ext_idx:]
+            if file_suffix not in suffixes:
+                continue
+
+            full_path = os.path.join(root, filename)
+            rel_str = os.path.relpath(full_path, resolved_str).replace(os.sep, "/")
+            rel_path = Path(rel_str)
+
+            index.setdefault(filename, []).append((rel_str, rel_path))
+
+            stem_part = filename[:ext_idx]
+            if stem_part == "index":
+                dir_name = os.path.basename(root)
+                key = f"__dir_stem__:{dir_name}{file_suffix}"
+                index.setdefault(key, []).append((rel_str, rel_path))
+
+    return index
+
+
+def _score_and_select(candidates: list[tuple[str, float]]) -> str | None:
+    """Select the best candidate from a scored list.
+
+    Requires a minimum score of 8.0 and a gap of at least 3.0 from the
+    runner-up to avoid ambiguous matches.
+    """
+    if not candidates:
+        return None
+
+    candidates.sort(key=lambda x: x[1], reverse=True)
+    best_path, best_score = candidates[0]
+
+    if best_score < 8.0:
+        return None
+
+    if len(candidates) > 1:
+        runner_up_score = candidates[1][1]
+        if best_score - runner_up_score < 3.0:
+            return None
+
+    return best_path
+
+
+def _find_correct_path_indexed(
+    missing_path: str,
+    parent_parts: tuple[str, ...],
+    file_index: dict[str, list[tuple[str, Path]]],
+) -> str | None:
+    """Find the correct path using a pre-built file index (no tree walk needed)."""
+    missing = Path(missing_path)
+    basename = missing.name
+    stem = missing.stem
+    suffix = missing.suffix
+
+    if not suffix:
+        return None
+
+    candidates: list[tuple[str, float]] = []
+
+    # Strategy 1: Exact basename match
+    for rel_str, rel_path in file_index.get(basename, []):
+        score = 10.0
+        candidate_parts = rel_path.parent.parts
+        for i, part in enumerate(parent_parts):
+            if i < len(candidate_parts) and candidate_parts[i] == part:
+                score += 3.0
+        depth_diff = abs(len(candidate_parts) - len(parent_parts))
+        score -= 0.5 * depth_diff
+        candidates.append((rel_str, score))
+
+    # Strategy 2: index.{ext} in directory matching stem
+    stem_key = f"__dir_stem__:{stem}{suffix}"
+    for rel_str, rel_path in file_index.get(stem_key, []):
+        score = 8.0
+        candidate_parts = rel_path.parent.parts
+        for i, part in enumerate(parent_parts):
+            if i < len(candidate_parts) and candidate_parts[i] == part:
+                score += 3.0
+        depth_diff = abs(len(candidate_parts) - len(parent_parts))
+        score -= 0.5 * depth_diff
+        candidates.append((rel_str, score))
+
+    return _score_and_select(candidates)
+
+
+def _find_correct_path(missing_path: str, project_dir: Path) -> str | None:
+    """Attempt to find the correct path for a missing file using fuzzy matching.
+
+    Strategies:
+    1. Same basename in nearby directory
+    2. index.{ext} pattern (e.g., preload/api.ts -> preload/api/index.ts)
+    """
+    missing = Path(missing_path)
+    basename = missing.name
+    stem = missing.stem
+    suffix = missing.suffix
+    parent_parts = missing.parent.parts
+
+    if not suffix:
+        return None
+
+    candidates: list[tuple[str, float]] = []
+    resolved_project = project_dir.resolve()
+    resolved_str = str(resolved_project)
+
+    for root, dirs, files in os.walk(resolved_project):
+        dirs[:] = [d for d in dirs if d not in _EXCLUDE_DIRS]
+
+        for filename in files:
+            if not filename.endswith(suffix):
+                continue
+
+            full_path = os.path.join(root, filename)
+            rel_str = os.path.relpath(full_path, resolved_str).replace(os.sep, "/")
+            rel = Path(rel_str)
+
+            score = 0.0
+
+            if filename == basename:
+                score += 10.0
+            elif filename == f"index{suffix}" and os.path.basename(root) == stem:
+                score += 8.0
+            else:
+                continue
+
+            candidate_parts = rel.parent.parts
+            for i, part in enumerate(parent_parts):
+                if i < len(candidate_parts) and candidate_parts[i] == part:
+                    score += 3.0
+
+            depth_diff = abs(len(candidate_parts) - len(parent_parts))
+            score -= 0.5 * depth_diff
+
+            candidates.append((rel_str, score))
+
+    return _score_and_select(candidates)
+
+
+def _auto_correct_subtask_files(
+    subtask: dict,
+    missing_files: list[str],
+    project_dir: Path,
+    spec_dir: Path,
+) -> list[str]:
+    """Attempt to auto-correct missing file paths in a subtask.
+
+    Corrects paths in-memory AND persists changes to implementation_plan.json.
+
+    Returns:
+        List of file paths that could NOT be corrected
+    """
+    corrections: dict[str, str] = {}
+    still_missing: list[str] = []
+
+    suffixes_needed: set[str] = set()
+    for missing_path in missing_files:
+        suffix = Path(missing_path).suffix
+        if suffix:
+            suffixes_needed.add(suffix)
+    file_index = (
+        _build_file_index(project_dir, suffixes_needed) if suffixes_needed else {}
+    )
+
+    for missing_path in missing_files:
+        missing = Path(missing_path)
+        corrected = _find_correct_path_indexed(
+            missing_path, missing.parent.parts, file_index
+        )
+        if corrected:
+            corrections[missing_path] = corrected
+            logger.info(f"Auto-corrected file path: {missing_path} -> {corrected}")
+            print_status(f"Auto-corrected: {missing_path} -> {corrected}", "success")
+        else:
+            still_missing.append(missing_path)
+
+    if not corrections:
+        return still_missing
+
+    # Update subtask in-memory
+    files_to_modify = subtask.get("files_to_modify", [])
+    subtask["files_to_modify"] = [corrections.get(f, f) for f in files_to_modify]
+
+    # Persist corrections to implementation_plan.json
+    plan_file = spec_dir / "implementation_plan.json"
+    if plan_file.exists():
+        try:
+            with open(plan_file, encoding="utf-8") as f:
+                plan = json.load(f)
+
+            subtask_id = subtask.get("id")
+            if subtask_id is not None:
+                plan_subtask = find_subtask_in_plan(plan, subtask_id)
+                if plan_subtask:
+                    plan_files = plan_subtask.get("files_to_modify", [])
+                    plan_subtask["files_to_modify"] = [
+                        corrections.get(f, f) for f in plan_files
+                    ]
+
+            write_json_atomic(plan_file, plan)
+            logger.info(
+                f"Persisted {len(corrections)} path correction(s) to implementation_plan.json"
+            )
+        except (OSError, TypeError, ValueError) as e:
+            logger.warning(f"Failed to persist path corrections: {e}")
+
+    return still_missing
+
+
+def _validate_plan_file_paths(spec_dir: Path, project_dir: Path) -> str | None:
+    """Validate all file paths in the implementation plan after planning.
+
+    Returns a retry context string for the planner if uncorrectable paths remain,
+    or None if all paths are valid.
+    """
+    plan_file = spec_dir / "implementation_plan.json"
+    if not plan_file.exists():
+        return None
+
+    try:
+        with open(plan_file, encoding="utf-8") as f:
+            plan = json.load(f)
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+        return None
+
+    resolved_project = project_dir.resolve()
+
+    missing_entries: list[tuple[list[str], int, str]] = []
+    suffixes_needed: set[str] = set()
+
+    for phase in plan.get("phases", []):
+        for subtask in phase.get("subtasks", []):
+            files = subtask.get("files_to_modify", [])
+            for i, file_path in enumerate(files):
+                full_path = (resolved_project / file_path).resolve()
+                if not full_path.is_relative_to(resolved_project):
+                    continue
+                if full_path.exists():
+                    continue
+
+                missing = Path(file_path)
+                if missing.suffix:
+                    suffixes_needed.add(missing.suffix)
+                    missing_entries.append((files, i, file_path))
+
+    if not missing_entries:
+        return None
+
+    file_index = _build_file_index(project_dir, suffixes_needed)
+
+    all_missing: list[str] = []
+    corrections_made = 0
+
+    for files_list, idx, file_path in missing_entries:
+        missing = Path(file_path)
+        corrected = _find_correct_path_indexed(
+            file_path, missing.parent.parts, file_index
+        )
+        if corrected:
+            files_list[idx] = corrected
+            corrections_made += 1
+            logger.info(f"Post-plan auto-corrected: {file_path} -> {corrected}")
+            print_status(f"Auto-corrected: {file_path} -> {corrected}", "success")
+        else:
+            all_missing.append(file_path)
+
+    if corrections_made > 0:
+        try:
+            write_json_atomic(plan_file, plan)
+            logger.info(f"Persisted {corrections_made} post-plan path correction(s)")
+        except (OSError, TypeError, ValueError) as e:
+            logger.warning(f"Failed to persist post-plan corrections: {e}")
+
+    if not all_missing:
+        return None
+
+    return (
+        "## FILE PATH VALIDATION ERRORS\n\n"
+        "The following files referenced in your implementation plan do NOT exist "
+        "and could not be auto-corrected:\n"
+        + "\n".join(f"- `{p}`" for p in all_missing)
+        + "\n\nPlease fix these file paths in the `implementation_plan.json`.\n"
+        "Use the project's actual file structure to find the correct paths.\n"
+        "Common issues: wrong directory nesting, missing index files "
+        "(e.g., `dir/file.ts` should be `dir/file/index.ts`)."
+    )
+
+
+def validate_subtask_files(
+    subtask: dict, project_dir: Path, spec_dir: Path | None = None
+) -> dict:
+    """Validate all files_to_modify exist before subtask execution.
+
+    Returns dict with success status, missing_files, and invalid_paths.
+    If spec_dir is provided, attempts auto-correction of wrong paths.
+    """
+    files_to_modify = subtask.get("files_to_modify", [])
+    if not files_to_modify:
+        return {"success": True, "missing_files": [], "invalid_paths": []}
+
+    resolved_project = project_dir.resolve()
+    missing_files = []
+    invalid_paths = []
+
+    for file_path in files_to_modify:
+        full_path = (resolved_project / file_path).resolve()
+        if not full_path.is_relative_to(resolved_project):
+            invalid_paths.append(file_path)
+            continue
+        if not full_path.exists():
+            missing_files.append(file_path)
+
+    if invalid_paths:
+        return {
+            "success": False,
+            "error": f"Path traversal detected: {', '.join(invalid_paths)}",
+            "missing_files": missing_files,
+            "invalid_paths": invalid_paths,
+        }
+
+    if missing_files:
+        # Attempt auto-correction if spec_dir is provided
+        if spec_dir:
+            still_missing = _auto_correct_subtask_files(
+                subtask, missing_files, project_dir, spec_dir
+            )
+            if not still_missing:
+                return {"success": True, "missing_files": [], "invalid_paths": []}
+            missing_files = still_missing
+
+        return {
+            "success": False,
+            "error": f"Planned files do not exist: {', '.join(missing_files)}",
+            "missing_files": missing_files,
+            "invalid_paths": [],
+        }
+
+    return {"success": True, "missing_files": [], "invalid_paths": []}
+
+
+def _display_context_window_usage(
+    context: dict,
+    subtask_id: str | None = None,
+) -> None:
+    """
+    Display context window usage information to the user.
+
+    This provides transparency about what files are included in the context
+    and the estimated token usage, helping users understand the scope of
+    information being provided to the AI agent.
+
+    Args:
+        context: Context dict from load_subtask_context
+        subtask_id: Optional subtask ID for more detailed display
+    """
+    if not TOKEN_ESTIMATOR_AVAILABLE:
+        return
+
+    pattern_files = list(context.get("patterns", {}).keys())
+    files_to_modify = list(context.get("files_to_modify", {}).keys())
+    total_files = len(pattern_files) + len(files_to_modify)
+
+    if total_files == 0:
+        return
+
+    token_estimator = TokenEstimator()
+
+    pattern_tokens = sum(
+        token_estimator.count_tokens(context["patterns"][f]) for f in pattern_files
+    )
+    modify_tokens = sum(
+        token_estimator.count_tokens(context["files_to_modify"][f])
+        for f in files_to_modify
+    )
+    total_tokens = pattern_tokens + modify_tokens
+
+    status_level = _get_context_status_level(total_tokens)
+
+    print()
+    print_status("Context Window Usage", status_level)
+    print_key_value("Total Files", str(total_files))
+    print_key_value("Estimated Tokens", f"{total_tokens:,}")
+    print_key_value(
+        "Pattern Files", f"{len(pattern_files)} ({pattern_tokens:,} tokens)"
+    )
+    print_key_value(
+        "Files to Modify", f"{len(files_to_modify)} ({modify_tokens:,} tokens)"
+    )
+
+    _print_context_warnings(total_tokens)
+
+    max_context = 200_000
+    percentage = (total_tokens / max_context) * 100
+    print_key_value("Context Usage", f"{percentage:.1f}%")
+
+    if subtask_id:
+        _print_context_file_list(pattern_files, files_to_modify)
+
+    print()
+
+
+def _get_context_status_level(total_tokens: int) -> str:
+    """Return status level string based on token count."""
+    if total_tokens > 150_000:
+        return "error"
+    if total_tokens > 100_000:
+        return "warning"
+    return "success"
+
+
+def _print_context_warnings(total_tokens: int) -> None:
+    """Print warning messages if context is too large."""
+    if total_tokens > 150_000:
+        print()
+        print_status(
+            f"⚠️ Context window is critically large ({total_tokens:,} tokens). "
+            f"This may impact performance or exceed model limits.",
+            "error",
+        )
+    elif total_tokens > 100_000:
+        print()
+        print_status(
+            f"⚠️ Context window is large ({total_tokens:,} tokens). "
+            f"Consider reducing file count or using summaries.",
+            "warning",
+        )
+
+
+def _print_context_file_list(
+    pattern_files: list[str], files_to_modify: list[str]
+) -> None:
+    """Print the list of files included in context."""
+    print()
+    print(muted("Files included in context:"))
+    for label, files in [
+        ("Pattern files", pattern_files),
+        ("Files to modify", files_to_modify),
+    ]:
+        if not files:
+            continue
+        print(muted(f"  {label}:"))
+        for f in files[:5]:
+            print(muted(f"    - {f}"))
+        if len(files) > 5:
+            print(muted(f"    ... and {len(files) - 5} more"))
 
 
 async def run_autonomous_agent(
@@ -77,6 +573,7 @@ async def run_autonomous_agent(
     max_iterations: int | None = None,
     verbose: bool = False,
     source_spec_dir: Path | None = None,
+    restart_from: str | None = None,
 ) -> None:
     """
     Run the autonomous agent loop with automatic memory management.
@@ -91,6 +588,7 @@ async def run_autonomous_agent(
         max_iterations: Maximum number of iterations (None for unlimited)
         verbose: Whether to show detailed output
         source_spec_dir: Original spec directory in main project (for syncing from worktree)
+        restart_from: Subtask ID to restart from (None for normal execution)
     """
     # Set environment variable for security hooks to find the correct project directory
     # This is needed because os.getcwd() may return the wrong directory in worktree mode
@@ -131,7 +629,45 @@ async def run_autonomous_agent(
             print()
 
     # Check if this is a fresh start or continuation
+    # Lazy import to avoid circular import: prompts_pkg → agents → coder → prompts_pkg
+    from prompts_pkg.prompts import is_first_run
+
     first_run = is_first_run(spec_dir)
+
+    # Restore provider config if restarting
+    if restart_from:
+        try:
+            from core.providers.config import get_provider_config
+            from implementation_plan import ImplementationPlan
+
+            plan_file = spec_dir / "implementation_plan.json"
+            if plan_file.exists():
+                plan = ImplementationPlan.load(plan_file)
+                if plan.provider_config:
+                    # Restore provider and model from saved config
+                    provider_config = get_provider_config()
+                    saved_provider = plan.provider_config.get("provider")
+                    saved_model = plan.provider_config.get("model")
+
+                    if saved_provider:
+                        os.environ["AI_ENGINE_PROVIDER"] = saved_provider
+                        logger.info(f"Restored provider from config: {saved_provider}")
+                    if saved_model:
+                        # Restore model via provider-specific env var
+                        model_env_map = {
+                            "claude": "CLAUDE_MODEL",
+                            "litellm": "LITELLM_MODEL",
+                            "openrouter": "OPENROUTER_MODEL",
+                            "zhipuai": "ZHIPUAI_MODEL",
+                        }
+                        env_key = model_env_map.get(
+                            saved_provider or provider_config.provider
+                        )
+                        if env_key:
+                            os.environ[env_key] = saved_model
+                        logger.info(f"Restored model from config: {saved_model}")
+        except Exception as e:
+            logger.warning(f"Failed to restore provider config: {e}")
 
     # Track which phase we're in for logging
     current_log_phase = LogPhase.CODING
@@ -139,6 +675,11 @@ async def run_autonomous_agent(
     planning_retry_context: str | None = None
     planning_validation_failures = 0
     max_planning_validation_retries = 3
+
+    # Track recovery state for enhanced recovery
+    pending_recovery_action: RecoveryAction | None = None
+    override_model: str | None = None  # For model fallback
+    recovery_guidance: str | None = None  # Strategy guidance for next attempt
 
     def _validate_and_fix_implementation_plan() -> tuple[bool, list[str]]:
         from spec.validate_pkg import SpecValidator, auto_fix_plan
@@ -219,6 +760,10 @@ async def run_autonomous_agent(
     while True:
         iteration += 1
 
+        # Clear restart_from after first iteration to continue normally
+        if iteration > 1 and restart_from:
+            restart_from = None
+
         # Check for human intervention (PAUSE file)
         pause_file = spec_dir / HUMAN_INTERVENTION_FILE
         if pause_file.exists():
@@ -243,7 +788,7 @@ async def run_autonomous_agent(
             break
 
         # Get the next subtask to work on (planner sessions shouldn't bind to a subtask)
-        next_subtask = None if first_run else get_next_subtask(spec_dir)
+        next_subtask = None if first_run else get_next_subtask(spec_dir, restart_from)
         subtask_id = next_subtask.get("id") if next_subtask else None
 
         # Update status for this session
@@ -274,21 +819,59 @@ async def run_autonomous_agent(
         commit_before = get_latest_commit(project_dir)
         commit_count_before = get_commit_count(project_dir)
 
+        # === ENHANCED RECOVERY: Handle pending recovery action ===
+        if pending_recovery_action:
+            # Apply exponential backoff delay if specified
+            if pending_recovery_action.wait_seconds > 0:
+                print_status(
+                    f"Recovery backoff: waiting {pending_recovery_action.wait_seconds:.1f}s before retry...",
+                    "progress",
+                )
+                await asyncio.sleep(pending_recovery_action.wait_seconds)
+
+            # Handle rollback action
+            if pending_recovery_action.action == "rollback":
+                print_status(
+                    f"Rolling back to commit {pending_recovery_action.target[:8]}...",
+                    "warning",
+                )
+                rollback_success = recovery_manager.rollback_to_commit(
+                    pending_recovery_action.target
+                )
+                if rollback_success:
+                    print_status("Rollback successful", "success")
+                else:
+                    print_status("Rollback failed", "error")
+
+            # Display recovery notification if needed
+            if pending_recovery_action.should_notify:
+                print()
+                print_status(pending_recovery_action.notification_message, "warning")
+                print()
+
+            # Clear the pending action
+            pending_recovery_action = None
+
         # Get the phase-specific model and thinking level (respects task_metadata.json configuration)
         # first_run means we're in planning phase, otherwise coding phase
         current_phase = "planning" if first_run else "coding"
-        phase_model = get_phase_model(spec_dir, current_phase, model)
+
+        # Use override model if set (for model fallback), otherwise use phase model
+        if override_model:
+            phase_model = resolve_model_id(override_model)
+            print_status(f"Using fallback model: {override_model}", "progress")
+        else:
+            phase_model = get_phase_model(spec_dir, current_phase, model)
+
         phase_thinking_budget = get_phase_thinking_budget(spec_dir, current_phase)
 
-        # Create client (fresh context) with phase-specific model and thinking
         # Use appropriate agent_type for correct tool permissions and thinking budget
-        client = create_client(
-            project_dir,
-            spec_dir,
-            phase_model,
-            agent_type="planner" if first_run else "coder",
-            max_thinking_tokens=phase_thinking_budget,
-        )
+        agent_type_for_session = "planner" if first_run else "coder"
+
+        # Defer provider/session creation until we know process isolation is not used.
+        # When process isolation is enabled the subprocess creates its own client,
+        # so building one here would be wasted work.
+        client = None
 
         # Generate appropriate prompt
         if first_run:
@@ -350,7 +933,7 @@ async def run_autonomous_agent(
                     for retry_attempt in range(3):
                         delay = (retry_attempt + 1) * 2  # 2s, 4s, 6s
                         await asyncio.sleep(delay)
-                        next_subtask = get_next_subtask(spec_dir)
+                        next_subtask = get_next_subtask(spec_dir, restart_from)
                         if next_subtask:
                             # Update subtask_id after successful retry
                             subtask_id = next_subtask.get("id")
@@ -368,6 +951,39 @@ async def run_autonomous_agent(
                     print("No pending subtasks found - build may be complete!")
                     break
 
+            # Validate that all files_to_modify exist before attempting execution
+            # This prevents infinite retry loops when implementation plan references non-existent files
+            # Pass spec_dir to enable auto-correction of wrong paths
+            validation_result = validate_subtask_files(
+                next_subtask, project_dir, spec_dir
+            )
+            if not validation_result["success"]:
+                # File validation failed - record error and skip session
+                error_msg = validation_result["error"]
+                attempt_count = recovery_manager.get_attempt_count(subtask_id)
+                recovery_manager.record_attempt(
+                    subtask_id, iteration, False, "file_validation", error_msg
+                )
+                print_status(f"File validation failed: {error_msg}", "error")
+
+                if attempt_count >= 2:
+                    recovery_manager.mark_subtask_stuck(
+                        subtask_id,
+                        f"File validation failed after {attempt_count} attempts: {error_msg}",
+                    )
+                    emit_phase(
+                        ExecutionPhase.FAILED,
+                        f"Subtask {subtask_id} stuck: file validation failed",
+                        subtask=subtask_id,
+                    )
+                    print_status(
+                        f"Subtask {subtask_id} marked as STUCK after {attempt_count} failed validation attempts",
+                        "error",
+                    )
+
+                first_run = False
+                continue
+
             # Get attempt count for recovery context
             attempt_count = recovery_manager.get_attempt_count(subtask_id)
             recovery_hints = (
@@ -380,6 +996,14 @@ async def run_autonomous_agent(
             plan = load_implementation_plan(spec_dir)
             phase = find_phase_for_subtask(plan, subtask_id) if plan else {}
 
+            # Retrieve pattern suggestions for this subtask
+            subtask_description = next_subtask.get("description", "")
+            pattern_suggestions = await get_pattern_suggestions(
+                spec_dir=spec_dir,
+                project_dir=project_dir,
+                query=subtask_description,
+            )
+
             # Generate focused, minimal prompt for this subtask
             prompt = generate_subtask_prompt(
                 spec_dir=spec_dir,
@@ -388,12 +1012,22 @@ async def run_autonomous_agent(
                 phase=phase or {},
                 attempt_count=attempt_count,
                 recovery_hints=recovery_hints,
+                pattern_suggestions=pattern_suggestions,
             )
+
+            # Add recovery strategy guidance if available
+            if recovery_guidance:
+                prompt += f"\n\n## RECOVERY STRATEGY\n\n{recovery_guidance}\n"
+                # Clear the guidance after using it
+                recovery_guidance = None
 
             # Load and append relevant file context
             context = load_subtask_context(spec_dir, project_dir, next_subtask)
             if context.get("patterns") or context.get("files_to_modify"):
                 prompt += "\n\n" + format_context_for_prompt(context)
+
+                # Display context window usage for transparency
+                _display_context_window_usage(context, subtask_id)
 
             # Retrieve and append Graphiti memory context (if enabled)
             graphiti_context = await get_graphiti_context(
@@ -415,11 +1049,74 @@ async def run_autonomous_agent(
             task_logger.set_subtask(subtask_id)
             task_logger.set_session(iteration)
 
-        # Run session with async context manager
-        async with client:
-            status, response, usage_metadata = await run_agent_session(
-                client, prompt, spec_dir, verbose, phase=current_log_phase, model=phase_model
+        # Check if process isolation is enabled
+        use_process_isolation = (
+            os.getenv("AGENT_PROCESS_ISOLATION", "").lower() == "true"
+        )
+
+        if use_process_isolation:
+            # Run in isolated subprocess for crash resistance
+            agent_type = "planner" if first_run else "coder"
+            if verbose or iteration == 1:
+                print_status(
+                    "Process isolation: ENABLED (crash-resistant mode)", "info"
+                )
+            status, response, usage_metadata = await run_agent_session_isolated(
+                project_dir=project_dir,
+                spec_dir=spec_dir,
+                agent_type=agent_type,
+                model=phase_model,
+                starting_message=prompt,
+                system_prompt=None,
+                max_thinking_tokens=phase_thinking_budget,
+                session_name=f"{agent_type}-session-{iteration}",
+                limits=None,  # Use default ResourceLimits
             )
+        else:
+            # Create provider/session now (deferred to avoid wasted work when
+            # process isolation is enabled).
+            provider_config = ProviderConfig.from_env(agent_type=agent_type_for_session)
+            provider = create_engine_provider(provider_config)
+
+            from core.providers.base import SessionConfig
+
+            session_config = SessionConfig(
+                name=f"{agent_type_for_session}-session-{iteration}",
+                model=phase_model,
+                extra={
+                    "agent_type": agent_type_for_session,
+                    "max_thinking_tokens": phase_thinking_budget,
+                },
+            )
+
+            if provider.name == "claude":
+                session = provider.create_session(
+                    session_config,
+                    project_dir=project_dir,
+                    spec_dir=spec_dir,
+                    agent_type=agent_type_for_session,
+                    max_thinking_tokens=phase_thinking_budget,
+                )
+            else:
+                session = provider.create_session(session_config)
+
+            if not hasattr(session, "client"):
+                raise AttributeError(
+                    f"Provider {provider.name} session missing 'client' attribute"
+                )
+
+            client = session.client
+
+            # Run in current process (legacy mode)
+            async with client:
+                (
+                    status,
+                    response,
+                    usage_metadata,
+                    _decision_tracker,
+                ) = await run_agent_session(
+                    client, prompt, spec_dir, verbose, phase=current_log_phase
+                )
 
         # Save token statistics for coding phase
         if usage_metadata and current_log_phase == LogPhase.CODING:
@@ -442,8 +1139,49 @@ async def run_autonomous_agent(
         if is_planning_phase and status != "error":
             valid, errors = _validate_and_fix_implementation_plan()
             if valid:
-                plan_validated = True
-                planning_retry_context = None
+                # Persist provider configuration to implementation plan
+                try:
+                    from core.providers.config import get_provider_config
+                    from implementation_plan import ImplementationPlan
+
+                    plan_file = spec_dir / "implementation_plan.json"
+                    if plan_file.exists():
+                        plan = ImplementationPlan.load(plan_file)
+                        provider_config = get_provider_config()
+                        if provider_config and not plan.provider_config:
+                            plan.provider_config = {
+                                "provider": provider_config.provider,
+                                "model": provider_config.get_model_for_provider(),
+                            }
+                            await plan.async_save(plan_file)
+                            logger.debug(
+                                "Provider config persisted to implementation_plan.json"
+                            )
+                except Exception as e:
+                    logger.warning(f"Failed to persist provider config to plan: {e}")
+
+                # Validate file paths in the newly created plan
+                path_issues = _validate_plan_file_paths(spec_dir, project_dir)
+                if (
+                    path_issues
+                    and planning_validation_failures < max_planning_validation_retries
+                ):
+                    planning_validation_failures += 1
+                    planning_retry_context = path_issues
+                    print_status(
+                        "Plan has invalid file paths - retrying planner",
+                        "warning",
+                    )
+                    first_run = True
+                    status = "continue"
+                else:
+                    if path_issues:
+                        logger.warning(
+                            f"Plan has uncorrectable file paths after "
+                            f"{planning_validation_failures} retries - proceeding anyway"
+                        )
+                    plan_validated = True
+                    planning_retry_context = None
             else:
                 planning_validation_failures += 1
                 if planning_validation_failures >= max_planning_validation_retries:
@@ -494,27 +1232,171 @@ async def run_autonomous_agent(
                 source_spec_dir=source_spec_dir,
             )
 
-            # Check for stuck subtasks
-            attempt_count = recovery_manager.get_attempt_count(subtask_id)
-            if not success and attempt_count >= 3:
-                recovery_manager.mark_subtask_stuck(
-                    subtask_id, f"Failed after {attempt_count} attempts"
-                )
-                print()
-                print_status(
-                    f"Subtask {subtask_id} marked as STUCK after {attempt_count} attempts",
-                    "error",
-                )
-                print(muted("Consider: manual intervention or skipping this subtask"))
+            # === ENHANCED RECOVERY: Handle failures with smart recovery ===
+            if not success:
+                attempt_count = recovery_manager.get_attempt_count(subtask_id)
 
-                # Record stuck subtask in Linear (if enabled)
-                if linear_is_enabled:
-                    await linear_task_stuck(
-                        spec_dir=spec_dir,
-                        subtask_id=subtask_id,
-                        attempt_count=attempt_count,
+                # Classify the failure type
+                # We use a generic "verification failed" error since we don't have the actual error message
+                # The recovery system will use attempt history to determine if it's circular
+                error_message = (
+                    f"Subtask {subtask_id} verification failed or incomplete"
+                )
+                failure_type = recovery_manager.classify_failure(
+                    error_message, subtask_id
+                )
+
+                # Determine recovery action (handles exponential backoff, model fallback, DLQ, notifications)
+                recovery_action = recovery_manager.determine_recovery_action(
+                    failure_type, subtask_id
+                )
+
+                # Record the notification or silent failure
+                recovery_manager.record_recovery_notification(
+                    subtask_id, failure_type, recovery_action
+                )
+
+                print()
+                print_status(f"Recovery action: {recovery_action.action}", "warning")
+                print_key_value("Reason", recovery_action.reason)
+
+                # Handle different recovery actions
+                if recovery_action.action == "retry":
+                    # CRITICAL: Reset subtask status to 'pending' so get_next_subtask() can find it.
+                    # Without this, the subtask stays 'in_progress' and the retry loop
+                    # exits with "No pending subtasks found - build may be complete!"
+                    if subtask_id:
+                        if reset_subtask_to_pending(spec_dir, subtask_id):
+                            print_status(
+                                f"Reset subtask {subtask_id} to pending for retry",
+                                "info",
+                            )
+                        else:
+                            print_status(
+                                f"Warning: Could not reset subtask {subtask_id} status",
+                                "warning",
+                            )
+
+                    # Set up for retry with exponential backoff and optional model fallback
+                    pending_recovery_action = recovery_action
+
+                    # Set model fallback if recommended
+                    if recovery_action.use_model_fallback:
+                        # Extract current model shorthand and get fallback
+                        current_model_shorthand = "sonnet"  # Default
+                        if "opus" in phase_model.lower():
+                            current_model_shorthand = "opus"
+                        elif "sonnet" in phase_model.lower():
+                            current_model_shorthand = "sonnet"
+                        elif "haiku" in phase_model.lower():
+                            current_model_shorthand = "haiku"
+
+                        # Get fallback model from chain
+                        fallback_chain = MODEL_FALLBACK_CHAIN.get(
+                            current_model_shorthand, []
+                        )
+                        if fallback_chain:
+                            override_model = fallback_chain[0]  # Use first fallback
+                            print_status(
+                                f"Will try fallback model: {override_model}", "info"
+                            )
+                        else:
+                            override_model = None
+
+                    # Set recovery guidance from strategy
+                    if recovery_action.strategy:
+                        recovery_guidance = recovery_action.strategy.guidance
+                        print_key_value(
+                            "Strategy", recovery_action.strategy.description
+                        )
+
+                    print_status(
+                        f"Will retry after {recovery_action.wait_seconds:.1f}s backoff",
+                        "progress",
                     )
-                    print_status("Linear notified of stuck subtask", "info")
+
+                elif recovery_action.action == "skip":
+                    # Mark subtask as stuck and skip
+                    recovery_manager.mark_subtask_stuck(
+                        subtask_id, recovery_action.reason
+                    )
+                    print_status(f"Subtask {subtask_id} marked as STUCK", "error")
+                    print(muted("Recovery exhausted - consider manual intervention"))
+
+                    # Notify user about stuck subtask
+                    notify_stuck_subtask(
+                        subtask_id=subtask_id,
+                        reason=recovery_action.reason,
+                        attempt_count=attempt_count,
+                        spec_dir=spec_dir,
+                    )
+
+                    # Record stuck subtask in Linear (if enabled)
+                    if linear_is_enabled:
+                        await linear_task_stuck(
+                            spec_dir=spec_dir,
+                            subtask_id=subtask_id,
+                            attempt_count=attempt_count,
+                        )
+                        print_status("Linear notified of stuck subtask", "info")
+
+                elif recovery_action.action == "escalate":
+                    # Critical failure - escalate to human
+                    recovery_manager.mark_subtask_stuck(
+                        subtask_id, recovery_action.reason
+                    )
+                    print()
+                    print_status("ESCALATION REQUIRED", "error")
+                    print_status(recovery_action.reason, "error")
+                    print(
+                        muted(
+                            "This failure has been added to the dead-letter queue for manual review"
+                        )
+                    )
+                    print()
+
+                    # Notify user about escalation
+                    notify_stuck_subtask(
+                        subtask_id=subtask_id,
+                        reason=recovery_action.reason,
+                        attempt_count=attempt_count,
+                        spec_dir=spec_dir,
+                    )
+
+                    # Record stuck subtask in Linear (if enabled)
+                    if linear_is_enabled:
+                        await linear_task_stuck(
+                            spec_dir=spec_dir,
+                            subtask_id=subtask_id,
+                            attempt_count=attempt_count,
+                        )
+                        print_status("Linear notified of escalation", "info")
+
+                elif recovery_action.action == "rollback":
+                    # Rollback will be handled at the start of next iteration
+                    # Reset subtask to pending so it's retried after rollback
+                    if subtask_id:
+                        reset_subtask_to_pending(spec_dir, subtask_id)
+                    pending_recovery_action = recovery_action
+                    print_status(
+                        f"Will rollback to {recovery_action.target[:8]} on next iteration",
+                        "warning",
+                    )
+
+                elif recovery_action.action == "continue":
+                    # Context exhausted - will continue in next session
+                    # Reset subtask to pending so it's picked up in the next session
+                    if subtask_id:
+                        reset_subtask_to_pending(spec_dir, subtask_id)
+                    print_status(
+                        "Context exhausted - will continue in next session", "info"
+                    )
+
+                # Sync recovery status changes back to main project (worktree mode)
+                if source_spec_dir:
+                    sync_spec_to_source(spec_dir, source_spec_dir)
+
+                print()
         elif plan_validated and source_spec_dir:
             # After planning phase, sync the newly created implementation plan back to source
             if sync_spec_to_source(spec_dir, source_spec_dir):
@@ -554,7 +1436,7 @@ async def run_autonomous_agent(
             )
 
             # Show next subtask info
-            next_subtask = get_next_subtask(spec_dir)
+            next_subtask = get_next_subtask(spec_dir, restart_from)
             if next_subtask:
                 subtask_id = next_subtask.get("id")
                 print(

@@ -489,8 +489,6 @@ def get_model_usage_trends(
     start_date = end_date - timedelta(days=window_days)
 
     # Get all usage in window
-    summary = aggregate_model_usage(project_dir, start_date, end_date)
-
     # Group usage by time period
     trends = []
 
@@ -527,16 +525,19 @@ def get_model_usage_trends(
 
             # Round timestamp to period start
             if granularity == "daily":
-                period_key = timestamp.replace(hour=0, minute=0, second=0, microsecond=0)
+                period_key = timestamp.replace(
+                    hour=0, minute=0, second=0, microsecond=0
+                )
             elif granularity == "weekly":
                 # Round to Monday
                 days_since_monday = timestamp.weekday()
-                period_key = (
-                    timestamp.replace(hour=0, minute=0, second=0, microsecond=0)
-                    - timedelta(days=days_since_monday)
-                )
+                period_key = timestamp.replace(
+                    hour=0, minute=0, second=0, microsecond=0
+                ) - timedelta(days=days_since_monday)
             else:  # monthly
-                period_key = timestamp.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+                period_key = timestamp.replace(
+                    day=1, hour=0, minute=0, second=0, microsecond=0
+                )
 
             if period_key not in time_records:
                 time_records[period_key] = []
@@ -552,12 +553,13 @@ def get_model_usage_trends(
             period_key = current_date.replace(hour=0, minute=0, second=0, microsecond=0)
         elif granularity == "weekly":
             days_since_monday = current_date.weekday()
-            period_key = (
-                current_date.replace(hour=0, minute=0, second=0, microsecond=0)
-                - timedelta(days=days_since_monday)
-            )
+            period_key = current_date.replace(
+                hour=0, minute=0, second=0, microsecond=0
+            ) - timedelta(days=days_since_monday)
         else:
-            period_key = current_date.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            period_key = current_date.replace(
+                day=1, hour=0, minute=0, second=0, microsecond=0
+            )
 
         # Get records for this period
         period_records = time_records.get(period_key, [])
@@ -644,7 +646,9 @@ def export_model_usage_data(
             )
 
             for model, metrics in sorted(
-                summary.metrics_by_model.items(), key=lambda x: x[1].total_cost, reverse=True
+                summary.metrics_by_model.items(),
+                key=lambda x: x[1].total_cost,
+                reverse=True,
             ):
                 writer.writerow(
                     [
@@ -792,9 +796,7 @@ def main() -> None:
         print(json.dumps(summary.to_dict(), indent=2))
 
     elif args.get_trends:
-        trends = get_model_usage_trends(
-            project_dir, args.window_days, args.granularity
-        )
+        trends = get_model_usage_trends(project_dir, args.window_days, args.granularity)
         print(json.dumps(trends, indent=2))
 
     elif args.export:

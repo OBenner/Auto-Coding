@@ -3,7 +3,6 @@ import { useTranslation } from 'react-i18next';
 import { Lock, Unlock, Loader2 } from 'lucide-react';
 import { Switch } from '../ui/switch';
 import { Label } from '../ui/label';
-import { Button } from '../ui/button';
 import {
   Tooltip,
   TooltipContent,

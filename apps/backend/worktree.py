@@ -39,6 +39,7 @@ sys.modules["core.worktree"] = _worktree_module
 _spec.loader.exec_module(_worktree_module)
 
 # Re-export key classes and types from core.worktree for backward compatibility
+# Optional: re-exported for backward compatibility facade
 from core.worktree import (  # noqa: F401
     PullRequestResult,
     PushAndCreatePRResult,

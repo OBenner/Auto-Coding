@@ -5,7 +5,9 @@ import type {
   IPCResult,
   SourceEnvConfig,
   SourceEnvCheckResult,
-  ToolDetectionResult
+  ToolDetectionResult,
+  AIProviderConfig,
+  ProviderConfigValidation
 } from '../../shared/types';
 
 export interface SettingsAPI {
@@ -33,6 +35,11 @@ export interface SettingsAPI {
   notifySentryStateChanged: (enabled: boolean) => void;
   getSentryDsn: () => Promise<string>;
   getSentryConfig: () => Promise<{ dsn: string; tracesSampleRate: number; profilesSampleRate: number }>;
+
+  // AI Provider Configuration (backend .env sync)
+  getProviderConfig: () => Promise<IPCResult<AIProviderConfig>>;
+  updateProviderConfig: (config: Partial<AIProviderConfig>) => Promise<IPCResult>;
+  validateProviderConfig: () => Promise<IPCResult<ProviderConfigValidation>>;
 }
 
 export const createSettingsAPI = (): SettingsAPI => ({
@@ -76,5 +83,15 @@ export const createSettingsAPI = (): SettingsAPI => ({
 
   // Get full Sentry config from main process (DSN + sample rates)
   getSentryConfig: (): Promise<{ dsn: string; tracesSampleRate: number; profilesSampleRate: number }> =>
-    ipcRenderer.invoke(IPC_CHANNELS.GET_SENTRY_CONFIG)
+    ipcRenderer.invoke(IPC_CHANNELS.GET_SENTRY_CONFIG),
+
+  // AI Provider Configuration (backend .env sync)
+  getProviderConfig: (): Promise<IPCResult<AIProviderConfig>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.PROVIDER_CONFIG_GET),
+
+  updateProviderConfig: (config: Partial<AIProviderConfig>): Promise<IPCResult> =>
+    ipcRenderer.invoke(IPC_CHANNELS.PROVIDER_CONFIG_UPDATE, config),
+
+  validateProviderConfig: (): Promise<IPCResult<ProviderConfigValidation>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.PROVIDER_CONFIG_VALIDATE)
 });

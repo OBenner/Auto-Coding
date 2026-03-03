@@ -10,35 +10,35 @@ Tests cover:
 """
 
 import json
+
+# Add auto-claude to path for imports
+import sys
 import tempfile
 from pathlib import Path
 
 import pytest
 
-# Add auto-claude to path for imports
-import sys
 sys.path.insert(0, str(Path(__file__).parent.parent / "apps" / "backend"))
 
 from qa_loop import (
-    # Iteration tracking
-    get_iteration_history,
-    record_iteration,
-    # Recurring issue detection
-    _normalize_issue_key,
-    _issue_similarity,
-    has_recurring_issues,
-    get_recurring_issue_summary,
-    # No-test project handling
-    check_test_discovery,
-    is_no_test_project,
-    create_manual_test_plan,
+    ISSUE_SIMILARITY_THRESHOLD,
     # Configuration
     RECURRING_ISSUE_THRESHOLD,
-    ISSUE_SIMILARITY_THRESHOLD,
+    _issue_similarity,
+    # Recurring issue detection
+    _normalize_issue_key,
+    # No-test project handling
+    check_test_discovery,
+    create_manual_test_plan,
+    # Iteration tracking
+    get_iteration_history,
+    get_recurring_issue_summary,
+    has_recurring_issues,
+    is_no_test_project,
     # Implementation plan helpers
     load_implementation_plan,
+    record_iteration,
 )
-
 
 # =============================================================================
 # FIXTURES
@@ -76,7 +76,7 @@ def spec_with_plan(spec_dir):
         "qa_signoff": {
             "status": "pending",
             "qa_session": 0,
-        }
+        },
     }
     plan_file = spec_dir / "implementation_plan.json"
     with open(plan_file, "w") as f:
@@ -130,8 +130,12 @@ class TestIterationTracking:
 
     def test_record_iteration_updates_stats(self, spec_with_plan):
         """Test that recording updates qa_stats."""
-        record_iteration(spec_with_plan, 1, "rejected", [{"title": "Error", "type": "error"}])
-        record_iteration(spec_with_plan, 2, "rejected", [{"title": "Warning", "type": "warning"}])
+        record_iteration(
+            spec_with_plan, 1, "rejected", [{"title": "Error", "type": "error"}]
+        )
+        record_iteration(
+            spec_with_plan, 2, "rejected", [{"title": "Warning", "type": "warning"}]
+        )
 
         plan = load_implementation_plan(spec_with_plan)
         stats = plan.get("qa_stats", {})
@@ -290,7 +294,10 @@ class TestRecurringIssueSummary:
     def test_summary_counts(self):
         """Test that summary counts are correct."""
         history = [
-            {"status": "rejected", "issues": [{"title": "Error A"}, {"title": "Error B"}]},
+            {
+                "status": "rejected",
+                "issues": [{"title": "Error A"}, {"title": "Error B"}],
+            },
             {"status": "rejected", "issues": [{"title": "Error A"}]},
             {"status": "approved", "issues": []},
         ]
@@ -347,7 +354,7 @@ class TestCheckTestDiscovery:
         """Test reading valid discovery file."""
         discovery = {
             "frameworks": [{"name": "pytest", "type": "unit"}],
-            "test_directories": ["tests/"]
+            "test_directories": ["tests/"],
         }
         discovery_file = spec_dir / "test_discovery.json"
         with open(discovery_file, "w") as f:

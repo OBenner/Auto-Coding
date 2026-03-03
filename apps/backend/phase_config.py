@@ -126,6 +126,57 @@ AGENT_DEFAULT_MODELS: dict[str, str] = {
     "ideation": "sonnet",
 }
 
+# Agent-level default provider mapping
+# Maps each agent type to a default AI provider
+# Used for multi-provider orchestration where different agents can use different providers
+AGENT_DEFAULT_PROVIDERS: dict[str, str] = {
+    # ═══════════════════════════════════════════════════════════════════════
+    # SPEC CREATION AGENTS (Use claude as default provider)
+    # ═══════════════════════════════════════════════════════════════════════
+    "spec_gatherer": "claude",
+    "spec_researcher": "claude",
+    "spec_writer": "claude",
+    "spec_critic": "claude",
+    "spec_discovery": "claude",
+    "spec_context": "claude",
+    "spec_validation": "claude",
+    "spec_compaction": "claude",
+    # ═══════════════════════════════════════════════════════════════════════
+    # BUILD AGENTS (Use claude as default provider)
+    # ═══════════════════════════════════════════════════════════════════════
+    "planner": "claude",
+    "coder": "claude",
+    # ═══════════════════════════════════════════════════════════════════════
+    # QA AGENTS (Use claude as default provider)
+    # ═══════════════════════════════════════════════════════════════════════
+    "qa_reviewer": "claude",
+    "qa_fixer": "claude",
+    # ═══════════════════════════════════════════════════════════════════════
+    # UTILITY AGENTS (Use claude as default provider)
+    # ═══════════════════════════════════════════════════════════════════════
+    "insights": "claude",
+    "merge_resolver": "claude",
+    "commit_message": "claude",
+    # ═══════════════════════════════════════════════════════════════════════
+    # PR AGENTS (Use claude as default provider)
+    # ═══════════════════════════════════════════════════════════════════════
+    "pr_reviewer": "claude",
+    "pr_orchestrator_parallel": "claude",
+    "pr_followup_parallel": "claude",
+    # ═══════════════════════════════════════════════════════════════════════
+    # ANALYSIS AGENTS (Use claude as default provider)
+    # ═══════════════════════════════════════════════════════════════════════
+    "analysis": "claude",
+    "batch_analysis": "claude",
+    "batch_validation": "claude",
+    # ═══════════════════════════════════════════════════════════════════════
+    # ROADMAP & IDEATION (Use claude as default provider)
+    # ═══════════════════════════════════════════════════════════════════════
+    "roadmap_discovery": "claude",
+    "competitor_analysis": "claude",
+    "ideation": "claude",
+}
+
 
 class PhaseModelConfig(TypedDict, total=False):
     spec: str
@@ -711,3 +762,38 @@ def get_spec_phase_thinking_budget(phase_name: str) -> int | None:
     """
     thinking_level = SPEC_PHASE_THINKING_LEVELS.get(phase_name, "medium")
     return get_thinking_budget(thinking_level)
+
+
+def get_provider_for_agent(agent_type: str) -> str:
+    """
+    Get the AI provider to use for a specific agent.
+
+    Priority:
+    1. Environment variable AGENT_PROVIDER_<agent_type> (if set)
+    2. Global AI_ENGINE_PROVIDER environment variable (if set)
+    3. AGENT_DEFAULT_PROVIDERS mapping (if agent_type has a default)
+    4. Default to 'claude'
+
+    Args:
+        agent_type: The agent type (e.g., 'coder', 'planner', 'qa_reviewer')
+
+    Returns:
+        Provider name ('claude', 'litellm', or 'openrouter')
+    """
+    # 1. Check for agent-specific environment variable override
+    env_var_name = f"AGENT_PROVIDER_{agent_type.upper()}"
+    env_provider = os.environ.get(env_var_name)
+    if env_provider:
+        return env_provider
+
+    # 2. Global AI_ENGINE_PROVIDER env var overrides the hardcoded defaults
+    global_provider = os.environ.get("AI_ENGINE_PROVIDER")
+    if global_provider:
+        return global_provider
+
+    # 3. Check agent default providers mapping
+    default_provider = AGENT_DEFAULT_PROVIDERS.get(agent_type)
+    if default_provider:
+        return default_provider
+
+    return "claude"

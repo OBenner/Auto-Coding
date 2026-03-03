@@ -4,7 +4,6 @@ import { Cpu, Lock, RefreshCw } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { AgentModelDisplay } from '../model-usage/AgentModelDisplay';
-import { ModelLockControl } from '../model-usage/ModelLockControl';
 import type { Project } from '../../../shared/types';
 import type { ModelLockConfig } from '../../../shared/types/model-usage';
 
@@ -52,11 +51,6 @@ export function ModelUsageSettings({ project }: ModelUsageSettingsProps) {
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const handleLockChange = (agentType: string, isLocked: boolean) => {
-    // Refresh the locks after a change
-    loadModelLocks();
   };
 
   // Get default agent models from constants (this could be enhanced to fetch from backend)

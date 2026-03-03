@@ -46,8 +46,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from phase_config import (
-    Phase,
-    AgentModelConfig,
     ModelLockConfig,
     is_agent_model_locked,
     is_phase_model_locked,
@@ -187,7 +185,7 @@ def cmd_lock_phase(spec_dir: str, phase: str, model_id: str) -> int:
             return 0
         else:
             print(
-                f"⚠️  Warning: Lock was created but verification failed",
+                "⚠️  Warning: Lock was created but verification failed",
                 file=sys.stderr,
             )
             return 1
@@ -232,7 +230,7 @@ def cmd_lock_agent(spec_dir: str, agent_type: str, model_id: str) -> int:
             return 0
         else:
             print(
-                f"⚠️  Warning: Lock was created but verification failed",
+                "⚠️  Warning: Lock was created but verification failed",
                 file=sys.stderr,
             )
             return 1

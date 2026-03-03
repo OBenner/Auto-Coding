@@ -1,0 +1,20 @@
+{
+  "filters": {
+    "searchPlaceholder": "Search tasks...",
+    "searchAriaLabel": "Search tasks by title or description",
+    "sortByLabel": "Sort by",
+    "sortModes": {
+      "manual": "Manual",
+      "priority": "Priority",
+      "created": "Created Date",
+      "updated": "Updated Date"
+    },
+    "sortOrderToggle": "Toggle sort order",
+    "sortOrder": {
+      "ascending": "Ascending (low to high, oldest to newest)",
+      "descending": "Descending (high to low, newest to oldest)"
+    },
+    "clearFilters": "Clear Filters",
+    "clearFiltersAriaLabel": "Clear all active filters"
+  }
+}

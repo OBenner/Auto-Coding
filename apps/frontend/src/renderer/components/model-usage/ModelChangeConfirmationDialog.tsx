@@ -11,6 +11,7 @@ import {
   AlertDialogTitle,
 } from '../ui/alert-dialog';
 import { Badge } from '../ui/badge';
+import { parseModelId, getAgentLabel } from './model-utils';
 
 interface ModelChangeConfirmationDialogProps {
   open: boolean;
@@ -22,41 +23,6 @@ interface ModelChangeConfirmationDialogProps {
   isChanging: boolean;
   onOpenChange: (open: boolean) => void;
   onConfirm: () => void;
-}
-
-/**
- * Parse model ID to get display name and version
- */
-function parseModelId(modelId: string): { name: string; version: string } {
-  // Check if it's a tier shorthand (opus, sonnet, haiku)
-  if (['opus', 'sonnet', 'haiku'].includes(modelId)) {
-    const names: Record<string, string> = {
-      opus: 'Opus',
-      sonnet: 'Sonnet',
-      haiku: 'Haiku'
-    };
-    return {
-      name: names[modelId] || modelId,
-      version: 'Default'
-    };
-  }
-
-  // Parse full model ID
-  // e.g., "claude-sonnet-4-5-20250929" -> { name: "Sonnet", version: "4.5" }
-  const parts = modelId.split('-');
-  const tier = parts[1] || 'unknown';
-  const version = parts.slice(2, 5).join('.').replace(/\.+/g, '.');
-
-  const tierNames: Record<string, string> = {
-    sonnet: 'Sonnet',
-    opus: 'Opus',
-    haiku: 'Haiku'
-  };
-
-  return {
-    name: tierNames[tier] || tier,
-    version: version || 'Latest'
-  };
 }
 
 /**
@@ -79,10 +45,7 @@ export function ModelChangeConfirmationDialog({
   const { t } = useTranslation(['model-usage', 'common']);
 
   // Format agent type for display
-  const displayLabel = agentLabel || agentType
-    .split('_')
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ');
+  const displayLabel = agentLabel || getAgentLabel(agentType);
 
   const currentModelInfo = parseModelId(currentModel);
   const newModelInfo = parseModelId(newModel);

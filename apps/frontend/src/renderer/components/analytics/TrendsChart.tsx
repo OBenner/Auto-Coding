@@ -261,7 +261,7 @@ export function TrendsChart({ trends, isLoading = false }: TrendsChartProps) {
                     cy={point.y}
                     r="4"
                     fill={metric.color}
-                    className="hover:r-6 transition-all"
+                    className="cursor-pointer transition-transform hover:scale-125"
                   />
                   {/* Tooltip on hover (simplified) */}
                   <title>
