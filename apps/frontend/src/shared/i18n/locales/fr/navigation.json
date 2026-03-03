@@ -25,7 +25,8 @@
     "agentTools": "Aperçu MCP",
     "mergeAnalytics": "Analyse des fusions",
     "sessions": "Relecture de session",
-    "feedback": "Retour d'information"
+    "feedback": "Retour d'information",
+    "modelUsage": "Utilisation du modèle"
   },
   "actions": {
     "settings": "Paramètres",

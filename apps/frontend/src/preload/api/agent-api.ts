@@ -25,6 +25,7 @@ import { createGitLabAPI, GitLabAPI } from './modules/gitlab-api';
 import { createShellAPI, ShellAPI } from './modules/shell-api';
 import { createSessionContextAPI, SessionContextAPI } from './modules/session-context-api';
 import { createProductivityAnalyticsAPI, ProductivityAnalyticsAPI } from './modules/productivity-analytics-api';
+import { createModelUsageAPI, ModelUsageAPI } from './modules/model-usage-api';
 
 /**
  * Combined Agent API interface
@@ -40,7 +41,12 @@ export interface AgentAPI extends
   GitLabAPI,
   ShellAPI,
   SessionContextAPI,
+<<<<<<< Updated upstream
   ProductivityAnalyticsAPI {
+=======
+  ProductivityAnalyticsAPI,
+  ModelUsageAPI {
+>>>>>>> Stashed changes
   analytics: AnalyticsAPI;
 }
 
@@ -61,6 +67,7 @@ export const createAgentAPI = (): AgentAPI => {
   const shellAPI = createShellAPI();
   const sessionContextAPI = createSessionContextAPI();
   const productivityAnalyticsAPI = createProductivityAnalyticsAPI();
+  const modelUsageAPI = createModelUsageAPI();
 
   return {
     // Roadmap API
@@ -94,7 +101,10 @@ export const createAgentAPI = (): AgentAPI => {
     ...sessionContextAPI,
 
     // Productivity Analytics API
-    ...productivityAnalyticsAPI
+    ...productivityAnalyticsAPI,
+
+    // Model Usage Analytics API
+    ...modelUsageAPI
   };
 };
 
@@ -110,5 +120,6 @@ export type {
   GitLabAPI,
   ShellAPI,
   SessionContextAPI,
-  ProductivityAnalyticsAPI
+  ProductivityAnalyticsAPI,
+  ModelUsageAPI
 };

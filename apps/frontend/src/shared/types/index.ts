@@ -22,6 +22,7 @@ export * from './merge-analytics';
 export * from './workspace';
 export * from './session-context';
 export * from './productivity-analytics';
+export * from './model-usage';
 export * from './template';
 export * from './session-replay';
 export * from './scheduler';

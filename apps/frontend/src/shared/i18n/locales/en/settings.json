@@ -418,6 +418,13 @@
       "integrationTitle": "Memory",
       "integrationDescription": "Configure persistent cross-session memory for agents",
       "syncDescription": "Configure persistent memory"
+    },
+    "modelUsage": {
+      "title": "Model Usage",
+      "description": "Model configuration and locks",
+      "integrationTitle": "Model Usage",
+      "integrationDescription": "View and manage AI model usage and lock specific model versions",
+      "syncDescription": "Configure model settings"
     }
   },
   "provider": {

@@ -51,6 +51,7 @@ import { SessionList } from './components/session-replay/SessionList';
 import { AgentTools } from './components/AgentTools';
 import { PatternsPage } from './pages/PatternsPage';
 import { ProductivityDashboard } from './components/analytics/ProductivityDashboard';
+import { ModelUsageDashboard } from './components/model-usage/ModelUsageDashboard';
 import { MergeAnalyticsDashboard } from './components/merge-analytics/MergeAnalyticsDashboard';
 import { FeedbackDashboard } from './components/FeedbackDashboard';
 import { WelcomeScreen } from './components/WelcomeScreen';
@@ -1104,6 +1105,9 @@ export function App() {
                 )}
                 {activeView === 'productivity' && (activeProjectId || selectedProjectId) && (
                   <ProductivityDashboard projectId={activeProjectId || selectedProjectId!} />
+                )}
+                {activeView === 'model-usage' && (activeProjectId || selectedProjectId) && (
+                  <ModelUsageDashboard projectId={activeProjectId || selectedProjectId!} />
                 )}
                 {activeView === 'merge-analytics' && (activeProjectId || selectedProjectId) && (
                   <MergeAnalyticsDashboard projectId={activeProjectId || selectedProjectId!} />

@@ -15,6 +15,10 @@ import enTaskReview from './locales/en/taskReview.json';
 import enTerminal from './locales/en/terminal.json';
 import enErrors from './locales/en/errors.json';
 import enAnalytics from './locales/en/analytics.json';
+<<<<<<< Updated upstream
+=======
+import enModelUsage from './locales/en/model-usage.json';
+>>>>>>> Stashed changes
 import enCodeReview from './locales/en/codeReview.json';
 import enQuality from './locales/en/quality.json';
 
@@ -32,6 +36,10 @@ import frTaskReview from './locales/fr/taskReview.json';
 import frTerminal from './locales/fr/terminal.json';
 import frErrors from './locales/fr/errors.json';
 import frAnalytics from './locales/fr/analytics.json';
+<<<<<<< Updated upstream
+=======
+import frModelUsage from './locales/fr/model-usage.json';
+>>>>>>> Stashed changes
 import frCodeReview from './locales/fr/codeReview.json';
 import frQuality from './locales/fr/quality.json';
 
@@ -52,6 +60,10 @@ export const resources = {
     terminal: enTerminal,
     errors: enErrors,
     analytics: enAnalytics,
+<<<<<<< Updated upstream
+=======
+    'model-usage': enModelUsage,
+>>>>>>> Stashed changes
     codeReview: enCodeReview,
     quality: enQuality
   },
@@ -69,6 +81,10 @@ export const resources = {
     terminal: frTerminal,
     errors: frErrors,
     analytics: frAnalytics,
+<<<<<<< Updated upstream
+=======
+    'model-usage': frModelUsage,
+>>>>>>> Stashed changes
     codeReview: frCodeReview,
     quality: frQuality
   }
@@ -81,7 +97,11 @@ i18n
     lng: 'en', // Default language (will be overridden by settings)
     fallbackLng: 'en',
     defaultNS,
+<<<<<<< Updated upstream
     ns: ['common', 'navigation', 'settings', 'tasks', 'welcome', 'onboarding', 'dialogs', 'github', 'gitlab', 'taskReview', 'terminal', 'errors', 'analytics', 'codeReview', 'quality'],
+=======
+    ns: ['common', 'navigation', 'settings', 'tasks', 'welcome', 'onboarding', 'dialogs', 'github', 'gitlab', 'taskReview', 'terminal', 'errors', 'analytics', 'model-usage', 'codeReview', 'quality'],
+>>>>>>> Stashed changes
     interpolation: {
       escapeValue: false // React already escapes values
     },
