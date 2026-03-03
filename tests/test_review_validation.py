@@ -11,11 +11,8 @@ Tests for hash computation and spec change detection:
 
 from pathlib import Path
 
-import pytest
-
 from review import ReviewState
 from review.state import _compute_file_hash, _compute_spec_hash
-from tests.review_fixtures import review_spec_dir
 
 
 class TestSpecHashValidation:
@@ -70,7 +67,9 @@ class TestSpecHashValidation:
         assert len(spec_hash) == 32
         assert all(c in "0123456789abcdef" for c in spec_hash)
 
-    def test_compute_spec_hash_changes_on_spec_edit(self, review_spec_dir: Path) -> None:
+    def test_compute_spec_hash_changes_on_spec_edit(
+        self, review_spec_dir: Path
+    ) -> None:
         """_compute_spec_hash() changes when spec.md is modified."""
         hash_before = _compute_spec_hash(review_spec_dir)
 
@@ -82,7 +81,9 @@ class TestSpecHashValidation:
 
         assert hash_before != hash_after
 
-    def test_compute_spec_hash_changes_on_plan_edit(self, review_spec_dir: Path) -> None:
+    def test_compute_spec_hash_changes_on_plan_edit(
+        self, review_spec_dir: Path
+    ) -> None:
         """_compute_spec_hash() changes when plan is modified."""
         hash_before = _compute_spec_hash(review_spec_dir)
 
@@ -148,6 +149,7 @@ class TestSpecHashValidation:
 
         # Test 2: Plan modification should invalidate
         import json
+
         plan_file = review_spec_dir / "implementation_plan.json"
         plan_content = plan_file.read_text()
         plan = json.loads(plan_content)

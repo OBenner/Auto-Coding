@@ -323,9 +323,8 @@ class FindingValidator:
         if (
             not finding.suggested_fix
             or len(finding.suggested_fix) < self.MIN_SUGGESTED_FIX_LENGTH
-        ):
-            if finding.severity == ReviewSeverity.LOW:
-                return True
+        ) and finding.severity == ReviewSeverity.LOW:
+            return True
 
         # Check for style findings without clear justification
         if finding.category.value == "style":

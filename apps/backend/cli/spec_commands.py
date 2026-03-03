@@ -7,6 +7,7 @@ CLI commands for managing specs (listing, finding, etc.)
 
 import sys
 from pathlib import Path
+from typing import Any
 
 # Ensure parent directory is in path for imports (before other imports)
 _PARENT_DIR = Path(__file__).parent.parent
@@ -188,4 +189,180 @@ def print_specs_list(project_dir: Path, auto_create: bool = True) -> None:
     print("\nTo run a spec:")
     print("  python auto-claude/run.py --spec 001")
     print("  python auto-claude/run.py --spec 001-feature-name")
+    print()
+
+
+def list_templates(
+    project_dir: Path, category: str | None = None, tags: list[str] | None = None
+) -> list[dict[str, Any]]:
+    """
+    List all available templates with optional filtering.
+
+    Args:
+        project_dir: Project root directory
+        category: Optional category filter
+        tags: Optional tag filters
+
+    Returns:
+        List of template info dicts with keys: name, description, category, parameters
+    """
+    # Import here to avoid import errors if template system is not available
+    try:
+        from spec.templates.library import TemplateLibrary
+    except ImportError:
+        return []
+
+    # Create template library
+    library = TemplateLibrary()
+
+    # Get templates with optional filtering
+    templates = library.list_templates(category=category, tags=tags)
+
+    return templates
+
+
+def print_templates_list(
+    project_dir: Path, category: str | None = None, tags: list[str] | None = None
+) -> None:
+    """
+    Print a formatted list of all available templates.
+
+    Args:
+        project_dir: Project root directory
+        category: Optional category filter
+        tags: Optional tag filters
+    """
+    templates = list_templates(project_dir, category=category, tags=tags)
+
+    if not templates:
+        print("\nNo templates found.")
+        return
+
+    print("\n" + "=" * 70)
+    print("  AVAILABLE TEMPLATES")
+    print("=" * 70)
+    print()
+
+    # Group templates by category
+    categories: dict[str, list[dict[str, Any]]] = {}
+    for template in templates:
+        cat = template.get("category", "General")
+        if cat not in categories:
+            categories[cat] = []
+        categories[cat].append(template)
+
+    # Print templates grouped by category
+    for cat_name, cat_templates in sorted(categories.items()):
+        print(f"  {cat_name}")
+        print(f"  {'-' * 70}")
+
+        for template in cat_templates:
+            name = template.get("name", "Unknown")
+            description = template.get("description", "")
+
+            print(f"    • {name}")
+            if description:
+                # Wrap description if too long
+                if len(description) > 60:
+                    desc_lines = [
+                        description[i : i + 60] for i in range(0, len(description), 60)
+                    ]
+                    print(f"      {desc_lines[0]}")
+                    for line in desc_lines[1:]:
+                        print(f"      {line}")
+                else:
+                    print(f"      {description}")
+            print()
+
+    print("-" * 70)
+    print()
+    print(f"Total: {len(templates)} template(s)")
+    print()
+
+
+def show_template_info(project_dir: Path, template_name: str) -> None:
+    """
+    Show detailed information about a specific template.
+
+    Args:
+        project_dir: Project root directory
+        template_name: Name of the template to show
+    """
+    # Import here to avoid import errors if template system is not available
+    try:
+        from spec.templates.library import TemplateLibrary
+    except ImportError:
+        print("\nTemplate system not available.")
+        return
+
+    library = TemplateLibrary()
+    template = library.get_template(template_name)
+
+    if not template:
+        print(f"\nTemplate not found: {template_name}")
+        return
+
+    print("\n" + "=" * 70)
+    print(f"  TEMPLATE: {template.name}")
+    print("=" * 70)
+    print()
+
+    print(f"Category: {template.category}")
+    print()
+    print("Description:")
+    print(f"  {template.description}")
+    print()
+
+    if template.parameters:
+        print("Parameters:")
+        for param_name, param_info in template.parameters.items():
+            param_type = param_info.get("type", "string")
+            param_desc = param_info.get("description", "")
+            required = param_info.get("required", False)
+
+            req_marker = " (required)" if required else " (optional)"
+            print(f"  • {param_name}: {param_type}{req_marker}")
+            if param_desc:
+                print(f"    {param_desc}")
+        print()
+    else:
+        print("Parameters: None (template uses defaults)")
+        print()
+
+    print("-" * 70)
+    print()
+
+
+def preview_template_spec(
+    project_dir: Path, template_name: str, params: dict[str, Any]
+) -> None:
+    """
+    Preview a generated spec from a template without saving it.
+
+    Args:
+        project_dir: Project root directory
+        template_name: Name of the template to preview
+        params: Template parameters
+    """
+    # Import here to avoid import errors if template system is not available
+    try:
+        from spec.templates.library import TemplateLibrary
+    except ImportError:
+        print("\nTemplate system not available.")
+        return
+
+    library = TemplateLibrary()
+    preview = library.preview_template(template_name, params)
+
+    if not preview:
+        print(f"\nTemplate not found: {template_name}")
+        return
+
+    print("\n" + "=" * 70)
+    print(f"  SPEC PREVIEW: {template_name}")
+    print("=" * 70)
+    print()
+    print(preview)
+    print()
+    print("-" * 70)
     print()

@@ -24,19 +24,21 @@ Usage:
 from __future__ import annotations
 
 import json
+import logging
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+logger = logging.getLogger(__name__)
+
 # Import the existing secrets scanner
 try:
-    from security.scan_secrets import SecretMatch, get_all_tracked_files, scan_files
+    from security.scan_secrets import get_all_tracked_files, scan_files
 
     HAS_SECRETS_SCANNER = True
 except ImportError:
     HAS_SECRETS_SCANNER = False
-    SecretMatch = None
 
 
 # =============================================================================
@@ -390,14 +392,14 @@ class SecurityScanner:
                             )
                         )
                 except json.JSONDecodeError:
-                    pass
+                    logger.debug("Failed to parse pip-audit JSON output")
 
         except FileNotFoundError:
-            pass  # pip-audit not available
+            logger.debug("pip-audit not available")
         except subprocess.TimeoutExpired:
-            pass
-        except Exception:
-            pass
+            logger.debug("pip-audit timed out")
+        except (OSError, ValueError, KeyError):
+            logger.debug("pip-audit output parsing failed")
 
     def _is_python_project(self, project_dir: Path) -> bool:
         """Check if this is a Python project."""
@@ -442,8 +444,12 @@ class SecurityScanner:
 
     def to_dict(self, result: SecurityScanResult) -> dict[str, Any]:
         """Convert result to dictionary for JSON serialization."""
+        # Redact matched_text to prevent clear-text secret logging
+        redacted_secrets = [
+            {**secret, "matched_text": "[redacted]"} for secret in result.secrets
+        ]
         return {
-            "secrets": result.secrets,
+            "secrets": redacted_secrets,
             "vulnerabilities": [
                 {
                     "severity": v.severity,
@@ -578,9 +584,13 @@ def main() -> None:
         print(f"Should Block QA: {result.should_block_qa}")
 
         if result.secrets:
-            print("\nSecrets Detected:")
-            for secret in result.secrets:
-                print(f"  - {secret['pattern']} in {secret['file']}:{secret['line']}")
+            print(f"\nSecrets Detected ({len(result.secrets)}):")
+            for _secret_entry in result.secrets:
+                # Only log pattern type and location, never actual secret values
+                pattern_type = str(_secret_entry.get("pattern", "unknown"))
+                file_loc = str(_secret_entry.get("file", "unknown"))
+                line_num = str(_secret_entry.get("line", "?"))
+                print(f"  - {pattern_type} in {file_loc}:{line_num}")
 
         if result.vulnerabilities:
             print(f"\nVulnerabilities ({len(result.vulnerabilities)}):")

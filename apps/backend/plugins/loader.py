@@ -28,25 +28,65 @@ from .isolation import PluginSandbox, ResourceLimits
 # Configure logging
 logger = logging.getLogger(__name__)
 
-# Import debug utilities
+# Import debug utilities - wrapped with source module name for CodeQL compliance
+_SOURCE = "plugins.loader"
 try:
-    from debug import debug, debug_error, debug_success, debug_verbose, debug_warning
+    from debug import (
+        debug as _raw_debug,
+    )
+    from debug import (
+        debug_error as _raw_debug_error,
+    )
+    from debug import (
+        debug_success as _raw_debug_success,
+    )
+    from debug import (
+        debug_verbose as _raw_debug_verbose,
+    )
+    from debug import (
+        debug_warning as _raw_debug_warning,
+    )
 except ImportError:
 
-    def debug(*args, **kwargs):
-        pass
+    def _raw_debug(*_args, **_kwargs):
+        """No-op fallback when debug module is unavailable."""
 
-    def debug_verbose(*args, **kwargs):
-        pass
+    def _raw_debug_error(*_args, **_kwargs):
+        """No-op fallback when debug module is unavailable."""
 
-    def debug_success(*args, **kwargs):
-        pass
+    def _raw_debug_success(*_args, **_kwargs):
+        """No-op fallback when debug module is unavailable."""
 
-    def debug_error(*args, **kwargs):
-        pass
+    def _raw_debug_verbose(*_args, **_kwargs):
+        """No-op fallback when debug module is unavailable."""
 
-    def debug_warning(*args, **kwargs):
-        pass
+    def _raw_debug_warning(*_args, **_kwargs):
+        """No-op fallback when debug module is unavailable."""
+
+
+def _debug(msg: str, **kwargs) -> None:
+    """Debug log with source module."""
+    _raw_debug(_SOURCE, msg, **kwargs)
+
+
+def _debug_verbose(msg: str, **kwargs) -> None:
+    """Verbose debug log with source module."""
+    _raw_debug_verbose(_SOURCE, msg, **kwargs)
+
+
+def _debug_success(msg: str, **kwargs) -> None:
+    """Success debug log with source module."""
+    _raw_debug_success(_SOURCE, msg, **kwargs)
+
+
+def _debug_error(msg: str, **kwargs) -> None:
+    """Error debug log with source module."""
+    _raw_debug_error(_SOURCE, msg, **kwargs)
+
+
+def _debug_warning(msg: str, **kwargs) -> None:
+    """Warning debug log with source module."""
+    _raw_debug_warning(_SOURCE, msg, **kwargs)
 
 
 class PluginLoadError(Exception):
@@ -268,11 +308,11 @@ class PluginLoader:
         """
         discovered = []
 
-        debug("loader", "Discovering plugins...")
+        _debug("Discovering plugins...")
 
         # Scan system plugins first (can be overridden by user plugins)
         if self.system_plugins_dir.exists():
-            debug_verbose("loader", f"Scanning system plugins: {self.system_plugins_dir}")
+            _debug_verbose(f"Scanning system plugins: {self.system_plugins_dir}")
             for plugin_dir in self.system_plugins_dir.iterdir():
                 if plugin_dir.is_dir():
                     try:
@@ -293,10 +333,9 @@ class PluginLoader:
                             )
 
                         discovered.append(metadata)
-                        debug_verbose("loader", f"  Found: {metadata.name} v{metadata.version}")
+                        _debug_verbose(f"  Found: {metadata.name} v{metadata.version}")
                     except Exception as e:
-                        debug_warning(
-                            "loader",
+                        _debug_warning(
                             f"  Skipping invalid system plugin {plugin_dir.name}: {e}"
                         )
                         logger.warning(
@@ -305,7 +344,7 @@ class PluginLoader:
 
         # Scan user plugins (can override system plugins)
         if self.user_plugins_dir.exists():
-            debug_verbose("loader", f"Scanning user plugins: {self.user_plugins_dir}")
+            _debug_verbose(f"Scanning user plugins: {self.user_plugins_dir}")
             for plugin_dir in self.user_plugins_dir.iterdir():
                 if plugin_dir.is_dir():
                     try:
@@ -330,23 +369,21 @@ class PluginLoader:
                             (p for p in discovered if p.name == metadata.name), None
                         )
                         if existing:
-                            debug_warning(
-                                "loader",
+                            _debug_warning(
                                 f"  User plugin '{metadata.name}' overrides system plugin"
                             )
                             discovered.remove(existing)
                         discovered.append(metadata)
-                        debug_verbose("loader", f"  Found: {metadata.name} v{metadata.version}")
+                        _debug_verbose(f"  Found: {metadata.name} v{metadata.version}")
                     except Exception as e:
-                        debug_warning(
-                            "loader",
+                        _debug_warning(
                             f"  Skipping invalid user plugin {plugin_dir.name}: {e}"
                         )
                         logger.warning(
                             f"Failed to load user plugin {plugin_dir.name}: {e}"
                         )
 
-        debug_success("loader", f"Discovered {len(discovered)} plugins")
+        _debug_success(f"Discovered {len(discovered)} plugins")
         return discovered
 
     def load_plugin(
@@ -378,12 +415,12 @@ class PluginLoader:
         if not plugin_dir.exists():
             raise PluginLoadError(f"Plugin directory not found: {plugin_dir}")
 
-        debug("loader", f"Loading plugin from: {plugin_dir}")
+        _debug(f"Loading plugin from: {plugin_dir}")
 
         # Load and validate manifest
         try:
             metadata = self._load_metadata(plugin_dir)
-            debug_verbose("loader", f"  Loaded metadata: {metadata.name} v{metadata.version}")
+            _debug_verbose(f"  Loaded metadata: {metadata.name} v{metadata.version}")
         except Exception as e:
             raise PluginValidationError(f"Invalid plugin manifest: {e}") from e
 
@@ -402,7 +439,7 @@ class PluginLoader:
                 f"Plugin module not found: Expected {plugin_dir}/plugin.py or {plugin_dir}/__init__.py"
             )
 
-        debug_verbose("loader", f"  Loading module: {module_path}")
+        _debug_verbose(f"  Loading module: {module_path}")
 
         # Dynamically import plugin module
         try:
@@ -415,7 +452,7 @@ class PluginLoader:
         # Instantiate plugin
         try:
             plugin = plugin_class(metadata)
-            debug_verbose("loader", f"  Instantiated plugin class: {plugin_class.__name__}")
+            _debug_verbose(f"  Instantiated plugin class: {plugin_class.__name__}")
         except Exception as e:
             raise PluginLoadError(f"Failed to instantiate plugin: {e}") from e
 
@@ -429,9 +466,9 @@ class PluginLoader:
             allowed_dirs=allowed_dirs,
             limits=limits or self.default_limits,
         )
-        debug_verbose("loader", f"  Configured sandbox with {len(allowed_dirs)} allowed dirs")
+        _debug_verbose(f"  Configured sandbox with {len(allowed_dirs)} allowed dirs")
 
-        debug_success("loader", f"Loaded plugin: {metadata.name} v{metadata.version}")
+        _debug_success(f"Loaded plugin: {metadata.name} v{metadata.version}")
         return plugin
 
     def validate_plugin_security(self, plugin_dir: Path) -> tuple[bool, list[str]]:

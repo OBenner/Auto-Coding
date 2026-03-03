@@ -1,0 +1,172 @@
+{
+  "editor": {
+    "title": "Éditeur de modèle d'agent",
+    "description": "Créer et gérer des modèles d'agent personnalisés",
+    "fields": {
+      "name": "Nom du modèle",
+      "description": "Description",
+      "category": "Catégorie",
+      "version": "Version",
+      "customPrompt": "Invite système personnalisée",
+      "thinkingLevel": "Niveau de réflexion"
+    },
+    "placeholders": {
+      "name": "ex: agent-documentation",
+      "description": "Que fait ce modèle d'agent ?",
+      "category": "ex: documentation, tests, sécurité",
+      "version": "1.0.0",
+      "customPrompt": "Entrez l'invite système personnalisée pour cet agent..."
+    },
+    "validation": {
+      "nameRequired": "Le nom du modèle est requis",
+      "descriptionRequired": "La description est requise",
+      "categoryRequired": "La catégorie est requise",
+      "promptTooShort": "L'invite personnalisée doit contenir au moins 20 caractères",
+      "invalidVersion": "Format de version invalide (utilisez le versionnage sémantique comme 1.0.0)",
+      "invalidNameFormat": "Le nom doit être en minuscules alphanumériques avec des tirets uniquement",
+      "exportFailed": "L'exportation a échoué"
+    },
+    "updateAvailable": "Mise à jour disponible",
+    "update": "Mettre à jour",
+    "upToDate": "À jour",
+    "currentVersion": "Version actuelle",
+    "newVersionAvailable": "Nouvelle version {{version}} disponible",
+    "hints": {
+      "versionFormat": "Versionnage sémantique (ex : 1.0.0)",
+      "customPrompt": "Cette invite remplacera l'invite système par défaut de l'agent. Utilisez des instructions claires pour définir le comportement et les capacités de l'agent."
+    },
+    "actions": {
+      "save": "Enregistrer le modèle",
+      "cancel": "Annuler",
+      "test": "Tester le modèle",
+      "import": "Importer le modèle",
+      "export": "Exporter le modèle",
+      "importing": "Importation...",
+      "exporting": "Exportation...",
+      "saving": "Enregistrement...",
+      "testing": "Test en cours..."
+    }
+  },
+  "selector": {
+    "noneOption": "Aucun",
+    "useDefaultAgentHint": "(Utiliser l'agent par défaut)",
+    "category": "Catégorie :",
+    "toolsConfigured": "Outils configurés"
+  },
+  "toolSelector": {
+    "title": "Configuration des outils",
+    "description": "Sélectionnez les outils et serveurs MCP que ce modèle d'agent peut utiliser",
+    "baseTools": "Outils de base",
+    "mcpServers": "Serveurs MCP",
+    "tools": {
+      "read": "Read - Lire le contenu des fichiers",
+      "glob": "Glob - Trouver des fichiers par motif",
+      "grep": "Grep - Rechercher dans les fichiers",
+      "write": "Write - Créer de nouveaux fichiers",
+      "edit": "Edit - Modifier des fichiers existants",
+      "bash": "Bash - Exécuter des commandes",
+      "webFetch": "WebFetch - Récupérer des pages web",
+      "webSearch": "WebSearch - Rechercher sur le web"
+    },
+    "mcp": {
+      "context7": "Context7 - Recherche de documentation",
+      "graphiti": "Graphiti Memory - Graphe de connaissances",
+      "linear": "Linear - Gestion de projet",
+      "electron": "Electron - Automation d'application de bureau",
+      "puppeteer": "Puppeteer - Automation de navigateur",
+      "autoClaude": "Auto-Code - Gestion des builds"
+    },
+    "selectAll": "Tout sélectionner",
+    "deselectAll": "Tout désélectionner",
+    "noToolsSelected": "Au moins un outil doit être sélectionné",
+    "autoClaudeRequired": "Le MCP Auto-Code est requis et toujours activé"
+  },
+  "wizard": {
+    "title": "Paramètres du modèle",
+    "description": "Remplissez les paramètres pour générer votre spécification",
+    "parameter": {
+      "required": "Obligatoire",
+      "optional": "Optionnel"
+    },
+    "actions": {
+      "preview": "Aperçu de la spec",
+      "cancel": "Annuler",
+      "back": "Retour",
+      "next": "Suivant",
+      "create": "Créer la spec"
+    },
+    "validation": {
+      "required": "Ce champ est obligatoire",
+      "invalidNumber": "Veuillez entrer un nombre valide",
+      "invalidInteger": "Veuillez entrer un entier valide",
+      "minValue": "La valeur doit être au moins {{min}}",
+      "maxValue": "La valeur doit être au maximum {{max}}",
+      "patternMismatch": "Format invalide"
+    },
+    "placeholder": {
+      "string": "Entrer {{name}}...",
+      "number": "Entrer un nombre...",
+      "list": "Entrer des valeurs séparées par des virgules...",
+      "boolean": "Sélectionner vrai ou faux"
+    },
+    "examples": {
+      "title": "Exemples",
+      "use": "Utiliser cet exemple"
+    },
+    "loading": "Chargement du modèle...",
+    "noParameters": "Ce modèle ne nécessite aucun paramètre"
+  },
+  "preview": {
+    "sections": {
+      "rationale": "Justification",
+      "userStories": "User Stories",
+      "acceptanceCriteria": "Critères d'acceptation",
+      "technicalDetails": "Détails techniques",
+      "testCoverage": "Couverture de tests",
+      "dependencies": "Dépendances"
+    },
+    "empty": {
+      "title": "Aucun contenu de spécification",
+      "description": "Générez une spécification pour voir l'aperçu"
+    }
+  },
+  "testDialog": {
+    "title": "Tester le modèle",
+    "description": "Exécuter un test à blanc du modèle {{name}} avec un exemple d'entrée",
+    "templateName": "Modèle",
+    "category": "Catégorie",
+    "testInput": "Entrée de test",
+    "inputPlaceholder": "Entrez une description de tâche exemple pour tester le modèle...",
+    "inputHint": "Décrivez une tâche pour laquelle vous utiliseriez ce modèle. Le modèle générera une spécification sans apporter de modifications.",
+    "inputRequired": "L'entrée de test est requise",
+    "runTest": "Exécuter le test",
+    "running": "Test en cours...",
+    "testFailed": "Le test du modèle a échoué. Vérifiez la configuration du modèle et réessayez.",
+    "testSuccess": "Test réussi ! Le modèle a généré le contenu suivant :",
+    "apiNotAvailable": "API non disponible"
+  },
+  "marketplace": {
+    "title": "Marketplace des modèles",
+    "description": "Parcourir et importer des modèles d'agent partagés par la communauté",
+    "searchPlaceholder": "Rechercher des modèles communautaires...",
+    "filter": "Options de filtre",
+    "all": "Tous",
+    "noTemplates": "Aucun modèle trouvé",
+    "emptyMarketplace": "Marketplace communautaire",
+    "emptyMarketplaceHint": "Les modèles communautaires apparaîtront ici lorsque la marketplace sera disponible.",
+    "searchEmptyHint": "Essayez d'ajuster votre recherche ou vos filtres",
+    "templateCount": "{{count}} modèle",
+    "templateCount_plural": "{{count}} modèles",
+    "filteredCount": "Filtré à partir de {{total}}",
+    "import": "Importer le modèle",
+    "importing": "Importation...",
+    "stats": {
+      "downloads": "{{count}} téléchargement",
+      "downloads_plural": "{{count}} téléchargements",
+      "reviews": "{{count}} avis",
+      "reviews_plural": "{{count}} avis"
+    },
+    "author": "Par {{author}}",
+    "version": "v{{version}}"
+  }
+}

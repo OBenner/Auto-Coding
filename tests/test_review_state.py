@@ -12,15 +12,12 @@ Tests for basic ReviewState functionality including:
 import json
 from pathlib import Path
 
-import pytest
-
-from review import ReviewState, REVIEW_STATE_FILE
-from tests.review_fixtures import approved_state, pending_state
-
+from review import REVIEW_STATE_FILE, ReviewState
 
 # =============================================================================
 # REVIEW STATE - BASIC FUNCTIONALITY
 # =============================================================================
+
 
 class TestReviewStateBasics:
     """Tests for ReviewState basic functionality."""
@@ -92,6 +89,7 @@ class TestReviewStateBasics:
 # =============================================================================
 # REVIEW STATE - LOAD/SAVE
 # =============================================================================
+
 
 class TestReviewStatePersistence:
     """Tests for ReviewState load and save operations."""
