@@ -104,7 +104,7 @@ const baseNavItems: NavItem[] = [
 // GitHub nav items shown when GitHub is enabled
 const githubNavItems: NavItem[] = [
   { id: 'github-issues', labelKey: 'navigation:items.githubIssues', icon: Github, shortcut: 'G' },
-  { id: 'github-prs', labelKey: 'navigation:items.githubPRs', icon: GitPullRequest, shortcut: 'P' }
+  { id: 'github-prs', labelKey: 'navigation:items.githubPRs', icon: GitPullRequest, shortcut: 'H' }
 ];
 
 // GitLab nav items shown when GitLab is enabled

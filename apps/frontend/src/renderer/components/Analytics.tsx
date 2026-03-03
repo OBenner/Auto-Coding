@@ -51,7 +51,7 @@ export function Analytics({ projectId }: AnalyticsProps) {
   const [refreshing, setRefreshing] = useState(false);
 
   // Load analytics data
-  const loadAnalytics = async () => {
+  const loadAnalytics = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -69,11 +69,11 @@ export function Analytics({ projectId }: AnalyticsProps) {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [projectId, t]);
 
   useEffect(() => {
     loadAnalytics();
-  }, [projectId]);
+  }, [loadAnalytics]);
 
   const handleRefresh = () => {
     setRefreshing(true);
@@ -591,7 +591,7 @@ function QAView({
           {Object.keys(qaStats.common_issues).length > 0 ? (
             <div className="space-y-3">
               {Object.entries(qaStats.common_issues)
-                .sort(([, a]: any, [, b]: any) => b - a)
+                .sort(([, a]: [string, number], [, b]: [string, number]) => b - a)
                 .map(([issue, count]) => (
                   <div key={issue} className="flex items-center justify-between">
                     <div className="flex items-center gap-2 flex-1">

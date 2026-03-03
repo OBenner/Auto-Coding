@@ -378,7 +378,7 @@ class AnalyticsService:
         Returns:
             MetricsSummary with aggregated metrics
         """
-        summary = MetricsSummary(last_updated=datetime.utcnow().isoformat() + "Z")
+        summary = MetricsSummary(last_updated=datetime.now(timezone.utc).isoformat())
 
         spec_dirs = self._get_all_spec_dirs()
         summary.total_specs = len(spec_dirs)
@@ -517,7 +517,7 @@ class AnalyticsService:
                         str(date_str).replace("Z", "+00:00")
                     )
                 except (TypeError, ValueError):
-                    pass
+                    pass  # Fall through to mtime fallback below
 
             if spec_date is None:
                 try:
@@ -578,5 +578,5 @@ class AnalyticsService:
         return {
             "summary": summary.to_dict(),
             "trends": [t.to_dict() for t in trends],
-            "generated_at": datetime.utcnow().isoformat() + "Z",
+            "generated_at": datetime.now(timezone.utc).isoformat(),
         }
