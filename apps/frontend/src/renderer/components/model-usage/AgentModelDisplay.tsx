@@ -132,7 +132,9 @@ export function AgentModelDisplay({ agentModels = {}, lockedModels = {} }: Agent
                         {agent.label}
                       </CardTitle>
                       {agent.isLocked && (
-                        <Lock className="h-3.5 w-3.5 text-muted-foreground" title="Model locked" />
+                        <span title="Model locked">
+                          <Lock className="h-3.5 w-3.5 text-muted-foreground" />
+                        </span>
                       )}
                     </div>
                   </CardHeader>
