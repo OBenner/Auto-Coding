@@ -310,6 +310,20 @@ def _extract_cost_records(spec_dir: Path) -> list[dict[str, Any]]:
 # =============================================================================
 
 
+def _accumulate_tokens(
+    metric: ModelMetrics | AgentMetrics,
+    input_tokens: int,
+    output_tokens: int,
+    cost: float,
+) -> None:
+    """Accumulate token and cost counters on a metrics object."""
+    metric.total_usage_count += 1
+    metric.total_input_tokens += input_tokens
+    metric.total_output_tokens += output_tokens
+    metric.total_tokens += input_tokens + output_tokens
+    metric.total_cost += cost
+
+
 def aggregate_model_usage(
     project_dir: Path,
     start_date: datetime | None = None,
@@ -390,16 +404,10 @@ def aggregate_model_usage(
             model_metric = model_metrics[model]
 
             # Update model metrics
-            model_metric.total_usage_count += 1
-            model_metric.total_input_tokens += input_tokens
-            model_metric.total_output_tokens += output_tokens
-            model_metric.total_tokens += input_tokens + output_tokens
-            model_metric.total_cost += cost
-
-            # Update agent usage for this model
-            if agent_type not in model_metric.usage_by_agent:
-                model_metric.usage_by_agent[agent_type] = 0
-            model_metric.usage_by_agent[agent_type] += 1
+            _accumulate_tokens(model_metric, input_tokens, output_tokens, cost)
+            model_metric.usage_by_agent[agent_type] = (
+                model_metric.usage_by_agent.get(agent_type, 0) + 1
+            )
 
             # Update first/last used
             if model_metric.first_used is None or timestamp < model_metric.first_used:
@@ -413,16 +421,8 @@ def aggregate_model_usage(
             agent_metric = agent_metrics[agent_type]
 
             # Update agent metrics
-            agent_metric.total_usage_count += 1
-            agent_metric.total_input_tokens += input_tokens
-            agent_metric.total_output_tokens += output_tokens
-            agent_metric.total_tokens += input_tokens + output_tokens
-            agent_metric.total_cost += cost
-
-            # Update model usage for this agent
-            if model not in agent_metric.models_used:
-                agent_metric.models_used[model] = 0
-            agent_metric.models_used[model] += 1
+            _accumulate_tokens(agent_metric, input_tokens, output_tokens, cost)
+            agent_metric.models_used[model] = agent_metric.models_used.get(model, 0) + 1
 
     # Determine primary model for each agent
     for agent_metric in agent_metrics.values():

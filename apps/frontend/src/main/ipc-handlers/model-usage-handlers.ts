@@ -96,6 +96,50 @@ async function executePythonScript(
 }
 
 /**
+ * Helper to get a project and return error if not found.
+ */
+function getProjectOrError(projectId: string): { project: ReturnType<typeof projectStore.getProject> } | IPCResult<never> {
+  const project = projectStore.getProject(projectId);
+  if (!project) {
+    return { success: false, error: 'Project not found' } as IPCResult<never>;
+  }
+  return { project };
+}
+
+/**
+ * Helper to run an analytics script command for a project.
+ */
+async function runAnalyticsCommand<T>(
+  projectId: string,
+  args: string[],
+  errorLabel: string
+): Promise<IPCResult<T>> {
+  const result = getProjectOrError(projectId);
+  if ('success' in result) return result;
+
+  try {
+    const data = await executePythonScript(
+      result.project!.path,
+      'apps/backend/analysis/model_usage_analytics.py',
+      args
+    );
+    return { success: true, data };
+  } catch (error) {
+    debugError(`[Model Usage] ${errorLabel}:`, error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    return { success: false, error: `${errorLabel}: ${errorMessage}` };
+  }
+}
+
+/** Build CLI args with optional date filters. */
+function withDateFilters(baseArgs: string[], startDate?: string, endDate?: string): string[] {
+  const args = [...baseArgs];
+  if (startDate) args.push('--start-date', startDate);
+  if (endDate) args.push('--end-date', endDate);
+  return args;
+}
+
+/**
  * Register all model usage-related IPC handlers
  */
 export function registerModelUsageHandlers(): void {
@@ -104,27 +148,18 @@ export function registerModelUsageHandlers(): void {
   // ============================================
 
   /**
-   * Get model usage summary
-   * Handler: getModelUsageSummary
+   * Get model usage summary (with caching)
    */
   ipcMain.handle(
     IPC_CHANNELS.MODEL_USAGE_GET_SUMMARY,
-    async (
-      _,
-      projectId: string,
-      startDate?: string,
-      endDate?: string
-    ): Promise<IPCResult<ModelUsageSummary>> => {
-      const project = projectStore.getProject(projectId);
-      if (!project) {
-        return { success: false, error: 'Project not found' };
-      }
+    async (_, projectId: string, startDate?: string, endDate?: string): Promise<IPCResult<ModelUsageSummary>> => {
+      const result = getProjectOrError(projectId);
+      if ('success' in result) return result;
+      const project = result.project!;
 
       try {
-        // Try to use cached aggregated data first
         const analyticsDir = path.join(project.path, '.auto-claude', 'analytics');
 
-        // Include date filters in cache key to avoid returning stale results
         // Sanitize inputs to prevent path traversal attacks
         const sanitize = (v: string): string => v.replace(/[^a-zA-Z0-9._:-]/g, '_');
         const cacheKeyParts = ['model_usage_summary'];
@@ -136,29 +171,19 @@ export function registerModelUsageHandlers(): void {
         let useCached = false;
         if (await fileExists(summaryFile)) {
           const stats = await fsPromises.stat(summaryFile);
-          const fileAge = Date.now() - stats.mtimeMs;
-          useCached = fileAge < 5 * 60 * 1000; // 5 minutes
+          useCached = Date.now() - stats.mtimeMs < 5 * 60 * 1000;
         }
 
         let summary: ModelUsageSummary;
 
         if (useCached) {
-          // Load from cache
-          const content = await fsPromises.readFile(summaryFile, 'utf-8');
-          summary = JSON.parse(content);
+          summary = JSON.parse(await fsPromises.readFile(summaryFile, 'utf-8'));
         } else {
-          // Call Python backend to aggregate metrics
-          const args = ['--get-summary'];
-          if (startDate) args.push('--start-date', startDate);
-          if (endDate) args.push('--end-date', endDate);
-
           summary = await executePythonScript(
             project.path,
             'apps/backend/analysis/model_usage_analytics.py',
-            args
+            withDateFilters(['--get-summary'], startDate, endDate)
           );
-
-          // Cache the result
           await fsPromises.mkdir(analyticsDir, { recursive: true });
           await fsPromises.writeFile(summaryFile, JSON.stringify(summary, null, 2), 'utf-8');
         }
@@ -167,152 +192,69 @@ export function registerModelUsageHandlers(): void {
       } catch (error) {
         debugError('[Model Usage] Failed to get summary:', error);
         const errorMessage = error instanceof Error ? error.message : String(error);
-        return {
-          success: false,
-          error: `Failed to get model usage summary: ${errorMessage}`,
-        };
+        return { success: false, error: `Failed to get model usage summary: ${errorMessage}` };
       }
     }
   );
 
-  /**
-   * Get model usage trends over time
-   */
+  /** Get model usage trends over time */
   ipcMain.handle(
     IPC_CHANNELS.MODEL_USAGE_GET_TRENDS,
-    async (
-      _,
-      projectId: string,
-      windowDays: number = 30,
-      granularity: string = 'daily'
-    ): Promise<IPCResult<ModelUsageTrendPoint[]>> => {
-      const project = projectStore.getProject(projectId);
-      if (!project) {
-        return { success: false, error: 'Project not found' };
-      }
-
-      try {
-        // Call Python backend to get trends
-        const trends = await executePythonScript(
-          project.path,
-          'apps/backend/analysis/model_usage_analytics.py',
-          ['--get-trends', '--window-days', String(windowDays), '--granularity', granularity]
-        );
-
-        return { success: true, data: trends };
-      } catch (error) {
-        debugError('[Model Usage] Failed to get trends:', error);
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        return {
-          success: false,
-          error: `Failed to get model usage trends: ${errorMessage}`,
-        };
-      }
-    }
+    async (_, projectId: string, windowDays: number = 30, granularity: string = 'daily') =>
+      runAnalyticsCommand<ModelUsageTrendPoint[]>(
+        projectId,
+        ['--get-trends', '--window-days', String(windowDays), '--granularity', granularity],
+        'Failed to get model usage trends'
+      )
   );
 
-  // Helper to run an analytics script command for a project
-  async function runAnalyticsCommand<T>(
-    projectId: string,
-    args: string[],
-    errorLabel: string
-  ): Promise<IPCResult<T>> {
-    const project = projectStore.getProject(projectId);
-    if (!project) {
-      return { success: false, error: 'Project not found' };
-    }
-
-    try {
-      const data = await executePythonScript(
-        project.path,
-        'apps/backend/analysis/model_usage_analytics.py',
-        args
-      );
-      return { success: true, data };
-    } catch (error) {
-      debugError(`[Model Usage] ${errorLabel}:`, error);
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      return { success: false, error: `${errorLabel}: ${errorMessage}` };
-    }
-  }
-
-  /**
-   * Get metrics for a specific model
-   */
+  /** Get metrics for a specific model */
   ipcMain.handle(
     IPC_CHANNELS.MODEL_USAGE_GET_MODEL_METRICS,
-    async (_, projectId: string, model: string, startDate?: string, endDate?: string): Promise<IPCResult<ModelMetrics>> => {
-      const args = ['--get-model-metrics', '--model', model];
-      if (startDate) args.push('--start-date', startDate);
-      if (endDate) args.push('--end-date', endDate);
-      return runAnalyticsCommand(projectId, args, 'Failed to get model metrics');
-    }
+    async (_, projectId: string, model: string, startDate?: string, endDate?: string) =>
+      runAnalyticsCommand<ModelMetrics>(
+        projectId,
+        withDateFilters(['--get-model-metrics', '--model', model], startDate, endDate),
+        'Failed to get model metrics'
+      )
   );
 
-  /**
-   * Get metrics for a specific agent
-   */
+  /** Get metrics for a specific agent */
   ipcMain.handle(
     IPC_CHANNELS.MODEL_USAGE_GET_AGENT_METRICS,
-    async (_, projectId: string, agentType: string, startDate?: string, endDate?: string): Promise<IPCResult<AgentMetrics>> => {
-      const args = ['--get-agent-metrics', '--agent-type', agentType];
-      if (startDate) args.push('--start-date', startDate);
-      if (endDate) args.push('--end-date', endDate);
-      return runAnalyticsCommand(projectId, args, 'Failed to get agent metrics');
-    }
+    async (_, projectId: string, agentType: string, startDate?: string, endDate?: string) =>
+      runAnalyticsCommand<AgentMetrics>(
+        projectId,
+        withDateFilters(['--get-agent-metrics', '--agent-type', agentType], startDate, endDate),
+        'Failed to get agent metrics'
+      )
   );
 
-  /**
-   * Export model usage data to file
-   */
+  /** Export model usage data to file */
   ipcMain.handle(
     IPC_CHANNELS.MODEL_USAGE_EXPORT,
-    async (
-      _,
-      projectId: string,
-      options: ModelUsageExportOptions
-    ): Promise<IPCResult<string>> => {
-      const project = projectStore.getProject(projectId);
-      if (!project) {
-        return { success: false, error: 'Project not found' };
-      }
+    async (_, projectId: string, options: ModelUsageExportOptions): Promise<IPCResult<string>> => {
+      const result = getProjectOrError(projectId);
+      if ('success' in result) return result;
 
       try {
         const args = ['--export', '--format', options.format];
+        if (options.filter?.start_date) args.push('--start-date', options.filter.start_date);
+        if (options.filter?.end_date) args.push('--end-date', options.filter.end_date);
+        if (options.filter?.model) args.push('--model', options.filter.model);
+        if (options.filter?.agent_type) args.push('--agent-type', options.filter.agent_type);
+        if (options.output_path) args.push('--output', options.output_path);
 
-        if (options.filter) {
-          if (options.filter.start_date) {
-            args.push('--start-date', options.filter.start_date);
-          }
-          if (options.filter.end_date) {
-            args.push('--end-date', options.filter.end_date);
-          }
-          if (options.filter.model) {
-            args.push('--model', options.filter.model);
-          }
-          if (options.filter.agent_type) {
-            args.push('--agent-type', options.filter.agent_type);
-          }
-        }
-
-        if (options.output_path) {
-          args.push('--output', options.output_path);
-        }
-
-        const result = await executePythonScript(
-          project.path,
+        const data = await executePythonScript(
+          result.project!.path,
           'apps/backend/analysis/model_usage_analytics.py',
           args
         );
-
-        return { success: true, data: result.output_path };
+        return { success: true, data: data.output_path };
       } catch (error) {
         debugError('[Model Usage] Failed to export data:', error);
         const errorMessage = error instanceof Error ? error.message : String(error);
-        return {
-          success: false,
-          error: `Failed to export model usage data: ${errorMessage}`,
-        };
+        return { success: false, error: `Failed to export model usage data: ${errorMessage}` };
       }
     }
   );
@@ -327,31 +269,20 @@ export function registerModelUsageHandlers(): void {
   ipcMain.handle(
     IPC_CHANNELS.MODEL_LOCK_LIST,
     async (_, projectId: string): Promise<IPCResult<ModelLockConfig>> => {
-      const project = projectStore.getProject(projectId);
-      if (!project) {
-        return { success: false, error: 'Project not found' };
-      }
+      const result = getProjectOrError(projectId);
+      if ('success' in result) return result;
 
       try {
-        // Read model_locks.json from project's .auto-claude directory
-        const locksPath = path.join(project.path, '.auto-claude', 'model_locks.json');
-
+        const locksPath = path.join(result.project!.path, '.auto-claude', 'model_locks.json');
         if (!(await fileExists(locksPath))) {
-          // No locks configured
           return { success: true, data: { phaseModels: {}, agentModels: {} } };
         }
-
-        const content = await fsPromises.readFile(locksPath, 'utf-8');
-        const locks: ModelLockConfig = JSON.parse(content);
-
+        const locks: ModelLockConfig = JSON.parse(await fsPromises.readFile(locksPath, 'utf-8'));
         return { success: true, data: locks };
       } catch (error) {
         debugError('[Model Lock] Failed to list locks:', error);
         const errorMessage = error instanceof Error ? error.message : String(error);
-        return {
-          success: false,
-          error: `Failed to list model locks: ${errorMessage}`,
-        };
+        return { success: false, error: `Failed to list model locks: ${errorMessage}` };
       }
     }
   );
@@ -362,15 +293,13 @@ export function registerModelUsageHandlers(): void {
     commandArgs: string[],
     errorLabel: string
   ): Promise<IPCResult<{ success: boolean }>> {
-    const project = projectStore.getProject(projectId);
-    if (!project) {
-      return { success: false, error: 'Project not found' };
-    }
+    const result = getProjectOrError(projectId);
+    if ('success' in result) return result;
 
     try {
-      const specDir = path.join(project.path, '.auto-claude', 'specs', projectId);
+      const specDir = path.join(result.project!.path, '.auto-claude', 'specs', projectId);
       await executePythonScript(
-        project.path,
+        result.project!.path,
         'apps/backend/scripts/model_locks_manager.py',
         [...commandArgs.slice(0, 1), specDir, ...commandArgs.slice(1)],
         false
