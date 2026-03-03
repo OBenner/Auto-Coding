@@ -10,6 +10,7 @@ Memory Integration:
 """
 
 import asyncio
+import logging
 import time
 from pathlib import Path
 
@@ -35,9 +36,21 @@ from task_logger import (
     get_task_logger,
 )
 
+# Import plugin system for agent lifecycle hooks
+try:
+    from plugins.base import PluginType
+    from plugins.registry import PluginRegistry
+    from plugins.sdk.agent import AgentContext
+
+    PLUGINS_AVAILABLE = True
+except ImportError:
+    PLUGINS_AVAILABLE = False
+
 # Configuration
 QA_PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
 MAX_FIXER_ITERATIONS = 10  # Max recovery attempts for a single QA fix session
+
+logger = logging.getLogger(__name__)
 
 
 # =============================================================================
@@ -472,6 +485,48 @@ async def run_qa_fixer_session(
                 "gotchas_encountered": [],
             }
 
+            # Call after_session hook for enabled agent plugins
+            if PLUGINS_AVAILABLE:
+                try:
+                    registry = PluginRegistry.get_instance()
+                    agent_plugins = registry.list_plugins(
+                        plugin_type=PluginType.AGENT, enabled_only=True
+                    )
+
+                    if agent_plugins:
+                        # Create agent context for plugins
+                        agent_context = AgentContext(
+                            project_dir=project_dir,
+                            spec_dir=spec_dir,
+                            session_id=f"qa_fixer_{fix_session}",
+                            client=client,
+                            phase="validation",
+                            metadata={
+                                "fix_session": fix_session,
+                                "iteration": fixer_iteration,
+                            },
+                        )
+
+                        # Determine session success (will be updated after validation)
+                        # For now, assume success based on fixes_ready
+                        session_success = fixes_ready
+
+                        # Call after_session for each enabled agent plugin
+                        for plugin in agent_plugins:
+                            try:
+                                plugin.after_session(
+                                    agent_context, success=session_success
+                                )
+                                logger.debug(
+                                    f"Called after_session for plugin: {plugin.name}"
+                                )
+                            except Exception as e:
+                                logger.warning(
+                                    f"Plugin {plugin.name} after_session hook failed: {e}"
+                                )
+                except Exception as e:
+                    logger.warning(f"Failed to call after_session hooks: {e}")
+
             # Robust validation: check both status and ready flag
             if fixes_ready:
                 # Calculate iteration duration
@@ -557,6 +612,43 @@ async def run_qa_fixer_session(
             print(f"  Duration: {iteration_duration:.1f}s\n")
             if task_logger:
                 task_logger.log_error(f"QA fixer error: {e}", LogPhase.VALIDATION)
+
+            # Call after_session hook for enabled agent plugins (error case)
+            if PLUGINS_AVAILABLE:
+                try:
+                    registry = PluginRegistry.get_instance()
+                    agent_plugins = registry.list_plugins(
+                        plugin_type=PluginType.AGENT, enabled_only=True
+                    )
+
+                    if agent_plugins:
+                        # Create agent context for plugins
+                        agent_context = AgentContext(
+                            project_dir=project_dir,
+                            spec_dir=spec_dir,
+                            session_id=f"qa_fixer_{fix_session}",
+                            client=client,
+                            phase="validation",
+                            metadata={
+                                "fix_session": fix_session,
+                                "iteration": fixer_iteration,
+                                "error": str(e),
+                            },
+                        )
+
+                        # Call after_session for each enabled agent plugin (error case)
+                        for plugin in agent_plugins:
+                            try:
+                                plugin.after_session(agent_context, success=False)
+                                logger.debug(
+                                    f"Called after_session for plugin: {plugin.name}"
+                                )
+                            except Exception as hook_error:
+                                logger.warning(
+                                    f"Plugin {plugin.name} after_session hook failed: {hook_error}"
+                                )
+                except Exception as hook_error:
+                    logger.warning(f"Failed to call after_session hooks: {hook_error}")
 
             # Record failed iteration
             error_issue = {

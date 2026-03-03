@@ -1,0 +1,14 @@
+{
+  "name": "file-templates",
+  "version": "1.0.0",
+  "author": "Auto-Coding Team",
+  "description": "File templates plugin that provides MCP tools for creating files from customizable templates (React, Python, TypeScript, etc.)",
+  "plugin_type": "integration",
+  "required_permissions": [
+    "read_files",
+    "write_files"
+  ],
+  "dependencies": [],
+  "homepage": "https://github.com/OBenner/Auto-Coding/tree/main/examples/plugins/file-templates",
+  "license": "MIT"
+}

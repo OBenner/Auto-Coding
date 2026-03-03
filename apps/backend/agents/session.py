@@ -31,6 +31,9 @@ from linear_updater import (
     linear_subtask_completed,
     linear_subtask_failed,
 )
+from plugins.base import PluginType
+from plugins.registry import PluginRegistry
+from plugins.sdk.agent import AgentContext
 from progress import (
     count_subtasks_detailed,
     is_build_complete,
@@ -885,6 +888,60 @@ async def run_agent_session(
     )
     print("Sending prompt to Claude Agent SDK...\n")
 
+    # Derive project_dir from spec_dir
+    # Spec dir is typically: <project>/.auto-claude/specs/<spec-name>/
+    # So project_dir is: spec_dir.parent.parent
+    project_dir = spec_dir.parent.parent
+
+    # Initialize plugins - get enabled agent plugins from registry
+    enabled_agent_plugins = []
+    try:
+        registry = PluginRegistry.get_instance()
+        if registry.is_plugin_loaded("hello-world-agent"):
+            # Registry is initialized, get enabled agent plugins
+            enabled_agent_plugins = registry.list_plugins(
+                plugin_type=PluginType.AGENT, enabled_only=True
+            )
+            debug(
+                "session",
+                f"Found {len(enabled_agent_plugins)} enabled agent plugin(s)",
+            )
+    except Exception as e:
+        # Plugin system not available or not initialized
+        debug_detailed("session", f"Plugin system not available: {e}")
+        enabled_agent_plugins = []
+
+    # Create agent context for plugin hooks
+    session_id = f"{phase.value}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    agent_context = AgentContext(
+        project_dir=project_dir,
+        spec_dir=spec_dir,
+        session_id=session_id,
+        client=client,
+        phase=phase.value,
+        metadata={"verbose": verbose},
+    )
+
+    # Call before_session hooks on enabled agent plugins
+    for plugin in enabled_agent_plugins:
+        try:
+            if hasattr(plugin, "before_session"):
+                plugin.before_session(agent_context)
+                debug(
+                    "session",
+                    f"Called before_session hook for plugin: {plugin.name}",
+                )
+        except Exception as e:
+            logger.warning(
+                f"before_session hook failed for plugin {plugin.name}: {e}",
+                exc_info=True,
+            )
+            debug_error(
+                "session",
+                f"before_session hook failed for plugin: {plugin.name}",
+                error=str(e),
+            )
+
     # Get task logger for this spec
     task_logger = get_task_logger(spec_dir)
 
@@ -966,6 +1023,17 @@ async def run_agent_session(
                 f"Received message #{message_count}",
                 msg_type=msg_type,
             )
+
+            # Call on_message hook for agent plugins (for monitoring/analytics)
+            for plugin in enabled_agent_plugins:
+                try:
+                    if hasattr(plugin, "on_message"):
+                        plugin.on_message(agent_context, msg)
+                except Exception as e:
+                    # Don't let plugin errors break the session
+                    logger.debug(
+                        f"on_message hook failed for plugin {plugin.name}: {e}"
+                    )
 
             # Session bounds safety check
             if SessionBounds.check(current_round.round_number, message_count):
@@ -1276,6 +1344,22 @@ async def run_agent_session(
                 tool_count=tool_count,
                 response_length=len(response_text),
             )
+
+            # Call after_session hooks (success case)
+            for plugin in enabled_agent_plugins:
+                try:
+                    if hasattr(plugin, "after_session"):
+                        plugin.after_session(agent_context, success=True)
+                        debug(
+                            "session",
+                            f"Called after_session hook for plugin: {plugin.name}",
+                        )
+                except Exception as e:
+                    logger.warning(
+                        f"after_session hook failed for plugin {plugin.name}: {e}",
+                        exc_info=True,
+                    )
+
             return "complete", response_text, usage_metadata, decision_tracker
 
         debug_success(
@@ -1285,6 +1369,22 @@ async def run_agent_session(
             tool_count=tool_count,
             response_length=len(response_text),
         )
+
+        # Call after_session hooks (success case)
+        for plugin in enabled_agent_plugins:
+            try:
+                if hasattr(plugin, "after_session"):
+                    plugin.after_session(agent_context, success=True)
+                    debug(
+                        "session",
+                        f"Called after_session hook for plugin: {plugin.name}",
+                    )
+            except Exception as e:
+                logger.warning(
+                    f"after_session hook failed for plugin {plugin.name}: {e}",
+                    exc_info=True,
+                )
+
         return "continue", response_text, usage_metadata, decision_tracker
 
     except Exception as e:
@@ -1312,6 +1412,21 @@ async def run_agent_session(
             task_logger.log_error(
                 f"[{classified.category.value.upper()}] {error_msg}", phase
             )
+
+        # Call after_session hooks (error case)
+        for plugin in enabled_agent_plugins:
+            try:
+                if hasattr(plugin, "after_session"):
+                    plugin.after_session(agent_context, success=False)
+                    debug(
+                        "session",
+                        f"Called after_session hook for plugin: {plugin.name}",
+                    )
+            except Exception as hook_error:
+                logger.warning(
+                    f"after_session hook failed for plugin {plugin.name}: {hook_error}",
+                    exc_info=True,
+                )
 
         # Save conversation history even on error for debugging
         try:
