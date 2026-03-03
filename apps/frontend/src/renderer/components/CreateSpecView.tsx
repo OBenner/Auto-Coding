@@ -41,22 +41,8 @@ import { cn } from '../lib/utils';
 /**
  * Pattern suggestion from Graphiti memory system
  */
-export interface PatternSuggestion {
-  /** Pattern description */
-  pattern: string;
-  /** Pattern category (e.g., "state-management", "error-handling") */
-  category: string;
-  /** Categorization confidence (0.0-1.0) */
-  confidence: number;
-  /** Reasoning for categorization */
-  reasoning: string;
-  /** Semantic search relevance score (0.0-1.0) */
-  score: number;
-  /** Spec ID where pattern originated */
-  spec_id: string;
-  /** When pattern was created */
-  timestamp: string;
-}
+import type { PatternSuggestion } from '../../shared/types';
+export type { PatternSuggestion };
 
 /**
  * Pattern action state

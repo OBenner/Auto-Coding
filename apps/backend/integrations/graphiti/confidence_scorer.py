@@ -14,8 +14,7 @@ import math
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from core.sentry import capture_exception
-from debug import debug, debug_detailed, debug_error, debug_success, is_debug_enabled
+from debug import debug, debug_detailed, debug_success, is_debug_enabled
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +42,7 @@ class ConfidenceScorer:
     MEDIUM_USAGE_THRESHOLD = 5  # Uses needed for medium confidence
     RECENCY_DECAY_DAYS = 30  # Days after which recency starts to decay
     MAX_RECENCY_BOOST = 0.1  # Maximum boost from recent usage
+    USAGE_RETENTION_DAYS = 90  # Prune usage entries older than this
 
     def __init__(self):
         """Initialize confidence scorer."""
@@ -72,6 +72,12 @@ class ConfidenceScorer:
             self._usage_history[pattern_key] = []
 
         self._usage_history[pattern_key].append(timestamp)
+
+        # Prune old entries to bound memory usage
+        cutoff = timestamp - timedelta(days=self.USAGE_RETENTION_DAYS)
+        self._usage_history[pattern_key] = [
+            t for t in self._usage_history[pattern_key] if t >= cutoff
+        ]
 
         if is_debug_enabled():
             debug_detailed(

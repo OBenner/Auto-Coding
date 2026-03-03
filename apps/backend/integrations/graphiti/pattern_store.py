@@ -165,9 +165,7 @@ class PatternStore:
             if success:
                 stored_count += 1
 
-        logger.info(
-            f"Batch stored {stored_count}/{len(patterns)} patterns in Graphiti"
-        )
+        logger.info(f"Batch stored {stored_count}/{len(patterns)} patterns in Graphiti")
         return stored_count
 
     async def query_patterns(

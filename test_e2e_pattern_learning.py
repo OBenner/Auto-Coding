@@ -15,7 +15,6 @@ This test validates all acceptance criteria from the spec.
 """
 
 import asyncio
-import json
 import sys
 import tempfile
 from pathlib import Path
@@ -25,9 +24,8 @@ backend_dir = Path(__file__).parent / "apps" / "backend"
 sys.path.insert(0, str(backend_dir))
 
 from graphiti_config import is_graphiti_enabled
-from integrations.graphiti.confidence_scorer import ConfidenceScorer, create_pattern_key
+from integrations.graphiti.confidence_scorer import ConfidenceScorer
 from integrations.graphiti.memory import get_graphiti_memory
-from integrations.graphiti.pattern_extractor import PatternExtractor
 from integrations.graphiti.pattern_learner import PatternLearner
 from integrations.graphiti.pattern_store import PatternStore
 from integrations.graphiti.pattern_suggester import suggest_patterns

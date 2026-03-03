@@ -63,42 +63,43 @@ async def discover_with_memory(
 
         memory = await get_graphiti_memory(spec_dir, project_dir)
         if memory is not None:
-            from integrations.graphiti.pattern_suggester import suggest_patterns
+            try:
+                from integrations.graphiti.pattern_suggester import suggest_patterns
 
-            # Get pattern suggestions from Graphiti
-            graphiti_patterns = await suggest_patterns(
-                client=memory.client,
-                group_id=memory.group_id,
-                spec_context_id=memory.spec_context_id,
-                query=task,
-                categories=categories,
-                num_results=num_results,
-                min_score=min_score,
-                include_project_context=True,
-                project_dir=project_dir,
-            )
+                # Get pattern suggestions from Graphiti
+                graphiti_patterns = await suggest_patterns(
+                    client=memory.client,
+                    group_id=memory.group_id,
+                    spec_context_id=memory.spec_context_id,
+                    query=task,
+                    categories=categories,
+                    num_results=num_results,
+                    min_score=min_score,
+                    include_project_context=True,
+                    project_dir=project_dir,
+                )
 
-            # Format Graphiti patterns for output
-            for i, pattern_data in enumerate(graphiti_patterns):
-                pattern_text = pattern_data.get("pattern", "")
-                category = pattern_data.get("category", "uncategorized")
-                confidence = pattern_data.get("confidence", 0.0)
-                reasoning = pattern_data.get("reasoning", "")
+                if graphiti_patterns:
+                    # Format Graphiti patterns for output
+                    for i, pattern_data in enumerate(graphiti_patterns):
+                        pattern_text = pattern_data.get("pattern", "")
+                        category = pattern_data.get("category", "uncategorized")
+                        confidence = pattern_data.get("confidence", 0.0)
+                        reasoning = pattern_data.get("reasoning", "")
 
-                # Create formatted pattern entry
-                pattern_key = f"graphiti_pattern_{i}"
-                pattern_value = f"Pattern: {pattern_text}\nCategory: {category}\nConfidence: {confidence:.2f}"
-                if reasoning:
-                    pattern_value += f"\nReasoning: {reasoning}"
+                        # Create formatted pattern entry
+                        pattern_key = f"graphiti_pattern_{i}"
+                        pattern_value = f"Pattern: {pattern_text}\nCategory: {category}\nConfidence: {confidence:.2f}"
+                        if reasoning:
+                            pattern_value += f"\nReasoning: {reasoning}"
 
-                patterns[pattern_key] = pattern_value
+                        patterns[pattern_key] = pattern_value
 
-            logger.info(
-                f"Found {len(graphiti_patterns)} patterns from Graphiti for task: {task[:50]}..."
-            )
-
-            # Close the memory connection
-            await memory.close()
+                    logger.info(
+                        f"Found {len(graphiti_patterns)} patterns from Graphiti for task: {task[:50]}..."
+                    )
+            finally:
+                await memory.close()
 
     except ImportError:
         logger.debug("Graphiti memory not available, skipping memory-based patterns")

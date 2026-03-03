@@ -93,7 +93,11 @@ class PatternLearner:
 
             if not patterns:
                 if is_debug_enabled():
-                    debug("patterns", "No patterns found in file", file_path=str(file_path))
+                    debug(
+                        "patterns",
+                        "No patterns found in file",
+                        file_path=str(file_path),
+                    )
                 return []
 
             # Add file path to each pattern for tracking
@@ -230,9 +234,7 @@ class PatternLearner:
 
         # Filter to only code files
         code_extensions = {".py", ".js", ".jsx", ".ts", ".tsx", ".vue", ".go", ".rs"}
-        code_files = [
-            f for f in modified_files if f.suffix.lower() in code_extensions
-        ]
+        code_files = [f for f in modified_files if f.suffix.lower() in code_extensions]
 
         if not code_files:
             if is_debug_enabled():
@@ -269,12 +271,16 @@ class PatternLearner:
         """
         if not is_graphiti_enabled():
             if is_debug_enabled():
-                debug_warning("patterns", "Graphiti not enabled, skipping pattern storage")
+                debug_warning(
+                    "patterns", "Graphiti not enabled, skipping pattern storage"
+                )
             return 0
 
         try:
             # Import here to avoid circular dependency
             from memory.graphiti_helpers import get_graphiti_memory
+
+            from .pattern_store import PatternStore
 
             memory = await get_graphiti_memory(self.spec_dir, self.project_dir)
             if memory is None:
@@ -285,37 +291,41 @@ class PatternLearner:
                     )
                 return 0
 
-            stored_count = 0
-            for pattern in patterns:
-                # Format pattern for storage
-                pattern_desc = self._format_pattern_description(pattern)
-
-                # Extract category metadata
-                category_metadata = {
-                    "category": pattern.get("type", "uncategorized"),
-                    "confidence": 0.7,  # Initial confidence for learned patterns
-                    "reasoning": pattern.get("context", ""),
-                }
-
-                # Store pattern
-                success = await memory._queries.add_pattern(
-                    pattern=pattern_desc,
-                    category_metadata=category_metadata,
+            try:
+                store = PatternStore(
+                    client=memory.client,
+                    group_id=memory.group_id,
+                    spec_context_id=memory.spec_context_id,
+                    project_dir=self.project_dir,
                 )
 
-                if success:
-                    stored_count += 1
+                # Format patterns for batch storage
+                store_patterns = []
+                for pattern in patterns:
+                    pattern_desc = self._format_pattern_description(pattern)
+                    store_patterns.append(
+                        {
+                            "pattern": pattern_desc,
+                            "category": pattern.get("type", "uncategorized"),
+                            "confidence": 0.7,  # Initial confidence for learned patterns
+                            "metadata": {"reasoning": pattern.get("context", "")},
+                        }
+                    )
 
-            if is_debug_enabled():
-                debug_detailed(
-                    "patterns",
-                    "Pattern storage complete",
-                    attempted=len(patterns),
-                    stored=stored_count,
-                    failed=len(patterns) - stored_count,
-                )
+                stored_count = await store.store_patterns_batch(store_patterns)
 
-            return stored_count
+                if is_debug_enabled():
+                    debug_detailed(
+                        "patterns",
+                        "Pattern storage complete",
+                        attempted=len(patterns),
+                        stored=stored_count,
+                        failed=len(patterns) - stored_count,
+                    )
+
+                return stored_count
+            finally:
+                await memory.close()
 
         except Exception as e:
             logger.warning(f"Failed to store patterns in Graphiti: {e}")

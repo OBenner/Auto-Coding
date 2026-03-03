@@ -938,7 +938,7 @@ class CommandExecutor:
 
                 return result
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.error("Package install timed out after 120s")
             # Kill orphaned subprocess to avoid resource leakage
             try:

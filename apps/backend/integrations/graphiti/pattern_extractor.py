@@ -200,7 +200,9 @@ class PatternExtractor:
 
                     # Check for logging in handler
                     for stmt in ast.walk(handler):
-                        if isinstance(stmt, ast.Call) and isinstance(stmt.func, ast.Attribute):
+                        if isinstance(stmt, ast.Call) and isinstance(
+                            stmt.func, ast.Attribute
+                        ):
                             if isinstance(stmt.func.value, ast.Name):
                                 if "log" in stmt.func.value.id.lower():
                                     has_logging = True
@@ -212,7 +214,9 @@ class PatternExtractor:
 
                 # Get code snippet
                 end_line = node.lineno + 5  # Get a few lines of context
-                snippet = self._get_code_snippet(lines, node.lineno, end_line - node.lineno)
+                snippet = self._get_code_snippet(
+                    lines, node.lineno, end_line - node.lineno
+                )
 
                 pattern_desc = "Try-except"
                 if exception_types:
@@ -226,7 +230,9 @@ class PatternExtractor:
                 if node.finalbody:
                     pattern_desc += " with finally clause"
 
-                context_parts = [f"Exception types: {', '.join(exception_types) or 'generic'}"]
+                context_parts = [
+                    f"Exception types: {', '.join(exception_types) or 'generic'}"
+                ]
                 if has_logging:
                     context_parts.append("includes logging")
                 if has_reraise:
@@ -283,10 +289,27 @@ class PatternExtractor:
                         obj_name = node.func.value.attr
 
                     # Identify common API patterns
-                    api_keywords = ["client", "api", "request", "http", "fetch", "session"]
-                    http_methods = ["get", "post", "put", "delete", "patch", "head", "options"]
+                    api_keywords = [
+                        "client",
+                        "api",
+                        "request",
+                        "http",
+                        "fetch",
+                        "session",
+                    ]
+                    http_methods = [
+                        "get",
+                        "post",
+                        "put",
+                        "delete",
+                        "patch",
+                        "head",
+                        "options",
+                    ]
 
-                    if obj_name and any(keyword in obj_name.lower() for keyword in api_keywords):
+                    if obj_name and any(
+                        keyword in obj_name.lower() for keyword in api_keywords
+                    ):
                         snippet = self._get_code_snippet(lines, node.lineno, 3)
 
                         # Identify HTTP method usage
@@ -311,14 +334,19 @@ class PatternExtractor:
                     decorator_name = None
                     if isinstance(decorator, ast.Name):
                         decorator_name = decorator.id
-                    elif isinstance(decorator, ast.Call) and isinstance(decorator.func, ast.Attribute):
+                    elif isinstance(decorator, ast.Call) and isinstance(
+                        decorator.func, ast.Attribute
+                    ):
                         # Decorators like @app.route(), @api.get()
                         if isinstance(decorator.func.value, ast.Name):
                             obj = decorator.func.value.id
                             method = decorator.func.attr
                             decorator_name = f"{obj}.{method}"
 
-                    if decorator_name and any(kw in decorator_name.lower() for kw in ["route", "api", "endpoint"]):
+                    if decorator_name and any(
+                        kw in decorator_name.lower()
+                        for kw in ["route", "api", "endpoint"]
+                    ):
                         snippet = self._get_code_snippet(lines, node.lineno, 3)
                         patterns.append(
                             {
@@ -357,7 +385,9 @@ class PatternExtractor:
 
                 if has_property or has_setter:
                     snippet = self._get_code_snippet(lines, node.lineno, 3)
-                    pattern_type = "Property getter" if has_property else "Property setter"
+                    pattern_type = (
+                        "Property getter" if has_property else "Property setter"
+                    )
                     patterns.append(
                         {
                             "type": "state-management",
@@ -375,7 +405,10 @@ class PatternExtractor:
                     if isinstance(decorator, ast.Name) and decorator.id == "dataclass":
                         has_dataclass = True
                     elif isinstance(decorator, ast.Call):
-                        if isinstance(decorator.func, ast.Name) and decorator.func.id == "dataclass":
+                        if (
+                            isinstance(decorator.func, ast.Name)
+                            and decorator.func.id == "dataclass"
+                        ):
                             has_dataclass = True
 
                 if has_dataclass:
@@ -399,7 +432,10 @@ class PatternExtractor:
                             if isinstance(stmt, ast.Assign):
                                 for target in stmt.targets:
                                     if isinstance(target, ast.Attribute):
-                                        if isinstance(target.value, ast.Name) and target.value.id == "self":
+                                        if (
+                                            isinstance(target.value, ast.Name)
+                                            and target.value.id == "self"
+                                        ):
                                             state_attrs.append(target.attr)
 
                         if state_attrs:
@@ -423,7 +459,8 @@ class PatternExtractor:
                         # Check if the variable name suggests state (all caps, or specific naming)
                         var_name = target.id
                         if var_name.isupper() or any(
-                            kw in var_name.lower() for kw in ["state", "cache", "store", "config"]
+                            kw in var_name.lower()
+                            for kw in ["state", "cache", "store", "config"]
                         ):
                             snippet = self._get_code_snippet(lines, node.lineno, 1)
                             patterns.append(
@@ -503,7 +540,9 @@ class PatternExtractor:
         lines = source_code.split("\n")
 
         for node in ast.walk(tree):
-            if isinstance(node, ast.FunctionDef) or isinstance(node, ast.AsyncFunctionDef):
+            if isinstance(node, ast.FunctionDef) or isinstance(
+                node, ast.AsyncFunctionDef
+            ):
                 # Get decorators
                 decorators = []
                 for dec in node.decorator_list:

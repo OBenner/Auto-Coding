@@ -76,9 +76,11 @@ export function PatternReview({
   const [activeFilter, setActiveFilter] = useState<CategoryFilter>('all');
   const [processingPatterns, setProcessingPatterns] = useState<Set<string>>(new Set());
 
-  // Extract unique categories from patterns
+  // Extract unique categories from patterns (normalizing falsy values)
   const categories = useMemo(() => {
-    const uniqueCategories = new Set(patterns.map(p => p.category));
+    const uniqueCategories = new Set(
+      patterns.map(p => (p.category && p.category.trim()) || 'uncategorized').filter(Boolean)
+    );
     return ['all', ...Array.from(uniqueCategories).sort()];
   }, [patterns]);
 
@@ -86,7 +88,8 @@ export function PatternReview({
   const categoryCounts = useMemo(() => {
     const counts: Record<string, number> = { all: patterns.length };
     for (const pattern of patterns) {
-      counts[pattern.category] = (counts[pattern.category] || 0) + 1;
+      const cat = (pattern.category && pattern.category.trim()) || 'uncategorized';
+      counts[cat] = (counts[cat] || 0) + 1;
     }
     return counts;
   }, [patterns]);
@@ -251,12 +254,13 @@ export function PatternReview({
           {/* Pattern Cards */}
           {sortedPatterns.length > 0 && (
             <div className="space-y-3">
-              {sortedPatterns.map((pattern, index) => {
+              {sortedPatterns.map((pattern) => {
                 const confidenceLevel = getConfidenceLevel(pattern.confidence);
                 const processing = isProcessing(pattern);
+                const stableKey = pattern.spec_id || `${pattern.category}:${pattern.pattern}`;
 
                 return (
-                  <Card key={`${pattern.category}-${index}`} className="overflow-hidden">
+                  <Card key={stableKey} className="overflow-hidden">
                     <CardHeader className="pb-3">
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex-1 space-y-2">
@@ -305,11 +309,12 @@ export function PatternReview({
                             {t('patterns:metadata.spec')}: {pattern.spec_id}
                           </span>
                         )}
-                        {pattern.timestamp && (
-                          <span>
-                            {new Date(pattern.timestamp).toLocaleDateString()}
-                          </span>
-                        )}
+                        {pattern.timestamp && (() => {
+                          const date = new Date(pattern.timestamp);
+                          return Number.isNaN(date.getTime()) ? null : (
+                            <span>{date.toLocaleDateString()}</span>
+                          );
+                        })()}
                       </div>
 
                       {/* Actions */}
